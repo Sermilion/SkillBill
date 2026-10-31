@@ -1,8 +1,10 @@
 package skillbill.infrastructure.workflow.review.specialists
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.declaredCodeReviewSkillNames
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.preparation.ReviewAttributionPort
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.review.plan.ReviewLaunchPlanPolicy
@@ -14,9 +16,13 @@ import java.nio.file.Path
 @Inject
 class FileSystemReviewAttribution(
   private val installedCatalog: InstalledPlatformPackCatalogPort,
+  private val diagnostics: RuntimeDiagnostics,
 ) : ReviewAttributionPort {
   override fun routedSkillPlatformSlugs(): Map<String, String> =
-    runCatching { platformReviewAttributionMappings(installedCatalog.manifests()) }.getOrDefault(emptyMap())
+    catchingNonCancellation { platformReviewAttributionMappings(installedCatalog.manifests()) }.getOrElse { error ->
+      diagnostics.warning("review attribution mappings unavailable; routing falls back to no platform slugs", error)
+      emptyMap()
+    }
 
   override fun composedLaunchPlan(routedPackSlug: String): ReviewLaunchPlan {
     val manifests = installedCatalog.manifests()

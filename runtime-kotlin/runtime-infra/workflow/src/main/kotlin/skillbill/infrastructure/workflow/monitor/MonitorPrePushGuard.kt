@@ -1,5 +1,7 @@
 package skillbill.infrastructure.workflow.monitor
 
+import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
@@ -44,7 +46,9 @@ internal fun writeMonitorPrePushGuard(): Path {
 }
 
 internal fun removeMonitorPrePushGuard(directory: Path) {
-  runCatching {
+  try {
     Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+  } catch (_: IOException) {
+  } catch (_: UncheckedIOException) {
   }
 }

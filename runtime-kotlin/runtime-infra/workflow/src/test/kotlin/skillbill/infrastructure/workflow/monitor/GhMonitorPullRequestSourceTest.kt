@@ -1,6 +1,10 @@
 package skillbill.infrastructure.workflow.monitor
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import skillbill.infrastructure.workflow.github.GhCommandResult
+import skillbill.infrastructure.workflow.github.GhCommandRunner
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
@@ -45,16 +49,23 @@ class GhMonitorPullRequestSourceTest {
   private fun source(
     exitCode: Int = 0,
     stdout: String,
-  ) = GhMonitorPullRequestSource { _, args ->
-    calls += args
-    GhCommandResult(exitCode, stdout)
-  }
+    diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  ) = GhMonitorPullRequestSource(
+    GhCommandRunner { _, args ->
+      calls += args
+      GhCommandResult(exitCode, stdout)
+    },
+    diagnostics,
+  )
 
   private fun routedSource(vararg responses: Pair<String, GhCommandResult>) =
-    GhMonitorPullRequestSource { _, args ->
-      calls += args
-      responses.toMap().getValue(args.last())
-    }
+    GhMonitorPullRequestSource(
+      GhCommandRunner { _, args ->
+        calls += args
+        responses.toMap().getValue(args.last())
+      },
+      NoopRuntimeDiagnostics,
+    )
 
   private fun foundPullRequest(json: String) =
     assertIs<MonitorPullRequestLookup.Found>(source(stdout = json).pullRequest(REPO, 1)).pullRequest
@@ -156,6 +167,18 @@ class GhMonitorPullRequestSourceTest {
   }
 
   @Test
+  fun `unparsable poll leaves a diagnostic`() {
+    val diagnostics = RecordingDiagnostics()
+
+    assertIs<MonitorPullRequestLookup.Failed>(
+      source(stdout = "not json", diagnostics = diagnostics).pullRequest(REPO, 9),
+    )
+
+    assertEquals(1, diagnostics.warnings.size)
+    assertIs<JsonProcessingException>(diagnostics.warnings.single().second)
+  }
+
+  @Test
   fun `a paginated listing concatenates every page and asks for all states`() {
     val pages = "[${pullRequestJson(1)}]\n[${pullRequestJson(2, state = "merged")}]"
 
@@ -186,4 +209,22 @@ class GhMonitorPullRequestSourceTest {
       source(exitCode = 1, stdout = "gh: rate limited"),
     ).forEach { assertIs<MonitorPullRequestListing.Failed>(it.pullRequests(REPO)) }
   }
+}
+
+private class RecordingDiagnostics : RuntimeDiagnostics {
+  val warnings = mutableListOf<Pair<String, Throwable?>>()
+
+  override fun warning(
+    message: String,
+    error: Throwable?,
+  ) {
+    warnings += message to error
+  }
+
+  override fun error(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+
+  override fun info(message: String) = Unit
 }

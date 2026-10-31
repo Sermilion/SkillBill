@@ -1,6 +1,8 @@
 package skillbill.infrastructure.workflow.git.fingerprint
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.contracts.newSha256Digest
+import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.host.jvm.requirePathContainedIn
 import skillbill.infrastructure.workflow.process.GIT_CHANGED_FILE_SAMPLE_LIMIT
 import skillbill.infrastructure.workflow.process.GIT_NUMSTAT_PART_LIMIT
@@ -101,7 +103,7 @@ internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOpe
   ): WorkflowGitOperationResult {
     val tree = runGitCommand(repoRoot, "rev-parse", "$revision^{tree}")
     if (tree !is WorkflowGitOperationResult.Ok) return tree
-    return runCatching {
+    return catchingNonCancellation {
       val digest = newSha256Digest()
       digestAnchor(digest, "head_tree", tree.value.orEmpty(), staged = "", unstaged = "")
       WorkflowGitOperationResult.Ok(value = digest.digest().joinToString("") { "%02x".format(it) })
@@ -133,7 +135,7 @@ internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOpe
     val untracked = runGitCommand(repoRoot, "ls-files", "--others", "--exclude-standard", "-z")
     val failure = listOf(head, staged, unstaged, untracked).firstOrNull { it !is WorkflowGitOperationResult.Ok }
     if (failure != null) return failure
-    return runCatching {
+    return catchingNonCancellation {
       val digest = newSha256Digest()
       digestAnchor(digest, anchorLabel, head.value.orEmpty(), staged.value.orEmpty(), unstaged.value.orEmpty())
       val root = repoRoot.normalize()
@@ -158,7 +160,7 @@ internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOpe
     headCommit: String,
     ownedPaths: List<String>,
   ): WorkflowGitOperationResult =
-    runCatching {
+    catchingNonCancellation {
       val digest = newSha256Digest()
       UntrackedFingerprintDigest.digestPart(digest, "base", baseCommit.orEmpty().toByteArray())
       UntrackedFingerprintDigest.digestPart(digest, "head", headCommit.toByteArray())
@@ -231,11 +233,7 @@ internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOpe
     path: String,
   ): Int? {
     val resolved = root.resolve(path).normalize()
-    val contained =
-      runCatching {
-        requirePathContainedIn(resolved, root) { "Untracked path escapes repository root: $path" }
-      }
-    if (contained.isFailure) return null
+    if (!pathContainedIn(resolved, root)) return null
     if (Files.isSymbolicLink(resolved) || !Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) return null
     return try {
       Files.newInputStream(resolved).use { input -> countTextLines(input) }

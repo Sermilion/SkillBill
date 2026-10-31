@@ -1,8 +1,10 @@
 package skillbill.infrastructure.workflow.github
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
@@ -96,7 +98,7 @@ class GhPullRequestReviewThreads internal constructor(
       ) + cursor?.let { listOf("-f", "cursor=$it") }.orEmpty() + listOf("-f", "query=$THREADS_QUERY")
     val result = gh.run(repoRoot, args)
     if (result.exitCode != 0) return ThreadPage.Unavailable(result.describeFailure())
-    return runCatching { parseThreadPage(result.stdout, cursor) }
+    return catchingNonCancellation { parseThreadPage(result.stdout, cursor) }
       .getOrElse { error -> ThreadPage.Unavailable("GitHub returned unreadable review threads (${error.message}).") }
   }
 
@@ -139,7 +141,7 @@ class GhPullRequestReviewThreads internal constructor(
     )
 
   private fun pullRequestFrom(node: JsonNode): ReviewPullRequest? =
-    runCatching {
+    catchingNonCancellation {
       val url = node.requiredText("url")
       val (owner, name) = checkNotNull(PULL_REQUEST_URL.find(url)) { "unrecognised pull request url" }.destructured
       ReviewPullRequest(
@@ -154,7 +156,13 @@ class GhPullRequestReviewThreads internal constructor(
     }.getOrNull()
 
   private fun readJson(stdout: String): JsonNode? =
-    runCatching { mapper.readTree(stdout) }.getOrNull()?.takeIf(JsonNode::isObject)
+    (
+      try {
+        mapper.readTree(stdout)
+      } catch (_: JsonProcessingException) {
+        null
+      }
+    )?.takeIf(JsonNode::isObject)
 
   private sealed interface ThreadPage {
     data class Read(

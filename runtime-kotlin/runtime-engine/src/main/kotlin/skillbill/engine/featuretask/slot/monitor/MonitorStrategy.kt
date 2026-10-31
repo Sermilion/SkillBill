@@ -163,9 +163,9 @@ class MonitorStrategy(
         "useful event, such as a check starting or settling. Attribute runner capacity only to observed evidence; " +
         "if no capacity detail is available, say it is unavailable and do not query administrative APIs. " +
         "Do not infer a commit link, check state, elapsed time, or runner capacity. " +
-        "Monitoring waits while checks are pending. " +
-        "If no check has been reported within an hour, or a " +
-        "GitHub CLI cannot report checks, monitoring blocks."
+        "Monitoring waits while checks are pending. A failed GitHub identity or checks read is recorded and retried " +
+        "as unknown for that round; it does not establish that CI has not started. If no check has been reported " +
+        "within an hour after a usable no-check observation, monitoring blocks."
 
     private const val MONITOR_FIX_DIRECTIVE: String =
       "Monitor repair completion requires both a fix for the recorded failure and passing runnable local " +

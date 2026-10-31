@@ -2,6 +2,7 @@
 package skillbill.infrastructure.workflow.review.specialists
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
 import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256HexOfFile
@@ -79,10 +80,10 @@ class FileSystemReviewNativeAgentPreflight(
     val installed = entry.installedPath
     if (!Files.isSymbolicLink(installed)) fail(entry.logicalName, provider, installed, "managed link is missing")
     val resolved =
-      runCatching { installed.toRealPath() }
+      catchingNonCancellation { installed.toRealPath() }
         .getOrElse { fail(entry.logicalName, provider, installed, "managed link is dangling or unreadable", it) }
     val target =
-      runCatching { entry.cacheTargetPath.toRealPath() }
+      catchingNonCancellation { entry.cacheTargetPath.toRealPath() }
         .getOrElse { fail(entry.logicalName, provider, installed, "managed cache artifact is missing", it) }
     if (resolved != target) {
       fail(
@@ -108,7 +109,9 @@ class FileSystemReviewNativeAgentPreflight(
   }
 
   private fun provider(agentId: String): NativeAgentProvider? =
-    runCatching { NativeAgentProvider.forSupportedAgent(SupportedAgent.fromWire(agentId)) }.getOrNull()
+    SupportedAgent.fromWireOrNull(agentId)?.let { agent ->
+      NativeAgentProvider.entries.firstOrNull { it.supportedAgent == agent }
+    }
 
   private fun activeProviderDirs(
     provider: NativeAgentProvider,

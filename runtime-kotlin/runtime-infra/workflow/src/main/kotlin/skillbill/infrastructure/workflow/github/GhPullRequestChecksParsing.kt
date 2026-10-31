@@ -1,16 +1,25 @@
 package skillbill.infrastructure.workflow.github
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import java.time.Instant
+import java.time.format.DateTimeParseException
 
 private val checksMapper: ObjectMapper by lazy { ObjectMapper() }
 
 internal fun parsePullRequestChecks(result: GhCommandResult): PullRequestChecks {
-  val entries = runCatching { checksMapper.readTree(result.stdout) }.getOrNull()?.takeIf(JsonNode::isArray)
+  val entries =
+    (
+      try {
+        checksMapper.readTree(result.stdout)
+      } catch (_: JsonProcessingException) {
+        null
+      }
+    )?.takeIf(JsonNode::isArray)
   return when {
     entries != null -> checksFromEntries(entries)
     result.stdout.contains(NO_CHECKS_MARKER, ignoreCase = true) -> PullRequestChecks.NoChecks
@@ -39,7 +48,13 @@ private fun checkFrom(entry: JsonNode): PullRequestCheck? {
 
 private fun startedAtFrom(entry: JsonNode): Instant? =
   entry.path("startedAt").takeIf(JsonNode::isTextual)?.asText()
-    ?.let { text -> runCatching { Instant.parse(text) }.getOrNull() }
+    ?.let { text ->
+      try {
+        Instant.parse(text)
+      } catch (_: DateTimeParseException) {
+        null
+      }
+    }
     ?.takeIf { it.isAfter(Instant.EPOCH) }
 
 private fun bucketFrom(wireValue: String): CheckBucket? = CheckBucket.entries.firstOrNull { it.wireValue == wireValue }

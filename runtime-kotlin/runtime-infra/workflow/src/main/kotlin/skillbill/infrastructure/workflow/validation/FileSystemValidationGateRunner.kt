@@ -15,6 +15,7 @@ import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.workflow.taskruntime.validation.gateStdoutExcerpt
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -83,7 +84,10 @@ class FileSystemValidationGateRunner(
         command = request.argv.joinToString(" "),
       )
     } finally {
-      runCatching { Files.deleteIfExists(outputFile) }
+      try {
+        Files.deleteIfExists(outputFile)
+      } catch (_: IOException) {
+      }
     }
   }
 
@@ -107,7 +111,12 @@ class FileSystemValidationGateRunner(
     internal fun producedByThisRun(
       path: Path,
       artifactFloor: Instant,
-    ): Boolean = runCatching { !Files.getLastModifiedTime(path).toInstant().isBefore(artifactFloor) }.getOrDefault(true)
+    ): Boolean =
+      try {
+        !Files.getLastModifiedTime(path).toInstant().isBefore(artifactFloor)
+      } catch (_: IOException) {
+        true
+      }
 
     internal fun expandGlob(
       repoRoot: Path,

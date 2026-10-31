@@ -9,6 +9,7 @@ import skillbill.review.context.model.accounting.ReviewBudgetOutcome
 import skillbill.review.context.model.execution.ForbiddenReviewOperation
 import skillbill.review.model.requireRepositoryRelativePath
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 
@@ -33,8 +34,11 @@ internal fun validateRepositoryMapping(
   var current = root
   repositoryPath.split('/').forEach { logicalComponent ->
     val component =
-      runCatching { Path.of(logicalComponent) }
-        .getOrElse { throw IllegalArgumentException("Review path is not representable on the active filesystem.", it) }
+      try {
+        Path.of(logicalComponent)
+      } catch (error: InvalidPathException) {
+        throw IllegalArgumentException("Review path is not representable on the active filesystem.", error)
+      }
     require(!component.isAbsolute && component.nameCount == 1 && component.toString() == logicalComponent) {
       "Review path '$repositoryPath' is not represented exactly on the active filesystem."
     }

@@ -473,8 +473,9 @@ monitoring start repair on the first poll reporting a failed check,
 even while other checks are pending, and on the first poll reporting a merge
 conflict, even when no checks are listed. The repair agent runs the project's local checks, as validation does, and settles completed only when they pass; the runtime commits and pushes only a completed repair. Success still requires every check to pass,
 be skipped, or be cancelled with none pending. A missing pull request, wrong
-branch, unavailable checks, or exhausted repair loop stops the goal at the failing
-finalization step. A later goal run reuses completed subtasks and the existing PR
+branch, or exhausted repair loop stops the goal at the failing finalization step. A failed GitHub identity or CI
+checks read is recorded as unknown for that round and retried; only a usable no-check observation can start the
+no-start timeout. A later goal run reuses completed subtasks and the existing PR
 and monitors again. Accepted no-change goals create no PR and skip monitoring.
 
 Finishing the subtasks does not complete the goal. PR publication and monitoring

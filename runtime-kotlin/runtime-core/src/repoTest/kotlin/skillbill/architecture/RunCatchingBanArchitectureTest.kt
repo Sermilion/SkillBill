@@ -8,7 +8,6 @@ import kotlin.test.assertTrue
 private val RUN_CATCHING_PENDING_MAIN_ROOTS: Set<String> =
   setOf(
     "runtime-kotlin/runtime-engine/src/main/kotlin",
-    "runtime-kotlin/runtime-infra/workflow/src/main/kotlin",
     "runtime-kotlin/runtime-infra/skills/src/main/kotlin",
   )
 

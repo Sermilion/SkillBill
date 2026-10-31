@@ -138,7 +138,9 @@ internal interface PhaseMonitorStepBinding :
 /** Pull request CI observation the monitor step drives; the selected monitor strategy supplies it. */
 internal interface PhaseCiObservation {
   /**
-   * Watches the pull request open for [branch] until its checks settle, CI fails to start, or cannot be read.
+   * Watches the pull request open for [branch] until its checks settle or a usable no-check observation exceeds the
+   * CI start timeout. Failed identity and checks reads are reported through [onInconclusive] and retried as unknown
+   * for that round; they do not establish that CI has not started.
    * [onCiRunning] is invoked while checks are still pending so status can stay fresh for the whole run.
    */
   fun watch(

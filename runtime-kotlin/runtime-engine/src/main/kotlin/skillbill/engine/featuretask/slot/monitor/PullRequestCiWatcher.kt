@@ -47,11 +47,15 @@ internal class PullRequestCiWatcher(
       progress = reportRunning(url, checks, checksSettled(checks), onCiRunning, progress)
     }
     while (true) {
-      val poll = observePoll(request, reportChecks, ::reportInconclusive)
+      val poll = observePoll(request, reportChecks, ::reportInconclusive, onInconclusive)
       ciStarted = ciStarted || poll.started
       val settled = poll.outcome
       if (settled != null) return settled
-      if (!ciStarted && Duration.between(startedAt, now()) >= startTimeout) {
+      val awaitingStart = !poll.unknown && poll.startTimeoutEligible && !ciStarted
+      if (
+        awaitingStart &&
+        Duration.between(startedAt, now()) >= startTimeout
+      ) {
         return PullRequestCiOutcome.Blocked(startTimeoutReason())
       }
       sleep(pollInterval)
@@ -66,27 +70,28 @@ internal class PullRequestCiWatcher(
 
   private data class CheckRefresh(val after: Instant, val graceEndsAt: Instant)
 
-  private data class CiPoll(val outcome: PullRequestCiOutcome? = null, val started: Boolean = false)
+  private data class CiPoll(
+    val outcome: PullRequestCiOutcome? = null,
+    val started: Boolean = false,
+    val unknown: Boolean = false,
+    val startTimeoutEligible: Boolean = false,
+  )
 
   private fun observePoll(
     request: WatchRequest,
     onChecks: (String, List<PullRequestCheck>) -> Unit,
     onInconclusive: (String) -> Unit,
+    onReadFailure: (String) -> Unit,
   ): CiPoll {
-    val identity = currentIdentity(request.repoRoot, request.branch)
-    val found =
-      identity as? PullRequestIdentity.Found ?: return CiPoll(
-        refreshedOutcome(request, identityVerdict(identity)),
-      )
+    val identity = currentIdentity(request.repoRoot, request.branch, onReadFailure)
+    val found = identity as? PullRequestIdentity.Found ?: return identityPoll(request, identity, onReadFailure)
     if (found.conflicting) return CiPoll(PullRequestCiOutcome.Conflicted)
     return when (val checks = checksLookup.lookup(request.repoRoot, found.number)) {
       is PullRequestChecks.Unavailable ->
-        CiPoll(
-          refreshedUnavailable(request.repoRoot, request.branch, PullRequestCiOutcome.Unavailable(checks.reason)),
-        )
+        checksLookupFailure(request, checks.reason, onReadFailure)
       PullRequestChecks.NoChecks -> {
         onChecks(found.url, emptyList())
-        CiPoll()
+        CiPoll(startTimeoutEligible = true)
       }
       is PullRequestChecks.Reported -> {
         onChecks(found.url, checks.checks)
@@ -94,21 +99,15 @@ internal class PullRequestCiWatcher(
         when {
           failingChecks.isNotEmpty() && !refreshed(request.refresh, checks.checks) -> CiPoll(started = true)
           failingChecks.isNotEmpty() || checksSettled(checks.checks) ->
-            CiPoll(
-              refreshedOutcome(
-                request,
-                refreshedTerminal(
-                  request,
-                  found,
-                  failingChecks.takeIf {
-                    it.isNotEmpty()
-                  },
-                  onInconclusive,
-                ),
-              ),
+            refreshedTerminal(
+              request,
+              found,
+              failingChecks.takeIf { it.isNotEmpty() },
+              onInconclusive,
+              onReadFailure,
             )
-          checks.checks.isNotEmpty() -> refreshedPending(request, found, onInconclusive)
-          else -> CiPoll()
+          checks.checks.isNotEmpty() -> refreshedPending(request, found, onInconclusive, onReadFailure)
+          else -> CiPoll(startTimeoutEligible = true)
         }
       }
     }
@@ -125,15 +124,38 @@ internal class PullRequestCiWatcher(
           !now().isBefore(refresh.graceEndsAt)
       )
 
-  private fun refreshedOutcome(
+  private fun identityPoll(
     request: WatchRequest,
-    outcome: PullRequestCiOutcome?,
-  ): PullRequestCiOutcome? =
-    if (outcome is PullRequestCiOutcome.Unavailable) {
-      refreshedUnavailable(request.repoRoot, request.branch, outcome)
-    } else {
-      outcome
+    identity: PullRequestIdentity,
+    onReadFailure: (String) -> Unit,
+  ): CiPoll =
+    when (identity) {
+      is PullRequestIdentity.Unavailable -> identityAfterUnknown(request, onReadFailure)
+      is PullRequestIdentity.Merged -> CiPoll(PullRequestCiOutcome.Merged)
+      PullRequestIdentity.Absent -> CiPoll(PullRequestCiOutcome.NoPullRequest)
+      is PullRequestIdentity.Found -> if (identity.conflicting) CiPoll(PullRequestCiOutcome.Conflicted) else CiPoll()
     }
+
+  private fun identityAfterUnknown(
+    request: WatchRequest,
+    onReadFailure: (String) -> Unit,
+  ): CiPoll =
+    when (val latest = lookupIdentity(request.repoRoot, request.branch, onReadFailure)) {
+      is PullRequestIdentity.Merged -> CiPoll(PullRequestCiOutcome.Merged)
+      PullRequestIdentity.Absent -> CiPoll(PullRequestCiOutcome.NoPullRequest)
+      is PullRequestIdentity.Unavailable -> CiPoll(unknown = true)
+      is PullRequestIdentity.Found ->
+        if (latest.conflicting) CiPoll(PullRequestCiOutcome.Conflicted) else CiPoll(unknown = true)
+    }
+
+  private fun checksLookupFailure(
+    request: WatchRequest,
+    reason: String,
+    onReadFailure: (String) -> Unit,
+  ): CiPoll {
+    readFailure(onReadFailure, "GitHub CI checks lookup failed: $reason")
+    return identityAfterUnknown(request, onReadFailure)
+  }
 
   private fun checksSettled(checks: List<PullRequestCheck>): Boolean =
     checks.isNotEmpty() && checks.none { it.bucket == CheckBucket.PENDING }
@@ -142,10 +164,11 @@ internal class PullRequestCiWatcher(
     request: WatchRequest,
     observed: PullRequestIdentity.Found,
     onInconclusive: (String) -> Unit,
+    onReadFailure: (String) -> Unit,
   ): CiPoll =
-    when (val latest = identityLookup.lookup(request.repoRoot, request.branch)) {
+    when (val latest = lookupIdentity(request.repoRoot, request.branch, onReadFailure)) {
       is PullRequestIdentity.Merged -> CiPoll(PullRequestCiOutcome.Merged)
-      is PullRequestIdentity.Unavailable -> CiPoll(PullRequestCiOutcome.Unavailable(latest.reason))
+      is PullRequestIdentity.Unavailable -> CiPoll(unknown = true)
       PullRequestIdentity.Absent -> CiPoll(PullRequestCiOutcome.NoPullRequest)
       is PullRequestIdentity.Found ->
         when {
@@ -161,52 +184,60 @@ internal class PullRequestCiWatcher(
   private fun currentIdentity(
     repoRoot: Path,
     branch: String,
+    onReadFailure: (String) -> Unit,
   ): PullRequestIdentity {
-    val identity = identityLookup.lookup(repoRoot, branch)
+    val identity = lookupIdentity(repoRoot, branch, onReadFailure)
     return if ((identity as? PullRequestIdentity.Found)?.conflicting == true) {
-      identityLookup.lookup(repoRoot, branch)
+      lookupIdentity(repoRoot, branch, onReadFailure)
     } else {
       identity
     }
   }
+
+  private fun lookupIdentity(
+    repoRoot: Path,
+    branch: String,
+    onReadFailure: (String) -> Unit,
+  ): PullRequestIdentity =
+    identityLookup.lookup(repoRoot, branch).also { identity ->
+      if (identity is PullRequestIdentity.Unavailable) {
+        readFailure(onReadFailure, "GitHub pull request identity lookup failed: ${identity.reason}")
+      }
+    }
 
   private fun refreshedTerminal(
     request: WatchRequest,
     observedIdentity: PullRequestIdentity.Found,
     failingChecks: List<PullRequestCheck>?,
     onInconclusive: (String) -> Unit,
-  ): PullRequestCiOutcome? =
-    when (val latest = identityLookup.lookup(request.repoRoot, request.branch)) {
-      is PullRequestIdentity.Merged -> PullRequestCiOutcome.Merged
-      is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(latest.reason)
-      PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
+    onReadFailure: (String) -> Unit,
+  ): CiPoll =
+    when (val latest = lookupIdentity(request.repoRoot, request.branch, onReadFailure)) {
+      is PullRequestIdentity.Merged -> CiPoll(PullRequestCiOutcome.Merged)
+      is PullRequestIdentity.Unavailable -> CiPoll(unknown = true)
+      PullRequestIdentity.Absent -> CiPoll(PullRequestCiOutcome.NoPullRequest)
       is PullRequestIdentity.Found ->
         if (latest.conflicting) {
-          PullRequestCiOutcome.Conflicted
+          CiPoll(PullRequestCiOutcome.Conflicted)
         } else if (latest.number != observedIdentity.number || latest.headSha != observedIdentity.headSha) {
           onInconclusive("Pull request identity changed during check observation.")
-          null
+          CiPoll()
         } else if (failingChecks != null) {
-          PullRequestCiOutcome.Failed(failingChecks, observedIdentity.headSha, latest.editableFieldsDigest)
+          CiPoll(PullRequestCiOutcome.Failed(failingChecks, observedIdentity.headSha, latest.editableFieldsDigest))
         } else {
-          latest.headSha?.takeIf(String::isNotBlank)?.let(PullRequestCiOutcome::Passed) ?: run {
+          latest.headSha?.takeIf(String::isNotBlank)?.let { CiPoll(PullRequestCiOutcome.Passed(it)) } ?: run {
             onInconclusive("Green checks have no pull request head to attribute them to.")
-            null
+            CiPoll()
           }
         }
     }
 
-  private fun refreshedUnavailable(
-    repoRoot: Path,
-    branch: String,
-    observed: PullRequestCiOutcome.Unavailable,
-  ): PullRequestCiOutcome =
-    when (val latest = identityLookup.lookup(repoRoot, branch)) {
-      is PullRequestIdentity.Merged -> PullRequestCiOutcome.Merged
-      is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(latest.reason)
-      PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
-      is PullRequestIdentity.Found -> if (latest.conflicting) PullRequestCiOutcome.Conflicted else observed
-    }
+  private fun readFailure(
+    onReadFailure: (String) -> Unit,
+    reason: String,
+  ) {
+    onReadFailure(reason.take(MAX_FAILURE_CONTEXT_LENGTH))
+  }
 
   private data class CiProgress(val at: Instant? = null, val names: List<String>? = null)
 
@@ -244,14 +275,6 @@ internal class PullRequestCiWatcher(
       }
     }.getOrDefault("")
 
-  private fun identityVerdict(identity: PullRequestIdentity): PullRequestCiOutcome? =
-    when (identity) {
-      is PullRequestIdentity.Found -> null
-      is PullRequestIdentity.Merged -> PullRequestCiOutcome.Merged
-      PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
-      is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(identity.reason)
-    }
-
   private fun startTimeoutReason(): String = "CI did not start within ${startTimeout.toMinutes()} minutes."
 
   private companion object {
@@ -262,5 +285,6 @@ internal class PullRequestCiWatcher(
     const val MAX_PROGRESS_CHECKS: Int = 8
     const val MAX_PROGRESS_TEXT_LENGTH: Int = 160
     const val MAX_PROGRESS_LINK_LENGTH: Int = 300
+    const val MAX_FAILURE_CONTEXT_LENGTH: Int = 300
   }
 }

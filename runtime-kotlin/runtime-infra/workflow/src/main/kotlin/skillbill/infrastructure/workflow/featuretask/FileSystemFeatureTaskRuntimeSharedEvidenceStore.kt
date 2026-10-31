@@ -206,10 +206,13 @@ internal fun storePath(
   storeRoot: Path,
   artifactDir: Path,
 ): String =
-  runCatching { storeRoot.toAbsolutePath().normalize().relativize(artifactDir).toString() }
-    .getOrNull()
-    ?.takeIf { it.isNotBlank() && !it.startsWith("..") }
-    ?: artifactDir.toString()
+  try {
+    storeRoot.toAbsolutePath().normalize().relativize(artifactDir).toString()
+      .takeIf { it.isNotBlank() && !it.startsWith("..") }
+      ?: artifactDir.toString()
+  } catch (_: IllegalArgumentException) {
+    artifactDir.toString()
+  }
 
 internal fun artifactDir(
   storeRoot: Path,

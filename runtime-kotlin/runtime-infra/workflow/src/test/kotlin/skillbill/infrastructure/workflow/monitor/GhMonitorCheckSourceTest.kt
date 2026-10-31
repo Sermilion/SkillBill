@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.monitor
 
 import skillbill.infrastructure.workflow.github.GhCommandResult
 import skillbill.infrastructure.workflow.github.GhCommandRunner
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.monitor.model.MonitorFailureLog
@@ -21,6 +22,7 @@ class GhMonitorCheckSourceTest {
         calls += args
         GhCommandResult(0, "failed step output")
       },
+      NoopRuntimeDiagnostics,
     )
 
   private fun failing(link: String) = PullRequestCheck("build", CheckBucket.FAIL, link)

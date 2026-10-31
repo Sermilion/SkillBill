@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.github
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import me.tatarka.inject.annotations.Inject
@@ -54,7 +55,13 @@ class GhPullRequestIdentityLookup internal constructor(
   }
 
   private fun parseIdentity(stdout: String): PullRequestIdentity =
-    runCatching { mapper.readTree(stdout) }.getOrNull()
+    (
+      try {
+        mapper.readTree(stdout)
+      } catch (_: JsonProcessingException) {
+        null
+      }
+    )
       ?.takeIf(JsonNode::isArray)
       ?.let(::identityFromEntries)
       ?: PullRequestIdentity.Unavailable("GitHub CLI returned unparsable pull request output.")

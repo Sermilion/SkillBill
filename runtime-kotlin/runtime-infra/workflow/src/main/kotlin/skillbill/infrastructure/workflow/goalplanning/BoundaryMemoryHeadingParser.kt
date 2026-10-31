@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.goalplanning
 
 import skillbill.infrastructure.contracts.sha256Hex
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
 
 data class BoundaryMemoryEntry(
   val headingId: String,
@@ -34,11 +35,14 @@ object BoundaryMemoryHeadingParser {
 
   fun sourcePathOf(headingId: String): String? = headingId.substringBeforeLast('#', "").takeIf(String::isNotEmpty)
 
-  fun entryDate(heading: String): LocalDate? =
-    runCatching {
-      val dateText = ENTRY_DATE.find(heading.trim())?.groupValues?.get(1) ?: return null
+  fun entryDate(heading: String): LocalDate? {
+    val dateText = ENTRY_DATE.find(heading.trim())?.groupValues?.get(1) ?: return null
+    return try {
       LocalDate.parse(dateText)
-    }.getOrNull()
+    } catch (_: DateTimeParseException) {
+      null
+    }
+  }
 
   private data class Scan(val entries: List<Pair<String, String>>, val unclosedFence: Boolean)
 

@@ -67,6 +67,7 @@ class StandalonePullRequestWatcherTest {
     expected: String = PUBLISHED,
     superseded: Set<String> = emptySet(),
     refreshAfter: Instant? = null,
+    onSleep: () -> Unit = {},
   ): PullRequestCiOutcome =
     StandalonePullRequestWatcher(
       source = source,
@@ -75,6 +76,7 @@ class StandalonePullRequestWatcherTest {
       sleep = { duration ->
         sleeps += duration
         clock = clock.plus(duration)
+        onSleep()
       },
       cancelled = { cancelled },
     ).watch(
@@ -244,19 +246,21 @@ class StandalonePullRequestWatcherTest {
   }
 
   @Test
-  fun `an unavailable check service is reported with its evidence`() {
+  fun `an unavailable check service is retried until checks recover`() {
     heads += PUBLISHED
-    reported = PullRequestChecks.Unavailable("gh: HTTP 502")
+    reportedSequence += PullRequestChecks.Unavailable("gh: HTTP 502")
+    reportedSequence += reports(check("build", CheckBucket.PASS))
 
-    assertEquals(PullRequestCiOutcome.Unavailable("gh: HTTP 502"), watch())
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), watch())
   }
 
   @Test
-  fun `a pull request that cannot be read is reported unavailable rather than missing`() {
+  fun `a pull request that cannot be read is retried until identity recovers`() {
     heads += PUBLISHED
     lookupFailure = "gh: rate limited"
+    reported = reports(check("build", CheckBucket.PASS))
 
-    assertEquals(PullRequestCiOutcome.Unavailable("gh: rate limited"), watch())
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), watch(onSleep = { lookupFailure = null }))
   }
 
   @Test

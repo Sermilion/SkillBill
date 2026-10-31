@@ -526,8 +526,9 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
-  fun `an unavailable identity refresh during pending CI retains its failure`() {
+  fun `an unavailable identity refresh during pending CI retries and observes the merge`() {
     val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))))
+    val inconclusive = mutableListOf<String>()
     var identityCalls = 0
     val identities =
       PullRequestIdentityLookup { _, _ ->
@@ -543,35 +544,58 @@ class PullRequestCiWatcherTest {
       watcher(
         checks,
         identityLookup = identities,
-      ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
+      ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onInconclusive = inconclusive::add)
 
-    assertEquals(PullRequestCiOutcome.Unavailable("gh is not authenticated"), outcome)
+    assertEquals(PullRequestCiOutcome.Merged, outcome)
+    assertEquals(listOf("GitHub pull request identity lookup failed: gh is not authenticated"), inconclusive)
   }
 
   @Test
-  fun `an unavailable checks lookup reports unavailable with its reason`() {
-    val checks = ScriptedChecks(PullRequestChecks.Unavailable("gh pr checks --json unsupported; upgrade gh"))
+  fun `an unavailable checks lookup retries and reports its reason`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Unavailable("gh: HTTP 502"),
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
+      )
+    val inconclusive = mutableListOf<String>()
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
+    val outcome =
+      watcher(checks, startTimeout = Duration.ZERO).watch(
+        REPO_ROOT,
+        BRANCH,
+        expectedHead = ExpectedCiHead(HEAD_SHA),
+        onInconclusive = inconclusive::add,
+      )
 
-    assertEquals(
-      PullRequestCiOutcome.Unavailable("gh pr checks --json unsupported; upgrade gh"),
-      outcome,
-    )
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
+    assertEquals(listOf("GitHub CI checks lookup failed: gh: HTTP 502"), inconclusive)
   }
 
   @Test
-  fun `an unavailable pull request lookup reports unavailable with its reason`() {
-    val checks = ScriptedChecks(PullRequestChecks.NoChecks)
+  fun `an unavailable pull request lookup retries without reading checks until identity recovers`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))))
+    val inconclusive = mutableListOf<String>()
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        if (identityCalls <= 2) {
+          assertEquals(0, checks.calls)
+          PullRequestIdentity.Unavailable("gh: HTTP 502")
+        } else {
+          PullRequestIdentity.Found(PR_URL, PR_NUMBER, headSha = HEAD_SHA)
+        }
+      }
 
     val outcome =
       watcher(
         checks,
-        identity = PullRequestIdentity.Unavailable("gh is not authenticated"),
-      ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
+        startTimeout = Duration.ZERO,
+        identityLookup = identities,
+      ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onInconclusive = inconclusive::add)
 
-    assertEquals(PullRequestCiOutcome.Unavailable("gh is not authenticated"), outcome)
-    assertEquals(0, checks.calls)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
+    assertEquals(List(2) { "GitHub pull request identity lookup failed: gh: HTTP 502" }, inconclusive)
   }
 
   private fun watcher(

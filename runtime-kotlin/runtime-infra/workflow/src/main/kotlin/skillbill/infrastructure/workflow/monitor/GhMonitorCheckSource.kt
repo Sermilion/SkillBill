@@ -5,12 +5,14 @@ import skillbill.infrastructure.workflow.github.GhCommandRunner
 import skillbill.infrastructure.workflow.github.ProcessGhCommandRunner
 import skillbill.infrastructure.workflow.github.describeFailure
 import skillbill.infrastructure.workflow.github.parsePullRequestChecks
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.monitor.MonitorCheckSource
 import skillbill.ports.monitor.model.MonitorFailureLog
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Path
 
 private const val LOG_OUTPUT_BYTES: Long = 8L * 1024 * 1024
@@ -20,27 +22,37 @@ private val RUN_LINK = Regex("/actions/runs/(\\d+)(?:/job/(\\d+))?")
 
 class GhMonitorCheckSource internal constructor(
   private val gh: GhCommandRunner,
+  private val diagnostics: RuntimeDiagnostics,
 ) : MonitorCheckSource {
   @Inject
-  constructor() : this(
+  constructor(diagnostics: RuntimeDiagnostics) : this(
     ProcessGhCommandRunner(maxOutputBytes = LOG_OUTPUT_BYTES, deadlineSeconds = LOG_DEADLINE_SECONDS),
+    diagnostics,
   )
 
-  override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks =
-    parsePullRequestChecks(
-      gh.run(
-        Path.of("."),
-        listOf(
-          "pr",
-          "checks",
-          pullRequest.number.toString(),
-          "--repo",
-          repositoryArgument(pullRequest),
-          "--json",
-          "name,state,bucket,link,startedAt",
+  override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks {
+    val result =
+      parsePullRequestChecks(
+        gh.run(
+          Path.of("."),
+          listOf(
+            "pr",
+            "checks",
+            pullRequest.number.toString(),
+            "--repo",
+            repositoryArgument(pullRequest),
+            "--json",
+            "name,state,bucket,link,startedAt",
+          ),
         ),
-      ),
-    )
+      )
+    if (result is PullRequestChecks.Unavailable) {
+      diagnostics.warning(
+        "monitor poll checks unavailable for ${pullRequest.repository.slug}#${pullRequest.number}: ${result.reason}",
+      )
+    }
+    return result
+  }
 
   override fun failureLog(
     pullRequest: MonitorPullRequestIdentity,
@@ -59,7 +71,9 @@ class GhMonitorCheckSource internal constructor(
     return if (result.exitCode == 0) {
       MonitorFailureLog.Available(result.stdout.takeLast(LOG_TAIL_CHARACTERS))
     } else {
-      MonitorFailureLog.Unavailable(result.describeFailure())
+      val reason = result.describeFailure()
+      diagnostics.warning("monitor poll failure log unavailable for $repository#${pullRequest.number}: $reason")
+      MonitorFailureLog.Unavailable(reason)
     }
   }
 
@@ -67,7 +81,12 @@ class GhMonitorCheckSource internal constructor(
     pullRequest: MonitorPullRequestIdentity,
     link: String,
   ): MatchResult? {
-    val uri = runCatching { URI(link) }.getOrNull() ?: return null
+    val uri =
+      try {
+        URI(link)
+      } catch (_: URISyntaxException) {
+        return null
+      }
     val path = uri.path.orEmpty()
     val ownPrefix = "/${pullRequest.repository.slug}/actions/runs/"
     return RUN_LINK.find(path)?.takeIf {
