@@ -100,8 +100,10 @@ private fun ToolRows(tools: List<ChatToolEntry>, streaming: Boolean) {
   val colors = SkillBillTheme.colors
   val scroll = rememberScrollState()
   var rowHeight by remember { mutableStateOf<Int?>(null) }
-  val scrolls = tools.size > VISIBLE_TOOL_ROWS
-  val maxHeight = rowHeight?.takeIf { scrolls }?.let { with(LocalDensity.current) { (it * VISIBLE_TOOL_ROWS).toDp() } }
+  val maxHeight = rowHeight?.takeIf { tools.size > VISIBLE_TOOL_ROWS }
+    ?.let { with(LocalDensity.current) { (it * VISIBLE_TOOL_ROWS).toDp() } }
+  // Scroll only once the height cap exists. Inside the chat's LazyColumn an uncapped verticalScroll gets infinite height.
+  val scrolls = maxHeight != null
   LaunchedEffect(scroll, streaming, scrolls) {
     if (!streaming || !scrolls) return@LaunchedEffect
     var lastMax = scroll.maxValue

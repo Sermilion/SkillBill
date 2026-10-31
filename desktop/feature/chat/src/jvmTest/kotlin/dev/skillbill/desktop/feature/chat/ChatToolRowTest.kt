@@ -1,8 +1,10 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
@@ -58,6 +60,29 @@ class ChatToolRowTest {
     onNodeWithText("Command 1").assertIsNotDisplayed()
     onNodeWithText("Command 1").performScrollTo().assertIsDisplayed()
     onNodeWithText("Command 8").assertIsNotDisplayed()
+  }
+
+  @Test
+  fun `a long group inside the chat's lazy list measures without infinite height`() = runComposeUiTest {
+    val tools = (1..8).map { n ->
+      val call = ChatToolCall("bash-$n", "Bash", "echo $n", "Command $n")
+      ChatToolEntry(call, ChatEvent.ToolResult(call.id, "$n", false), start, start + 1.seconds)
+    }
+    setContent { SkillBillTheme(reducedMotion = true) { LazyColumn { item { ChatToolGroup(tools, streaming = true) } } } }
+
+    onNodeWithText("Command 8").assertIsDisplayed()
+    onNodeWithText("Command 1").assertIsNotDisplayed()
+  }
+
+  @Test
+  fun `a long group inside the transcript's lazy list lays out without an unbounded scroll`() = runComposeUiTest {
+    val tools = (1..8).map { n ->
+      val call = ChatToolCall("bash-$n", "Bash", "echo $n", "Command $n")
+      ChatToolEntry(call, ChatEvent.ToolResult(call.id, "$n", false), start, start + 1.seconds)
+    }
+    setContent { SkillBillTheme(reducedMotion = true) { LazyColumn { item { ChatToolGroup(tools, streaming = true) } } } }
+
+    onNodeWithText("Command 8").assertIsDisplayed()
   }
 
   @Test
