@@ -9,6 +9,7 @@ import skillbill.ports.system.HostPlatformPort
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
 
@@ -50,7 +51,14 @@ class GateJvmResolver(
     return try {
       dispositionOf(runGuard(guard, environment), rejectedCandidate)
     } finally {
-      runCatching { Files.deleteIfExists(guard) }
+      try {
+        Files.deleteIfExists(guard)
+      } catch (cleanup: IOException) {
+        diagnostics.warning(
+          "Gate JVM resolution: seam=GateJvmResolver.evaluateGuard could not delete guard $guard",
+          cleanup,
+        )
+      }
     }
   }
 
@@ -218,7 +226,11 @@ internal fun runtimeImageRoot(hostPlatform: HostPlatformPort): Path? =
   runningJavaHome(hostPlatform)?.takeUnless(::hostsAJavaCompiler)
 
 private fun runningJavaHome(hostPlatform: HostPlatformPort): Path? =
-  runCatching { hostPlatform.resolveJavaHome().toRealPath() }.getOrNull()
+  try {
+    hostPlatform.resolveJavaHome().toRealPath()
+  } catch (_: IOException) {
+    null
+  }
 
 private fun hostsAJavaCompiler(home: Path): Boolean =
   JAVA_COMPILER_EXECUTABLES.any { name -> Files.isExecutable(home.resolve("bin").resolve(name)) }
@@ -251,6 +263,13 @@ private fun liesInside(
   imageRoot: Path?,
 ): Boolean {
   if (imageRoot == null || value.isBlank()) return false
-  val candidate = runCatching { Path.of(value).toRealPath() }.getOrNull() ?: return false
+  val candidate =
+    try {
+      Path.of(value).toRealPath()
+    } catch (_: InvalidPathException) {
+      return false
+    } catch (_: IOException) {
+      return false
+    }
   return candidate.startsWith(imageRoot)
 }

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.host.process
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
@@ -119,18 +120,26 @@ internal fun currentProcessIdentity(
 internal fun processBootIdentity(diagnostics: RuntimeDiagnostics): String {
   val linuxBootId = Path.of("/proc/sys/kernel/random/boot_id")
   if (Files.isReadable(linuxBootId)) {
-    runCatching { Files.readString(linuxBootId).trim() }
-      .getOrNull()
+    val bootId =
+      try {
+        Files.readString(linuxBootId).trim()
+      } catch (failure: IOException) {
+        diagnostics.warning("seam=processBootIdentity expected=kernel boot id used=init-process fallback", failure)
+        null
+      }
+    bootId
       ?.takeIf(String::isNotBlank)
       ?.let { return it }
   }
-  runCatching { ProcessHandle.of(INIT_PID).flatMap { it.info().startInstant() }.orElse(null) }
-    .getOrNull()
-    ?.let { return "boot-${it.toEpochMilli()}" }
+  val initProcessBirth =
+    catchingNonCancellation { ProcessHandle.of(INIT_PID).flatMap { it.info().startInstant() }.orElse(null) }
+  initProcessBirth.getOrNull()?.let { return "boot-${it.toEpochMilli()}" }
+  val error = initProcessBirth.exceptionOrNull()
   diagnostics.warning(
     "seam=processBootIdentity expected=kernel boot id or init-process birth " +
       "used=$BOOT_IDENTITY_UNAVAILABLE. This platform exposes neither; process-birth evidence remains " +
       "the reused-pid guard.",
+    error,
   )
   return BOOT_IDENTITY_UNAVAILABLE
 }

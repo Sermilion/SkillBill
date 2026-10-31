@@ -140,6 +140,23 @@ class ProjectStoreResolverTest {
   }
 
   @Test
+  fun `lineage probe interruption propagates without creating a fallback store`() {
+    val repo = gitCheckout("interrupted")
+    val interruptedLineages =
+      object : RepositoryLineagePort {
+        override fun lineage(repoRoot: Path): RepositoryLineage? = throw InterruptedException("probe interrupted")
+      }
+
+    assertFailsWith<InterruptedException> { resolver(interruptedLineages).resolve(repo) }
+
+    assertTrue(!Files.exists(storeParent), "An interrupted git probe must not create a non-git fallback store.")
+    assertTrue(
+      warnings.none { "git_unavailable" in it },
+      "An interruption must not be reported as git unavailable.",
+    )
+  }
+
+  @Test
   fun `a non-git directory gets a path-hash store`() {
     val plain = Files.createDirectories(home.resolve("plain"))
 
@@ -218,7 +235,7 @@ class ProjectStoreResolverTest {
     assertTrue("l-missing" in failure.message.orEmpty() && storeParent.toString() in failure.message.orEmpty())
   }
 
-  private fun resolver(): ProjectStoreResolver =
+  private fun resolver(lineages: RepositoryLineagePort = this.lineages): ProjectStoreResolver =
     ProjectStoreResolver(
       CanonicalRepositoryRoot,
       lineages,

@@ -10,9 +10,11 @@ class JdkDaemonThreadPort : DaemonThreadPort {
   ) {
     val worker = Thread(action)
     worker.isDaemon = true
-    runCatching {
-      worker.start()
+    worker.start()
+    try {
       worker.join(joinBudgetMillis)
+    } catch (_: InterruptedException) {
+      Thread.currentThread().interrupt()
     }
   }
 }

@@ -1,5 +1,7 @@
 package skillbill.infrastructure.host.process
 
+import skillbill.error.core.catchingNonCancellation
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 const val PROCESS_CLEANUP_BUDGET_SECONDS = 5L
@@ -13,11 +15,11 @@ fun destroyOwnedProcessTree(
   var failure: Throwable? = null
 
   fun attempt(action: () -> Unit) {
-    val error = runCatching(action).exceptionOrNull() ?: return
+    val error = catchingNonCancellation(action).exceptionOrNull() ?: return
     failure = failure?.also { existing -> existing.addSuppressed(error) } ?: error
   }
   val handle =
-    runCatching { process.toHandle() }
+    catchingNonCancellation { process.toHandle() }
       .onFailure { error -> failure = error }
       .getOrNull()
   handle?.let { ownedProcess ->
@@ -45,7 +47,10 @@ fun closeInputAndJoin(
   if (joinWithDeadline(outputThread, joinDeadlineNanos)) {
     return true
   }
-  runCatching { process.inputStream.close() }
+  try {
+    process.inputStream.close()
+  } catch (_: IOException) {
+  }
   joinWithDeadline(outputThread, joinDeadlineNanos)
   return false
 }

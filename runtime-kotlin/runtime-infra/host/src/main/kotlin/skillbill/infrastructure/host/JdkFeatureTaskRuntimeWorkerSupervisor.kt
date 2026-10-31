@@ -3,6 +3,7 @@ package skillbill.infrastructure.host
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.process.currentProcessIdentity
 import skillbill.infrastructure.host.process.inspectRecordedProcess
 import skillbill.infrastructure.host.process.processBirthMatches
@@ -20,6 +21,7 @@ import java.io.IOException
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -36,7 +38,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
   override fun currentProcess(): FeatureTaskRuntimeProcessIdentity = currentProcessIdentity(platform, diagnostics)
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection =
-    runCatching { currentProcess() }.fold(
+    catchingNonCancellation { currentProcess() }.fold(
       onSuccess = { local -> inspectLocalOwnership(ownership, local) },
       onFailure = {
         FeatureTaskRuntimeProcessInspection.Unsupported(it.message ?: "Local process identity is unavailable.")
@@ -214,7 +216,13 @@ private class HeartbeatLoop(
 
   private fun scheduleNext(delaySeconds: Long) {
     synchronized(lifecycleLock) {
-      if (!stopped) runCatching { executor.schedule(::runTick, delaySeconds, TimeUnit.SECONDS) }
+      if (!stopped) {
+        try {
+          executor.schedule(::runTick, delaySeconds, TimeUnit.SECONDS)
+        } catch (rejected: RejectedExecutionException) {
+          diagnostics.error("Worker heartbeat for '${plan.label}' could not schedule its next tick.", rejected)
+        }
+      }
     }
   }
 

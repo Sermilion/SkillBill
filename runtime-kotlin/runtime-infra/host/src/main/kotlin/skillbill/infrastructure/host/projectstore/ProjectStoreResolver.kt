@@ -5,6 +5,7 @@ import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.projectstore.PROJECT_STORE_RECORD_CONTRACT_VERSION
 import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.projectstore.ProjectStoreFailureCode
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
@@ -28,7 +29,6 @@ import java.time.Clock
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class ProjectStoreResolver(
@@ -46,17 +46,17 @@ class ProjectStoreResolver(
 
   override fun resolve(workingDirectory: Path): ProjectStoreLocation {
     val checkout =
-      runCatching { locate(workingDirectory) }.getOrElse { failure ->
-        return gitUnavailable(workingDirectory, failure.rethrowIfCancellation())
+      catchingNonCancellation { locate(workingDirectory) }.getOrElse { failure ->
+        return gitUnavailable(workingDirectory, failure)
       }
     cache[checkout.commonDir]?.let { return it }
     return synchronized(lock) {
-      cache[checkout.commonDir] ?: runCatching {
+      cache[checkout.commonDir] ?: catchingNonCancellation {
         bind(checkout).also {
           noteLegacyState(checkout, it)
           cache[checkout.commonDir] = it
         }
-      }.getOrElse { failure -> gitUnavailable(workingDirectory, failure.rethrowIfCancellation()) }
+      }.getOrElse { failure -> gitUnavailable(workingDirectory, failure) }
     }
   }
 
@@ -146,12 +146,16 @@ class ProjectStoreResolver(
       bindNonGit(checkout, NON_GIT_OUTCOME)
     }
 
-  private fun canonicalStateDir(): Path =
-    runCatching { repositories.canonicalPath(stateDir) }
-      .getOrElse { failure ->
-        failure.rethrowIfCancellation()
-        stateDir.toAbsolutePath().normalize()
-      }
+  private fun canonicalStateDir(): Path = canonicalOrNormalized(stateDir)
+
+  private fun canonicalOrNormalized(path: Path): Path =
+    catchingNonCancellation { repositories.canonicalPath(path) }.getOrElse { failure ->
+      diagnostics.warning(
+        "seam=project_store_identity value_expected=canonical_path value_used=normalized_path " +
+          "cause=${failure.causeLabel()} path=$path",
+      )
+      path.toAbsolutePath().normalize()
+    }
 
   private fun bindNonGit(
     checkout: Checkout,
@@ -199,11 +203,11 @@ class ProjectStoreResolver(
   }
 
   private fun localRemoteCommonDir(remote: String): String? =
-    runCatching {
+    catchingNonCancellation {
       val path = if (remote.startsWith(FILE_SCHEME)) Path.of(URI(remote)) else Path.of(remote).takeIf { it.isAbsolute }
       path?.takeIf(Files::isDirectory)?.let(::locate)?.takeIf { it.gitRoot != null }?.commonDir?.toString()
     }.getOrElse { failure ->
-      failure.rethrowIfCancellation()
+      identityWarning("local_remote_unresolved cause=${failure.causeLabel()}")
       null
     }
 
@@ -316,7 +320,16 @@ class ProjectStoreResolver(
       )
       written = true
     } finally {
-      if (!written && !existedBefore) runCatching { Files.deleteIfExists(root) }
+      if (!written && !existedBefore) {
+        try {
+          Files.deleteIfExists(root)
+        } catch (cleanup: IOException) {
+          diagnostics.warning(
+            "seam=project_store_create value_expected=partial_store_removed value_used=$root " +
+              "cause=${cleanup.causeLabel()}",
+          )
+        }
+      }
     }
     outcome?.let(::identityWarning)
     return location(id)
@@ -360,15 +373,10 @@ class ProjectStoreResolver(
     cause: Throwable,
   ): ProjectStoreLocation {
     identityWarning("$GIT_UNAVAILABLE_OUTCOME cause=${cause.causeLabel()}")
-    val directory =
-      runCatching { repositories.canonicalPath(workingDirectory) }
-        .getOrElse { failure ->
-          failure.rethrowIfCancellation()
-          workingDirectory.toAbsolutePath().normalize()
-        }
-    return runCatching { synchronized(lock) { bindNonGit(Checkout(directory, null), null) } }
+    val directory = canonicalOrNormalized(workingDirectory)
+    return catchingNonCancellation { synchronized(lock) { bindNonGit(Checkout(directory, null), null) } }
       .getOrElse { failure ->
-        failure.rethrowIfCancellation()
+        identityWarning("non_git_store_unrecorded cause=${failure.causeLabel()}")
         location(nonGitProjectId(directory))
       }
   }
@@ -404,7 +412,13 @@ class ProjectStoreResolver(
     val recordPath = targetDir.resolve(RECORD_FILE)
     val record =
       if (STORE_ID_PATTERN.matches(projectId)) {
-        runCatching { ProjectStoreRecordCodec.parse(Files.readString(recordPath)) }.getOrNull()
+        try {
+          ProjectStoreRecordCodec.parse(Files.readString(recordPath))
+        } catch (_: SkillBillRuntimeException) {
+          null
+        } catch (_: IOException) {
+          null
+        }
       } else {
         null
       }
@@ -462,11 +476,6 @@ class ProjectStoreResolver(
       "seam=project_store_record value_expected=contract_version $PROJECT_STORE_RECORD_CONTRACT_VERSION " +
         "value_used=$observed cause=$cause path=$recordPath",
     )
-  }
-
-  private fun Throwable.rethrowIfCancellation(): Throwable {
-    if (this is CancellationException || this is InterruptedException) throw this
-    return this
   }
 
   private data class Checkout(

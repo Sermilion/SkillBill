@@ -9,7 +9,6 @@ private val RUN_CATCHING_PENDING_MAIN_ROOTS: Set<String> =
   setOf(
     "runtime-kotlin/runtime-application/src/main/kotlin",
     "runtime-kotlin/runtime-engine/src/main/kotlin",
-    "runtime-kotlin/runtime-infra/host/src/main/kotlin",
     "runtime-kotlin/runtime-infra/launcher/src/main/kotlin",
     "runtime-kotlin/runtime-infra/workflow/src/main/kotlin",
     "runtime-kotlin/runtime-infra/skills/src/main/kotlin",
