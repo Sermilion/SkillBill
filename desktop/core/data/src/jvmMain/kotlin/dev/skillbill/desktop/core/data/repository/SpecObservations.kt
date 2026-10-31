@@ -50,7 +50,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 private const val SHARE_TIMEOUT_MS = 5_000L
 internal const val SPEC_SESSION_CHANGED = "The database session changed before the spec folder was deleted. Try again."
-private val EDITOR_VARIABLES = setOf("VISUAL", "EDITOR")
+internal val EDITOR_VARIABLES = setOf("VISUAL", "EDITOR")
 
 /**
  * One session's spec reads. Each project's tree is one snapshot read, re-read when the platform watcher reports a change
