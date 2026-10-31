@@ -3436,6 +3436,21 @@ Goal intake refuses new work without requirements, so pre-planning always has th
 
 Whole-artifact wire encoding stays at the CLI and MCP projection boundaries. WorkflowService retains typed artifacts in its snapshot views, avoiding both a twelfth constructor collaborator and a map-form round trip inside the application service. The sqlite encoder port exchanges JSON text because runtime-ports forbids serialization-library types; consumers parse only the whole object and never encode the goal-continuation fields. Parse-boundary guards follow the codecs into sqlite rather than selecting deleted domain parsers.
 
+## [2026-10-31] Keep cancellation capture behind one helper and a source guard
+Context: Broad `runCatching` can turn coroutine cancellation or thread interruption into ordinary failure values, and the pinned detekt version cannot reliably type-resolve the repository's Kotlin sources.
+Decision: Use `catchingNonCancellation` for result capture and enforce the `runCatching` ban with a catalog main-source architecture guard.
+Reason: The helper preserves cancellation and interruption consistently; the source guard enforces the migration without depending on unsupported type resolution.
+
+## [2026-10-31] Use a catalog-driven exact-package cycle census
+Context: Per-module checks and first-segment cycle detection left gaps in architecture coverage and missed longer package cycles.
+Decision: Derive one parameterized exact-SCC check from the runtime module catalog, with empty censuses except for the still-cyclic engine and goal-runner modules.
+Reason: Catalog-derived cases cover declared modules uniformly, and exact SCCs expose cycles of any length. The retained censuses keep the remaining cycles visible while their removal stays out of this change's scope.
+
+## [2026-10-31] Store goal-continuation query fields as typed columns
+Context: Goal child, status, and parent reads filtered `feature_task_workflows` through JSON expressions over `artifacts_json`.
+Decision: Add nullable query columns in a named migration, backfill only correctly typed artifact values, and update them in the same statement as artifact writes.
+Reason: Existing databases need an explicit migration; typed columns avoid JSON extraction in query predicates, while same-statement writes keep the indexed fields aligned with the source artifact.
+
 ## [2026-10-31] Process adapters own monotonic time and process handles
 
 `PrincipleEnforcementInventory.processAdapterModules` permits `System.nanoTime()`
