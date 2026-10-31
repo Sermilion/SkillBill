@@ -47,7 +47,7 @@ open class InstallApplyTestSupport {
 
   protected fun setupApplyFixture(): ApplyFixture {
     val repoRoot = Files.createTempDirectory("skillbill-install-apply-repo").also(tempDirs::add)
-    val home = Files.createTempDirectory("skillbill-install-apply-home").also(tempDirs::add)
+    val home = Files.createTempDirectory("skillbill-install-apply-home").also(tempDirs::add).toRealPath()
     seedBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
     seedBaseSkill(repoRoot, "bill-code-review", nativeAgentName = "bill-code-review-worker")
     seedBaseSkill(repoRoot, "bill-code-check")

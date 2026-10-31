@@ -31,7 +31,7 @@ Reason: The next turn then goes out as a first turn with --session-id and the fu
 
 ## [2026-10-31] Show unsupported chat agents instead of switching to Claude
 Context: Only Claude has a chat transport, while executions also run on codex, cursor and junie.
-Decision: AgentExecutionChatRepository emits one failed AgentUnsupported event, records chat.agent_unsupported and starts no process. The tab shows "Chat is not available for agent <id> yet" and Send stays disabled.
+Decision: AgentExecutionChatRepository emits one failed AgentUnsupported event, records chat.agent_unsupported and starts no process. The tab shows `Chat is not available for agent <id> yet` and Send stays disabled.
 Reason: The chat must use the execution's agent. A silent switch to Claude would answer with a different agent and model than the one running the execution.
 Revisit when: A ChatTransport exists for another agent.
 
