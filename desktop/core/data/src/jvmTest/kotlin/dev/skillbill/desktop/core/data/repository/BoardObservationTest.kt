@@ -11,6 +11,9 @@ import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -20,6 +23,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -28,6 +32,7 @@ import kotlin.time.Instant
 
 private val QUERY = BoardQuery(HistoryWindow.Day, filter = "", pageSize = 20)
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class BoardObservationTest {
   @Test
   fun `complete query loads every page in the shared observation`() = runTest {
@@ -102,6 +107,23 @@ class BoardObservationTest {
     assertEquals(3, reads.pageReads)
   }
 
+  @Test
+  fun `ongoing commits do not discard a completed board read`() = runTest {
+    val (signals, reads, board) = fixture()
+    val states = mutableListOf<BoardState>()
+    val release = CompletableDeferred<Unit>()
+    var calls = 0
+    reads.beforePages = { if (++calls == 1) release.await() else awaitCancellation() }
+    backgroundScope.launch { board.observe(QUERY).collect { states += it } }
+    runCurrent()
+    signals.value = signal(goals = 2)
+    runCurrent()
+    release.complete(Unit)
+    runCurrent()
+
+    assertEquals(listOf(workItem("goal")), assertIs<BoardState.Loaded>(states.last()).items)
+  }
+
   private fun TestScope.fixture(
     items: List<WorkItem> = listOf(workItem("goal")),
   ): Triple<MutableStateFlow<SignalSnapshot>, FakeBoardReads, BoardObservations> {
@@ -118,6 +140,7 @@ class BoardObservationTest {
     var completeReads = 0
     var nextCursor: String? = null
     var appendedPage: BoardPage? = null
+    var beforePages: (suspend () -> Unit)? = null
 
     override suspend fun complete(query: BoardQuery): Outcome<BoardPage, Nothing> {
       completeReads++
@@ -126,6 +149,7 @@ class BoardObservationTest {
 
     override suspend fun pages(query: BoardQuery, pageCount: Int): Outcome<BoardPage, Nothing> {
       pageReads++
+      beforePages?.invoke()
       return Outcome.Success(BoardPage(items.take(query.pageSize), nextCursor = nextCursor, observedAt = clock.now()))
     }
 

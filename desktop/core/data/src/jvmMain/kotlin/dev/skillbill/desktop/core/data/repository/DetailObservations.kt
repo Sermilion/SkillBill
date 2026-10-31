@@ -10,28 +10,27 @@ import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
-import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import skillbill.contracts.persistence.DesktopReadSchema
@@ -45,7 +44,6 @@ private val DETAIL_TOPICS = listOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSch
  * One session's detail observations and prefetch cache. A detail loads once, then refreshes only when a `goals`, `phases`
  * or `activity` change may touch it, replacing its sections in place.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class DetailObservations internal constructor(
   private val scope: CoroutineScope,
   private val signals: StateFlow<SignalSnapshot>,
@@ -84,17 +82,27 @@ class DetailObservations internal constructor(
     }
   }
 
-  /** Re-reads per [needsRefresh]; activity churn only reaches here, so it never restarts the first load. */
+  /**
+   * Finishes each read before applying queued signals. Refresh requirements compare against that completed snapshot, so
+   * activity cannot cancel a read or replace a pending full refresh.
+   */
   private fun refreshes(item: WorkItem, appliedAtLoad: SignalSnapshot): Flow<DetailRead> {
     val ids = setOfNotNull(item.id, item.control.workflowId, item.control.invocationId)
     var applied = appliedAtLoad
-    return merge(
-      signals.mapNotNull { snapshot -> refreshKind(snapshot, applied, ids).also { applied = snapshot } },
-      requestedRefreshes.mapNotNull { id -> DetailRefreshKind.FULL.takeIf { id == item.id } },
-    )
+    var appliedRefresh = 0L
+    val refreshRequests = requestedRefreshes.filter { it == item.id }.runningFold(0L) { revision, _ -> revision + 1 }
+    return combine(signals, refreshRequests) { snapshot, revision -> snapshot to revision }
       .conflate()
-      .mapLatest { kind ->
-        if (kind == DetailRefreshKind.ACTIVITY) reads.activity(item.id) else reads.refresh(item.id, extended[item.id].orEmpty())
+      .mapNotNull { (snapshot, revision) ->
+        val kind = if (revision != appliedRefresh) DetailRefreshKind.FULL else refreshKind(snapshot, applied, ids)
+        val read = when (kind) {
+          DetailRefreshKind.FULL -> reads.refresh(item.id, extended[item.id].orEmpty())
+          DetailRefreshKind.ACTIVITY -> reads.activity(item.id)
+          null -> null
+        }
+        applied = snapshot
+        appliedRefresh = revision
+        read
       }
   }
 
@@ -159,7 +167,7 @@ class DetailObservations internal constructor(
 }
 
 /**
- * Subtask 1's change test, per `goals`, `phases` and `activity` topic that moved past [applied]: a resynchronize, an
+ * For each `goals`, `phases` and `activity` topic that moved past [applied]: a resynchronize, an
  * unlisted or overflowed topic, a base above the applied revision, or an id of this item listed means a refresh.
  */
 private enum class DetailRefreshKind { ACTIVITY, FULL }
