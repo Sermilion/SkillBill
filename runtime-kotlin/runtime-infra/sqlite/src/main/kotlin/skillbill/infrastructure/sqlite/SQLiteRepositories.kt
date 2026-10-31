@@ -76,6 +76,7 @@ import skillbill.review.model.FeedbackTelemetryOptions
 import skillbill.review.model.GoalWorkflowStats
 import skillbill.review.model.ImportedReview
 import skillbill.review.model.NumberedFinding
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.model.ReviewFinishedTelemetry
 import java.nio.file.Path
 import java.sql.Connection
@@ -419,6 +420,9 @@ internal class SQLiteReviewRepository(
 
   override fun fetchNumberedFindings(runId: String): List<NumberedFinding> =
     ReviewRuntime.fetchNumberedFindings(connection, runId)
+
+  override fun fetchFindingStatuses(runId: String): Map<String, ReviewFindingStatus> =
+    ReviewRuntime.fetchFindingStatuses(connection, runId)
 
   override fun findingExists(
     runId: String,

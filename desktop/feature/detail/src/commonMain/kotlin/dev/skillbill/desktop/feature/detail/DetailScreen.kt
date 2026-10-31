@@ -62,6 +62,10 @@ internal class DetailScreenHost(
   val terminalOpen: Boolean = false,
   val onToggleSpecs: () -> Unit = {},
   val onToggleTerminal: () -> Unit = {},
+  val chatOpen: Boolean = false,
+  val chatPaneOpen: Boolean = false,
+  val chatShortcut: String = "",
+  val onToggleChat: () -> Unit = {},
 )
 
 private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
@@ -118,6 +122,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(DetailAction.Retry) })
         SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
+        SbIconButton(LucideIcons.bot, if (host.chatOpen) "Close chat" else "Chat", host.onToggleChat, shortcut = host.chatShortcut, selected = host.chatOpen)
         SbIconButton(LucideIcons.panelRight, "Toggle details", host.onToggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)
       },
     )
@@ -153,7 +158,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         }
       }
       DetailPeek(
-        open = host.detailsPaneOpen && !host.specsOpen,
+        open = host.detailsPaneOpen && !host.specsOpen && !host.chatPaneOpen,
         wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
           selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
         } == true,
@@ -215,11 +220,13 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       pipelineSection(item, detail)
       briefingSection(item, detail, onAction)
       activitySection(item, detail, state, onAction)
+      // A standalone run's own result comes right after its activity.
+      standaloneResultSection(item, detail)
+      qaReportSection(item, detail, onAction)
       if (item.kind != WorkKind.Goal) {
         goalQaSection(detail)
         goalAssessmentSection(detail)
       }
-      qaReportSection(item, detail, onAction)
       // Standalone phases and operations keep their dependencies, validation, phase results and spec bundle in the document.
       dependencySection(item, detail, state, onAction)
       validationSection(item, detail)

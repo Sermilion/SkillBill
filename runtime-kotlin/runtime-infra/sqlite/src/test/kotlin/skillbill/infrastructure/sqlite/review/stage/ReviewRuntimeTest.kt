@@ -8,6 +8,7 @@ import skillbill.infrastructure.sqlite.reviewSessionId
 import skillbill.infrastructure.sqlite.tempDbConnection
 import skillbill.review.attribution.canonicalPlatformSlugs
 import skillbill.review.attribution.withCanonicalAttribution
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.parsing.ReviewParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -51,6 +52,33 @@ class ReviewRuntimeTest {
       assertEquals("Minor", numberedFindings[1].severity)
       assertEquals("ux_accessibility", review.findings[1].issueCategory)
       assertNull(summary.reviewFinishedAt)
+    }
+  }
+
+  @Test
+  fun `finding statuses take the latest settling feedback before the goal loop outcome`() {
+    val (_, connection) = tempDbConnection("review-finding-status")
+    connection.use {
+      persistImportedReview(connection, ReviewParser.parseReview(TABLE_REVIEW.trimIndent()), sourcePath = null)
+      val run = "rvw-20260402-tbl-a"
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feedback_events (review_run_id, finding_id, event_type) VALUES " +
+            "('$run', 'F-001', 'finding_accepted'), ('$run', 'F-001', 'fix_applied'), " +
+            "('$run', 'F-002', 'finding_edited')",
+        )
+        statement.executeUpdate(
+          "INSERT INTO review_finding_outcomes (workflow_id, review_pass_number, finding_ordinal, review_run_id, " +
+            "finding_id, finding_key, key_state, outcome) " +
+            "VALUES ('wf-1', 1, 2, '$run', 'F-002', 'k', 'resolved', 'rejected')",
+        )
+      }
+
+      assertEquals(
+        mapOf("F-001" to ReviewFindingStatus.FIXED, "F-002" to ReviewFindingStatus.REJECTED),
+        ReviewRuntime.fetchFindingStatuses(connection, run),
+      )
+      assertEquals(emptyMap(), ReviewRuntime.fetchFindingStatuses(connection, "rvw-unknown"))
     }
   }
 

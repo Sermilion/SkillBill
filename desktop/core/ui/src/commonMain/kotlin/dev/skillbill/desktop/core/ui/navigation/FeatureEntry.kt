@@ -46,6 +46,9 @@ enum class PaneSlot {
 
   /** Docked under the main column: the terminal. */
   Bottom,
+
+  /** The chat pane, shown in the right slot in place of Specs. */
+  Chat,
 }
 
 class PaneContribution(val slot: PaneSlot, val content: @Composable () -> Unit)

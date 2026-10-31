@@ -94,8 +94,11 @@ fun SidebarItem(
           )
         }
       } else if (count != null) {
-        // `.sb-nav .n` inherits the item's 500 weight.
-        BasicText(count.toString(), style = type.tSmMedium.tabular().copy(color = colors.fgFaint), maxLines = 1)
+        // `.sb-nav .n` inherits the item's 500 weight. It sits in the same 18 dp slot as the attention pill so the
+        // digits share one column when a pill row is stacked above plain counts.
+        Box(Modifier.defaultMinSize(minWidth = 18.dp).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+          BasicText(count.toString(), style = type.tSmMedium.tabular().copy(color = colors.fgFaint), maxLines = 1)
+        }
       }
     }
   }

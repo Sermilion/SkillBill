@@ -137,6 +137,7 @@ internal fun goalAssessmentSummary(assessment: GoalAssessmentResult): String {
   val state = when (assessment.state) {
     GoalAssessmentState.PENDING -> "Pending"
     GoalAssessmentState.RUNNING -> "Running · round ${assessment.round}"
+    GoalAssessmentState.BLOCKED -> "Blocked · round ${assessment.round}"
     GoalAssessmentState.COMPLETED -> "Completed · round ${assessment.round}"
     GoalAssessmentState.SKIPPED -> "Skipped"
   }

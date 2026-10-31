@@ -83,6 +83,7 @@ internal class InMemoryPhaseRunState(
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
 
   var reviewResult: ParallelCodeReviewResult? = null
+  var reviewRunId: String? = null
     private set
 
   private var qualityCheck: QualityCheckSession? = null
@@ -221,6 +222,7 @@ internal class InMemoryPhaseRunState(
     laneTelemetryRecorded: Boolean,
   ) {
     reviewResult = result
+    this.reviewRunId = reviewRunId
     val assembly = reviewResultAssembly
     assembly.persistReviewPassClaims(reviewRunId, result.mergeResult.findings, persistEmpty = true)
     if (laneTelemetryRecorded) return

@@ -1,17 +1,57 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.model.InlineReviewRubricPlan
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.review.model.ReviewLaneReviewDisposition
+import skillbill.review.model.ReviewRunLane
+import java.util.concurrent.CancellationException
 
-/** Resolves the specialist rubrics an inline review merges into its single prompt. */
+/** Resolves the specialist rubrics an inline review merges into its single prompt, and records the lanes it applied. */
 fun interface InlineReviewRubricResolver {
+  /** The rendered rubrics, or null when no lane applies. */
   fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
+
+  /** The rendered rubrics with the lanes they came from; a resolver without lane records reports none. */
+  fun plan(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<InlineReviewRubricPlan?> =
+    when (val resolved = resolve(request)) {
+      is ParallelCodeReviewPlanned.Failed -> resolved
+      is ParallelCodeReviewPlanned.Ready ->
+        ParallelCodeReviewPlanned.Ready(
+          resolved.value?.let {
+            InlineReviewRubricPlan(it, emptyList())
+          },
+        )
+    }
+
+  /** Records [lanes] as the lanes review run [reviewRunId] applied. */
+  fun recordLanes(
+    reviewRunId: String,
+    lanes: List<ReviewRunLane>,
+  ) = Unit
+}
+
+class ParallelReviewInlineRubricResolver(
+  private val reviewRunner: ParallelCodeReviewRunner,
+) : InlineReviewRubricResolver {
+  override fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
+    reviewRunner.resolveInlineReviewRubrics(request)
+
+  override fun plan(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<InlineReviewRubricPlan?> =
+    reviewRunner.planInlineReviewRubrics(request)
+
+  override fun recordLanes(
+    reviewRunId: String,
+    lanes: List<ReviewRunLane>,
+  ) = reviewRunner.recordInlineReviewLanes(reviewRunId, lanes)
 }
 
 internal object InlineReviewLanesSection {
@@ -42,8 +82,8 @@ internal object InlineReviewLanesSection {
 internal fun InlineReviewRubricResolver?.resolveInlineRubrics(
   request: ParallelCodeReviewRequest,
   diagnostics: RuntimeDiagnostics,
-): String? =
-  when (val resolved = this?.resolve(request)) {
+): InlineReviewRubricPlan? =
+  when (val resolved = this?.plan(request)) {
     null -> null
     is ParallelCodeReviewPlanned.Ready -> resolved.value
     is ParallelCodeReviewPlanned.Failed -> {
@@ -54,6 +94,25 @@ internal fun InlineReviewRubricResolver?.resolveInlineRubrics(
       null
     }
   }
+
+internal fun InlineReviewRubricResolver?.recordInlineLanes(
+  reviewRunId: String,
+  plan: InlineReviewRubricPlan?,
+  completed: Boolean,
+  diagnostics: RuntimeDiagnostics,
+) {
+  if (this == null || plan == null || plan.lanes.isEmpty()) return
+  val disposition = if (completed) ReviewLaneReviewDisposition.COMPLETE else ReviewLaneReviewDisposition.INCOMPLETE
+  runCatching { recordLanes(reviewRunId, plan.lanes.map { it.copy(reviewDisposition = disposition) }) }
+    .onFailure { error ->
+      if (error is CancellationException) throw error
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Inline review lanes for $reviewRunId were not recorded",
+        error,
+      )
+    }
+}
 
 internal object InlineReviewPromptSections {
   const val REVIEW_DIRECTIVE: String =

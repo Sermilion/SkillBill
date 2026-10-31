@@ -163,7 +163,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { result ->
       SubtaskPhaseResults(result.subtaskId,
         result.reviewPasses.map { pass -> ReviewPass(pass.passNumber, pass.verdict, pass.unresolvedFindingCount,
-          pass.findings.map { ReviewFinding(it.severity, it.label, it.text) }) },
+          pass.findings.map { ReviewFinding(it.severity, it.location ?: it.specialist ?: it.ref, it.description) }) },
         result.audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
         result.review?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) })
     },
@@ -204,6 +204,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
 private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {
   GoalRunnerAssessmentState.PENDING -> GoalAssessmentState.PENDING
   GoalRunnerAssessmentState.RUNNING -> GoalAssessmentState.RUNNING
+  GoalRunnerAssessmentState.BLOCKED -> GoalAssessmentState.BLOCKED
   GoalRunnerAssessmentState.COMPLETED -> GoalAssessmentState.COMPLETED
   GoalRunnerAssessmentState.SKIPPED -> GoalAssessmentState.SKIPPED
 }

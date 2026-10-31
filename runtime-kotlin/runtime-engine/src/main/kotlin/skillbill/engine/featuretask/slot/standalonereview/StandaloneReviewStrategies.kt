@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.standalonereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.application.review.model.InlineReviewRubricPlan
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
@@ -32,6 +33,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewLanesSection
 import skillbill.engine.featuretask.slot.codereview.InlineReviewRubricResolver
 import skillbill.engine.featuretask.slot.codereview.ReviewTargetResolver
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
+import skillbill.engine.featuretask.slot.codereview.recordInlineLanes
 import skillbill.engine.featuretask.slot.codereview.resolveInlineRubrics
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
@@ -156,10 +158,18 @@ abstract class StandaloneReviewStrategy(
         target,
         reviewInput,
       )
+    val lanePlan =
+      if (reviewRunner == null) {
+        rubricResolver.resolveInlineRubrics(
+          rubricRequest,
+          context.diagnostics,
+        )
+      } else {
+        null
+      }
     val rubricSection =
       if (reviewRunner == null) {
-        rubricResolver.resolveInlineRubrics(rubricRequest, context.diagnostics)
-          ?.let(InlineReviewLanesSection::render)
+        lanePlan?.rubrics?.let(InlineReviewLanesSection::render)
       } else {
         when (val resolved = rubricResolver?.resolve(rubricRequest)) {
           null -> null
@@ -172,7 +182,7 @@ abstract class StandaloneReviewStrategy(
       run,
       binding,
       iteration,
-      StandaloneReviewLaunchInput(target, reviewInput, reviewRunId, directive),
+      StandaloneReviewLaunchInput(target, reviewInput, reviewRunId, directive, lanePlan),
     )
   }
 
@@ -200,7 +210,7 @@ abstract class StandaloneReviewStrategy(
         reportTruncated = output.truncated || result.reportTruncated,
       )
     binding.retainReviewOutput(iteration, raw)
-    return finishReport(binding, iteration, facts.reviewRunId, retainedResult, output)
+    return finishReport(binding, iteration, facts, retainedResult, output)
   }
 
   private fun prepareReport(
@@ -219,10 +229,11 @@ abstract class StandaloneReviewStrategy(
   private fun finishReport(
     binding: PhaseReviewStepBinding,
     iteration: Int,
-    reviewRunId: String,
+    facts: StandaloneReviewLaunchInput,
     retainedResult: ParallelCodeReviewResult,
     output: StandaloneLaunch,
   ): PhaseOutcome {
+    val reviewRunId = facts.reviewRunId
     val report =
       StandaloneReviewReportAdmission.admit(
         output.rawOutput,
@@ -245,6 +256,12 @@ abstract class StandaloneReviewStrategy(
         retainedResult
       }
     binding.recordReviewRun(reviewRunId, recordedResult, reviewRunner != null)
+    rubricResolver.recordInlineLanes(
+      reviewRunId,
+      facts.lanePlan,
+      rejection.isBlank(),
+      binding.reviewExecutionContext().diagnostics,
+    )
     if (rejection.isNotBlank()) {
       binding.blockReviewStep(
         iteration,
@@ -323,7 +340,12 @@ abstract class StandaloneReviewStrategy(
   ): String =
     buildString {
       target.openingLines("$head^", head).forEach(::appendLine)
-      appendLine("Return a findings register with one finding per line, or the exact line NO_FINDINGS when empty.")
+      appendLine("Start the report with one line naming every rubric you applied: 'lanes: <skill name>, <skill name>'.")
+      appendLine(
+        "Return a findings register with one finding per line, written as " +
+          "'[F-001] Severity | Confidence | specialist=<rubric skill name> | path/File.kt:12 | defect description', " +
+          "or the exact line NO_FINDINGS when empty.",
+      )
       appendLine("End with exactly one canonical line: verdict: approved or verdict: changes_requested.")
       append(AgentAddonPromptFormatter.format(run.request.agentAddonSelection))
       appendLine()
@@ -530,6 +552,7 @@ private data class StandaloneReviewLaunchInput(
   val input: GoalSubtaskReviewInput,
   val reviewRunId: String,
   val directive: String,
+  val lanePlan: InlineReviewRubricPlan? = null,
 )
 
 private const val DELEGATED_QUALITY_RUBRIC_HEADING = "## Selected local code-quality rubric"

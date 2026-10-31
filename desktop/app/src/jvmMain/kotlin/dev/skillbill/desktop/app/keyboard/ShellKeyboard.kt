@@ -6,6 +6,8 @@ import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
+import dev.skillbill.desktop.core.ui.pane.ChatCommands
+import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -19,6 +21,8 @@ class ShellKeyboard(
   private val input: ShellInput,
   private val menu: CommandMenuState,
   private val terminal: TerminalTriggers,
+  private val chat: ChatCommands,
+  private val selection: SelectionHolder,
 ) {
   private val keymap = ShellKeymap()
 
@@ -53,6 +57,7 @@ class ShellKeyboard(
       ShellCommand.ShowShortcuts -> panes.shortcutsOpen = true
       ShellCommand.ToggleDrawer -> panes.drawerOpen = !panes.drawerOpen
       ShellCommand.ToggleSpecs -> panes.specsOpen = !panes.specsOpen
+      ShellCommand.ToggleChat -> if (navigator.top.route !is SettingsRoute) chat.toggleChat(selection.item.value)
       is ShellCommand.Navigate -> navigator.navigate(command.route)
       is ShellCommand.Screen -> return input.dispatchScreenKey(navigator.top.contentKey, command.key)
     }

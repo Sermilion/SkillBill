@@ -33,6 +33,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandalonePlanReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -925,4 +926,14 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 93,
       name = "rebuild-work-board-titles",
       operation = WorkBoardReadModelRebuildMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 94,
+      name = "rebuild-work-board-readable-phase-titles",
+      operation = WorkBoardReadModelRebuildMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 95,
+      name = "record-standalone-review-run-id",
+      operation = ::recordStandaloneReviewRunId,
     )

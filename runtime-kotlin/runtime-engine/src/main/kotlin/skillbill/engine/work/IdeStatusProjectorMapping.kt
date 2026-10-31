@@ -324,10 +324,10 @@ internal object IdeStatusTitles {
   ): String =
     record.planReport?.featureName.nonBlank()
       ?: seededFeatureName.nonBlank()
-      ?: idWithTarget(
-        record.phaseId,
-        record.issueKey.nonBlank()
-          ?: record.monitorTarget?.pullRequestKey?.let { "#${it.substringAfterLast('#')}" }
+      ?: nameWithTarget(
+        displayName(record.phaseId),
+        record.issueKey.nonBlank()?.let { "for $it" }
+          ?: record.monitorTarget?.pullRequestKey?.let { "on PR #${it.substringAfterLast('#')}" }
           ?: branchTarget(record.branchCorrelation),
       )
 
@@ -336,22 +336,37 @@ internal object IdeStatusTitles {
     issueKey: String?,
     branch: String?,
   ): String {
-    val id =
+    val name =
       when (family) {
-        WorkflowFamily.VERIFY -> "verify"
-        WorkflowFamily.TASK_RUNTIME -> "feature-task"
+        WorkflowFamily.VERIFY -> "Verify"
+        WorkflowFamily.TASK_RUNTIME -> "Feature task"
       }
-    return idWithTarget(id, issueKey.nonBlank() ?: branchTarget(branch))
+    return nameWithTarget(name, issueKey.nonBlank()?.let { "for $it" } ?: branchTarget(branch))
   }
 
-  private fun idWithTarget(
-    id: String,
-    target: String?,
-  ): String = target?.let { "$id $it" } ?: id
+  private fun displayName(phaseId: String): String =
+    PHASE_NAMES[phaseId] ?: phaseId.replace('-', ' ').replace('_', ' ').replaceFirstChar(Char::uppercaseChar)
 
-  private fun branchTarget(branch: String?): String? = branch.nonBlank()?.takeUnless { it == DETACHED_HEAD }
+  private fun nameWithTarget(
+    name: String,
+    target: String?,
+  ): String = target?.let { "$name $it" } ?: name
+
+  private fun branchTarget(branch: String?): String? =
+    branch.nonBlank()?.takeUnless { it == DETACHED_HEAD }?.let { "on branch $it" }
 
   private fun String?.nonBlank(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 
   private const val DETACHED_HEAD = "HEAD"
+
+  private val PHASE_NAMES =
+    mapOf(
+      "review" to "Code review",
+      "validation" to "Validation",
+      "qa" to "QA",
+      "plan" to "Plan",
+      "pr" to "Pull request",
+      "monitor" to "CI monitor",
+      "standalone-monitor" to "CI monitor",
+    )
 }

@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.tabular
-import dev.skillbill.desktop.core.designsystem.component.CompactFindingRow
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
@@ -157,7 +156,7 @@ private fun ChipItems(detail: Detail, edges: List<WorkDependency>, onAction: (De
   }
 }
 
-/** `.sb-insp-sec`: the Review caption, one block per pass with its compact findings, then the audit. */
+/** `.sb-insp-sec`: the Review caption, one block per pass with the review phase's findings table, then the audit. */
 @Composable
 private fun SubtaskReview(detail: Detail, subtaskId: Int) {
   val colors = SkillBillTheme.colors
@@ -184,13 +183,13 @@ private fun SubtaskReview(detail: Detail, subtaskId: Int) {
   }
 }
 
+/** A pass: its verdict and status tally, the lanes its review run applied, then its findings as the review phase shows them. */
 @Composable
 private fun PassBlock(pass: ReviewPass, modifier: Modifier) {
-  Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-    InspectorLine("Pass ${pass.passNumber}", listOf(pass.verdict, "${pass.unresolvedFindingCount} unresolved"))
-    if (pass.findings.isNotEmpty()) {
-      Column { pass.findings.forEach { CompactFindingRow(it.text, it.severity, it.label) } }
-    }
+  Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    InspectorLine("Pass ${pass.passNumber}", listOf(reviewVerdictLabel(pass.verdict), reviewFindingsTally(pass.findings)))
+    if (pass.lanes.isNotEmpty()) ReviewLanes(pass.lanes, pass.findings)
+    if (pass.findings.isNotEmpty()) ReviewFindingsBox(pass.findings)
   }
 }
 

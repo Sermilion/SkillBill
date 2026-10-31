@@ -29,7 +29,7 @@ class IdeStatusTitleProjectionTest {
   }
 
   @Test
-  fun `a standalone phase is titled by its id and recorded target, never by its summary`() {
+  fun `a standalone phase is titled by its readable name and recorded target, never by its summary`() {
     establishTemporarySchemaReadiness("ide-status-phase-title").use { fixture ->
       val database =
         sqliteDatabaseSessionFactory(fixture.tempDir, fixture.dbPath.toString(), emptyMap(), ideStatusClock)
@@ -55,7 +55,11 @@ class IdeStatusTitleProjectionTest {
       val titles = items.associate { it.snapshot.execution?.invocationId.orEmpty() to it.snapshot.title }
 
       assertEquals(
-        mapOf("plan-1" to "plan SKILL-452", "review-1" to "review feat/SKILL-452-board", "qa-1" to "qa"),
+        mapOf(
+          "plan-1" to "Plan for SKILL-452",
+          "review-1" to "Code review on branch feat/SKILL-452-board",
+          "qa-1" to "QA",
+        ),
         titles,
       )
       assertTrue(items.none { it.snapshot.title == it.snapshot.summary })

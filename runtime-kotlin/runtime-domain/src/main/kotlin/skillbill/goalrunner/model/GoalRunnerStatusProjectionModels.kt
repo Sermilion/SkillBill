@@ -6,6 +6,7 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.idestatus.model.WorktreeEditSummary
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
@@ -180,12 +181,17 @@ data class GoalRunnerReviewPassResult(
   val verdict: String,
   val unresolvedFindingCount: Int,
   val findings: List<GoalRunnerReviewFinding>,
+  val lanes: List<String> = emptyList(),
 )
 
 data class GoalRunnerReviewFinding(
+  val ref: String,
   val severity: String,
-  val label: String,
-  val text: String,
+  val confidence: String?,
+  val specialist: String?,
+  val location: String?,
+  val description: String,
+  val status: ReviewFindingStatus = ReviewFindingStatus.OPEN,
 )
 
 data class GoalRunnerPhaseConclusion(

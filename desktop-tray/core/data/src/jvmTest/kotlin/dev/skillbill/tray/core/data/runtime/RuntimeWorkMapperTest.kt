@@ -77,6 +77,22 @@ class RuntimeWorkMapperTest {
   }
 
   @Test
+  fun `a blocked assessment maps to blocked`() {
+    val assessment = GoalRunnerAssessmentResult(
+      state = GoalRunnerAssessmentState.BLOCKED,
+      round = 2,
+      exitReason = GoalAssessmentExitReason.PERSISTENT_FINDING,
+      fixRan = true,
+      openFindingRefs = emptyList(),
+      findings = emptyList(),
+    )
+
+    val mapped = requireNotNull(detail(assessment).toDomain(KotlinInstant.fromEpochSeconds(0), null).goalAssessment)
+
+    assertEquals(GoalAssessmentState.BLOCKED, mapped.state)
+  }
+
+  @Test
   fun `a goal without an assessment record maps to no assessment and a skipped one stays skipped`() {
     assertNull(detail(null).toDomain(KotlinInstant.fromEpochSeconds(0), null).goalAssessment)
 

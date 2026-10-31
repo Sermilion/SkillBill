@@ -2,6 +2,7 @@ package skillbill.application.review.parallel.runner
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.application.review.model.InlineReviewRubricPlan
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewReportContract
@@ -34,7 +35,9 @@ import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.model.ReviewCoverageReport
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.model.ReviewLaneAggregationInput
+import skillbill.review.model.ReviewLaneResolutionState
 import skillbill.review.model.ReviewLaneReviewDisposition
+import skillbill.review.model.ReviewRunLane
 import skillbill.review.model.ReviewStage
 import skillbill.review.parallel.ParallelReviewMerger
 import skillbill.review.stage.ReviewStageDegradationSelection
@@ -52,7 +55,46 @@ class ParallelCodeReviewRunner(
     renderedRubrics(planning.resolveInlineCodeQualityRubrics(request)) { "Selected code-quality specialist: $it" }
 
   fun resolveInlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
-    renderedRubrics(planning.resolveInlineReviewRubrics(request)) { "Selected specialist: $it" }
+    when (val plan = planInlineReviewRubrics(request)) {
+      is ParallelCodeReviewPlanned.Failed -> plan
+      is ParallelCodeReviewPlanned.Ready -> ParallelCodeReviewPlanned.Ready(plan.value?.rubrics)
+    }
+
+  fun planInlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<InlineReviewRubricPlan?> =
+    when (val planned = planning.resolveInlineReviewRubrics(request)) {
+      is ParallelCodeReviewPlanned.Failed -> planned
+      is ParallelCodeReviewPlanned.Ready ->
+        when (val rendered = renderedRubrics(planned) { "Selected specialist: $it" }) {
+          is ParallelCodeReviewPlanned.Failed -> rendered
+          is ParallelCodeReviewPlanned.Ready ->
+            ParallelCodeReviewPlanned.Ready(
+              rendered.value?.let { InlineReviewRubricPlan(it, planned.value.map(::inlineReviewLane)) },
+            )
+        }
+    }
+
+  fun recordInlineReviewLanes(
+    reviewRunId: String,
+    lanes: List<ReviewRunLane>,
+  ) {
+    runtimeOwnedPersistence.requiredWrite(
+      seam = "ParallelCodeReviewRunner.recordInlineReviewLanes",
+      expected = "runtime-owned inline review lanes",
+    ) { unitOfWork -> unitOfWork.reviews.replaceReviewRunLanes(reviewRunId, lanes) }
+  }
+
+  private fun inlineReviewLane(planned: PlannedReviewRubric): ReviewRunLane =
+    ReviewRunLane(
+      laneSkillName = planned.descriptor.skillName,
+      packSlug = planned.descriptor.packSlug,
+      area = planned.descriptor.area,
+      depth = planned.descriptor.depth,
+      required = planned.descriptor.required,
+      orderIndex = planned.descriptor.orderIndex,
+      originLayerChain = planned.descriptor.originLayerChain,
+      resolutionState = ReviewLaneResolutionState.RESOLVED,
+      reviewDisposition = ReviewLaneReviewDisposition.INCOMPLETE,
+    )
 
   private fun renderedRubrics(
     planned: ParallelCodeReviewPlanned<List<PlannedReviewRubric>>,

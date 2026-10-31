@@ -43,6 +43,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -86,7 +87,9 @@ class TerminalTabChrome(val id: String, val title: String)
  * The caller owns [height], clamping and persistence. [onResizeBy] reports a height delta: positive grows the pane
  * (dragging the grip up or the taller button), negative shrinks it. [renameFieldGate] is called inside the open rename
  * field, for exactly as long as the field is composed, with the field's own cancel and commit. It returns the modifier
- * that gates the window's shortcuts while the field has focus.
+ * that gates the window's shortcuts while the field has focus. Another pane reuses the chrome by passing its own [icon] and
+ * [noun], which name every control; a null [onNewTab], [onResizeBy] or [onStartRename] drops that control, the grip or the
+ * double-click rename.
  */
 @Composable
 fun TerminalPaneChrome(
@@ -95,20 +98,24 @@ fun TerminalPaneChrome(
   activeId: String?,
   renamingId: String?,
   onSelectTab: (String) -> Unit,
-  onStartRename: (String) -> Unit,
+  onStartRename: ((String) -> Unit)?,
   onRename: (id: String, name: String) -> Unit,
   onCancelRename: () -> Unit,
   renameFieldGate: @Composable (cancel: () -> Unit, commit: () -> Unit) -> Modifier,
   onCloseTab: (String) -> Unit,
-  onNewTab: () -> Unit,
-  onResizeBy: (Dp) -> Unit,
+  onNewTab: (() -> Unit)?,
+  onResizeBy: ((Dp) -> Unit)?,
   onClose: () -> Unit,
   modifier: Modifier = Modifier,
+  icon: ImageVector = LucideIcons.terminal,
+  noun: String = "terminal",
+  newTabShortcut: String? = "⌃ ⇧ `",
+  closeShortcut: String? = "⌃ `",
   content: @Composable BoxScope.() -> Unit,
 ) {
   val colors = SkillBillTheme.colors
   val density = LocalDensity.current
-  val drag = rememberDraggableState { delta -> onResizeBy(with(density) { (-delta).toDp() }) }
+  val drag = rememberDraggableState { delta -> onResizeBy?.invoke(with(density) { (-delta).toDp() }) }
   Box(modifier.fillMaxWidth().heightIn(min = SkillBillSize.terminalMin).height(height).background(colors.bgInset).hairline(Edge.Top, colors.border)) {
     // `.sb-term`'s 1 px top border sits outside its content, so the bar starts below the hairline.
     Column(Modifier.padding(top = 1.dp)) {
@@ -123,31 +130,33 @@ fun TerminalPaneChrome(
           // takes the rest. A second weight would cap the strip at half the free space, so the left group fills the row
           // instead, and its 6 px end padding stands for the gap on the far side of the empty `.l-grow`.
           Row(Modifier.weight(1f).padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            SbIcon(LucideIcons.terminal, SbIconSize.Sm)
+            SbIcon(icon, SbIconSize.Sm)
             Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
               tabs.forEach { tab ->
                 TerminalTab(
                   tab, active = tab.id == activeId, renaming = tab.id == renamingId,
-                  onSelect = { onSelectTab(tab.id) }, onStartRename = { onStartRename(tab.id) },
+                  onSelect = { onSelectTab(tab.id) }, onStartRename = onStartRename?.let { start -> { start(tab.id) } },
                   onRename = { onRename(tab.id, it) }, onCancelRename = onCancelRename, renameFieldGate = renameFieldGate, onClose = { onCloseTab(tab.id) },
                 )
               }
             }
-            SbIconButton(LucideIcons.plus, "New terminal tab", onNewTab, size = SbControlSize.Small, shortcut = "⌃ ⇧ `")
+            onNewTab?.let { SbIconButton(LucideIcons.plus, "New $noun tab", it, size = SbControlSize.Small, shortcut = newTabShortcut) }
           }
-          SbIconButton(LucideIcons.chevronUp, "Make terminal taller", { onResizeBy(terminalStep) }, size = SbControlSize.Small)
-          SbIconButton(LucideIcons.chevronDown, "Make terminal shorter", { onResizeBy(-terminalStep) }, size = SbControlSize.Small)
-          SbIconButton(LucideIcons.x, "Close terminal", onClose, size = SbControlSize.Small, shortcut = "⌃ `")
+          onResizeBy?.let { resize ->
+            SbIconButton(LucideIcons.chevronUp, "Make $noun taller", { resize(terminalStep) }, size = SbControlSize.Small)
+            SbIconButton(LucideIcons.chevronDown, "Make $noun shorter", { resize(-terminalStep) }, size = SbControlSize.Small)
+          }
+          SbIconButton(LucideIcons.x, "Close $noun", onClose, size = SbControlSize.Small, shortcut = closeShortcut)
         }
       }
       Box(Modifier.fillMaxWidth().weight(1f), content = content)
     }
-    Box(
+    if (onResizeBy != null) Box(
       // `top: -3px` is measured from the padding box, which starts below the 1 px top border.
       Modifier.fillMaxWidth().height(terminalGripHeight).offset(y = 1.dp - terminalGripHeight / 2)
         .pointerHoverIcon(verticalResizePointerIcon)
         .draggable(drag, Orientation.Vertical)
-        .semantics { contentDescription = "Resize terminal" },
+        .semantics { contentDescription = "Resize $noun" },
     )
   }
 }
@@ -158,7 +167,7 @@ private fun TerminalTab(
   active: Boolean,
   renaming: Boolean,
   onSelect: () -> Unit,
-  onStartRename: () -> Unit,
+  onStartRename: (() -> Unit)?,
   onRename: (String) -> Unit,
   onCancelRename: () -> Unit,
   renameFieldGate: @Composable (cancel: () -> Unit, commit: () -> Unit) -> Modifier,
@@ -180,7 +189,7 @@ private fun TerminalTab(
       .clickable(interaction, indication = null, role = Role.Button) {
         onSelect()
         val previous = lastClick
-        if (previous != null && previous.elapsedNow().inWholeMilliseconds <= doubleTapMillis) {
+        if (onStartRename != null && previous != null && previous.elapsedNow().inWholeMilliseconds <= doubleTapMillis) {
           lastClick = null
           onStartRename()
         } else {

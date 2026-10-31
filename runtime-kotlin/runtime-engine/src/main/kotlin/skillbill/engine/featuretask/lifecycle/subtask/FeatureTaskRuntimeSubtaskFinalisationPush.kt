@@ -19,6 +19,16 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.pushDirect(
   branch: String,
   commitSha: String,
 ): String? {
+  val refreshed = gitOperations.refreshRemoteBranch(repoRoot, branch)
+  if (refreshed !is WorkflowGitOperationResult.Ok) {
+    return "the finalised subtask commit '$commitSha' could not be pushed " +
+      "(remote branch could not be refreshed: ${refreshed.error})"
+  }
+  if (!refreshed.value.equals(WorkflowGitRemoteOperations.ABSENT_REMOTE_BRANCH, ignoreCase = true) &&
+    remoteDiverged(branch, commitSha)
+  ) {
+    return "the finalised subtask commit '$commitSha' could not be pushed (remote branch '$branch' has moved)"
+  }
   val pushed = gitOperations.pushBranch(repoRoot, branch)
   if (pushed is WorkflowGitOperationResult.Ok) return null
   return "the finalised subtask commit '$commitSha' could not be pushed (${pushed.error})"

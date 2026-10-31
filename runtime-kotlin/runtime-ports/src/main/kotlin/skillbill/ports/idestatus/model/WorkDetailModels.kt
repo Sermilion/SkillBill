@@ -7,6 +7,7 @@ import skillbill.idestatus.model.IdeStatusDisplayGroup
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.work.model.WorkGoalDependency
 import skillbill.ports.work.model.WorkStoreObservation
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.time.Instant
 
@@ -119,6 +120,24 @@ data class WorkExecutionInstance(
   val qaOutcome: StandaloneQaOutcome? = null,
   val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
+  val reviewReport: StandaloneReviewReport? = null,
+)
+
+data class StandaloneReviewReport(
+  val verdict: String?,
+  val summary: String?,
+  val findings: List<StandaloneReviewReportFinding>,
+  val lanes: List<String> = emptyList(),
+)
+
+data class StandaloneReviewReportFinding(
+  val ref: String,
+  val severity: String,
+  val confidence: String?,
+  val specialist: String?,
+  val location: String?,
+  val description: String,
+  val status: ReviewFindingStatus = ReviewFindingStatus.OPEN,
 )
 
 enum class ExecutionReasonRestoration { EXACT, RESTORED, MISSING, AMBIGUOUS, BUDGET_EXCEEDED, MISSING_CONTENT }

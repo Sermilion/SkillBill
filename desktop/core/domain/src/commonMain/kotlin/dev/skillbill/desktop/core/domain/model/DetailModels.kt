@@ -150,9 +150,14 @@ data class SubtaskPhaseResults(
   val review: PhaseConclusion?,
 )
 
-data class ReviewPass(val passNumber: Int, val verdict: String, val unresolvedFindingCount: Int, val findings: List<ReviewFinding>)
-
-data class ReviewFinding(val severity: String, val label: String, val text: String)
+/** One goal subtask review pass, its findings as the review phase shows them; [lanes] is empty when the pass's review run is not stored. */
+data class ReviewPass(
+  val passNumber: Int,
+  val verdict: String,
+  val unresolvedFindingCount: Int,
+  val findings: List<ReviewReportFinding>,
+  val lanes: List<String> = emptyList(),
+)
 
 data class PhaseConclusion(val verdict: String?, val summary: String?, val detail: String?, val attemptCount: Int)
 
@@ -216,7 +221,28 @@ data class ExecutionInstance(
   val qaVerdict: QaVerdict?,
   val qaReportText: String?,
   val planReport: PlanRunReport?,
+  val reviewReport: ReviewReport? = null,
 )
+
+/**
+ * A standalone review's report as the runtime read it: the canonical verdict token, the prose around the findings, the findings,
+ * and the review lanes (rubric skill names) it applied, in the order it named them.
+ */
+data class ReviewReport(val verdict: String?, val summary: String?, val findings: List<ReviewReportFinding>, val lanes: List<String> = emptyList())
+
+/** One reported finding; [specialist] is the review lane that raised it, [location] a `path:line` when the report gave one. */
+data class ReviewReportFinding(
+  val ref: String,
+  val severity: String,
+  val confidence: String?,
+  val specialist: String?,
+  val location: String?,
+  val description: String,
+  val status: ReviewFindingStatus = ReviewFindingStatus.Open,
+)
+
+/** Where a review finding stands: the operator's feedback on it, or else what the goal loop did with it. */
+enum class ReviewFindingStatus { Open, Fixed, Accepted, Declined, FalsePositive, Rejected }
 
 /** The feature a plan run settled and the subtasks it split the feature into; also a goal's spec bundle. */
 data class PlanRunReport(

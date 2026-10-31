@@ -108,6 +108,7 @@ import skillbill.review.model.FeedbackTelemetryOptions
 import skillbill.review.model.GoalWorkflowStats
 import skillbill.review.model.ImportedReview
 import skillbill.review.model.NumberedFinding
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.model.ReviewFinishedTelemetry
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewLaunchPlan
@@ -412,6 +413,8 @@ internal class FakeGoalStatsRepository(
 internal class FakeGoalStatsReviewRepository(
   private val stats: GoalWorkflowStats,
 ) : ReviewRepository, ReviewRunCompletenessRepository by UnavailableReviewRunCompletenessRepository {
+  override fun fetchFindingStatuses(runId: String) = error("Unexpected fetchFindingStatuses")
+
   override fun saveImportedReview(
     review: ImportedReview,
     sourcePath: String?,
@@ -567,6 +570,8 @@ internal class FakeReviewRepository(
   }
 
   override fun fetchNumberedFindings(runId: String): List<NumberedFinding> = numberedFindings
+
+  override fun fetchFindingStatuses(runId: String) = emptyMap<String, ReviewFindingStatus>()
 
   override fun findingExists(
     runId: String,

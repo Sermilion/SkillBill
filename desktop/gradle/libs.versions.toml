@@ -24,8 +24,12 @@ jna = "5.14.0"
 jetbrains-annotations = "23.0.0"
 slf4j = "2.0.17"
 asm = "9.9.1"
+markdown = "0.46.0"
+highlights = "1.1.0"
 
 [libraries]
+markdown-renderer = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdown" }
+highlights = { module = "dev.snipme:highlights", version.ref = "highlights" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlin-compose-compiler-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
 kotlin-serialization-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }

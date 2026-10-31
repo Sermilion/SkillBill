@@ -18,6 +18,8 @@ import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
+import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
+import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import me.tatarka.inject.annotations.Inject
@@ -44,6 +46,7 @@ class DetailFeatureEntry(
   private val toasts: ToastQueue,
   private val shellPanes: ShellPanes,
   private val paneCommands: PaneCommands,
+  private val chat: ChatCommands,
 ) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = route is DetailRoute
 
@@ -71,6 +74,7 @@ class DetailFeatureEntry(
       }
     }
     val terminalOpen by paneCommands.terminalOpen.collectAsState()
+    val shownChatId by chat.shownChatId.collectAsState()
     val host = DetailScreenHost(
       detailsPaneOpen = shellPanes.detailsPaneOpen,
       detailsShortcut = DETAILS_SHORTCUT,
@@ -79,6 +83,10 @@ class DetailFeatureEntry(
       terminalOpen = terminalOpen,
       onToggleSpecs = { shellPanes.specsOpen = !shellPanes.specsOpen },
       onToggleTerminal = paneCommands::toggleTerminal,
+      chatOpen = shownChatId == item.id,
+      chatPaneOpen = shellPanes.chatOpen,
+      chatShortcut = CHAT_SHORTCUT,
+      onToggleChat = { chat.toggleChat(item) },
     )
     DetailScreen(state, host) { action ->
       if (action is DetailAction.SelectSubtask || action is DetailAction.MoveSubtaskSelection) {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -37,6 +39,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -46,12 +49,15 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
 private val INPUT_HEIGHT = 30.dp
+private val MULTILINE_MAX_HEIGHT = 120.dp
 
+/** A [multiline] input grows up to 120 dp; Enter submits and Shift+Enter inserts a newline. [visualTransformation] styles the shown text only. */
 @Composable
 fun SbInput(
   value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier,
   placeholder: String? = null, leadingIcon: ImageVector? = null, mono: Boolean = false,
-  isError: Boolean = false, enabled: Boolean = true, onSubmit: (() -> Unit)? = null,
+  isError: Boolean = false, enabled: Boolean = true, onSubmit: (() -> Unit)? = null, multiline: Boolean = false,
+  visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.sm)
@@ -73,12 +79,14 @@ fun SbInput(
     value = value,
     onValueChange = onValueChange,
     enabled = enabled,
-    singleLine = true,
+    singleLine = !multiline,
+    visualTransformation = visualTransformation,
     textStyle = textStyle.copy(color = colors.fg),
     // caret-color defaults to the text color.
     cursorBrush = SolidColor(colors.fg),
     interactionSource = interaction,
-    modifier = modifier.height(INPUT_HEIGHT).background(colors.bgInset, shape)
+    modifier = modifier.then(if (multiline) Modifier.heightIn(min = INPUT_HEIGHT, max = MULTILINE_MAX_HEIGHT) else Modifier.height(INPUT_HEIGHT))
+      .background(colors.bgInset, shape)
       .drawBehind {
         if (focusRing.alpha > 0f) {
           val outset = 1.5.dp.toPx()
@@ -95,16 +103,16 @@ fun SbInput(
       .border(1.dp, baseBorder, shape)
       .semantics { if (!enabled) disabled() }
       // 10px padding inside the 1px border; a leading icon sits 9px from the outer edge.
-      .padding(start = if (leadingIcon == null) 11.dp else 9.dp, end = 11.dp)
+      .padding(start = if (leadingIcon == null) 11.dp else 9.dp, end = 11.dp, top = if (multiline) 7.dp else 0.dp, bottom = if (multiline) 7.dp else 0.dp)
       .onPreviewKeyEvent { event ->
-        if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && enabled && onSubmit != null) {
+        if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && !(multiline && event.isShiftPressed) && enabled && onSubmit != null) {
           onSubmit()
           true
         } else false
       },
     decorationBox = { innerTextField ->
       Row(
-        Modifier.fillMaxHeight(),
+        if (multiline) Modifier else Modifier.fillMaxHeight(),
         verticalAlignment = Alignment.CenterVertically,
         // With an icon the text starts at padding-left 30px + 1px border: 9 + 14 + 8.
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -112,7 +120,7 @@ fun SbInput(
         CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
           leadingIcon?.let { SbIcon(it, SbIconSize.Sm) }
         }
-        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+        Box(if (multiline) Modifier.weight(1f) else Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
           if (value.isEmpty() && placeholder != null) {
             BasicText(placeholder, style = textStyle.copy(color = colors.fgFaint), maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
           }

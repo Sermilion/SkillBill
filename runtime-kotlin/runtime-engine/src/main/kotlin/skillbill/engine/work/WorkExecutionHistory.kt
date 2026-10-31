@@ -11,8 +11,10 @@ import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
+import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.WorkExecutionInstance
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.time.Instant
 
 private val historyLogger = System.getLogger("skillbill.execution-history")
@@ -109,6 +111,16 @@ internal fun workExecutionHistory(
           it.qaOutcome,
           it.qaReportText,
           it.planReport,
+          reviewReport =
+            if (it.phaseId == SkeletonDefinition.REVIEW.id) {
+              reviewReport(
+                it,
+                reason.text,
+                unitOfWork,
+              )
+            } else {
+              null
+            },
         )
       }
   } else {
@@ -127,6 +139,24 @@ internal fun workExecutionHistory(
         )
       }
   }
+}
+
+internal fun reviewReport(
+  record: StandalonePhaseStatusRecord,
+  text: String?,
+  unitOfWork: UnitOfWork,
+): StandaloneReviewReport? {
+  val report = StandaloneReviewReportReader.read(text) ?: return null
+  val runId = record.reviewRunId ?: return report
+  val recorded =
+    unitOfWork.reviews.fetchReviewRunLanes(runId)
+      .sortedBy { it.orderIndex }
+      .map { it.laneSkillName }
+  val statuses = unitOfWork.reviews.fetchFindingStatuses(runId)
+  return report.copy(
+    lanes = recorded.ifEmpty { report.lanes },
+    findings = report.findings.map { finding -> statuses[finding.ref]?.let { finding.copy(status = it) } ?: finding },
+  )
 }
 
 internal data class ResolvedExecutionReason(
