@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.FindingRow
-import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
@@ -50,23 +49,18 @@ internal fun DetailSections.validationSection(item: WorkItem, detail: Detail) {
   }
 }
 
-/** A review pass: the `t-sm` header line (500 title, muted verdict, faint unresolved count), then its findings in a box, 8 apart. */
+/** A review pass: the `t-sm` header line (500 title, muted verdict, faint status tally), its lanes, then the review findings table, 8 apart. */
 @Composable
 private fun ReviewPassBlock(pass: ReviewPass) {
   val colors = SkillBillTheme.colors
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       BasicText("Review pass ${pass.passNumber}", style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg))
-      SectionText(pass.verdict, colors.fgMuted)
-      SectionText("· ${pass.unresolvedFindingCount} unresolved", colors.fgFaint)
+      SectionText(reviewVerdictLabel(pass.verdict), colors.fgMuted)
+      SectionText("· ${reviewFindingsTally(pass.findings)}", colors.fgFaint)
     }
-    if (pass.findings.isNotEmpty()) {
-      SbBox {
-        pass.findings.forEachIndexed { index, finding ->
-          FindingRow(title = finding.text, severity = finding.severity, location = finding.label, showDivider = index > 0)
-        }
-      }
-    }
+    if (pass.lanes.isNotEmpty()) ReviewLanes(pass.lanes, pass.findings)
+    if (pass.findings.isNotEmpty()) ReviewFindingsBox(pass.findings)
   }
 }
 

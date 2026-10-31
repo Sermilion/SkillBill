@@ -62,7 +62,9 @@ private fun MutableList<SnapshotEntry>.putDetail(detail: Detail) {
       incident.summary + incident.cause?.let { "; cause: $it" }.orEmpty() + "; next: ${incident.nextAction}"
     },
   )
-  val findings = detail.phaseResults.flatMap { it.reviewPasses }.flatMap { it.findings }.map { "[${it.severity}] ${it.label}: ${it.text}" } +
+  val findings = detail.phaseResults.flatMap { it.reviewPasses }.flatMap { it.findings }.map { finding ->
+    "[${finding.severity}] " + finding.location?.let { "$it " }.orEmpty() + finding.description + " (${finding.status.name})"
+  } +
     detail.goalQa?.findings.orEmpty().map { "[qa] ${it.title}" + if (it.fixed) " (fixed)" else "" } +
     detail.goalAssessment?.findings.orEmpty().map { "[${it.severity}] ${it.path}:${it.line} ${it.failureScenario} (${it.state.name})" }
   findings.forEachIndexed { index, finding -> put("detail.finding.${index + 1}", finding) }

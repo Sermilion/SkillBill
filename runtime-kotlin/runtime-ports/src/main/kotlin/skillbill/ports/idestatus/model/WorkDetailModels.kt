@@ -7,6 +7,7 @@ import skillbill.idestatus.model.IdeStatusDisplayGroup
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.work.model.WorkGoalDependency
 import skillbill.ports.work.model.WorkStoreObservation
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.time.Instant
 
@@ -136,6 +137,7 @@ data class StandaloneReviewReportFinding(
   val specialist: String?,
   val location: String?,
   val description: String,
+  val status: ReviewFindingStatus = ReviewFindingStatus.OPEN,
 )
 
 enum class ExecutionReasonRestoration { EXACT, RESTORED, MISSING, AMBIGUOUS, BUDGET_EXCEEDED, MISSING_CONTENT }

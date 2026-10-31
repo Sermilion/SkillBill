@@ -6,6 +6,7 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.idestatus.model.WorktreeEditSummary
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
@@ -175,17 +176,28 @@ data class GoalRunnerSubtaskPhaseResults(
   val audit: GoalRunnerPhaseConclusion? = null,
 )
 
+/** One review pass; [lanes] are the review lanes its run applied, empty when the pass's review run is not stored. */
 data class GoalRunnerReviewPassResult(
   val passNumber: Int,
   val verdict: String,
   val unresolvedFindingCount: Int,
   val findings: List<GoalRunnerReviewFinding>,
+  val lanes: List<String> = emptyList(),
 )
 
+/**
+ * A pass finding as the review run stored it, with its [status]. A pass whose run is not stored falls back to the
+ * compact summary: [ref] and [description] from it, no [confidence], [specialist] or [location], and status
+ * [ReviewFindingStatus.OPEN].
+ */
 data class GoalRunnerReviewFinding(
+  val ref: String,
   val severity: String,
-  val label: String,
-  val text: String,
+  val confidence: String?,
+  val specialist: String?,
+  val location: String?,
+  val description: String,
+  val status: ReviewFindingStatus = ReviewFindingStatus.OPEN,
 )
 
 data class GoalRunnerPhaseConclusion(

@@ -7,6 +7,7 @@ import skillbill.review.model.FindingMetadata
 import skillbill.review.model.ImportedFinding
 import skillbill.review.model.ImportedReview
 import skillbill.review.model.NumberedFinding
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.model.ReviewSummary
 import skillbill.review.parsing.ReviewParser
 import java.sql.Connection
@@ -75,6 +76,24 @@ internal object ReviewRuntime {
       }
     }
   }
+
+  fun fetchFindingStatuses(
+    connection: Connection,
+    reviewRunId: String,
+  ): Map<String, ReviewFindingStatus> =
+    connection.prepareStatement(findingStatusSourcesSql).use { statement ->
+      statement.bindAll(reviewRunId)
+      statement.executeQuery().use { resultSet ->
+        buildMap {
+          while (resultSet.next()) {
+            put(
+              resultSet.getString("finding_id"),
+              ReviewFindingStatus.of(resultSet.getString("feedback_event"), resultSet.getString("loop_outcome")),
+            )
+          }
+        }
+      }
+    }
 
   fun reviewExists(
     connection: Connection,

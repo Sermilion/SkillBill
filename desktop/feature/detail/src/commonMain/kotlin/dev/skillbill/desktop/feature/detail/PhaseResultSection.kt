@@ -2,8 +2,6 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicText
@@ -13,14 +11,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
-import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -43,15 +38,9 @@ internal fun laneChipLabel(lane: String): String {
   return if (platform.isEmpty()) lane else "$platform · ${name.substringAfter("-code-review-")}"
 }
 
-/** "Approved · 3 findings", or just the count when the report declared no verdict. */
-internal fun reviewReportCaption(report: ReviewReport): String {
-  val count = when (report.findings.size) {
-    0 -> "no findings"
-    1 -> "1 finding"
-    else -> "${report.findings.size} findings"
-  }
-  return listOfNotNull(report.verdict?.let(::reviewVerdictLabel), count).joinToString(" · ")
-}
+/** "Approved · 3 findings · 2 fixed · 1 open", or just the tally when the report declared no verdict. */
+internal fun reviewReportCaption(report: ReviewReport): String =
+  listOfNotNull(report.verdict?.let(::reviewVerdictLabel), reviewFindingsTally(report.findings)).joinToString(" · ")
 
 /**
  * Right after Activity, a standalone run's result: a review's findings as one boxed table under its verdict, with the rest of
@@ -79,52 +68,16 @@ private fun DetailSections.reviewResultSection(run: ExecutionInstance, report: R
       }
       Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         BasicText(reviewReportCaption(report), style = SkillBillTheme.type.tSm.copy(color = verdictColor))
-        if (report.lanes.isNotEmpty()) ReviewLanes(report)
+        if (report.lanes.isNotEmpty()) ReviewLanes(report.lanes, report.findings)
       }
     }
     itemsIndexed(report.findings, key = { index, finding -> "review-finding-$index-${finding.ref}" }) { index, finding ->
-      BoxedFindingRow(
-        index, report.findings.size,
-        title = finding.description,
-        severity = finding.severity,
-        ref = finding.ref,
-        location = finding.location,
-        meta = listOfNotNull(finding.specialist, finding.confidence?.let { "$it confidence" }).joinToString(" · ").ifBlank { null },
-        state = "Open",
-        stateColor = SkillBillTheme.colors.fgFaint,
-      )
+      ReviewFindingRow(index, report.findings.size, finding)
     }
     report.summary?.let { summary ->
       item(key = "review-result-summary-${run.invocationId}") {
         FoldedReport(summary, Modifier.padding(top = if (report.findings.isEmpty()) 0.dp else 16.dp))
       }
-    }
-  }
-}
-
-/**
- * The lanes the review applied, one chip each: a green dot for a lane that came back clean, an amber dot and its finding count
- * for one that raised findings. The tooltip carries the full rubric name.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ReviewLanes(report: ReviewReport) {
-  val colors = SkillBillTheme.colors
-  val counts = remember(report) { report.findings.groupingBy { it.specialist }.eachCount() }
-  FlowRow(
-    horizontalArrangement = Arrangement.spacedBy(6.dp),
-    verticalArrangement = Arrangement.spacedBy(6.dp),
-    itemVerticalAlignment = Alignment.CenterVertically,
-  ) {
-    BasicText("Lanes", style = SkillBillTheme.type.tSmMedium.copy(color = colors.fgMuted))
-    report.lanes.forEach { lane ->
-      val count = counts[lane] ?: 0
-      val label = laneChipLabel(lane)
-      SbLabel(
-        if (count > 0) "$label · $count" else label,
-        SbLabelStyle.Dot(if (count > 0) colors.stBlocked else colors.stDone),
-        tooltip = if (count > 0) "$lane · $count ${if (count == 1) "finding" else "findings"}" else "$lane · clean",
-      )
     }
   }
 }

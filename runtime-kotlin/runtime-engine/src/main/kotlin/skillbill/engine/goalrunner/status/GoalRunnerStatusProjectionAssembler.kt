@@ -43,6 +43,7 @@ import skillbill.goalrunner.model.GoalRunnerStatusProjectionRuntimeInputs
 import skillbill.goalrunner.model.GoalRunnerStatusProjector
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
+import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.idestatus.model.summary
 import skillbill.ports.db.DatabaseSessionFactory
@@ -64,6 +65,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
@@ -602,15 +604,20 @@ class GoalRunnerStatusProjectionAssembler(
       val artifacts =
         phaseQuery.loadPhaseResultArtifacts(workflowId) ?: return GoalRunnerSubtaskPhaseResults(subtask.id)
       val records = artifacts.phaseRecords()
+      val rawResults = reviewRawResults(artifacts, durableRead)
       GoalRunnerSubtaskPhaseResults(
         subtaskId = subtask.id,
         reviewPasses =
           GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts)?.passResults.orEmpty().map { pass ->
+            val stored = rawResults[pass.passNumber.toString()]
+              ?.let(GoalSubtaskReviewSummaryReducer::reviewRunId)
+              ?.let { runId -> storedPassFindings(runId, durableRead) }
             GoalRunnerReviewPassResult(
               passNumber = pass.passNumber,
               verdict = pass.verdict.wireValue,
               unresolvedFindingCount = pass.unresolvedFindingCount,
-              findings = pass.findings.map { GoalRunnerReviewFinding(it.severity, it.label, it.text) },
+              findings = stored?.findings ?: pass.findings.map(::compactPassFinding),
+              lanes = stored?.lanes.orEmpty(),
             )
           },
         review = records[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW]?.toConclusion(),
@@ -626,6 +633,60 @@ class GoalRunnerStatusProjectionAssembler(
       GoalRunnerSubtaskPhaseResults(subtask.id)
     }
   }
+
+  // The raw review output per pass number; a decode failure leaves every pass on its compact summary.
+  private fun reviewRawResults(
+    artifacts: Any,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): Map<String, String> =
+    runCatching { GoalSubtaskReviewArtifactDecoder.decode(artifacts)?.rawResults.orEmpty() }.getOrElse { error ->
+      durableRead.recordDegradedRead(
+        seam = "goal-status.subtask_review_raw_results",
+        expected = "raw_review_results",
+        used = "compact_findings",
+        error = error,
+      )
+      emptyMap()
+    }
+
+  private class StoredPassFindings(
+    val findings: List<GoalRunnerReviewFinding>,
+    val lanes: List<String>,
+  )
+
+  // The pass's findings as its review run stored them, each with its status, and the lanes the run applied.
+  private fun storedPassFindings(
+    runId: String,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): StoredPassFindings? =
+    runCatching {
+      database.read { unit ->
+        val reviews = unit.reviews
+        val statuses = reviews.fetchFindingStatuses(runId)
+        StoredPassFindings(
+          findings = storedReviewPassFindings(reviews.fetchNumberedFindings(runId), statuses),
+          lanes = reviews.fetchReviewRunLanes(runId).sortedBy { it.orderIndex }.map { it.laneSkillName },
+        )
+      }
+    }.getOrElse { error ->
+      durableRead.recordDegradedRead(
+        seam = "goal-status.subtask_review_findings",
+        expected = "stored_review_findings",
+        used = "compact_findings",
+        error = error,
+      )
+      null
+    }
+
+  private fun compactPassFinding(finding: GoalSubtaskReviewCompactFinding): GoalRunnerReviewFinding =
+    GoalRunnerReviewFinding(
+      ref = finding.findingId.orEmpty(),
+      severity = finding.severity,
+      confidence = null,
+      specialist = null,
+      location = null,
+      description = finding.text,
+    )
 
   private fun FeatureTaskRuntimePhaseRecord.toConclusion(): GoalRunnerPhaseConclusion {
     val envelope =

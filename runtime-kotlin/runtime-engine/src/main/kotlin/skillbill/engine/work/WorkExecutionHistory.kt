@@ -147,13 +147,17 @@ internal fun reviewReport(
   unitOfWork: UnitOfWork,
 ): StandaloneReviewReport? {
   val report = StandaloneReviewReportReader.read(text) ?: return null
+  val runId = record.reviewRunId ?: return report
   val recorded =
-    record.reviewRunId
-      ?.let(unitOfWork.reviews::fetchReviewRunLanes)
-      .orEmpty()
+    unitOfWork.reviews.fetchReviewRunLanes(runId)
       .sortedBy { it.orderIndex }
       .map { it.laneSkillName }
-  return if (recorded.isEmpty()) report else report.copy(lanes = recorded)
+  // A report's refs are the stored finding ids, so each finding takes its stored status.
+  val statuses = unitOfWork.reviews.fetchFindingStatuses(runId)
+  return report.copy(
+    lanes = recorded.ifEmpty { report.lanes },
+    findings = report.findings.map { finding -> statuses[finding.ref]?.let { finding.copy(status = it) } ?: finding },
+  )
 }
 
 internal data class ResolvedExecutionReason(

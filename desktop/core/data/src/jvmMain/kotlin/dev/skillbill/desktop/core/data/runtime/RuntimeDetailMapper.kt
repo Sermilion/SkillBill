@@ -25,13 +25,13 @@ import dev.skillbill.desktop.core.domain.model.IncidentTelemetry
 import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
-import dev.skillbill.desktop.core.domain.model.ReviewReport
-import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
 import dev.skillbill.desktop.core.domain.model.PlannedSubtask
 import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.ReasonRestoration
-import dev.skillbill.desktop.core.domain.model.ReviewFinding
+import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.ReviewPass
+import dev.skillbill.desktop.core.domain.model.ReviewReport
+import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SubtaskDependency
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
@@ -47,27 +47,28 @@ import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.domain.model.WorktreeEdit
 import skillbill.engine.work.control.model.WorkRunOptions
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState as RuntimeAssessmentFindingState
+import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as RuntimeAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerAssessmentState
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import skillbill.ports.idestatus.model.StandalonePlanReport
-import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailList
 import skillbill.ports.idestatus.model.WorkIncidentProgress
 import skillbill.ports.idestatus.model.WorkIncidentProjection
 import skillbill.ports.system.CheckedOutBranchSource
+import skillbill.review.model.ReviewFindingStatus as RuntimeReviewFindingStatus
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryEligibilityResult
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryUnavailableReason
 import java.nio.file.Path
+import java.time.Instant as JavaInstant
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
-import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState as RuntimeAssessmentFindingState
-import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as RuntimeAssessmentVerification
-import java.time.Instant as JavaInstant
 
 /**
  * The detail header: the row's fields plus, for a goal, the manifest's feature title, the executing agent (the goal's active agent, or the run
@@ -162,7 +163,11 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
       SubtaskPhaseResults(
         result.subtaskId,
         result.reviewPasses.map { pass ->
-          ReviewPass(pass.passNumber, pass.verdict, pass.unresolvedFindingCount, pass.findings.map { ReviewFinding(it.severity, it.label, it.text) })
+          ReviewPass(
+            pass.passNumber, pass.verdict, pass.unresolvedFindingCount,
+            pass.findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description, it.status.toDomain()) },
+            pass.lanes,
+          )
         },
         result.audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
         result.review?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
@@ -230,7 +235,9 @@ private fun IdeStatusWorkflowQaOutcome.toDomain(): WorkQaOutcome? =
 
 private fun StandaloneReviewReport.toDomain(): ReviewReport =
   ReviewReport(
-    verdict, summary, findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description) }, lanes,
+    verdict, summary,
+    findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description, it.status.toDomain()) },
+    lanes,
   )
 
 private fun StandalonePlanReport.toDomain(): PlanRunReport =
@@ -249,6 +256,15 @@ private fun RuntimeAssessmentVerification.toDomain(): GoalAssessmentVerification
   RuntimeAssessmentVerification.REFUTED -> GoalAssessmentVerification.Refuted
   RuntimeAssessmentVerification.UNVERIFIED -> GoalAssessmentVerification.Unverified
   RuntimeAssessmentVerification.NOT_REQUIRED -> GoalAssessmentVerification.NotRequired
+}
+
+private fun RuntimeReviewFindingStatus.toDomain(): ReviewFindingStatus = when (this) {
+  RuntimeReviewFindingStatus.OPEN -> ReviewFindingStatus.Open
+  RuntimeReviewFindingStatus.FIXED -> ReviewFindingStatus.Fixed
+  RuntimeReviewFindingStatus.ACCEPTED -> ReviewFindingStatus.Accepted
+  RuntimeReviewFindingStatus.DECLINED -> ReviewFindingStatus.Declined
+  RuntimeReviewFindingStatus.FALSE_POSITIVE -> ReviewFindingStatus.FalsePositive
+  RuntimeReviewFindingStatus.REJECTED -> ReviewFindingStatus.Rejected
 }
 
 private fun RuntimeAssessmentFindingState.toDomain(): GoalAssessmentFindingState = when (this) {

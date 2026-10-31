@@ -88,6 +88,7 @@ internal val numberedFindingsSql =
     f.confidence,
     f.location,
     f.description,
+    COALESCE(fl.lane_skill_name, f.lane_skill_name) AS lane_skill_name,
     COALESCE(v.claim_verdict, a.claim_verdict) AS claim_verdict,
     a.scope_disposition AS scope_disposition,
     COALESCE(NULLIF(a.citations, ''), v.citations) AS citations,
@@ -95,10 +96,31 @@ internal val numberedFindingsSql =
     COALESCE(a.severity_adjustment_justification,
       v.severity_adjustment_justification) AS severity_adjustment_justification
   FROM findings f
+  LEFT JOIN review_run_finding_lanes fl
+    ON fl.review_run_id = f.review_run_id AND fl.finding_id = f.finding_id
   LEFT JOIN review_run_finding_verdicts v
     ON v.review_run_id = f.review_run_id AND v.finding_id = f.finding_id AND v.stage = 'verification'
   LEFT JOIN review_run_finding_verdicts a
     ON a.review_run_id = f.review_run_id AND a.finding_id = f.finding_id AND a.stage = 'adjudication'
   WHERE f.review_run_id = ?
   ORDER BY f.finding_id
+  """.trimIndent()
+
+internal val findingStatusSourcesSql =
+  """
+  SELECT
+    f.finding_id,
+    (
+      SELECT e.event_type FROM feedback_events e
+      WHERE e.review_run_id = f.review_run_id AND e.finding_id = f.finding_id
+        AND e.event_type IN ('fix_applied', 'fix_rejected', 'false_positive', 'finding_accepted')
+      ORDER BY e.id DESC LIMIT 1
+    ) AS feedback_event,
+    (
+      SELECT o.outcome FROM review_finding_outcomes o
+      WHERE o.review_run_id = f.review_run_id AND o.finding_id = f.finding_id
+      ORDER BY o.review_pass_number DESC, o.recorded_at DESC LIMIT 1
+    ) AS loop_outcome
+  FROM findings f
+  WHERE f.review_run_id = ?
   """.trimIndent()

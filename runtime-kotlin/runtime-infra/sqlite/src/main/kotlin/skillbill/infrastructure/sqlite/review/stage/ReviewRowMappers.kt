@@ -53,6 +53,7 @@ internal fun ResultSet.toNumberedFinding(number: Int): NumberedFinding =
     confidence = getString(ReviewFinishedTelemetryPayloadKeys.CONFIDENCE),
     location = getString(ReviewFinishedTelemetryPayloadKeys.LOCATION),
     description = getString(ReviewFinishedTelemetryPayloadKeys.DESCRIPTION),
+    laneSkillName = getString("lane_skill_name")?.takeIf(String::isNotBlank),
     claimVerdict =
       getString(ReviewFindingPayloadKeys.CLAIM_VERDICT)
         ?.trim()

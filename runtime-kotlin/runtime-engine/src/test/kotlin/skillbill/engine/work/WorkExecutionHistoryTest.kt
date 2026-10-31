@@ -11,6 +11,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.repository.ReviewRepository
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.model.ReviewLaneResolutionState
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.model.ReviewRunLane
@@ -126,6 +127,8 @@ class WorkExecutionHistoryTest {
         override val reviews: ReviewRepository =
           object : ReviewRepository by unexercised() {
             override fun fetchReviewRunLanes(runId: String) = if (runId == "rvw-1") recorded else emptyList()
+
+            override fun fetchFindingStatuses(runId: String) = emptyMap<String, ReviewFindingStatus>()
           }
       }
     val review = monitorRecord(1, runSequence = "1").copy(phaseId = "review", monitorTarget = null)
@@ -137,6 +140,34 @@ class WorkExecutionHistoryTest {
     assertEquals(
       listOf("bill-kmp-code-review-ui", "bill-made-up-code-review-lane"),
       reviewReport(review, text, unit)?.lanes,
+    )
+  }
+
+  @Test
+  fun `a review finding takes the status stored for its review run and stays open without one`() {
+    val text =
+      "[F-001] Major | High | a.kt:3 | Draft is lost\n" +
+        "[F-002] Minor | Low | b.kt:4 | Label drifts\n" +
+        "verdict: changes_requested"
+    val database = TrackingDatabase(work = emptyList(), workflows = IdeStatusWorkflowStates())
+    val unit =
+      object : UnitOfWork by database.unitOfWork() {
+        override val reviews: ReviewRepository =
+          object : ReviewRepository by unexercised() {
+            override fun fetchReviewRunLanes(runId: String) = emptyList<ReviewRunLane>()
+
+            override fun fetchFindingStatuses(runId: String) = mapOf("F-001" to ReviewFindingStatus.FIXED)
+          }
+      }
+    val review = monitorRecord(1, runSequence = "1").copy(phaseId = "review", monitorTarget = null)
+
+    assertEquals(
+      listOf(ReviewFindingStatus.FIXED, ReviewFindingStatus.OPEN),
+      reviewReport(review.copy(reviewRunId = "rvw-1"), text, unit)?.findings?.map { it.status },
+    )
+    assertEquals(
+      listOf(ReviewFindingStatus.OPEN, ReviewFindingStatus.OPEN),
+      reviewReport(review, text, unit)?.findings?.map { it.status },
     )
   }
 

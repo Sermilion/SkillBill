@@ -105,7 +105,40 @@ data class NumberedFinding(
   val scopeDisposition: ReviewScopeDisposition? = null,
   val citations: List<ReviewFindingCitation> = emptyList(),
   val severityAdjustment: ReviewSeverityAdjustment? = null,
+  val laneSkillName: String? = null,
 )
+
+/** Where a reported finding stands, for display. */
+enum class ReviewFindingStatus {
+  OPEN,
+  FIXED,
+  ACCEPTED,
+  DECLINED,
+  FALSE_POSITIVE,
+  REJECTED,
+  ;
+
+  companion object {
+    /**
+     * The operator's latest settling feedback wins; then the goal loop's own outcome for the finding; then an
+     * accepted-but-unfixed finding. [feedbackEvent] is a `feedback_events.event_type`, [loopOutcome] a
+     * `review_finding_outcomes.outcome`.
+     */
+    fun of(
+      feedbackEvent: String?,
+      loopOutcome: String?,
+    ): ReviewFindingStatus =
+      when {
+        feedbackEvent == "fix_applied" -> FIXED
+        feedbackEvent == "fix_rejected" -> DECLINED
+        feedbackEvent == "false_positive" -> FALSE_POSITIVE
+        loopOutcome == "addressed" -> FIXED
+        loopOutcome == "rejected" -> REJECTED
+        feedbackEvent == "finding_accepted" -> ACCEPTED
+        else -> OPEN
+      }
+  }
+}
 
 data class TriageDecision(
   val number: Int,
