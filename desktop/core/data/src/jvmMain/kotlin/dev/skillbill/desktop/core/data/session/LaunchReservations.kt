@@ -39,6 +39,8 @@ class LaunchReservations {
     val handle: LaunchReservationHandle,
     val target: LaunchBoardTarget,
     val baseline: Lifecycle?,
+    val baselineExecutionId: String?,
+    val baselineRunSequence: String?,
     val baselineObservedAt: kotlin.time.Instant?,
     val phase: Phase,
   )
@@ -72,7 +74,10 @@ class LaunchReservations {
       else -> target
     }
     val selectedBaseline = if (target is LaunchBoardTarget.Goal) selected?.lifecycle else baseline
-    held[key] = Reservation(handle, boundTarget, selectedBaseline, snapshot.page.observedAt, Phase.InFlight)
+    held[key] = Reservation(
+      handle, boundTarget, selectedBaseline, selected?.control?.executionId, selected?.control?.runSequence,
+      snapshot.page.observedAt, Phase.InFlight,
+    )
     publish()
     ReservationAdmission.Reserved(handle)
   }
@@ -117,7 +122,9 @@ class LaunchReservations {
     if (reservation.target is LaunchBoardTarget.Goal && reservation.target.workId == null) {
       held[key] = reservation.copy(target = reservation.target.copy(workId = item.id))
     }
-    if (item.running || item.lifecycle != reservation.baseline) held.remove(key)
+    val executionChanged = item.control.executionId != null && item.control.executionId != reservation.baselineExecutionId
+    val runChanged = item.control.runSequence != null && item.control.runSequence != reservation.baselineRunSequence
+    if (item.running || item.lifecycle != reservation.baseline || executionChanged || runChanged) held.remove(key)
   }
 
   private fun LaunchBoardTarget.select(items: List<WorkItem>): WorkItem? = when (this) {

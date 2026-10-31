@@ -77,6 +77,23 @@ class LaunchReservationsTest {
   }
 
   @Test
+  fun `a resumed goal that blocks before the next board read releases its reservation`() {
+    val source = paused.copy(lifecycle = Lifecycle.Blocked, control = paused.control.copy(executionId = "prior", runSequence = "1"))
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(launches.reserve(
+      KEY, SESSION, LaunchBoardTarget.Item(source.id, source.kind, source.control.repositoryIdentity), source.lifecycle, page(source),
+    )).handle
+    launches.settle(handle, succeeded = true)
+    launches.onBoard(SESSION, page(source))
+    assertEquals(setOf(KEY), launches.keys.value)
+
+    val blockedAgain = source.copy(control = source.control.copy(executionId = "resumed", runSequence = "2"))
+    launches.onBoard(SESSION, page(blockedAgain))
+
+    assertEquals(emptySet(), launches.keys.value)
+  }
+
+  @Test
   fun `the board never releases a launch still in flight`() = runTest {
     val launches = reservations()
     reserve(launches)

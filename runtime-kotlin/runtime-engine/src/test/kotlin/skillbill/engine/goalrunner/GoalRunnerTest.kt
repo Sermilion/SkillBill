@@ -1525,6 +1525,30 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
+  fun `resume with every child complete restores the goal branch before assessment`() {
+    val git = BranchTrackingGitOperations(current = "main")
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed children must not run again") },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = RecordingPullRequestPort(),
+        ).copy(gitOperations = git),
+      )
+
+    assertIs<GoalRunnerRunReport.Completed>(
+      runner.run(linearRunRequest(Files.createTempDirectory("goal-finalize-align"))),
+    )
+
+    assertEquals("feat/SKILL-56-goal", git.current)
+  }
+
+  @Test
   fun `linear finalize deletes scratch before commit-all and completes when remaining dirt is swept`() {
     val repoRoot = Files.createTempDirectory("goal-linear-finalize")
     val scratch = RecordingSpecScratchStore()

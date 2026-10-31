@@ -174,6 +174,29 @@ class GoalAssessmentLoopTest {
   }
 
   @Test
+  fun `fresh discovery can resume after branch alignment changes an unassessed head`() {
+    val round =
+      GoalAssessmentRound(
+        round = 1,
+        headSha = FIRST_FIX_SHA,
+        scopeFiles = emptyList(),
+        assessorRuns = emptyList(),
+        findings = emptyList(),
+        scenarios = emptyList(),
+        regressions = emptyList(),
+        fix = null,
+      )
+    val stored = GoalAssessmentRecordRead.Recorded(GoalAssessmentRecord("SKILL-442", listOf(round)))
+    val fixture = GoalAssessmentGateFixture(home, AssessmentOutcomeStore(stored)) { NO_FINDING }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertEquals(ASSESSMENT_HEAD_SHA, record.rounds.single().headSha)
+    assertEquals(1, fixture.calls.count { it == AssessmentCall.FIRST_SUBTASK })
+  }
+
+  @Test
   fun `a recorded exit skips the stage and the no change path records skipped_no_changes once`() {
     val exited = GoalAssessmentRecord("SKILL-442", exitReason = GoalAssessmentExitReason.CONVERGED)
     val recorded =

@@ -121,12 +121,25 @@ class DefaultGoalRunnerAssessmentGate(
             "the stored assessment record is unreadable: ${read.reason}",
           )
       }
-    val existing = prior.rounds.getOrNull(round - 1)
+    val existing = resumeRound(prior.rounds.getOrNull(round - 1), round, bundle.headSha)
     val problem = resumeProblem(prior, existing, round, bundle.headSha)
     if (problem != null) {
       return unavailable(prior.copy(exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE), problem)
     }
     return GoalAssessmentRoundRun(services, state, request, bundle, prior, existing, round).execute()
+  }
+
+  private fun resumeRound(
+    existing: GoalAssessmentRound?,
+    round: Int,
+    headSha: String,
+  ): GoalAssessmentRound? {
+    if (existing == null || round != 1) return existing
+    if (existing.assessorRuns.isNotEmpty()) return existing
+    val hasResults =
+      existing.findings.isNotEmpty() || existing.scenarios.isNotEmpty() || existing.regressions.isNotEmpty()
+    val repairStarted = existing.fix != null || existing.repairPlan != null || existing.targetRef != null
+    return if (hasResults || repairStarted) existing else existing.copy(headSha = headSha)
   }
 
   private fun resumeProblem(

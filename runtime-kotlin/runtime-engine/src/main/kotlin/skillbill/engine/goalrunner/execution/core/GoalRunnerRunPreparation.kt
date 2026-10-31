@@ -130,9 +130,14 @@ class GoalRunnerRunPreparation(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalRunnerRunReport? {
-    val selection = GoalRunnerPlanner.selectNext(state.manifest) as? GoalRunnerSelection.Run ?: return null
-    val subtaskId = selection.decision.subtask.id
-    val branch = state.manifest.branchPlanFor(subtaskId).branch.trim()
+    val selection = GoalRunnerPlanner.selectNext(state.manifest)
+    val subtaskId = (selection as? GoalRunnerSelection.Run)?.decision?.subtask?.id ?: 0
+    val branch =
+      when (selection) {
+        is GoalRunnerSelection.Run -> state.manifest.branchPlanFor(subtaskId).branch.trim()
+        is GoalRunnerSelection.Done -> state.manifest.goalWorkBranch()?.trim() ?: return null
+        is GoalRunnerSelection.Blocked -> return null
+      }
     val failure = existingGoalBranchCheckoutFailure(request.repoRoot, branch) ?: return null
     return stopped(
       StoppedReportArgs(
@@ -142,10 +147,9 @@ class GoalRunnerRunPreparation(
         reason = GoalRunnerStopReason.BLOCKED,
         blockedReason =
           "Goal '${request.issueKey}' resumes on branch '$branch', and the runtime could not check it out " +
-            "before reading its specs, so it stopped instead of planning against another branch's spec " +
-            "files: $failure",
+            "before continuing its work: $failure",
         workflowId = state.parentWorkflowId,
-        lastResumableStep = "plan",
+        lastResumableStep = if (subtaskId == 0) "goal_assessment" else "plan",
       ),
     )
   }

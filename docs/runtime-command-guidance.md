@@ -485,7 +485,10 @@ that monitoring is running. Running status requires a verified live process owne
 A merged PR completes monitoring regardless of failing or pending checks. The
 monitor checks the PR's state on every poll so a merge during CI ends the wait.
 When every subtask is terminal, resume skips the planning sweep and continues
-finalization without reading archived planning specs.
+finalization without reading archived planning specs. It restores the existing goal
+branch before assessment and quality work. An assessment discovery round with no
+accepted assessor output can bind to that restored head; completed assessment
+results retain their original head binding.
 Goal and IDE status read workflow state from the database without consulting spec
 projections. Issue-key spec lookup uses bundles directly under the project store's
 `specs/` and, for in-flight legacy goals, directly under `.feature-specs/`. The
