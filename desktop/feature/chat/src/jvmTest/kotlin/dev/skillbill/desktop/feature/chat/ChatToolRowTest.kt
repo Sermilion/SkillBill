@@ -1,5 +1,8 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
@@ -44,21 +47,17 @@ class ChatToolRowTest {
   }
 
   @Test
-  fun `a long group shows its newest five calls until expanded, then folds back from the bottom`() = runComposeUiTest {
-    val tools = (1..7).map { n ->
+  fun `a long streaming group scrolls inside five rows and follows its newest call`() = runComposeUiTest {
+    val tools = (1..8).map { n ->
       val call = ChatToolCall("bash-$n", "Bash", "echo $n", "Command $n")
       ChatToolEntry(call, ChatEvent.ToolResult(call.id, "$n", false), start, start + 1.seconds)
     }
     setContent { SkillBillTheme(reducedMotion = true) { ChatToolGroup(tools, streaming = true) } }
 
-    onNodeWithText("Command 2").assertDoesNotExist()
-    onNodeWithText("Command 3").assertExists()
-    onNodeWithText("Command 7").assertExists()
-    onNodeWithText("Show 2 earlier").performClick()
-    onNodeWithText("Command 1").assertExists()
-    onNodeWithText("Show less").performClick()
-    onNodeWithText("Command 1").assertDoesNotExist()
-    onNodeWithText("Show 2 earlier").assertExists()
+    onNodeWithText("Command 8").assertIsDisplayed()
+    onNodeWithText("Command 1").assertIsNotDisplayed()
+    onNodeWithText("Command 1").performScrollTo().assertIsDisplayed()
+    onNodeWithText("Command 8").assertIsNotDisplayed()
   }
 
   @Test

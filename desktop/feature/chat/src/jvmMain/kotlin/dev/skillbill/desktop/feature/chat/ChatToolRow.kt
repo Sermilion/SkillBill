@@ -1,5 +1,14 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.defaultScrollbarStyle
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
@@ -46,8 +54,11 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
 private val OUTPUT_MAX_HEIGHT = 240.dp
 
-/** How many of a group's tool calls show before "Show N earlier"; the newest ones, so a streaming turn shows its live work. */
+/** How many collapsed tool calls the group's scroll area shows at once. */
 internal const val VISIBLE_TOOL_ROWS = 5
+
+/** How close to the end, in pixels, the reader must be for the streaming group to keep following the newest call. */
+private const val FOLLOW_SLACK_PX = 24
 
 /** A turn's tool calls under one header; open while the turn streams, folded once it ends, until the operator toggles it. */
 @Composable
@@ -76,29 +87,47 @@ internal fun ChatToolGroup(tools: List<ChatToolEntry>, streaming: Boolean) {
       Spacer(Modifier.weight(1f))
       GroupStatus(tools)
     }
-    if (open) {
-      var showAll by rememberSaveable { mutableStateOf(false) }
-      val hidden = if (showAll) 0 else (tools.size - VISIBLE_TOOL_ROWS).coerceAtLeast(0)
-      if (hidden > 0) FoldToggle("Show $hidden earlier", LucideIcons.chevronDown) { showAll = true }
-      tools.drop(hidden).forEach { tool -> key(tool.call.id) { ChatToolRow(tool) } }
-      if (showAll && tools.size > VISIBLE_TOOL_ROWS) FoldToggle("Show less", LucideIcons.chevronUp) { showAll = false }
-    }
+    if (open) ToolRows(tools, streaming)
   }
 }
 
+/**
+ * The group's calls in a scroll area as tall as [VISIBLE_TOOL_ROWS] collapsed rows, with a thin scrollbar. While the turn
+ * streams it follows the newest call, unless the reader has scrolled up from the end. Short groups render as a plain list.
+ */
 @Composable
-private fun FoldToggle(label: String, icon: ImageVector, onClick: () -> Unit) {
+private fun ToolRows(tools: List<ChatToolEntry>, streaming: Boolean) {
   val colors = SkillBillTheme.colors
-  Row(
-    Modifier.fillMaxWidth().dividerAbove(colors.borderSubtle)
-      .clickable(role = Role.Button, onClick = onClick)
-      .pointerHoverIcon(PointerIcon.Hand)
-      .padding(horizontal = 10.dp, vertical = 6.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(icon, SbIconSize.Xs) }
-    BasicText(label, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+  val scroll = rememberScrollState()
+  var rowHeight by remember { mutableStateOf<Int?>(null) }
+  val scrolls = tools.size > VISIBLE_TOOL_ROWS
+  val maxHeight = rowHeight?.takeIf { scrolls }?.let { with(LocalDensity.current) { (it * VISIBLE_TOOL_ROWS).toDp() } }
+  LaunchedEffect(scroll, streaming, scrolls) {
+    if (!streaming || !scrolls) return@LaunchedEffect
+    var lastMax = scroll.maxValue
+    scroll.scrollTo(lastMax)
+    snapshotFlow { scroll.maxValue }.collect { max ->
+      if (scroll.value >= lastMax - FOLLOW_SLACK_PX) scroll.scrollTo(max)
+      lastMax = max
+    }
+  }
+  Box(Modifier.fillMaxWidth().then(if (maxHeight != null) Modifier.heightIn(max = maxHeight) else Modifier)) {
+    Column(Modifier.fillMaxWidth().then(if (scrolls) Modifier.verticalScroll(scroll) else Modifier)) {
+      tools.forEach { tool ->
+        key(tool.call.id) {
+          Box(Modifier.onSizeChanged { size -> rowHeight = rowHeight?.let { minOf(it, size.height) } ?: size.height }) {
+            ChatToolRow(tool)
+          }
+        }
+      }
+    }
+    if (scrolls) {
+      VerticalScrollbar(
+        rememberScrollbarAdapter(scroll),
+        Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 2.dp, horizontal = 2.dp),
+        style = defaultScrollbarStyle().copy(thickness = 4.dp, unhoverColor = colors.borderStrong, hoverColor = colors.fgFaint),
+      )
+    }
   }
 }
 
