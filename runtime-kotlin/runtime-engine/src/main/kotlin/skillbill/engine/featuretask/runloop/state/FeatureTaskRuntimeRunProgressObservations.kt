@@ -13,72 +13,72 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 /**
  * Read-only progress and attempt facts for one run; mutation routes through [FeatureTaskRuntimeRunTransitionOwner].
  */
-internal interface FeatureTaskRuntimeRunProgressObservations {
-  fun phase(phaseId: String): PhaseProgressObservation
+public interface FeatureTaskRuntimeRunProgressObservations {
+  public fun phase(phaseId: String): PhaseProgressObservation
 
-  val transitions: FeatureTaskRuntimeTransitionDeclaration
+  public val transitions: FeatureTaskRuntimeTransitionDeclaration
 
-  val initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>
+  public val initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>
 
-  val settledVerdictsByPhaseId: Map<String, FeatureTaskRuntimeVerdict>
+  public val settledVerdictsByPhaseId: Map<String, FeatureTaskRuntimeVerdict>
 
-  fun validatedRecordToOutput(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseOutput?
+  public fun validatedRecordToOutput(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseOutput?
 
-  fun outputs(requiredPhaseIds: Collection<String> = emptyList()): List<FeatureTaskRuntimePhaseOutput>
+  public fun outputs(requiredPhaseIds: Collection<String> = emptyList()): List<FeatureTaskRuntimePhaseOutput>
 
-  val phasesRequiringDurableGateInvalidation: Set<String>
+  public val phasesRequiringDurableGateInvalidation: Set<String>
 
-  fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart
+  public fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart
 
-  val completedPhaseIds: List<String>
+  public val completedPhaseIds: List<String>
 
-  fun fixLoopIterationFor(
+  public fun fixLoopIterationFor(
     phaseId: String,
     absoluteIteration: Int,
   ): Int
 
-  fun legacyLaunchSeamRejectionConsumedBudget(
+  public fun legacyLaunchSeamRejectionConsumedBudget(
     phaseId: String,
     currentReason: String,
   ): Boolean
 
-  fun loop(loopId: String): LoopProgressObservation
+  public fun loop(loopId: String): LoopProgressObservation
 
-  val monitorFailedRepairCommitShas: Set<String>
+  public val monitorFailedRepairCommitShas: Set<String>
 
-  val monitorFailureEvidenceUnavailable: Boolean
+  public val monitorFailureEvidenceUnavailable: Boolean
 
-  val reviewEvidenceGeneration: Int
+  public val reviewEvidenceGeneration: Int
 
-  fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict
+  public fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict
 
-  fun verdictFor(phaseId: String): FeatureTaskRuntimeVerdict
+  public fun verdictFor(phaseId: String): FeatureTaskRuntimeVerdict
 
-  fun spanBlockedByEntryGate(span: List<String>): Boolean
+  public fun spanBlockedByEntryGate(span: List<String>): Boolean
 }
 
 /** Run-loop phase blocking inputs that need review-pass and resume metadata. */
-internal interface FeatureTaskRuntimeProgressSnapshotAccess : FeatureTaskRuntimeRunProgressObservations {
-  fun persistedBlockResume(
+public interface FeatureTaskRuntimeProgressSnapshotAccess : FeatureTaskRuntimeRunProgressObservations {
+  public fun persistedBlockResume(
     phaseId: String,
     reason: String,
   ): PhaseBlockResume
 
   /** The reason of every durable BLOCKED ledger entry of [phaseId] in the reentry of [loopId] and [edgeIteration]. */
-  fun blockedReasons(
+  public fun blockedReasons(
     phaseId: String,
     loopId: String?,
     edgeIteration: Int?,
   ): List<String>
 
-  fun trailingNonOutputAttempts(
+  public fun trailingNonOutputAttempts(
     phaseId: String,
     isProcessFailure: (String) -> Boolean,
   ): List<FeatureTaskRuntimeNonOutputAttempt>
 
-  val currentReviewPassNumber: Int?
+  public val currentReviewPassNumber: Int?
 
-  val resumeRules: (String) -> PhaseResumeRules
+  public val resumeRules: (String) -> PhaseResumeRules
 }
 
 internal fun detachedProgressObservations(
@@ -102,7 +102,7 @@ internal fun durablePhaseAttemptCount(
     ?: observation.nextIteration
 }
 
-internal data class PhaseProgressObservation(
+public data class PhaseProgressObservation(
   val completed: Boolean,
   val hasPriorRecord: Boolean,
   val resumedFromPriorProcess: Boolean,
@@ -114,7 +114,7 @@ internal data class PhaseProgressObservation(
   val acknowledgedAttemptCount: Int? = null,
 )
 
-internal data class LoopProgressObservation(
+public data class LoopProgressObservation(
   val iteration: Int,
   val liveClaimed: Boolean,
 )

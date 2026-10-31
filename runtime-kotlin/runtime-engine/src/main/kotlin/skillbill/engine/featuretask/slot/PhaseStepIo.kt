@@ -10,7 +10,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 import kotlin.time.Duration
 
-data class PhaseStepInput(
+public data class PhaseStepInput(
   val stepName: String,
   val directive: String,
   val priorValues: Map<String, String>,
@@ -19,7 +19,7 @@ data class PhaseStepInput(
   val policy: PhaseStepPolicy,
 )
 
-data class PhaseStepFacts(
+public data class PhaseStepFacts(
   val issueKey: String,
   val repoRoot: Path,
   val timeout: Duration?,
@@ -40,7 +40,7 @@ data class PhaseStepFacts(
   val agentWorkingDirectory: Path? = null,
 )
 
-data class PhaseStepOutput(
+public data class PhaseStepOutput(
   val stdout: PhaseStepStdout,
   val stderr: String,
   val processStarted: Boolean,
@@ -51,13 +51,13 @@ data class PhaseStepOutput(
   val launchOutcome: AgentRunLaunchOutcome? = null,
 )
 
-data class PhaseStepFileManifest(
+public data class PhaseStepFileManifest(
   val before: List<String>,
   val after: List<String>,
   val reeditedPaths: List<String> = emptyList(),
 )
 
-data class PhaseStepStdout(
+public data class PhaseStepStdout(
   val text: String,
   val bytes: ByteArray,
   val truncated: Boolean,
@@ -65,13 +65,13 @@ data class PhaseStepStdout(
   val sha256: String,
 )
 
-data class PhaseLaunchFailure(
+public data class PhaseLaunchFailure(
   val kind: PhaseLaunchFailureKind,
   val reason: String,
   val cause: String = reason,
 )
 
-enum class PhaseLaunchFailureKind {
+public enum class PhaseLaunchFailureKind {
   UNSUPPORTED_AGENT,
   BEFORE_CAPTURE_FAILED,
   PREPARATION_REJECTED,

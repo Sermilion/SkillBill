@@ -18,32 +18,32 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
-abstract class PhaseStrategy {
-  abstract val slot: PhaseSlot
+public abstract class PhaseStrategy {
+  public abstract val slot: PhaseSlot
 
-  abstract val strategyId: String
+  public abstract val strategyId: String
 
-  open val semanticRevision: Int = 1
+  internal open val semanticRevision: Int = 1
 
-  abstract val steps: List<String>
+  public abstract val steps: List<String>
 
-  open val optionalSteps: Set<String> = emptySet()
+  internal open val optionalSteps: Set<String> = emptySet()
 
-  abstract val entryStep: String
+  internal abstract val entryStep: String
 
-  abstract fun policyFor(stepId: String): PhaseStepPolicy
+  internal abstract fun policyFor(stepId: String): PhaseStepPolicy
 
-  abstract fun directiveFor(stepId: String): String
+  internal abstract fun directiveFor(stepId: String): String
 
-  open fun promptSections(
+  internal open fun promptSections(
     stepId: String,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections = PhaseStepPromptSections(taskDirective = directiveFor(stepId))
 
-  open fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
+  internal open fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
     FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES
 
-  internal abstract fun stepDescriptor(stepId: String): PhaseStepDescriptor<*>
+  public abstract fun stepDescriptor(stepId: String): PhaseStepDescriptor<*>
 
   internal fun stepHooks(stepId: String): PhaseStepHooks<*> = stepDescriptor(stepId).hooks
 
@@ -114,14 +114,14 @@ internal interface PhaseRecordedPlanMappingCapability {
   ): PhaseExecutionPlanMapping?
 }
 
-internal enum class PhaseReportedGate { BUILD, VALIDATION }
+public enum class PhaseReportedGate { BUILD, VALIDATION }
 
-internal sealed interface PhaseQualityGateOperation {
-  data class PackGate(
+public sealed interface PhaseQualityGateOperation {
+  public data class PackGate(
     val commandFamily: ValidationGateCommandFamily,
   ) : PhaseQualityGateOperation
 
-  data object AgentValidation : PhaseQualityGateOperation
+  public data object AgentValidation : PhaseQualityGateOperation
 }
 
 internal data class PhaseExecutionPlanMapping(

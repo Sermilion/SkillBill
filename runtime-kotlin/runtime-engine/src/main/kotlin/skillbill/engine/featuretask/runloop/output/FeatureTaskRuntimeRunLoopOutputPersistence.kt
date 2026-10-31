@@ -11,7 +11,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 
-object FeatureTaskRuntimeRunLoopOutputPersistence {
+internal object FeatureTaskRuntimeRunLoopOutputPersistence {
   internal fun schemaInvalidAttempt(
     operatorReason: String,
     fileManifest: FeatureTaskRuntimePhaseFileManifest,

@@ -38,7 +38,7 @@ internal data class RemediationCommitPrepared(
   val message: String,
 )
 
-object FeatureTaskRuntimeRunLoopCheckpointRemediation {
+internal object FeatureTaskRuntimeRunLoopCheckpointRemediation {
   internal fun recordRemediationBaseSha(
     context: PhaseCheckpointRemediationContext,
     precedingPhaseId: String,
@@ -584,7 +584,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
   }
 }
 
-fun FeatureTaskRuntimeResolvedBranch.baselineOwnedPathsForCheckpoint(): List<String> =
+internal fun FeatureTaskRuntimeResolvedBranch.baselineOwnedPathsForCheckpoint(): List<String> =
   baselineOwnedPaths.ifEmpty { baselineUntrackedPaths }
 
 internal fun PhaseRunRecords.goalStartBaselinePaths(request: FeatureTaskRuntimeRunFacts): List<String>? =

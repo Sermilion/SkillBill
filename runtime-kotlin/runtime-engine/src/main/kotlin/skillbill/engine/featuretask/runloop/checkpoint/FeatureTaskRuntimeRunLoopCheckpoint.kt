@@ -45,7 +45,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckp
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
-object FeatureTaskRuntimeRunLoopCheckpoint {
+internal object FeatureTaskRuntimeRunLoopCheckpoint {
   internal const val CHECKPOINT_IDENTITY_WRITE_REFUSED: String =
     "the identity write was refused: the worker lease is not current, the workflow row is missing, " +
       "or the recorded attempt is older than the preceding phase's durable record"

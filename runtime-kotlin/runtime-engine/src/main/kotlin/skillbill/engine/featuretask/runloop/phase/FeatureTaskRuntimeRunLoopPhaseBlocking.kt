@@ -54,7 +54,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 
-object FeatureTaskRuntimeRunLoopPhaseBlocking {
+internal object FeatureTaskRuntimeRunLoopPhaseBlocking {
   internal fun blockStepInPhase(
     context: PhaseCheckpointRemediationContext,
     block: PhaseBlockRequest,

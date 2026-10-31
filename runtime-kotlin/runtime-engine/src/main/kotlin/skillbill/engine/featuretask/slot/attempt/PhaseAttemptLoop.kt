@@ -31,9 +31,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 /** Runs the attempts of one step call and settles the step, so a run state decides how its steps launch. */
-internal fun interface PhaseStepAttempts {
+public fun interface PhaseStepAttempts {
   /** Runs the attempts [call] makes for [run] and returns the step's outcome. */
-  fun run(
+  public fun run(
     run: PhaseRun,
     call: PhaseStepCall,
     context: PhaseRunLoopAttemptScope,

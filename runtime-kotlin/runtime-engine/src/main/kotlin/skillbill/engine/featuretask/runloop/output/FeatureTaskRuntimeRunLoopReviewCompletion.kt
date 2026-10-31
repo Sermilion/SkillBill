@@ -49,7 +49,7 @@ internal fun isGoalReviewRun(
   state: FeatureTaskRuntimeProgressSnapshotAccess,
 ): Boolean = state.resumeRules(run.phaseId).tracksReviewPasses && isGoalContinuationRun(run.request)
 
-object FeatureTaskRuntimeRunLoopReviewCompletion {
+internal object FeatureTaskRuntimeRunLoopReviewCompletion {
   internal fun ReviewOutputPersistenceContext.persistStandaloneReviewCompletion(
     args: PhaseReviewPersistenceArgs,
     outputText: String,

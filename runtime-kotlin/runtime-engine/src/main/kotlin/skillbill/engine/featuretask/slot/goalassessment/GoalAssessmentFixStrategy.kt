@@ -11,7 +11,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class GoalAssessmentFixStrategy : PhaseStrategy() {
+public class GoalAssessmentFixStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX to
@@ -46,8 +46,8 @@ class GoalAssessmentFixStrategy : PhaseStrategy() {
     }
   }
 
-  companion object {
-    const val ID = "goal-assessment-fix"
+  internal companion object {
+    internal const val ID: String = "goal-assessment-fix"
 
     private const val DIRECTIVE: String =
       "Fix every finding and regression the operator instructions list, in one pass, by editing the checked-out " +

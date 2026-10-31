@@ -5,7 +5,7 @@ import skillbill.engine.featuretask.phaserun.LegacySpecReplanSource
 import java.nio.file.Path
 
 @Inject
-class LegacySpecReplanIntake(
+public class LegacySpecReplanIntake(
   private val legacySpecIntake: LegacySpecIntake,
 ) : LegacySpecReplanSource {
   override fun replanIntake(

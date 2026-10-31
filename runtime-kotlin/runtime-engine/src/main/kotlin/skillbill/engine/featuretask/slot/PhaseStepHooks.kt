@@ -44,19 +44,19 @@ import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
  * preparation and output gate ask the strategy of the running step for its hooks, so step-specific evidence,
  * prompt sections, and output checks live with the step instead of in the shared code.
  */
-internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
-  val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
+public interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
+  public val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
 
   /** The rule a [completionRejection] of this step is recorded under in the durable block reason. */
-  val completionRejectionRule: String
+  public val completionRejectionRule: String
     get() = PhaseStepOutputCheck.OUTPUT_VERIFICATION_RULE
 
   /** The failure disposition a blocked terminal output of this step gets when it names none. */
-  val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
+  public val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
     get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
 
   /** Checks validated [outputMap] of [run] before the shared output checks run. */
-  fun checkValidatedOutput(
+  public fun checkValidatedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     state: B,
@@ -64,7 +64,7 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
   /** Settles the step records that completed [outputMap] of [run] carries, once every completion check passed. */
-  fun settleCompletedOutput(
+  public fun settleCompletedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     state: B,
@@ -75,22 +75,23 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
    * The form of completed [attested] output of [capture] the output gate accepts, given its validated [outputMap]. A
    * step stamps the facts the runtime measured around it here.
    */
-  fun acceptedOutput(
+  public fun acceptedOutput(
     context: PhaseStepOutputContext,
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): NormalizedFeatureTaskRuntimePhaseOutput = attested
 
-  fun interpretedOutput(
+  public fun interpretedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     state: B,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): NormalizedFeatureTaskRuntimePhaseOutput = output
 
-  companion object {
-    val None: PhaseStepHooks<PhaseAcceptedStepExecution> = object : PhaseStepHooks<PhaseAcceptedStepExecution> {}
+  public companion object {
+    internal val None: PhaseStepHooks<PhaseAcceptedStepExecution> =
+      object : PhaseStepHooks<PhaseAcceptedStepExecution> {}
   }
 }
 
@@ -197,15 +198,15 @@ internal interface PhaseAfterCompletionHooks {
 }
 
 /** The launch behaviour one strategy step adds to the shared launch preparation and pre-launch checks. */
-internal interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
+public interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
   /** The repository checkpoint the launch handoff of [run] expects, given the [current] checkpoint fingerprint. */
-  fun expectedLaunchCheckpoint(
+  public fun expectedLaunchCheckpoint(
     run: PhaseRun,
     current: String?,
   ): String? = run.reentry?.expectedRepositoryCheckpoint ?: current
 
   /** The review pass and review tier the launch prompt of [run] carries. */
-  fun launchReviewTier(
+  public fun launchReviewTier(
     run: PhaseRun,
     state: B,
   ): PhaseLaunchReviewTier =
@@ -219,7 +220,7 @@ internal interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
    * Whether attempt [iteration] of [run] launches, once its required start is acknowledged and before launch
    * preparation composes its prompt. A step that owns durable turn accounting reserves the turn here.
    */
-  fun admitLaunch(
+  public fun admitLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
     state: B,
@@ -356,54 +357,54 @@ internal fun <B : PhaseAcceptedStepExecution> PhaseStepLaunchHooks<B>.failureCon
   (this as? PhaseFailureContinuationHooks<B>)?.failureContinuationOutput(run, failure, state)
 
 /** What a step decides about one attempt before launch preparation. */
-internal sealed interface PhaseLaunchAdmission {
-  data object Launch : PhaseLaunchAdmission
+public sealed interface PhaseLaunchAdmission {
+  public data object Launch : PhaseLaunchAdmission
 
-  data class Block(
+  public data class Block(
     val reason: String,
     val disposition: FeatureTaskRuntimeFailureDisposition,
   ) : PhaseLaunchAdmission
 
-  data class WriteRejected(
+  public data class WriteRejected(
     val rejection: RequiredPhaseWrite.Rejected,
   ) : PhaseLaunchAdmission
 
-  data class Settled(
+  public data class Settled(
     val outcome: PhaseOutcome,
   ) : PhaseLaunchAdmission
 }
 
-internal data class PhaseLaunchReviewTier(
+public data class PhaseLaunchReviewTier(
   val passNumber: Int?,
   val resolution: ReviewPassResolution?,
   val executedTier: CodeReviewExecutionMode,
 )
 
 /** The verdict of a step's check over its validated output. */
-internal sealed interface PhaseStepOutputCheck {
-  data object Accept : PhaseStepOutputCheck
+public sealed interface PhaseStepOutputCheck {
+  public data object Accept : PhaseStepOutputCheck
 
-  data class Reject(
+  public data class Reject(
     val reason: String,
     val rule: String = OUTPUT_VERIFICATION_RULE,
   ) : PhaseStepOutputCheck
 
-  data class Redeliver(
+  public data class Redeliver(
     val reason: String,
   ) : PhaseStepOutputCheck
 
-  data class OweFindings(
+  public data class OweFindings(
     val reason: String,
     val refs: Set<String>,
   ) : PhaseStepOutputCheck
 
-  data class Block(
+  public data class Block(
     val reason: String,
     val disposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
   ) : PhaseStepOutputCheck
 
-  companion object {
-    const val OUTPUT_VERIFICATION_RULE = "output-verification"
+  public companion object {
+    public const val OUTPUT_VERIFICATION_RULE: String = "output-verification"
   }
 }
 
@@ -417,7 +418,7 @@ internal fun NormalizedFeatureTaskRuntimePhaseOutput.withMeasuredFacts(
   return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
 }
 
-internal enum class PhaseStepHookContextKind {
+public enum class PhaseStepHookContextKind {
   COMMON,
   AUDIT,
   COMMIT,
@@ -547,189 +548,189 @@ internal data object RepairReceiptBindingFamily : PhaseBindingFamily<PhaseImplem
   ): R = factory.repairReceipt(hooks, use)
 }
 
-internal interface PhaseBindingFactory :
+public interface PhaseBindingFactory :
   PhaseAgentBindingFactory,
   PhaseReviewBindingFactory,
   PhaseSideEffectBindingFactory
 
-internal interface PhaseAgentBindingFactory {
-  fun <R> agent(
+public interface PhaseAgentBindingFactory {
+  public fun <R> agent(
     hooks: PhaseStepHooks<PhaseAgentStepBinding>,
     use: (PhaseAgentStepBinding) -> R,
   ): R
 
-  fun <R> planningAgent(
+  public fun <R> planningAgent(
     hooks: PhaseStepHooks<PhasePlanningAgentStepBinding>,
     use: (PhasePlanningAgentStepBinding) -> R,
   ): R
 
-  fun <R> planningFanOut(
+  public fun <R> planningFanOut(
     hooks: PhaseStepHooks<PhasePlanningStepBinding>,
     use: (PhasePlanningStepBinding) -> R,
   ): R
 
-  fun <R> planningUnit(
+  public fun <R> planningUnit(
     hooks: PhaseStepHooks<PhasePlanningUnitBinding>,
     use: (PhasePlanningUnitBinding) -> R,
   ): R
 
-  fun <R> qaFindings(
+  public fun <R> qaFindings(
     hooks: PhaseStepHooks<PhaseQaStepBinding>,
     use: (PhaseQaStepBinding) -> R,
   ): R
 }
 
-internal interface PhaseReviewBindingFactory {
-  fun <R> review(
+public interface PhaseReviewBindingFactory {
+  public fun <R> review(
     hooks: PhaseStepHooks<PhaseReviewStepBinding>,
     use: (PhaseReviewStepBinding) -> R,
   ): R
 
-  fun <R> findingVerification(
+  public fun <R> findingVerification(
     hooks: PhaseStepHooks<PhaseVerifyFindingsStepBinding>,
     use: (PhaseVerifyFindingsStepBinding) -> R,
   ): R
 
-  fun <R> repairReceipt(
+  public fun <R> repairReceipt(
     hooks: PhaseStepHooks<PhaseImplementFixStepBinding>,
     use: (PhaseImplementFixStepBinding) -> R,
   ): R
 }
 
-internal interface PhaseSideEffectBindingFactory {
-  fun <R> qualityGate(
+public interface PhaseSideEffectBindingFactory {
+  public fun <R> qualityGate(
     operation: PhaseQualityGateOperation,
     hooks: PhaseStepHooks<PhaseQualityGateStepBinding>,
     use: (PhaseQualityGateStepBinding) -> R,
   ): R
 
-  fun <R> commit(
+  public fun <R> commit(
     hooks: PhaseStepHooks<PhaseCommitStepBinding>,
     use: (PhaseCommitStepBinding) -> R,
   ): R
 
-  fun <R> monitor(
+  public fun <R> monitor(
     hooks: PhaseStepHooks<PhaseMonitorStepBinding>,
     use: (PhaseMonitorStepBinding) -> R,
   ): R
 
-  fun <R> standaloneMonitor(
+  public fun <R> standaloneMonitor(
     hooks: PhaseStepHooks<PhaseStandaloneMonitorStepBinding>,
     use: (PhaseStandaloneMonitorStepBinding) -> R,
   ): R
 
-  fun <R> standalonePublication(
+  public fun <R> standalonePublication(
     hooks: PhaseStepHooks<PhaseStandalonePublicationStepBinding>,
     use: (PhaseStandalonePublicationStepBinding) -> R,
   ): R
 
-  fun <R> pullRequest(
+  public fun <R> pullRequest(
     hooks: PhaseStepHooks<PhasePullRequestStepBinding>,
     use: (PhasePullRequestStepBinding) -> R,
   ): R
 }
 
-internal class PhaseStepDescriptor<B : PhaseAcceptedStepExecution>(
-  val family: PhaseBindingFamily<B>,
-  val hooks: PhaseStepHooks<B>,
-  val loopRules: PhaseStepLoopRules<B>? = null,
+public class PhaseStepDescriptor<B : PhaseAcceptedStepExecution> internal constructor(
+  internal val family: PhaseBindingFamily<B>,
+  internal val hooks: PhaseStepHooks<B>,
+  internal val loopRules: PhaseStepLoopRules<B>? = null,
   private val execution: (PhaseRun, B) -> PhaseOutcome,
 ) {
-  fun bind(factory: PhaseBindingFactory): B = family.construct(factory, hooks) { binding -> binding }
+  public fun bind(factory: PhaseBindingFactory): B = family.construct(factory, hooks) { binding -> binding }
 
-  fun execute(
+  public fun execute(
     run: PhaseRun,
     binding: B,
   ): PhaseOutcome = execution(run, binding)
 
-  fun <R> capture(visitor: PhaseStepCapture<R>): R = visitor.capture(this)
+  public fun <R> capture(visitor: PhaseStepCapture<R>): R = visitor.capture(this)
 }
 
-internal interface PhaseStepCapture<R> {
-  fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): R
+public interface PhaseStepCapture<R> {
+  public fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): R
 }
 
-internal class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution>(
+public class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution> internal constructor(
   private val hooks: PhaseStepHooks<B>,
   private val binding: B,
 ) {
-  fun beforeAgentLaunch(
+  internal fun beforeAgentLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
   ): String? = hooks.beforeAgentLaunch(run, context, binding)
 
-  fun launchPromptSupplement(
+  internal fun launchPromptSupplement(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
   ): String = hooks.launchPromptSupplement(run, context, binding)
 
-  fun failureContinuationOutput(
+  internal fun failureContinuationOutput(
     run: PhaseRun,
     failure: PhaseStepFailure,
   ): PhaseFailureContinuationOutput? = hooks.failureContinuationOutput(run, failure, binding)
 
-  fun launchReviewTier(run: PhaseRun): PhaseLaunchReviewTier = hooks.launchReviewTier(run, binding)
+  internal fun launchReviewTier(run: PhaseRun): PhaseLaunchReviewTier = hooks.launchReviewTier(run, binding)
 
-  fun handoffFindingVerdicts(): List<ReviewFindingVerdict> = hooks.handoffFindingVerdicts(binding)
+  internal fun handoffFindingVerdicts(): List<ReviewFindingVerdict> = hooks.handoffFindingVerdicts(binding)
 
-  fun admitLaunch(
+  internal fun admitLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
     iteration: Int,
   ): PhaseLaunchAdmission = hooks.admitLaunch(run, context, binding, iteration)
 
-  fun checkValidatedOutput(
+  internal fun checkValidatedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = hooks.checkValidatedOutput(run, context, binding, outputMap)
 
-  fun completionRejection(
+  internal fun completionRejection(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? = hooks.completionRejection(run, context, binding, outputMap)
 
-  fun settleCompletedOutput(
+  internal fun settleCompletedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = hooks.settleCompletedOutput(run, context, binding, outputMap)
 
-  fun interpretedOutput(
+  internal fun interpretedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): NormalizedFeatureTaskRuntimePhaseOutput = hooks.interpretedOutput(run, context, binding, output)
 
-  fun recordAcceptedOutput(
+  internal fun recordAcceptedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ) = hooks.recordAcceptedOutput(run, context, binding, outputMap)
 }
 
-internal enum class PhaseStepFailureSource {
+public enum class PhaseStepFailureSource {
   BLOCK,
   PAUSE,
   THROWN,
 }
 
-internal data class PhaseStepFailure(
+public data class PhaseStepFailure(
   val reason: String,
   val source: PhaseStepFailureSource,
   val failureCode: String? = null,
   val owedFindingRefs: Set<String> = emptySet(),
 )
 
-internal data class PhaseFailureContinuationOutput(
+public data class PhaseFailureContinuationOutput(
   val output: NormalizedFeatureTaskRuntimePhaseOutput,
   val diagnosticDetail: String? = null,
 )
 
 /** A step's decision, bound to its active step binding, over one stop of [run]. */
-internal fun interface PhaseFailureContinuation {
-  fun outputFor(
+public fun interface PhaseFailureContinuation {
+  public fun outputFor(
     run: PhaseRun,
     failure: PhaseStepFailure,
   ): PhaseFailureContinuationOutput?

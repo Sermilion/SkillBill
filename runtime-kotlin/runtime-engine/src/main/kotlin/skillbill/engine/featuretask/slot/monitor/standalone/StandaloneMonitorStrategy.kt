@@ -27,7 +27,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class StandaloneMonitorStrategy(
+public class StandaloneMonitorStrategy(
   private val service: StandaloneMonitorService,
 ) : PhaseStrategy(),
   MonitorRepairCapability by MonitorRepairRoles {
@@ -142,8 +142,8 @@ class StandaloneMonitorStrategy(
     return finalLine.trim('`', '*', ' ').equals(StandaloneMonitorDirectives.REPAIR_FIXED_LINE, ignoreCase = true)
   }
 
-  companion object {
-    const val ID = "standalone-monitor-ci"
+  public companion object {
+    public const val ID: String = "standalone-monitor-ci"
   }
 }
 

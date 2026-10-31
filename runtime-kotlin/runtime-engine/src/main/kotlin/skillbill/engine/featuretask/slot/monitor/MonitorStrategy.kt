@@ -29,7 +29,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-class MonitorStrategy(
+public class MonitorStrategy(
   private val identityLookup: PullRequestIdentityLookup,
   checksLookup: PullRequestChecksLookup,
 ) : PhaseStrategy(),
@@ -145,8 +145,8 @@ class MonitorStrategy(
     }
   }
 
-  companion object {
-    const val ID = "monitor-ci"
+  public companion object {
+    public const val ID: String = "monitor-ci"
 
     private const val MONITOR_DIRECTIVE: String =
       "This phase does not launch an agent. The runtime watches every check reported for the pull request " +

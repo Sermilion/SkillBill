@@ -10,7 +10,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 
-internal enum class FeatureTaskRuntimeContinuationKind(val wireValue: String) {
+public enum class FeatureTaskRuntimeContinuationKind(internal val wireValue: String) {
   IMPLEMENTATION_CONTINUATION("implementation_continuation"),
   SCHEMA_CORRECTION("schema_correction"),
   PROCESS_RETRY("process_retry"),
@@ -25,10 +25,10 @@ internal enum class FeatureTaskRuntimeContinuationKind(val wireValue: String) {
   IMPLEMENTATION_CRITERION_TURN("implementation_criterion_turn"),
   ;
 
-  companion object {
-    const val LEDGER_DETAIL_PREFIX: String = "continuation:"
+  internal companion object {
+    internal const val LEDGER_DETAIL_PREFIX: String = "continuation:"
 
-    fun fromLedgerDetail(detail: String?): FeatureTaskRuntimeContinuationKind? =
+    internal fun fromLedgerDetail(detail: String?): FeatureTaskRuntimeContinuationKind? =
       detail
         ?.takeIf { it.startsWith(LEDGER_DETAIL_PREFIX) }
         ?.removePrefix(LEDGER_DETAIL_PREFIX)
@@ -47,7 +47,7 @@ internal data class FeatureTaskRuntimePhaseStartReentry(
   }
 }
 
-fun emitFeatureTaskRuntimeEventSafely(
+internal fun emitFeatureTaskRuntimeEventSafely(
   diagnostics: RuntimeDiagnostics,
   seam: String,
   emit: () -> Unit,
@@ -63,12 +63,12 @@ fun emitFeatureTaskRuntimeEventSafely(
     }
 }
 
-class FeatureTaskRuntimeRunObservability internal constructor(
+public class FeatureTaskRuntimeRunObservability internal constructor(
   internal val recorder: PhaseRunRecords,
-  val request: FeatureTaskRuntimeRunFacts,
-  val diagnostics: RuntimeDiagnostics,
+  internal val request: FeatureTaskRuntimeRunFacts,
+  internal val diagnostics: RuntimeDiagnostics,
 ) {
-  fun branchResolved(
+  internal fun branchResolved(
     phaseId: String,
     branch: String,
     created: Boolean,
@@ -85,7 +85,7 @@ class FeatureTaskRuntimeRunObservability internal constructor(
     )
   }
 
-  fun branchSetupBlocked(
+  internal fun branchSetupBlocked(
     phaseId: String,
     resolvedAgentId: String,
     blockedReason: String,
@@ -147,7 +147,7 @@ class FeatureTaskRuntimeRunObservability internal constructor(
     )
   }
 
-  fun completed(
+  internal fun completed(
     phaseId: String,
     resolvedAgentId: String,
     attemptCount: Int,
@@ -164,7 +164,7 @@ class FeatureTaskRuntimeRunObservability internal constructor(
     )
   }
 
-  fun validationGateProgress() = Unit
+  internal fun validationGateProgress() = Unit
 }
 
 internal fun featureTaskRuntimeStartContinuationKind(

@@ -21,7 +21,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class ImplementThenSimplifyStrategy :
+public class ImplementThenSimplifyStrategy :
   PhaseStrategy(),
   PhaseResumeCapability by ImplementThenSimplifyResume {
   private val policies: Map<String, PhaseStepPolicy> = IMPLEMENT_THEN_SIMPLIFY_POLICIES
@@ -92,8 +92,8 @@ class ImplementThenSimplifyStrategy :
       }
   }
 
-  companion object {
-    const val ID = "implement-then-simplify"
+  public companion object {
+    public const val ID: String = "implement-then-simplify"
   }
 }
 

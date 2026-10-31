@@ -13,21 +13,21 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
  * only the decisions it owns, each as a capability next to this interface, and reconstruction reads the neutral
  * answer for every capability the step does not declare.
  */
-internal interface PhaseResumeRules {
+public interface PhaseResumeRules {
   /** The form resumed [record] of this step takes, given [stripped], the record without its retired loop. */
-  fun resumedRecord(
+  public fun resumedRecord(
     record: FeatureTaskRuntimePhaseRecord,
     stripped: FeatureTaskRuntimePhaseRecord,
   ): FeatureTaskRuntimePhaseRecord = stripped
 
   /** How a persisted block of this step with [reason] resumes, given its [recentBlockedReasons], newest first. */
-  fun persistedBlockResume(
+  public fun persistedBlockResume(
     reason: String,
     recentBlockedReasons: List<String?>,
   ): PhaseBlockResume = PhaseBlockResume.DEFAULT
 
-  companion object {
-    val None: PhaseResumeRules = object : PhaseResumeRules {}
+  public companion object {
+    internal val None: PhaseResumeRules = object : PhaseResumeRules {}
   }
 }
 
@@ -110,7 +110,7 @@ internal fun PhaseResumeRules.invalidatesResumedCompletion(
   output: () -> FeatureTaskRuntimePhaseOutput?,
 ): Boolean = (this as? PhaseResumedCompletionInvalidation)?.invalidatesResumedCompletion(record, output) ?: false
 
-internal enum class PhaseBlockResume {
+public enum class PhaseBlockResume {
   DEFAULT,
   RELAUNCH,
   RELAUNCH_WITH_FRESH_BUDGET,

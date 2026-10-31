@@ -13,52 +13,52 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
  * The run state a [PhaseRunner] reads and writes around one launch: the settlement target a step attempt pins,
  * launch observation, token accounting, and the settled envelope an attempt recorded.
  */
-interface PhaseLaunchState {
+public interface PhaseLaunchState {
   /** The sink a launch of this state streams its output to; a fan-out unit attributes its lines here. */
-  val launchOutputSink: AgentRunOutputSink get() = AgentRunOutputSink.NONE
+  public val launchOutputSink: AgentRunOutputSink get() = AgentRunOutputSink.NONE
 
   /** The prompt section appended to every launch of this state; a fan-out unit names the work it owns here. */
-  val launchPromptContext: String
+  public val launchPromptContext: String
 
   /**
    * Prepares [input] for launch once the runner has captured the before-state. Returns the input to launch, or
    * null when preparation rejected the launch and the step must not launch.
    */
-  fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? = input
+  public fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? = input
 
   /**
    * The settlement target the step prompt pins for [attempt], or null when the state records no settlements and the
    * step settles through its final object.
    */
-  fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget?
+  public fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget?
 
   /** The activity and worktree-edit observation attached to a launch of [stepName]. */
-  fun launchObservation(stepName: String): PhaseLaunchObservation
+  public fun launchObservation(stepName: String): PhaseLaunchObservation
 
   /** Records the estimated token usage of one launch of [stepName]. */
-  fun recordTokenUsage(
+  public fun recordTokenUsage(
     stepName: String,
     inputTokens: Int,
     outputTokens: Int,
   )
 
   /** Reads the envelope settled for [stepName] at [target], if any. */
-  fun settledEnvelope(
+  public fun settledEnvelope(
     stepName: String,
     target: FeatureTaskRuntimePhaseSettlementTarget,
   ): PhaseSettledEnvelopeRead
 }
 
-data class PhaseLaunchObservation(
+public data class PhaseLaunchObservation(
   val activityStampSink: AgentRunActivityStampSink,
   val worktreeEditObserver: AgentRunWorktreeEditObserver,
   val progressEmitter: ((AgentRunProgressEmission) -> Unit)? = null,
 )
 
-sealed interface PhaseSettledEnvelopeRead {
-  data object None : PhaseSettledEnvelopeRead
+public sealed interface PhaseSettledEnvelopeRead {
+  public data object None : PhaseSettledEnvelopeRead
 
-  data class Found(val envelope: FeatureTaskRuntimeWorkflowArtifactMap) : PhaseSettledEnvelopeRead
+  public data class Found(val envelope: FeatureTaskRuntimeWorkflowArtifactMap) : PhaseSettledEnvelopeRead
 
-  data class Failed(val error: SkillBillRuntimeException) : PhaseSettledEnvelopeRead
+  public data class Failed(val error: SkillBillRuntimeException) : PhaseSettledEnvelopeRead
 }

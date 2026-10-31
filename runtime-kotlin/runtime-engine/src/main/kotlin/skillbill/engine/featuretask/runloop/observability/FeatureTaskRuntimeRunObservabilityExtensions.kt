@@ -6,7 +6,7 @@ import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 
-fun FeatureTaskRuntimeRunObservability.fixLoopIteration(
+public fun FeatureTaskRuntimeRunObservability.fixLoopIteration(
   phaseId: String,
   resolvedAgentId: String,
   attemptCount: Int,
@@ -21,7 +21,7 @@ fun FeatureTaskRuntimeRunObservability.fixLoopIteration(
   )
 }
 
-internal fun FeatureTaskRuntimeRunObservability.continuation(
+public fun FeatureTaskRuntimeRunObservability.continuation(
   phaseId: String,
   resolvedAgentId: String,
   attemptCount: Int,
@@ -51,7 +51,7 @@ internal fun FeatureTaskRuntimeRunObservability.continuation(
   )
 }
 
-fun FeatureTaskRuntimeRunObservability.ciStillRunning(
+internal fun FeatureTaskRuntimeRunObservability.ciStillRunning(
   phaseId: String,
   pullRequestUrl: String,
   pendingChecks: List<PullRequestCheck>,
@@ -66,7 +66,7 @@ fun FeatureTaskRuntimeRunObservability.ciStillRunning(
   )
 }
 
-fun FeatureTaskRuntimeRunObservability.completedEvent(
+internal fun FeatureTaskRuntimeRunObservability.completedEvent(
   phaseId: String,
   resolvedAgentId: String,
   attemptCount: Int,
@@ -81,7 +81,7 @@ fun FeatureTaskRuntimeRunObservability.completedEvent(
   )
 }
 
-fun FeatureTaskRuntimeRunObservability.paused(
+public fun FeatureTaskRuntimeRunObservability.paused(
   phaseId: String,
   resolvedAgentId: String,
   attemptCount: Int,
@@ -108,7 +108,7 @@ fun FeatureTaskRuntimeRunObservability.paused(
   )
 }
 
-fun FeatureTaskRuntimeRunObservability.blocked(
+public fun FeatureTaskRuntimeRunObservability.blocked(
   phaseId: String,
   resolvedAgentId: String,
   attemptCount: Int,
@@ -135,7 +135,7 @@ fun FeatureTaskRuntimeRunObservability.blocked(
   )
 }
 
-fun FeatureTaskRuntimeRunObservability.loopEdge(
+internal fun FeatureTaskRuntimeRunObservability.loopEdge(
   phaseId: String,
   loopId: String,
   edgeIteration: Int,
@@ -167,7 +167,7 @@ fun FeatureTaskRuntimeRunObservability.loopEdge(
   )
 }
 
-fun FeatureTaskRuntimeRunObservability.loopCapExhausted(
+internal fun FeatureTaskRuntimeRunObservability.loopCapExhausted(
   phaseId: String,
   loopId: String,
   declaredCap: Int,
@@ -186,9 +186,9 @@ fun FeatureTaskRuntimeRunObservability.loopCapExhausted(
   )
 }
 
-val FeatureTaskRuntimeRunObservability.observabilityRequest get() = request
+internal val FeatureTaskRuntimeRunObservability.observabilityRequest get() = request
 
-fun FeatureTaskRuntimeRunObservability.emitSafely(event: FeatureTaskRuntimeRunEvent) {
+internal fun FeatureTaskRuntimeRunObservability.emitSafely(event: FeatureTaskRuntimeRunEvent) {
   emitFeatureTaskRuntimeEventSafely(
     diagnostics = observabilityDiagnostics,
     seam = "event-sink emission (${event::class.simpleName})",
@@ -197,9 +197,9 @@ fun FeatureTaskRuntimeRunObservability.emitSafely(event: FeatureTaskRuntimeRunEv
   }
 }
 
-fun FeatureTaskRuntimeRunObservability.appendLedger(ledgerRequest: FeatureTaskRuntimePhaseLedgerRequest) {
+internal fun FeatureTaskRuntimeRunObservability.appendLedger(ledgerRequest: FeatureTaskRuntimePhaseLedgerRequest) {
   observabilityRecorder.appendLedgerEntry(ledgerRequest)
 }
 
 internal val FeatureTaskRuntimeRunObservability.observabilityRecorder get() = recorder
-val FeatureTaskRuntimeRunObservability.observabilityDiagnostics get() = diagnostics
+internal val FeatureTaskRuntimeRunObservability.observabilityDiagnostics get() = diagnostics

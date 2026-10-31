@@ -727,23 +727,23 @@ private fun recentBlockedReasons(
     .take(2)
     .map(FeatureTaskRuntimePhaseLedgerEntry::blockedReason)
 
-data class ExplicitResumeStart(
+public data class ExplicitResumeStart(
   val phaseId: String,
   val reopen: Boolean,
 )
 
-internal data class FeatureTaskRuntimeNonOutputAttempt(
+public data class FeatureTaskRuntimeNonOutputAttempt(
   val paused: Boolean,
   val reason: String,
 )
 
-val NON_OUTPUT_LEDGER_ACTIONS =
+internal val NON_OUTPUT_LEDGER_ACTIONS =
   setOf(
     FeatureTaskRuntimePhaseLedgerAction.BLOCKED,
     FeatureTaskRuntimePhaseLedgerAction.PAUSED,
   )
 
-const val REVIEW_INVALIDATION_AGENT_ID: String = "audit-gate-migration"
+internal const val REVIEW_INVALIDATION_AGENT_ID: String = "audit-gate-migration"
 
 internal data class InFlightReentry(
   val destinationPhaseId: String,

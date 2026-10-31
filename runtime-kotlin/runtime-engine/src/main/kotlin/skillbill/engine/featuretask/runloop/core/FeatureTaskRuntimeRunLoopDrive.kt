@@ -22,7 +22,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeTransitionFunction
 
-object FeatureTaskRuntimeRunLoopDrive {
+internal object FeatureTaskRuntimeRunLoopDrive {
   internal fun resumedReentry(context: FeatureTaskRuntimeRunLoopContext): PendingReentry? {
     val state = context.state
     val (loopId, reentry) = state.latestInFlightReentry ?: return null

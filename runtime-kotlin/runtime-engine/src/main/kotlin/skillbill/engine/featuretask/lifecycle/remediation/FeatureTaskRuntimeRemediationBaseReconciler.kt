@@ -140,7 +140,7 @@ internal data class RemediationBaseRecovery(
   val failureMessageOverride: String? = null,
 )
 
-internal data class RemediationDegradationSignal(
+public data class RemediationDegradationSignal(
   val seam: String? = null,
   val valueUsed: String? = null,
   val valueExpected: String? = null,

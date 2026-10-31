@@ -46,7 +46,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-object PhaseAttemptOnce {
+internal object PhaseAttemptOnce {
   internal fun persistRequiredStart(
     context: PhaseAttemptLaunchCollaborationScope,
     run: PhaseRun,

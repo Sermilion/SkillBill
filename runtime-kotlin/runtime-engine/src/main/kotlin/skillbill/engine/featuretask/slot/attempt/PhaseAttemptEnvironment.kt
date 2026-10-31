@@ -53,8 +53,8 @@ internal interface PhaseAttemptTransitionDeclarationAccess {
 }
 
 /** Per-attempt facts shared across helper surfaces. */
-internal interface PhaseAttemptEnvironment {
-  val request: FeatureTaskRuntimeRunFacts
+public interface PhaseAttemptEnvironment {
+  public val request: FeatureTaskRuntimeRunFacts
 }
 
 /** Output-gate and runtime-owned gate settlement collaborators for one accepted step. */
@@ -276,7 +276,7 @@ internal interface PhaseRunLoopAttemptCollaborators :
   PhaseAttemptLaunchRuntimeContext,
   PhaseAttemptStrategyLookup
 
-internal open class PhaseAttemptSettlementScope(
+public open class PhaseAttemptSettlementScope internal constructor(
   private val boundHost: PhaseAttemptRunHost,
 ) : PhaseOutputSettlementContext,
   PhaseAttemptPlanAuthorization,
@@ -314,10 +314,10 @@ internal open class PhaseAttemptSettlementScope(
   override val diagnostics: RuntimeDiagnostics
     get() = boundHost.diagnostics
 
-  val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
+  public val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = boundHost.implementationChecklistStore
 
-  val phaseInstructionSource: PhaseInstructionFileSource
+  public val phaseInstructionSource: PhaseInstructionFileSource
     get() = boundHost.phaseInstructionSource
 
   override val progress: FeatureTaskRuntimeProgressSnapshotAccess
@@ -421,7 +421,7 @@ internal open class PhaseAttemptSettlementScope(
   ) = boundHost.runnerForAcceptedAttempt(run, call)
 }
 
-internal open class PhaseAttemptLaunchCollaborationScope(
+public open class PhaseAttemptLaunchCollaborationScope internal constructor(
   host: PhaseAttemptRunHost,
 ) : PhaseAttemptSettlementScope(host),
   PhaseQualityGateReporting by host,
@@ -466,7 +466,7 @@ internal open class PhaseAttemptScope(
   host: PhaseAttemptRunHost,
 ) : PhaseAttemptLaunchCollaborationScope(host)
 
-internal class PhaseRunLoopAttemptScope(
+public class PhaseRunLoopAttemptScope internal constructor(
   host: PhaseAttemptRunHost,
 ) : PhaseAttemptLaunchCollaborationScope(host),
   PhaseRunLoopAttemptCollaborators {

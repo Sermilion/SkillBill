@@ -10,8 +10,8 @@ import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisc
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
 /** Resolves the specialist rubrics an inline review merges into its single prompt. */
-fun interface InlineReviewRubricResolver {
-  fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
+public fun interface InlineReviewRubricResolver {
+  public fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
 }
 
 internal object InlineReviewLanesSection {

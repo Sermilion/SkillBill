@@ -67,7 +67,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-object PhaseLaunchPreparation {
+internal object PhaseLaunchPreparation {
   internal fun PhaseAttemptLaunchPreparationContext.prepareLaunchForCapture(
     run: PhaseRun,
     iteration: Int?,

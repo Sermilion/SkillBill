@@ -20,13 +20,13 @@ import java.nio.file.Path
 import java.time.Clock
 
 @Inject
-class WorktreeEditJournalWriter(
+public class WorktreeEditJournalWriter(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val gitOperations: WorkflowGitOperations,
 ) {
-  fun observer(
+  internal fun observer(
     repoRoot: Path,
     resolveWorkflowId: () -> String?,
     resolvePhaseId: () -> String?,

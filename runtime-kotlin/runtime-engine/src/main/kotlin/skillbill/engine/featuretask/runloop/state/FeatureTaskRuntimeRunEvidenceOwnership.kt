@@ -4,7 +4,7 @@ import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.lifecycle.checkpoint.normalizeForAliasComparison
 import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
 
-object FeatureTaskRuntimeRunEvidenceOwnership {
+internal object FeatureTaskRuntimeRunEvidenceOwnership {
   private val checkoutEvidenceRoot = normalizeForAliasComparison(LegacyProjectStatePaths.LEGACY_RUN_EVIDENCE_PREFIX)
 
   fun isRunEvidencePath(path: String): Boolean {

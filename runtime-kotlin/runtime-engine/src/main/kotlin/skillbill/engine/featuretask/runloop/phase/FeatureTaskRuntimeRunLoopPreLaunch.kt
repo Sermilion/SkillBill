@@ -22,7 +22,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-object FeatureTaskRuntimeRunLoopPreLaunch {
+internal object FeatureTaskRuntimeRunLoopPreLaunch {
   internal fun preLaunchBlock(
     context: PhaseRunLoopAttemptCollaborators,
     run: PhaseRun,

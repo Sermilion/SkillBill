@@ -122,7 +122,7 @@ internal data class FinaliseSubtaskCommitArgs(
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
 )
 
-object PhaseOutputGate {
+internal object PhaseOutputGate {
   internal fun rejectedOutputTargeting(args: RejectedOutputTargetingArgs): RejectedOutputTargeting =
     RejectedOutputTargeting(
       phaseId = args.phaseId,

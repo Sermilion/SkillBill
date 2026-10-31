@@ -16,12 +16,12 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import java.nio.file.Path
 
-internal interface PhaseAttemptLaunchHookContext : PhaseAttemptEnvironment {
-  val progress: FeatureTaskRuntimeProgressSnapshotAccess
-  val session: FeatureTaskRuntimeRunSessionObservations
-  val diagnostics: RuntimeDiagnostics
+public interface PhaseAttemptLaunchHookContext : PhaseAttemptEnvironment {
+  public val progress: FeatureTaskRuntimeProgressSnapshotAccess
+  public val session: FeatureTaskRuntimeRunSessionObservations
+  public val diagnostics: RuntimeDiagnostics
 
-  fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
+  public fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
 }
 
 internal interface PhasePullRequestLaunchHookContext : PhaseAttemptLaunchHookContext {
@@ -35,12 +35,12 @@ internal interface PhaseCommitLaunchHookContext : PhaseAttemptLaunchHookContext 
   )
 }
 
-internal interface PhaseStepOutputContext : PhaseAttemptEnvironment {
-  val progress: FeatureTaskRuntimeProgressSnapshotAccess
-  val diagnostics: RuntimeDiagnostics
-  val specSource: SpecSource
+public interface PhaseStepOutputContext : PhaseAttemptEnvironment {
+  public val progress: FeatureTaskRuntimeProgressSnapshotAccess
+  public val diagnostics: RuntimeDiagnostics
+  public val specSource: SpecSource
 
-  fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
+  public fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
 }
 
 internal const val NO_CHANGE_PAUSE_REASON =

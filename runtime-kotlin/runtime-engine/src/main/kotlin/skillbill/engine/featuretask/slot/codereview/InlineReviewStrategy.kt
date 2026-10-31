@@ -33,7 +33,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 
-class InlineReviewStrategy private constructor(
+public class InlineReviewStrategy private constructor(
   internal val runner: PhaseRunner,
   private val codeReview: CodeReviewSlot,
 ) : PhaseStrategy(),
@@ -41,7 +41,7 @@ class InlineReviewStrategy private constructor(
   PhaseResumeCapability by codeReview,
   PhaseStatusCapability by codeReview,
   PhaseVerdictCapability by codeReview {
-  constructor(
+  public constructor(
     runner: PhaseRunner,
     rubricResolver: InlineReviewRubricResolver? = null,
   ) : this(runner, CodeReviewSlot(runner, InlineReviewPass(rubricResolver)))
@@ -65,8 +65,8 @@ class InlineReviewStrategy private constructor(
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> = codeReview.stepDescriptor(stepId)
 
-  companion object {
-    const val ID = "inline"
+  public companion object {
+    public const val ID: String = "inline"
   }
 }
 
@@ -125,7 +125,7 @@ internal class InlineReviewPass(
   }
 }
 
-object InlineReviewDirective {
+internal object InlineReviewDirective {
   fun compose(
     target: ReviewTarget,
     revisions: Pair<String, String>,

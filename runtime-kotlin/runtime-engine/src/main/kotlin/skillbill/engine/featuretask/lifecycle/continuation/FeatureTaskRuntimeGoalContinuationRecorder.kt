@@ -89,7 +89,7 @@ class FeatureTaskRuntimeGoalContinuationRecorder(
     inputBuilder.buildGoalReviewInput(workflowId, gitOperations, repoRoot, scope, admitted)
 }
 
-internal data class GoalContinuationStateRecordRequest(
+public data class GoalContinuationStateRecordRequest(
   val workflowId: String,
   val continuation: FeatureTaskRuntimeGoalContinuationArtifact? = null,
   val reviewBaseline: GoalSubtaskReviewBaseline? = null,
@@ -98,7 +98,7 @@ internal data class GoalContinuationStateRecordRequest(
   val workflowStatus: String? = null,
 )
 
-internal data class GoalReviewPassCompletionRequest(
+public data class GoalReviewPassCompletionRequest(
   val workflowId: String,
   val verdict: FeatureTaskRuntimeVerdict,
   val unresolvedFindingCount: Int,

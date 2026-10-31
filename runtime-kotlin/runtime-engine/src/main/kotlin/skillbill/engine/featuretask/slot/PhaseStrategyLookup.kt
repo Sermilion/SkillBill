@@ -38,23 +38,23 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.traversalOrViolation
 import java.util.concurrent.ConcurrentHashMap
 
-class PhaseStrategyLookup(
-  val registry: PhaseStrategyRegistry,
+public class PhaseStrategyLookup(
+  public val registry: PhaseStrategyRegistry,
   private val selection: PhaseStrategySelection,
-  val modelDirectiveSupplements: ModelDirectiveSupplements,
-  val phaseInstructionSource: PhaseInstructionFileSource = AbsentPhaseInstructionFileSource,
+  public val modelDirectiveSupplements: ModelDirectiveSupplements,
+  internal val phaseInstructionSource: PhaseInstructionFileSource = AbsentPhaseInstructionFileSource,
 ) {
   private val plans = ConcurrentHashMap<PlanKey, ResolvedPhaseExecutionPlan>()
   private val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
 
-  fun strategyFor(
+  public fun strategyFor(
     stepId: String,
     facts: PhaseStrategySelectionFacts,
   ): PhaseStrategy {
     return strategyFor(stepId, executionPlan(facts))
   }
 
-  fun strategyFor(
+  public fun strategyFor(
     stepId: String,
     plan: ResolvedPhaseExecutionPlan,
   ): PhaseStrategy =
@@ -69,7 +69,7 @@ class PhaseStrategyLookup(
     return registry.runner(strategy.slot, strategy.strategyId)
   }
 
-  fun selectedOwnerOf(
+  internal fun selectedOwnerOf(
     stepId: String,
     plan: ResolvedPhaseExecutionPlan,
   ): PhaseStrategy? {
@@ -97,7 +97,7 @@ class PhaseStrategyLookup(
     return strategy
   }
 
-  fun selectedStepIds(facts: PhaseStrategySelectionFacts): Set<String> = executionPlan(facts).selectedStepIds
+  public fun selectedStepIds(facts: PhaseStrategySelectionFacts): Set<String> = executionPlan(facts).selectedStepIds
 
   internal fun resumeRules(plan: ResolvedPhaseExecutionPlan): (String) -> PhaseResumeRules =
     { stepId ->
@@ -112,7 +112,7 @@ class PhaseStrategyLookup(
     diagnostics: RuntimeDiagnostics,
   ) = (selectedOwnerOf(stepId, plan) as? PhaseVerdictCapability)?.verdictRule(stepId, diagnostics)
 
-  fun executionPlan(facts: PhaseStrategySelectionFacts): ResolvedPhaseExecutionPlan = resolve(facts)
+  public fun executionPlan(facts: PhaseStrategySelectionFacts): ResolvedPhaseExecutionPlan = resolve(facts)
 
   internal fun matchesRecordedSelection(
     plan: ResolvedPhaseExecutionPlan,
@@ -138,7 +138,7 @@ class PhaseStrategyLookup(
     }
   }
 
-  internal fun qualityGateSelection(plan: ResolvedPhaseExecutionPlan): FeatureTaskRuntimeQualityGateSelection? {
+  public fun qualityGateSelection(plan: ResolvedPhaseExecutionPlan): FeatureTaskRuntimeQualityGateSelection? {
     val gateSteps = plan.selectedStepIds.filter { PhaseSlot.slotForStep(it) == PhaseSlot.QUALITY_GATE }
     if (gateSteps.isEmpty()) return null
     val operations =
@@ -231,7 +231,7 @@ class PhaseStrategyLookup(
     )
   }
 
-  fun validateTraversalOverride(
+  internal fun validateTraversalOverride(
     facts: PhaseStrategySelectionFacts,
     declaration: FeatureTaskRuntimeTransitionDeclaration,
   ): FeatureTaskRuntimeTransitionDeclaration {
@@ -487,7 +487,7 @@ internal object GoalPlanningImportSteps {
     )
 }
 
-class ModelDirectiveSupplements(val enabled: Boolean) {
+public class ModelDirectiveSupplements(public val enabled: Boolean) {
   private val loaded = ConcurrentHashMap<String, String>()
 
   internal fun directiveFor(

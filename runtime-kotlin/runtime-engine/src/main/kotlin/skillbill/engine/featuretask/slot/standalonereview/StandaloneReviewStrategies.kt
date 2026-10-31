@@ -59,29 +59,29 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.time.Duration.Companion.minutes
 
-open class InlineStandaloneReviewStrategy(
+public open class InlineStandaloneReviewStrategy(
   runner: PhaseRunner,
   rubricResolver: InlineReviewRubricResolver? = null,
 ) : StandaloneReviewStrategy(runner, null, rubricResolver) {
   override val strategyId: String = ID
 
-  companion object {
-    const val ID = "inline"
+  public companion object {
+    public const val ID: String = "inline"
   }
 }
 
-open class DelegatedStandaloneReviewStrategy(
+public open class DelegatedStandaloneReviewStrategy(
   runner: PhaseRunner,
   reviewRunner: ParallelCodeReviewRunner,
 ) : StandaloneReviewStrategy(runner, reviewRunner) {
   override val strategyId: String = ID
 
-  companion object {
-    const val ID = "delegated"
+  public companion object {
+    public const val ID: String = "delegated"
   }
 }
 
-abstract class StandaloneReviewStrategy(
+public abstract class StandaloneReviewStrategy(
   internal val runner: PhaseRunner,
   private val reviewRunner: ParallelCodeReviewRunner?,
   private val rubricResolver: InlineReviewRubricResolver? =

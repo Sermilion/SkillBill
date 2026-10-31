@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.lifecycle.subtask
 import skillbill.engine.featuretask.lifecycle.continuation.matches
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 
-internal sealed interface FeatureTaskRuntimeSubtaskCommitDecision
+public sealed interface FeatureTaskRuntimeSubtaskCommitDecision
 
 data object FeatureTaskRuntimeSubtaskCommitCreate : FeatureTaskRuntimeSubtaskCommitDecision
 

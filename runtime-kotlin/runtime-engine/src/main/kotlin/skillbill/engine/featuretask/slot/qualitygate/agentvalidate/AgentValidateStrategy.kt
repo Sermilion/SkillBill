@@ -23,7 +23,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AgentValidateStrategy :
+public class AgentValidateStrategy :
   PhaseStrategy(),
   PhaseResumeCapability by AgentValidateCapabilities,
   PhaseStatusCapability by AgentValidateCapabilities {
@@ -67,8 +67,8 @@ class AgentValidateStrategy :
     }
   }
 
-  companion object {
-    const val ID = "agent-validate"
+  public companion object {
+    public const val ID: String = "agent-validate"
   }
 }
 

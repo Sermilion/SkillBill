@@ -23,7 +23,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-object FeatureTaskRuntimeRunLoopBackwardEdge {
+internal object FeatureTaskRuntimeRunLoopBackwardEdge {
   internal fun resumeInFlightReentry(
     context: FeatureTaskRuntimeRunLoopContext,
     edge: FeatureTaskRuntimeBackwardEdge,

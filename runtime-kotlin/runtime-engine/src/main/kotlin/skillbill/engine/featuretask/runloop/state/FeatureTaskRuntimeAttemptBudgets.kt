@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.runloop.state
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
-object FeatureTaskRuntimeAttemptBudgets {
+internal object FeatureTaskRuntimeAttemptBudgets {
   const val MAX_OUTPUT_GATE_RETRY_ATTEMPTS: Int = 1
   const val MAX_PROCESS_FAILURE_ATTEMPTS: Int = 3
   val ATTEMPT_BUDGET_FAILURE_CODE: String = FeatureTaskRuntimeFailureCode.PHASE_ATTEMPT_BUDGET_EXHAUSTED.label()

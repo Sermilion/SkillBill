@@ -233,16 +233,16 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 }
 
-internal sealed interface FeatureTaskRuntimeBranchSetupOutcome {
-  val establishedBranch: String?
-  val blockedReason: String?
+public sealed interface FeatureTaskRuntimeBranchSetupOutcome {
+  public val establishedBranch: String?
+  public val blockedReason: String?
 
-  companion object {
-    fun established(branch: String): FeatureTaskRuntimeBranchSetupOutcome = Established(branch)
+  public companion object {
+    public fun established(branch: String): FeatureTaskRuntimeBranchSetupOutcome = Established(branch)
 
-    fun blocked(reason: String): FeatureTaskRuntimeBranchSetupOutcome = Blocked(reason)
+    public fun blocked(reason: String): FeatureTaskRuntimeBranchSetupOutcome = Blocked(reason)
 
-    fun unchanged(): FeatureTaskRuntimeBranchSetupOutcome = Unchanged
+    public fun unchanged(): FeatureTaskRuntimeBranchSetupOutcome = Unchanged
   }
 }
 

@@ -27,7 +27,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class PackBuildStrategy :
+public class PackBuildStrategy :
   PhaseStrategy(),
   PhaseResumeCapability by PackBuildCapabilities,
   PhaseStatusCapability by PackBuildCapabilities {
@@ -80,8 +80,8 @@ class PackBuildStrategy :
     }
   }
 
-  companion object {
-    const val ID = "pack-build"
+  public companion object {
+    public const val ID: String = "pack-build"
   }
 }
 

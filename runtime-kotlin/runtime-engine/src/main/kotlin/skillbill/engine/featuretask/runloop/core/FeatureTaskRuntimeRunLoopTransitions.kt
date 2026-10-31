@@ -37,7 +37,7 @@ internal fun spanBetween(
   sourcePhaseId: String,
 ): List<String> = transitions.spanBetween(destinationPhaseId, sourcePhaseId)
 
-object FeatureTaskRuntimeRunLoopTransitions {
+internal object FeatureTaskRuntimeRunLoopTransitions {
   internal fun transitionTarget(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,

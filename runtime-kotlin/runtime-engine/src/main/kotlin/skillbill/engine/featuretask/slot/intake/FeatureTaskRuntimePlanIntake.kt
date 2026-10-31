@@ -13,7 +13,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigi
 import java.nio.file.Path
 
 /** How the plan's `intake` step settled the parent spec. */
-sealed interface PlanIntakeSettlement {
+internal sealed interface PlanIntakeSettlement {
   /** An operator spec with a readable acceptance list was left as it is. */
   data class Kept(val specPath: Path) : PlanIntakeSettlement
 
@@ -28,14 +28,14 @@ sealed interface PlanIntakeSettlement {
 }
 
 @Inject
-class FeatureTaskRuntimePlanIntake(
+public class FeatureTaskRuntimePlanIntake(
   private val intakePreparation: PlanSpecIntakePreparation,
   private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
   private val fileStore: DecompositionManifestStore,
   private val repositories: RepositoryEnclosingRootPort,
   private val projectStore: ProjectStorePort,
 ) {
-  fun settle(
+  internal fun settle(
     workflowId: String,
     issueKey: String,
     intake: String?,

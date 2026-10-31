@@ -29,12 +29,12 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 @Inject
-class FeatureTaskRuntimeRunPreparation(
+public class FeatureTaskRuntimeRunPreparation(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val continuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
 ) {
-  fun prepare(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation {
+  public fun prepare(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation {
     requireNotNull(request.admittedExecution) { "Durable preparation requires transactional execution admission." }
     val persistedInvariants =
       try {

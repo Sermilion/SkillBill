@@ -12,12 +12,12 @@ import skillbill.workflow.taskruntime.artifact.decodePlanSeedFromArtifact
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 
 @Inject
-class FeatureTaskRuntimePlanSeedRecorder(
+public class FeatureTaskRuntimePlanSeedRecorder(
   private val database: DatabaseSessionFactory,
 ) {
   private val engine: WorkflowEngine = WorkflowEngine()
 
-  fun record(
+  public fun record(
     workflowId: String,
     seed: FeatureTaskRuntimePlanSeed,
   ) {
@@ -47,7 +47,7 @@ class FeatureTaskRuntimePlanSeedRecorder(
     }
   }
 
-  fun read(workflowId: String): FeatureTaskRuntimePlanSeed? =
+  public fun read(workflowId: String): FeatureTaskRuntimePlanSeed? =
     database.read { unitOfWork ->
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
         ?.artifacts

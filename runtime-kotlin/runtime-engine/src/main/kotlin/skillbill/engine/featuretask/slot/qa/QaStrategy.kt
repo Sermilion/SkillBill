@@ -58,7 +58,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 @Inject
-class QaStrategy(
+public class QaStrategy(
   private val reports: QaReportSettlement,
   private val execution: QaExecutionLifecycle,
   private val outcomes: FeatureTaskQaOutcomeRecorder,
@@ -300,8 +300,8 @@ class QaStrategy(
       }
     }
 
-  companion object {
-    const val ID = "agent-qa"
+  public companion object {
+    public const val ID: String = "agent-qa"
     private const val MISSING_WORKSPACE = "QA execution was not prepared before step admission."
   }
 }

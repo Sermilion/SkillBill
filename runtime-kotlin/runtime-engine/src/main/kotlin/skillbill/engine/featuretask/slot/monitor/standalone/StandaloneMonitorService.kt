@@ -20,7 +20,7 @@ import skillbill.ports.monitor.model.MonitorWritability
 import java.time.Clock
 import java.time.Duration
 
-class StandaloneMonitorService(
+public class StandaloneMonitorService(
   private val source: MonitorPullRequestSource,
   private val checks: MonitorCheckSource,
   private val publisher: MonitorRepairPublisher,

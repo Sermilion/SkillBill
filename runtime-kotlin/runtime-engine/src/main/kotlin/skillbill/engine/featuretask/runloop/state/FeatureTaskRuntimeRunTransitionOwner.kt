@@ -18,13 +18,13 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 
-internal class FeatureTaskRuntimeRunTransitionOwner(
+public class FeatureTaskRuntimeRunTransitionOwner internal constructor(
   private val progress: FeatureTaskRuntimeRunState,
   private val session: FeatureTaskRuntimeRunLoopSession,
 ) {
   private var checkpointBlockOverride: ((String) -> Unit)? = null
 
-  fun <T> checkpointBlocksAsWarnings(
+  internal fun <T> checkpointBlocksAsWarnings(
     onBlock: (String) -> Unit,
     action: () -> T,
   ): T {
@@ -36,14 +36,14 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     }
   }
 
-  fun claimResumedInFlightEdge(
+  internal fun claimResumedInFlightEdge(
     loopId: String,
     edgeIteration: Int,
   ) {
     progress.recordEdgeIteration(loopId, edgeIteration)
   }
 
-  fun enterBackwardEdgeReentry(
+  internal fun enterBackwardEdgeReentry(
     reopenedPhaseIds: Collection<String>,
     loopId: String,
     edgeIteration: Int,
@@ -54,16 +54,16 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     session.transitionReentryPair(pendingReentry, pendingReentry)
   }
 
-  fun reenterAcceptanceSteps(phaseIds: Collection<String>) {
+  internal fun reenterAcceptanceSteps(phaseIds: Collection<String>) {
     phaseIds.forEach(progress::reopenForReentry)
     session.transitionReentryPair(null, null)
   }
 
-  fun invalidateProducerOutputForRegeneration(phaseId: String) {
+  internal fun invalidateProducerOutputForRegeneration(phaseId: String) {
     progress.invalidateProducerOutput(phaseId)
   }
 
-  fun applyPersistedReviewGenerationInvalidation(
+  internal fun applyPersistedReviewGenerationInvalidation(
     generation: Int,
     reviewStepId: String,
     reentryLoopId: String,
@@ -75,18 +75,18 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     }
   }
 
-  fun establishResumedReentryPair(pending: PendingReentry?) {
+  internal fun establishResumedReentryPair(pending: PendingReentry?) {
     session.transitionReentryPair(pending, pending)
   }
 
-  fun enterExplicitResumeStart(explicitResume: ExplicitResumeStart) {
+  internal fun enterExplicitResumeStart(explicitResume: ExplicitResumeStart) {
     if (explicitResume.reopen) {
       progress.reopenFromExplicitResume(explicitResume.phaseId)
     }
     session.transitionReentryPair(null, null)
   }
 
-  fun consumeBriefingPendingReentry(phaseId: String): PendingReentry? {
+  internal fun consumeBriefingPendingReentry(phaseId: String): PendingReentry? {
     val briefing = session.pendingReentry?.takeIf { it.phaseId == phaseId }
     if (briefing != null) {
       session.transitionPendingReentry(null)
@@ -94,7 +94,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return briefing
   }
 
-  fun recordForwardPhaseCompletion(
+  internal fun recordForwardPhaseCompletion(
     output: FeatureTaskRuntimePhaseOutput,
     operatorBlockRetryPhaseId: String,
   ) {
@@ -104,7 +104,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     session.consumeOperatorBlockRetryCompletion(operatorBlockRetryPhaseId)
   }
 
-  fun applyCarriedForwardInMemoryCompletion(
+  internal fun applyCarriedForwardInMemoryCompletion(
     output: FeatureTaskRuntimePhaseOutput,
     clearPendingReentry: Boolean,
   ) {
@@ -114,11 +114,11 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     progress.recordCompleted(output)
   }
 
-  fun reserveReviewPassAfterPhaseState(reviewPassNumber: Int?) {
+  internal fun reserveReviewPassAfterPhaseState(reviewPassNumber: Int?) {
     progress.reserveReviewPass(reviewPassNumber)
   }
 
-  fun persistBlockedPhaseState(
+  internal fun persistBlockedPhaseState(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
   ): Boolean {
@@ -129,7 +129,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return persisted
   }
 
-  fun persistPausedPhaseState(
+  internal fun persistPausedPhaseState(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
     pausedReport: FeatureTaskRuntimeRunReport.Paused,
@@ -142,24 +142,24 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return persisted
   }
 
-  fun persistBranchSetupBlockedPhase(
+  internal fun persistBranchSetupBlockedPhase(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
   ): Boolean = recorder.recordPhaseState(phaseState)
 
-  fun persistGoalContinuationPause(
+  internal fun persistGoalContinuationPause(
     goalContinuationRecorder: PhaseRunGoal,
     request: GoalContinuationStateRecordRequest,
   ): Boolean = goalContinuationRecorder.recordGoalContinuationState(request)
 
-  fun persistDecomposeTerminal(
+  internal fun persistDecomposeTerminal(
     recorder: PhaseRunRecords,
     workflowId: String,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
   ): Boolean = recorder.recordDecomposeTerminal(workflowId, terminal, planStepId)
 
-  fun transitionCheckpointRemediationBlock(
+  internal fun transitionCheckpointRemediationBlock(
     request: FeatureTaskRuntimeRunFacts,
     phaseId: String,
     reason: String,
@@ -182,7 +182,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     )
   }
 
-  fun acknowledgeRequiredPhaseStart(
+  internal fun acknowledgeRequiredPhaseStart(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
   ): RequiredPhaseWrite {
@@ -194,7 +194,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return write
   }
 
-  fun applyPersistedPhaseCompletion(
+  internal fun applyPersistedPhaseCompletion(
     output: FeatureTaskRuntimePhaseOutput,
     reviewPassNumber: Int?,
   ) {
@@ -202,7 +202,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     progress.recordCompleted(output)
   }
 
-  fun persistAuthoritativePhaseCompletion(
+  internal fun persistAuthoritativePhaseCompletion(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
     inMemoryOutput: FeatureTaskRuntimePhaseOutput,
@@ -216,7 +216,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return persisted
   }
 
-  fun persistGoalReviewPhaseCompletion(
+  internal fun persistGoalReviewPhaseCompletion(
     recorder: PhaseRunRecords,
     completion: GoalReviewPhaseCompletionRequest,
   ): Boolean {
@@ -238,7 +238,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return persisted
   }
 
-  fun persistReviewGenerationInvalidation(
+  internal fun persistReviewGenerationInvalidation(
     recorder: PhaseRunRecords,
     workflowId: String,
     reviewStepId: String,
@@ -253,7 +253,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return generation
   }
 
-  fun persistCarriedForwardPhaseCompletion(
+  internal fun persistCarriedForwardPhaseCompletion(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
     inMemoryOutput: FeatureTaskRuntimePhaseOutput,
@@ -266,27 +266,27 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     return persisted == RequiredPhaseWrite.Acknowledged
   }
 
-  fun recordSyntheticUpstreamCompletion(output: FeatureTaskRuntimePhaseOutput) {
+  internal fun recordSyntheticUpstreamCompletion(output: FeatureTaskRuntimePhaseOutput) {
     progress.recordCompleted(output)
   }
 
-  fun transitionTerminalBlocked(report: FeatureTaskRuntimeRunReport.Blocked) {
+  internal fun transitionTerminalBlocked(report: FeatureTaskRuntimeRunReport.Blocked) {
     session.transitionToBlocked(report)
   }
 
-  fun transitionTerminalPaused(report: FeatureTaskRuntimeRunReport.Paused) {
+  internal fun transitionTerminalPaused(report: FeatureTaskRuntimeRunReport.Paused) {
     session.transitionToPaused(report)
   }
 
-  fun transitionTerminalDecomposed(report: FeatureTaskRuntimeRunReport.Decomposed) {
+  internal fun transitionTerminalDecomposed(report: FeatureTaskRuntimeRunReport.Decomposed) {
     session.transitionToDecomposed(report)
   }
 
-  fun restartAttemptBudgetForRelaunch(phaseId: String) {
+  internal fun restartAttemptBudgetForRelaunch(phaseId: String) {
     progress.restartAttemptBudget(phaseId)
   }
 
-  fun beginPhaseAttemptLaunchAfterRequiredStart(
+  internal fun beginPhaseAttemptLaunchAfterRequiredStart(
     phaseId: String,
     operatorReopened: Boolean,
     preserveAttemptBudget: Boolean = false,
@@ -297,19 +297,19 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     progress.recordPhaseLaunched(phaseId)
   }
 
-  fun observeResolvedBranchForCheckpoint(branch: String?) {
+  internal fun observeResolvedBranchForCheckpoint(branch: String?) {
     session.transitionResolvedBranch(branch)
   }
 
-  fun markCheckpointOwnershipDecided() {
+  internal fun markCheckpointOwnershipDecided() {
     session.markCheckpointOwnershipDecided()
   }
 
-  fun markRecordRejectionSettlementPending() {
+  internal fun markRecordRejectionSettlementPending() {
     session.markRecordRejectionSettlementPending()
   }
 
-  fun recordPhaseContentIdentities(
+  internal fun recordPhaseContentIdentities(
     request: FeatureTaskRuntimeRunFacts,
     gitOperations: WorkflowGitOperations,
     phaseId: String,
@@ -322,21 +322,21 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     session.recordPhaseContentIdentities(phaseId, identities.identities)
   }
 
-  fun consumeRecordRejectionSettlementAdvance(): FeatureTaskRuntimeVerdict? {
+  internal fun consumeRecordRejectionSettlementAdvance(): FeatureTaskRuntimeVerdict? {
     if (!session.recordRejectionSettlementPending) return null
     session.clearRecordRejectionSettlementPending()
     return FeatureTaskRuntimeVerdict.RECORD_REJECTED
   }
 
-  fun clearPersistedBlockAfterUpstreamRecovery(phaseId: String) {
+  internal fun clearPersistedBlockAfterUpstreamRecovery(phaseId: String) {
     progress.clearPersistedBlock(phaseId)
   }
 
-  fun discardStaleResumedReentry(loopId: String) {
+  internal fun discardStaleResumedReentry(loopId: String) {
     progress.discardStaleReentry(loopId)
   }
 
-  fun clearRecoveredBranchSetupBlock(phaseId: String) {
+  internal fun clearRecoveredBranchSetupBlock(phaseId: String) {
     if (!progress.phase(phaseId).branchSetupBlocked) {
       return
     }

@@ -29,7 +29,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AcceptanceAuditStrategy :
+public class AcceptanceAuditStrategy :
   PhaseStrategy(),
   AcceptanceRepairCapability,
   PhaseLoopCapability by AcceptanceAuditCapabilities,
@@ -101,8 +101,8 @@ class AcceptanceAuditStrategy :
     return if (stepId == entryStep) AcceptanceAuditVerdictRule(diagnostics) else null
   }
 
-  companion object {
-    const val ID = "acceptance-audit"
+  public companion object {
+    public const val ID: String = "acceptance-audit"
   }
 }
 

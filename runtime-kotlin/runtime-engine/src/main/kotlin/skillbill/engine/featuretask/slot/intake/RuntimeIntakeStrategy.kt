@@ -20,7 +20,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class RuntimeIntakeStrategy(private val planIntake: () -> FeatureTaskRuntimePlanIntake) : PhaseStrategy() {
+public class RuntimeIntakeStrategy(private val planIntake: () -> FeatureTaskRuntimePlanIntake) : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to
@@ -98,8 +98,8 @@ class RuntimeIntakeStrategy(private val planIntake: () -> FeatureTaskRuntimePlan
     )
   }
 
-  companion object {
-    const val ID = "runtime-intake"
+  public companion object {
+    public const val ID: String = "runtime-intake"
 
     private const val DIRECTIVE: String =
       "This phase does not launch an agent. The runtime keeps an operator spec that has a readable acceptance " +

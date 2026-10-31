@@ -23,25 +23,25 @@ import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 /** Accepted-step launch surface exposed to one prepared step call; not a full step binding. */
-internal interface PhaseAcceptedStepCallTarget {
-  val launchState: PhaseLaunchState
+public interface PhaseAcceptedStepCallTarget {
+  public val launchState: PhaseLaunchState
 
-  fun nextStepIteration(): Int
+  public fun nextStepIteration(): Int
 
-  fun nextGateIteration(): Int
+  public fun nextGateIteration(): Int
 
-  fun requireAcceptedAttempt(
+  public fun requireAcceptedAttempt(
     run: PhaseRun,
     call: PhaseStepCall,
   )
 
-  fun requireAcceptedStep(
+  public fun requireAcceptedStep(
     run: PhaseRun,
     strategyId: String,
   )
 }
 
-internal data class PhaseStepCall(
+public data class PhaseStepCall(
   val description: PhaseStepDescription,
   private val acceptedStep: PhaseAcceptedStepExecution,
   val request: FeatureTaskRuntimeRunFacts,

@@ -2,17 +2,17 @@ package skillbill.engine.featuretask.slot.state
 
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 
-enum class RequiredPhaseWriteKind(val wireValue: String) {
+public enum class RequiredPhaseWriteKind(internal val wireValue: String) {
   START("start"),
   BRIEFING("briefing"),
   COMPLETION("completion"),
   IMPLEMENTATION_PROGRESS("implementation-progress"),
 }
 
-sealed interface RequiredPhaseWrite {
-  data object Acknowledged : RequiredPhaseWrite
+public sealed interface RequiredPhaseWrite {
+  public data object Acknowledged : RequiredPhaseWrite
 
-  data class Rejected(
+  public data class Rejected(
     val writeKind: RequiredPhaseWriteKind,
     val workflowId: String,
     val phaseId: String,
@@ -20,7 +20,7 @@ sealed interface RequiredPhaseWrite {
     val handoffRejection: InvalidFeatureTaskRuntimeHandoffProjectionContext? = null,
     val detail: String? = null,
   ) : RequiredPhaseWrite {
-    val message: String =
+    public val message: String =
       "Required ${writeKind.wireValue} write rejected for phase '$phaseId', attempt $attempt." +
         detail?.let { " $it" }.orEmpty()
   }

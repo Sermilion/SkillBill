@@ -20,10 +20,10 @@ import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.util.Collections
 
-class PhaseStrategyRegistration(val strategy: PhaseStrategy, internal val runner: PhaseRunner)
+public class PhaseStrategyRegistration(internal val strategy: PhaseStrategy, internal val runner: PhaseRunner)
 
-class PhaseStrategyRegistry(registrations: List<PhaseStrategyRegistration>) {
-  val strategies: List<PhaseStrategy> = Collections.unmodifiableList(registrations.map { it.strategy })
+public class PhaseStrategyRegistry(registrations: List<PhaseStrategyRegistration>) {
+  public val strategies: List<PhaseStrategy> = Collections.unmodifiableList(registrations.map { it.strategy })
   private val byKey: Map<Pair<PhaseSlot, String>, PhaseStrategy>
   private val runners: Map<Pair<PhaseSlot, String>, PhaseRunner>
 
@@ -45,18 +45,18 @@ class PhaseStrategyRegistry(registrations: List<PhaseStrategyRegistration>) {
     runners = keyedRunners
   }
 
-  fun contains(
+  public fun contains(
     slot: PhaseSlot,
     strategyId: String,
   ): Boolean = (slot to canonicalStrategyId(slot, strategyId)) in byKey
 
-  fun strategy(
+  public fun strategy(
     slot: PhaseSlot,
     strategyId: String,
   ): PhaseStrategy =
     byKey[slot to canonicalStrategyId(slot, strategyId)] ?: throw UnknownPhaseStrategyError(slot.wireValue, strategyId)
 
-  internal fun runner(
+  public fun runner(
     slot: PhaseSlot,
     strategyId: String,
   ): PhaseRunner =

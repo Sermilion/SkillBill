@@ -19,7 +19,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class GoalChildHistoryDraftStrategy : PhaseStrategy() {
+public class GoalChildHistoryDraftStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY to
@@ -83,8 +83,8 @@ class GoalChildHistoryDraftStrategy : PhaseStrategy() {
     ): String? = GoalChildHistoryDraftOutputPersistence.save(recorder, run, output)
   }
 
-  companion object {
-    const val ID = "goal-child-history-draft"
+  public companion object {
+    public const val ID: String = "goal-child-history-draft"
     private const val DIRECTIVE =
       "Prepare a durable history draft for the parent goal. " +
         "Do not edit, create, or delete project history or decision files."

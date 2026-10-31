@@ -35,7 +35,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-object FeatureTaskRuntimeRunLoopPlanningBranch {
+internal object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun blockOnCapExhaustion(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,

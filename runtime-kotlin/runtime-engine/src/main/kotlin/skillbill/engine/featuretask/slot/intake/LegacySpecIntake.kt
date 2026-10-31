@@ -26,7 +26,7 @@ import java.nio.file.Path
  * that plans a bundle into the project store. A legacy spec that cannot be read replans from its issue key and feature
  * name alone, and a missing legacy spec is [NotLegacy]; no lookup failure blocks the launch.
  */
-sealed interface LegacySpecRoute {
+internal sealed interface LegacySpecRoute {
   data object NotLegacy : LegacySpecRoute
 
   data object ResumeInPlace : LegacySpecRoute
@@ -35,7 +35,7 @@ sealed interface LegacySpecRoute {
 }
 
 @Inject
-class LegacySpecIntake(
+public class LegacySpecIntake(
   private val database: DatabaseSessionFactory,
   private val repositories: RepositoryEnclosingRootPort,
   private val projectStore: ProjectStorePort,
@@ -43,7 +43,7 @@ class LegacySpecIntake(
   private val diagnostics: RuntimeDiagnostics,
   private val specPathResolver: FeatureSpecPathResolverPort,
 ) {
-  fun routeIssueKey(
+  internal fun routeIssueKey(
     issueKey: String,
     repoRoot: Path,
   ): LegacySpecRoute {
@@ -64,7 +64,7 @@ class LegacySpecIntake(
     }
   }
 
-  fun route(
+  internal fun route(
     referencedSpec: Path,
     issueKey: String,
     repoRoot: Path,

@@ -186,7 +186,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 }
 
 @Inject
-class FeatureTaskRuntimeRunLoopDurableLaunch(
+public class FeatureTaskRuntimeRunLoopDurableLaunch(
   private val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
   private val activityStampWriter: AgentActivityStampWriter,
   private val worktreeEditJournalWriter: WorktreeEditJournalWriter,
@@ -200,7 +200,7 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
   ): PhaseRunFanOut =
     FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(state, facts, stepId, decompositionPlanner, runLoopEntry)
 
-  internal fun bindings(
+  public fun bindings(
     facts: FeatureTaskRuntimeRunFacts,
     state: PhaseRunState,
     run: PhaseRun,
@@ -212,7 +212,7 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
     guardPhase: String,
   ): FeatureTaskRuntimeBranchSetupOutcome = branchSetupRunner.ensureFeatureBranch(facts, telemetry, guardPhase)
 
-  internal fun observation(
+  public fun observation(
     facts: FeatureTaskRuntimeRunFacts,
     stepName: String,
   ): PhaseLaunchObservation =

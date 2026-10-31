@@ -8,27 +8,27 @@ import skillbill.ports.workflow.gitops.RuntimePhaseFileManifestGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
-internal interface PhaseRepositoryObservations :
+public interface PhaseRepositoryObservations :
   DefaultBranchGitOperations,
   GoalSubtaskReviewGitOperations,
   RepositoryFingerprintGitOperations,
   RepositoryOwnedPathsGitOperations,
   RuntimePhaseFileManifestGitOperations {
-  fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult
+  public fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult
 
-  fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult
+  public fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult
 
-  fun resolveCommit(
+  public fun resolveCommit(
     repoRoot: Path,
     revision: String,
   ): WorkflowGitOperationResult
 
-  fun commitCountAhead(
+  public fun commitCountAhead(
     repoRoot: Path,
     baseRevision: String,
   ): WorkflowGitOperationResult
 
-  fun mergeBaseWithHead(
+  public fun mergeBaseWithHead(
     repoRoot: Path,
     baseRevision: String,
   ): WorkflowGitOperationResult

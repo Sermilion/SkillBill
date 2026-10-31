@@ -31,7 +31,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-class AgentPlanStrategy :
+internal class AgentPlanStrategy :
   PhaseStrategy(),
   PhaseResumeCapability by AgentPlanResume {
   private val policies: Map<String, PhaseStepPolicy> = AGENT_PLAN_POLICIES

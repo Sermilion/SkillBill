@@ -227,7 +227,7 @@ internal fun completedOutput(
 internal fun reviewSpecPath(run: PhaseRun): Path? =
   if (run.request.reviewInvocation != null) null else Path.of(run.request.runInvariants.specReference)
 
-object ReviewTargetResolver {
+internal object ReviewTargetResolver {
   fun resolve(
     requested: ReviewTarget?,
     porcelainStatus: String,

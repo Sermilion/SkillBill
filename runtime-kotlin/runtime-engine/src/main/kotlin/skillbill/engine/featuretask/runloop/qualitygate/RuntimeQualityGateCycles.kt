@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 
 @Inject
-class RuntimeQualityGateCycles(
+public class RuntimeQualityGateCycles(
   private val buildCoordinator: FeatureTaskRuntimeBuildGateCoordinator,
   private val receiptValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val validationCoordinator: FeatureTaskRuntimeValidationGateCoordinator,
@@ -33,7 +33,7 @@ class RuntimeQualityGateCycles(
     run: PhaseRun,
   ): PhaseOutcome = AgentValidateGateCycle(context, call, validationCoordinator).run(run)
 
-  internal fun resolve(
+  public fun resolve(
     request: FeatureTaskRuntimeRunFacts,
     changedPaths: List<String>,
   ): ValidationGateResolution {

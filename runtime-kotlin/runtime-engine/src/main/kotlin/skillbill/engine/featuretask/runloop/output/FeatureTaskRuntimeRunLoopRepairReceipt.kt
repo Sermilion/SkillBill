@@ -9,7 +9,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
-object FeatureTaskRuntimeRunLoopRepairReceipt {
+internal object FeatureTaskRuntimeRunLoopRepairReceipt {
   internal fun blockRemediationBaseSha(
     context: PhaseCheckpointRemediationContext,
     precedingPhaseId: String,

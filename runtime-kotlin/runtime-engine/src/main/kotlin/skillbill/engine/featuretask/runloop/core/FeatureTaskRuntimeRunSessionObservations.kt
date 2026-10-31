@@ -4,26 +4,26 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
 /** Read-only session facts for attempt and settlement helpers; mutations route through the transition owner. */
-internal interface FeatureTaskRuntimeRunSessionObservations {
-  val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry?
+public interface FeatureTaskRuntimeRunSessionObservations {
+  public val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry?
 
-  val checkpointOwnershipDecided: Boolean
+  public val checkpointOwnershipDecided: Boolean
 
-  val resolvedBranch: String?
+  public val resolvedBranch: String?
 
-  val operatorBlockRetryCompleted: Boolean
+  public val operatorBlockRetryCompleted: Boolean
 
-  val pendingReentry: PendingReentry?
+  public val pendingReentry: PendingReentry?
 
-  val activeReentry: PendingReentry?
+  public val activeReentry: PendingReentry?
 
-  val recordRejectionSettlementPending: Boolean
+  public val recordRejectionSettlementPending: Boolean
 
-  val blocked: FeatureTaskRuntimeRunReport.Blocked?
+  public val blocked: FeatureTaskRuntimeRunReport.Blocked?
 
-  val paused: FeatureTaskRuntimeRunReport.Paused?
+  public val paused: FeatureTaskRuntimeRunReport.Paused?
 
-  val decomposed: FeatureTaskRuntimeRunReport.Decomposed?
+  public val decomposed: FeatureTaskRuntimeRunReport.Decomposed?
 
-  fun phaseContentIdentitiesFor(phaseId: String): Map<String, String>
+  public fun phaseContentIdentitiesFor(phaseId: String): Map<String, String>
 }

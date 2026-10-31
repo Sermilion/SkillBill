@@ -13,7 +13,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class StandaloneMonitorPublicationStrategy(
+public class StandaloneMonitorPublicationStrategy(
   private val service: StandaloneMonitorService,
 ) : PhaseStrategy() {
   private val policies =
@@ -58,7 +58,7 @@ class StandaloneMonitorPublicationStrategy(
     }
   }
 
-  companion object {
-    const val ID = "standalone-monitor-publication"
+  public companion object {
+    public const val ID: String = "standalone-monitor-publication"
   }
 }

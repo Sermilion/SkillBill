@@ -45,20 +45,20 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.nio.file.Path
 
-internal class FeatureTaskRuntimeRunLoopContext(
+public class FeatureTaskRuntimeRunLoopContext internal constructor(
   override val request: FeatureTaskRuntimeRunFacts,
-  val runState: PhaseRunState,
+  internal val runState: PhaseRunState,
   override val gitOperations: WorkflowGitOperations,
   override val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   override val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
   override val specIntentProjectionResolver: SpecIntentProjectionResolver,
   override val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
-  val qualityGateCycles: RuntimeQualityGateCycles,
+  internal val qualityGateCycles: RuntimeQualityGateCycles,
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
-  val projectStoreRoot: Path,
+  internal val projectStoreRoot: Path,
 ) : PhaseRunLoopAttemptCollaborators {
-  val commitPushManifestCompletion: CommitPushManifestCompletion?
+  internal val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = runState.commitPushManifestCompletion
   override val progress get() = runState.coupledProgress().progressSnapshot
 
@@ -78,20 +78,20 @@ internal class FeatureTaskRuntimeRunLoopContext(
 
   override val coupledRunTransitions get() = runState.coupledRunTransitions
 
-  fun hasLeftSlot(slot: PhaseSlot): Boolean =
+  internal fun hasLeftSlot(slot: PhaseSlot): Boolean =
     transitions.forwardPhaseIds.any { stepId ->
       val owner = runState.selectedOwnerOf(stepId)
       owner != null && owner.slot.ordinal > slot.ordinal &&
         state.phase(stepId).record?.status?.let { it != WorkflowStepStatus.PENDING } == true
     }
 
-  fun bindingFactory(run: PhaseRun): PhaseBindingFactory {
+  internal fun bindingFactory(run: PhaseRun): PhaseBindingFactory {
     requireAcceptedRun(run)
     runState.stepBinding.beginStepBinding(run)
     return FeatureTaskRuntimeRunLoopStepBindings.factory(launchScope(run), run)
   }
 
-  fun fanOutUnitBindings(
+  internal fun fanOutUnitBindings(
     run: PhaseRun,
     unitId: Int,
     bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
@@ -135,7 +135,7 @@ internal class FeatureTaskRuntimeRunLoopContext(
     return runState.strategyFor(stepId)
   }
 
-  fun stepHooks(run: PhaseRun): PhaseStepHooks<*> = strategyFor(run.phaseId).stepHooks(run.phaseId)
+  internal fun stepHooks(run: PhaseRun): PhaseStepHooks<*> = strategyFor(run.phaseId).stepHooks(run.phaseId)
 
   override fun acceptedStepPolicy(stepId: String) =
     runState.selectedOwnerOf(stepId)?.policyFor(stepId)
@@ -175,7 +175,7 @@ internal fun resolveLaunchRejectionAttribution(
   )
 }
 
-fun isFeatureSpecPathForIssue(
+internal fun isFeatureSpecPathForIssue(
   path: String,
   issueKey: String,
 ): Boolean {
@@ -187,7 +187,7 @@ fun isFeatureSpecPathForIssue(
   return issueDirectory == key || issueDirectory.startsWith("$key-")
 }
 
-fun reconcileCheckpointPathInventory(
+internal fun reconcileCheckpointPathInventory(
   repoRoot: Path,
   issueKey: String,
   specReference: String,
@@ -208,7 +208,7 @@ fun reconcileCheckpointPathInventory(
     }.distinct()
 }
 
-fun resolveReviewPassNumber(
+internal fun resolveReviewPassNumber(
   reservedPassNumber: Int?,
   completedReviewPassCount: Int,
 ): Int {
@@ -222,7 +222,7 @@ fun resolveReviewPassNumber(
 }
 
 @Inject
-open class FeatureTaskRuntimeRunLoopEntry(
+public open class FeatureTaskRuntimeRunLoopEntry(
   private val gitOperations: WorkflowGitOperations,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
@@ -235,7 +235,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
   private val commitPushManifestCompletion: CommitPushManifestCompletion,
   private val projectStore: ProjectStorePort,
 ) {
-  internal fun context(
+  public fun context(
     request: FeatureTaskRuntimeRunFacts,
     runState: PhaseRunState,
   ): FeatureTaskRuntimeRunLoopContext {
@@ -256,7 +256,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
     )
   }
 
-  internal open fun run(
+  public open fun run(
     context: FeatureTaskRuntimeRunLoopContext,
     beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit = {},
   ): FeatureTaskRuntimeRunReport {
@@ -267,7 +267,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
   }
 }
 
-class FeatureTaskRuntimeRunLoop internal constructor(
+public class FeatureTaskRuntimeRunLoop internal constructor(
   internal val context: FeatureTaskRuntimeRunLoopContext,
 ) {
   internal val session = context.runState.coupledSession()
@@ -277,7 +277,7 @@ class FeatureTaskRuntimeRunLoop internal constructor(
     context.runState.coupledRunTransitions.establishResumedReentryPair(resumed)
   }
 
-  fun drive() {
+  internal fun drive() {
     with(FeatureTaskRuntimeRunLoopDrive) {
       invalidateStaleEvidence(context)
       context.runPhaseDriveLoop(::advance)
@@ -309,7 +309,7 @@ class FeatureTaskRuntimeRunLoop internal constructor(
     )
   }
 
-  fun report(): FeatureTaskRuntimeRunReport {
+  internal fun report(): FeatureTaskRuntimeRunReport {
     val branch =
       session.resolvedBranch
         ?: context.recorder.loadResolvedBranch(context.request.workflowId)?.branch
@@ -326,7 +326,7 @@ class FeatureTaskRuntimeRunLoop internal constructor(
     )
   }
 
-  fun applyOperatorDecision(): String? =
+  internal fun applyOperatorDecision(): String? =
     buildString {
       append("Operator decisions over review remediation are removed; ")
       append("the run advances to validate after one implement_fix round.")

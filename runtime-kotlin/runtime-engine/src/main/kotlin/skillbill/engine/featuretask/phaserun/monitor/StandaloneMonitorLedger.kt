@@ -26,36 +26,36 @@ internal interface StandaloneMonitorRunRecords {
   val standaloneMonitorLedger: StandaloneMonitorLedger?
 }
 
-internal class StandaloneMonitorLedger(
-  val execution: MonitorExecutionContext,
+public class StandaloneMonitorLedger internal constructor(
+  internal val execution: MonitorExecutionContext,
   private val cleanup: MonitorCleanupOwnership,
 ) {
   private val receipts = mutableListOf<StandalonePublishedRepair>()
   private val heads = mutableListOf(execution.target.head.tip.sha)
 
-  val acknowledgedHeadSha: String get() = heads.last()
+  internal val acknowledgedHeadSha: String get() = heads.last()
 
-  val supersededHeadShas: Set<String> get() = heads.dropLast(1).toSet()
+  internal val supersededHeadShas: Set<String> get() = heads.dropLast(1).toSet()
 
-  var pendingRepair: StandalonePendingRepair? = null
+  internal var pendingRepair: StandalonePendingRepair? = null
     private set
 
-  val publishedRepairs: List<StandalonePublishedRepair> get() = receipts.toList()
+  internal val publishedRepairs: List<StandalonePublishedRepair> get() = receipts.toList()
 
-  val pullRequestEditRefreshAfter: Instant?
+  internal val pullRequestEditRefreshAfter: Instant?
     get() = receipts.lastOrNull()?.takeIf { it.commitSha == acknowledgedHeadSha }?.pullRequestEdit?.refreshAfter
 
-  fun <T> exclusive(block: () -> T): T = cleanup.exclusive(block)
+  internal fun <T> exclusive(block: () -> T): T = cleanup.exclusive(block)
 
-  fun beginRepair(repair: StandalonePendingRepair) {
+  internal fun beginRepair(repair: StandalonePendingRepair) {
     pendingRepair = repair
   }
 
-  fun completePendingRepair() {
+  internal fun completePendingRepair() {
     pendingRepair = pendingRepair?.copy(completed = true)
   }
 
-  fun adopt(headSha: String): String? =
+  internal fun adopt(headSha: String): String? =
     if (pendingRepair != null) {
       "A repair is pending on $acknowledgedHeadSha."
     } else {
@@ -65,13 +65,13 @@ internal class StandaloneMonitorLedger(
       }
     }
 
-  fun acknowledge(commitSha: String) {
+  internal fun acknowledge(commitSha: String) {
     receipts += StandalonePublishedRepair(commitSha)
     heads += commitSha
     pendingRepair = null
   }
 
-  fun acknowledgePullRequestEdit() {
+  internal fun acknowledgePullRequestEdit() {
     val edit = StandalonePullRequestEdit(receipts.size + 1, pendingRepair?.startedAt)
     receipts += StandalonePublishedRepair(acknowledgedHeadSha, edit)
     pendingRepair = null

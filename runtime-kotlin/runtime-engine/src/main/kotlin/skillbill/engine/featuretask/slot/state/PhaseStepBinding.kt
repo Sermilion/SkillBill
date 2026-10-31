@@ -24,126 +24,126 @@ import java.nio.file.Path
 import java.time.Instant
 
 /** Step binding for one accepted step; strategies read launch facts through [launchState] only. */
-internal interface PhaseStepBinding {
+public interface PhaseStepBinding {
   /** The phase id this binding was issued for; attempt authorization rejects other step ids. */
-  val acceptedPhaseId: String
+  public val acceptedPhaseId: String
 
   /**
    * The strategy the execution plan selected for [acceptedPhaseId]. Step calls take their prompt,
    * policy, and strategy id from it, so a wrapper that delegates execution keeps its own identity.
    */
-  val acceptedOwner: PhaseStrategy
+  public val acceptedOwner: PhaseStrategy
 
-  val modelDirectiveSupplements: ModelDirectiveSupplements
+  public val modelDirectiveSupplements: ModelDirectiveSupplements
 
-  val launchState: PhaseLaunchState
+  public val launchState: PhaseLaunchState
 
-  fun nextStepIteration(): Int
+  public fun nextStepIteration(): Int
 
-  fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
+  public fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
 
-  fun completedStepEnvelope(stepId: String): FeatureTaskRuntimeWorkflowArtifactMap?
+  public fun completedStepEnvelope(stepId: String): FeatureTaskRuntimeWorkflowArtifactMap?
 
-  fun completedStepPayload(stepId: String): String?
+  public fun completedStepPayload(stepId: String): String?
 
-  val resolvedBranchName: String?
+  public val resolvedBranchName: String?
 
-  fun stepCompleted(iteration: Int)
+  public fun stepCompleted(iteration: Int)
 
-  fun isStepCompleted(stepId: String): Boolean
+  public fun isStepCompleted(stepId: String): Boolean
 
-  fun isEvidenceInvalidated(stepId: String): Boolean
+  public fun isEvidenceInvalidated(stepId: String): Boolean
 
-  fun requireAcceptedAttempt(
+  public fun requireAcceptedAttempt(
     run: PhaseRun,
     call: PhaseStepCall,
   )
 
-  fun requireAcceptedStep(
+  public fun requireAcceptedStep(
     run: PhaseRun,
     strategyId: String,
   )
 
-  fun finishStepExecution()
+  public fun finishStepExecution()
 }
 
 /** Accepted-step agent launch and branch guard without review-only persistence. */
-internal interface PhaseAcceptedStepExecution :
+public interface PhaseAcceptedStepExecution :
   PhaseStepBinding,
   PhaseAcceptedStepCallTarget {
   /**
    * Records [stepId] as completed by the runtime from [output], ahead of any launch. Throws when the completion
    * cannot persist atomically.
    */
-  fun settleRuntimeAuthoredCompletion(
+  public fun settleRuntimeAuthoredCompletion(
     stepId: String,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   )
 
-  val boundHooks: PhaseBoundStepHooks<*>
+  public val boundHooks: PhaseBoundStepHooks<*>
 }
 
 /** Agent and side-effect steps execute through the accepted attempt owner only. */
-internal interface PhaseAgentStepBinding :
+public interface PhaseAgentStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution
 
-internal interface PhaseQaStepBinding : PhaseAgentStepBinding {
-  fun qaRepairState(): QaRepairState?
+public interface PhaseQaStepBinding : PhaseAgentStepBinding {
+  public fun qaRepairState(): QaRepairState?
 }
 
 /** Agent launch is available only to steps that execute an agent through the attempt owner. */
-internal interface PhaseAgentExecution {
-  fun runAcceptedAgentStep(
+public interface PhaseAgentExecution {
+  public fun runAcceptedAgentStep(
     run: PhaseRun,
     call: PhaseStepCall,
   ): PhaseOutcome
 }
 
 /** Planning attempts persist their required briefing through the accepted planning owner. */
-internal interface PhasePlanningBriefingBinding : PhaseAcceptedStepExecution {
-  fun recordPlanningBriefing(
+public interface PhasePlanningBriefingBinding : PhaseAcceptedStepExecution {
+  public fun recordPlanningBriefing(
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     attempt: Int,
   ): RequiredPhaseWrite
 }
 
 /** Goal planning fan-out runs units through its owner. */
-internal interface PhaseQualityGateStepBinding : PhaseAcceptedStepExecution {
-  fun runSelectedQualityGate(
+public interface PhaseQualityGateStepBinding : PhaseAcceptedStepExecution {
+  public fun runSelectedQualityGate(
     run: PhaseRun,
     call: PhaseStepCall,
   ): PhaseOutcome
 }
 
-internal interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
-  fun runCommitPush(run: PhaseRun): PhaseOutcome
+public interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
+  public fun runCommitPush(run: PhaseRun): PhaseOutcome
 }
 
-internal interface PhaseMonitorStepBinding :
+public interface PhaseMonitorStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution {
-  fun publishRepair(
+  public fun publishRepair(
     run: PhaseRun,
     pullRequests: PullRequestIdentityLookup,
     conflictBaseBranch: String?,
   ): String?
 
-  fun runMonitor(
+  public fun runMonitor(
     run: PhaseRun,
     observation: PhaseCiObservation,
   ): PhaseOutcome
 }
 
 /** Pull request CI observation the monitor step drives; the selected monitor strategy supplies it. */
-internal interface PhaseCiObservation {
+public interface PhaseCiObservation {
   /**
    * Watches the pull request open for [branch] until its checks settle or a usable no-check observation exceeds the
    * CI start timeout. Failed identity and checks reads are reported through [onInconclusive] and retried as unknown
    * for that round; they do not establish that CI has not started.
    * [onCiRunning] is invoked while checks are still pending so status can stay fresh for the whole run.
    */
-  fun watch(
+  public fun watch(
     repoRoot: Path,
     branch: String,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
@@ -152,32 +152,32 @@ internal interface PhaseCiObservation {
   ): PullRequestCiOutcome
 
   /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */
-  fun recordFailingChecks(
+  public fun recordFailingChecks(
     issueKey: String,
     checks: List<PullRequestCheck>,
   )
 
   /** Keeps [baseBranch] so the fix step for [issueKey] can merge it and resolve conflicts. */
-  fun recordMergeConflict(
+  public fun recordMergeConflict(
     issueKey: String,
     baseBranch: String,
   )
 }
 
 /** The accepted standalone monitor and monitor-repair steps; both act only on the invocation's own ledger. */
-internal interface PhaseStandaloneMonitorStepBinding :
+public interface PhaseStandaloneMonitorStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution {
-  fun runStandaloneMonitor(
+  public fun runStandaloneMonitor(
     run: PhaseRun,
     operations: PhaseStandaloneMonitorOperations,
   ): PhaseOutcome
 
   /** The evidence brief for the repair the monitor started, or an empty string when none is pending. */
-  fun standaloneRepairBrief(): String
+  public fun standaloneRepairBrief(): String
 
   /** The reason the repair cannot launch against the current pull request and worktree, or null when it can. */
-  fun guardStandaloneRepairLaunch(
+  public fun guardStandaloneRepairLaunch(
     run: PhaseRun,
     operations: PhaseStandaloneMonitorOperations,
   ): String?
@@ -186,7 +186,7 @@ internal interface PhaseStandaloneMonitorStepBinding :
    * The reason the settled repair cannot be published, or null when it was published or nothing was pending. A repair
    * the agent did not report as fixed is never completed or published.
    */
-  fun publishStandaloneRepair(
+  public fun publishStandaloneRepair(
     run: PhaseRun,
     operations: PhaseStandaloneMonitorOperations,
     reportedFixed: Boolean,
@@ -194,38 +194,38 @@ internal interface PhaseStandaloneMonitorStepBinding :
 }
 
 /** The accepted standalone publication step; its first visit changes nothing. */
-internal interface PhaseStandalonePublicationStepBinding : PhaseAcceptedStepExecution {
-  fun runStandalonePublication(
+public interface PhaseStandalonePublicationStepBinding : PhaseAcceptedStepExecution {
+  public fun runStandalonePublication(
     run: PhaseRun,
     operations: PhaseStandaloneMonitorOperations,
   ): PhaseOutcome
 }
 
 /** Identity-based observation, repair evidence and guarded publication the standalone monitor strategy supplies. */
-internal interface PhaseStandaloneMonitorOperations {
+public interface PhaseStandaloneMonitorOperations {
   /** Watches the pinned pull request until its checks settle, it merges or closes, or it cannot be read. */
-  fun observe(
+  public fun observe(
     ledger: StandaloneMonitorLedger,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
   ): PullRequestCiOutcome
 
   /** The repair brief for [failing] checks on the last head this invocation published. */
-  fun failureEvidence(
+  public fun failureEvidence(
     ledger: StandaloneMonitorLedger,
     failing: List<PullRequestCheck>,
   ): String
 
   /** The repair brief for a merge conflict with the pinned base commit. */
-  fun conflictEvidence(ledger: StandaloneMonitorLedger): String
+  public fun conflictEvidence(ledger: StandaloneMonitorLedger): String
 
   /** The reason the pending repair cannot launch, or null when the target and worktree are unchanged. */
-  fun guardRepairLaunch(
+  public fun guardRepairLaunch(
     ledger: StandaloneMonitorLedger,
     worktree: StandaloneRepairWorktree,
   ): String?
 
   /** Publishes the completed pending repair, or reports that nothing is pending or why publication blocked. */
-  fun publish(
+  public fun publish(
     ledger: StandaloneMonitorLedger,
     worktree: StandaloneRepairWorktree,
   ): StandalonePublication
@@ -235,117 +235,117 @@ internal interface PhaseStandaloneMonitorOperations {
  * The owned worktree of this invocation's repair, bound to that path. It can only read HEAD, test ancestry and commit
  * the repair's own changes; it cannot push, fetch, reset, check out, tag or address another checkout.
  */
-internal interface StandaloneRepairWorktree {
-  fun headSha(): String?
+public interface StandaloneRepairWorktree {
+  public fun headSha(): String?
 
-  fun descendsFrom(
+  public fun descendsFrom(
     ancestorSha: String,
     descendantSha: String,
   ): Boolean
 
   /** The reason the repair's changes could not be committed, or null when committed or nothing was pending. */
-  fun commitPending(subject: String): String?
+  public fun commitPending(subject: String): String?
 }
 
-internal sealed interface StandalonePublication {
-  data object NothingPending : StandalonePublication
+public sealed interface StandalonePublication {
+  public data object NothingPending : StandalonePublication
 
-  data class Published(val commitSha: String) : StandalonePublication
+  public data class Published(val commitSha: String) : StandalonePublication
 
-  data class PullRequestEdited(val headSha: String) : StandalonePublication
+  public data class PullRequestEdited(val headSha: String) : StandalonePublication
 
-  data class Blocked(val reason: String) : StandalonePublication
+  public data class Blocked(val reason: String) : StandalonePublication
 }
 
-internal data class ExpectedCiHead(
+public data class ExpectedCiHead(
   val sha: String? = null,
   val refreshAfter: Instant? = null,
 )
 
-internal sealed interface PullRequestCiOutcome {
-  data class Passed(val headSha: String) : PullRequestCiOutcome
+public sealed interface PullRequestCiOutcome {
+  public data class Passed(val headSha: String) : PullRequestCiOutcome
 
-  data object Merged : PullRequestCiOutcome
+  public data object Merged : PullRequestCiOutcome
 
-  data object NoCiConfigured : PullRequestCiOutcome
+  public data object NoCiConfigured : PullRequestCiOutcome
 
-  data object NoPullRequest : PullRequestCiOutcome
+  public data object NoPullRequest : PullRequestCiOutcome
 
-  data class Failed(
+  public data class Failed(
     val failingChecks: List<PullRequestCheck>,
     val headSha: String? = null,
     val editableFieldsDigest: String? = null,
   ) : PullRequestCiOutcome
 
-  data object Conflicted : PullRequestCiOutcome
+  public data object Conflicted : PullRequestCiOutcome
 
-  data class Blocked(val reason: String) : PullRequestCiOutcome
+  public data class Blocked(val reason: String) : PullRequestCiOutcome
 
-  data class Unavailable(val reason: String) : PullRequestCiOutcome
+  public data class Unavailable(val reason: String) : PullRequestCiOutcome
 }
 
-internal interface PhasePullRequestStepBinding : PhaseAgentStepBinding {
-  fun pullRequestContext(): PhasePullRequestContext
+public interface PhasePullRequestStepBinding : PhaseAgentStepBinding {
+  public fun pullRequestContext(): PhasePullRequestContext
 }
 
-internal interface PhasePlanningAgentStepBinding :
+public interface PhasePlanningAgentStepBinding :
   PhaseAgentStepBinding,
   PhasePlanningBriefingBinding
 
-internal interface PhasePlanningStepBinding : PhasePlanningAgentStepBinding {
+public interface PhasePlanningStepBinding : PhasePlanningAgentStepBinding {
   /**
    * Completes the accepted plan step from the spec bundle already on disk without launching an agent, recording its
    * snapshot. Subtasks that already carry their plan are recorded as settled units of [unitStepId]. Returns null
    * when the step must launch an agent to author the bundle.
    */
-  fun settleExistingBundle(
+  public fun settleExistingBundle(
     run: PhaseRun,
     unitStepId: String,
   ): PhaseOutcome?
 
-  fun fanOut(stepId: String): PhaseRunFanOut
+  public fun fanOut(stepId: String): PhaseRunFanOut
 
-  fun authorizeFanOutWave(run: PhaseRun)
+  public fun authorizeFanOutWave(run: PhaseRun)
 
-  fun releaseFanOutWave(run: PhaseRun)
+  public fun releaseFanOutWave(run: PhaseRun)
 }
 
 /** Planning fan-out unit execution; not a general run-loop step binding. */
-internal interface PhasePlanningUnitBinding : PhasePlanningAgentStepBinding
+public interface PhasePlanningUnitBinding : PhasePlanningAgentStepBinding
 
 /**
  * Review and remediation steps combine accepted-step execution with review-owned persistence.
  * This type does not extend [PhaseAgentStepBinding], so non-review consumers cannot treat a
  * review binding as an ordinary agent marker binding.
  */
-internal interface PhaseReviewStepBinding :
+public interface PhaseReviewStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution,
   PhaseReviewPassState,
   PhaseReviewSettlementState,
   PhaseReviewFindingObservations,
   PhaseReviewGenerationState {
-  fun reviewExecutionContext(): PhaseReviewExecutionContext
+  public fun reviewExecutionContext(): PhaseReviewExecutionContext
 
-  fun startReviewStep(
+  public fun startReviewStep(
     run: PhaseRun,
     iteration: Int,
   ): PhaseOutcome?
 
-  fun blockRequiredReviewWrite(rejection: RequiredPhaseWrite.Rejected): PhaseOutcome
+  public fun blockRequiredReviewWrite(rejection: RequiredPhaseWrite.Rejected): PhaseOutcome
 }
 
 /** verify_findings reads and writes only the finding-verification ledger for its step. */
-internal interface PhaseVerifyFindingsStepBinding :
+public interface PhaseVerifyFindingsStepBinding :
   PhaseAgentStepBinding,
   PhaseFindingVerificationState
 
 /** implement_fix records repair receipts and reads review verdict handoff facts for its step. */
-internal interface PhaseImplementFixStepBinding :
+public interface PhaseImplementFixStepBinding :
   PhaseAgentStepBinding,
   PhaseRepairReceiptState
 
-internal data class PhasePullRequestContext(
+public data class PhasePullRequestContext(
   val request: FeatureTaskRuntimeRunFacts,
   val gitOperations: PhaseRepositoryObservations,
   val diagnostics: RuntimeDiagnostics,
@@ -353,5 +353,5 @@ internal data class PhasePullRequestContext(
   val transitions: FeatureTaskRuntimeTransitionDeclaration,
   private val branch: FeatureTaskRuntimeResolvedBranch?,
 ) {
-  fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? = branch
+  public fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? = branch
 }

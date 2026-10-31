@@ -10,7 +10,7 @@ import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.skeleton.immutableStepLaunchAssignments
 import java.util.Collections
 
-data class PhaseStrategySelectionFacts(
+public data class PhaseStrategySelectionFacts(
   val definition: SkeletonDefinition,
   val values: Set<Enum<*>>,
   val stepAssignments: Map<String, StepLaunchAssignment> = emptyMap(),
@@ -19,15 +19,15 @@ data class PhaseStrategySelectionFacts(
     stepAssignments.forEach { (stepId, assignment) -> require(assignment.stepId == stepId) }
   }
 
-  fun copiedAssignments(): Map<String, StepLaunchAssignment> = immutableStepLaunchAssignments(stepAssignments)
+  internal fun copiedAssignments(): Map<String, StepLaunchAssignment> = immutableStepLaunchAssignments(stepAssignments)
 }
 
-sealed interface PhaseStrategyBinding {
-  val strategyIds: Set<String>
+public sealed interface PhaseStrategyBinding {
+  public val strategyIds: Set<String>
 
-  fun resolve(facts: PhaseStrategySelectionFacts): String?
+  public fun resolve(facts: PhaseStrategySelectionFacts): String?
 
-  data class Fixed(val strategyId: String) : PhaseStrategyBinding {
+  public data class Fixed(val strategyId: String) : PhaseStrategyBinding {
     init {
       if (strategyId.isBlank()) {
         throw InvalidPhaseStrategyCompositionError("fixed selection has a blank strategy identity")
@@ -39,7 +39,7 @@ sealed interface PhaseStrategyBinding {
     override fun resolve(facts: PhaseStrategySelectionFacts): String = strategyId
   }
 
-  class ByFact(ids: Map<out Enum<*>, String>) : PhaseStrategyBinding {
+  public class ByFact(ids: Map<out Enum<*>, String>) : PhaseStrategyBinding {
     private val ids: Map<Enum<*>, String> = Collections.unmodifiableMap(LinkedHashMap(ids))
 
     init {
@@ -62,7 +62,7 @@ sealed interface PhaseStrategyBinding {
   }
 }
 
-class PhaseStrategySelection(
+public class PhaseStrategySelection(
   registry: PhaseStrategyRegistry,
   bindings: Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>>,
 ) {
@@ -94,12 +94,12 @@ class PhaseStrategySelection(
     definition: SkeletonDefinition,
   ): Boolean = bindings[definition]?.get(slot) is PhaseStrategyBinding.ByFact
 
-  fun binds(
+  public fun binds(
     slot: PhaseSlot,
     facts: PhaseStrategySelectionFacts,
   ): Boolean = bindings[facts.definition]?.containsKey(slot) == true
 
-  fun strategyIdFor(
+  internal fun strategyIdFor(
     slot: PhaseSlot,
     facts: PhaseStrategySelectionFacts,
   ): String {

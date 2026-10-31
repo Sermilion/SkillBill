@@ -12,7 +12,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class RuntimeCommitStrategy : PhaseStrategy() {
+public class RuntimeCommitStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH to
@@ -60,8 +60,8 @@ class RuntimeCommitStrategy : PhaseStrategy() {
     }
   }
 
-  companion object {
-    const val ID = "runtime-commit"
+  public companion object {
+    public const val ID: String = "runtime-commit"
 
     private const val DIRECTIVE: String =
       "This phase does not launch an agent. The runtime stages every dirty non-ignored path. Feature-spec " +
