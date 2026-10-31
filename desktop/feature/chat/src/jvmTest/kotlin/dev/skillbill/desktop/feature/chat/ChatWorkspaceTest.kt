@@ -4,6 +4,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
 import dev.skillbill.desktop.core.domain.model.DetailSections
@@ -142,6 +143,57 @@ class ChatWorkspaceTest {
     Snapshot.sendApplyNotifications()
     runCurrent()
     assertNull(workspace.shownChatId.value)
+  }
+
+  @Test
+  fun `an action sends its exact instruction once and an older reply cannot execute it again`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val action = ChatSuggestedAction("File an issue", "File an issue describing this execution's failure.", ChatPermissionMode.ReadOnly)
+    chat.events = { flowOf(ChatEvent.TextDelta("I can file an issue."), ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val reply = assertIs<ChatMessage.Agent>(session.transcript.value.last())
+
+    workspace.executeAction(item.id, reply, action)
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+
+    assertEquals(2, chat.requests.size)
+    assertTrue(chat.requests.last().prompt.endsWith(action.instruction))
+    assertEquals(ChatPermissionMode.ReadOnly, chat.requests.last().mode)
+    assertEquals(listOf(ChatMessage.Operator(action.instruction)), session.transcript.value.filterIsInstance<ChatMessage.Operator>())
+    assertTrue(controls.calls.isEmpty())
+  }
+
+  @Test
+  fun `an act action pauses a running execution before sending its instruction and then resumes it`() = runTest {
+    val item = workItem("SKILL-1")
+    val header = MutableStateFlow(loaded(item))
+    details.details = mapOf(item.id to header)
+    val action = ChatSuggestedAction("Push with lease", "Push this execution's branch using a lease pinned to its verified remote tip.", ChatPermissionMode.Act)
+    chat.events = { flowOf(ChatEvent.TextDelta("I can push."), ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val reply = assertIs<ChatMessage.Agent>(workspace.session(item.id)!!.transcript.value.last())
+
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+    assertEquals(listOf("pauseNow"), controls.calls.map { it.control })
+    assertEquals(1, chat.requests.size)
+    header.value = loaded(item.copy(lifecycle = Lifecycle.Paused, running = false))
+    runCurrent()
+
+    assertEquals(2, chat.requests.size)
+    assertEquals(ChatPermissionMode.Act, chat.requests.last().mode)
+    assertTrue(chat.requests.last().prompt.startsWith(ACT_PREFIX))
+    assertTrue(chat.requests.last().prompt.endsWith(action.instruction))
+    assertEquals(listOf("pauseNow", "launch"), controls.calls.map { it.control })
   }
 
   @Test

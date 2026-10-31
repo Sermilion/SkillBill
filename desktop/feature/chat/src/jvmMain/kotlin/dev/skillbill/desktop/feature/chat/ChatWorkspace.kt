@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.Lifecycle
@@ -147,6 +148,16 @@ class ChatWorkspace(
     sessions.clear()
     drafts.clear()
     tabState.value = ChatTabsState()
+  }
+
+  fun executeAction(id: String, reply: ChatMessage.Agent, action: ChatSuggestedAction) {
+    val session = sessions[id] ?: return
+    if (session.transcript.value.lastOrNull() !== reply) return
+    if (reply.streaming || action !in reply.actions || !session.agentSupportedState.value || session.agentState.value == null) return
+    when (action.mode) {
+      ChatPermissionMode.ReadOnly -> send(id, action.instruction)
+      ChatPermissionMode.Act -> pauseAndAct(id, action.instruction)
+    }
   }
 
   /** Asks the agent about the execution, in the mode its state allows now; it never changes the execution. */

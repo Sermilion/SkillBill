@@ -1,3 +1,8 @@
+## [2026-10-31] Return executable chat suggestions as reply metadata
+Context: Operators want buttons for concrete actions proposed in an agent reply.
+Decision: The Claude adapter requests a trailing `skillbill-actions` fenced JSON array with at most three label, instruction and mode records. It hides metadata across stream chunks and emits typed suggestions only after a completed turn. Invalid metadata preserves the visible answer, produces no buttons and records `chat.actions_invalid`. A click is bound to the latest completed reply and sends its exact instruction through the existing send or pause-and-act path. Older, busy and unavailable suggestions cannot execute. Labels state when a running execution will pause.
+Reason: Typed suggestions give each button a specific instruction while retaining streamed Markdown answers. The workspace remains the owner of pause, act and resume behavior.
+
 ## [2026-10-31] Allow shell commands in chat act mode
 Context: The operator wants the chat agent to run shell commands for the selected execution.
 Decision: Act turns allow the Bash tool without command-prefix restrictions and tell the agent it can run shell commands. Running executions retain the existing read-only command allowlist. This supersedes the act-mode command restrictions in the earlier permission decision.

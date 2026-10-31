@@ -108,7 +108,9 @@ internal class ChatTurns(private val chat: ExecutionChatRepository, private val 
         }
         when (event) {
           is ChatEvent.TextDelta -> session.appendDelta(event.text)
-          is ChatEvent.ToolUse -> session.appendTool(event.name)
+          is ChatEvent.ToolUse -> session.appendTool(event.call)
+          is ChatEvent.ToolResult -> session.recordToolResult(event)
+          is ChatEvent.SuggestedActions -> session.suggestActions(event.actions)
           ChatEvent.Completed -> session.endStreaming()
           is ChatEvent.Failed -> {
             session.endStreaming()

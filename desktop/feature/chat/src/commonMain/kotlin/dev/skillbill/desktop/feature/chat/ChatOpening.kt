@@ -29,11 +29,13 @@ fun stateLine(item: WorkItem): String {
   }
 }
 
-fun openingInstruction(state: ExecutionState): String = when (state) {
-  ExecutionState.Blocked -> "Explain the block reason and propose concrete resolutions."
-  ExecutionState.Failed -> "Diagnose the failure and propose a fix."
-  ExecutionState.Stalled -> "Explain why the execution is stuck and how to get it moving."
-  ExecutionState.Running -> "Summarize progress so far and what happens next."
-  ExecutionState.Done -> "Review the outcome and point out anything that needs follow-up."
-  ExecutionState.Stopped -> "Summarize the current state and the next steps."
-}
+fun openingInstruction(state: ExecutionState): String =
+  "Keep your opening reply to 2 short sentences and at most 60 words. No headings, lists or detailed recap. " +
+    when (state) {
+      ExecutionState.Blocked -> "State the block reason and the best next action."
+      ExecutionState.Failed -> "State the failure and the best next action."
+      ExecutionState.Stalled -> "State why the execution is stuck and the best next action."
+      ExecutionState.Running -> "State what is running and what happens next."
+      ExecutionState.Done -> "State the outcome and any essential follow-up."
+      ExecutionState.Stopped -> "State the current status and the best next action."
+    }

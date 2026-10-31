@@ -39,6 +39,7 @@ class ClaudeChatTransport(
       environment = claudeEnvironment(host.variables, homes),
       stdin = request.prompt,
     )
+    val reply = ChatReplyStream(diagnostics)
     var streamStarted = false
     launcher.run(command).transformWhile { output ->
       // The login shell's profile can print to stdout before claude starts; only lines after the first JSON object are the stream.
@@ -58,7 +59,7 @@ class ClaudeChatTransport(
           listOf(ChatEvent.Failed(failure, output.stderrTail.takeLast(2000)))
         }
       }
-      for (event in events) {
+      for (event in events.flatMap(reply::accept)) {
         if (event is ChatEvent.Failed) diagnostics.record("chat.turn_failed")
         emit(event)
       }

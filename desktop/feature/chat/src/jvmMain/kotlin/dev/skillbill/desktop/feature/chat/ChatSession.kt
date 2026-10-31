@@ -1,6 +1,9 @@
 package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatToolCall
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.Job
@@ -39,7 +42,21 @@ class ChatSession internal constructor(internal var item: WorkItem, val sessionI
 
   internal fun appendDelta(text: String) = updateStreaming { it.copy(text = it.text + text) }
 
-  internal fun appendTool(name: String) = updateStreaming { it.copy(tools = it.tools + name) }
+  internal fun appendTool(call: ChatToolCall) = updateStreaming { message ->
+    val exists = message.tools.any { it.call.id == call.id }
+    message.copy(tools = if (exists) message.tools.map { if (it.call.id == call.id) it.copy(call = call) else it }
+      else message.tools + ChatToolEntry(call))
+  }
+
+  internal fun recordToolResult(result: ChatEvent.ToolResult) = messages.update { list ->
+    list.map { message ->
+      if (message is ChatMessage.Agent) message.copy(tools = message.tools.map {
+        if (it.call.id == result.callId) it.copy(result = result) else it
+      }) else message
+    }
+  }
+
+  internal fun suggestActions(actions: List<ChatSuggestedAction>) = updateStreaming { it.copy(actions = actions) }
 
   internal fun endStreaming() = messages.update { list ->
     val last = list.lastOrNull()

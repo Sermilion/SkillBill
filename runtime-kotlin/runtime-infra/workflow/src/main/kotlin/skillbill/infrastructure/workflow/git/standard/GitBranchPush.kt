@@ -13,6 +13,7 @@ import java.util.logging.Logger
 private val pushRecoveryLog = Logger.getLogger("skillbill.infrastructure.workflow.git.standard.GitBranchPush")
 private const val RECOVERY_PUSH_TIMEOUT_SECONDS = 45L
 private const val GIT_FATAL_EXIT_CODE = 128
+private const val REJECTED_MARKER = "[rejected]"
 
 internal fun gitPushBranch(
   repoRoot: Path,
@@ -61,9 +62,76 @@ private fun pushResolvedBranch(
       "git ${args.joinToString(" ")}: ${initial.failure}"
     }
   return if (!initial.timedOut && initial.readFailure == null && initial.exitCode != GIT_FATAL_EXIT_CODE) {
-    WorkflowGitOperationResult.Failed(initialError)
+    if (initial.output.contains(REJECTED_MARKER)) {
+      pushRewrittenHistory(branch, head.output.trim(), destination.output, initialError, execute)
+    } else {
+      WorkflowGitOperationResult.Failed(initialError)
+    }
   } else {
     recoverPush(branch, head.output.trim(), destination.output, initialError, execute)
+  }
+}
+
+/**
+ * A local rebase, amend, or squash of already-published commits makes the plain push non-fast-forward.
+ * Replace the remote only when its tip appears in the local branch reflog (git's `--force-if-includes`
+ * rule): the local side integrated that work before rewriting it. A remote commit the local branch never
+ * held, such as a concurrent repair push, keeps the rejection.
+ */
+private fun pushRewrittenHistory(
+  branch: String,
+  sha: String,
+  destinations: String,
+  initialError: String,
+  execute: (List<String>, Long) -> GitProcessResult,
+): WorkflowGitOperationResult {
+  val remote = integratedRemoteHead(branch, destinations, execute)
+  if (remote !is WorkflowGitOperationResult.Ok) {
+    return WorkflowGitOperationResult.Failed("$initialError ${remote.error}".trimEnd())
+  }
+  val args = listOf("push", "--force-with-lease=refs/heads/$branch:${remote.value}", "-u", "origin", branch)
+  val lease = execute(args, gitTimeoutSeconds(args))
+  val result =
+    when {
+      !lease.succeeded -> {
+        recordRecovery("failed", "rewrite_lease_push_failed")
+        WorkflowGitOperationResult.Failed("$initialError Lease push: ${lease.failure}")
+      }
+      !branchUnchanged(branch, sha, execute) ->
+        WorkflowGitOperationResult.Failed(
+          "$initialError Local branch moved during push; recovery preserved the new head.",
+        )
+      else -> WorkflowGitOperationResult.Ok(branch)
+    }
+  if (lease.succeeded) recordRecovery("lease_push", "local_history_rewritten")
+  return result
+}
+
+/** The remote tip when the local branch reflog holds it; a failure explains why a lease push is unsafe. */
+private fun integratedRemoteHead(
+  branch: String,
+  destinations: String,
+  execute: (List<String>, Long) -> GitProcessResult,
+): WorkflowGitOperationResult {
+  val destination = destinations.lineSequence().filter(String::isNotBlank).toList().singleOrNull()
+  if (ProtectedBranches.protectedName(branch) != null || destination == null) {
+    return WorkflowGitOperationResult.Failed("")
+  }
+  val remote = remoteHead(destination, branch, execute)
+  val remoteSha = (remote as? WorkflowGitOperationResult.Ok)?.value.orEmpty()
+  val reflog = execute(listOf("rev-list", "--walk-reflogs", "refs/heads/$branch"), GIT_TIMEOUT_SECONDS)
+  return when {
+    remoteSha.isBlank() -> {
+      recordRecovery("rejected", "rewrite_remote_unresolved")
+      WorkflowGitOperationResult.Failed("Remote verification: ${remote.description}.")
+    }
+    !reflog.succeeded || remoteSha !in reflog.output.lineSequence().map(String::trim) -> {
+      recordRecovery("rejected", "remote_commits_not_integrated")
+      WorkflowGitOperationResult.Failed(
+        "Remote head $remoteSha was never on local branch '$branch'; integrate it before pushing.",
+      )
+    }
+    else -> WorkflowGitOperationResult.Ok(remoteSha)
   }
 }
 

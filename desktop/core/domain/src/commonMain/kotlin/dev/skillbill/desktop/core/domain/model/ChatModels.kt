@@ -25,11 +25,19 @@ data class ChatTurnRequest(
   val prompt: String,
 )
 
+data class ChatSuggestedAction(val label: String, val instruction: String, val mode: ChatPermissionMode)
+
+data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?)
+
 /** What one turn streams back; a turn ends with [Completed] or [Failed]. */
 sealed interface ChatEvent {
   data class TextDelta(val text: String) : ChatEvent
 
-  data class ToolUse(val name: String) : ChatEvent
+  data class ToolUse(val call: ChatToolCall) : ChatEvent
+
+  data class ToolResult(val callId: String, val output: String, val isError: Boolean) : ChatEvent
+
+  data class SuggestedActions(val actions: List<ChatSuggestedAction>) : ChatEvent
 
   data object Completed : ChatEvent
 

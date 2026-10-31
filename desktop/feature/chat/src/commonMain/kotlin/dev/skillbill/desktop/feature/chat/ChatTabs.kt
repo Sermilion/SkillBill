@@ -1,7 +1,12 @@
 package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatToolCall
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.WorkKind
+
+data class ChatToolEntry(val call: ChatToolCall, val result: ChatEvent.ToolResult? = null)
 
 /** One line of a chat transcript. */
 sealed interface ChatMessage {
@@ -11,7 +16,7 @@ sealed interface ChatMessage {
   data class Operator(val text: String) : ChatMessage
 
   /** An agent answer; [streaming] while its turn runs, [tools] in the order the agent used them. */
-  data class Agent(val text: String, val streaming: Boolean, val tools: List<String>) : ChatMessage
+  data class Agent(val text: String, val streaming: Boolean, val tools: List<ChatToolEntry>, val actions: List<ChatSuggestedAction> = emptyList()) : ChatMessage
 
   data class Notice(val text: String) : ChatMessage
 
