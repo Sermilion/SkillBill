@@ -3,7 +3,6 @@ package dev.skillbill.desktop.feature.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,8 +24,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -51,6 +53,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import java.awt.Toolkit
+import kotlinx.coroutines.flow.filter
 import java.awt.datatransfer.StringSelection
 
 /** The chat's messages, oldest first; it follows the newest message, including a streaming answer as it grows. */
@@ -63,11 +66,20 @@ internal fun ChatTranscript(session: ChatSession, modifier: Modifier = Modifier,
   val agent by session.agent.collectAsState()
   val messages by session.transcript.collectAsState()
   val listState = rememberLazyListState()
-  val newest = messages.lastOrNull() as? ChatMessage.Agent
-  LaunchedEffect(messages.size, newest?.text, newest?.tools, newest?.actions, newest?.streaming) {
-    if (messages.isEmpty()) return@LaunchedEffect
-    listState.scrollToItem(messages.lastIndex)
-    listState.layoutInfo.visibleItemsInfo.lastOrNull()?.let { listState.scrollBy(it.size.toFloat()) }
+  // Follows the bottom until the operator scrolls away from it; scrolling back to the end resumes following.
+  var following by remember { mutableStateOf(true) }
+  LaunchedEffect(listState) {
+    snapshotFlow { listState.isScrollInProgress }.filter { !it }.collect { following = !listState.canScrollForward }
+  }
+  LaunchedEffect(messages.size) {
+    following = true
+    listState.scrollToEnd()
+  }
+  // Content can grow without a new message (streamed text, tool rows, rewrapping), so follow the height, not the keys.
+  LaunchedEffect(listState) {
+    snapshotFlow { listState.canScrollForward }.filter { it }.collect {
+      if (following && !listState.isScrollInProgress) listState.scrollToEnd()
+    }
   }
   LazyColumn(
     modifier.fillMaxWidth(),
@@ -80,6 +92,19 @@ internal fun ChatTranscript(session: ChatSession, modifier: Modifier = Modifier,
     }
   }
 }
+
+/** Jumps to the last item, then scrolls until its bottom edge is in view; each `scrollBy` remeasures, so no stale layout is read. */
+private suspend fun LazyListState.scrollToEnd() {
+  val last = layoutInfo.totalItemsCount - 1
+  if (last < 0) return
+  scrollToItem(last)
+  scroll {
+    repeat(MAX_END_SCROLL_STEPS) { if (scrollBy(END_SCROLL_STEP_PX) == 0f) return@scroll }
+  }
+}
+
+private const val END_SCROLL_STEP_PX = 10_000f
+private const val MAX_END_SCROLL_STEPS = 20
 
 @Composable
 private fun ChatMessageRow(
