@@ -20,6 +20,8 @@ import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
 import dev.nucleusframework.composenativetray.tray.api.Tray
+import dev.skillbill.desktop.app.display.DesktopUiScale
+import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.host.HostIntent
 import dev.skillbill.desktop.app.host.HostIntents
 import dev.skillbill.desktop.app.tray.macos.MacStatusItemBridge
@@ -36,13 +38,24 @@ import kotlinx.coroutines.withContext
 import java.awt.SystemTray
 
 @Composable
-fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailability, intents: HostIntents, mainVisible: Boolean, reducedMotion: Boolean, onQuit: () -> Unit) {
+fun ApplicationScope.TrayHost(
+  model: TrayViewModel,
+  availability: TrayAvailability,
+  intents: HostIntents,
+  uiScale: DesktopUiScale,
+  mainVisible: Boolean,
+  reducedMotion: Boolean,
+  onQuit: () -> Unit,
+) {
   val state by model.state.collectAsState()
   val available by availability.state.collectAsState()
   var visible by remember { mutableStateOf(false) }
   var opening by remember { mutableStateOf(false) }
   val scope = rememberCoroutineScope()
-  val windowState = rememberWindowState(size = DpSize(380.dp, 590.dp))
+  val mac = System.getProperty("os.name").contains("mac", true)
+  // The macOS popover takes its size and position from the status item in native points, so it keeps the platform density.
+  val popoverScale = if (mac) DesktopUiScale() else uiScale
+  val windowState = rememberWindowState(size = popoverScale.windowSize(DpSize(380.dp, 590.dp)))
   val placement = remember { TrayPopoverPlacement() }
   val density = LocalDensity.current.density.toDouble()
   val linux = System.getProperty("os.name").contains("linux", true)
@@ -66,7 +79,6 @@ fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailabili
   val running = loaded?.counts?.running ?: 0
   val goals = loaded?.goals.orEmpty()
   val phases = loaded?.let { it.livePhases + it.finishedPhases + it.liveOperations + it.finishedOperations }.orEmpty()
-  val mac = System.getProperty("os.name").contains("mac", true)
   if (!available.probeComplete || available.available) if (mac) NativeTrayHost.MacStatusItem(status, running, goals, phases,
     onPrimary = { scope.launch(Dispatchers.Main) {
       availability.available()
@@ -139,16 +151,18 @@ fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailabili
     resizable = false,
     state = windowState,
   ) {
-    SkillBillTheme(reducedMotion) {
-      // The 380 dp transparent window leaves 10 dp around the 360 dp popover for its shadow.
-      Box(Modifier.fillMaxSize().padding(10.dp)) {
-        TrayPopoverContent(
-          state,
-          onAction = model::onAction,
-          onOpen = { intents.send(HostIntent.ShowMain); visible = false },
-          onSettings = { intents.send(HostIntent.OpenSettings); visible = false },
-          onQuit = onQuit,
-        )
+    DesktopUiScaleProvider(popoverScale) {
+      SkillBillTheme(reducedMotion) {
+        // The 380 dp transparent window leaves 10 dp around the 360 dp popover for its shadow.
+        Box(Modifier.fillMaxSize().padding(10.dp)) {
+          TrayPopoverContent(
+            state,
+            onAction = model::onAction,
+            onOpen = { intents.send(HostIntent.ShowMain); visible = false },
+            onSettings = { intents.send(HostIntent.OpenSettings); visible = false },
+            onQuit = onQuit,
+          )
+        }
       }
     }
   }

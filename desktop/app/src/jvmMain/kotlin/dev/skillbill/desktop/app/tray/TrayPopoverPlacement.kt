@@ -4,6 +4,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPosition
 import dev.nucleusframework.composenativetray.utils.TrayClickTracker
+import dev.skillbill.desktop.app.display.readKwinXwaylandScale
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -19,7 +20,6 @@ import java.awt.Rectangle
 import java.awt.Toolkit
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.Files
 import kotlin.math.roundToInt
 
 fun trayIconAnchor(): Point {
@@ -71,33 +71,6 @@ private fun awtTrayAnchor(raw: Point, screens: List<Rectangle>, environment: Map
 }
 
 private fun queryKdeDisplayLayout(): String? = KdeDisplayLayout().query()
-
-private fun readKwinXwaylandScale(path: Path): Float? {
-  if (!Files.exists(path)) return null
-  var inSection = false
-  return try {
-    Files.readAllLines(path).firstNotNullOfOrNull { line ->
-      val value = line.trim()
-      when {
-        value.startsWith("[") && value.endsWith("]") -> { inSection = value == "[Xwayland]"; null }
-        inSection && value.substringBefore("=", "").trim() == "Scale" -> parseScale(value.substringAfter("=", "").trim())
-        else -> null
-      }
-    }
-  } catch (_: Exception) {
-    TrayDiagnostics.record("tray_kde_xwayland_scale_unavailable")
-    null
-  }
-}
-
-private fun parseScale(value: String): Float? {
-  val percent = value.endsWith("%")
-  val number = value.removeSuffix("%").removeSuffix("x").removeSuffix("X").trim().toFloatOrNull() ?: return null
-  return when {
-    percent || number > 10f -> number / 100f
-    else -> number
-  }
-}
 
 internal fun mapKdeTrayAnchor(raw: Point, layout: String, screens: List<Rectangle>, xwaylandScale: Float): Point {
   val output = Json.parseToJsonElement(layout).jsonObject.getValue("outputs").jsonArray
