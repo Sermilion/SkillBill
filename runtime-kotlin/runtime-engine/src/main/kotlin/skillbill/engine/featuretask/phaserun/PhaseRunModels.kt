@@ -163,7 +163,7 @@ public data class InMemoryPhaseRunFacts(
   override val reviewInvocation: ReviewInvocation = request.reviewInvocation
   override val phaseInstructions: PhaseInstructions? = request.instructions
   override val qaExecution: QaExecutionContext? = request.qaExecution
-  override val goalHistoryWriterInput = request.goalHistoryWriterInput
+  override val goalHistoryWriterInput: GoalHistoryWriterInput? = request.goalHistoryWriterInput
   override val goalQualityAutomaticRecovery: Boolean = request.goalQualityPhaseProgress != null
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = request.acceptedGoalQualityExecutionPlan
   override val qaOutcomeWorkflowId: String = request.goalQualityInvocationId?.let { "$workflowId:$it" } ?: workflowId

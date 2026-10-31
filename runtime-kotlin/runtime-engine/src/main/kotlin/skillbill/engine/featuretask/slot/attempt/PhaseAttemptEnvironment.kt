@@ -308,7 +308,7 @@ public open class PhaseAttemptSettlementScope internal constructor(
   override val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry
     get() = boundHost.lifecycleTelemetry
 
-  override val clock
+  override val clock: Clock
     get() = boundHost.clock
 
   override val diagnostics: RuntimeDiagnostics

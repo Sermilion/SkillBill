@@ -2,9 +2,9 @@ package skillbill.engine.work.observation.model
 
 import java.time.Instant
 
-class WorkObservationRegistration internal constructor(
-  val nextLeaseExpiry: Instant?,
+public class WorkObservationRegistration internal constructor(
+  public val nextLeaseExpiry: Instant?,
   private val registrations: List<AutoCloseable>,
 ) : AutoCloseable {
-  override fun close() = registrations.forEach { it.close() }
+  override fun close(): Unit = registrations.forEach { it.close() }
 }

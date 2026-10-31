@@ -34,7 +34,7 @@ import java.time.Duration
 import java.time.Instant
 
 @Inject
-class ProductReportDelivery(
+public class ProductReportDelivery(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val tracker: ProductIssueTrackerPort,
@@ -44,7 +44,7 @@ class ProductReportDelivery(
   private val runtimeFacts: ProductReportRuntimeFactsCollector,
   private val ownership: ProductReportDeliveryOwnershipPort,
 ) {
-  fun deliver(limit: Int = BATCH_LIMIT) {
+  internal fun deliver(limit: Int = BATCH_LIMIT) {
     val batchSize = limit.coerceIn(1, BATCH_LIMIT)
     val candidates =
       catchingNonCancellation {
@@ -691,7 +691,7 @@ class ProductReportDelivery(
     return ProductReportPendingComment(draft.body, sha256HexUtf8(draft.body), represented)
   }
 
-  fun recoverySettled(
+  internal fun recoverySettled(
     attempt: BlockIncidentRecoveryAttempt,
     dispatch: Boolean = true,
   ) {

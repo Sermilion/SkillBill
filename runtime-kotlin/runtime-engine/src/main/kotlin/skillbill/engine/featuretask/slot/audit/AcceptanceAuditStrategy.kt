@@ -39,7 +39,7 @@ public class AcceptanceAuditStrategy :
   PhaseVerdictCapability {
   private val policies: Map<String, PhaseStepPolicy> = ACCEPTANCE_AUDIT_POLICIES
 
-  override val acceptanceRepairSteps =
+  override val acceptanceRepairSteps: AcceptanceCriterionRepairStepRoles =
     AcceptanceCriterionRepairStepRoles(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,

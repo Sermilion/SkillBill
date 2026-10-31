@@ -22,12 +22,12 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 import java.nio.file.Path
 
 @Inject
-class WorkControlRecovery(
+public class WorkControlRecovery(
   private val status: IdeStatusService,
   private val recovery: BlockIncidentRecoveryService,
   private val runs: WorkRunActions,
 ) {
-  fun preview(
+  internal fun preview(
     workId: String,
     incidentToken: String,
     confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
@@ -38,7 +38,7 @@ class WorkControlRecovery(
     return preview(target, incidentToken, confirmedPrerequisites)
   }
 
-  fun recover(
+  internal fun recover(
     workId: String,
     incidentToken: String,
     incidentRevision: Long,
@@ -83,7 +83,7 @@ class WorkControlRecovery(
       else -> WorkIncidentRecoveryOutcome.Accepted
     }
 
-  fun preview(
+  internal fun preview(
     target: WorkRunTarget,
     incidentToken: String,
     confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
@@ -108,7 +108,7 @@ class WorkControlRecovery(
     }
   }
 
-  fun recover(
+  internal fun recover(
     target: WorkRunTarget,
     incidentToken: String,
     incidentRevision: Long,

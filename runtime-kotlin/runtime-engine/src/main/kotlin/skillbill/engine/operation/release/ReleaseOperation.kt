@@ -17,7 +17,7 @@ import skillbill.ports.operation.model.ReleaseBuildReadiness
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
-class ReleaseOperation(
+public class ReleaseOperation(
   private val gitOperations: WorkflowGitOperations,
   private val buildGate: ReleaseBuildGate,
 ) : ConfirmableOperation,

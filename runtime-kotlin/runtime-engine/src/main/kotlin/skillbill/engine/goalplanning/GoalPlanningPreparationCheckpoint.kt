@@ -18,13 +18,13 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 @Inject
-class GoalPlanningPreparationCheckpoint(
+public class GoalPlanningPreparationCheckpoint(
   private val database: DatabaseSessionFactory,
   envelopeValidator: FeatureTaskRuntimeWireArtifactValidator,
 ) {
   private val gate = GoalPlanningPreparationProjectionGate(envelopeValidator)
 
-  fun findStoredSubtaskPlan(
+  internal fun findStoredSubtaskPlan(
     identity: GoalPlanningIdentity,
     subtaskId: Int,
     governedSubSpecPath: String,
@@ -33,13 +33,13 @@ class GoalPlanningPreparationCheckpoint(
       it.goalPlanningPreparations.findSubtaskPlan(identity, subtaskId, governedSubSpecPath)
     }.planOrThrow()
 
-  fun findSharedPreplan(identity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? =
+  internal fun findSharedPreplan(identity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? =
     when (val result = findSharedPreplanResult(identity)) {
       is SharedGoalPreplanLookupResult.Found -> result.checkpoint
       is SharedGoalPreplanLookupResult.Conflicted -> throw result.conflict.toFailure()
     }
 
-  fun findSharedPreplanResult(identity: GoalPlanningIdentity): SharedGoalPreplanLookupResult =
+  internal fun findSharedPreplanResult(identity: GoalPlanningIdentity): SharedGoalPreplanLookupResult =
     when (val result = database.read { it.goalPlanningPreparations.findSharedPreplan(identity) }) {
       is SharedGoalPreplanLookupResult.Found ->
         SharedGoalPreplanLookupResult.Found(
@@ -50,7 +50,7 @@ class GoalPlanningPreparationCheckpoint(
       is SharedGoalPreplanLookupResult.Conflicted -> result
     }
 
-  fun findSubtaskPlan(
+  internal fun findSubtaskPlan(
     identity: GoalPlanningIdentity,
     subtaskId: Int,
     governedSubSpecPath: String,
@@ -60,7 +60,7 @@ class GoalPlanningPreparationCheckpoint(
     }.planOrThrow()?.also(gate::validateSubtaskPlan)
 }
 
-class GoalPlanningPreparationProjectionGate(
+internal class GoalPlanningPreparationProjectionGate(
   private val envelopeValidator: FeatureTaskRuntimeWireArtifactValidator,
 ) {
   fun validateSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {

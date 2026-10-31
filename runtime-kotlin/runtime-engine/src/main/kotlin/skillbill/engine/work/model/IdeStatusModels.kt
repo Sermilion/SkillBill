@@ -8,7 +8,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import java.nio.file.Path
 import java.time.Instant
 
-enum class IdeStatusSelectionTier {
+internal enum class IdeStatusSelectionTier {
   ACTIVE,
   PAUSED,
   BLOCKED,
@@ -20,7 +20,7 @@ enum class IdeStatusSelectionTier {
   val rank: Int get() = ordinal
 }
 
-data class IdeStatusCandidate(
+internal data class IdeStatusCandidate(
   val workflowId: String,
   val workflowFamily: IdeStatusWorkflowFamily,
   val issueKey: String?,
@@ -35,7 +35,7 @@ data class IdeStatusCandidate(
   val standaloneStatus: StandalonePhaseStatusRecord? = null,
 )
 
-sealed class IdeStatusRepositoryResolution {
+internal sealed class IdeStatusRepositoryResolution {
   data class Ok(
     val identity: String,
     val repoRoot: Path,
@@ -47,7 +47,7 @@ sealed class IdeStatusRepositoryResolution {
   data class Missing(val message: String) : IdeStatusRepositoryResolution()
 }
 
-data class IdeStatusRequest(
+public data class IdeStatusRequest(
   val repoRoot: String,
   val observedAt: Instant? = null,
 ) {
@@ -56,7 +56,7 @@ data class IdeStatusRequest(
   }
 }
 
-data class IdeStatusResult(
+public data class IdeStatusResult(
   val snapshot: IdeStatusSnapshot,
   val exitCode: Int,
   val queryWork: IdeStatusQueryWorkReport = IdeStatusQueryWorkReport.NONE,

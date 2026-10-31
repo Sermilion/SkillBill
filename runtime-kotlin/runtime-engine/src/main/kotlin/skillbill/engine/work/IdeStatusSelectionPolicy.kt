@@ -12,7 +12,7 @@ import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import java.time.Duration
 import java.time.Instant
 
-object IdeStatusSelectionPolicy {
+internal object IdeStatusSelectionPolicy {
   private const val LIVE_RETENTION_HOURS = 24L
   private const val BLOCKED_RETENTION_HOURS = 24L
   private const val SETTLED_RETENTION_HOURS = 6L
@@ -180,7 +180,7 @@ object IdeStatusSelectionPolicy {
     }
 }
 
-object IdeStatusFreshnessClassifier {
+internal object IdeStatusFreshnessClassifier {
   private const val FRESH_WINDOW_MINUTES = 30L
   val FRESH_WINDOW: Duration = Duration.ofMinutes(FRESH_WINDOW_MINUTES)
 

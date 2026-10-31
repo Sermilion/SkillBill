@@ -27,24 +27,24 @@ import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Produces a diagnosis for one claimed block incident without changing its observation. */
-fun interface BlockIncidentInvestigator {
+public fun interface BlockIncidentInvestigator {
   /**
    * Returns the terminal diagnosis state and the diagnosis record to persist for [claimed]. [workerDegradations]
    * carries what the worker observed before the investigation started, and the record must include them.
    */
-  fun investigate(
+  public fun investigate(
     claimed: BlockIncident,
     workerDegradations: Set<BlockIncidentDegradation>,
   ): BlockIncidentInvestigationResult
 }
 
-data class BlockIncidentInvestigationResult(
+public data class BlockIncidentInvestigationResult(
   val diagnosis: BlockIncidentDiagnosis,
   val record: BlockIncidentDiagnosisRecord,
 )
 
 @Inject
-class BlockIncidentInvestigationWorker(
+public class BlockIncidentInvestigationWorker(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val investigator: BlockIncidentInvestigator,
@@ -56,7 +56,7 @@ class BlockIncidentInvestigationWorker(
   private val reportDelivery: ProductReportDelivery?,
   private val telemetry: BlockIncidentTelemetryPort?,
 ) {
-  fun runEligible(
+  internal fun runEligible(
     limit: Int,
     observedSince: Instant? = null,
     dispatchReports: Boolean = true,

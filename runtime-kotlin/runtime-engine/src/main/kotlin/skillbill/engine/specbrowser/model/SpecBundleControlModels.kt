@@ -1,6 +1,6 @@
 package skillbill.engine.specbrowser.model
 
-enum class SpecBundleRunState {
+public enum class SpecBundleRunState {
   NOT_STARTED,
   RUNNING,
   PAUSE_REQUESTED,
@@ -11,7 +11,7 @@ enum class SpecBundleRunState {
   UNAVAILABLE,
 }
 
-data class SpecBundleControl(
+public data class SpecBundleControl(
   val issueKey: String?,
   val runState: SpecBundleRunState,
   val everStarted: Boolean,

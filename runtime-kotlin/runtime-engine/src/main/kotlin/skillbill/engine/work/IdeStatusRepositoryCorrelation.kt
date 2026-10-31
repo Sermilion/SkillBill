@@ -11,7 +11,7 @@ import skillbill.ports.work.model.WorkItem
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Path
 
-class IdeStatusRepositoryCorrelation(
+internal class IdeStatusRepositoryCorrelation(
   private val unitOfWork: UnitOfWork,
   private val repositoryIdentity: String,
 ) {

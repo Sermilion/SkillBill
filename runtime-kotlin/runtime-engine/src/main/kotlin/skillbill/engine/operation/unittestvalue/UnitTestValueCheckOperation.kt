@@ -13,7 +13,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import java.nio.file.Path
 
-class UnitTestValueCheckOperation(
+public class UnitTestValueCheckOperation(
   private val gitOperations: WorkflowGitOperations,
 ) : Operation {
   override val id: String = "unit-test-value-check"

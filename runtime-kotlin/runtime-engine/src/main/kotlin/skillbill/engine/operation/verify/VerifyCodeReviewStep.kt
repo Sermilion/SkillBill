@@ -27,14 +27,14 @@ import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 /** The multi-agent review the delegated mode runs; production wires `ParallelCodeReviewRunner.run`. */
-interface VerifyDelegatedReviewer {
-  fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome
+public interface VerifyDelegatedReviewer {
+  public fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome
 
-  fun inlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
+  public fun inlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
 }
 
 @Inject
-class ParallelVerifyReviewer(
+public class ParallelVerifyReviewer(
   private val reviewRunner: ParallelCodeReviewRunner,
 ) : VerifyDelegatedReviewer {
   override fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome = reviewRunner.run(request)

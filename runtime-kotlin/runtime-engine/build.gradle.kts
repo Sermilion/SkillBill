@@ -4,6 +4,10 @@ plugins {
   `java-test-fixtures`
 }
 
+kotlin {
+  explicitApi()
+}
+
 dependencies {
   api(project(":runtime-contracts"))
   api(project(":runtime-domain"))

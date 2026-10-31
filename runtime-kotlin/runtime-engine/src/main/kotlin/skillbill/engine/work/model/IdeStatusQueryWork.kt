@@ -1,6 +1,6 @@
 package skillbill.engine.work.model
 
-class IdeStatusQueryWork {
+internal class IdeStatusQueryWork {
   private var statements = 0
   private var rowsRead = 0
   private var pages = 0
@@ -29,14 +29,14 @@ class IdeStatusQueryWork {
     IdeStatusQueryWorkReport(statements, rowsRead, pages, retries, budgetExhausted)
 }
 
-data class IdeStatusQueryWorkReport(
+public data class IdeStatusQueryWorkReport(
   val statements: Int,
   val rowsRead: Int,
   val pages: Int,
   val retries: Int,
   val budgetExhausted: Boolean,
 ) {
-  companion object {
+  internal companion object {
     val NONE = IdeStatusQueryWorkReport(0, 0, 0, 0, false)
   }
 }

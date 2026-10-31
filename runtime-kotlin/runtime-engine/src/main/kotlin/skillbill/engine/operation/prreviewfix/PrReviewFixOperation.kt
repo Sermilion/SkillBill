@@ -27,7 +27,7 @@ import skillbill.ports.review.pullrequest.model.ReviewThreadListing
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.gitops.ProtectedBranches
 
-class PrReviewFixOperation(
+public class PrReviewFixOperation(
   private val reviewThreads: PullRequestReviewThreadOperations,
   private val gitOperations: WorkflowGitOperations,
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
@@ -35,7 +35,7 @@ class PrReviewFixOperation(
 ) : ConfirmableOperation,
   OperationPrecheck,
   ConfirmAdmission {
-  constructor(
+  public constructor(
     reviewThreads: PullRequestReviewThreadOperations,
     gitOperations: WorkflowGitOperations,
     runPhase: (PhaseRunRequest) -> PhaseRunResult,

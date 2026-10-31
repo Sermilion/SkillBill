@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepB
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
+import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
@@ -41,6 +42,7 @@ import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ParallelReviewLaneRunResult
@@ -50,6 +52,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -71,7 +74,7 @@ public class InMemoryPhaseRunState(
     GoalQualityPhaseRunSettlements(records)
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
   override var commitPushManifestCompletion: CommitPushManifestCompletion? = null
-  override val diagnostics get() = telemetry.diagnostics
+  override val diagnostics: RuntimeDiagnostics get() = telemetry.diagnostics
 
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
@@ -93,7 +96,7 @@ public class InMemoryPhaseRunState(
 
   override fun strategyFor(stepId: String): PhaseStrategy = strategies.strategyFor(stepId, executionPlan)
 
-  override fun runnerFor(stepId: String) = strategies.runnerFor(stepId, executionPlan)
+  override fun runnerFor(stepId: String): PhaseRunner = strategies.runnerFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
@@ -103,7 +106,7 @@ public class InMemoryPhaseRunState(
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
-  override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
+  override fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? = executionPlan.stepLaunchAssignments[stepId]
 
   override val launchPromptContext: String = ""
 

@@ -4,7 +4,7 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import java.nio.file.Path
 import java.time.Instant
 
-data class WorkRunTarget(
+public data class WorkRunTarget(
   val id: String,
   val repositoryIdentity: String,
   val repositoryRoot: Path,
@@ -14,7 +14,7 @@ data class WorkRunTarget(
   val databaseFileObservation: DatabaseFileObservation,
 )
 
-data class WorkRunOptions(
+public data class WorkRunOptions(
   val canCancel: Boolean,
   val canLaunch: Boolean,
   val launchLabel: String,

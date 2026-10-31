@@ -16,12 +16,12 @@ import skillbill.engine.operation.core.applyStoredProposal
 import skillbill.engine.operation.core.missingIntake
 import skillbill.engine.operation.core.proposeFromStep
 
-class FeatureGuardCleanupOperation(
+public class FeatureGuardCleanupOperation(
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
   private val modelAssignmentSource: () -> FeatureTaskRuntimeModelAssignment,
 ) : ConfirmableOperation,
   OperationPrecheck {
-  constructor(
+  public constructor(
     runPhase: (PhaseRunRequest) -> PhaseRunResult,
     modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
   ) : this(runPhase, { modelAssignment })

@@ -47,7 +47,7 @@ import java.nio.file.Path
 import java.time.Clock
 
 @Inject
-class VerifyOperation(
+public class VerifyOperation(
   private val workflows: WorkflowService,
   private val gitOperations: WorkflowGitOperations,
   private val pullRequests: PullRequestReviewThreadOperations,

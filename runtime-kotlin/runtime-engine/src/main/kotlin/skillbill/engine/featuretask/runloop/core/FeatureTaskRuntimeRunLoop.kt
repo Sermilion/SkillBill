@@ -12,10 +12,12 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledProgress
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
@@ -43,7 +45,9 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
+import java.time.Clock
 
 public class FeatureTaskRuntimeRunLoopContext internal constructor(
   override val request: FeatureTaskRuntimeRunFacts,
@@ -60,10 +64,10 @@ public class FeatureTaskRuntimeRunLoopContext internal constructor(
 ) : PhaseRunLoopAttemptCollaborators {
   internal val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = runState.commitPushManifestCompletion
-  override val progress get() = runState.coupledProgress().progressSnapshot
+  override val progress: FeatureTaskRuntimeProgressSnapshotAccess get() = runState.coupledProgress().progressSnapshot
 
   internal val state: FeatureTaskRuntimeRunState get() = runState.coupledProgress()
-  override val session get() = runState.coupledSession().sessionSnapshot()
+  override val session: FeatureTaskRuntimeRunSessionObservations get() = runState.coupledSession().sessionSnapshot()
   override val observability: FeatureTaskRuntimeRunObservability get() = runState.telemetry
   override val recorder: PhaseRunRecords get() = runState.records
   override val transitions: FeatureTaskRuntimeTransitionDeclaration get() = runState.transitions
@@ -73,10 +77,10 @@ public class FeatureTaskRuntimeRunLoopContext internal constructor(
   override val phaseSettlementService: PhaseRunSettlements get() = runState.settlements
   override val checkpoints: PhaseRunCheckpoints get() = runState.checkpoints
   override val diagnostics: RuntimeDiagnostics get() = runState.diagnostics
-  override val clock get() = runState.clock
+  override val clock: Clock get() = runState.clock
   override val specSource: SpecSource get() = runState.specSource
 
-  override val coupledRunTransitions get() = runState.coupledRunTransitions
+  override val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner get() = runState.coupledRunTransitions
 
   internal fun hasLeftSlot(slot: PhaseSlot): Boolean =
     transitions.forwardPhaseIds.any { stepId ->
@@ -137,7 +141,7 @@ public class FeatureTaskRuntimeRunLoopContext internal constructor(
 
   internal fun stepHooks(run: PhaseRun): PhaseStepHooks<*> = strategyFor(run.phaseId).stepHooks(run.phaseId)
 
-  override fun acceptedStepPolicy(stepId: String) =
+  override fun acceptedStepPolicy(stepId: String): PhaseStepPolicy =
     runState.selectedOwnerOf(stepId)?.policyFor(stepId)
       ?: error("Step '$stepId' is not in the accepted execution plan.")
 

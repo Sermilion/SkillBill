@@ -43,7 +43,7 @@ import java.nio.file.Path
 import java.time.Clock
 
 @Inject
-class WorkRunActions(
+public class WorkRunActions(
   private val database: DatabaseSessionFactory,
   private val status: IdeStatusService,
   private val goals: GoalRunnerStatusService,
@@ -55,7 +55,7 @@ class WorkRunActions(
   private val environment: EnvironmentContext,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
-  fun startGoal(
+  internal fun startGoal(
     repoRoot: Path,
     issueKey: String,
     agentId: String?,
@@ -92,7 +92,7 @@ class WorkRunActions(
     }
   }
 
-  fun launch(
+  internal fun launch(
     target: WorkRunTarget,
     agentId: String?,
   ): WorkControlResult {

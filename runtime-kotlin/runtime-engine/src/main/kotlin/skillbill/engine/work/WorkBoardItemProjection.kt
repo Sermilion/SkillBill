@@ -66,7 +66,7 @@ import java.time.Instant
 import java.util.Locale
 
 @Inject
-class WorkBoardItemProjection(
+public class WorkBoardItemProjection(
   private val projector: IdeStatusProjector,
   private val ideStatusValidator: IdeStatusValidator,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -607,7 +607,7 @@ internal sealed interface WorkDetailMatch {
 }
 
 @Inject
-class WorkBoardReadModelProjection(
+public class WorkBoardReadModelProjection(
   private val projection: WorkBoardItemProjection,
   private val diagnostics: RuntimeDiagnostics,
 ) : WorkBoardReadModelProjector {

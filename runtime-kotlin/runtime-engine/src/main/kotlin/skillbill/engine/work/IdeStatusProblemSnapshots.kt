@@ -8,7 +8,7 @@ import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import java.time.Instant
 
-object IdeStatusProblemSnapshots {
+internal object IdeStatusProblemSnapshots {
   fun invalidRepositoryInput(
     observedAt: Instant,
     message: String,

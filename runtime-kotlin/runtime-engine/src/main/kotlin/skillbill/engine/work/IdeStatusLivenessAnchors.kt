@@ -10,7 +10,7 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.WorkflowStatus
 import java.time.Instant
 
-class IdeStatusLivenessAnchors(
+internal class IdeStatusLivenessAnchors(
   private val unitOfWork: UnitOfWork,
 ) {
   fun lifecycle(

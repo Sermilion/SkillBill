@@ -12,7 +12,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 
 @Inject
-class BlockIncidentRecoveryActions(
+public class BlockIncidentRecoveryActions(
   private val goalWrites: WorkflowGoalRunnerBlockWrites,
   private val standaloneRecovery: FeatureTaskRuntimeStandaloneIncidentRecovery,
 ) {

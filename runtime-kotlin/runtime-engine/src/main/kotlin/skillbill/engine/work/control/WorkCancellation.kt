@@ -33,7 +33,7 @@ import java.time.Clock
 import java.time.Duration
 
 @Inject
-class WorkCancellation(
+public class WorkCancellation(
   private val database: DatabaseSessionFactory,
   private val status: IdeStatusService,
   private val goals: GoalRunnerStatusService,
@@ -41,7 +41,7 @@ class WorkCancellation(
   private val clock: Clock,
   private val launcher: WorkRunLauncher,
 ) {
-  fun cancel(target: WorkRunTarget): WorkControlResult {
+  public fun cancel(target: WorkRunTarget): WorkControlResult {
     val item =
       database.read { matchingRun(status, target) }
         ?: return WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)

@@ -73,7 +73,7 @@ internal sealed interface BlockIncidentProjectionAssessment {
 }
 
 @Inject
-class BlockIncidentRecoveryService(
+public class BlockIncidentRecoveryService(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val executionPlanValidator: FeatureTaskRuntimeExecutionPlanValidator,

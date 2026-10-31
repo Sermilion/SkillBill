@@ -7,7 +7,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryF
 import java.nio.file.Path
 import java.time.Instant
 
-data class WorkControlTarget(
+public data class WorkControlTarget(
   val workflowId: String,
   val repositoryIdentity: String,
   val repositoryRoot: Path,
@@ -23,9 +23,9 @@ data class WorkControlTarget(
   val databaseFileObservation: DatabaseFileObservation? = null,
 )
 
-enum class WorkControlAction { PAUSE, STOP, CANCEL, LAUNCH, RECOVER }
+public enum class WorkControlAction { PAUSE, STOP, CANCEL, LAUNCH, RECOVER }
 
-enum class WorkControlRejection {
+public enum class WorkControlRejection {
   UNKNOWN_TARGET,
   CHANGED_TARGET,
   INELIGIBLE_TARGET,
@@ -45,32 +45,32 @@ enum class WorkControlRejection {
   RECOVERY_IN_PROGRESS,
 }
 
-sealed interface WorkControlResult {
+public sealed interface WorkControlResult {
   /** The request was admitted; it makes no claim about the lifecycle of the controlled process. */
-  data object Accepted : WorkControlResult
+  public data object Accepted : WorkControlResult
 
   /** A goal pause is durably recorded. The goal runner honours it at its next checkpoint; nothing has stopped yet. */
-  data object IntentRecorded : WorkControlResult
+  public data object IntentRecorded : WorkControlResult
 
   /** A goal stop was recorded and the goal runner's process was confirmed to have exited. */
-  data object ExitConfirmed : WorkControlResult
+  public data object ExitConfirmed : WorkControlResult
 
   /**
    * A goal stop was recorded and a termination signal was sent, but the runner's exit could not be confirmed because
    * its process identity changed after the signal. The runner may still be running.
    */
-  data object TerminationAttempted : WorkControlResult
+  public data object TerminationAttempted : WorkControlResult
 
-  data class LaunchFailed(val reason: String) : WorkControlResult
+  public data class LaunchFailed(val reason: String) : WorkControlResult
 
   /** [detail] carries the typed recovery reason behind RECOVERY_UNAVAILABLE and PREREQUISITE_UNMET. */
-  data class Rejected(val reason: WorkControlRejection, val detail: String? = null) : WorkControlResult
+  public data class Rejected(val reason: WorkControlRejection, val detail: String? = null) : WorkControlResult
 
   /**
    * A block incident recovery attempt reached [status]. [launch] is the resumed run's launch result, null when the
    * attempt failed or settled before this request could resume it.
    */
-  data class Recovered(
+  public data class Recovered(
     val attemptId: String,
     val status: BlockIncidentRecoveryAttemptStatus,
     val failure: BlockIncidentRecoveryFailure?,

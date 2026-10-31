@@ -37,12 +37,12 @@ private val RECOVERING_ATTEMPTS =
   )
 
 @Inject
-class WorkIncidentProjectionBuilder(
+public class WorkIncidentProjectionBuilder(
   private val recovery: BlockIncidentRecoveryService,
   private val telemetry: BlockIncidentTelemetryPort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun build(
+  internal fun build(
     unit: UnitOfWork,
     workflowId: String?,
     invocationId: String?,

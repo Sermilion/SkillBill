@@ -10,17 +10,17 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
 /** The verify run's telemetry, under the `bill-feature-verify` labels; no method may fail the run. */
-interface VerifyTelemetry {
+public interface VerifyTelemetry {
   /** Records `feature_verify_started`; the returned session id is blank when nothing was recorded. */
-  fun started(request: FeatureVerifyStartedRequest): String
+  public fun started(request: FeatureVerifyStartedRequest): String
 
-  fun finished(request: FeatureVerifyFinishedRequest)
+  public fun finished(request: FeatureVerifyFinishedRequest): Unit
 
   /** Imports the code-review register as an orchestrated child review and triages it with no decisions. */
-  fun reviewImported(reviewText: String)
+  public fun reviewImported(reviewText: String): Unit
 }
 
-class ServiceVerifyTelemetry(
+public class ServiceVerifyTelemetry(
   private val lifecycle: LifecycleTelemetryService,
   private val reviews: ReviewService,
   private val telemetry: TelemetryService,
@@ -31,13 +31,12 @@ class ServiceVerifyTelemetry(
       lifecycle.featureVerifyStarted(request).toPayload()["session_id"]?.toString().orEmpty()
     }
 
-  override fun finished(request: FeatureVerifyFinishedRequest) =
+  override fun finished(request: FeatureVerifyFinishedRequest): Unit =
     isolate("finished", Unit) {
       lifecycle.featureVerifyFinished(request)
-      Unit
     }
 
-  override fun reviewImported(reviewText: String) =
+  override fun reviewImported(reviewText: String): Unit =
     isolate("review import", Unit) {
       if (!telemetry.isEnabled()) return@isolate
       val imported = reviews.importReview("-", finishZeroFindingTelemetry = false, stdinText = reviewText)

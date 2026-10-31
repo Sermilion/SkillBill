@@ -1,6 +1,6 @@
 package skillbill.engine.operation.release
 
-enum class ReleaseBump(val wireValue: String) {
+internal enum class ReleaseBump(val wireValue: String) {
   PATCH("patch"),
   MINOR("minor"),
   MAJOR("major"),

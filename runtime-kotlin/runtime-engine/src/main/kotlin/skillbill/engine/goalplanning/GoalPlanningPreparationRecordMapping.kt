@@ -6,7 +6,7 @@ import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 
-fun GoalPlanningPreparationRecord.toEnvelopeMap(): Map<String, Any?> =
+internal fun GoalPlanningPreparationRecord.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
     "parent_goal_workflow_id" to parentGoalWorkflowId,
@@ -27,7 +27,7 @@ fun GoalPlanningPreparationRecord.toEnvelopeMap(): Map<String, Any?> =
     "plan_payload" to planPayload,
   )
 
-fun Map<String, Any?>.toGoalPlanningPreparationRecord(): GoalPlanningPreparationRecord {
+internal fun Map<String, Any?>.toGoalPlanningPreparationRecord(): GoalPlanningPreparationRecord {
   val provenanceMap = (this["provenance"] as? Map<*, *>).orEmpty()
   val preparationStatusValue = stringValue("preparation_status")
   val preparationStatus =

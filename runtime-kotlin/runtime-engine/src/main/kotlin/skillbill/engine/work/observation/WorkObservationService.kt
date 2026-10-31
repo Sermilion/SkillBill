@@ -10,11 +10,11 @@ import skillbill.ports.taskruntime.WorkOwnerExitObserver
 import java.time.Instant
 
 @Inject
-class WorkObservationService(
+public class WorkObservationService(
   private val database: DatabaseSessionFactory,
   private val exits: WorkOwnerExitObserver,
 ) {
-  fun observeOwners(
+  public fun observeOwners(
     ids: List<String>,
     observedAt: Instant,
     onExit: () -> Unit,

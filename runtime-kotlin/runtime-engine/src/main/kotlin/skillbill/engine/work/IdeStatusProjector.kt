@@ -87,7 +87,7 @@ private data class ChildOptionalContext(
 }
 
 @Inject
-class IdeStatusProjector(
+public class IdeStatusProjector(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val goalRunnerStatusService: GoalRunnerStatusService,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,

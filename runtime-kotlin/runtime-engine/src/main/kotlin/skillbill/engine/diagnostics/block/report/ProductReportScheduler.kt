@@ -18,14 +18,14 @@ import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportSt
 import java.time.Clock
 
 @Inject
-class ProductReportScheduler(
+public class ProductReportScheduler(
   private val database: DatabaseSessionFactory,
   private val runtimeFacts: ProductReportRuntimeFactsCollector,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val telemetry: BlockIncidentTelemetryPort?,
 ) {
-  fun schedule(
+  internal fun schedule(
     incident: BlockIncidentOccurrence,
     diagnosis: BlockIncidentDiagnosisRecord,
     recoveryAttempts: List<BlockIncidentRecoveryAttempt>,

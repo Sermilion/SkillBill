@@ -13,7 +13,7 @@ import skillbill.engine.operation.core.applyStoredProposal
 import skillbill.engine.operation.core.missingIntake
 import skillbill.engine.operation.core.proposeFromStep
 
-class FeatureGuardOperation :
+public class FeatureGuardOperation :
   ConfirmableOperation,
   OperationPrecheck {
   override val id: String = "feature-guard"

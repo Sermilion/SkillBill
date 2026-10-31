@@ -19,11 +19,11 @@ import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 @Inject
-class OperationStepRunner(
+public class OperationStepRunner(
   private val runner: PhaseRunner,
   private val gitOperations: WorkflowGitOperations,
 ) {
-  fun runReadOnly(
+  internal fun runReadOnly(
     context: OperationContext,
     stepName: String,
     directive: String,
@@ -34,7 +34,7 @@ class OperationStepRunner(
     return runUnchanged(context, stepName, input, session)
   }
 
-  fun runReportOnly(
+  internal fun runReportOnly(
     context: OperationContext,
     stepName: String,
     directive: String,
@@ -58,7 +58,7 @@ class OperationStepRunner(
     return result
   }
 
-  fun runEditing(
+  internal fun runEditing(
     context: OperationContext,
     stepName: String,
     directive: String,
@@ -170,7 +170,7 @@ class OperationStepRunner(
     }
 }
 
-sealed interface OperationStepResult {
+internal sealed interface OperationStepResult {
   data class Settled(
     val value: String,
     val changedPaths: List<String> = emptyList(),

@@ -5,7 +5,7 @@ import skillbill.ports.projectstore.ProjectStorePort
 import java.nio.file.Path
 import java.util.UUID
 
-data class OperationRequest(
+public data class OperationRequest(
   val operationId: String,
   val repoRoot: Path,
   val invokedAgentId: String?,
@@ -13,19 +13,19 @@ data class OperationRequest(
   val instructions: String?,
 )
 
-data class OperationResult(
+public data class OperationResult(
   val invocationId: String,
   val outcome: OperationOutcome,
 )
 
 @Inject
-class OperationExecutor(
+public class OperationExecutor(
   private val registry: OperationRegistry,
   private val gate: OperationConfirmationGate,
   private val steps: OperationStepRunner,
   private val projectStore: ProjectStorePort,
 ) {
-  fun execute(request: OperationRequest): OperationResult {
+  public fun execute(request: OperationRequest): OperationResult {
     val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
     val operation =
       registry.find(request.operationId)
