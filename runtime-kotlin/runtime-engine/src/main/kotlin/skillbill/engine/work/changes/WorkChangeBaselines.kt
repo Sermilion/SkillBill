@@ -14,12 +14,6 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.taskruntime.artifact.resolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 
-/**
- * The baseline a work item's changes are diffed against: the merge base of HEAD and the work's own base branch.
- * A goal uses its manifest's base branch, so a goal stacked on another branch shows only its own changes.
- * A feature task run uses its resolved branch's base. A standalone phase, or a run with no recorded base,
- * falls back to the repository's default branch.
- */
 internal fun workChangeBaseline(
   standalone: StandalonePhaseStatusRecord?,
   goalManifest: DecompositionManifest?,
