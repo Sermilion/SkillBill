@@ -31,6 +31,7 @@ import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.durablePhaseAttemptCount
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -377,7 +378,7 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
       val subtaskId =
         request.goalContinuation?.subtaskId?.toString()
           ?: FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID
-      return runCatching {
+      return catchingNonCancellation {
         recorder.loadCheckpointIdentities(request.workflowId)
       }.fold(
         onSuccess = { loaded -> loaded.orEmpty() },
@@ -466,7 +467,7 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
     identity: FeatureTaskRuntimeSubtaskCommitIdentity,
   ): SubtaskCommitLedgerState {
     val read =
-      runCatching {
+      catchingNonCancellation {
         recorder.loadCheckpointIdentities(
           request.workflowId,
         )
@@ -604,7 +605,7 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
       val commitSha = args.commitSha
       val blockedReason = args.blockedReason
       val recorded =
-        runCatching {
+        catchingNonCancellation {
           recorder.appendCheckpointIdentity(
             AppendCheckpointIdentityArgs(
               workflowId = request.workflowId,

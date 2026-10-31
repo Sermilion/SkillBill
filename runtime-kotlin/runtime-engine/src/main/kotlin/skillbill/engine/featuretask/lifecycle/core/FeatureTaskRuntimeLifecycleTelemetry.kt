@@ -9,6 +9,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFinishedTelemetryContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
 @Inject
@@ -44,6 +45,7 @@ class FeatureTaskRuntimeLifecycleTelemetry(
     isolate("finished", Unit) {
       emitFeatureTaskRuntimeFinished(
         lifecycleTelemetryService,
+        diagnostics,
         report,
         context,
         completionStatusOf(report),
@@ -60,7 +62,7 @@ class FeatureTaskRuntimeLifecycleTelemetry(
     }
     isolate("finishedError", Unit) {
       val outcomes =
-        runCatching(context.phaseOutcomes)
+        catchingNonCancellation(context.phaseOutcomes)
           .onFailure { error ->
             RuntimeDiagnosticsBestEffortWarning.record(
               diagnostics,
@@ -70,7 +72,7 @@ class FeatureTaskRuntimeLifecycleTelemetry(
             )
           }
           .getOrDefault(emptyMap())
-      emitFeatureTaskRuntimeFinishedError(lifecycleTelemetryService, context, outcomes, error)
+      emitFeatureTaskRuntimeFinishedError(lifecycleTelemetryService, diagnostics, context, outcomes, error)
     }
   }
 
@@ -85,7 +87,7 @@ class FeatureTaskRuntimeLifecycleTelemetry(
     fallback: T,
     block: () -> T,
   ): T =
-    runCatching(block)
+    catchingNonCancellation(block)
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,

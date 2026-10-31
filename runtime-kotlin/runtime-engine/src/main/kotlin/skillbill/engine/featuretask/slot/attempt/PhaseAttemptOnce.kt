@@ -42,9 +42,9 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.engine.featuretask.slot.withLaunchSink
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import java.util.concurrent.CancellationException
 
 object PhaseAttemptOnce {
   internal fun persistRequiredStart(
@@ -143,7 +143,7 @@ object PhaseAttemptOnce {
   ): PhaseOutcome {
     val reason = rejection.message
     val coupling = context.settlementCoupling()
-    return runCatching {
+    return catchingNonCancellation {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
         coupling.progress,
         coupling.transitions,
@@ -158,10 +158,6 @@ object PhaseAttemptOnce {
         ),
       )
     }.getOrElse { secondary ->
-      when (secondary) {
-        is CancellationException -> throw secondary
-        is InterruptedException -> throw secondary
-      }
       RuntimeDiagnosticsBestEffortWarning.record(
         context.diagnostics,
         "Required phase write rejection for '${run.phaseId}' could not be persisted; " +

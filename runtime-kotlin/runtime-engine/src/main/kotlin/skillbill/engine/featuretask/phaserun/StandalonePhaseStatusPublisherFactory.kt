@@ -5,13 +5,13 @@ import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
+import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.nio.file.Path
 import java.time.Clock
 import java.util.UUID
-import java.util.concurrent.CancellationException
 
 data class StandalonePhaseLaunch(
   val agentId: String? = null,
@@ -83,11 +83,10 @@ class StandalonePhaseStatusPublisherFactory(
     workflowId: String,
     workBranch: String? = null,
   ) {
-    runCatching {
+    catchingNonCancellation {
       val registration = registrations.workflowRegistration(repoRoot, issueKey, workflowId, workBranch)
       database.transaction { unitOfWork -> unitOfWork.standalonePhaseStatuses.registerWorkflow(registration) }
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status workflow registration failed", error)
     }
   }

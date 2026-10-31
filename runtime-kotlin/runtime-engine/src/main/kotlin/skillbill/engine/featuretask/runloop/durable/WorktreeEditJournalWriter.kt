@@ -7,6 +7,7 @@ import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
@@ -42,12 +43,21 @@ class WorktreeEditJournalWriter(
     resolvePhaseId: () -> String?,
   ) {
     val workflowId =
-      runCatching { resolveWorkflowId() }
+      catchingNonCancellation { resolveWorkflowId() }
+        .onFailure { error ->
+          val failure = (error.failureCodeLabel() ?: error.javaClass.simpleName).take(MAX_DIAGNOSTIC_CAUSE_LENGTH)
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "seam=worktree_edit_journal_resolve_workflow_id resolver=resolveWorkflowId " +
+              "value_expected=resolved_workflow_id value_used=skipped_observation failure=$failure",
+            error,
+          )
+        }
         .getOrElseUnlessCooperative { null }
         ?.takeIf(String::isNotBlank)
         ?: return
     val error =
-      runCatching {
+      catchingNonCancellation {
         persistMeasuredTick(workflowId, repoRoot, resolvePhaseId)
       }.exceptionOrNull() ?: return
     error.rethrowIfCooperativeCancellationOrInterruption()
@@ -80,7 +90,18 @@ class WorktreeEditJournalWriter(
       return
     }
     val measuredEntries = persistEntries.map { Triple(it.path, it.insertions, it.deletions) }
-    val phaseId = runCatching { resolvePhaseId() }.getOrElseUnlessCooperative { null }
+    val phaseId =
+      catchingNonCancellation { resolvePhaseId() }
+        .onFailure { error ->
+          val failure = (error.failureCodeLabel() ?: error.javaClass.simpleName).take(MAX_DIAGNOSTIC_CAUSE_LENGTH)
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "seam=worktree_edit_journal_resolve_phase_id resolver=resolvePhaseId " +
+              "value_expected=resolved_phase_id value_used=null_phase_id workflow_id=$workflowId failure=$failure",
+            error,
+          )
+        }
+        .getOrElseUnlessCooperative { null }
     val truncatedRows = entries.size - persistEntries.size
     val tick =
       WorktreeEditTick(

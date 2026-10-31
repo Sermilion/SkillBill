@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.pullrequest
 
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
@@ -16,7 +17,7 @@ internal class PullRequestMeasurement(
     if (branch.isNullOrBlank()) {
       PullRequestIdentity.Unavailable("the workflow has no resolved branch")
     } else {
-      runCatching { lookup.lookup(repoRoot, branch) }
+      catchingNonCancellation { lookup.lookup(repoRoot, branch) }
         .getOrElse { error -> PullRequestIdentity.Unavailable("pull request lookup failed: ${error.message}") }
     }
 

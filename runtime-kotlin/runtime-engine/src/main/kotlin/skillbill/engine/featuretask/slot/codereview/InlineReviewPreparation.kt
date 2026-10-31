@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputBlocked
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
@@ -18,6 +17,7 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -112,7 +112,7 @@ internal object InlineReviewPreparation {
     context: PhaseReviewExecutionContext,
     state: PhaseReviewStepBinding,
   ): InlineReviewPrepared =
-    runCatching { state.reserveReviewPass() }.fold(
+    catchingNonCancellation { state.reserveReviewPass() }.fold(
       onSuccess = { reservation ->
         when (reservation) {
           GoalSubtaskReviewPassReservation.MissingState ->
@@ -137,7 +137,7 @@ internal object InlineReviewPreparation {
     context: PhaseReviewExecutionContext,
     state: PhaseReviewStepBinding,
   ): InlineReviewPrepared =
-    runCatching {
+    catchingNonCancellation {
       val resolved = state.resolvedBranch()
       state.prepareGoalReviewInput(
         scopedUntrackedExclusions =
@@ -173,12 +173,11 @@ internal object InlineReviewPreparation {
     state: PhaseReviewStepBinding,
   ): InlineReviewPrepared {
     val accepted =
-      runCatching {
+      catchingNonCancellation {
         state.carriedForwardReviewResult()?.let { output ->
           NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output, run.phaseId)
         }
       }.getOrElse { error ->
-        error.rethrowIfCooperativeCancellationOrInterruption()
         return blockCarriedForward(state, "malformed: ${error.message.orEmpty()}")
       } ?: return blockCarriedForward(state, "missing.")
     val iteration = state.nextStepIteration()

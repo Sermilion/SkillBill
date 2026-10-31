@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.tracksReviewPasses
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
@@ -148,7 +149,7 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
     val fileManifest = args.fileManifest
     val completion = goalReviewPhaseCompletionRequest(args, normalizedOutput, repairEvidence)
     val completed =
-      runCatching {
+      catchingNonCancellation {
         transitions.persistGoalReviewPhaseCompletion(
           recorder = recorder,
           completion = completion,

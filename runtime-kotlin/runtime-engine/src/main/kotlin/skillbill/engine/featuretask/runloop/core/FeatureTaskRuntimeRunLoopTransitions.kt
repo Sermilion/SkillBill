@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -132,7 +133,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
         ?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
         ?: return true
     val failures = mutableListOf<String>()
-    runCatching {
+    catchingNonCancellation {
       context.coupledRunTransitions.checkpointBlocksAsWarnings(failures::add) {
         FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
           context,
@@ -143,7 +144,6 @@ object FeatureTaskRuntimeRunLoopTransitions {
         )
       }
     }.onFailure { error ->
-      if (error is InterruptedException) throw error
       failures += checkpoint.failureWarning(context.session.resolvedBranch.orEmpty(), error.message.orEmpty())
     }
     failures.forEach { warning ->

@@ -302,6 +302,7 @@ private fun phaseRecorderParts(
         injected.rejectedOutputDiagnosticMetadataValidator,
         injected.producerOutputEvidenceValidator,
         injected.clock,
+        injected.diagnostics,
       ),
     phaseState =
       FeatureTaskRuntimePhaseStateRecorder(
@@ -331,6 +332,7 @@ private fun phaseRecorderParts(
         injected.database,
         workflowPersistence,
         injected.wireArtifactValidator,
+        injected.diagnostics,
       ),
     gateProgress = FeatureTaskRuntimeGateProgressRecorder(injected.database, workflowPersistence),
   )

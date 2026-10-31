@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.PhaseLoopContext
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseSlotContainmentRules
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -44,7 +45,7 @@ internal class QaLoopRules(
         FeatureTaskRuntimePhaseWorkflowDefinition.QA_INVALIDATION_LOOP_ID -> STALE_WARNING
         else -> return
       }
-    runCatching { recordStaleQa(context, warning) }.onFailure { recordingFailure ->
+    catchingNonCancellation { recordStaleQa(context, warning) }.onFailure { recordingFailure ->
       RuntimeDiagnosticsBestEffortWarning.record(
         context.diagnostics,
         "QA loop cap warning could not be recorded [seam=qa_loop_cap, loop=$loopId].",

@@ -51,6 +51,7 @@ class FeatureTaskRuntimeTerminalFailureReasonTest {
         workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
         reviewAttributionPort = EmptyReviewAttributionPort,
       ),
+      NoopRuntimeDiagnostics,
       FeatureTaskRuntimeFinishedTelemetryContext(
         telemetrySessionId = SESSION_ID,
         phaseOutcomes = { mapOf("implement" to "completed") },

@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.slot.PhaseEntrySettlementRules
 import skillbill.engine.featuretask.slot.PhaseLoopContext
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -25,7 +26,7 @@ internal object ImplementThenSimplifyLoopRules : PhaseEntrySettlementRules<Phase
     state: PhaseAgentStepBinding,
   ): PhaseEntrySettlement? {
     if (stepId != SIMPLIFY || !implementClaimsNoChange(state)) return null
-    return runCatching { state.settleRuntimeAuthoredCompletion(SIMPLIFY, skipEnvelope()) }.fold(
+    return catchingNonCancellation { state.settleRuntimeAuthoredCompletion(SIMPLIFY, skipEnvelope()) }.fold(
       onSuccess = { PhaseEntrySettlement.Completed(FeatureTaskRuntimeVerdict.ADVANCE) },
       onFailure = { error ->
         PhaseEntrySettlement.Blocked(

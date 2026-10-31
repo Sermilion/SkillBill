@@ -56,6 +56,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CancellationException
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,6 +66,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class PhaseStandaloneMonitorExecutionTest {
@@ -421,6 +423,34 @@ class PhaseStandaloneMonitorExecutionTest {
     assertTrue("Cleanup: released" in failure.message.orEmpty(), failure.message)
 
     assertEquals(0, operations.calls, "no refused operation may observe or publish")
+    assertEquals(headSha, forkHead())
+  }
+
+  @Test
+  fun `an interrupted monitor preserves its cancellation and releases its clean owned worktree`() {
+    val cancellation = CancellationException("operator stop")
+    lateinit var worktree: Path
+    val interruptedRun =
+      object : TestFeatureTaskRuntimeRunLoopEntry() {
+        override fun run(
+          context: FeatureTaskRuntimeRunLoopContext,
+          beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
+        ): FeatureTaskRuntimeRunReport {
+          worktree = context.request.repoRoot
+          Thread.currentThread().interrupt()
+          throw cancellation
+        }
+      }
+
+    try {
+      assertSame(cancellation, assertFailsWith<CancellationException> { run(runLoopEntry = interruptedRun) })
+      assertTrue(Thread.currentThread().isInterrupted)
+    } finally {
+      Thread.interrupted()
+    }
+
+    assertFalse(Files.exists(worktree), "cancellation must still settle the clean owned worktree")
+    assertEquals("main", git(caller, "branch", "--show-current"))
     assertEquals(headSha, forkHead())
   }
 

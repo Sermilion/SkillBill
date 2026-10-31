@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.migration.RuntimeMigrationReceipt
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseSessionFactory
@@ -130,56 +131,63 @@ class FeatureTaskRuntimeWorkerCoordinator(
     reviewSelection: RuntimeReviewSelection?,
   ): UnownedClaim {
     var receipt: RuntimeMigrationReceipt? = null
-    return runCatching {
-      database.transaction { unitOfWork ->
-        val existing = unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
-        if (existing != null) return@transaction UnownedClaim.Recover(existing)
-        val row =
-          unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
-            ?: throw invalidWorkflowStateSchemaError("Feature-task runtime worker workflow '$workflowId' is missing.")
-        if (row.workflowStatus.workflowStatus() in TERMINAL_WORKFLOW_STATUSES) {
-          error(
-            "Cannot acquire worker ownership for terminal workflow '$workflowId' (${row.workflowStatus}).",
-          )
-        }
-        val execution =
-          executionAdmission.admit(
-            unitOfWork,
-            workflowId,
-            inputs,
-            identity,
-            reviewSelection,
-          )
-        receipt = execution.migrationReceipt
-        val admittedRow =
-          unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
-            ?: throw invalidWorkflowStateSchemaError(
-              "Feature-task runtime worker workflow '$workflowId' disappeared during admission.",
-            )
-        val admittedSnapshot = admittedRow.toSnapshot()
-        val priorGeneration =
-          maxOf(
-            unitOfWork.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.generation ?: 0L,
-            BlockIncidentIdentity.fromArtifacts(admittedSnapshot.artifacts)?.generation ?: 0L,
-          )
-        val currentPhaseAttempt = currentPhaseAttempt(admittedSnapshot)
-        val ownership =
-          newOwnership(
-            workflowId,
-            generation = Math.addExact(priorGeneration, 1L),
-            phaseId = admittedRow.currentStepId,
-            phaseAttempt = currentPhaseAttempt,
-          )
-        if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, admittedRow.updatedAt)) {
-          UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedSnapshot))
-        } else {
-          UnownedClaim.Lost(execution)
-        }
-      }
-    }.onFailure {
-      receipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
-    }.getOrThrow().also {
+    var committed = false
+    return try {
+      val result =
+        catchingNonCancellation {
+          database.transaction { unitOfWork ->
+            val existing = unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
+            if (existing != null) return@transaction UnownedClaim.Recover(existing)
+            val row =
+              unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
+                ?: throw invalidWorkflowStateSchemaError(
+                  "Feature-task runtime worker workflow '$workflowId' is missing.",
+                )
+            if (row.workflowStatus.workflowStatus() in TERMINAL_WORKFLOW_STATUSES) {
+              error(
+                "Cannot acquire worker ownership for terminal workflow '$workflowId' (${row.workflowStatus}).",
+              )
+            }
+            val execution =
+              executionAdmission.admit(
+                unitOfWork,
+                workflowId,
+                inputs,
+                identity,
+                reviewSelection,
+              )
+            receipt = execution.migrationReceipt
+            val admittedRow =
+              unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
+                ?: throw invalidWorkflowStateSchemaError(
+                  "Feature-task runtime worker workflow '$workflowId' disappeared during admission.",
+                )
+            val admittedSnapshot = admittedRow.toSnapshot()
+            val priorGeneration =
+              maxOf(
+                unitOfWork.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.generation ?: 0L,
+                BlockIncidentIdentity.fromArtifacts(admittedSnapshot.artifacts)?.generation ?: 0L,
+              )
+            val currentPhaseAttempt = currentPhaseAttempt(admittedSnapshot)
+            val ownership =
+              newOwnership(
+                workflowId,
+                generation = Math.addExact(priorGeneration, 1L),
+                phaseId = admittedRow.currentStepId,
+                phaseAttempt = currentPhaseAttempt,
+              )
+            if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, admittedRow.updatedAt)) {
+              UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedSnapshot))
+            } else {
+              UnownedClaim.Lost(execution)
+            }
+          }
+        }.getOrThrow()
+      committed = true
       receipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
+      result
+    } finally {
+      if (!committed) receipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
     }
   }
 
@@ -234,58 +242,63 @@ class FeatureTaskRuntimeWorkerCoordinator(
     reviewSelection: RuntimeReviewSelection?,
   ): Pair<AdmittedFeatureTaskRuntimeExecution, WorkflowStateSnapshot> {
     var admissionReceipt: RuntimeMigrationReceipt? = null
-    return runCatching {
-      database.transaction {
-        val original =
-          requireNotNull(
-            it.workflowStates.getFeatureTaskWorkflowAsMode(
-              existing.workflowId,
-              FeatureTaskWorkflowMode.RUNTIME,
-            )?.toSnapshot(),
-          )
-        val execution =
-          executionAdmission.admit(
-            it,
-            existing.workflowId,
-            inputs,
-            identity,
-            reviewSelection,
-          )
-        admissionReceipt = execution.migrationReceipt
-        val retainedGeneration =
-          it.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(existing.workflowId)?.generation
-        if (retainedGeneration != existing.generation) {
-          error("Worker generation observation changed for workflow '${existing.workflowId}'.")
-        }
-        val reserved =
-          it.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
-            existing.workflowId,
-            existing.ownerToken,
-            existing.generation,
-          )
-        if (!reserved) {
-          val current = it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId)
-          val leftoverReservation =
-            existing.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED &&
-              current != null &&
-              current.workflowId == existing.workflowId &&
-              current.ownerToken == existing.ownerToken &&
-              current.generation == existing.generation &&
-              current.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
-          if (!leftoverReservation) {
-            error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
+    var committed = false
+    return try {
+      val result =
+        catchingNonCancellation {
+          database.transaction {
+            val original =
+              requireNotNull(
+                it.workflowStates.getFeatureTaskWorkflowAsMode(
+                  existing.workflowId,
+                  FeatureTaskWorkflowMode.RUNTIME,
+                )?.toSnapshot(),
+              )
+            val execution =
+              executionAdmission.admit(
+                it,
+                existing.workflowId,
+                inputs,
+                identity,
+                reviewSelection,
+              )
+            admissionReceipt = execution.migrationReceipt
+            val retainedGeneration =
+              it.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(existing.workflowId)?.generation
+            if (retainedGeneration != existing.generation) {
+              error("Worker generation observation changed for workflow '${existing.workflowId}'.")
+            }
+            val reserved =
+              it.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
+                existing.workflowId,
+                existing.ownerToken,
+                existing.generation,
+              )
+            if (!reserved) {
+              val current = it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId)
+              val leftoverReservation =
+                existing.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED &&
+                  current != null &&
+                  current.workflowId == existing.workflowId &&
+                  current.ownerToken == existing.ownerToken &&
+                  current.generation == existing.generation &&
+                  current.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
+              if (!leftoverReservation) {
+                error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
+              }
+              diagnostics.info(
+                "seam=feature-task-runtime.worker-recovery workflow_id=${existing.workflowId} " +
+                  "outcome=leftover_takeover_reserved owner_token=${existing.ownerToken}",
+              )
+            }
+            execution to original
           }
-          diagnostics.info(
-            "seam=feature-task-runtime.worker-recovery workflow_id=${existing.workflowId} " +
-              "outcome=leftover_takeover_reserved owner_token=${existing.ownerToken}",
-          )
-        }
-        execution to original
-      }
-    }.onFailure {
-      admissionReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
-    }.getOrThrow().also {
+        }.getOrThrow()
+      committed = true
       admissionReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
+      result
+    } finally {
+      if (!committed) admissionReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
     }
   }
 
@@ -294,46 +307,53 @@ class FeatureTaskRuntimeWorkerCoordinator(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Triple<AdmittedFeatureTaskRuntimeExecution, WorkflowStateSnapshot, FeatureTaskRuntimeWorkerOwnership> {
     var transferReceipt: RuntimeMigrationReceipt? = null
-    return runCatching {
-      database.transaction {
-        val execution =
-          executionAdmission.admit(
-            it,
-            existing.workflowId,
-            admitted.effectiveInputs,
-            admitted.identity,
-            admitted.plan.reviewSelection,
-          )
-        transferReceipt = execution.migrationReceipt
-        val admittedSnapshot = requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, existing.workflowId))
-        val currentPhaseAttempt =
-          admittedSnapshot.step(admittedSnapshot.currentStepId)
-            ?.attemptCount
-            ?.coerceAtLeast(1)
-            ?: throw invalidWorkflowStateSchemaError(
-              "Feature-task runtime worker workflow '${existing.workflowId}' has no current phase attempt.",
-            )
-        val replacement =
-          newOwnership(
-            existing.workflowId,
-            Math.addExact(existing.generation, 1L),
-            admittedSnapshot.currentStepId,
-            currentPhaseAttempt,
-          )
-        if (!it.workflowStates.transferFeatureTaskRuntimeWorker(
-            replacement,
-            existing.ownerToken,
-            existing.generation,
-          )
-        ) {
-          error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
-        }
-        Triple(execution, admittedSnapshot, replacement)
-      }
-    }.onFailure {
-      transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
-    }.getOrThrow().also {
+    var committed = false
+    return try {
+      val result =
+        catchingNonCancellation {
+          database.transaction {
+            val execution =
+              executionAdmission.admit(
+                it,
+                existing.workflowId,
+                admitted.effectiveInputs,
+                admitted.identity,
+                admitted.plan.reviewSelection,
+              )
+            transferReceipt = execution.migrationReceipt
+            val admittedSnapshot =
+              requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, existing.workflowId))
+            val currentPhaseAttempt =
+              admittedSnapshot.step(admittedSnapshot.currentStepId)
+                ?.attemptCount
+                ?.coerceAtLeast(1)
+                ?: throw invalidWorkflowStateSchemaError(
+                  "Feature-task runtime worker workflow '${existing.workflowId}' " +
+                    "has no current phase attempt.",
+                )
+            val replacement =
+              newOwnership(
+                existing.workflowId,
+                Math.addExact(existing.generation, 1L),
+                admittedSnapshot.currentStepId,
+                currentPhaseAttempt,
+              )
+            if (!it.workflowStates.transferFeatureTaskRuntimeWorker(
+                replacement,
+                existing.ownerToken,
+                existing.generation,
+              )
+            ) {
+              error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
+            }
+            Triple(execution, admittedSnapshot, replacement)
+          }
+        }.getOrThrow()
+      committed = true
       transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
+      result
+    } finally {
+      if (!committed) transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
     }
   }
 

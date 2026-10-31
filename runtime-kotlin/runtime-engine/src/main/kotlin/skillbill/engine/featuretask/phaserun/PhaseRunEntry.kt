@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phaserun
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
@@ -14,6 +15,9 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.isCooperativeCancellation
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
@@ -31,6 +35,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import java.time.Clock
 import java.util.UUID
+import java.util.concurrent.CancellationException
 
 @Inject
 class PhaseRunEntry(
@@ -300,15 +305,33 @@ class PhaseRunEntry(
       publisher.recordQaOutcome(StandaloneQaOutcome.ATTEMPTED)
     }
     monitor?.cleanup?.onSettled { settlement ->
-      runCatching { publisher.recordMonitorCleanup(settlement.toStatusCleanup()) }
+      catchingNonCancellation { publisher.recordMonitorCleanup(settlement.toStatusCleanup()) }
+        .onFailure { failure ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "standalone-phase.monitor-cleanup-status " +
+              "failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+            failure,
+          )
+        }
     }
-    val outcome = runCatching { body(statusRequest) }
+    val outcome =
+      try {
+        catchingNonCancellation { body(statusRequest) }
+      } catch (cancelled: CancellationException) {
+        Result.failure(cancelled)
+      } catch (interrupted: InterruptedException) {
+        Result.failure(interrupted)
+      }
     val settlement = monitor?.cleanup?.settle(primaryOutcomeOf(outcome))
     return outcome
       .map { result -> if (monitor == null) result else result.withTargetReport(monitor.context, settlement) }
       .onSuccess(publisher::settle)
       .onFailure(publisher::settleFailure)
-      .getOrElse { failure -> throw monitor?.let { monitorRunFailure(failure, it.context, settlement) } ?: failure }
+      .getOrElse { failure ->
+        if (failure.isCooperativeCancellation()) throw failure
+        throw monitor?.let { monitorRunFailure(failure, it.context, settlement) } ?: failure
+      }
   }
 
   private fun monitorBlocked(

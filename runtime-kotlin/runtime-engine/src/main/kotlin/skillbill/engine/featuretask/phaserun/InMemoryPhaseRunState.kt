@@ -33,6 +33,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.missingValidationGate
 import skillbill.idestatus.model.AgentActivityLabel
@@ -52,7 +53,6 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
 internal class InMemoryPhaseRunState(
   private val facts: InMemoryPhaseRunFacts,
@@ -159,9 +159,8 @@ internal class InMemoryPhaseRunState(
       lastKind = kind
       lastPublishedAt = now
       val bounded = boundedIdeStatusActivity(activity) ?: return
-      runCatching { output(stepName, bounded) }
+      catchingNonCancellation { output(stepName, bounded) }
         .onFailure { error ->
-          if (error is CancellationException) throw error
           RuntimeDiagnosticsBestEffortWarning.record(
             diagnostics,
             "Phase run $invocationId could not publish launch activity for '$stepName'.",
@@ -230,7 +229,7 @@ internal class InMemoryPhaseRunState(
     val assembly = reviewResultAssembly
     assembly.persistReviewPassClaims(reviewRunId, result.mergeResult.findings, persistEmpty = true)
     if (laneTelemetryRecorded) return
-    runCatching {
+    catchingNonCancellation {
       assembly.emitReviewStageDegradations(
         reviewRunId,
         ParallelReviewLaneRunResult(
@@ -312,7 +311,7 @@ internal class InMemoryPhaseRunState(
     stepName: String,
     emit: () -> T,
   ): T? =
-    runCatching(emit)
+    catchingNonCancellation(emit)
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,

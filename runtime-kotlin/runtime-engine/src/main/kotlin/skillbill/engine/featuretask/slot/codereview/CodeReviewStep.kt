@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
@@ -179,7 +180,7 @@ internal class CodeReviewStep(
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
   ): ReviewPassLaunch {
-    val outcome = runCatching { reviewPass.review(run, input, reviewRunId, runner, state) }
+    val outcome = catchingNonCancellation { reviewPass.review(run, input, reviewRunId, runner, state) }
     outcome.exceptionOrNull()?.let { error -> return launchFailure(error) ?: throw error }
     return when (val review = outcome.getOrThrow()) {
       is ParallelCodeReviewRunOutcome.Reviewed -> ReviewPassLaunch.Reviewed(review.result)

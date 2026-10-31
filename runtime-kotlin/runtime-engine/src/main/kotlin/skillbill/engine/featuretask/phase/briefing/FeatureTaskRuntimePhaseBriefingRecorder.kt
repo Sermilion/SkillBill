@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phase.briefing
 
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
@@ -12,8 +13,11 @@ import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassificatio
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -32,6 +36,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
+  internal val diagnostics: RuntimeDiagnostics,
 ) {
   fun recordOwnedPhaseBriefing(
     workflowId: String,
@@ -293,8 +298,14 @@ fun FeatureTaskRuntimePhaseBriefingRecorder.recordSharedEvidenceMeasurement(
   measurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
 ) {
   if (measurement == null) return
-  runCatching {
+  catchingNonCancellation {
     unitOfWork.lifecycleTelemetry.featureTaskRuntimeSharedEvidence(measurement)
+  }.onFailure { failure ->
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "phase-briefing.shared-evidence-measurement failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+      failure,
+    )
   }
 }
 

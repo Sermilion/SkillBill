@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.StandaloneMonitorResources
@@ -56,9 +58,23 @@ class MonitorCleanupOwnership internal constructor(
     removalAllowed: Boolean = true,
   ): MonitorSettlement {
     settlement?.let { return it }
+    val interrupted = Thread.interrupted()
+    return try {
+      settleOwned(outcome, removalAllowed)
+    } finally {
+      if (interrupted) Thread.currentThread().interrupt()
+    }
+  }
+
+  private fun settleOwned(
+    outcome: MonitorPrimaryOutcome,
+    removalAllowed: Boolean,
+  ): MonitorSettlement {
     val recorded = outcome.copy(detail = monitorOutcomeDetail(outcome.detail, outcome.kind.wireValue))
     val result =
-      runCatching { resources.settle(MonitorSettleRequest(fence, recorded, removalAllowed)) }.getOrElse { failure ->
+      catchingNonCancellation {
+        resources.settle(MonitorSettleRequest(fence, recorded, removalAllowed))
+      }.getOrElse { failure ->
         MonitorSettlement.Retained(
           MonitorRetentionReason.CLEANUP_FAILED,
           knownPath,
@@ -66,14 +82,27 @@ class MonitorCleanupOwnership internal constructor(
         )
       }
     settlement = result
-    runCatching { exitHook.unregister() }
+    catchingNonCancellation { exitHook.unregister() }
+      .onFailure { record("monitorCleanup.exit_hook_unregister", it) }
     report(recorded, result)
-    listener?.let { notify -> runCatching { notify(result) } }
+    listener?.let { notify ->
+      catchingNonCancellation { notify(result) }
+        .onFailure { record("monitorCleanup.settled_listener", it) }
+    }
     return result
   }
 
   private fun settleOnShutdown() {
-    val drained = runCatching { childDrain.drain(SHUTDOWN_CHILD_DRAIN) }.getOrDefault(false)
+    val drained =
+      try {
+        catchingNonCancellation { childDrain.drain(SHUTDOWN_CHILD_DRAIN) }
+          .onFailure { record("monitorCleanup.child_drain", it) }
+          .getOrDefault(false)
+      } catch (interrupted: InterruptedException) {
+        Thread.currentThread().interrupt()
+        record("monitorCleanup.child_drain", interrupted)
+        false
+      }
     val detail = SHUTDOWN_OUTCOME_DETAIL + if (drained) "" else "; an owned repair child was still running"
     settle(MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, detail), removalAllowed = drained)
   }
@@ -93,6 +122,17 @@ class MonitorCleanupOwnership internal constructor(
     RuntimeDiagnosticsBestEffortWarning.record(
       diagnostics,
       "seam=monitorCleanup outcome=${outcome.kind.wireValue} outcome_detail=${outcome.detail} settlement=$disposition",
+    )
+  }
+
+  private fun record(
+    seam: String,
+    failure: Throwable,
+  ) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "$seam failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+      failure,
     )
   }
 }

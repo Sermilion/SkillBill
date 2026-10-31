@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.missingUpstream
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchRuntimeContext
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
@@ -68,7 +69,7 @@ internal object RuntimeCommitUpstreamHeadRecovery {
         }?.let { upstreamReceipt(it, attemptCount) }
     val accepted =
       output?.let {
-        runCatching {
+        catchingNonCancellation {
           NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(it.payload, phaseId)
         }.getOrNull()
       }

@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
+import skillbill.error.core.catchingNonCancellation
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -17,7 +18,6 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
-import java.util.concurrent.CancellationException
 
 @Inject
 class StandalonePhaseRegistrationFactory(
@@ -101,19 +101,19 @@ class StandalonePhaseRegistrationFactory(
     }.toMap()
 
   private fun processOwner(): FeatureTaskRuntimeProcessIdentity? =
-    runCatching {
-      workerSupervisor.currentProcess()
-    }.getOrElse { failure ->
-      if (failure is CancellationException) throw failure
-      if (failure is InterruptedException) {
-        Thread.currentThread().interrupt()
-        throw failure
+    try {
+      catchingNonCancellation {
+        workerSupervisor.currentProcess()
+      }.getOrElse { failure ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "seam=standalone-status.process-owner outcome=unavailable cause=${failure.javaClass.simpleName}",
+        )
+        null
       }
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "seam=standalone-status.process-owner outcome=unavailable cause=${failure.javaClass.simpleName}",
-      )
-      null
+    } catch (interrupted: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw interrupted
     }
 }
 

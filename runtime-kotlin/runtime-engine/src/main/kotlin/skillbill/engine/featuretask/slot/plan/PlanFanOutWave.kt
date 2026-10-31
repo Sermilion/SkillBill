@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.slot.plan
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 
 internal fun runPlanFanOutWave(
@@ -15,8 +15,7 @@ internal fun runPlanFanOutWave(
   val units =
     wave.map { unitId ->
       {
-        val result = runCatching { runUnit(unitId) }
-        result.exceptionOrNull()?.rethrowIfCooperativeCancellationOrInterruption()
+        val result = catchingNonCancellation { runUnit(unitId) }
         fanOutPort.runExclusively { fanOut.settleUnit(unitId, result) }
       }
     }

@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
@@ -114,7 +115,7 @@ internal object ImplementFixReceipt {
     state: PhaseImplementFixStepBinding,
     receipt: FeatureTaskRuntimeRepairReceipt,
   ): String? =
-    runCatching { state.recordRepairReceipt(receipt) }.fold(
+    catchingNonCancellation { state.recordRepairReceipt(receipt) }.fold(
       onSuccess = { recorded -> if (recorded) null else WRITE_FAILURE_REASON },
       onFailure = { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
@@ -134,7 +135,7 @@ internal object ImplementFixReceipt {
     reviewState: GoalSubtaskReviewState,
   ): Set<String> {
     val passNumber = reviewState.passResults.lastOrNull()?.passNumber ?: return emptySet()
-    return runCatching {
+    return catchingNonCancellation {
       state
         .unaddressedReviewFindings()
         .asSequence()

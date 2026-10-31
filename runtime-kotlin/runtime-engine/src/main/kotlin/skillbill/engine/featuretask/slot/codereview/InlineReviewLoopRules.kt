@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopContext
 import skillbill.engine.featuretask.slot.PhaseReentryStateRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -73,7 +74,7 @@ internal object InlineReviewLoopRules :
     state: PhaseReviewStepBinding,
   ): PhaseEntrySettlement? {
     if (stepId != REVIEW || !isGoalContinuationRun(context.request)) return null
-    return runCatching { state.goalReviewState() }.fold(
+    return catchingNonCancellation { state.goalReviewState() }.fold(
       onSuccess = { reviewState ->
         reviewState
           ?.takeIf { it.reviewCapReached || it.reviewSkippedByUser }
@@ -98,7 +99,7 @@ internal object InlineReviewLoopRules :
     stepId: String,
     state: PhaseReviewStepBinding,
   ): String? =
-    runCatching { state.goalReviewState() }.fold(
+    catchingNonCancellation { state.goalReviewState() }.fold(
       onSuccess = { reviewState ->
         when {
           reviewState == null ->
@@ -120,7 +121,7 @@ internal object InlineReviewLoopRules :
     state: PhaseReviewStepBinding,
   ): String? =
     state.completedStepPayload(stepId)?.let { output ->
-      runCatching {
+      catchingNonCancellation {
         NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output, stepId)
       }.fold(
         onSuccess = { accepted ->
@@ -141,7 +142,7 @@ internal object InlineReviewLoopRules :
     state: PhaseReviewStepBinding,
     reviewState: GoalSubtaskReviewState,
   ): PhaseEntrySettlement =
-    runCatching { state.carriedForwardReviewResult() }.fold(
+    catchingNonCancellation { state.carriedForwardReviewResult() }.fold(
       onSuccess = { rawResult ->
         rawResult?.let { recordCarriedForward(stepId, state, it, reviewState) }
           ?: carriedForwardBlock(null)
@@ -155,7 +156,7 @@ internal object InlineReviewLoopRules :
     rawResult: String,
     reviewState: GoalSubtaskReviewState,
   ): PhaseEntrySettlement =
-    runCatching {
+    catchingNonCancellation {
       val accepted = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(rawResult, stepId)
       state.settleCarriedForwardReview(accepted)
     }.fold(

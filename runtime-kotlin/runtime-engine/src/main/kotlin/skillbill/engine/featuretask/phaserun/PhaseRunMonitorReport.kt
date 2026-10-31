@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunFailureCode
 import skillbill.engine.featuretask.phaserun.monitor.monitorOutcomeDetail
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.isCooperativeCancellation
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
@@ -32,7 +33,7 @@ internal fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOu
     },
     onFailure = { failure ->
       MonitorPrimaryOutcome(
-        if (failure is InterruptedException) MonitorOutcomeKind.CANCELLED else MonitorOutcomeKind.RUN_FAILED,
+        if (failure.isCooperativeCancellation()) MonitorOutcomeKind.CANCELLED else MonitorOutcomeKind.RUN_FAILED,
         monitorOutcomeDetail(failure.message, failure::class.java.simpleName),
       )
     },
@@ -43,7 +44,7 @@ internal fun monitorRunFailure(
   context: MonitorExecutionContext,
   settlement: MonitorSettlement?,
 ): Throwable {
-  if (settlement == null || failure !is Exception || failure is InterruptedException) return failure
+  if (settlement == null || failure !is Exception || failure.isCooperativeCancellation()) return failure
   return SkillBillRuntimeException(
     code = (failure as? SkillBillRuntimeException)?.code ?: StandaloneMonitorRunFailureCode.RUN_FAILED,
     message =

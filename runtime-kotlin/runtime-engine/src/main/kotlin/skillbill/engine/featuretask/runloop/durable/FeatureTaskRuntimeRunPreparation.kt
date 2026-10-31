@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -366,7 +367,7 @@ private fun FeatureTaskRuntimeGoalContinuationRecorder.readContinuation(
   request: FeatureTaskRuntimeRunRequest,
   persistencePrefix: String,
 ): ContinuationRead =
-  runCatching { continuation(request.workflowId) }.fold(
+  catchingNonCancellation { continuation(request.workflowId) }.fold(
     onSuccess = { continuation ->
       continuation?.let { readReviewBaseline(request, it) } ?: ContinuationRead.None
     },
@@ -377,7 +378,7 @@ private fun FeatureTaskRuntimeGoalContinuationRecorder.readReviewBaseline(
   request: FeatureTaskRuntimeRunRequest,
   continuation: FeatureTaskRuntimeGoalContinuationArtifact,
 ): ContinuationRead =
-  runCatching { reviewState(request.workflowId) }.fold(
+  catchingNonCancellation { reviewState(request.workflowId) }.fold(
     onSuccess = { state ->
       state?.let {
         ContinuationRead.Available(

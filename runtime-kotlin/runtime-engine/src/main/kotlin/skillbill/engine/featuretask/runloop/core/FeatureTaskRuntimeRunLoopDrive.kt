@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.featureTaskRuntimePhaseOrderViolationMessage
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -254,7 +255,7 @@ object FeatureTaskRuntimeRunLoopDrive {
   ): String? {
     val route = { completed: String, verdict: FeatureTaskRuntimeVerdict -> nextPhaseAfter(this, completed, verdict) }
     val settled =
-      runCatching { advance(phaseId) }.getOrElse { failure ->
+      catchingNonCancellation { advance(phaseId) }.getOrElse { failure ->
         return FeatureTaskRuntimeRunLoopContainment.containedNextPhase(
           this,
           phaseId,
@@ -263,7 +264,7 @@ object FeatureTaskRuntimeRunLoopDrive {
         )
       }
     val completedPhaseId = settled.completedPhaseId ?: return null
-    return runCatching { route(completedPhaseId, requireNotNull(settled.completedVerdict)) }
+    return catchingNonCancellation { route(completedPhaseId, requireNotNull(settled.completedVerdict)) }
       .getOrElse { failure ->
         FeatureTaskRuntimeRunLoopContainment.containedNextPhase(
           this,

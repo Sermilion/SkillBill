@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.durablePhaseAttemptCount
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -70,7 +71,7 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
     val commitSha = args.commitSha
     val stagedPaths = args.stagedPaths
     val appended =
-      runCatching {
+      catchingNonCancellation {
         recorder.appendCheckpointIdentity(
           AppendCheckpointIdentityArgs(
             workflowId = request.workflowId,

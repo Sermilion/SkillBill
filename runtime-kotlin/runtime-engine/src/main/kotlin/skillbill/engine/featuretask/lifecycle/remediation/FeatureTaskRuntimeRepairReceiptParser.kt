@@ -77,11 +77,8 @@ private fun repairEntry(
 }
 
 fun featureTaskRuntimeRemediationRoundNumberOrNull(reviewState: GoalSubtaskReviewState): Int? =
-  runCatching { featureTaskRuntimeRemediationRoundNumber(reviewState.completedPassCount) }
-    .getOrElse { error ->
-      if (error is SkillBillRuntimeException && error.code == FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT) {
-        null
-      } else {
-        throw error
-      }
-    }
+  try {
+    featureTaskRuntimeRemediationRoundNumber(reviewState.completedPassCount)
+  } catch (error: SkillBillRuntimeException) {
+    if (error.code == FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT) null else throw error
+  }

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
@@ -13,12 +14,15 @@ import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistenc
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
 import skillbill.error.core.rejectedOutputDiagnosticInvalidRequestMessage
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.evidenceKey
 import skillbill.ports.persistence.UnitOfWork
@@ -67,6 +71,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
   private val rejectedOutputDiagnosticMetadataValidator: RejectedOutputDiagnosticMetadataValidator,
   private val producerOutputEvidenceValidator: ProducerOutputEvidenceValidator,
   private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   private sealed class DiagnosticWriteOutcome<out T> {
     class Written<T>(val value: T) : DiagnosticWriteOutcome<T>()
@@ -190,7 +195,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     unitOfWork: UnitOfWork,
     request: RejectedOutputDiagnosticRequest,
   ) {
-    runCatching {
+    catchingNonCancellation {
       unitOfWork.lifecycleTelemetry.featureTaskRuntimeRejection(
         FeatureTaskRuntimeRejectionMeasurement(
           workflowId = request.workflowId,
@@ -203,7 +208,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
           exhaustedFixLoop = request.exhaustedFixLoop,
         ),
       )
-    }
+    }.onFailure { recordFailure("rejected-output.rejection-measurement", it) }
   }
 
   fun retainOwnedProducerOutput(
@@ -350,7 +355,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     workflowId: String,
     signal: FeatureTaskRuntimeDiagnosticSignal,
   ) {
-    runCatching {
+    catchingNonCancellation {
       database.transaction { unitOfWork ->
         unitOfWork.lifecycleTelemetry.featureTaskRuntimeDiagnosticDegradation(
           FeatureTaskRuntimeDiagnosticDegradationMeasurement(
@@ -365,7 +370,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
           ),
         )
       }
-    }
+    }.onFailure { recordFailure("rejected-output.degradation-measurement", it) }
   }
 
   private fun persistDiagnosticSignal(
@@ -373,7 +378,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     signal: FeatureTaskRuntimeDiagnosticSignal,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ) {
-    runCatching {
+    catchingNonCancellation {
       database.transaction { unitOfWork ->
         if (
           admitted != null &&
@@ -398,7 +403,18 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
           ),
         )
       }
-    }
+    }.onFailure { recordFailure("rejected-output.diagnostic-signal", it) }
+  }
+
+  private fun recordFailure(
+    seam: String,
+    failure: Throwable,
+  ) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "$seam failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+      failure,
+    )
   }
 
   fun loadDiagnosticSignals(workflowId: String): List<FeatureTaskRuntimeDiagnosticSignal> =

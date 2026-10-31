@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -182,7 +183,7 @@ internal class RuntimeOwnedGateSettlement(
     run: PhaseRun,
     outputText: String,
   ): Result<NormalizedFeatureTaskRuntimePhaseOutput> =
-    runCatching {
+    catchingNonCancellation {
       val accepted = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId)
       acceptance(run, accepted)
       accepted

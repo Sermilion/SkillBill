@@ -1,8 +1,11 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.StandaloneMonitorResources
@@ -21,6 +24,7 @@ import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
 import skillbill.ports.process.ShutdownHookPort
 import java.util.UUID
+import java.util.concurrent.CancellationException
 
 @Inject
 class StandaloneMonitorExecutionPreparer(
@@ -101,8 +105,14 @@ class StandaloneMonitorExecutionPreparer(
   ): MonitorPreparation {
     val cleanup = MonitorCleanupOwnership(fence, resources, diagnostics, shutdownHooks, childDrain)
     val prepared =
-      runCatching { createWorkspace(fence, context, target, cleanup) }
-        .getOrElse { failure -> setupFailure(failure, cleanup, target) }
+      try {
+        catchingNonCancellation { createWorkspace(fence, context, target, cleanup) }
+          .getOrElse { failure -> setupFailure(failure, cleanup, target) }
+      } catch (cancelled: CancellationException) {
+        settleCancellation(cancelled, cleanup)
+      } catch (interrupted: InterruptedException) {
+        settleCancellation(interrupted, cleanup)
+      }
     if (prepared !is MonitorPreparation.Prepared) {
       cleanup.settle(
         MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, "Monitor preparation ended before handing off."),
@@ -123,18 +133,57 @@ class StandaloneMonitorExecutionPreparer(
     target: MonitorResolvedTarget,
   ): MonitorPreparation.Failed {
     val primary =
-      if (failure is InterruptedException) {
-        MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "Monitor preparation was interrupted.")
-      } else {
-        MonitorPrimaryOutcome(
-          MonitorOutcomeKind.SETUP_FAILED,
-          monitorOutcomeDetail(failure.message, failure::class.java.simpleName),
-        )
-      }
+      MonitorPrimaryOutcome(
+        MonitorOutcomeKind.SETUP_FAILED,
+        monitorOutcomeDetail(failure.message, failure::class.java.simpleName),
+      )
     val settlement = cleanup.settle(primary)
-    if (failure is InterruptedException) Thread.currentThread().interrupt()
     if (failure !is SkillBillRuntimeException) throw failure
     return MonitorPreparation.Failed(primary.detail, target.pullRequest, settlement)
+  }
+
+  private fun settleCancellation(
+    failure: Throwable,
+    cleanup: MonitorCleanupOwnership,
+  ): Nothing {
+    var cleanupInterrupted = false
+    try {
+      try {
+        catchingNonCancellation {
+          cleanup.settle(
+            MonitorPrimaryOutcome(
+              MonitorOutcomeKind.CANCELLED,
+              if (failure is InterruptedException) {
+                "Monitor preparation was interrupted."
+              } else {
+                "Monitor preparation was cancelled."
+              },
+            ),
+          )
+        }.onFailure { cleanupFailure -> recordCleanupFailure(failure, cleanupFailure) }
+      } catch (cancelled: CancellationException) {
+        recordCleanupFailure(failure, cancelled)
+      } catch (interrupted: InterruptedException) {
+        cleanupInterrupted = true
+        recordCleanupFailure(failure, interrupted)
+      }
+    } finally {
+      if (failure is InterruptedException || cleanupInterrupted) Thread.currentThread().interrupt()
+    }
+    throw failure
+  }
+
+  private fun recordCleanupFailure(
+    primary: Throwable,
+    secondary: Throwable,
+  ) {
+    if (secondary !== primary) primary.addSuppressed(secondary)
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=monitorPreparation.cancellation_cleanup " +
+        "failure=${secondary.failureCodeLabel() ?: secondary::class.simpleName}",
+      secondary,
+    )
   }
 
   private fun createWorkspace(

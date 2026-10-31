@@ -6,6 +6,7 @@ import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
@@ -39,7 +40,7 @@ class FeatureTaskRuntimeSpecGate(
       return
     }
     val agentId = finalizingAgentId()?.takeIf(String::isNotBlank) ?: return
-    runCatching {
+    catchingNonCancellation {
       specStatusWriter.writeFinalizingAgent(Path.of(request.runInvariants.specReference), agentId)
     }.onFailure { error ->
       RuntimeDiagnosticsBestEffortWarning.record(
@@ -69,7 +70,7 @@ class FeatureTaskRuntimeSpecGate(
         projectStore.resolve(request.repoRoot),
       ).parent
         ?: return
-    runCatching { specScratchStore.deleteDirectoryIfExists(specDir) }
+    catchingNonCancellation { specScratchStore.deleteDirectoryIfExists(specDir) }
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,

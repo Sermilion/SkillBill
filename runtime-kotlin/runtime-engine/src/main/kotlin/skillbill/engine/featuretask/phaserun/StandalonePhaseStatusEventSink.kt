@@ -5,6 +5,7 @@ import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
+import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -27,7 +28,6 @@ import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseInciden
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
 class StandalonePhaseStatusEventSink(
   private val database: DatabaseSessionFactory,
@@ -58,7 +58,7 @@ class StandalonePhaseStatusEventSink(
   }
 
   override fun emit(event: FeatureTaskRuntimeRunEvent) {
-    runCatching {
+    catchingNonCancellation {
       ensureRegistered(event.workflowId.takeIf(String::isNotBlank))
       val state =
         when (event) {
@@ -69,7 +69,6 @@ class StandalonePhaseStatusEventSink(
       currentActivity = boundedIdeStatusActivity(activityFor(event))
       persist(state, finishedAt = null, terminalResult = null)
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status publication failed", error)
     }
   }
@@ -78,19 +77,18 @@ class StandalonePhaseStatusEventSink(
     stepName: String,
     activity: String,
   ) {
-    runCatching {
+    catchingNonCancellation {
       ensureRegistered(null)
       currentStep = stepName
       currentActivity = boundedIdeStatusActivity(activity)
       persist(state = "active", finishedAt = null, terminalResult = null)
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status activity publication failed", error)
     }
   }
 
   fun settle(result: PhaseRunResult) {
-    runCatching {
+    catchingNonCancellation {
       ensureRegistered(null)
       when (result) {
         is PhaseRunResult.Completed -> {
@@ -113,7 +111,6 @@ class StandalonePhaseStatusEventSink(
         }
       }
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status settlement failed", error)
     }
   }
@@ -123,7 +120,7 @@ class StandalonePhaseStatusEventSink(
     workflowId: String? = null,
     report: StandalonePlanReport? = null,
   ) {
-    runCatching {
+    catchingNonCancellation {
       ensureRegistered(workflowId)
       planReport = report
       persist(
@@ -132,19 +129,17 @@ class StandalonePhaseStatusEventSink(
         terminalResult = result,
       )
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status plan settlement failed", error)
     }
   }
 
   fun publishPlanReport(report: () -> StandalonePlanReport?) {
-    runCatching {
-      val built = report() ?: return@runCatching
+    catchingNonCancellation {
+      val built = report() ?: return@catchingNonCancellation
       ensureRegistered(null)
       planReport = built
       persist(state = "active", finishedAt = null, terminalResult = null)
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status plan report publication failed", error)
     }
   }
@@ -154,12 +149,11 @@ class StandalonePhaseStatusEventSink(
     workflowId: String? = null,
     stepId: String? = null,
   ) {
-    runCatching {
+    catchingNonCancellation {
       ensureRegistered(workflowId)
       currentStep = stepId ?: currentStep
       persist(state = "blocked", finishedAt = null, terminalResult = reason)
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status blocked settlement failed", error)
     }
     observeBlocked(reason, workflowId, stepId)
@@ -171,7 +165,7 @@ class StandalonePhaseStatusEventSink(
     stepId: String?,
   ) {
     val observation =
-      runCatching {
+      catchingNonCancellation {
         val registration = registrationForWorkflow(workflowId)
         val target = registered?.monitorTarget ?: registration.monitorTarget
         val blockedWorkflowId = (registered?.workflowId ?: registration.workflowId)?.takeIf(String::isNotBlank)
@@ -208,7 +202,6 @@ class StandalonePhaseStatusEventSink(
             ),
         )
       }.onFailure { error ->
-        if (error is CancellationException) throw error
         RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone block incident observation failed", error)
       }.getOrNull() ?: return
     blockIncidentCapture.capture(observation)
@@ -232,7 +225,7 @@ class StandalonePhaseStatusEventSink(
     error: Throwable,
     workflowId: String? = null,
   ) {
-    runCatching {
+    catchingNonCancellation {
       ensureRegistered(workflowId)
       persist(
         state = "failed",
@@ -240,7 +233,6 @@ class StandalonePhaseStatusEventSink(
         terminalResult = error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty(),
       )
     }.onFailure { settlementError ->
-      if (settlementError is CancellationException) throw settlementError
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status failure settlement failed", settlementError)
     }
   }

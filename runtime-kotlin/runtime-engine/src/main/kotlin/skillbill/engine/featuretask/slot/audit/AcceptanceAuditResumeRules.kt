@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.slot.state.PhaseAuditLedgerResume
 import skillbill.engine.featuretask.slot.state.PhaseResumedCompletionInvalidation
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
 import skillbill.engine.featuretask.slot.state.recordEnvelope
+import skillbill.error.core.catchingNonCancellation
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
@@ -82,7 +83,7 @@ internal object AcceptanceAuditResumeRules : PhaseAuditLedgerResume, PhaseResume
   private fun hasLegacyInnerGaps(value: String?): Boolean {
     if (value.isNullOrBlank()) return false
     val inner =
-      runCatching {
+      catchingNonCancellation {
         JsonCodec.parseObjectOrNull(value)
           ?.let(JsonCodec::jsonElementToValue)
           ?.let(JsonCodec::anyToStringAnyMap)

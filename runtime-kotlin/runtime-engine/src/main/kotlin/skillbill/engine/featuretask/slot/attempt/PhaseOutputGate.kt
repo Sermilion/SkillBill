@@ -81,6 +81,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -246,7 +247,7 @@ object PhaseOutputGate {
     childOutput: FeatureTaskRuntimeChildOutput?,
   ) {
     val output = childOutput ?: return
-    runCatching {
+    catchingNonCancellation {
       recordRejectedOutput(
         context.progress,
         context.recorder,

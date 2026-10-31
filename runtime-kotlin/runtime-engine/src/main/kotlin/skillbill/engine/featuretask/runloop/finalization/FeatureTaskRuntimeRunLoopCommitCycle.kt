@@ -42,6 +42,7 @@ import skillbill.engine.featuretask.slot.attempt.blockAndPersistInPhase
 import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
@@ -423,7 +424,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     run: PhaseRun,
     outputText: String,
   ): Result<NormalizedFeatureTaskRuntimePhaseOutput> =
-    runCatching {
+    catchingNonCancellation {
       NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId)
     }
 

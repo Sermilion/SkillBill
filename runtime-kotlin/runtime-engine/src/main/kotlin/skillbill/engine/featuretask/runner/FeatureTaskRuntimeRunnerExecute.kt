@@ -28,6 +28,7 @@ import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunRecords
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -39,6 +40,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.util.concurrent.CancellationException
 
 @Inject
 class FeatureTaskRuntimeRunnerExecute(
@@ -134,20 +136,25 @@ class FeatureTaskRuntimeRunnerExecute(
         executionPlan.dispatchStrategyByStep,
       )
     val report =
-      runCatching {
-        executePrepared.driveExecutePreparedRunLoop(
-          runRequest,
-          specSource,
-          executionPlan,
-          observability,
-          state,
-        )
-      }.onFailure { error ->
-        lifecycleTelemetry.finishedError(
-          telemetryContext,
-          error,
-        )
-      }.getOrThrow()
+      try {
+        catchingNonCancellation {
+          executePrepared.driveExecutePreparedRunLoop(
+            runRequest,
+            specSource,
+            executionPlan,
+            observability,
+            state,
+          )
+        }.onFailure { error ->
+          lifecycleTelemetry.finishedError(telemetryContext, error)
+        }.getOrThrow()
+      } catch (cancelled: CancellationException) {
+        lifecycleTelemetry.finishedError(telemetryContext, cancelled)
+        throw cancelled
+      } catch (interrupted: InterruptedException) {
+        lifecycleTelemetry.finishedError(telemetryContext, interrupted)
+        throw interrupted
+      }
     val terminalReport = executePrepared.finalizeExecutePreparedRunReport(runRequest, report, specSource, executionPlan)
     lifecycleTelemetry.finished(terminalReport, telemetryContext)
     return terminalReport

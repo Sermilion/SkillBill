@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.reviewStateFromArtifa
 import skillbill.engine.featuretask.model.subtask.PersistHealedRemediationBaseRequest
 import skillbill.engine.featuretask.model.subtask.ResolvedReviewFixCheckpoint
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineRecoveryRequest
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInputFailureReason
@@ -75,7 +76,7 @@ internal fun recoveredRemediationBaseSha(
 ): String? {
   if (stored == null) return null
   val request =
-    runCatching {
+    catchingNonCancellation {
       GoalSubtaskReviewBaselineRecoveryRequest(
         unreachableSha = stored,
         failureReason = GoalSubtaskReviewInputFailureReason.BASE_NOT_ANCESTOR,

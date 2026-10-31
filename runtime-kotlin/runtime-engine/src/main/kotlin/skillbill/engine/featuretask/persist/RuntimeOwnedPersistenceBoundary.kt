@@ -4,13 +4,13 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.runtimepersistence.runtimeOwnedFactUnavailable
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
-import kotlin.coroutines.cancellation.CancellationException
 
 private fun Throwable.isOwnedFactUnavailable(): Boolean =
   (this as? SkillBillRuntimeException)?.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE
@@ -72,9 +72,9 @@ class RuntimeOwnedPersistenceBoundary(
     onFailure: (Exception) -> T,
     block: () -> T,
   ): T {
-    val outcome = runCatching(block)
+    val outcome = catchingNonCancellation(block)
     val error = outcome.exceptionOrNull() ?: return outcome.getOrThrow()
-    if (error is Exception && error !is CancellationException && !error.isOwnedFactUnavailable()) {
+    if (error is Exception && !error.isOwnedFactUnavailable()) {
       return onFailure(error)
     }
     throw error

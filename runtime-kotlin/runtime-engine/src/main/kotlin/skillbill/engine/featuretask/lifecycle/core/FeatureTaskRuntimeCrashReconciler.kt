@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationReason
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationResult
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
@@ -30,7 +31,6 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
 @Inject
 class FeatureTaskRuntimeCrashReconciler(
@@ -44,22 +44,26 @@ class FeatureTaskRuntimeCrashReconciler(
   fun reconcile(workflowId: String? = null): FeatureTaskRuntimeCrashReconciliationResult {
     val now = clock.instant()
     val candidates =
-      runCatching {
-        database.read { unit ->
-          if (workflowId == null) {
-            unit.workflowStates.findFeatureTaskRuntimeCrashReconciliationCandidates(now.toString())
-          } else {
-            listOfNotNull(recoveryCandidate(unit.workflowStates, workflowId, now))
+      try {
+        catchingNonCancellation {
+          database.read { unit ->
+            if (workflowId == null) {
+              unit.workflowStates.findFeatureTaskRuntimeCrashReconciliationCandidates(now.toString())
+            } else {
+              listOfNotNull(recoveryCandidate(unit.workflowStates, workflowId, now))
+            }
           }
+        }.getOrElse { error ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Crash-reconciliation candidate scan failed; startup is unaffected.",
+            error,
+          )
+          return FeatureTaskRuntimeCrashReconciliationResult.NONE
         }
-      }.getOrElse { error ->
-        rethrowCooperativeTermination(error)
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "Crash-reconciliation candidate scan failed; startup is unaffected.",
-          error,
-        )
-        return FeatureTaskRuntimeCrashReconciliationResult.NONE
+      } catch (interrupted: InterruptedException) {
+        Thread.currentThread().interrupt()
+        throw interrupted
       }
     if (candidates.isEmpty()) return FeatureTaskRuntimeCrashReconciliationResult.NONE
     val reasonClassCounts = mutableMapOf<String, Int>()
@@ -94,22 +98,26 @@ class FeatureTaskRuntimeCrashReconciler(
     candidate: FeatureTaskRuntimeCrashReconciliationCandidate,
     now: Instant,
   ): String? =
-    runCatching {
-      if (!supervisor.inspect(candidate.ownership).isConfirmedDead()) {
-        return@runCatching null
+    try {
+      catchingNonCancellation {
+        if (!supervisor.inspect(candidate.ownership).isConfirmedDead()) {
+          return@catchingNonCancellation null
+        }
+        val reason = interruptionReason()
+        val admission = readCandidateAdmission(candidate) ?: return@catchingNonCancellation null
+        val reconciled = reconcileAdmittedCandidate(candidate, admission, reason, now)
+        if (reconciled) reason.wireValue else null
+      }.getOrElse { error ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Crash reconciliation faulted on a candidate; the pass continues and the fault is counted.",
+          error,
+        )
+        FAULT_REASON_CLASS
       }
-      val reason = interruptionReason()
-      val admission = readCandidateAdmission(candidate) ?: return@runCatching null
-      val reconciled = reconcileAdmittedCandidate(candidate, admission, reason, now)
-      if (reconciled) reason.wireValue else null
-    }.getOrElse { error ->
-      rethrowCooperativeTermination(error)
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "Crash reconciliation faulted on a candidate; the pass continues and the fault is counted.",
-        error,
-      )
-      FAULT_REASON_CLASS
+    } catch (interrupted: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw interrupted
     }
 
   private fun readCandidateAdmission(
@@ -257,14 +265,4 @@ class FeatureTaskRuntimeCrashReconciler(
 
   private fun interruptionReason(): FeatureTaskRuntimeCrashReconciliationReason =
     FeatureTaskRuntimeCrashReconciliationReason.LEASE_EXPIRED
-
-  private fun rethrowCooperativeTermination(error: Throwable) {
-    when (error) {
-      is CancellationException -> throw error
-      is InterruptedException -> {
-        Thread.currentThread().interrupt()
-        throw error
-      }
-    }
-  }
 }

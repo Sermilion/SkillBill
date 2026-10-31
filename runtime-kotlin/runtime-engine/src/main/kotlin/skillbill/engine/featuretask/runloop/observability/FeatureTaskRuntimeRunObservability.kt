@@ -6,9 +6,9 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
-import kotlin.coroutines.cancellation.CancellationException
 
 internal enum class FeatureTaskRuntimeContinuationKind(val wireValue: String) {
   IMPLEMENTATION_CONTINUATION("implementation_continuation"),
@@ -52,10 +52,9 @@ fun emitFeatureTaskRuntimeEventSafely(
   seam: String,
   emit: () -> Unit,
 ) {
-  runCatching { emit() }
+  catchingNonCancellation { emit() }
     .exceptionOrNull()
     ?.let { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "Feature-task-runtime $seam failed; the run is unaffected.",

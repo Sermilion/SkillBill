@@ -9,6 +9,7 @@ import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
@@ -261,7 +262,7 @@ internal class PullRequestCiWatcher(
     check.copy(name = check.name.take(MAX_PROGRESS_TEXT_LENGTH), link = progressLink(check.link))
 
   private fun progressLink(value: String): String =
-    runCatching {
+    try {
       val uri = URI(value)
       val scheme = uri.scheme?.takeIf { it == "http" || it == "https" }
       val host = uri.host?.takeIf(String::isNotBlank)
@@ -273,7 +274,9 @@ internal class PullRequestCiWatcher(
           .takeIf { it.length <= MAX_PROGRESS_LINK_LENGTH }
           .orEmpty()
       }
-    }.getOrDefault("")
+    } catch (_: URISyntaxException) {
+      ""
+    }
 
   private fun startTimeoutReason(): String = "CI did not start within ${startTimeout.toMinutes()} minutes."
 

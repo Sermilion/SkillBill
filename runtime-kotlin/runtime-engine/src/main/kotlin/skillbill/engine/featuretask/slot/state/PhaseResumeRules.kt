@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.state
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.catchingNonCancellation
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -128,7 +129,7 @@ internal fun carriesPullRequestIncidentFields(phaseId: String): Boolean = phaseI
 
 internal fun recordEnvelope(record: FeatureTaskRuntimePhaseRecord): Map<String, Any?>? =
   record.outputArtifact?.let { artifact ->
-    runCatching {
+    catchingNonCancellation {
       JsonCodec.parseObjectOrNull(artifact)
         ?.let(JsonCodec::jsonElementToValue)
         ?.let(JsonCodec::anyToStringAnyMap)
