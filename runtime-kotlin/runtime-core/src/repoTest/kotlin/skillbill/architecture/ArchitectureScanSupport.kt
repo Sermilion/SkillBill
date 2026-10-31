@@ -11,10 +11,10 @@ object ArchitectureScanSupport {
     Path.of("").toAbsolutePath().normalize().let { start ->
       var dir: Path? = start
       while (dir != null) {
-        if (Files.isDirectory(dir.resolve("runtime-kotlin"))) return@let dir
+        if (Files.isRegularFile(dir.resolve("runtime-kotlin/settings.gradle.kts"))) return@let dir
         dir = dir.parent
       }
-      start
+      error("Could not locate the skill-bill repository root from $start")
     }
 
   data class ParseBoundarySite(val relativePath: String, val functionNames: Set<String>)
@@ -758,18 +758,6 @@ object ArchitectureScanSupport {
     }
     return violations.sorted()
   }
-
-  fun parseIntBaseline(text: String): Map<String, Int> =
-    text.lineSequence()
-      .map { it.trim() }
-      .filter { it.isNotBlank() && !it.startsWith("#") }
-      .mapNotNull { line ->
-        val parts = line.split(Regex("""\s+"""), limit = 2)
-        if (parts.size != 2) return@mapNotNull null
-        val count = parts[1].toIntOrNull() ?: return@mapNotNull null
-        parts[0] to count
-      }
-      .toMap()
 
   fun packageImportEdges(
     scanRoot: String,

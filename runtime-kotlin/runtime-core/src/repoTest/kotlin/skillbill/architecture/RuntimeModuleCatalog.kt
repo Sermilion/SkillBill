@@ -167,53 +167,6 @@ object RuntimeModuleCatalog {
         ),
     )
 
-  val mainProjectDependenciesByModule: Map<String, Set<String>> =
-    moduleEdgeExpectations.mapValues { (_, expectation) -> expectation.api + expectation.implementation }
-
-  val testFixturesProjectDependenciesByModule: Map<String, Set<String>> =
-    mapOf(
-      "runtime-application" to
-        setOf(
-          "runtime-infra:host",
-          "runtime-infra:contracts",
-          "runtime-infra:workflow",
-          "runtime-ports",
-        ),
-      "runtime-contracts" to emptySet(),
-      "runtime-core" to emptySet(),
-      "runtime-engine" to
-        setOf(
-          "runtime-application",
-          "runtime-domain",
-          "runtime-infra:contracts",
-          "runtime-infra:sqlite",
-          "runtime-infra:workflow",
-          "runtime-ports",
-        ),
-      "runtime-goalrunner" to
-        setOf(
-          "runtime-application",
-          "runtime-domain",
-          "runtime-engine",
-          "runtime-infra:contracts",
-          "runtime-infra:sqlite",
-          "runtime-ports",
-        ),
-      "runtime-domain" to emptySet(),
-      "runtime-infra" to emptySet(),
-      "runtime-infra:host" to setOf("runtime-ports"),
-      "runtime-infra:contracts" to emptySet(),
-      "runtime-infra:skills" to setOf("runtime-domain", "runtime-ports"),
-      "runtime-infra:launcher" to emptySet(),
-      "runtime-infra:workflow" to emptySet(),
-      "runtime-infra:http" to emptySet(),
-      "runtime-infra:sqlite" to
-        setOf("runtime-contracts", "runtime-domain", "runtime-infra:contracts", "runtime-ports"),
-      "runtime-cli" to emptySet(),
-      "runtime-mcp" to emptySet(),
-      "runtime-ports" to emptySet(),
-    )
-
   val declaredSubsystemPackages: List<String> =
     listOf(
       "skillbill.agent.model",

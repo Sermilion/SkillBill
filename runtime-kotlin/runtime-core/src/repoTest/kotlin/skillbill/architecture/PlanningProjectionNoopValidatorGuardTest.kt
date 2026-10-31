@@ -9,9 +9,7 @@ import kotlin.test.assertEquals
 
 class PlanningProjectionNoopValidatorGuardTest {
   private val runtimeRoot: Path =
-    Path.of("").toAbsolutePath().normalize().let { workingDir ->
-      if (workingDir.fileName.toString().startsWith("runtime-")) workingDir.parent else workingDir
-    }
+    ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin")
 
   private val noopSymbol = "AcceptingFeatureTaskRuntimeWireArtifactValidator"
 

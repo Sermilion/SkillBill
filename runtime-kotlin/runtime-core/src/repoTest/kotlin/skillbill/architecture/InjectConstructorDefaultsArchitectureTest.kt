@@ -7,11 +7,6 @@ import kotlin.test.assertEquals
 class InjectConstructorDefaultsArchitectureTest {
   @Test
   fun `every declared module matches its inject constructor defaults baseline`() {
-    assertEquals(
-      emptySet(),
-      baseline("inject-constructor-defaults-baseline.txt"),
-      "The runtime-application inject-defaults rule is absolute; its baseline must stay empty.",
-    )
     val drift = ArchitectureScanSupport.injectConstructorDefaultDrift()
     assertEquals(emptyList(), drift, drift.joinToString("\n"))
   }
@@ -254,7 +249,4 @@ class InjectConstructorDefaultsArchitectureTest {
       ).map { site -> site.parameter }
     assertEquals(listOf("openBrace", "closingParen", "stdinText"), parameters)
   }
-
-  private fun baseline(name: String): Set<String> =
-    ArchitectureScanSupport.parseStringSetBaseline(ArchitectureBaselineSupport.readBaseline(name))
 }

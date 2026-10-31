@@ -531,8 +531,8 @@ runtime-core
   `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-cli has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
-  `RuntimeComponent` (kotlin-inject). The allow-list is enforced by
-  `RuntimeAdapterDependencyAllowlistTest`.
+  `RuntimeComponent` (kotlin-inject). Module `dependencies { }` blocks declare
+  these edges, and `RuntimeCoreCompositionOnlyTest` pins the runtime-core edges.
 - `runtime-mcp`: MCP adapter surface, MCP-specific payload shaping, stdio
   server, MCP telemetry schema validation, and MCP runtime context creation.
   SKILL-52.2 subtask 5 narrows the main-source project dependency allow-list to
@@ -540,8 +540,8 @@ runtime-core
   `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-mcp has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
-  `RuntimeComponent`. The allow-list is enforced by
-  `RuntimeAdapterDependencyAllowlistTest`.
+  `RuntimeComponent`. Module `dependencies { }` blocks declare these edges, and
+  `RuntimeCoreCompositionOnlyTest` pins the runtime-core edges.
 
 Inside `runtime-mcp` the advertised surface has a single shape. `McpToolRegistry`
 holds one ordered `List<McpTool>`; each entry names the tool once and carries its

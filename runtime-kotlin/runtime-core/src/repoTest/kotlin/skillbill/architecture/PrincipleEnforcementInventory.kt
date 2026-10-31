@@ -8,7 +8,6 @@ object PrincipleEnforcementInventory {
   const val RUNTIME_ENGINE_MAIN: String = "runtime-kotlin/runtime-engine/src/main/kotlin"
   const val APPLICATION_PACKAGE_PREFIX: String = "skillbill.application."
   const val CLI_PACKAGE_PREFIX: String = "skillbill.cli."
-  const val SPILLOVER_FILE_NAME_BASELINE: String = "spillover-file-name-baseline.txt"
   const val CUSTOM_THROWABLE_BASELINE: String = "custom-throwable-baseline.txt"
   const val RUNTIME_COMPONENT_SOURCE: String =
     "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeComponent.kt"

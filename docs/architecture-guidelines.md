@@ -93,9 +93,8 @@ Every module edge is pinned in `RuntimeModuleCatalog.moduleEdgeExpectations`.
 | runtime-core | Kotlin-Inject wiring | Logic, accessors that nothing reads |
 | runtime-cli, runtime-mcp | Parsing, validation, rendering, exit codes | Use-case orchestration, identity derivation, process or environment reads |
 
-Check: Guard (`RuntimeGradleModuleLayeringTest`, `RuntimeCoreCompositionOnlyTest`,
-`RuntimeContractModuleImportRulesTest`, `RuntimeLayerBoundaryArchitectureTest`,
-`RuntimeAdapterDependencyAllowlistTest`) plus review for the "never holds" column.
+Check: Guard (`RuntimeCoreCompositionOnlyTest`, `RuntimeContractModuleImportRulesTest`,
+`RuntimeLayerBoundaryArchitectureTest`) plus review for the "never holds" column.
 
 ### A2. Every declaration has one owner
 

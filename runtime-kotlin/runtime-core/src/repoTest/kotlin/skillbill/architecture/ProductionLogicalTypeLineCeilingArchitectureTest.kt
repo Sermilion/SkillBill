@@ -6,15 +6,11 @@ import kotlin.test.assertEquals
 class ProductionLogicalTypeLineCeilingArchitectureTest {
   @Test
   fun `production logical types stay within baseline or ceiling`() {
-    val baseline =
-      ArchitectureScanSupport.parseIntBaseline(
-        ArchitectureBaselineSupport.readBaseline("logical-type-line-ceiling-baseline.txt"),
-      )
     val violations =
       ArchitectureScanSupport.logicalTypeLineCeilingViolations(
         productionRoots = listOf("runtime-kotlin"),
         ceiling = PrincipleEnforcementInventory.PRODUCTION_LINE_CEILING,
-        baseline = baseline,
+        baseline = emptyMap(),
       )
     assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }

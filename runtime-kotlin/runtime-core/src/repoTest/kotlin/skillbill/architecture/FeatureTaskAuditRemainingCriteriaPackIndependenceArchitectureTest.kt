@@ -8,13 +8,7 @@ import kotlin.test.assertTrue
 
 class FeatureTaskAuditRemainingCriteriaPackIndependenceArchitectureTest {
   private val runtimeRoot: Path =
-    Path.of("").toAbsolutePath().normalize().let { workingDir ->
-      if (workingDir.fileName.toString().startsWith("runtime-")) {
-        workingDir.parent
-      } else {
-        workingDir
-      }
-    }
+    ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin")
   private val repoRoot: Path = runtimeRoot.parent
 
   @Test
