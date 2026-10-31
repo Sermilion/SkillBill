@@ -105,6 +105,68 @@ class GitWorkChangesAdapterTest {
     assertIs<WorkFileDiffResult.BaseUnavailable>(adapter.fileDiff(repo.toString(), missing, file))
   }
 
+  @Test
+  fun `committedChanges lists tracked changes between two commits and leaves out untracked files`() {
+    git(repo, "add", "del.txt", "keep.txt")
+    git(repo, "commit", "-m", "more")
+    val head = git(repo, "rev-parse", "HEAD")
+
+    val listed = assertIs<WorkChangeListResult.Listed>(adapter.committedChanges(repo.toString(), base, head))
+
+    assertEquals(base, listed.baseSha)
+    assertEquals(
+      listOf(
+        WorkChangedFile("b.kt", "a.kt", WorkChangeStatus.RENAMED, 3, 1),
+        WorkChangedFile("bin.dat", null, WorkChangeStatus.ADDED, null, null),
+        WorkChangedFile("del.txt", null, WorkChangeStatus.DELETED, 0, 1),
+        WorkChangedFile("keep.txt", null, WorkChangeStatus.MODIFIED, 1, 0),
+        WorkChangedFile("mod.txt", null, WorkChangeStatus.MODIFIED, 1, 0),
+      ),
+      listed.files,
+    )
+    assertEquals(5, listed.insertions)
+    assertEquals(2, listed.deletions)
+
+    val renamed = listed.files.first { it.path == "b.kt" }
+    val patch = assertIs<WorkFileDiffResult.Patch>(adapter.committedFileDiff(repo.toString(), base, head, renamed))
+    assertEquals(3, patch.text.lines().count { it.startsWith("+") && !it.startsWith("+++") })
+    assertEquals(1, patch.text.lines().count { it.startsWith("-") && !it.startsWith("---") })
+  }
+
+  @Test
+  fun `committed reads with a missing commit are BaseUnavailable naming it`() {
+    val missing = "0123456789abcdef0123456789abcdef01234567"
+    val file = WorkChangedFile("mod.txt", null, WorkChangeStatus.MODIFIED, 1, 0)
+
+    val listed =
+      assertIs<WorkChangeListResult.BaseUnavailable>(adapter.committedChanges(repo.toString(), base, missing))
+    assertTrue(missing in listed.reason, listed.reason)
+    assertIs<WorkFileDiffResult.BaseUnavailable>(adapter.committedFileDiff(repo.toString(), missing, base, file))
+  }
+
+  @Test
+  fun `uncommittedChanges lists staged, unstaged and untracked changes against HEAD`() {
+    write("mod.txt", "x\ny\nz\n")
+    git(repo, "add", "mod.txt")
+    val head = git(repo, "rev-parse", "HEAD")
+
+    val listed = assertIs<WorkChangeListResult.Listed>(adapter.uncommittedChanges(repo.toString()))
+
+    assertEquals(head, listed.baseSha)
+    assertEquals(listOf("del.txt", "keep.txt", "mod.txt", "notes.txt", "u.txt"), listed.files.map { it.path })
+  }
+
+  @Test
+  fun `uncommittedChanges in a repository with no commit is BaseUnavailable`() {
+    val empty = Files.createTempDirectory("skillbill-work-changes-empty")
+    try {
+      git(empty, "init", "--initial-branch", "main")
+      assertIs<WorkChangeListResult.BaseUnavailable>(adapter.uncommittedChanges(empty.toString()))
+    } finally {
+      empty.toFile().deleteRecursively()
+    }
+  }
+
   private fun diff(file: WorkChangedFile): WorkFileDiffResult = adapter.fileDiff(repo.toString(), base, file)
 
   private fun write(

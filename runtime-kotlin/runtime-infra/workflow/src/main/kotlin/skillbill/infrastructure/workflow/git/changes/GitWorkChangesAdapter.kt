@@ -1,39 +1,27 @@
 package skillbill.infrastructure.workflow.git.changes
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.workflow.git.standard.gitDefaultBranch
-import skillbill.infrastructure.workflow.process.GitStdoutCapture
-import skillbill.infrastructure.workflow.process.captureGitStdout
-import skillbill.infrastructure.workflow.process.gitTimedOutError
-import skillbill.infrastructure.workflow.process.runGitProcess
 import skillbill.ports.idestatus.model.WorkChangeBaseline
 import skillbill.ports.workchanges.WorkChangesPort
 import skillbill.ports.workchanges.model.WorkChangeListResult
 import skillbill.ports.workchanges.model.WorkChangeStatus
 import skillbill.ports.workchanges.model.WorkChangedFile
+import skillbill.ports.workchanges.model.WorkCommitRange
 import skillbill.ports.workchanges.model.WorkFileDiffResult
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workchanges.model.WorkOutsideCommitsResult
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 
-private const val PATCH_LIMIT_BYTES = 1_048_576
-private const val LIST_LIMIT_BYTES = 8L * 1_048_576
 private const val NUL = '\u0000'
-private val SUCCESS_EXIT = setOf(0)
-private val NO_INDEX_EXIT = setOf(0, 1)
-private val RENAME_CONFIG = listOf("-c", "diff.renames=true")
-private val DIFF_OPTIONS = listOf("-M", "--relative", "--no-ext-diff", "--no-textconv", "--no-color")
-private val PATCH_OPTIONS = listOf("--unified=3", "--src-prefix=a/", "--dst-prefix=b/")
-private val BINARY_PATCH = Regex("^Binary files .* differ$", RegexOption.MULTILINE)
 
 @Inject
 class GitWorkChangesAdapter : WorkChangesPort {
   override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
     val root = Path.of(baseline.worktreeRoot)
-    repositoryProblem(root)?.let { return it }
+    listRepositoryProblem(root)?.let { return it }
     val base =
       when (val resolved = resolveBase(root, baseline)) {
         is BaseRead.Resolved -> resolved.sha
@@ -60,22 +48,69 @@ class GitWorkChangesAdapter : WorkChangesPort {
         when {
           file.insertions == null && file.deletions == null -> WorkFileDiffResult.Binary
           file.status == WorkChangeStatus.UNTRACKED -> untrackedDiff(root, file.path)
-          else -> patch(root, trackedDiffArgs(baseSha, file), SUCCESS_EXIT)
+          else -> patch(root, trackedPatchArgs(listOf(baseSha), file), SUCCESS_EXIT)
         }
     }
   }
 
-  private fun repositoryProblem(root: Path): WorkChangeListResult? {
-    if (!Files.isDirectory(root)) return WorkChangeListResult.NotARepository(root.toString())
-    val args = listOf("rev-parse", "--is-inside-work-tree")
-    val result = runGitProcess(root, args)
-    return when {
-      result.timedOut -> WorkChangeListResult.Failed(gitTimedOutError(args))
-      result.readFailure != null -> WorkChangeListResult.Failed(result.readFailure.message.orEmpty())
-      result.exitCode != 0 || result.output != "true" -> WorkChangeListResult.NotARepository(root.toString())
-      else -> null
+  override fun committedChanges(
+    worktreeRoot: String,
+    fromSha: String,
+    toSha: String,
+  ): WorkChangeListResult {
+    val root = Path.of(worktreeRoot)
+    listRepositoryProblem(root)?.let { return it }
+    return when (val missing = missingCommit(root, listOf(fromSha, toSha))) {
+      is BaseRead.Unavailable -> WorkChangeListResult.BaseUnavailable(missing.reason)
+      is BaseRead.Failed -> WorkChangeListResult.Failed(missing.message)
+      else -> committedList(root, fromSha, toSha)
     }
   }
+
+  private fun committedList(
+    root: Path,
+    fromSha: String,
+    toSha: String,
+  ): WorkChangeListResult {
+    if (fromSha == toSha) return sumListed(fromSha, emptyList())
+    return when (val read = trackedFiles(root, listOf(fromSha, toSha))) {
+      is ListStep.Files -> sumListed(fromSha, read.files)
+      is ListStep.Stop -> WorkChangeListResult.Failed(read.message)
+    }
+  }
+
+  override fun committedFileDiff(
+    worktreeRoot: String,
+    fromSha: String,
+    toSha: String,
+    file: WorkChangedFile,
+  ): WorkFileDiffResult {
+    val root = Path.of(worktreeRoot)
+    when (val missing = missingCommit(root, listOf(fromSha, toSha))) {
+      is BaseRead.Unavailable -> return WorkFileDiffResult.BaseUnavailable(missing.reason)
+      is BaseRead.Failed -> return WorkFileDiffResult.Failed(missing.message)
+      else -> Unit
+    }
+    if (file.insertions == null && file.deletions == null) return WorkFileDiffResult.Binary
+    return patch(root, trackedPatchArgs(listOf(fromSha, toSha), file), SUCCESS_EXIT)
+  }
+
+  override fun uncommittedChanges(worktreeRoot: String): WorkChangeListResult {
+    val root = Path.of(worktreeRoot)
+    listRepositoryProblem(root)?.let { return it }
+    val head = scalar(root, listOf("rev-parse", "--verify", "HEAD^{commit}"), "repository has no commit")
+    return when (head) {
+      is BaseRead.Resolved -> changes(WorkChangeBaseline.SubtaskStart(worktreeRoot, head.sha, emptyList()))
+      is BaseRead.Unavailable -> WorkChangeListResult.BaseUnavailable(head.reason)
+      is BaseRead.Failed -> WorkChangeListResult.Failed(head.message)
+    }
+  }
+
+  override fun outsideCommits(
+    worktreeRoot: String,
+    targetBranch: String?,
+    subtaskRanges: List<WorkCommitRange>,
+  ): WorkOutsideCommitsResult = readOutsideCommits(Path.of(worktreeRoot), targetBranch, subtaskRanges)
 
   private fun resolveBase(
     root: Path,
@@ -84,39 +119,8 @@ class GitWorkChangesAdapter : WorkChangesPort {
     when (baseline) {
       is WorkChangeBaseline.SubtaskStart -> BaseRead.Resolved(baseline.baseSha)
       is WorkChangeBaseline.RunStart -> BaseRead.Resolved(baseline.baseSha)
-      is WorkChangeBaseline.TargetMergeBase -> {
-        val target =
-          baseline.targetBranch
-            ?: when (val branch = gitDefaultBranch(root)) {
-              is WorkflowGitOperationResult.Ok -> branch.value
-              is WorkflowGitOperationResult.Failed -> return BaseRead.Unavailable("no default branch: ${branch.error}")
-            }
-        scalar(root, listOf("merge-base", "HEAD", target), "no merge-base between HEAD and $target")
-      }
+      is WorkChangeBaseline.TargetMergeBase -> mergeBase(root, baseline.targetBranch)
     }
-
-  private fun commitExists(
-    root: Path,
-    sha: String,
-  ): BaseRead =
-    when (val read = scalar(root, listOf("cat-file", "-e", "$sha^{commit}"), "base $sha is not a reachable commit")) {
-      is BaseRead.Resolved -> BaseRead.Resolved(sha)
-      else -> read
-    }
-
-  private fun scalar(
-    root: Path,
-    args: List<String>,
-    unavailableReason: String,
-  ): BaseRead {
-    val result = runGitProcess(root, args)
-    return when {
-      result.timedOut -> BaseRead.Failed(gitTimedOutError(args))
-      result.readFailure != null -> BaseRead.Failed(result.readFailure.message.orEmpty())
-      result.exitCode != 0 -> BaseRead.Unavailable(unavailableReason)
-      else -> BaseRead.Resolved(result.output)
-    }
-  }
 
   private fun listChanges(
     root: Path,
@@ -124,7 +128,7 @@ class GitWorkChangesAdapter : WorkChangesPort {
     excluded: Set<String>,
   ): WorkChangeListResult {
     val tracked =
-      when (val read = trackedFiles(root, base)) {
+      when (val read = trackedFiles(root, listOf(base))) {
         is ListStep.Files -> read.files
         is ListStep.Stop -> return WorkChangeListResult.Failed(read.message)
       }
@@ -133,28 +137,14 @@ class GitWorkChangesAdapter : WorkChangesPort {
         is ListStep.Files -> read.files
         is ListStep.Stop -> return WorkChangeListResult.Failed(read.message)
       }
-    val files = (tracked + untracked).sortedBy(WorkChangedFile::path)
-    return WorkChangeListResult.Listed(
-      baseSha = base,
-      files = files,
-      insertions = files.sumOf { it.insertions ?: 0 },
-      deletions = files.sumOf { it.deletions ?: 0 },
-    )
+    return sumListed(base, tracked + untracked)
   }
-
-  private fun trackedFiles(
-    root: Path,
-    base: String,
-  ): ListStep =
-    captureList(root, RENAME_CONFIG + listOf("diff", "--raw", "--numstat", "-z") + DIFF_OPTIONS + base) { text ->
-      parseTrackedChanges(text)?.let(ListStep::Files) ?: ListStep.Stop("unparseable git diff output")
-    }
 
   private fun untrackedFiles(
     root: Path,
     excluded: Set<String>,
   ): ListStep =
-    captureList(root, listOf("ls-files", "--others", "--exclude-standard", "-z")) { text ->
+    captureList(root, listOf("ls-files", "--others", "--exclude-standard", "-z"), ListStep::Stop) { text ->
       try {
         ListStep.Files(
           text.split(NUL).filter { it.isNotEmpty() && it !in excluded }.mapNotNull { untrackedChange(root, it) },
@@ -162,17 +152,6 @@ class GitWorkChangesAdapter : WorkChangesPort {
       } catch (error: IOException) {
         ListStep.Stop("untracked file could not be read: ${error.message}")
       }
-    }
-
-  private fun captureList(
-    root: Path,
-    args: List<String>,
-    onText: (String) -> ListStep,
-  ): ListStep =
-    when (val read = captureGitStdout(root, args, LIST_LIMIT_BYTES, SUCCESS_EXIT)) {
-      is GitStdoutCapture.Captured -> onText(read.text)
-      GitStdoutCapture.TooLarge -> ListStep.Stop("git ${args.joinToString(" ")} output exceeds $LIST_LIMIT_BYTES bytes")
-      is GitStdoutCapture.Failed -> ListStep.Stop(read.message)
     }
 
   private fun untrackedDiff(
@@ -192,43 +171,10 @@ class GitWorkChangesAdapter : WorkChangesPort {
     return patch(root, args, NO_INDEX_EXIT)
   }
 
-  private fun trackedDiffArgs(
-    baseSha: String,
-    file: WorkChangedFile,
-  ): List<String> =
-    RENAME_CONFIG + listOf("diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "--relative") +
-      PATCH_OPTIONS + baseSha + "--" + listOfNotNull(file.oldPath, file.path)
-
-  private fun patch(
-    root: Path,
-    args: List<String>,
-    acceptedExitCodes: Set<Int>,
-  ): WorkFileDiffResult =
-    when (val read = captureGitStdout(root, args, PATCH_LIMIT_BYTES.toLong(), acceptedExitCodes)) {
-      is GitStdoutCapture.Captured ->
-        if (BINARY_PATCH.containsMatchIn(read.text)) WorkFileDiffResult.Binary else WorkFileDiffResult.Patch(read.text)
-      GitStdoutCapture.TooLarge -> WorkFileDiffResult.TooLarge(PATCH_LIMIT_BYTES)
-      is GitStdoutCapture.Failed -> WorkFileDiffResult.Failed(read.message)
-    }
-
   private fun excludedUntracked(baseline: WorkChangeBaseline): Set<String> =
     when (baseline) {
       is WorkChangeBaseline.SubtaskStart -> baseline.excludedUntrackedPaths.toSet()
       is WorkChangeBaseline.RunStart -> baseline.excludedUntrackedPaths.toSet()
       is WorkChangeBaseline.TargetMergeBase -> emptySet()
     }
-}
-
-private sealed interface ListStep {
-  data class Files(val files: List<WorkChangedFile>) : ListStep
-
-  data class Stop(val message: String) : ListStep
-}
-
-private sealed interface BaseRead {
-  data class Resolved(val sha: String) : BaseRead
-
-  data class Unavailable(val reason: String) : BaseRead
-
-  data class Failed(val message: String) : BaseRead
 }

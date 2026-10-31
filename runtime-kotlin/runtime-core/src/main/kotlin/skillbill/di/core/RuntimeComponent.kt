@@ -74,6 +74,7 @@ import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.specbrowser.SpecBrowserService
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.WorkBoardReadModelProjection
+import skillbill.engine.work.changes.WorkChangeScopesService
 import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
@@ -304,6 +305,7 @@ abstract class RuntimeComponent(
   abstract val projectStorePort: ProjectStorePort
   abstract val projectConfigFilePort: ProjectConfigFilePort
   abstract val fileEditorLauncherPort: FileEditorLauncherPort
+  abstract val workChangeScopesService: WorkChangeScopesService
   abstract val workChangesPort: WorkChangesPort
   abstract val checkedOutBranchSource: CheckedOutBranchSource
 
