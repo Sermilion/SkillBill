@@ -52,7 +52,7 @@ internal interface AgentRunCommandBuilder {
   fun continuation(
     command: AgentRunCommand,
     diagnostics: RuntimeDiagnostics,
-  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)?
 }
 
 internal val GoalContinuationEnvironment: Map<String, String> =
@@ -169,6 +169,11 @@ internal class ClaudeAgentRunCommandBuilder(
   override val agent: SupportedAgent = SupportedAgent.CLAUDE
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CLAUDE_JSON
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
+
+  override fun continuation(
+    command: AgentRunCommand,
+    diagnostics: RuntimeDiagnostics,
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)

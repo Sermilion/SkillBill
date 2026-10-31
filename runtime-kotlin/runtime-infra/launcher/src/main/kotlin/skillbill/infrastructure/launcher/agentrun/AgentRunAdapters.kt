@@ -263,9 +263,9 @@ interface AgentRunOutputDecoder {
    * Decoder-declared classification of a decode failure. A decoder that owns a transport it cannot
    * always parse says so here; the launcher then degrades that launch to an empty harvest with a
    * bounded preview instead of promoting undecodable bytes to phase output. Decoders that treat
-   * every failure as fatal inherit the default and keep propagating.
+   * every failure as fatal return false and keep propagating.
    */
-  fun undecodable(error: Throwable): Boolean = false
+  fun undecodable(error: Throwable): Boolean
 
   companion object {
     val PLAIN = decoder { DecodedAgentRunOutput(it) }
@@ -289,6 +289,8 @@ interface AgentRunOutputDecoder {
     private fun decoder(body: (String) -> DecodedAgentRunOutput): AgentRunOutputDecoder =
       object : AgentRunOutputDecoder {
         override fun decode(stdout: String): DecodedAgentRunOutput = body(stdout)
+
+        override fun undecodable(error: Throwable): Boolean = false
       }
   }
 }

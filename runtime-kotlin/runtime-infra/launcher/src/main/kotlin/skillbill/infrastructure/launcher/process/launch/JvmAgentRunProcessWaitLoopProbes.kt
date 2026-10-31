@@ -149,11 +149,11 @@ internal fun AgentRunProgressProbe.readProgressToken(recorder: ProcessRunDegrada
 internal fun AgentRunProgressProbe.readProgressLabel(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
   readProbe(recorder, "progress_label") { (this as? AgentRunProgressLabelProbe)?.progressLabel() }
 
-internal fun AgentRunActivityProbe.readActivityToken(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
-  readProbe(recorder, "activity_token") { activityToken() }
+internal fun AgentRunActivityProbe?.readActivityToken(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
+  readProbe(recorder, "activity_token") { this?.activityToken() }
 
-internal fun AgentRunActivityProbe.readActivityLabel(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
-  readProbe(recorder, "activity_label") { activityLabel() }
+internal fun AgentRunActivityProbe?.readActivityLabel(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
+  readProbe(recorder, "activity_label") { this?.activityLabel() }
 
 internal fun AgentRunDeclaredProgressProbe.readDeclaredProgress(
   recorder: ProcessRunDegradationRecorder,

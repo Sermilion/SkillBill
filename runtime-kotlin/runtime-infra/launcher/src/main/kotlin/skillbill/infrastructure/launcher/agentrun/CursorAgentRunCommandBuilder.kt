@@ -1,9 +1,12 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import java.nio.file.Path
 
@@ -19,6 +22,11 @@ internal class CursorAgentRunCommandBuilder(
   override val agent: SupportedAgent = SupportedAgent.CURSOR
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CURSOR_STREAM_JSON
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
+
+  override fun continuation(
+    command: AgentRunCommand,
+    diagnostics: RuntimeDiagnostics,
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)

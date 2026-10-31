@@ -213,7 +213,6 @@ sealed interface GoalRunnerRunReport {
   val issueKey: String
   val attemptedSubtasks: List<Int>
   val parentWorkflowId: String?
-    get() = null
 
   data class Completed(
     override val issueKey: String,

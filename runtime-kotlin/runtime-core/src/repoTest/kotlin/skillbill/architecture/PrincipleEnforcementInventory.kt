@@ -263,8 +263,9 @@ object PrincipleEnforcementInventory {
       ),
       EnforcedRule(
         "Port null-object absence: no runtime module main source declares an Unavailable, Noop, Empty, or " +
-          "Unconfigured substitute; a reached absence is a nullable port resolved at the call site and the " +
-          "test-only substitutes live in testFixtures.",
+          "Unconfigured substitute, and every catalog module is scanned for interface defaults that return null, " +
+          "literals, empty collections, Unit or empty blocks, or throws; a reached absence is a nullable port " +
+          "resolved at the call site and the test-only substitutes live in testFixtures.",
         PortNullObjectAbsenceArchitectureTest::class,
       ),
       EnforcedRule(
