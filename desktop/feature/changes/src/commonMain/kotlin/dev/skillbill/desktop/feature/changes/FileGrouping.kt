@@ -1,0 +1,39 @@
+package dev.skillbill.desktop.feature.changes
+
+import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ScopeSubtask
+import dev.skillbill.desktop.core.domain.model.SubtaskStats
+import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.touchCount
+
+data class FileGroupUi(val module: String, val insertions: Int, val deletions: Int, val rows: List<FileRowUi>)
+data class FileRowUi(val file: ChangedFile, val touchCount: Int)
+
+internal fun moduleOf(path: String): String {
+  val segments = path.split('/')
+  val sourceIndex = segments.indexOf("src")
+  return when {
+    sourceIndex > 0 -> segments.take(sourceIndex).joinToString("/")
+    segments.size > 1 -> segments.dropLast(1).joinToString("/")
+    else -> "(root)"
+  }
+}
+
+internal fun groupFiles(files: List<ChangedFile>, filter: String, touchCount: (String) -> Int): List<FileGroupUi> =
+  files.filter { it.path.contains(filter, ignoreCase = true) }
+    .groupBy { moduleOf(it.path) }.map { (module, rows) ->
+      FileGroupUi(module, rows.sumOf { it.insertions ?: 0 }, rows.sumOf { it.deletions ?: 0 }, rows.map { FileRowUi(it, touchCount(it.path)) })
+    }
+
+internal fun scopeTouchCount(path: String, scope: ChangeScope, stats: Map<Int, SubtaskStats>): Int = touchCount(path, scope, stats) ?: 0
+
+internal fun scopeLabel(scope: ChangeScope, subtasks: List<ScopeSubtask>): String = when (scope) {
+  ChangeScope.All -> "All changes"
+  ChangeScope.Outside -> "Outside subtasks"
+  ChangeScope.Uncommitted -> "Uncommitted"
+  is ChangeScope.Subtasks -> if (scope.from == scope.to) subtasks.firstOrNull { it.id == scope.from }?.let { "${it.id} · ${it.name}" } ?: "Subtask ${scope.from}" else "Subtasks ${scope.from}–${scope.to}"
+}
+
+fun changesWindowTitle(item: WorkItem): String =
+  "Changes · ${item.issueKey?.let { "$it " }.orEmpty()}${item.title}"

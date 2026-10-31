@@ -122,6 +122,7 @@ sealed interface DetailAction {
 
   /** The diff view's back button or Escape returns to the document. */
   data object CloseDiff : DetailAction
+  data object OpenChangesWindow : DetailAction
 }
 
 sealed interface DetailEffect {
@@ -129,4 +130,5 @@ sealed interface DetailEffect {
   data class OpenRoute(val route: AppRoute) : DetailEffect
   data class CopyToClipboard(val text: String) : DetailEffect
   data class ShowToast(val message: ToastMessage) : DetailEffect
+  data class OpenChangesWindow(val item: WorkItem) : DetailEffect
 }

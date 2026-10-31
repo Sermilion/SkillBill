@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Hint
+import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.ChangesState
@@ -27,6 +28,9 @@ import dev.skillbill.desktop.core.ui.feedback.readProblemText
 internal fun DetailSections.changesSection(changes: ChangesUi, onAction: (DetailAction) -> Unit) {
   val listed = (changes.state as? ChangesState.Listed)?.changes
   section("changes", "Changes", count = listed?.files?.size?.toString()) {
+    item(key = "changes-open") {
+      SbButton("Open changes", { onAction(DetailAction.OpenChangesWindow) })
+    }
     when (val state = changes.state) {
       ChangesState.Loading -> notice("changes-loading") { Hint("Loading changes") }
       ChangesState.NoSubtask -> notice("changes-none") { Hint("No base branch to diff against yet") }

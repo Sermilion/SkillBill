@@ -89,6 +89,22 @@ class DetailViewModelTest {
   }
 
   @Test
+  fun `opening changes emits the current detail item`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val viewModel = viewModel()
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    details.flow.emit(loaded("a"))
+    advanceUntilIdle()
+
+    viewModel.onAction(DetailAction.OpenChangesWindow)
+    runCurrent()
+
+    assertEquals(listOf<DetailEffect>(DetailEffect.OpenChangesWindow(item)), effects)
+  }
+
+  @Test
   fun `each page request carries the anchor the previous page returned, once`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val viewModel = viewModel()

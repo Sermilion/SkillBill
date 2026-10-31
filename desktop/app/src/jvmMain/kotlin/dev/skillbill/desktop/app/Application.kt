@@ -1,7 +1,9 @@
 package dev.skillbill.desktop.app
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -14,6 +16,7 @@ import dev.skillbill.desktop.app.tray.TrayHost
 import dev.skillbill.desktop.app.motion.OsReducedMotionReader
 import dev.skillbill.desktop.app.motion.ReducedMotionRead
 import dev.skillbill.desktop.app.shell.MainWindow
+import dev.skillbill.desktop.app.shell.ChangesWindowHost
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -58,10 +61,16 @@ fun main() {
       }
     }
     TrayHost(trayModel, component.trayAvailability, component.hostIntents, uiScale, mainVisible, reducedMotion) { exitApplication() }
+    val changesEntries by component.changesWindows.windows.collectAsState()
     MainWindow(window, uiScale, reducedMotion, mainVisible, focusRequest) {
       if (component.trayAvailability.state.value.canHideToTray) mainVisible = false else {
         component.trayAvailability.unavailable()
         exitApplication()
+      }
+    }
+    changesEntries.forEach { entry ->
+      key(entry.item.id) {
+        ChangesWindowHost(entry, uiScale, reducedMotion, component.changesWindowViewModel) { component.changesWindows.close(entry.item.id) }
       }
     }
   }

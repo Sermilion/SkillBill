@@ -182,6 +182,7 @@ class DetailViewModel(
       is DetailAction.SelectChangedFile -> diff.select(action.file)
       is DetailAction.OpenChangedFile -> openChangedFile(action.file)
       DetailAction.CloseDiff -> diff.close()
+      DetailAction.OpenChangesWindow -> effectChannel.trySend(DetailEffect.OpenChangesWindow(state.value.header))
     }
   }
 
