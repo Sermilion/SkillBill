@@ -13,6 +13,7 @@ Reason: Typed suggestions give each button a specific instruction while retainin
 Context: The operator wants the chat agent to run shell commands for the selected execution.
 Decision: Act turns allow the Bash tool without command-prefix restrictions and tell the agent it can run shell commands. Running executions retain the existing read-only command allowlist. This supersedes the act-mode command restrictions in the earlier permission decision.
 Reason: Fixing an execution can require Git, build tools and project scripts. The existing pause-and-act flow provides act mode while keeping the execution stopped during changes.
+Superseded by: Run chat turns with the execution's own permissions on every agent (2026-10-31)
 
 ## [2026-10-31] Start chat turns through a POSIX login shell
 Context: An app launched from the Dock may not inherit the login PATH, so claude, skill-bill and gh may not resolve.
@@ -33,6 +34,7 @@ Reason: An unbounded join would hang the turn after claude exits. Dropping Exite
 Context: Claude Code 2.1.314 snapshots the first turn's system prompt and replays it on every resume by default.
 Decision: Every turn passes --restricted, the mode's --tools and --allowedTools, --permission-mode dontAsk, --permission-prompts none and --system-prompt-snapshot off. The read-only profile has no Edit or Write and allows named read-only skill-bill commands and MCP tools plus gh issue create on Sermilion/SkillBill. Turns never bypass permissions or disable session persistence.
 Reason: A headless turn cannot answer permission prompts, so anything outside the allowlist must be denied outright. The mode can change between turns, so the scope prompt has to be sent fresh on each one.
+Superseded by: Run chat turns with the execution's own permissions on every agent (2026-10-31)
 
 ## [2026-10-31] Let the chat workspace own pause, act and resume
 Context: A chat must not change a running execution unless the operator asks, but the operator may want a fix mid-run and may close the tab while the act turn streams.
@@ -49,6 +51,7 @@ Reason: The next turn then goes out as a first turn with --session-id and the fu
 Context: Only Claude has a chat transport, while executions also run on codex, cursor and junie.
 Decision: AgentExecutionChatRepository emits one failed AgentUnsupported event, records chat.agent_unsupported and starts no process. The tab shows `Chat is not available for agent <id> yet` and Send stays disabled.
 Reason: The chat must use the execution's agent. A silent switch to Claude would answer with a different agent and model than the one running the execution.
+Superseded by: Run chat turns with the execution's own permissions on every agent (2026-10-31)
 Revisit when: A ChatTransport exists for another agent.
 
 ## [2026-10-31] Share the right slot between chat and Specs
