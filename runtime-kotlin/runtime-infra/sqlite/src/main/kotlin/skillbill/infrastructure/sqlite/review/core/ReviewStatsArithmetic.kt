@@ -74,19 +74,17 @@ internal fun durationSeconds(
   if (startedAt.isEmpty() || finishedAt.isEmpty()) {
     return 0
   }
-  return runCatching {
+  return try {
     val start = LocalDateTime.parse(startedAt.replace(" ", "T"))
     val end = LocalDateTime.parse(finishedAt.replace(" ", "T"))
     Duration.between(start, end).seconds.coerceAtLeast(0).toInt()
-  }.getOrElse { error ->
-    if (error is DateTimeParseException) {
-      diagnostics.recordDegradedValue(
-        seam = "review_stats.duration_seconds",
-        expected = "parseable started_at and finished_at timestamps",
-        used = "started_at=$startedAt; finished_at=$finishedAt",
-        error = error,
-      )
-    }
+  } catch (error: DateTimeParseException) {
+    diagnostics.recordDegradedValue(
+      seam = "review_stats.duration_seconds",
+      expected = "parseable started_at and finished_at timestamps",
+      used = "started_at=$startedAt; finished_at=$finishedAt",
+      error = error,
+    )
     0
   }
 }

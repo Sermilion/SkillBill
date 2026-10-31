@@ -7,6 +7,7 @@ import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.databaseBusy
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
@@ -39,7 +40,6 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.sql.SQLException
 import java.time.Clock
-import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class SQLiteDatabaseSessionFactory(
@@ -78,7 +78,7 @@ class SQLiteDatabaseSessionFactory(
     if (!databaseExists()) return DatabaseCheckpointResult.Absent
     val dbPath = resolveDbPath()
     val outcome =
-      runCatching {
+      catchingNonCancellation {
         DatabaseRuntime.openWriteDbAt(dbPath, diagnostics).use { openDb ->
           openDb.connection.createStatement().use { it.execute("PRAGMA busy_timeout = 0") }
           val pageSize =
@@ -105,7 +105,6 @@ class SQLiteDatabaseSessionFactory(
         }
       }
     return outcome.getOrElse { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       if (error.isSqliteBusy()) {
         recordCheckpointBusy("checkpoint_blocked")
         DatabaseCheckpointResult.Busy
@@ -199,15 +198,20 @@ class SQLiteDatabaseSessionFactory(
   ): LeasedRead<T> {
     val openDb = lease.database
     val outcome =
-      runCatching {
-        readTransaction<LeasedRead<T>>(openDb, { it is LeasedRead.Done }) {
-          if (lease.reused && !readConnections.isCurrentGeneration(this, lease)) {
-            LeasedRead.Stale
-          } else {
-            LeasedRead.Done(runReadBlock(openDb, block))
+      try {
+        catchingNonCancellation {
+          readTransaction<LeasedRead<T>>(openDb, { it is LeasedRead.Done }) {
+            if (lease.reused && !readConnections.isCurrentGeneration(this, lease)) {
+              LeasedRead.Stale
+            } else {
+              LeasedRead.Done(runReadBlock(openDb, block))
+            }
           }
-        }
-      }.onFailure { readConnections.discard(lease) }.getOrThrow()
+        }.getOrThrow()
+      } catch (expectedFailure: Throwable) {
+        readConnections.discard(lease)
+        throw expectedFailure
+      }
     if (outcome is LeasedRead.Done) readConnections.giveBack(lease) else readConnections.discard(lease)
     return outcome
   }
@@ -217,7 +221,7 @@ class SQLiteDatabaseSessionFactory(
     commitWhen: (R) -> Boolean,
     body: Connection.() -> R,
   ): R =
-    runCatching {
+    catchingNonCancellation {
       openDb.connection.inDatabaseTransaction(
         DatabaseTransactionSpec(
           dbPath = openDb.dbPath,
@@ -247,7 +251,7 @@ class SQLiteDatabaseSessionFactory(
     repeat(DatabaseRuntime.SELF_MANAGED_WRITE_BUSY_ATTEMPTS - 1) {
       var blockCompleted = false
       val outcome =
-        runCatching {
+        catchingNonCancellation {
           withWriteDatabase { openDb ->
             runSelfManagedWrite(openDb, block) { blockCompleted = true }
           }
@@ -256,7 +260,6 @@ class SQLiteDatabaseSessionFactory(
       if (error == null) {
         return outcome.getOrThrow()
       }
-      error.rethrowIfCooperativeCancellationOrInterruption()
       if (blockCompleted) throw error
       if (!error.isSqliteBusy()) throw error
     }
@@ -405,9 +408,12 @@ class SQLiteDatabaseSessionFactory(
         val result = block(unitOfWork(openDb))
         onBlockCompleted()
         refreshFailure =
-          runCatching {
+          try {
             refreshBoardReadModelAfterSelfManagedWrite(openDb, before)
-          }.exceptionOrNull()
+            null
+          } catch (expectedFailure: Throwable) {
+            expectedFailure
+          }
         result
       }
     val error = refreshFailure
@@ -427,7 +433,7 @@ class SQLiteDatabaseSessionFactory(
     refreshFailure: Throwable,
   ) {
     val recovery =
-      runCatching {
+      catchingNonCancellation {
         openDb.connection.inDatabaseTransaction(
           DatabaseTransactionSpec(
             dbPath = openDb.dbPath,
@@ -443,17 +449,15 @@ class SQLiteDatabaseSessionFactory(
     if (recoveryFailure != null) {
       diagnostics.error("Could not invalidate the work board read model after refresh failed.", recoveryFailure)
       refreshFailure.addSuppressed(recoveryFailure)
-      recoveryFailure.rethrowIfCooperativeCancellationOrInterruption()
       return
     }
     diagnostics.warning("Invalidated the work board read model after refresh failed.", refreshFailure)
     if (changedTopics.isNotEmpty()) {
-      runCatching {
+      catchingNonCancellation {
         publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
       }.exceptionOrNull()?.let { publishFailure ->
         diagnostics.error("Could not publish the desktop commit signal after read model invalidation.", publishFailure)
         refreshFailure.addSuppressed(publishFailure)
-        publishFailure.rethrowIfCooperativeCancellationOrInterruption()
       }
     }
   }
@@ -512,19 +516,11 @@ class SQLiteDatabaseSessionFactory(
 }
 
 private fun <T> translatingBusyFailures(block: () -> T): T =
-  runCatching(block).getOrElse { error ->
-    error.rethrowIfCooperativeCancellationOrInterruption()
+  catchingNonCancellation(block).getOrElse { error ->
     if (error is SkillBillRuntimeException) throw error
     if (error.isSqliteBusy()) throw databaseBusy(error)
     throw error
   }
-
-private fun Throwable.rethrowIfCooperativeCancellationOrInterruption() {
-  when (this) {
-    is CancellationException -> throw this
-    is InterruptedException -> throw this
-  }
-}
 
 private fun Throwable.isSqliteBusy(): Boolean =
   generateSequence(this) { it.cause }.any { error ->

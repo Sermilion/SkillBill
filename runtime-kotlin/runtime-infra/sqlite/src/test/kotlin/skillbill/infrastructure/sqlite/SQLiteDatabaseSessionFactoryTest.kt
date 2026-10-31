@@ -5,8 +5,10 @@ import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
@@ -16,14 +18,86 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
+import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class SQLiteDatabaseSessionFactoryTest {
+  @Test
+  fun `cancelled self-managed projection invalidates the read model without replaying committed writes`() {
+    val tempDir = Files.createTempDirectory("skillbill-projection-cancellation")
+    val cancellation = CancellationException("projection cancelled")
+    val projector =
+      object : WorkBoardReadModelProjector {
+        override fun refresh(
+          unitOfWork: UnitOfWork,
+          workIds: Set<String>,
+          now: Instant,
+        ) {
+          throw cancellation
+        }
+
+        override fun rebuild(
+          unitOfWork: UnitOfWork,
+          now: Instant,
+        ) {
+          unitOfWork.workBoardReadModel.setComplete(true)
+        }
+      }
+    val database =
+      sqliteDatabaseSessionFactory(
+        userHome = tempDir,
+        dbPathOverride = tempDir.resolve("metrics.db").toString(),
+        environment = emptyMap(),
+        boardReadModelProjector = projector,
+      )
+    database.transaction { }
+    assertTrue(database.read { it.workBoardReadModel.isComplete() })
+    var writes = 0
+
+    val failure =
+      assertFailsWith<CancellationException> {
+        database.selfManagedWrite {
+          writes++
+          it.workflowStates.saveFeatureTaskWorkflow(workflowRecord("wftr-projection-cancellation"), RUNTIME)
+        }
+      }
+
+    assertSame(cancellation, failure)
+    assertEquals(1, writes)
+    database.read {
+      assertFalse(it.workBoardReadModel.isComplete())
+      assertEquals("running", it.workflowStates.getFeatureTaskWorkflow("wftr-projection-cancellation")?.workflowStatus)
+    }
+    database.transaction { }
+    assertTrue(database.read { it.workBoardReadModel.isComplete() })
+  }
+
+  @Test
+  fun `read cancellation propagates and releases its transaction connection`() {
+    val tempDir = Files.createTempDirectory("skillbill-read-cancellation")
+    val database = boundDatabase(tempDir, tempDir.resolve("metrics.db"))
+    val cancellation = CancellationException("cancelled")
+
+    assertSame(cancellation, assertFailsWith<CancellationException> { database.read { throw cancellation } })
+
+    database.transaction { unitOfWork ->
+      unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflowRecord("wftr-read-cancellation"), RUNTIME)
+    }
+    assertEquals(
+      "running",
+      database.read {
+        it.workflowStates.getFeatureTaskWorkflowAsMode("wftr-read-cancellation", RUNTIME)?.workflowStatus
+      },
+    )
+  }
+
   @Test
   fun `nested control writes share the outer transaction and roll back together`() {
     val tempDir = Files.createTempDirectory("skillbill-nested-write")

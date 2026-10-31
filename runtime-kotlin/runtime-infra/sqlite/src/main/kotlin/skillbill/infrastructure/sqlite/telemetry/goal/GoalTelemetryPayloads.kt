@@ -20,6 +20,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.time.format.DateTimeParseException
 
 private const val MILLIS_PER_SECOND = 1000L
 
@@ -194,16 +195,18 @@ private fun parseTelemetryTimestamp(
   diagnostics: RuntimeDiagnostics,
   fieldName: String,
 ): Instant? =
-  runCatching {
+  try {
     Instant.parse(value)
-  }.recoverCatching {
-    LocalDateTime.parse(value.replace(' ', 'T')).toInstant(ZoneOffset.UTC)
-  }.getOrElse { error ->
-    diagnostics.recordDegradedValue(
-      seam = "telemetry.goal_issue.$fieldName",
-      expected = "RFC 3339 instant or local date-time",
-      used = value.degradedValuePreview(),
-      error = error,
-    )
-    null
+  } catch (_: DateTimeParseException) {
+    try {
+      LocalDateTime.parse(value.replace(' ', 'T')).toInstant(ZoneOffset.UTC)
+    } catch (error: DateTimeParseException) {
+      diagnostics.recordDegradedValue(
+        seam = "telemetry.goal_issue.$fieldName",
+        expected = "RFC 3339 instant or local date-time",
+        used = value.degradedValuePreview(),
+        error = error,
+      )
+      null
+    }
   }

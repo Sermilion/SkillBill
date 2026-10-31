@@ -25,18 +25,16 @@ internal fun parseDurationSeconds(
   finishedAt: String,
   diagnostics: RuntimeDiagnostics,
 ): Int =
-  runCatching {
+  try {
     val start = LocalDateTime.parse(startedAt.replace(' ', 'T'))
     val end = LocalDateTime.parse(finishedAt.replace(' ', 'T'))
     maxOf(0, ChronoUnit.SECONDS.between(start, end).toInt())
-  }.getOrElse { error ->
-    if (error is DateTimeParseException) {
-      diagnostics.recordDegradedValue(
-        seam = "telemetry.duration_seconds",
-        expected = "parseable started_at and finished_at timestamps",
-        used = "started_at=$startedAt; finished_at=$finishedAt",
-        error = error,
-      )
-    }
+  } catch (error: DateTimeParseException) {
+    diagnostics.recordDegradedValue(
+      seam = "telemetry.duration_seconds",
+      expected = "parseable started_at and finished_at timestamps",
+      used = "started_at=$startedAt; finished_at=$finishedAt",
+      error = error,
+    )
     0
   }

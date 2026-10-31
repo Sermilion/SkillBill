@@ -12,7 +12,6 @@ import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
-import kotlin.coroutines.cancellation.CancellationException
 
 internal fun decodeReviewPolicy(raw: String): GoalRunnerReviewPolicy {
   val policy =
@@ -98,8 +97,6 @@ private fun parseAcceptanceList(raw: String): List<*> {
 private fun parseAcceptanceJsonElement(raw: String): JsonElement =
   try {
     JsonCodec.json.parseToJsonElement(raw)
-  } catch (error: CancellationException) {
-    throw error
   } catch (error: SerializationException) {
     invalidAcceptanceJson(error)
   }

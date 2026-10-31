@@ -4,6 +4,7 @@ import org.sqlite.SQLiteConfig
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.databaseAccessFailure
 import skillbill.error.core.databaseIncompatible
 import skillbill.infrastructure.sqlite.core.migration.MigrationLedger
@@ -269,7 +270,7 @@ private fun openedDatabase(
         DatabaseAccessOperation.OPEN,
         "file identity changed while the connection opened",
       )
-    runCatching { connection.close() }.onFailure(failure::addSuppressed)
+    catchingNonCancellation { connection.close() }.onFailure(failure::addSuppressed)
     throw failure
   }
   return OpenDatabase(connection, path, after)
@@ -290,12 +291,14 @@ private fun <T> Connection.closingOnFailure(
   diagnostics: RuntimeDiagnostics?,
   block: () -> T,
 ): T {
-  return runCatching(block).getOrElse { failure ->
-    runCatching { close() }.onFailure { closeFailure ->
-      failure.addSuppressed(closeFailure)
+  return try {
+    block()
+  } catch (expectedFailure: Throwable) {
+    catchingNonCancellation { close() }.onFailure { closeFailure ->
+      expectedFailure.addSuppressed(closeFailure)
       diagnostics?.warning("SQLite connection close failed after an earlier failure.")
     }
-    throw failure
+    throw expectedFailure
   }
 }
 
@@ -392,13 +395,9 @@ internal class DatabaseWriteReadinessGate {
         return
       }
       published = null
-      runCatching {
-        establishSchema()
-        published = DatabaseIdentity.read(normalized)
-          ?: error("Database readiness completed but identity could not be read at '$normalized'.")
-      }.onFailure {
-        published = null
-      }.getOrThrow()
+      establishSchema()
+      published = DatabaseIdentity.read(normalized)
+        ?: error("Database readiness completed but identity could not be read at '$normalized'.")
     }
   }
 }

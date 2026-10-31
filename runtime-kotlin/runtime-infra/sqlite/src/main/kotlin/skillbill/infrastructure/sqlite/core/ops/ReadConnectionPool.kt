@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.core.ops
 
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
 import skillbill.infrastructure.sqlite.core.schema.fileObservation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -38,26 +39,30 @@ internal class ReadConnectionPool(private val diagnostics: RuntimeDiagnostics) {
         pooled to epoch
       }
     val database =
-      runCatching(open).getOrElse { failure ->
+      try {
+        open()
+      } catch (expectedFailure: Throwable) {
         if (pooled) freeSlot()
-        throw failure
+        throw expectedFailure
       }
     if (database == null) {
       if (pooled) freeSlot()
       return null
     }
     val generation =
-      runCatching { database.connection.storedDesktopGeneration() }.getOrElse { failure ->
+      try {
+        database.connection.storedDesktopGeneration()
+      } catch (expectedFailure: Throwable) {
         if (pooled) freeSlot()
         close(database)
-        throw failure
+        throw expectedFailure
       }
     return ReadConnectionLease(PooledReadConnection(database, generation, leaseEpoch, pooled), reused = false)
   }
 
   fun isCurrentFile(lease: ReadConnectionLease): Boolean {
     val database = lease.database
-    return runCatching {
+    return catchingNonCancellation {
       fileObservation(database.dbPath, DatabaseAccessOperation.READ) == database.fileObservation
     }.getOrElse { failure ->
       diagnostics.info("Pooled read connection target is unreadable (${failure::class.simpleName}); reopening.")
@@ -114,7 +119,7 @@ internal class ReadConnectionPool(private val diagnostics: RuntimeDiagnostics) {
   }
 
   private fun close(database: OpenDatabase) {
-    runCatching { database.close() }.onFailure { failure ->
+    catchingNonCancellation { database.close() }.onFailure { failure ->
       diagnostics.warning("Pooled read connection close failed.", failure)
     }
   }

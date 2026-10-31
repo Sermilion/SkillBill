@@ -43,7 +43,7 @@ internal fun decodePassClaims(raw: String): List<ParallelReviewMergedFinding> {
     val fNumber = map[ReviewFindingPayloadKeys.F_NUMBER] as? String ?: return@mapNotNull null
     val severityName = map[ReviewFinishedTelemetryPayloadKeys.SEVERITY] as? String ?: return@mapNotNull null
     val severity =
-      runCatching { ParallelReviewSeverity.valueOf(severityName) }.getOrNull()
+      ParallelReviewSeverity.entries.firstOrNull { it.name == severityName }
         ?: return@mapNotNull null
     ParallelReviewMergedFinding(
       fNumber = fNumber,

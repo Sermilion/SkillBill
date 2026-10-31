@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.core.ops
 
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.core.schema.databasePath
@@ -41,7 +42,7 @@ internal inline fun <T> Connection.inDatabaseTransaction(
   var primaryFailure: Throwable? = null
   return try {
     val result =
-      runCatching { block() }.getOrElse { failure ->
+      catchingNonCancellation { block() }.getOrElse { failure ->
         primaryFailure =
           when (failure) {
             is SQLException ->
@@ -113,12 +114,12 @@ internal fun Connection.rollbackAfterFailedTransaction(
   diagnostics: RuntimeDiagnostics,
   primaryFailure: Throwable?,
 ) {
-  val rollbackOutcome = runCatching { createStatement().use { it.execute("ROLLBACK") } }
+  val rollbackOutcome = catchingNonCancellation { createStatement().use { it.execute("ROLLBACK") } }
   val rollbackFailure = rollbackOutcome.exceptionOrNull() ?: return
   if (primaryFailure != null && primaryFailure !== rollbackFailure) {
     primaryFailure.addSuppressed(rollbackFailure)
   }
-  runCatching { logTransactionRollbackFailure(dbPath, diagnostics, rollbackFailure, primaryFailure) }
+  catchingNonCancellation { logTransactionRollbackFailure(dbPath, diagnostics, rollbackFailure, primaryFailure) }
 }
 
 internal fun logTransactionRollbackFailure(
