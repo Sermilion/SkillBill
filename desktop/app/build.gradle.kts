@@ -29,6 +29,7 @@ kotlin {
     implementation(projects.core.designsystem)
     implementation(projects.core.ui)
     implementation(projects.feature.terminal)
+    implementation(projects.feature.chat)
     implementation(projects.feature.work)
     implementation(projects.feature.history)
     implementation(projects.feature.detail)
