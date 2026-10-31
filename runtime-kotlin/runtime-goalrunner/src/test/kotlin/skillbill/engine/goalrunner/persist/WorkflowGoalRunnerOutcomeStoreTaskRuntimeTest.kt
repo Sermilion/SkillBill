@@ -29,6 +29,7 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionAdmission
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
+import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -141,6 +142,48 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     assertEquals(listOf(repair), reopened.goalFinalRepairContext("wftr-task-runtime")?.outputs)
     assertEquals("QA warning", reopened.goalFinalRepairContext("wftr-task-runtime")?.warning)
     assertEquals(completion, reopened.goalHistoryCompletion("wftr-task-runtime"))
+  }
+
+  @Test
+  fun `fresh quality retires an unsettled execution and refuses a repeat`() {
+    val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "wftr-child")
+    workflows.saveFeatureTaskWorkflow(taskRuntimeWorkflowRecord("wftr-child", "wfl-parent"), RUNTIME)
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD_REVISION_5).seed(workflows, "wftr-child")
+    val store = testWorkflowGoalRunnerOutcomeStore(FakeDatabaseSessionFactory(workflows), testWorkflowSnapshotValidator)
+    val admitted =
+      store.admitGoalQualityExecution(
+        "wfl-parent",
+        "baseline",
+        GoalQualityExecutionInputs(
+          issueKey = "SKILL-87.1",
+          intake = null,
+          repoRoot = "/repository",
+          invokedAgentId = "codex",
+          configuredAgentOverrideId = null,
+          timeoutMillis = null,
+          qaSelection = FeatureTaskRuntimeQaSelection.AUTO,
+          parentSpecPath = "spec.md",
+          acceptanceCriteria = emptyList(),
+          acceptanceCriteriaReadFailure = null,
+          branch = "feat/SKILL-87",
+          modelDirectives = emptyMap(),
+          modelMatrix = null,
+          addons = emptyList(),
+        ),
+        GoalQualityExecutionPlans("qa-plan", "validation-plan"),
+      )
+    val invocationId = requireNotNull(admitted.execution).invocationId
+    val repair = GoalFinalRepairOutput("qa", invocationId, 1, "Interrupted QA output")
+    assertTrue(store.recordGoalFinalRepairOutput("wfl-parent", invocationId, repair))
+
+    assertTrue(store.chooseFreshGoalQualityExecution("wfl-parent"))
+    assertFalse(store.chooseFreshGoalQualityExecution("wfl-parent"))
+
+    val retired = assertNotNull(store.goalQualityExecution("wfl-parent"))
+    assertEquals(GoalQualityReadiness.ADMITTED, retired.readiness)
+    assertEquals(GoalQualityExecutionStatus.RETIRED, retired.execution?.status)
+    assertNull(store.goalFinalRepairContext("wfl-parent"))
   }
 
   @Test

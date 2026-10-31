@@ -1,5 +1,7 @@
 package skillbill.workflow.taskruntime.model.audit
 
+import skillbill.workflow.model.repair.FocusedRepairStrategy
+
 internal object AcceptanceCriterionRepairCoherence {
   private val SCENARIO_REF = Regex("""^(IS-\d{3}|AC-\d{3}\+AC-\d{3})$""")
   private val CRITERION_REF = Regex("""^AC-\d{3}$""")
@@ -198,7 +200,7 @@ internal object AcceptanceCriterionRepairCoherence {
         state.unsuccessfulTotals.getOrDefault(
           live.criterionRef,
           0,
-        ) < AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
+        ) < FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
     val capacity =
       state.outcomes.size < AcceptanceCriterionRepairState.MAX_REPAIR_OUTCOMES &&
         state.sourceTransitions.size < AcceptanceCriterionRepairState.MAX_REPAIR_SOURCE_TRANSITIONS
@@ -217,7 +219,7 @@ internal object AcceptanceCriterionRepairCoherence {
     val validTotals =
       totals.all {
           (ref, total) ->
-        ref in refs && total in 0..AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
+        ref in refs && total in 0..FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
       }
     if (state.budgetStartOutcomeIndex !in 0..outcomes.size) return false
     return validTotals && outcomes.drop(state.budgetStartOutcomeIndex).filterNot {

@@ -138,7 +138,7 @@ $defs:
         additionalProperties: false
         required: [state, round, exit_reason, fix_ran, open_finding_refs, findings]
         properties:
-          state: {type: string, enum: [pending, running, completed, skipped]}
+          state: {type: string, enum: [pending, running, blocked, completed, skipped]}
           round: {type: integer, minimum: 0}
           exit_reason:
             type: [string, "null"]

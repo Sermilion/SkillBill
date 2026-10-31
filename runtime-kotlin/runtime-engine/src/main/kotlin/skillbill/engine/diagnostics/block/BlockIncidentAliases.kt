@@ -30,6 +30,9 @@ public object BlockIncidentAliases {
     )
   }
 
+  public fun BlockIncidentAlias.withBlockCause(blockCause: String?): BlockIncidentAlias =
+    blockCause?.let { copy(value = "$value:cause=$it") } ?: this
+
   internal fun recoveredBlock(
     workflowId: String,
     stepId: String,

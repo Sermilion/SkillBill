@@ -5,9 +5,9 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
@@ -122,12 +122,25 @@ public class DefaultGoalRunnerAssessmentGate(
             "the stored assessment record is unreadable: ${read.reason}",
           )
       }
-    val existing = prior.rounds.getOrNull(round - 1)
+    val existing = resumeRound(prior.rounds.getOrNull(round - 1), round, bundle.headSha)
     val problem = resumeProblem(prior, existing, round, bundle.headSha)
     if (problem != null) {
       return unavailable(prior.copy(exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE), problem)
     }
     return GoalAssessmentRoundRun(services, state, request, bundle, prior, existing, round).execute()
+  }
+
+  private fun resumeRound(
+    existing: GoalAssessmentRound?,
+    round: Int,
+    headSha: String,
+  ): GoalAssessmentRound? {
+    if (existing == null || round != 1) return existing
+    if (existing.assessorRuns.isNotEmpty()) return existing
+    val hasResults =
+      existing.findings.isNotEmpty() || existing.scenarios.isNotEmpty() || existing.regressions.isNotEmpty()
+    val repairStarted = existing.fix != null || existing.repairPlan != null || existing.targetRef != null
+    return if (hasResults || repairStarted) existing else existing.copy(headSha = headSha)
   }
 
   private fun resumeProblem(
@@ -137,8 +150,7 @@ public class DefaultGoalRunnerAssessmentGate(
     headSha: String,
   ): String? =
     when {
-      round !in 1..GoalAssessmentRecord.MAX_ROUNDS ->
-        "round $round is outside the ${GoalAssessmentRecord.MAX_ROUNDS} rounds a goal allows"
+      round < 1 -> "round $round must be positive"
       prior.rounds.size > round -> "round $round was superseded by round ${prior.rounds.size}"
       prior.rounds.size < round - 1 -> "round $round cannot start before round ${prior.rounds.size + 1}"
       existing != null && !existing.headSha.equals(headSha, ignoreCase = true) ->

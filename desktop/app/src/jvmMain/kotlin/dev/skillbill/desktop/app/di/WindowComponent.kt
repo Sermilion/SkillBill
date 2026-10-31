@@ -20,6 +20,7 @@ import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +49,7 @@ interface WindowComponent {
   val keyboard: ShellKeyboard
   val terminal: TerminalTriggers
   val specsPane: SpecsPaneModel
+  val chat: ChatCommands
   val board: ShellBoardState
   val boardRepository: WorkBoardRepository
   val details: WorkDetailRepository

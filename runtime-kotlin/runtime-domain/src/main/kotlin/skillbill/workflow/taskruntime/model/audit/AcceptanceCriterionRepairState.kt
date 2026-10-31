@@ -1,5 +1,7 @@
 package skillbill.workflow.taskruntime.model.audit
 
+import skillbill.workflow.model.repair.FocusedRepairStrategy
+
 enum class AcceptanceCriterionRepairMode(val wireValue: String) {
   INITIAL_DISCOVERY("initial_discovery"),
   CURRENT_CRITERION_TARGETED("current_criterion_targeted"),
@@ -246,8 +248,9 @@ data class AcceptanceCriterionRepairState internal constructor(
     val outcome = acceptedOutcome
     val totals = unsuccessfulTotals.toMutableMap()
     if (!outcome.successful) {
-      val next = totals.getOrDefault(outcome.criterionRef, 0) + 1
-      if (next > MAX_UNSUCCESSFUL_REPAIR_OUTCOMES) return null
+      val next =
+        FocusedRepairStrategy.recordUnsuccessfulOutcome(totals.getOrDefault(outcome.criterionRef, 0))
+          ?: return null
       totals[outcome.criterionRef] = next
     }
     val changedCriteria = criteriaAfter(outcome)
@@ -255,11 +258,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     val queue = stableQueue(changedCriteria, dependencies, byRef) ?: return null
     val pending = if (outcome.successful) pendingAuditRefs - outcome.criterionRef else pendingAuditRefs
     val current = pending.firstOrNull() ?: queue.firstOrNull()
-    val blocked =
-      !outcome.successful && totals.getOrDefault(
-        outcome.criterionRef,
-        0,
-      ) >= MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
+    val blocked = !outcome.successful && FocusedRepairStrategy.exhausted(totals.getOrDefault(outcome.criterionRef, 0))
     return copy(
       criteria = changedCriteria,
       unresolvedQueue = queue,
@@ -350,7 +349,6 @@ data class AcceptanceCriterionRepairState internal constructor(
   }
 
   companion object {
-    const val MAX_UNSUCCESSFUL_REPAIR_OUTCOMES: Int = 3
     const val MAX_DURABLE_UTF8_BYTES: Int = 12_582_912
     const val RESERVATION_UTF8_HEADROOM: Int = 65_536
 
@@ -359,7 +357,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       unsuccessfulTotals: Map<String, Int>,
     ): Boolean =
       unresolvedQueue.any {
-        unsuccessfulTotals.getOrDefault(it, 0) >= MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
+        FocusedRepairStrategy.exhausted(unsuccessfulTotals.getOrDefault(it, 0))
       }
 
     fun restore(state: AcceptanceCriterionRepairState): AcceptanceCriterionRepairState? =

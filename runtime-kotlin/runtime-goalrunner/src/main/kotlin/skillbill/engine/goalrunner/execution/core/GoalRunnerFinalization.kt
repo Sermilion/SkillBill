@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -26,7 +27,6 @@ import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.qa.GoalQaGateResult
 import skillbill.engine.goalrunner.qa.GoalQaSkipReason
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
@@ -36,7 +36,9 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -115,7 +117,22 @@ public class GoalRunnerFinalization(
       noChangeFinalization(finalState.manifest, request, attempted)?.also { assessmentGate.skipNoChanges(finalState) }
         ?: publication.publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
-    assessmentGate.run(finalState, request)
+    val assessment = assessmentGate.run(finalState, request)
+    GoalAssessmentLoopRules.publicationBlockReason(assessment)?.let { reason ->
+      return stopped(
+        StoppedReportArgs(
+          issueKey = finalState.manifest.issueKey,
+          attempted = attempted,
+          subtaskId = 0,
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason =
+            reason +
+              " Resume explicitly with skill-bill goal resume ${request.issueKey} before running the goal again.",
+          workflowId = finalState.parentWorkflowId,
+          lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
+        ),
+      )
+    }
     return finalizeValidatedPublication(finalState, request, attempted)
   }
 
@@ -138,7 +155,12 @@ public class GoalRunnerFinalization(
         writeGoalHistory(finalState, request, attempted, invocationId)?.let { return it }
         invocationId to qaResult
       } catch (failure: SkillBillRuntimeException) {
-        return writeHistoryStopped(finalState, attempted, failure.message ?: "Final goal state could not be saved.")
+        return writeHistoryStopped(
+          finalState,
+          attempted,
+          failure.message ?: "Final goal state could not be saved.",
+          failure.failureCodeLabel(),
+        )
       }
     return commitAndPublish(finalState, request, attempted, prepared.first, prepared.second)
   }
@@ -391,6 +413,7 @@ public class GoalRunnerFinalization(
     state: GoalRunnerManifestState,
     attempted: List<Int>,
     reason: String,
+    failureCode: String? = null,
   ): GoalRunnerRunReport =
     stopped(
       StoppedReportArgs(
@@ -401,6 +424,7 @@ public class GoalRunnerFinalization(
         blockedReason = reason,
         workflowId = state.parentWorkflowId,
         lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
+        failureCode = failureCode,
       ),
     )
 

@@ -1,4 +1,4 @@
-package skillbill.engine.goalrunner.persist.assessment
+package skillbill.engine.goalrunner.model
 
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 

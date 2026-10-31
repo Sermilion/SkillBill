@@ -11,7 +11,24 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 @Inject
 @SingleIn(WindowScope::class)
 class ShellPanes {
-  var specsOpen by mutableStateOf(false)
+  private var specs by mutableStateOf(false)
+  private var chat by mutableStateOf(false)
+
+  /** Opening Specs closes the chat pane. */
+  var specsOpen: Boolean
+    get() = specs
+    set(value) {
+      specs = value
+      if (value) chat = false
+    }
+
+  /** Mirrors the chat workspace's pane state for the shell's layout; only the chat workspace writes it. Opening it closes Specs. */
+  var chatOpen: Boolean
+    get() = chat
+    set(value) {
+      chat = value
+      if (value) specs = false
+    }
   var detailsPaneOpen by mutableStateOf(false)
   var drawerOpen by mutableStateOf(false)
   var shortcutsOpen by mutableStateOf(false)

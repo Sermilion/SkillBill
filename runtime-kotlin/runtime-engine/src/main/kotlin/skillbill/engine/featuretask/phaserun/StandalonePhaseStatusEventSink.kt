@@ -48,6 +48,7 @@ public class StandalonePhaseStatusEventSink(
   private var qaOutcome: StandaloneQaOutcome? = null
   private var qaReportText: String? = null
   private var planReport: StandalonePlanReport? = null
+  private var reviewRunId: String? = null
 
   internal fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
     monitorCleanup = cleanup
@@ -94,6 +95,7 @@ public class StandalonePhaseStatusEventSink(
         is PhaseRunResult.Completed -> {
           result.qaOutcome?.let(::recordQaOutcome)
           qaReportText = result.qaReportText
+          reviewRunId = result.reviewRunId
           persist(
             state = "terminal",
             finishedAt = clock.instant(),
@@ -269,6 +271,7 @@ public class StandalonePhaseStatusEventSink(
             qaOutcome = qaOutcome,
             qaReportText = qaReportText,
             planReport = planReport,
+            reviewRunId = reviewRunId,
           ),
         )
       }

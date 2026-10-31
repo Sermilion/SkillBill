@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.app.shell
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -13,9 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
@@ -23,11 +22,14 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import dev.skillbill.desktop.app.command.CommandMenu
+import dev.skillbill.desktop.app.display.DesktopUiScale
+import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.di.WindowComponent
 import dev.skillbill.desktop.app.keyboard.ShortcutSheet
 import dev.skillbill.desktop.app.keyboard.KeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.app.keyboard.toKeyPress
+import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
@@ -38,11 +40,10 @@ import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellLayout
 import kotlinx.coroutines.cancel
-import java.awt.Dimension
 import java.awt.GraphicsEnvironment
 
-private val MIN_WINDOW_SIZE = Dimension(560, 420)
-private const val MIN_MAIN_WINDOW_DENSITY = 1.75f
+private const val MIN_WINDOW_WIDTH = 560
+private const val MIN_WINDOW_HEIGHT = 420
 
 /**
  * The opening size in content dp: the sidebar, the 780 dp document column and the details pane side by side with room to spare,
@@ -54,28 +55,34 @@ private val COMFORTABLE_CONTENT = DpSize(1400.dp, 900.dp)
 private const val MAX_SCREEN_SHARE = 0.9f
 
 /**
- * [COMFORTABLE_CONTENT] in window dp. The content renders at no less than [MIN_MAIN_WINDOW_DENSITY], above the screen's own scale,
- * so the window grows by that ratio; it is then capped at [MAX_SCREEN_SHARE] of the usable screen area.
+ * [COMFORTABLE_CONTENT] in window dp. When [uiScale] overrides the platform density the window grows by its window scale, so the
+ * content still gets its comfortable size; the result is then capped at [MAX_SCREEN_SHARE] of the usable screen area.
  */
-private fun comfortableWindowSize(): DpSize {
-  val environment = GraphicsEnvironment.getLocalGraphicsEnvironment()
-  if (GraphicsEnvironment.isHeadless()) return COMFORTABLE_CONTENT
-  val screenScale = environment.defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX.toFloat().coerceAtLeast(1f)
-  val contentToWindow = maxOf(screenScale, MIN_MAIN_WINDOW_DENSITY) / screenScale
-  val usable = environment.maximumWindowBounds
+private fun comfortableWindowSize(uiScale: DesktopUiScale): DpSize {
+  val size = uiScale.windowSize(COMFORTABLE_CONTENT)
+  if (GraphicsEnvironment.isHeadless()) return size
+  val usable = GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
   return DpSize(
-    minOf(COMFORTABLE_CONTENT.width.value * contentToWindow, usable.width * MAX_SCREEN_SHARE).dp,
-    minOf(COMFORTABLE_CONTENT.height.value * contentToWindow, usable.height * MAX_SCREEN_SHARE).dp,
+    minOf(size.width.value, usable.width * MAX_SCREEN_SHARE).dp,
+    minOf(size.height.value, usable.height * MAX_SCREEN_SHARE).dp,
   )
 }
 
 /** The main window: the shell frame, the routes, the command menu, the shortcut sheet and the toasts, all on [window]'s graph. */
 @Composable
-fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean, visible: Boolean, focusRequest: Int, onCloseRequest: () -> Unit) {
+fun ApplicationScope.MainWindow(
+  window: WindowComponent,
+  uiScale: DesktopUiScale,
+  reducedMotion: Boolean,
+  visible: Boolean,
+  focusRequest: Int,
+  onCloseRequest: () -> Unit,
+) {
   DisposableEffect(window) {
     onDispose {
       window.terminal.close()
       window.specsPane.close()
+      window.chat.closeChats()
       window.scope.scope.cancel()
     }
   }
@@ -85,7 +92,8 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
     onCloseRequest = onCloseRequest,
     visible = visible,
     title = "Skill Bill",
-    state = rememberWindowState(size = remember { comfortableWindowSize() }, position = WindowPosition(Alignment.Center)),
+    icon = skillBillIcon(),
+    state = rememberWindowState(size = remember(uiScale) { comfortableWindowSize(uiScale) }, position = WindowPosition(Alignment.Center)),
     onPreviewKeyEvent = { event ->
       val press = event.toKeyPress()
       val listNavigation = specsPaneOwnsNavigationKey(
@@ -100,8 +108,7 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
     },
   ) {
     val awtWindow = this.window
-    val systemDensity = LocalDensity.current
-    SideEffect { awtWindow.minimumSize = MIN_WINDOW_SIZE }
+    SideEffect { awtWindow.minimumSize = uiScale.windowDimension(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT) }
     LaunchedEffect(visible, focusRequest) {
       if (visible) {
         withFrameNanos { }
@@ -111,7 +118,7 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
         awtWindow.requestFocus()
       }
     }
-    CompositionLocalProvider(LocalDensity provides Density(maxOf(systemDensity.density, MIN_MAIN_WINDOW_DENSITY), systemDensity.fontScale)) {
+    DesktopUiScaleProvider(uiScale) {
       SkillBillTheme(reducedMotion) {
         val focusManager = LocalFocusManager.current
         SideEffect { keyboard.clearFocus = { focusManager.clearFocus() } }
@@ -121,7 +128,7 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
             val drawerMode = maxWidth < DRAWER_WIDTH
             SideEffect { keyboard.drawerMode = drawerMode }
             val panes = window.panes
-            val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !narrow, drawerMode = drawerMode)
+            val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !panes.chatOpen && !narrow, drawerMode = drawerMode)
             // Below the drawer breakpoint every view header leads with the sidebar toggle, as `.sb-side-toggle`.
             val sidebarToggle: (() -> Unit)? = remember(drawerMode, panes) { if (drawerMode) ({ panes.drawerOpen = !panes.drawerOpen }) else null }
             CompositionLocalProvider(LocalShellLayout provides layout, LocalSidebarToggle provides sidebarToggle) {
@@ -159,6 +166,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val board by window.board.view.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
+  val chat = contributions.firstOrNull { it.slot == PaneSlot.Chat }?.content
   val right = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
   val bottom = contributions.firstOrNull { it.slot == PaneSlot.Bottom }?.takeIf { panes.terminalOpen && topRoute !is SettingsRoute }?.content
   val navigate: (AppRoute) -> Unit = { route ->
@@ -183,11 +191,14 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   }
   ShellFrame(sidebar, drawerMode, panes.drawerOpen, onDismissDrawer = { panes.drawerOpen = false }) {
     WorkArea(drawerMode, right, bottom) {
-      AppNavHost(navigator, window.entries, shellProblem(session, board)) { problem ->
-        ProblemStatePanel(
-          problem,
-          onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },
-        )
+      Box(Modifier.fillMaxSize()) {
+        AppNavHost(navigator, window.entries, shellProblem(session, board)) { problem ->
+          ProblemStatePanel(
+            problem,
+            onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },
+          )
+        }
+        if (topRoute !is SettingsRoute) chat?.invoke()
       }
     }
   }

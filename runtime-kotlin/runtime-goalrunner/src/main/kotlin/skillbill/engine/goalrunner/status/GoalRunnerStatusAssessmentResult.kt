@@ -1,7 +1,7 @@
 package skillbill.engine.goalrunner.status
 
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
@@ -82,7 +82,8 @@ private fun GoalAssessmentRecord.toStatusResult(): GoalRunnerAssessmentResult {
 private fun GoalAssessmentRecord.statusState(): GoalRunnerAssessmentState =
   when {
     exitReason == GoalAssessmentExitReason.SKIPPED_NO_CHANGES -> GoalRunnerAssessmentState.SKIPPED
-    exitReason != null -> GoalRunnerAssessmentState.COMPLETED
+    exitReason == GoalAssessmentExitReason.CONVERGED -> GoalRunnerAssessmentState.COMPLETED
+    exitReason != null -> GoalRunnerAssessmentState.BLOCKED
     rounds.isEmpty() -> GoalRunnerAssessmentState.PENDING
     else -> GoalRunnerAssessmentState.RUNNING
   }
@@ -90,6 +91,6 @@ private fun GoalAssessmentRecord.statusState(): GoalRunnerAssessmentState =
 private fun GoalAssessmentRecord.statusRound(): Int =
   when {
     exitReason != null || rounds.isEmpty() -> rounds.size
-    rounds.last().fix != null -> (rounds.size + 1).coerceAtMost(GoalAssessmentRecord.MAX_ROUNDS)
+    rounds.last().fix != null -> rounds.size + 1
     else -> rounds.size
   }

@@ -77,9 +77,11 @@ data class GoalRunnerAcceptedBlockReference(
   val childIncidentToken: String?,
   val sourceAliasKind: String? = null,
   val sourceAliasValue: String? = null,
+  val blockCause: String? = null,
 ) {
   init {
     require(sourceWorkflowId.isNotBlank() && blockedStepId.isNotBlank() && (attempt == null || attempt > 0))
+    require(blockCause == null || blockCause.isNotBlank())
     require(aliasKind.isNotBlank() && aliasValue.isNotBlank())
     require(incidentToken.isNotBlank())
     require((sourceAliasKind == null) == (sourceAliasValue == null))
@@ -98,7 +100,7 @@ data class GoalRunnerAcceptedBlockReference(
         GoalRunnerAcceptedBlockReferenceKeys.CHILD_INCIDENT_TOKEN to childIncidentToken,
         GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_KIND to sourceAliasKind,
         GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_VALUE to sourceAliasValue,
-      ),
+      ).apply { blockCause?.let { put(GoalRunnerAcceptedBlockReferenceKeys.BLOCK_CAUSE, it) } },
     )
 
   fun matchesIdentity(
@@ -128,6 +130,7 @@ data class GoalRunnerAcceptedBlockReference(
         childIncidentToken = value.optionalString(GoalRunnerAcceptedBlockReferenceKeys.CHILD_INCIDENT_TOKEN),
         sourceAliasKind = value.optionalString(GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_KIND),
         sourceAliasValue = value.optionalString(GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_VALUE),
+        blockCause = value.optionalString(GoalRunnerAcceptedBlockReferenceKeys.BLOCK_CAUSE),
       )
     }
 
@@ -197,6 +200,8 @@ data class GoalRunnerStopReport(
   val incidentToken: String? = null,
   val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val failureCode: String? = null,
+  val recoveryCommand: String? = null,
 )
 
 enum class GoalPullRequestStatus(val wireValue: String) {

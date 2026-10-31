@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist.blockincident
 
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentAliases.withBlockCause
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWriteResult
@@ -27,7 +28,7 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
         reference.executionGeneration,
         reference.attempt,
         reference.childIncidentToken,
-      )
+      ).withBlockCause(reference.blockCause)
     val childToken = reference.childIncidentToken
     val observation =
       BlockIncidentObservation(

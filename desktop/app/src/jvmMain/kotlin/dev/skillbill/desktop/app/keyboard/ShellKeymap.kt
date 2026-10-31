@@ -61,6 +61,9 @@ sealed interface ShellCommand {
 
   data object ToggleSpecs : ShellCommand
 
+  /** Mod+L: the chat pane for the selected execution; a focused terminal keeps Ctrl+L as clear-screen. */
+  data object ToggleChat : ShellCommand
+
   data class Navigate(val route: AppRoute) : ShellCommand
 
   data class Screen(val key: ScreenKey) : ShellCommand
@@ -82,6 +85,7 @@ class ShellKeymap(private val timeSource: TimeSource = TimeSource.Monotonic) {
     }
     if (mod && press.key == ShellKey.Enter) return if (context.editOpen) ShellCommand.SaveEdit else null
     if (mod && char == 'i') return if (context.layerOpen) null else ShellCommand.ToggleDetailsPane
+    if (mod && char == 'l') return if (context.layerOpen || context.terminalFocused) null else ShellCommand.ToggleChat
     if (mod || press.alt) return null
     if (context.layerOpen || context.sheetOpen || context.textInputFocused || context.terminalFocused) {
       chord = null

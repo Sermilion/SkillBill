@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.incident
 
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentAliases.withBlockCause
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.slot.state.carriesPullRequestIncidentFields
@@ -63,7 +64,9 @@ internal object BlockIncidentRecoveredObservations {
   }
 
   private fun BlockIncidentIdentity.isGoalWriterIdentity(workflowId: String): Boolean =
-    alias == BlockIncidentAliases.goal(workflowId, stepId, generation, attempt, childIncidentToken)
+    alias ==
+      BlockIncidentAliases.goal(workflowId, stepId, generation, attempt, childIncidentToken)
+        .withBlockCause(blockCause)
 
   private fun goalBlock(
     family: WorkflowFamily,

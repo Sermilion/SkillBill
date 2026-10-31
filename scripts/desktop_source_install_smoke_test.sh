@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
-sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^stage_selected_desktop_app() {/,/^}/p; /^activate_staged_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_app_legacy_executable_path() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
+sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^stage_selected_desktop_app() {/,/^}/p; /^activate_staged_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_app_legacy_executable_path() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p; /^desktop_app_hosts_installer() {/,/^}/p; /^run_detached() {/,/^}/p; /^schedule_desktop_app_restart() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
 source "$task_dir/install-functions.sh"
 
 RUNTIME_KOTLIN_DIR="$task_dir/checkout/runtime-kotlin"
@@ -25,6 +25,8 @@ desktop_app_install_root() { printf '%s' "$task_dir/install"; }
 desktop_app_legacy_target_path() { printf '%s/SkillBill.app' "$2"; }
 install_desktop_app_launcher() { ln -sf "$3" "$task_dir/bin/skillbill-desktop"; }
 launch_desktop_app() { printf '%s\n' "$3" >> "$task_dir/launched"; }
+init_prebuilt_work_dir() { mkdir -p "$task_dir/staging"; }
+prebuilt_work_dir() { printf '%s' "$task_dir/staging"; }
 
 cat > "$task_dir/checkout/desktop/gradlew" <<'BUILD'
 #!/usr/bin/env bash
@@ -39,6 +41,7 @@ fi
 mkdir -p 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS'
 printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
 chmod +x 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
+printf 'commit=1111111111111111111111111111111111111111\n' > 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/build-identity.properties'
 BUILD
 chmod +x "$task_dir/checkout/desktop/gradlew"
 
@@ -51,6 +54,13 @@ if [[ -e "$task_dir/launched" ]]; then
   err 'Installer launched a desktop app that was not running.'
   exit 1
 fi
+
+stage_selected_desktop_app
+printf 'commit=2222222222222222222222222222222222222222\n' > "$BUILT_DESKTOP_APP_SOURCE/Contents/build-identity.properties"
+printf '#!/usr/bin/env bash\nprintf "replaced desktop build\\n"\n' > "$BUILT_DESKTOP_APP_SOURCE/Contents/MacOS/Skill Bill"
+activate_staged_desktop_app
+[[ "$(cat "$task_dir/install/Skill Bill.app/Contents/build-identity.properties")" == 'commit=1111111111111111111111111111111111111111' ]]
+[[ "$("$app")" == 'source desktop app' ]]
 
 (exec -a "$app" sleep 60) &
 running_app=$!
@@ -78,6 +88,39 @@ if kill -0 "$running_app" 2>/dev/null; then
 fi
 kill -0 "$unrelated_app"
 [[ "$(wc -l < "$task_dir/launched")" -eq 2 ]]
+
+# The installer runs inside the desktop app's terminal: the app is its parent. Stopping
+# the app there would end the installer, so the restart waits until the installer exits.
+declare -f > "$task_dir/hosted-functions.sh"
+declare -p task_dir RUNTIME_KOTLIN_DIR INSTALL_SOURCE DESKTOP_APP_INSTALL_RESULT BUILT_DESKTOP_APP_SOURCE RUNTIME_LAUNCHER_BIN_DIR > "$task_dir/hosted-vars.sh"
+cat > "$task_dir/hosted-install.sh" <<'HOSTED'
+set -euo pipefail
+source "$1/hosted-vars.sh"
+source "$1/hosted-functions.sh"
+export task_dir
+install_selected_desktop_app
+kill -0 "$PPID" && touch "$task_dir/app-alive-after-install"
+HOSTED
+(exec -a "$app" bash -c 'bash "$1/hosted-install.sh" "$1"; exec sleep 60' hosted "$task_dir") &
+hosting_app=$!
+trap 'kill "$running_app" "$unrelated_app" "$hosting_app" 2>/dev/null || true; rm -rf "$task_dir"' EXIT
+for _ in $(seq 1 100); do
+  if ! kill -0 "$hosting_app" 2>/dev/null && [[ "$(wc -l < "$task_dir/launched")" -eq 3 ]]; then
+    break
+  fi
+  sleep 0.1
+done
+if [[ ! -e "$task_dir/app-alive-after-install" ]]; then
+  err 'Installer stopped the desktop app that hosts it before the install finished.'
+  exit 1
+fi
+if kill -0 "$hosting_app" 2>/dev/null; then
+  err 'Installer left the desktop app that hosts it running after it exited.'
+  exit 1
+fi
+[[ "$(wc -l < "$task_dir/launched")" -eq 3 ]]
+[[ "$(tail -n 1 "$task_dir/launched")" == "$app" ]]
+kill -0 "$unrelated_app"
 
 touch "$task_dir/checkout/desktop/fail-build"
 if install_selected_desktop_app; then
@@ -119,4 +162,4 @@ if DESKTOP_LAUNCH_STATUS=23 PATH="$task_dir/service-bin:$PATH" launch_desktop_ap
   exit 1
 fi
 
-printf 'Required desktop install, direct and symlink launch restart, and failure preservation passed.\n'
+printf 'Required desktop install, direct, symlink and hosting-app launch restart, and failure preservation passed.\n'

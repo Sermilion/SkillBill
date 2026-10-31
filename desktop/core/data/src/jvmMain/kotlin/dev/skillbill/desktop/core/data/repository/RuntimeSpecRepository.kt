@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
+import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
 import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
@@ -60,6 +61,12 @@ class RuntimeSpecRepository(private val sessions: DatabaseSessionManager, privat
 
   override suspend fun revealFolder(path: String): OpenOutcome =
     sessions.sessions.value?.specs?.revealFolder(path) ?: OpenOutcome.NotOpened
+
+  override suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome {
+    val session = sessions.sessions.value ?: return SpecDeleteOutcome.Failed(noSession.error)
+    if (!sessions.isCurrent(session)) return SpecDeleteOutcome.Refused(SPEC_SESSION_CHANGED)
+    return session.specs.deleteBundle(bundle)
+  }
 
   private val preferredRoots = ConcurrentHashMap<String, MutableStateFlow<String?>>()
 

@@ -139,6 +139,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
           }
         } else SpecsTree(state, onAction, Modifier.fillMaxWidth())
       }
+      state.deleteTarget?.let { DeleteSpecFilesDialog(it, onAction) }
     }
     state.storePath?.let { path ->
       Row(

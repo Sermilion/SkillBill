@@ -119,6 +119,8 @@ data class GoalAssessmentRound(
   val scenarios: List<GoalAssessmentScenarioResult>,
   val regressions: List<GoalAssessmentRegressionResult>,
   val fix: GoalAssessmentFix?,
+  val targetRef: String? = null,
+  val repairPlan: String? = null,
 )
 
 data class GoalAssessmentRecord(
@@ -126,10 +128,7 @@ data class GoalAssessmentRecord(
   val rounds: List<GoalAssessmentRound> = emptyList(),
   val exitReason: GoalAssessmentExitReason? = null,
   val openFindingRefs: List<String> = emptyList(),
-) {
-  companion object {
-    const val MAX_ROUNDS: Int = 3
-  }
-}
+  val budgetStartRound: Int = 1,
+)
 
 data class GoalAssessmentRecordIssue(val fieldPath: String, val reason: String)

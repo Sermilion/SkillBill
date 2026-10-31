@@ -6,6 +6,8 @@ import java.nio.file.Path
 object UnavailableGoalRuntimeStateFileStore : GoalRuntimeStateFileStore {
   override fun directoryExists(path: Path): Boolean = unavailable()
 
+  override fun realPath(path: Path): Path? = unavailable()
+
   override fun deleteDirectoryTree(path: Path): GoalRuntimeDirectoryDeletion = unavailable()
 
   private fun unavailable(): Nothing {

@@ -64,8 +64,12 @@ private fun applicationClasspath(appDirectory: Path?, runtimeJars: List<Path>): 
     paths.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".jar") }.sorted().toList()
   }
   val appClasspath = appEntries.filter { entry -> Files.isDirectory(entry) || libraryName(entry.fileName.toString()) !in runtimeLibraries }
-  return (appClasspath + runtimeJars).map { it.toUri().toURL() }
+  val launcher = Path.of(LauncherMarker::class.java.protectionDomain.codeSource.location.toURI())
+  return (applicationEntriesFirst(appClasspath, launcher) + runtimeJars).map { it.toUri().toURL() }
 }
+
+internal fun applicationEntriesFirst(entries: List<Path>, launcher: Path): List<Path> =
+  entries.filter { it == launcher } + entries.filterNot { it == launcher }
 
 private fun distributionAppDirectory(): Path? {
   val location = Path.of(LauncherMarker::class.java.protectionDomain.codeSource.location.toURI())

@@ -11,6 +11,7 @@ kotlin {
     // Runtime classes come from the installed runtime's class loader at run time, never from the app image.
     compileOnly("dev.skillbill:runtime-core")
     compileOnly("dev.skillbill:runtime-contracts")
+    implementation(libs.kotlinx.serialization.json)
   }
   sourceSets.jvmTest.dependencies {
     // compileOnly is invisible to tests, which run the runtime types they construct.

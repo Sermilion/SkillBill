@@ -59,13 +59,13 @@ class GoalAssessmentRecordContractTest {
     val secondRoundReusingRef =
       artifact(valid, Keys.ROUNDS to listOf(roundMap(valid), roundMap(valid) + (Keys.ROUND to 2)))
     val danglingOpenRef = artifact(valid, Keys.OPEN_FINDING_REFS to listOf("GA-009"))
-    val fourRounds = artifact(valid, Keys.ROUNDS to (1..4).map { roundMap(valid) + (Keys.ROUND to it) })
+    val invalidTarget = artifact(valid, Keys.ROUNDS to listOf(roundMap(valid) + (Keys.TARGET_REF to "invalid")))
 
-    assertTrue(violations(fourRounds).isNotEmpty())
+    assertTrue(violations(invalidTarget).isNotEmpty())
     listOf(
       secondRoundReusingRef,
       danglingOpenRef,
-      fourRounds,
+      invalidTarget,
       artifact(valid, Keys.CONTRACT_VERSION to "9.0"),
       artifact(valid, "extra" to true),
     ).forEach { payload ->

@@ -1,9 +1,9 @@
 package skillbill.engine.goalrunner.execution.support
 
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome

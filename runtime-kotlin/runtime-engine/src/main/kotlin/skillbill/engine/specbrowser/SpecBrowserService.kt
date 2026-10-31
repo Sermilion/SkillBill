@@ -9,6 +9,7 @@ import skillbill.engine.specbrowser.model.SpecBrowserProject
 import skillbill.engine.specbrowser.model.SpecBrowserSnapshot
 import skillbill.engine.specbrowser.model.SpecBrowserStatus
 import skillbill.engine.specbrowser.model.SpecBundleControl
+import skillbill.engine.specbrowser.model.SpecBundleDeletion
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.ports.db.DatabaseSessionFactory
@@ -18,6 +19,8 @@ import skillbill.ports.projectstore.model.ProjectCatalogEntry
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
+import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
+import skillbill.ports.workflow.goalstate.model.GoalRuntimeDirectoryDeletion
 import java.nio.file.Path
 
 @RuntimeSingleton
@@ -25,13 +28,14 @@ import java.nio.file.Path
 public class SpecBrowserService(
   private val catalog: ProjectCatalogPort,
   private val projectStore: ProjectStorePort,
-  manifests: DecompositionManifestStore,
+  private val manifests: DecompositionManifestStore,
   validator: DecompositionManifestValidator,
   private val database: DatabaseSessionFactory,
   status: IdeStatusService,
   runs: WorkRunActions,
   private val goals: GoalIssueStartedReader,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val files: GoalRuntimeStateFileStore,
 ) {
   private val manifestCache = SpecManifestCache(manifests, validator)
   private val treeReader = SpecTreeReader(manifests, manifestCache)
@@ -82,6 +86,52 @@ public class SpecBrowserService(
       }
     return specBundleControl(facts)
   }
+
+  public fun deleteBundle(
+    projectId: String,
+    bundlePath: String,
+    preferredRepoRoot: Path?,
+  ): SpecBundleDeletion {
+    val project = locate(projectId, preferredRepoRoot)
+    val specsRoot =
+      project?.specsRoot?.toAbsolutePath()?.normalize()
+        ?: return SpecBundleDeletion.Refused(NO_SPEC_FOLDER_REASON)
+    val directory = specsRoot.resolve(bundlePath).normalize()
+    if (!directory.startsWith(specsRoot) || directory == specsRoot) {
+      return SpecBundleDeletion.Refused(OUTSIDE_SPEC_FOLDER_REASON)
+    }
+    val realRoot = files.realPath(specsRoot)
+    val realDirectory = files.realPath(directory)
+    if (realRoot == null || realDirectory == null) return SpecBundleDeletion.Absent
+    val refusal =
+      when {
+        realDirectory != realRoot.resolve(specsRoot.relativize(directory)) -> LINKED_BUNDLE_REASON
+        !isBundleDirectory(realDirectory) -> NOT_A_BUNDLE_REASON
+        goalHoldsBundle(project.repoRoot, realDirectory) -> LIVE_BUNDLE_REASON
+        else -> null
+      }
+    return refusal?.let(SpecBundleDeletion::Refused) ?: deleteDirectory(realDirectory)
+  }
+
+  private fun deleteDirectory(directory: Path): SpecBundleDeletion =
+    when (val deletion = files.deleteDirectoryTree(directory)) {
+      GoalRuntimeDirectoryDeletion.Deleted -> SpecBundleDeletion.Deleted(directory)
+      GoalRuntimeDirectoryDeletion.Absent -> SpecBundleDeletion.Absent
+      is GoalRuntimeDirectoryDeletion.Failed -> SpecBundleDeletion.Failed(deletion.reason)
+    }
+
+  private fun goalHoldsBundle(
+    repoRoot: Path?,
+    directory: Path,
+  ): Boolean {
+    val manifest = manifestCache.read(directory.resolve(DECOMPOSITION_MANIFEST_FILENAME))
+    val issueKey = rawSpecBundle(directory.fileName.toString(), manifest).issueKey ?: return false
+    return repoRoot != null && holdsRunner(liveGoals.goal(repoRoot, issueKey))
+  }
+
+  private fun isBundleDirectory(directory: Path): Boolean =
+    manifests.isRegularFile(directory.resolve(DECOMPOSITION_MANIFEST_FILENAME)) ||
+      manifests.isRegularFile(directory.resolve(SPEC_FILENAME))
 
   private fun availableFacts(
     issueKey: String,
@@ -156,5 +206,11 @@ public class SpecBrowserService(
     const val NO_KEY_REASON = "This spec folder has no issue key."
     const val NO_CHECKOUT_REASON = "No checkout of this project exists on this machine."
     const val NO_DATABASE_REASON = "Skill Bill has no run database yet."
+    const val SPEC_FILENAME = "spec.md"
+    const val NO_SPEC_FOLDER_REASON = "This project has no spec folder."
+    const val OUTSIDE_SPEC_FOLDER_REASON = "Only a spec folder inside the project's spec store can be deleted."
+    const val LINKED_BUNDLE_REASON = "The spec folder is reached through a symbolic link, so it was not deleted."
+    const val NOT_A_BUNDLE_REASON = "The folder holds no spec.md or decomposition manifest, so it is not a spec folder."
+    const val LIVE_BUNDLE_REASON = "The goal for this spec is running. Pause or cancel it before deleting its files."
   }
 }

@@ -3,9 +3,7 @@ package skillbill.engine.featuretask.slot.qualitygate.agentvalidate
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ValidationTestProbePayloadKeys
-import skillbill.engine.featuretask.runloop.output.payloadFreeRejectionReason
 import skillbill.engine.featuretask.slot.qualitygate.ValidateProbeActivation
-import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -14,8 +12,6 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ValidateProbeSettlementTest {
@@ -23,28 +19,7 @@ class ValidateProbeSettlementTest {
   private val site = ValidateProbeSettlement.Site(diagnostics, WORKFLOW_ID, PHASE_ID)
 
   @Test
-  fun `a malformed report gets one correction naming the code and none once the correction is spent`() {
-    val correction = assertNotNull(ValidateProbeSettlement.correction(MALFORMED_PROSE, correctionRequested = false))
-
-    assertTrue("INVALID_VALIDATION_TEST_PROBES" in correction)
-    assertNull(ValidateProbeSettlement.correction(MALFORMED_PROSE, correctionRequested = true))
-  }
-
-  @Test
-  fun `the stored rejection that asked for the correction is what marks it spent`() {
-    val asked = payloadFreeRejectionReason(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_TEST_PROBES.name, "/")
-
-    assertTrue(ValidateProbeSettlement.spendsCorrection(asked))
-    assertFalse(ValidateProbeSettlement.spendsCorrection(payloadFreeRejectionReason("validation-result", "/")))
-  }
-
-  @Test
-  fun `a valid report is never corrected`() {
-    assertNull(ValidateProbeSettlement.correction(SURVIVED_PROSE, correctionRequested = false))
-  }
-
-  @Test
-  fun `a second malformed report stores an empty list with a warning and leaves the verdict untouched`() {
+  fun `a prose report without probe lines stores an empty list with a warning and leaves the verdict untouched`() {
     val settled = ValidateProbeSettlement.storing(completion(MALFORMED_PROSE), MALFORMED_PROSE, site)
 
     assertEquals(emptyList<Any?>(), storedProbes(settled))

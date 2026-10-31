@@ -6,12 +6,20 @@ import skillbill.ports.workflow.goalstate.model.GoalRuntimeDirectoryDeletion
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.Comparator
 
 @Inject
 class FileSystemGoalRuntimeStateFileStore : GoalRuntimeStateFileStore {
   override fun directoryExists(path: Path): Boolean = Files.exists(path)
+
+  override fun realPath(path: Path): Path? =
+    try {
+      path.toRealPath()
+    } catch (_: NoSuchFileException) {
+      null
+    }
 
   override fun deleteDirectoryTree(path: Path): GoalRuntimeDirectoryDeletion {
     if (!Files.exists(path)) return GoalRuntimeDirectoryDeletion.Absent

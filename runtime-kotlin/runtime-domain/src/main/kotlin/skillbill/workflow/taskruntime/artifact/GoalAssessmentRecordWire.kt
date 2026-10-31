@@ -33,6 +33,7 @@ fun GoalAssessmentRecord.asGoalAssessmentRecordWireMap(): FeatureTaskRuntimeWork
     mapOf(
       Keys.CONTRACT_VERSION to GOAL_ASSESSMENT_RECORD_CONTRACT_VERSION,
       Keys.ISSUE_KEY to issueKey,
+      Keys.BUDGET_START_ROUND to budgetStartRound,
       Keys.ROUNDS to rounds.map(::roundWire),
       Keys.EXIT_REASON to exitReason?.wireValue,
       Keys.OPEN_FINDING_REFS to openFindingRefs,
@@ -48,6 +49,8 @@ private const val ENCODE_LABEL = "goal-assessment-record"
 private fun roundWire(round: GoalAssessmentRound): Map<String, Any?> =
   mapOf(
     Keys.ROUND to round.round,
+    Keys.TARGET_REF to round.targetRef,
+    Keys.REPAIR_PLAN to round.repairPlan,
     Keys.HEAD_SHA to round.headSha,
     Keys.SCOPE_FILES to round.scopeFiles,
     Keys.ASSESSOR_RUNS to
@@ -102,6 +105,7 @@ private class GoalAssessmentRecordDecoder(private val sourceLabel: String) {
     val record =
       GoalAssessmentRecord(
         issueKey = text(root[Keys.ISSUE_KEY], Keys.ISSUE_KEY),
+        budgetStartRound = integer(root[Keys.BUDGET_START_ROUND], Keys.BUDGET_START_ROUND),
         rounds = items(root[Keys.ROUNDS], Keys.ROUNDS, ::roundOf),
         exitReason =
           root[Keys.EXIT_REASON]?.let {
@@ -120,6 +124,8 @@ private class GoalAssessmentRecordDecoder(private val sourceLabel: String) {
     val fields = objectOf(value, path, ROUND_KEYS)
     return GoalAssessmentRound(
       round = integer(fields[Keys.ROUND], "$path.${Keys.ROUND}"),
+      targetRef = fields[Keys.TARGET_REF]?.let { text(it, "$path.${Keys.TARGET_REF}") },
+      repairPlan = fields[Keys.REPAIR_PLAN]?.let { text(it, "$path.${Keys.REPAIR_PLAN}") },
       headSha = text(fields[Keys.HEAD_SHA], "$path.${Keys.HEAD_SHA}"),
       scopeFiles = strings(fields[Keys.SCOPE_FILES], "$path.${Keys.SCOPE_FILES}"),
       assessorRuns = items(fields[Keys.ASSESSOR_RUNS], "$path.${Keys.ASSESSOR_RUNS}", ::assessorRun),
@@ -322,10 +328,19 @@ private class GoalAssessmentRecordDecoder(private val sourceLabel: String) {
   private companion object {
     const val ROOT = "<root>"
     val TOP_LEVEL_KEYS =
-      setOf(Keys.CONTRACT_VERSION, Keys.ISSUE_KEY, Keys.ROUNDS, Keys.EXIT_REASON, Keys.OPEN_FINDING_REFS)
+      setOf(
+        Keys.CONTRACT_VERSION,
+        Keys.ISSUE_KEY,
+        Keys.ROUNDS,
+        Keys.EXIT_REASON,
+        Keys.OPEN_FINDING_REFS,
+        Keys.BUDGET_START_ROUND,
+      )
     val ROUND_KEYS =
       setOf(
         Keys.ROUND,
+        Keys.TARGET_REF,
+        Keys.REPAIR_PLAN,
         Keys.HEAD_SHA,
         Keys.SCOPE_FILES,
         Keys.ASSESSOR_RUNS,

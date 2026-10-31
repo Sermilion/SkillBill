@@ -1,3 +1,8 @@
+## [2026-10-31] Name the unblock step in the incident's next action
+Context: An incident that matched no classification rule showed "No known workaround." even when the runtime knew the command that unblocks the goal, or when the block looked like a skill-bill defect.
+Decision: The current incident's next action names a typed recovery command when one exists. The command comes from blocked_recovery_command on the blocked goal parent, or from a parent whose quality record is historical_ambiguity, which gets goal fresh-quality. Otherwise an unreported skill-bill defect, or an unresolved incident with no workaround, points to the product repository's new-issue page with the incident token. Runtime eligibility still wins over these suggestions.
+Reason: The runtime already computes these commands and wrote them only into free text. Reading the typed value from live state keeps a resolved block from suggesting a stale command, and it never scrapes commands out of reasons that can contain agent output.
+
 ## [2026-10-30] Project the executing agent on board rows
 Context: The desktop board needs an agent on each row, but resolving it depends on goal, standalone run and runtime phase state.
 Decision: Resolve the display agent in the runtime projector and rebuild the persisted board model through its existing completeness path. Launches continue to use RunOptions.agentId.

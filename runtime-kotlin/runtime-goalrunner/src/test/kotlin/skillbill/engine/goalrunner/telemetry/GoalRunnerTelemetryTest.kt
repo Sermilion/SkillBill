@@ -18,10 +18,10 @@ import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
 import skillbill.engine.goalrunner.launchFacts
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome

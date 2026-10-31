@@ -1,5 +1,29 @@
 # goalrunner boundary decisions
 
+## [2026-10-31] Integrate remote commits before blocking a finalization push
+
+Context: SKILL-453 finalization committed on a local branch while another session had pushed two commits to the same PR branch, one a rebased copy of a local commit. The push was rejected as non-fast-forward. The push helper recovered only when the remote head had been on the local branch, so it refused, and finalization blocked the run with "Remote head ... was never on local branch". The operator had to rebase by hand and resume.
+
+Decision: When a rejected push finds a remote head the local branch never held, the git push helper fetches `origin/<branch>`, rebases the local branch onto it and pushes normally. It does this only for an unprotected branch with one origin push destination, checked out in the repository root, with no tracked uncommitted changes. Git drops local commits whose patch is already upstream. On a rebase conflict the helper aborts the rebase, confirms the branch is back at its original commit and fails with the conflicting paths. That failure still blocks finalization. The lease path for locally rewritten history and the protected-branch refusal are unchanged. Supersedes the "remote commit the local branch never held keeps the push rejected" behavior.
+
+Reason: Several writers push to a goal's PR branch: monitor repairs, chat act turns, the operator. A remote that moved ahead is routine, and the 2026-10-20 rule is that runs warn and continue rather than block. Only a conflict needs a person. Rebasing can bring back a commit a local rewrite meant to drop if the remote still holds it. CI and the PR monitor see that result, so the risk is lower than a blocked run.
+
+## [2026-10-31] Check review base reachability against the goal branch
+
+Context: Repair diagnosis treats a stored review base as unreachable when it is not an ancestor of the reference commit. An operator may inspect or resume a goal from a checkout that sits on another branch, such as main, which holds none of the goal's commits.
+
+Decision: The reference is the goal branch tip. HEAD is the fallback only when the goal branch is unknown or does not resolve locally.
+
+Reason: Against HEAD on another branch, every valid base would look unreachable and repair would report a false wedge.
+
+## [2026-10-31] Share focused repair decisions between audit and goal assessment
+
+Context: Goal assessment stopped after three global rounds and allowed finalization with unresolved source defects. Regression-only repairs could claim convergence before independent verification.
+
+Decision: `FocusedRepairStrategy` owns target selection, repair-stage routing and the three unsuccessful outcome allowance. Acceptance audit and goal assessment both consume it. Their aggregates keep their own evidence and identity checks. Assessment discovers once, plans and repairs one material item at a time, verifies every attempt, and blocks before QA or publication when an item exhausts its allowance. Material minor defects receive verification too. Test-value notes remain report-only. Explicit assessment resume resets the active allowance without deleting rounds.
+
+Compatibility: Assessment record version 0.2 adds selected targets, repair plans and the budget boundary, and removes the global round cap. The existing acceptance-repair contract-version quarantine class also covers goal assessment now that both use focused repair. Runtime execution preserves the rejected 0.1 record as diagnostic evidence before fresh discovery. Ordinary status reads do not regenerate records.
+
 ## [2026-10-29] Let an operator mark a whole goal complete
 Context: A goal whose work landed outside the runtime had no way out. Ordinary out-of-band accept is disabled, and a hard reset of runtime-completed subtasks cannot be restored because they carry no acceptance.
 Decision: `goal complete` accepts every unfinished subtask against one resolved commit, marks them complete, retires any active quality execution and sets `goalCompletedAt` in one transaction. It refuses while a live execution lease exists. The already-complete check lets a subtask whose recorded acceptance matches its commit skip the child history draft requirement.
@@ -230,3 +254,19 @@ Context: The quality gate blocks a parent marked `historical_ambiguity` and asks
 Decision: `skill-bill goal fresh-quality <issue-key> --reason <why>` moves the parent's quality record from `historical_ambiguity` to `clean_unstarted` in one transaction. It refuses while the parent execution lease is live and when the record holds no ambiguity. It is a separate command, not a `goal repair` wedge, because `goal resume` applies repair clears automatically and this choice discards history only an operator can judge.
 
 Reason: The ambiguity guard exists so the runtime never guesses. The guess belongs to the operator, and the runtime needs a durable way to record it. A CLI test drives the recovered-database block, the choice, a refused repeat and a run that no longer blocks.
+
+## [2026-10-31] Import readiness finds the completed plan by its project-store spec, not only by checkout path
+
+Context: The import looks up the completed plan by issue key and repository identity. That identity is the checkout's real path, so a plan made in another linked worktree, or before the repository moved, does not match. SKILL-454 was planned on 2026-10-30, the repository then moved to another path, and the goal launched on 2026-10-31 imported the project-store manifest with no matching plan. It wrote `historical_ambiguity`, finished all three subtasks, and blocked before final quality with no quality history behind it.
+
+Decision: When the path lookup finds nothing, readiness also accepts a completed plan for the same issue whose governed spec path equals the manifest's project-store parent spec (`specs/...`). This fallback feeds only the readiness choice. Plan linkage and planning timing keep the path-scoped plan. Repository-relative `.feature-specs/` manifests get no fallback.
+
+Reason: The project store is keyed by repository lineage, so every checkout and every past path of one repository shares the same `specs/` bundle. A completed plan in this database that governed that exact bundle, with no subtask started, is the same proof the 2026-10-28 rule asks for. Repository-relative spec paths can repeat across unrelated repositories, so they stay path-scoped. A runtime-engine test covers a plan from another checkout of the same spec and a plan for a different spec.
+
+## [2026-10-31] fresh-quality also retires an unsettled quality execution
+
+Context: A goal runner can die during an agent-backed final quality step, for example when the session that launched it ends. The next run finds the step `running` with no accepted output and blocks with "The outcome of goal-quality step 'qa#1' is unknown ... explicitly retire this quality execution and accept new cycles." No command did that. `goal fresh-quality` accepted only `historical_ambiguity`, `goal repair` reported the goal healthy, and the only commands that retire quality also reset, replan or complete the goal. SKILL-448 finished all 33 subtasks and then stayed blocked at QA.
+
+Decision: `goal fresh-quality` also retires an admitted execution whose status is not settled or retired. It uses the same retirement as reset and replan, now named `retireActiveExecution`, which also clears the finalization repair context. The next run admits a new execution with new cycles. Settled executions are still refused, and so is a live runner. The unknown-outcome message names the command.
+
+Reason: Retiring is the choice the block asks the operator to make, and `fresh-quality` already records operator choices that discard quality state the runtime cannot judge. A settled execution carries a real outcome, so the command leaves it alone. A runtime-engine test covers retiring an unsettled execution and refusing a repeat.

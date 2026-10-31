@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
+import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
 import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -210,6 +211,7 @@ class DetailViewModelTest {
     override suspend fun openFile(path: String) = OpenOutcome.Opened
     override suspend fun openFileInDefaultApp(path: String) = OpenOutcome.NotOpened
     override suspend fun revealFolder(path: String) = OpenOutcome.Opened
+    override suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome = error("unused")
   }
 
   private object NoWebPages : RepositoryWebPages {

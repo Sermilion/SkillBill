@@ -36,6 +36,7 @@ internal object ProcessLauncherRules {
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/motion/OsReducedMotionReader.kt",
     "feature/terminal/src/jvmMain/kotlin/dev/skillbill/desktop/feature/terminal/PtyShellLauncher.kt",
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/tray/KdeDisplayLayout.kt",
+    "core/data/src/jvmMain/kotlin/dev/skillbill/desktop/core/data/chat/ChatProcessLauncher.kt",
   )
 
   fun violations(desktopRoot: Path, settings: String, manifests: List<ModuleManifest>): List<String> {

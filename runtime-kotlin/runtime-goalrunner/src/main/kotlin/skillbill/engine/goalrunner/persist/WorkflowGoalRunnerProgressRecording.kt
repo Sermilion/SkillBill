@@ -11,12 +11,12 @@ import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.goalrunner.execution.support.maxHistorySequence
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.history.decodeHistoryDrafts
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.history.GoalFinalizationHistoryPayloadKeys
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.quality.GoalFinalizationHistoryMigration
 import skillbill.engine.goalrunner.persist.quality.fromPersistenceWire
 import skillbill.engine.workflow.support.workflowFamilyFor
@@ -144,9 +144,9 @@ private val PROGRESS_POLL_ARTIFACT_KEYS =
 public class WorkflowGoalRunnerProgressRecording(
   private val database: DatabaseSessionFactory,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
-  private val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
+  internal val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val historyEvidence: GoalChildHistoryEvidenceStore,
-  private val diagnostics: RuntimeDiagnostics,
+  internal val diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerWorkflowProgressStore,
   GoalRunnerWorkflowLedgerWriteStore,
   GoalRunnerGoalChildHistoryDraftStore,

@@ -2486,4 +2486,6 @@ private val expectedMigrationDefinitions =
     92 to "rebuild-work-board-executing-agent",
     93 to "rebuild-work-board-titles",
     94 to "add-goal-continuation-columns",
+    95 to "rebuild-work-board-readable-phase-titles",
+    96 to "record-standalone-review-run-id",
   )

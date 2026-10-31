@@ -48,6 +48,7 @@ import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.TestNoopGoalRunnerSubtaskLauncher
 import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
@@ -74,7 +75,6 @@ import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
 import skillbill.engine.goalrunner.persist.withSettledLegacyHistorySkip
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
@@ -90,6 +90,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.goalrunner.GoalObservabilityArtifacts
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
@@ -119,6 +120,7 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraft
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
@@ -426,6 +428,34 @@ class GoalRunnerTest {
 
     assertIs<GoalRunnerRunReport.Completed>(report, "$report")
     assertEquals(listOf("assessment", "qa"), events)
+  }
+
+  @Test
+  fun `exhausted assessment stops before goal QA and pull request publication`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { it.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val events = mutableListOf<String>()
+    val pr = RecordingPullRequestPort()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, pr).copy(
+          assessmentGate = RecordingGoalRunnerAssessmentGate(events, GoalAssessmentExitReason.PERSISTENT_FINDING),
+          qaGate = GoalRunnerQaGate { _, _ -> error("QA must not run before assessment accepts the goal.") },
+        ),
+      )
+
+    val report = assertIs<GoalRunnerRunReport.Stopped>(runner.run(runRequest()))
+
+    assertEquals("goal_assessment", report.stop.lastResumableStep)
+    assertEquals(GoalRunnerStopReason.BLOCKED, report.stop.reason)
+    assertTrue(pr.requests.isEmpty())
+    assertEquals(listOf("assessment"), events)
   }
 
   @Test
@@ -1496,6 +1526,30 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
+  fun `resume with every child complete restores the goal branch before assessment`() {
+    val git = BranchTrackingGitOperations(current = "main")
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed children must not run again") },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = RecordingPullRequestPort(),
+        ).copy(gitOperations = git),
+      )
+
+    assertIs<GoalRunnerRunReport.Completed>(
+      runner.run(linearRunRequest(Files.createTempDirectory("goal-finalize-align"))),
+    )
+
+    assertEquals("feat/SKILL-56-goal", git.current)
+  }
+
+  @Test
   fun `linear finalize deletes scratch before commit-all and completes when remaining dirt is swept`() {
     val repoRoot = Files.createTempDirectory("goal-linear-finalize")
     val scratch = RecordingSpecScratchStore()
@@ -2073,6 +2127,95 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
+  fun `finalize commit-all integrates remote commits pushed from elsewhere instead of blocking`() {
+    val root = Files.createTempDirectory("goal-finalize-integrate")
+    val branch = "feat/SKILL-56-goal"
+    val remote = Files.createDirectory(root.resolve("remote"))
+    val repoRoot = root.resolve("repo")
+    val other = root.resolve("other")
+    finalizeGit(root, "init", "--bare", "-b", "main", remote.toString())
+    finalizeGit(root, "clone", remote.toString(), repoRoot.toString())
+    finalizeIdentity(repoRoot)
+    finalizeCommit(repoRoot, "base.txt", "initial")
+    finalizeGit(repoRoot, "push", "origin", "HEAD:main")
+    finalizeGit(repoRoot, "checkout", "-b", branch)
+    finalizeCommit(repoRoot, "feature.txt", "feature")
+    finalizeGit(repoRoot, "push", "-u", "origin", branch)
+    finalizeGit(root, "clone", "-b", branch, remote.toString(), other.toString())
+    finalizeIdentity(other)
+    finalizeCommit(other, "monitor.txt", "monitor repair")
+    finalizeGit(other, "push", "origin", branch)
+    finalizeCommit(repoRoot, "src/Extra.kt", "local subtask work")
+    val realGit = GitWorkflowGitOperations()
+    val git =
+      CommitAllRecordingGitOperations(
+        dirtyPorcelain = " M src/Extra.kt",
+        currentBranch = branch,
+        push = realGit::pushBranch,
+      )
+    val pullRequests = RecordingPullRequestPort()
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          manifest(subtaskCount = 1)
+            .withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = pullRequests,
+        ).copy(gitOperations = git),
+      )
+
+    val report = runner.run(linearRunRequest(repoRoot))
+
+    assertIs<GoalRunnerRunReport.Completed>(report, "$report")
+    assertEquals(finalizeGit(repoRoot, "rev-parse", "HEAD"), finalizeGit(remote, "rev-parse", "refs/heads/$branch"))
+    assertEquals(
+      listOf("local subtask work", "monitor repair", "feature", "initial"),
+      finalizeGit(repoRoot, "log", "--format=%s").lines(),
+    )
+    assertEquals(1, pullRequests.openCount)
+    root.toFile().deleteRecursively()
+  }
+
+  private fun finalizeCommit(
+    dir: Path,
+    file: String,
+    message: String,
+  ) {
+    Files.createDirectories(dir.resolve(file).parent)
+    Files.writeString(dir.resolve(file), "$message\n")
+    finalizeGit(dir, "add", file)
+    finalizeGit(dir, "commit", "-m", message)
+  }
+
+  private fun finalizeIdentity(dir: Path) {
+    finalizeGit(dir, "config", "user.email", "runtime@example.test")
+    finalizeGit(dir, "config", "user.name", "Runtime")
+    finalizeGit(dir, "config", "commit.gpgsign", "false")
+  }
+
+  private fun finalizeGit(
+    dir: Path,
+    vararg args: String,
+  ): String {
+    val builder =
+      ProcessBuilder(listOf("git", "-C", dir.toString()) + args)
+        .redirectErrorStream(true)
+    builder.environment()["GIT_CONFIG_GLOBAL"] = "/dev/null"
+    builder.environment()["GIT_CONFIG_SYSTEM"] = "/dev/null"
+    val process = builder.start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    val exitCode = process.waitFor()
+    check(exitCode == 0) { "git ${args.joinToString(" ")} failed with $exitCode: $output" }
+    return output
+  }
+
+  @Test
   fun `finalize commit-all blocks when the worktree is not on the feature branch`() {
     val repoRoot = Files.createTempDirectory("goal-wrong-branch-finalize")
     val git =
@@ -2577,6 +2720,7 @@ private class CommitAllRecordingGitOperations(
   private val pushError: String? = null,
   private val commitResult: WorkflowGitCommitResult? = null,
   private val inProgressOperation: String = "",
+  private val push: ((Path, String) -> WorkflowGitOperationResult)? = null,
 ) : GoalReviewReadyGitOperations() {
   var stageAllCalls: Int = 0
   val stagePathsCalls: MutableList<List<String>> = mutableListOf()
@@ -2651,6 +2795,7 @@ private class CommitAllRecordingGitOperations(
     branch: String,
   ): WorkflowGitOperationResult {
     pushedBranches += branch
+    push?.let { return it(repoRoot, branch) }
     return pushError?.let { WorkflowGitOperationResult.Failed(error = it) }
       ?: WorkflowGitOperationResult.Ok(value = branch)
   }

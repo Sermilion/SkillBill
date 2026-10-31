@@ -65,4 +65,4 @@ fun ExpandableText(
   modifier: Modifier = Modifier,
   maxLines: Int = EXPANDABLE_TEXT_LINES,
   selectable: Boolean = false,
-) = ExpandableText(AnnotatedString(text), style, modifier, maxLines, selectable)
+) = ExpandableText(rememberRuntimeText(text), style, modifier, maxLines, selectable)

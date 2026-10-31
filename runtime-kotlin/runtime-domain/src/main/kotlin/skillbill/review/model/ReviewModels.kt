@@ -105,7 +105,34 @@ data class NumberedFinding(
   val scopeDisposition: ReviewScopeDisposition? = null,
   val citations: List<ReviewFindingCitation> = emptyList(),
   val severityAdjustment: ReviewSeverityAdjustment? = null,
+  val laneSkillName: String? = null,
 )
+
+enum class ReviewFindingStatus {
+  OPEN,
+  FIXED,
+  ACCEPTED,
+  DECLINED,
+  FALSE_POSITIVE,
+  REJECTED,
+  ;
+
+  companion object {
+    fun of(
+      feedbackEvent: String?,
+      loopOutcome: String?,
+    ): ReviewFindingStatus =
+      when {
+        feedbackEvent == "fix_applied" -> FIXED
+        feedbackEvent == "fix_rejected" -> DECLINED
+        feedbackEvent == "false_positive" -> FALSE_POSITIVE
+        loopOutcome == "addressed" -> FIXED
+        loopOutcome == "rejected" -> REJECTED
+        feedbackEvent == "finding_accepted" -> ACCEPTED
+        else -> OPEN
+      }
+  }
+}
 
 data class TriageDecision(
   val number: Int,

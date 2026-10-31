@@ -33,7 +33,7 @@ internal class GoalRunnerOperatorCompletion(
         GoalRunnerOutOfBandAcceptance(subtaskId, commitSha, reason, completedAt),
       )
     }
-    qualityExecution.retireForSelectionChange(unit, parentWorkflowId)
+    qualityExecution.retireActiveExecution(unit, parentWorkflowId)
     val saved =
       projectionPersistence.saveInTransaction(
         unit,

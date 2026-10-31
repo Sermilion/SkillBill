@@ -31,4 +31,10 @@ class ShellKeymapTest {
   fun `the command menu shortcut works while a text field has focus`() {
     assertEquals(ShellCommand.TogglePalette, ShellKeymap().resolve(key('k', meta = true), KeyContext(textInputFocused = true)))
   }
+
+  @Test
+  fun `the chat shortcut works in the composer and leaves Ctrl+L to a focused terminal`() {
+    assertEquals(ShellCommand.ToggleChat, ShellKeymap().resolve(key('l', ctrl = true), KeyContext(textInputFocused = true)))
+    assertNull(ShellKeymap().resolve(key('l', ctrl = true), KeyContext(terminalFocused = true)))
+  }
 }

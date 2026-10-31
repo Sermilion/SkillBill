@@ -5,7 +5,7 @@ import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStan
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerBlockRecoveryAdapter
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
-import skillbill.engine.work.WorkIncidentProjectionBuilder
+import skillbill.engine.work.incident.WorkIncidentProjectionBuilder
 import skillbill.engine.work.recovery.BlockIncidentRecoveryActions
 import skillbill.engine.work.recovery.BlockIncidentRecoveryService
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator

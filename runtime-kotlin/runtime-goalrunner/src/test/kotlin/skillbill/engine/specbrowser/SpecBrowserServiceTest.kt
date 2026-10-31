@@ -6,10 +6,13 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.goalPreflightServiceForTests
 import skillbill.engine.goalrunner.manifest.GoalRunnerIssueStartedReader
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.specbrowser.model.SpecBrowserFileKind
 import skillbill.engine.specbrowser.model.SpecBrowserNode
 import skillbill.engine.specbrowser.model.SpecBrowserSnapshot
 import skillbill.engine.specbrowser.model.SpecBrowserStatus
+import skillbill.engine.specbrowser.model.SpecBundleDeletion
+import skillbill.engine.specbrowser.model.SpecBundleRunState
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.engine.work.fixtureCheckedOutBranch
@@ -19,7 +22,9 @@ import skillbill.engine.work.ideStatusObservedAt
 import skillbill.engine.work.ideStatusService
 import skillbill.engine.work.runtimeRecord
 import skillbill.engine.work.testGoalRepositoryIdentity
+import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
+import skillbill.infrastructure.sqlite.TemporarySchemaDatabase
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
@@ -34,6 +39,7 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.goalstate.LocalGoalRuntimeStateFileStore
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.nio.file.Files
 import java.nio.file.Path
@@ -41,6 +47,8 @@ import java.nio.file.attribute.FileTime
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -177,27 +185,8 @@ class SpecBrowserServiceTest {
       writeBundle(specsRoot, "SKILL-149-finished", "SKILL-149", "complete", listOf(1 to "complete"))
       val environment = mapOf("HOME" to repo.toString())
       val database = sqliteSessionFactoryForTests(repo, schema.dbPath.toString(), environment, ideStatusClock)
-      val manifests = testWorkflowGoalRunnerManifestStore(database, TestDecompositionManifestStore, ideStatusClock)
+      val manifests = runningGoal(schema, database, repo)
       val state = goalManifestState(repo, testGoalRepositoryIdentity(repo), "w-child")
-      database.transaction { unit ->
-        listOf("goal-1", "w-child").forEach { id ->
-          unit.workflowStates.saveFeatureTaskWorkflow(
-            runtimeRecord(id, ideStatusObservedAt.toString()),
-            FeatureTaskWorkflowMode.RUNTIME,
-          )
-        }
-      }
-      schema.connection.prepareStatement(
-        "INSERT INTO goal_issue_progress " +
-          "(parent_workflow_id, issue_key, first_started_at, status, last_activity_at, state_entered_at) " +
-          "VALUES ('goal-1', 'SKILL-148', ?, 'running', ?, ?)",
-      ).use {
-        it.setString(1, ideStatusObservedAt.minusSeconds(60).toString())
-        it.setString(2, ideStatusObservedAt.minusSeconds(30).toString())
-        it.setString(3, ideStatusObservedAt.minusSeconds(30).toString())
-        it.executeUpdate()
-      }
-      manifests.save(state)
       manifests.persistControlState(
         "goal-1",
         state.controlState.copy(paused = true, pauseReason = "operator_request", pausedAt = "2026-08-02T10:00:00Z"),
@@ -212,7 +201,110 @@ class SpecBrowserServiceTest {
     }
   }
 
+  @Test
+  fun `deleting a bundle removes its folder and nothing beside it`() {
+    val root = Files.createTempDirectory("spec-browser-delete").toRealPath()
+    val specsRoot = Files.createDirectories(root.resolve("store").resolve("specs"))
+    writeBundle(specsRoot, "group/SKILL-60-doomed", "SKILL-60", "pending", listOf(1 to "pending"))
+    writeBundle(specsRoot, "group/SKILL-61-kept", "SKILL-61", "pending", listOf(1 to "pending"))
+    val service = absentDatabaseHarness(root).service
+
+    val deletion = service.deleteBundle("test-project", "group/SKILL-60-doomed", root)
+
+    assertEquals(SpecBundleDeletion.Deleted(specsRoot.resolve("group/SKILL-60-doomed")), deletion)
+    assertFalse(Files.exists(specsRoot.resolve("group/SKILL-60-doomed")))
+    assertTrue(Files.exists(specsRoot.resolve("group/SKILL-61-kept/spec.md")))
+    assertEquals(SpecBundleDeletion.Absent, service.deleteBundle("test-project", "group/SKILL-60-doomed", root))
+  }
+
+  @Test
+  fun `deletion refuses the spec root, paths outside it, plain folders and linked bundles`() {
+    val root = Files.createTempDirectory("spec-browser-delete-refused").toRealPath()
+    val specsRoot = Files.createDirectories(root.resolve("store").resolve("specs"))
+    writeBundle(specsRoot, "group/SKILL-62-kept", "SKILL-62", "pending", listOf(1 to "pending"))
+    val outside = Files.createDirectories(root.resolve("outside"))
+    Files.writeString(outside.resolve("spec.md"), "# not in the store")
+    Files.createSymbolicLink(specsRoot.resolve("SKILL-63-linked"), outside)
+    val service = absentDatabaseHarness(root).service
+
+    listOf("", ".", "group/..", "../../outside", outside.toString(), "group", "SKILL-63-linked").forEach { path ->
+      assertIs<SpecBundleDeletion.Refused>(service.deleteBundle("test-project", path, root), path)
+    }
+    assertTrue(Files.exists(specsRoot.resolve("group/SKILL-62-kept/spec.md")))
+    assertTrue(Files.exists(outside.resolve("spec.md")))
+    assertIs<SpecBundleDeletion.Refused>(service.deleteBundle("unknown-project", "group/SKILL-62-kept", null))
+  }
+
+  @Test
+  fun `deletion refuses while the bundle's goal is running`() {
+    establishTemporarySchemaReadiness("spec-browser-delete-live").use { schema ->
+      val repo = schema.tempDir.toRealPath()
+      val specsRoot = Files.createDirectories(repo.resolve("store").resolve("specs"))
+      val subtasks = listOf(1 to "complete", 2 to "pending")
+      writeBundle(specsRoot, "SKILL-148-ide-status", "SKILL-148", "in_progress", subtasks)
+      val environment = mapOf("HOME" to repo.toString())
+      val database = sqliteSessionFactoryForTests(repo, schema.dbPath.toString(), environment, ideStatusClock)
+      val manifests = runningGoal(schema, database, repo)
+      val state = goalManifestState(repo, testGoalRepositoryIdentity(repo), "w-child")
+      manifests.persistControlState("goal-1", state.controlState.copy(executionLease = liveLease))
+      val service = harness(database, repo).service
+      assertEquals(SpecBundleRunState.RUNNING, service.control("test-project", "SKILL-148-ide-status", repo).runState)
+
+      val deletion = service.deleteBundle("test-project", "SKILL-148-ide-status", repo)
+
+      assertIs<SpecBundleDeletion.Refused>(deletion)
+      assertTrue(Files.exists(specsRoot.resolve("SKILL-148-ide-status/spec.md")))
+    }
+  }
+
+  private fun runningGoal(
+    schema: TemporarySchemaDatabase,
+    database: DatabaseSessionFactory,
+    repo: Path,
+  ): GoalRunnerManifestStore {
+    val manifests = testWorkflowGoalRunnerManifestStore(database, TestDecompositionManifestStore, ideStatusClock)
+    val state = goalManifestState(repo, testGoalRepositoryIdentity(repo), "w-child")
+    database.transaction { unit ->
+      listOf("goal-1", "w-child").forEach { id ->
+        unit.workflowStates.saveFeatureTaskWorkflow(
+          runtimeRecord(id, ideStatusObservedAt.toString()),
+          FeatureTaskWorkflowMode.RUNTIME,
+        )
+      }
+    }
+    schema.connection.prepareStatement(
+      "INSERT INTO goal_issue_progress " +
+        "(parent_workflow_id, issue_key, first_started_at, status, last_activity_at, state_entered_at) " +
+        "VALUES ('goal-1', 'SKILL-148', ?, 'running', ?, ?)",
+    ).use {
+      it.setString(1, ideStatusObservedAt.minusSeconds(60).toString())
+      it.setString(2, ideStatusObservedAt.minusSeconds(30).toString())
+      it.setString(3, ideStatusObservedAt.minusSeconds(30).toString())
+      it.executeUpdate()
+    }
+    manifests.save(state)
+    manifests.persistControlState("goal-1", state.controlState)
+    return manifests
+  }
+
+  private val liveLease =
+    GoalRunnerExecutionLease(
+      generation = 1,
+      ownerToken = "runner",
+      hostIdentity = "host",
+      bootIdentity = "boot",
+      pid = 42,
+      processBirthToken = "birth-42",
+      heartbeatAt = ideStatusObservedAt.toString(),
+      expiresAt = "2999-01-01T00:00:00Z",
+    )
+
   private class Harness(val service: SpecBrowserService)
+
+  private fun absentDatabaseHarness(root: Path): Harness {
+    val environment = mapOf("HOME" to root.toString())
+    return harness(sqliteSessionFactoryForTests(root, root.resolve("absent.db").toString(), environment), root)
+  }
 
   private fun harness(
     database: DatabaseSessionFactory,
@@ -260,6 +352,7 @@ class SpecBrowserServiceTest {
         runs,
         GoalRunnerIssueStartedReader(manifests),
         TestRepositoryEnclosingRoot,
+        LocalGoalRuntimeStateFileStore(),
       ),
     )
   }

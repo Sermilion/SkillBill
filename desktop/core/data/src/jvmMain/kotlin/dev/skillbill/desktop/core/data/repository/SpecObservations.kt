@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.data.runtime.RuntimeReads
+import dev.skillbill.desktop.core.data.runtime.SessionClosedException
 import dev.skillbill.desktop.core.data.runtime.readOrProblem
 import dev.skillbill.desktop.core.data.runtime.toDomain
 import dev.skillbill.desktop.core.data.runtime.toState
@@ -14,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
+import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
 import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import kotlinx.coroutines.CancellationException
@@ -40,12 +42,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.di.core.RuntimeComponent
+import skillbill.engine.specbrowser.model.SpecBundleDeletion
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 private const val SHARE_TIMEOUT_MS = 5_000L
+internal const val SPEC_SESSION_CHANGED = "The database session changed before the spec folder was deleted. Try again."
 private val EDITOR_VARIABLES = setOf("VISUAL", "EDITOR")
 
 /**
@@ -143,6 +147,33 @@ class SpecObservations internal constructor(
       return OpenOutcome.NotOpened
     }
     return if (runtime.fileEditorLauncherPort.open(target, environment)) OpenOutcome.Opened else OpenOutcome.NotOpened
+  }
+
+  /** Runs as a session write, as purge does; a session that closes mid-call is reported as a refusal, not a failure. */
+  suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome {
+    var closed = false
+    val result = readOrProblem(runtime, diagnostics) {
+      try {
+        reads.write("spec_delete_bundle") { component ->
+          component.specBrowserService.deleteBundle(bundle.projectId, bundle.path, bundle.repoRoot?.let(Path::of))
+        }
+      } catch (failure: SessionClosedException) {
+        closed = true
+        throw failure
+      }
+    }
+    return when (result) {
+      is Outcome.Success -> when (val deletion = result.value) {
+        is SpecBundleDeletion.Deleted -> SpecDeleteOutcome.Deleted
+        SpecBundleDeletion.Absent -> {
+          diagnostics.record("spec_delete_bundle_absent")
+          SpecDeleteOutcome.Deleted
+        }
+        is SpecBundleDeletion.Refused -> SpecDeleteOutcome.Refused(deletion.reason)
+        is SpecBundleDeletion.Failed -> SpecDeleteOutcome.Failed(ReadProblem.Runtime(deletion.reason))
+      }
+      is Outcome.Failure -> if (closed) SpecDeleteOutcome.Refused(SPEC_SESSION_CHANGED) else SpecDeleteOutcome.Failed(result.error)
+    }
   }
 
   private fun revisionChanges(topic: String): Flow<Unit> =

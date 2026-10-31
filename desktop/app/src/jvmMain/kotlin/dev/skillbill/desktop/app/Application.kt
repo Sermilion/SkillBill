@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModelStore
 import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.nucleusApplication
+import dev.skillbill.desktop.app.display.resolveDesktopUiScale
 import dev.skillbill.desktop.app.host.HostIntent
 import dev.skillbill.desktop.app.tray.TrayHost
 import dev.skillbill.desktop.app.motion.OsReducedMotionReader
@@ -39,6 +40,7 @@ fun main() {
   }
   component.transitionNotifier.start()
   val window = component.windowComponentFactory.createWindowComponent()
+  val uiScale = resolveDesktopUiScale()
   nucleusApplication(backend = NucleusBackend.Awt) {
     var mainVisible by remember { mutableStateOf(true) }
     var focusRequest by remember { mutableStateOf(0) }
@@ -55,8 +57,8 @@ fun main() {
         }
       }
     }
-    TrayHost(trayModel, component.trayAvailability, component.hostIntents, mainVisible, reducedMotion) { exitApplication() }
-    MainWindow(window, reducedMotion, mainVisible, focusRequest) {
+    TrayHost(trayModel, component.trayAvailability, component.hostIntents, uiScale, mainVisible, reducedMotion) { exitApplication() }
+    MainWindow(window, uiScale, reducedMotion, mainVisible, focusRequest) {
       if (component.trayAvailability.state.value.canHideToTray) mainVisible = false else {
         component.trayAvailability.unavailable()
         exitApplication()

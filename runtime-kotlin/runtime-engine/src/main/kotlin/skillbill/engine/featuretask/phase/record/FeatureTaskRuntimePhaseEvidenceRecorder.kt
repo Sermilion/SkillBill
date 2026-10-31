@@ -332,7 +332,7 @@ internal fun FeatureTaskRuntimePhaseEvidenceRecorder.quarantineEntriesFrom(
   artifacts: Map<String, Any?>,
 ): List<FeatureTaskRuntimeQuarantineEntry> = decodeQuarantineEntries(artifacts, quarantineValidator)
 
-internal fun quarantineEntryPatch(
+public fun quarantineEntryPatch(
   artifacts: Map<String, Any?>,
   entry: FeatureTaskRuntimeQuarantineEntry,
   validator: FeatureTaskRuntimeWireArtifactValidator,
@@ -355,7 +355,7 @@ internal fun quarantineEntryPatch(
   return mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS.entry(wire))
 }
 
-internal fun nextQuarantineRegenerationAttempt(
+public fun nextQuarantineRegenerationAttempt(
   artifacts: Map<String, Any?>,
   validator: FeatureTaskRuntimeWireArtifactValidator,
   producingPhaseId: String,

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -113,7 +114,7 @@ fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () ->
       ) {
         val shape = RoundedCornerShape(SkillBillRadius.sm)
         Row(
-          Modifier.clearAndSetSemantics {}
+          Modifier.widthIn(max = 360.dp).clearAndSetSemantics {}
             .layeredShadow(SkillBillTheme.shadows.popover, shape)
             .background(SkillBillTheme.colors.bgOverlay, shape)
             .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
@@ -122,7 +123,7 @@ fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () ->
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          BasicText(text, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.2.em), maxLines = 1, softWrap = false)
+          BasicText(text, Modifier.weight(1f, fill = false), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.2.em))
           shortcut?.let { Kbd(it) }
         }
       }

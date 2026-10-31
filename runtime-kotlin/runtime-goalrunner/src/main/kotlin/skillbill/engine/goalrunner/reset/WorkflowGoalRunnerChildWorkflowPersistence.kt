@@ -107,7 +107,7 @@ public class WorkflowGoalRunnerChildWorkflowPersistence(
         existingChild
       }
     if (existingChild == null) {
-      qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
+      qualityExecution.retireActiveExecution(unitOfWork, state.parentWorkflowId)
       historyEvidence.retire(unitOfWork, state.parentWorkflowId, setup.subtaskId)
       unitOfWork.workflowStates.saveRecord(
         WorkflowFamily.TASK_RUNTIME,

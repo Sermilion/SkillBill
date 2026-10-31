@@ -20,6 +20,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
@@ -120,7 +121,7 @@ internal fun IncidentSection(
               }
             }
           } else {
-            incident.prerequisites.forEach { BasicText(it.instruction, style = rowStyle) }
+            incident.prerequisites.forEach { BasicText(rememberRuntimeText(it.instruction), style = rowStyle) }
           }
         }
       }

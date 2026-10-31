@@ -1,6 +1,6 @@
 package skillbill.engine.goalrunner.execution.support
 
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding

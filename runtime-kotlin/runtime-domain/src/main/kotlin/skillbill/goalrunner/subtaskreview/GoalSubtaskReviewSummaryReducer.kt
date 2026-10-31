@@ -52,6 +52,8 @@ object GoalSubtaskReviewSummaryReducer {
       .let(::withStableFindingRefs)
   }
 
+  fun reviewRunId(output: Any): String? = GoalSubtaskReviewStructuredFindingsParse.reviewRunIdOf(output)
+
   fun unaddressedFindings(
     output: Any,
     scope: UnaddressedFindingLedgerScope,

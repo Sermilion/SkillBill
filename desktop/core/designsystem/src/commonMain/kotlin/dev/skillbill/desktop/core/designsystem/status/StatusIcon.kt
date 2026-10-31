@@ -20,14 +20,14 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import kotlin.math.PI
 
 @Composable
-fun StatusIcon(kind: StatusKind, progress: Float?, large: Boolean = false, modifier: Modifier = Modifier) {
+fun StatusIcon(kind: StatusKind, progress: Float?, large: Boolean = false, modifier: Modifier = Modifier, tint: Color? = null) {
   val colors = SkillBillTheme.colors
   // The SVG re-renders with the new dash length; `.sb-status` declares no transition.
   val fraction = (progress ?: 0.5f).coerceIn(0.12f, 1f)
   Canvas(modifier.size(if (large) 16.dp else 14.dp).semantics { contentDescription = kind.label }) {
     scale(size.width / 14f, pivot = Offset.Zero) {
       val center = Offset(7f, 7f)
-      val color = kind.color(colors)
+      val color = tint ?: kind.color(colors)
       val ring = Stroke(width = 1.5f)
       when (kind) {
         StatusKind.Active -> {

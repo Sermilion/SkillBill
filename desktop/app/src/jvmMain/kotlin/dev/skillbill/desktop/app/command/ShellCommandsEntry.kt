@@ -6,11 +6,12 @@ import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
 import dev.skillbill.desktop.app.shell.ShellBoardState
 import dev.skillbill.desktop.app.shell.sectionLabel
-import dev.skillbill.desktop.app.shell.sectionLead
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.overlay.CommandItem
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.ui.status.boardSectionLead
+import dev.skillbill.desktop.core.ui.status.boardSectionLeadFill
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.ui.di.WindowScope
@@ -50,7 +51,7 @@ class ShellCommandsEntry(
   override fun commands(context: CommandContext): List<CommandSection> {
     val navigation = listOf(go("nav:work", "Go to Work", LucideIcons.target, "G W", WorkRoute(null))) +
       BoardSectionKind.entries.map { kind ->
-        ShellCommand(CommandItem("section:${kind.name}", "Go to ${sectionLabel(kind)}", lead = { StatusIcon(sectionLead(kind), 0.5f) })) { navigator.navigate(WorkRoute(kind)) }
+        ShellCommand(CommandItem("section:${kind.name}", "Go to ${sectionLabel(kind)}", lead = { StatusIcon(boardSectionLead(kind), boardSectionLeadFill(kind)) })) { navigator.navigate(WorkRoute(kind)) }
       } +
       go("nav:history", "Go to History", LucideIcons.history, "G H", HistoryRoute) +
       go("nav:settings", "Go to Settings", LucideIcons.sliders, "G ,", SettingsRoute(SettingsPageId.App))

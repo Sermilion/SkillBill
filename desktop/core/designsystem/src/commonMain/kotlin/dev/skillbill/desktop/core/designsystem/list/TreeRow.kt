@@ -17,17 +17,34 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.RectangleShape
@@ -56,6 +73,7 @@ private fun Modifier.bleedHorizontal(amount: Dp) = layout { measurable, constrai
   layout((placeable.width - extra * 2).coerceAtLeast(0), placeable.height) { placeable.placeRelative(-extra, 0) }
 }
 
+/** [onContextMenu] receives the press position in row coordinates, or the row's start for Shift+F10 and the Menu key. */
 @Composable
 fun TreeRow(
   title: String,
@@ -71,11 +89,30 @@ fun TreeRow(
   id: String? = null,
   meta: @Composable RowScope.() -> Unit = {},
   inPane: Boolean = false,
+  onContextMenu: ((Offset) -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val interaction = remember { MutableInteractionSource() }
   val hovered = interaction.collectIsHoveredAsState().value
+  val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+  var rowSize by remember { mutableStateOf(IntSize.Zero) }
+  val menu = if (onContextMenu == null) Modifier else Modifier
+    .pointerInput(onContextMenu) {
+      awaitPointerEventScope {
+        while (true) {
+          val event = awaitPointerEvent()
+          if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+            onContextMenu(event.changes.first().position)
+            event.changes.forEach { it.consume() }
+          }
+        }
+      }
+    }
+    .onPreviewKeyEvent {
+      val menuKey = it.key == Key.Menu || (it.key == Key.F10 && it.isShiftPressed)
+      if (it.type == KeyEventType.KeyDown && menuKey) { onContextMenu(Offset(if (rtl) rowSize.width.toFloat() else 0f, rowSize.height / 2f)); true } else false
+    }
   val rotation = animateFloatAsState(if (expanded) 90f else 0f, menuSpec(), label = "tree-row-caret").value
   val baseColor = if (focused) colors.fg else colors.fg2
   val titleStyle = when {
@@ -93,7 +130,7 @@ fun TreeRow(
         if (focused) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent,
         if (inPane) RoundedCornerShape(SkillBillRadius.sm) else RectangleShape,
       ).focusBar(focused)
-      .hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
+      .onSizeChanged { rowSize = it }.hoverable(interaction).then(menu).clickable(interaction, indication = null, role = Role.Button, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
       .then(if (expandable) Modifier.expandSemantics(expanded) else Modifier)
       .padding(start = if (inPane) paneBleed else treeBasePadding + treeIndent * level, end = if (inPane) paneBleed else 16.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),

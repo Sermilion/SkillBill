@@ -48,6 +48,7 @@ public data class GoalRunnerBlockRequest(
   public val stopReason: GoalRunnerStopReason? = null,
   public val failureCode: String? = null,
   public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+  public val recoveryCommand: String? = null,
 )
 
 internal data class GoalRunnerBlockWrite(
@@ -65,6 +66,7 @@ internal data class GoalRunnerBlockWrite(
   public val stopReason: GoalRunnerStopReason? = null,
   public val failureCode: String? = null,
   public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+  public val recoveryCommand: String? = null,
 )
 
 internal data class GoalRunnerBlockWriteResult(

@@ -1,9 +1,11 @@
 package dev.skillbill.desktop.app.tray
 
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPosition
 import dev.nucleusframework.composenativetray.utils.TrayClickTracker
+import dev.skillbill.desktop.app.display.readKwinXwaylandScale
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -19,7 +21,6 @@ import java.awt.Rectangle
 import java.awt.Toolkit
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.Files
 import kotlin.math.roundToInt
 
 fun trayIconAnchor(): Point {
@@ -30,8 +31,10 @@ fun trayIconAnchor(): Point {
   return pointer
 }
 
+data class TrayPopoverLocation(val position: WindowPosition, val alignment: Alignment)
+
 class TrayPopoverPlacement {
-  fun position(size: DpSize, nativeAnchor: Point, gap: Int): WindowPosition {
+  fun locate(size: DpSize, nativeAnchor: Point, gap: Int): TrayPopoverLocation {
     val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { it.defaultConfiguration }
     val anchor = awtTrayAnchor(nativeAnchor, screens.map { it.bounds }, System.getenv())
     val screen = screens.firstOrNull { it.bounds.contains(anchor) }
@@ -45,7 +48,7 @@ class TrayPopoverPlacement {
     val position = anchoredTrayPosition(anchor, workArea, size.width.value.roundToInt(), size.height.value.roundToInt(), gap)
     System.getLogger("SkillBillTrayPlacement").log(System.Logger.Level.INFO,
       "tray_window_anchored native=$nativeAnchor anchor=$anchor work_area=$workArea position=$position")
-    return WindowPosition(position.x.dp, position.y.dp)
+    return TrayPopoverLocation(WindowPosition(position.x.dp, position.y.dp), anchoredTrayAlignment(anchor, workArea))
   }
 }
 
@@ -71,33 +74,6 @@ private fun awtTrayAnchor(raw: Point, screens: List<Rectangle>, environment: Map
 }
 
 private fun queryKdeDisplayLayout(): String? = KdeDisplayLayout().query()
-
-private fun readKwinXwaylandScale(path: Path): Float? {
-  if (!Files.exists(path)) return null
-  var inSection = false
-  return try {
-    Files.readAllLines(path).firstNotNullOfOrNull { line ->
-      val value = line.trim()
-      when {
-        value.startsWith("[") && value.endsWith("]") -> { inSection = value == "[Xwayland]"; null }
-        inSection && value.substringBefore("=", "").trim() == "Scale" -> parseScale(value.substringAfter("=", "").trim())
-        else -> null
-      }
-    }
-  } catch (_: Exception) {
-    TrayDiagnostics.record("tray_kde_xwayland_scale_unavailable")
-    null
-  }
-}
-
-private fun parseScale(value: String): Float? {
-  val percent = value.endsWith("%")
-  val number = value.removeSuffix("%").removeSuffix("x").removeSuffix("X").trim().toFloatOrNull() ?: return null
-  return when {
-    percent || number > 10f -> number / 100f
-    else -> number
-  }
-}
 
 internal fun mapKdeTrayAnchor(raw: Point, layout: String, screens: List<Rectangle>, xwaylandScale: Float): Point {
   val output = Json.parseToJsonElement(layout).jsonObject.getValue("outputs").jsonArray
@@ -131,8 +107,7 @@ internal fun mapNativeTrayPoint(raw: Point, nativeBounds: Rectangle, awtBounds: 
 internal fun anchoredTrayPosition(anchor: Point, area: Rectangle, width: Int, height: Int, gap: Int): Point {
   val right = area.x + area.width
   val bottom = area.y + area.height
-  val edge = listOf(anchor.y - area.y, bottom - anchor.y, anchor.x - area.x, right - anchor.x)
-    .withIndex().minBy { it.value }.index
+  val edge = nearestTrayEdge(anchor, area)
   val x = when (edge) {
     2 -> maxOf(anchor.x, area.x) + gap
     3 -> minOf(anchor.x, right) - width - gap
@@ -146,3 +121,14 @@ internal fun anchoredTrayPosition(anchor: Point, area: Rectangle, width: Int, he
   return Point(x.coerceIn(area.x, maxOf(area.x, right - width)),
     y.coerceIn(area.y, maxOf(area.y, bottom - height)))
 }
+
+internal fun anchoredTrayAlignment(anchor: Point, area: Rectangle): Alignment = when (nearestTrayEdge(anchor, area)) {
+  0 -> Alignment.TopCenter
+  1 -> Alignment.BottomCenter
+  2 -> Alignment.CenterStart
+  else -> Alignment.CenterEnd
+}
+
+private fun nearestTrayEdge(anchor: Point, area: Rectangle): Int =
+  listOf(anchor.y - area.y, area.y + area.height - anchor.y, anchor.x - area.x, area.x + area.width - anchor.x)
+    .withIndex().minBy { it.value }.index

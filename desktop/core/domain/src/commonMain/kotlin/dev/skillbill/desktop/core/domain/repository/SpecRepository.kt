@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
+import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
 import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import kotlinx.coroutines.flow.Flow
@@ -30,4 +31,7 @@ interface SpecRepository {
 
   /** Shows a folder in the system file manager. */
   suspend fun revealFolder(path: String): OpenOutcome
+
+  /** Deletes the bundle's folder under the project's spec store; refused while the bundle's goal runs. */
+  suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome
 }

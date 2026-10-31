@@ -18,12 +18,8 @@ import dev.skillbill.desktop.core.ui.status.statusKind
 
 private fun activeNote(running: Boolean) = if (running) "ticking" else "last known duration"
 
-/** A finished standalone run has no current step; it shows how the run ended instead. */
-internal fun terminalStepLabel(item: WorkItem, detail: Detail): String =
-  when (val result = currentExecution(item, detail)?.result) {
-    null, "completed" -> "Complete"
-    else -> result.replaceFirstChar(Char::uppercase)
-  }
+/** What the Step or Phase cell reads once nothing runs any more; the result has its own section. */
+private const val IDLE_STEP = "Idle"
 
 /** HANDOFF 9.2 item 8, as screens.js `detail()` builds the strip: operations and phases get Step and the elapsed clock. */
 @Composable
@@ -36,9 +32,9 @@ internal fun DetailMetrics(item: WorkItem, detail: Detail) {
   val cells = buildList {
     add(
       when {
-        !goal && item.lifecycle == Lifecycle.Terminal -> MetricCell("Step", terminalStepLabel(item, detail), note = " ")
-        // A standalone run's step is a phase id: mono at `--t-md`, and the note line always holds its place.
-        !goal -> MetricCell("Step", note = item.phaseExecutionLabel ?: " ") {
+        !goal && item.lifecycle == Lifecycle.Terminal -> MetricCell("Step", IDLE_STEP)
+        // A standalone run's step is a phase id, mono at `--t-md`, with no note under it.
+        !goal -> MetricCell("Step") {
           BasicText(
             item.stepLabel,
             style = valueStyle.copy(fontFamily = SkillBillTheme.type.mono.fontFamily, fontSize = 14.sp, letterSpacing = (-0.16).sp, fontWeight = FontWeight.Medium),
@@ -57,6 +53,8 @@ internal fun DetailMetrics(item: WorkItem, detail: Detail) {
       if (planning) {
         val plans = item.planningProgress
         add(MetricCell("Phase", "plan", note = plans?.let { "${it.done}/${it.total} plans saved" }))
+      } else if (finished != null) {
+        add(MetricCell("Phase", IDLE_STEP, note = " "))
       } else {
         add(MetricCell("Phase", detail.currentPhase ?: item.stepLabel, note = item.phaseExecutionLabel ?: " "))
       }

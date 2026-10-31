@@ -29,6 +29,7 @@ kotlin {
     implementation(projects.core.designsystem)
     implementation(projects.core.ui)
     implementation(projects.feature.terminal)
+    implementation(projects.feature.chat)
     implementation(projects.feature.work)
     implementation(projects.feature.history)
     implementation(projects.feature.detail)
@@ -88,7 +89,7 @@ compose.desktop {
       linux {
         packageName = "skill-bill-desktop"
         appCategory = "Development"
-        iconFile.set(layout.projectDirectory.file("packaging/icons/skill-bill.png"))
+        iconFile.set(rootProject.layout.projectDirectory.file("core/designsystem/src/commonMain/composeResources/drawable/skill_bill.png"))
       }
     }
   }

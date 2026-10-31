@@ -88,6 +88,7 @@ public data class GoalRunnerRepairResult(
   public val appliedRepairs: List<GoalRunnerAppliedRepair> = emptyList(),
   public val refusalReason: String? = null,
   public val liveLeaseWorkflowId: String? = null,
+  public val recoveryCommand: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

@@ -1,5 +1,7 @@
 package skillbill.workflow.taskruntime.model.audit
 
+import skillbill.workflow.model.repair.FocusedRepairStrategy
+
 data class AcceptanceCriterionProseAudit(
   val id: String,
   val revision: Long,
@@ -141,7 +143,7 @@ private fun AcceptanceCriterionRepairState.applyFocusedAudit(
     ) ?: return null
   val blocked =
     !audit.satisfied && unsuccessfulTotals.getOrDefault(previous.canonicalRef, 0) >=
-      AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
+      FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
   val transition =
     if (previous.sourceDisposition != disposition) {
       listOf(

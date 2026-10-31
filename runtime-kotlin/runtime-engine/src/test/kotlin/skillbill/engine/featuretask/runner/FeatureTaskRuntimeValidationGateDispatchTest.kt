@@ -2,7 +2,9 @@ package skillbill.engine.featuretask.runner
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ValidationTestProbePayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.slot.VALIDATE_PROBE_LINE
@@ -28,6 +30,33 @@ import kotlin.test.assertNull
 class FeatureTaskRuntimeValidationGateDispatchTest {
   @TempDir
   lateinit var legacySpecRepo: Path
+
+  @Test
+  fun `duplicate malformed or missing probe lines never block completed validation prose`() {
+    val reports =
+      listOf(
+        "Required checks passed.",
+        "Required checks passed.\nTest probe FooTest.guards: killed",
+        "Required checks passed.\n$VALIDATE_PROBE_LINE\n$VALIDATE_PROBE_LINE",
+      )
+    reports.forEach { prose ->
+      val harness = validationHarness(prose)
+
+      val report = harness.runner.run(harness.request())
+
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
+      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "write_history" })
+      assertEquals(prose, admittedValue(harness, "validate"))
+      val record = assertNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("validate"))
+      val envelope =
+        JsonCodec.parseObjectOrNull(assertNotNull(record.outputArtifact))
+          ?.let(JsonCodec::jsonElementToValue)
+          ?.let(JsonCodec::anyToStringAnyMap)
+      val produced = JsonCodec.anyToStringAnyMap(envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS))
+      assertEquals(emptyList<Any?>(), produced?.get(ValidationTestProbePayloadKeys.TEST_PROBES))
+    }
+  }
 
   @Test
   fun `completed output completes validate without command evidence or a runtime rerun`() {

@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import dev.skillbill.desktop.app.keyboard.MOD_KEY
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -14,7 +14,9 @@ import dev.skillbill.desktop.core.designsystem.navigation.SidebarItem
 import dev.skillbill.desktop.core.designsystem.navigation.SidebarSection
 import dev.skillbill.desktop.core.designsystem.navigation.WorkspaceSwitcher
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
-import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.ui.pane.MOD_KEY
+import dev.skillbill.desktop.core.ui.status.boardSectionLead
+import dev.skillbill.desktop.core.ui.status.boardSectionLeadFill
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -70,23 +72,19 @@ fun ShellSidebar(
     SidebarSection("Board", boardExpanded, onToggle = { boardExpanded = !boardExpanded }) {
       BoardSectionKind.entries.forEach { kind ->
         val needsYou = kind == BoardSectionKind.NeedsYou
+        val on = topRoute == WorkRoute(kind)
+        // Same neutral tint as the sidebar's line icons, not the status palette.
+        val leadTint = if (on) SkillBillTheme.colors.fg else SkillBillTheme.colors.fgMuted
         SidebarItem(
           sectionLabel(kind),
           { onNavigate(WorkRoute(kind)) },
-          lead = { StatusIcon(sectionLead(kind), 0.5f) },
+          lead = { StatusIcon(boardSectionLead(kind), boardSectionLeadFill(kind), tint = leadTint) },
           count = if (needsYou) null else sectionSizes?.get(kind),
           attention = if (needsYou) sectionSizes?.get(kind) else null,
-          on = topRoute == WorkRoute(kind),
+          on = on,
         )
       }
     }
     contributions.forEach { SidebarItem(it.label, it.onClick, icon = it.icon) }
   }
-}
-
-/** The Board section's status glyph, the same one its group header leads with. */
-internal fun sectionLead(kind: BoardSectionKind): StatusKind = when (kind) {
-  BoardSectionKind.NeedsYou -> StatusKind.Blocked
-  BoardSectionKind.Finished -> StatusKind.Completed
-  BoardSectionKind.Goals, BoardSectionKind.Phases, BoardSectionKind.Operations -> StatusKind.Active
 }

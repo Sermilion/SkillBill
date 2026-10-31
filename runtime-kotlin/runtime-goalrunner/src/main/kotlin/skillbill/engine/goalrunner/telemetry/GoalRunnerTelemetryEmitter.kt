@@ -8,8 +8,8 @@ import skillbill.application.telemetry.model.GoalSubtaskFinishedRequest
 import skillbill.contracts.telemetry.GoalRunTerminalReason
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.assessment.toTelemetryCounts
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalRunnerRunReport

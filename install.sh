@@ -1862,6 +1862,8 @@ install_desktop_app_launcher() {
 Name=Skill Bill
 Type=Application
 Exec=$quoted_launcher
+Icon=$app_target/lib/Skill Bill.png
+StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt
 Terminal=false
 Categories=Development;
 ENTRY
@@ -1873,12 +1875,64 @@ BUILT_DESKTOP_APP_SOURCE=""
 # the installer stops it and relaunches the new build. Matching the full executable
 # path keeps unrelated processes out of reach.
 desktop_app_running_pids() {
-  local executable pattern
+  local executable pattern flags="-f"
   command -v pgrep >/dev/null 2>&1 || return 0
+  # BSD pgrep (macOS) leaves out its own ancestors unless -a is given, so an app whose
+  # built-in terminal runs the installer would be missed. procps pgrep excludes only
+  # itself, and -a means "list full command lines" there.
+  case "$(uname -s 2>/dev/null || true)" in
+    Darwin|*BSD) flags="-af" ;;
+  esac
   for executable in "$@"; do
     pattern="$(printf '%s' "$executable" | sed 's/[][\.*^$+?(){}|]/\\&/g')"
-    pgrep -f -- "^$pattern( |\$)" 2>/dev/null || true
+    pgrep $flags -- "^$pattern( |\$)" 2>/dev/null || true
   done
+}
+
+# Succeeds when one of the given pids is the installer or one of its ancestors, which
+# happens when the installer runs in the desktop app's built-in terminal.
+desktop_app_hosts_installer() {
+  local pid="$$" parent candidate
+  while [[ -n "$pid" && "$pid" -gt 1 ]]; do
+    for candidate in "$@"; do
+      [[ "$candidate" == "$pid" ]] && return 0
+    done
+    parent="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d '[:space:]')" || return 1
+    [[ "$parent" != "$pid" ]] || return 1
+    pid="$parent"
+  done
+  return 1
+}
+
+# Runs a command in its own session, so it survives the desktop app closing the
+# terminal the installer runs in.
+run_detached() {
+  if command -v setsid >/dev/null 2>&1; then
+    nohup setsid "$@" </dev/null >/dev/null 2>&1 &
+  elif command -v perl >/dev/null 2>&1; then
+    nohup perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or exit 127' "$@" </dev/null >/dev/null 2>&1 &
+  else
+    nohup "$@" </dev/null >/dev/null 2>&1 &
+  fi
+}
+
+# Stopping an app that hosts the installer would end the installer with it, so a
+# detached helper waits for the installer to exit, stops the app, then launches the
+# new build. Its output goes to the desktop restart log.
+schedule_desktop_app_restart() {
+  local os="$1" app_target="$2" executable="$3" log="/dev/null" helper
+  shift 3
+  if [[ -n "${SKILL_BILL_STATE_DIR:-}" ]] && mkdir -p "$SKILL_BILL_STATE_DIR/desktop" 2>/dev/null; then
+    log="$SKILL_BILL_STATE_DIR/desktop/restart.log"
+  fi
+  helper="$(declare -f warn stop_desktop_app launch_desktop_app)"'
+exec >>"$1" 2>&1
+SKILL_BILL_STATE_DIR=$2 installer=$3 os=$4 app_target=$5 executable=$6
+shift 6
+while kill -0 "$installer" 2>/dev/null; do sleep 0.2; done
+stop_desktop_app "$@"
+launch_desktop_app "$os" "$app_target" "$executable"'
+  run_detached bash -c "$helper" desktop-restart "$log" "${SKILL_BILL_STATE_DIR:-}" "$$" "$os" "$app_target" "$executable" "$@"
 }
 
 stop_desktop_app() {
@@ -1957,7 +2011,17 @@ stage_selected_desktop_app() {
   os="$(host_os)"
   if [[ "$INSTALL_SOURCE" == "source" ]]; then
     build_source_desktop_app "$os" || return 1
-    app_source="$BUILT_DESKTOP_APP_SOURCE"
+    init_prebuilt_work_dir || return 1
+    work_dir="$(prebuilt_work_dir)"
+    if [[ -z "$work_dir" ]] || ! work_dir="$(mktemp -d "$work_dir/desktop-source.XXXXXX")"; then
+      err "Could not create a private desktop staging directory."
+      return 1
+    fi
+    app_source="$(desktop_app_target_path "$os" "$work_dir")"
+    if ! cp -R "$BUILT_DESKTOP_APP_SOURCE" "$app_source"; then
+      err "Could not snapshot the desktop build before checking runtime parity."
+      return 1
+    fi
   else
     if ! token="$(host_token)"; then
       err "No desktop app release target is supported for this host."
@@ -2096,7 +2160,11 @@ activate_staged_desktop_app() {
   fi
   ok "Desktop app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
-  if [[ ${#running_pids[@]} -gt 0 ]]; then
+  if [[ ${#running_pids[@]} -gt 0 ]] && desktop_app_hosts_installer "${running_pids[@]}"; then
+    rm -rf "$backup_app"
+    schedule_desktop_app_restart "$os" "$app_target" "$executable" "${running_pids[@]}"
+    ok "The desktop app runs this installer, so it restarts with the new build when the installer exits."
+  elif [[ ${#running_pids[@]} -gt 0 ]]; then
     stop_desktop_app "${running_pids[@]}"
     rm -rf "$backup_app"
     if launch_desktop_app "$os" "$app_target" "$executable"; then

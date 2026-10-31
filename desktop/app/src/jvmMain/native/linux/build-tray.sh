@@ -28,6 +28,10 @@ menu = 'return sd_bus_message_append(reply, "o", tray->current_menu_path);'
 if text.count(menu) != 1:
     raise SystemExit("ComposeNativeTray Menu patch no longer matches")
 text = text.replace(menu, 'return sd_bus_message_append(reply, "o", "/");')
+right_click = 'enqueue_callback(tray, (pending_cb){.type = PCB_RCLICK, .x = x, .y = y});'
+if text.count(right_click) != 1:
+    raise SystemExit("ComposeNativeTray context activation patch no longer matches")
+text = text.replace(right_click, right_click.replace('PCB_RCLICK', 'PCB_CLICK'))
 tooltip = 'tray->tooltip_text ? tray->tooltip_text : "",\n                              ""); /* description */'
 if text.count(tooltip) != 1:
     raise SystemExit("ComposeNativeTray tooltip description patch no longer matches")

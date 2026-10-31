@@ -390,11 +390,12 @@ class GoalFreshQualityCommand(
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "fresh-quality",
-    "Resolve an 'ambiguous historical quality state' block by discarding that history. " +
-      "The next goal run admits a fresh quality execution with new cycles. Refused while a runner holds the goal.",
+    "Resolve an 'ambiguous historical quality state' block, or a final quality step whose outcome is unknown, " +
+      "by discarding that quality state. The next goal run admits a fresh quality execution with new cycles. " +
+      "Refused while a runner holds the goal.",
   ) {
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
-  private val reason by option("--reason", help = "Why the historical quality state can be discarded.").required()
+  private val reason by option("--reason", help = "Why the quality state can be discarded.").required()
   private val repoRoot by option("--repo-root", help = "Repository root for the goal.")
 
   override fun run() {

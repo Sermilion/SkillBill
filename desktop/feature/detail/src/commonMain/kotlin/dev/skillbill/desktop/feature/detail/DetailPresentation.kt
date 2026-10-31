@@ -115,6 +115,7 @@ internal fun goalFinishSteps(item: WorkItem, detail: Detail): List<PipelineStep>
   return pipelineSteps(item, detail, detail.goalFinishPipeline, goal = true).map { step ->
     when {
       step.label !in ASSESSMENT_STEPS -> step
+      state == GoalAssessmentState.Blocked -> PipelineStep(step.label, PipelineStepState.Failed, goal = true)
       state == GoalAssessmentState.Completed -> PipelineStep(step.label, PipelineStepState.Done, goal = true)
       state == GoalAssessmentState.Skipped -> PipelineStep(step.label, PipelineStepState.Pending, goal = true, tooltip = "skipped")
       else -> step

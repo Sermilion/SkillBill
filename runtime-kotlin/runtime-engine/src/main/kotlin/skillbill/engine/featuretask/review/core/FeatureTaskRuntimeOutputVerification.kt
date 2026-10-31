@@ -64,11 +64,12 @@ private fun findingVerificationVerdict(
   wireVerdict: FeatureTaskRuntimeVerdict?,
   outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
 ): FeatureTaskRuntimeVerdict {
-  if (wireVerdict != null) return wireVerdict
-  val verdict =
-    requireNotNull(findingVerificationVerdictFrom(outputObject)) {
+  val verdict = findingVerificationVerdictFrom(outputObject)
+  if (verdict == null) {
+    return requireNotNull(wireVerdict) {
       "verify_findings phase output carries neither a verdict nor finding dispositions."
     }
+  }
   return if (verdict.verifiedDispositions.isEmpty()) {
     FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED
   } else {

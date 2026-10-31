@@ -28,6 +28,7 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestProjectionReader
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
@@ -37,7 +38,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
@@ -859,6 +859,11 @@ internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
 }
 
 internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun prepareGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
+    readGoalAssessmentRecord(parentWorkflowId)
+
+  override fun reopenGoalAssessmentForOperatorResume(parentWorkflowId: String): Boolean = false
+
   override fun recordGoalFinalRepairOutput(
     parentWorkflowId: String,
     expectedInvocationId: String,

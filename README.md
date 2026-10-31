@@ -214,13 +214,17 @@ Targets are `pr`, `HEAD`, `uncommitted`, `staged`, `unstaged`, or a commit sha. 
 
 **Desktop app.** Installed with Skill Bill. It lists live, recent, and stalled work, shows each goal's pipeline and activity (review, audit, and QA results, including which QA findings were fixed), and can stop, resume, and re-run work from the window or the tray.
 
-![Skill Bill desktop app showing a three-subtask goal in its monitor phase, with pause, stop, and cancel controls](docs/assets/desktop-goal-run.png)
+![Skill Bill desktop app showing an active goal, subtask progress, phase pipeline, and pause and cancel controls](docs/assets/desktop-goal-run.png)
 
-A goal run. The sidebar groups work that needs you, standalone phases, goal runs, and history. The main pane shows subtask progress from the goal manifest, the current phase, elapsed time, attempts per phase, and dependencies between subtasks.
+Follow an active goal through its subtasks and phase pipeline. The goal view shows the current phase, elapsed time, and recent activity, with controls to pause or cancel the run.
 
-![Skill Bill desktop app showing goal activity with review, audit, and goal QA results for a subtask](docs/assets/desktop-goal-activity.png)
+![Skill Bill desktop app work list showing an active goal and finished runs across repositories](docs/assets/desktop-work-list.png)
 
-Goal activity for another run. Each subtask lists its review verdict, audit result with attempt count, and goal QA outcome, next to the agent, liveness, and validation status.
+See active goals and finished runs across repositories. The work list shows each run's phase, subtask progress, repository, and recent activity.
+
+![Skill Bill desktop app with the subtask details panel showing dependencies, review findings, audit status, and execution information](docs/assets/desktop-goal-activity.png)
+
+Open a subtask's details to inspect its spec file, dependencies, review findings, audit status, and execution information.
 
 **CLI.** Run these from the repository that owns the goal:
 

@@ -66,18 +66,33 @@ internal class SpecLiveGoalReader(
     }
   }
 
+  fun goal(
+    repoRoot: Path,
+    issueKey: String,
+  ): LiveGoal? {
+    val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    return database.readIfPresent { unit -> boardGoal(unit, identity, issueKey) }
+  }
+
   private fun liveGoal(
+    unit: UnitOfWork,
+    identity: String,
+    key: String,
+  ): LiveGoal? =
+    try {
+      boardGoal(unit, identity, key)
+    } catch (_: SkillBillRuntimeException) {
+      null
+    }
+
+  private fun boardGoal(
     unit: UnitOfWork,
     identity: String,
     key: String,
   ): LiveGoal? {
     val workflowId = parentWorkflowId(unit, identity, key) ?: return null
-    return try {
-      status.projectBoardSelection(listOf(workflowId), WorkBoardRequest()).items.singleOrNull()?.snapshot?.let {
-        LiveGoal(it.lifecycleState, it.pauseRequested == true)
-      }
-    } catch (_: SkillBillRuntimeException) {
-      null
+    return status.projectBoardSelection(listOf(workflowId), WorkBoardRequest()).items.singleOrNull()?.snapshot?.let {
+      LiveGoal(it.lifecycleState, it.pauseRequested == true)
     }
   }
 

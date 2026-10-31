@@ -35,6 +35,8 @@ internal fun stopped(args: StoppedReportArgs): GoalRunnerRunReport.Stopped =
         incidentToken = args.incidentToken,
         acceptedBlockReference = args.acceptedBlockReference,
         historicalBlockReference = args.historicalBlockReference,
+        failureCode = args.failureCode,
+        recoveryCommand = args.recoveryCommand,
       ),
   )
 

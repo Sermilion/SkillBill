@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.engine.featuretask.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.engine.featuretask.persist.GoalRunnerRestoredChildReference
+import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
@@ -12,7 +13,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -147,6 +147,10 @@ public interface GoalRunnerWorkflowOutcomeStore :
 }
 
 public interface GoalRunnerAssessmentRecordStore {
+  public fun prepareGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
+
+  public fun reopenGoalAssessmentForOperatorResume(parentWorkflowId: String): Boolean
+
   public fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
 
   public fun recordGoalAssessmentRecord(
@@ -262,9 +266,11 @@ public interface GoalRunnerQualityExecutionStore {
   public fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord?
 
   /**
-   * Records the operator's choice to discard ambiguous historical quality state. The parent's
-   * quality record becomes clean and unstarted, so the next goal run admits a fresh quality
-   * execution with new cycles. Returns false when the parent holds no historical ambiguity.
+   * Records the operator's choice to discard quality state the runtime cannot judge. Ambiguous
+   * historical state becomes clean and unstarted; an unsettled admitted execution, such as one
+   * whose agent step was interrupted before it recorded an outcome, is retired. Either way the
+   * next goal run admits a fresh quality execution with new cycles. Returns false when the
+   * parent holds neither.
    */
   public fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean
 

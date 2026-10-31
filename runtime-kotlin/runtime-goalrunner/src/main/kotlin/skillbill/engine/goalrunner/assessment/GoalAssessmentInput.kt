@@ -39,6 +39,10 @@ internal sealed interface GoalAssessmentFocus {
 
   data object CrossSubtask : GoalAssessmentFocus
 
+  data class Scenario(val ref: String) : GoalAssessmentFocus
+
+  data class Regression(val ref: String) : GoalAssessmentFocus
+
   data class Verifier(val candidates: List<GoalAssessmentVerifierCandidate>) : GoalAssessmentFocus
 }
 

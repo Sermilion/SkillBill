@@ -32,7 +32,8 @@ import dev.skillbill.desktop.core.designsystem.list.groupHeader
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
-import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.ui.status.boardSectionLead
+import dev.skillbill.desktop.core.ui.status.boardSectionLeadFill
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -59,11 +60,6 @@ internal fun emptySectionText(kind: BoardSectionKind, filtering: Boolean): Strin
   else -> "No ${sectionLabel(kind).lowercase()}"
 }
 
-private fun sectionLead(kind: BoardSectionKind): StatusKind = when (kind) {
-  BoardSectionKind.NeedsYou -> StatusKind.Blocked
-  BoardSectionKind.Finished -> StatusKind.Completed
-  BoardSectionKind.Goals, BoardSectionKind.Phases, BoardSectionKind.Operations -> StatusKind.Active
-}
 
 /** Pane toggles and the shell actions a Work row reaches without depending on the shell. */
 internal class WorkScreenHost(
@@ -144,7 +140,7 @@ private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScr
   LazyColumn(Modifier.fillMaxSize(), listState) {
     sections.forEach { boardSection ->
       val kind = boardSection.kind
-      groupHeader(key = "header:$kind", label = sectionLabel(kind), count = boardSection.items.size, lead = { StatusIcon(sectionLead(kind), 0.5f) })
+      groupHeader(key = "header:$kind", label = sectionLabel(kind), count = boardSection.items.size, lead = { StatusIcon(boardSectionLead(kind), boardSectionLeadFill(kind)) })
       items(boardSection.items, key = { "$kind:${it.id}" }) { item ->
         Box {
           WorkRow(item, focused = item.id == state.focusedId, renderedAt = state.renderedAt, narrow = narrow, onAction = onAction) { at ->

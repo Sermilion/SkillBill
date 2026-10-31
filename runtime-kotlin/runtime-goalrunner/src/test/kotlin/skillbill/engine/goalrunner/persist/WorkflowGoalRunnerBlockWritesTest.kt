@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
+import skillbill.contracts.workflow.goal.GoalBlockArtifactKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
@@ -15,6 +16,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerBlockWriteResult
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.blockincident.InMemoryBlockIncidentRepository
 import skillbill.ports.blockincident.InMemoryBlockIncidentSpool
 import skillbill.ports.db.DatabaseSessionFactory
@@ -113,6 +115,44 @@ class WorkflowGoalRunnerBlockWritesTest {
     assertIs<BlockIncidentCaptureOutcome.Captured>(capture(newChildCause.observation))
     assertNotEquals(childReference.incidentToken, secondChildReference.incidentToken)
     assertEquals(secondChildReference.incidentToken, newChildCause.observation.additionalAliases.single().value)
+  }
+
+  @Test
+  fun `a different block cause on a still-blocked parent opens its own incident`() {
+    saveRunning("wftr-parent", 1)
+    val validate = parentBlock("validate", "BLOCKED")
+    val validateIncident = observeBlockIncidentForTest(incidents, clock, validate.observation)
+
+    val quality = parentBlock("write_history", "WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION")
+    val qualityIncident = observeBlockIncidentForTest(incidents, clock, quality.observation)
+    val qualityReplay = parentBlock("write_history", "WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION")
+
+    assertNotEquals(validateIncident.occurrence.occurrenceToken, qualityIncident.occurrence.occurrenceToken)
+    assertEquals("WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION", qualityIncident.occurrence.failureCode)
+    assertEquals(qualityIncident.occurrence.occurrenceToken, qualityReplay.acceptedBlockReference.incidentToken)
+  }
+
+  @Test
+  fun `a later block without a recovery command clears the earlier one`() {
+    saveRunning("wftr-parent", 1)
+    writes.markBlocked(
+      GoalRunnerBlockRequest(
+        "wftr-parent",
+        "wedged",
+        "implement",
+        recoveryCommand = "skill-bill goal reset SKILL-1 --hard --yes",
+      ),
+      workflows,
+      incidents,
+    )
+    assertEquals(
+      "skill-bill goal reset SKILL-1 --hard --yes",
+      recordedRecoveryCommand("wftr-parent"),
+    )
+
+    parentBlock("write_history", "WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY")
+
+    assertNull(recordedRecoveryCommand("wftr-parent"))
   }
 
   @Test
@@ -269,6 +309,30 @@ class WorkflowGoalRunnerBlockWritesTest {
           causingChildWorkflowId = causingReference?.sourceWorkflowId,
           executionGeneration = generation,
           causingAcceptedBlockReference = causingReference,
+        ),
+        workflows,
+        incidents,
+      ),
+    )
+
+  private fun recordedRecoveryCommand(id: String): Any? =
+    requireNotNull(
+      workflows.get(WorkflowFamily.TASK_RUNTIME, id),
+    ).artifacts[GoalBlockArtifactKeys.BLOCKED_RECOVERY_COMMAND]
+
+  private fun parentBlock(
+    lastResumableStep: String,
+    failureCode: String,
+  ): GoalRunnerBlockWriteResult =
+    assertNotNull(
+      writes.markBlocked(
+        GoalRunnerBlockRequest(
+          "wftr-parent",
+          "blocked at $lastResumableStep",
+          lastResumableStep,
+          executionGeneration = 1,
+          stopReason = GoalRunnerStopReason.BLOCKED,
+          failureCode = failureCode,
         ),
         workflows,
         incidents,

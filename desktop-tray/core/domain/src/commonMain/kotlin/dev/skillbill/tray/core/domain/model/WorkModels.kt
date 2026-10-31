@@ -239,7 +239,7 @@ data class GoalQaResult(
 )
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
 data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
-enum class GoalAssessmentState { PENDING, RUNNING, COMPLETED, SKIPPED }
+enum class GoalAssessmentState { PENDING, RUNNING, BLOCKED, COMPLETED, SKIPPED }
 enum class GoalAssessmentVerification { CONFIRMED, REFUTED, UNVERIFIED, NOT_REQUIRED }
 enum class GoalAssessmentFindingState { OPEN, FIXED, REFUTED }
 /** The goal assessment stage; [exitReason] is null until the stage settles, and a skipped stage carries no findings. */

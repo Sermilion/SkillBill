@@ -46,6 +46,7 @@ internal fun readWorkGoalParentCandidatePage(
 ): List<WorkGoalParentCandidate> {
   require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
   val manifest = "$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}"
+  val continuation = "$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}"
   return connection.prepareStatement(
     """
     SELECT workflow_id, json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.STATUS}') AS manifest_status,
@@ -54,6 +55,8 @@ internal fun readWorkGoalParentCandidatePage(
     FROM feature_task_workflows
     WHERE mode = ? AND json_type(artifacts_json, '$manifest') = 'object'
       AND goal_issue_key IS NULL
+      AND (UPPER(TRIM(issue_key)) = UPPER(TRIM(?)) OR issue_key IS NULL)
+      AND json_type(artifacts_json, '$continuation') IS NULL
       AND json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.ISSUE_KEY}') = ?
       AND (? IS NULL OR COALESCE(
         (SELECT repository_identity FROM goal_planning_preparations WHERE parent_goal_workflow_id = workflow_id LIMIT 1),
@@ -67,7 +70,7 @@ internal fun readWorkGoalParentCandidatePage(
   ).use { statement ->
     statement.bindAll(
       DecompositionStatus.COMPLETE.wireValue, DecompositionStatus.SKIPPED.wireValue,
-      FeatureTaskWorkflowMode.RUNTIME.wireValue, issueKey, repositoryIdentity,
+      FeatureTaskWorkflowMode.RUNTIME.wireValue, issueKey, issueKey, repositoryIdentity,
       repositoryIdentity, repositoryIdentity, limit, offset,
     )
     statement.executeQuery().use { rows ->
