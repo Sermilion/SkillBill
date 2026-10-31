@@ -10,6 +10,8 @@ import dev.skillbill.desktop.core.domain.model.ActivityEvent
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -26,6 +28,7 @@ private val ROW = workItem("goal-1")
 private val OPTIONS =
   RunOptions(canCancel = false, canLaunch = true, launchLabel = "Resume", agentId = "claude", agentChoices = emptyList(), unavailableReason = null)
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DetailRepositoryTest {
   @Test
   fun `the first emission is the row header with no read`() = runTest {
@@ -125,12 +128,62 @@ class DetailRepositoryTest {
     assertTrue(states.drop(1).none { it.sections == DetailSections.Pending })
   }
 
+  @Test
+  fun `activity arriving during a subtask transition cannot cancel its published rows`() = runTest {
+    val signals = MutableStateFlow(signal())
+    val reads = FakeDetailReads()
+    reads.header = ROW.copy(currentSubtaskId = "31")
+    val details = DetailObservations(backgroundScope, signals, reads)
+    val states = mutableListOf<DetailState>()
+    backgroundScope.launch { details.observe(ROW).collect { states += it } }
+    runCurrent()
+    val release = CompletableDeferred<Unit>()
+    reads.beforeRefresh = { release.await() }
+    reads.header = ROW.copy(currentSubtaskId = "32")
+    reads.completed = 31
+
+    signals.value = signal(goals = 2)
+    runCurrent()
+    signals.value = signal(goals = 2, activity = 2)
+    runCurrent()
+    release.complete(Unit)
+    runCurrent()
+
+    assertEquals("32", states.last().header.currentSubtaskId)
+    assertEquals(31, assertIs<DetailSections.Loaded>(states.last().sections).detail.completeCount)
+  }
+
+  @Test
+  fun `full refresh stays pending when activity supersedes its signal during another read`() = runTest {
+    val signals = MutableStateFlow(signal())
+    val reads = FakeDetailReads()
+    val details = DetailObservations(backgroundScope, signals, reads)
+    val states = mutableListOf<DetailState>()
+    backgroundScope.launch { details.observe(ROW).collect { states += it } }
+    runCurrent()
+    val release = CompletableDeferred<Unit>()
+    reads.beforeRefresh = { release.await() }
+    signals.value = signal(goals = 2)
+    runCurrent()
+    reads.completed = 31
+    signals.value = signal(goals = 3)
+    runCurrent()
+    signals.value = signal(goals = 3, activity = 2)
+    runCurrent()
+    release.complete(Unit)
+    runCurrent()
+
+    assertEquals(31, assertIs<DetailSections.Loaded>(states.last().sections).detail.completeCount)
+  }
+
   private class FakeDetailReads : DetailReads {
     var header = ROW
     var options = OPTIONS
     var firstReads = 0
     var refreshes = 0
     var activityReads = 0
+    var completed = 0
+    var beforeRefresh: (suspend () -> Unit)? = null
 
     override suspend fun first(id: String): DetailRead {
       firstReads++
@@ -139,13 +192,15 @@ class DetailRepositoryTest {
 
     override suspend fun refresh(id: String, extended: Map<DetailList, Int>): DetailRead {
       refreshes++
-      return loaded(observedAtMs = refreshes.toLong())
+      val result = loaded(observedAtMs = refreshes.toLong())
+      beforeRefresh?.invoke()
+      return result
     }
 
     override suspend fun activity(id: String): DetailRead {
       activityReads++
       return DetailRead.Activity(
-        ROW,
+        header,
         LatestActivity(ActivityEvent("review", "worker", "updated", Instant.fromEpochMilliseconds(activityReads.toLong())), null),
       )
     }
@@ -155,7 +210,7 @@ class DetailRepositoryTest {
     private fun loaded(observedAtMs: Long = 0) = DetailRead.Loaded(
       header,
       DetailSections.Loaded(
-        emptyDetail(Instant.fromEpochMilliseconds(observedAtMs)), options, emptyMap(), emptySet(), stale = false,
+        emptyDetail(Instant.fromEpochMilliseconds(observedAtMs)).copy(completeCount = completed), options, emptyMap(), emptySet(), stale = false,
       ),
     )
   }

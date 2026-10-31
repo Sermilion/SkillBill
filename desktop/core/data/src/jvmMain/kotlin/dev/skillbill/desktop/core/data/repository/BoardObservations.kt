@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
@@ -88,7 +87,7 @@ class BoardObservations internal constructor(
         }.distinctUntilChanged().map { },
         deadlineTicks,
         refreshes,
-      ).conflate().mapLatest { reads.complete(query) }
+      ).conflate().map { reads.complete(query) }
         .onEach { result -> if (result is Outcome.Success) deadline.value = nextDeadline(result.value) }
         .distinctUntilChanged(),
     )
@@ -147,7 +146,7 @@ class BoardObservations internal constructor(
     )
 
     val state: StateFlow<BoardState> = merge(
-      triggers.conflate().mapLatest {
+      triggers.conflate().map {
         Event.Read(if (query.complete) reads.complete(query) else reads.pages(query, pageCount.get()))
       },
       appends.map { Event.Append(it) },
