@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.SpecBundleControlView
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecCounts
+import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
 import dev.skillbill.desktop.core.domain.model.SpecFileKind
 import dev.skillbill.desktop.core.domain.model.SpecGroup
 import dev.skillbill.desktop.core.domain.model.SpecNode
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -35,6 +37,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -61,6 +64,7 @@ class SpecsPaneModelTest {
   private val goal = workItem("SKILL-1")
   private val specs = FakeSpecs()
   private val controls = FakeWorkControlRepository()
+  private val toasts = ToastQueue()
   private val models = mutableListOf<SpecsPaneModel>()
 
   @AfterTest
@@ -147,11 +151,94 @@ class SpecsPaneModelTest {
     assertEquals(listOf("SKILL-1"), paths())
   }
 
+  @Test
+  fun `only a bundle row opens the row menu`() = runTest {
+    val model = openedModel()
+
+    model.onAction(SpecsAction.OpenRowMenu("SKILL-1/spec.md"))
+    model.onAction(SpecsAction.RequestDelete("SKILL-1/spec.md"))
+    advanceUntilIdle()
+    assertNull(model.state.value.rowMenuPath)
+    assertNull(model.state.value.deleteTarget)
+
+    model.onAction(SpecsAction.OpenRowMenu("SKILL-1"))
+    advanceUntilIdle()
+    assertEquals("SKILL-1", model.state.value.rowMenuPath)
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    advanceUntilIdle()
+
+    assertNull(model.state.value.rowMenuPath)
+    assertEquals(
+      SpecDeleteTarget("SKILL-1", "SKILL-1", "Example feature", "/repo/.skill-bill/specs/SKILL-1"),
+      model.state.value.deleteTarget,
+    )
+    assertEquals(emptyList(), specs.deletes)
+  }
+
+  @Test
+  fun `delete reaches the repository once, and only after confirmation`() = runTest {
+    val model = openedModel()
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    model.onAction(SpecsAction.KeepSpecFiles)
+    advanceUntilIdle()
+    assertNull(model.state.value.deleteTarget)
+    assertEquals(emptyList(), specs.deletes)
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    model.onAction(SpecsAction.ConfirmDelete)
+    model.onAction(SpecsAction.ConfirmDelete)
+    advanceUntilIdle()
+
+    assertEquals(listOf(SpecBundleRef("p1", "SKILL-1", "/repo")), specs.deletes)
+    assertFalse(model.state.value.deleting)
+  }
+
+  @Test
+  fun `a refused delete shows why and keeps the row`() = runTest {
+    specs.deleteOutcome = SpecDeleteOutcome.Refused("The goal for this spec is running.")
+    val model = openedModel()
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    model.onAction(SpecsAction.ConfirmDelete)
+    advanceUntilIdle()
+
+    assertEquals(listOf("Couldn't delete spec files: The goal for this spec is running."), toasts.host.toasts.map { it.data.title })
+    assertEquals(listOf("SKILL-1"), model.state.value.rows.map { it.node.path })
+    assertEquals(0, specs.refreshes)
+  }
+
+  @Test
+  fun `a deleted bundle refreshes the tree and drops its selection`() = runTest {
+    val model = openedModel()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+    assertEquals("SKILL-1", model.state.value.selectedPath)
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    model.onAction(SpecsAction.ConfirmDelete)
+    advanceUntilIdle()
+
+    assertEquals(1, specs.refreshes)
+    assertNull(model.state.value.selectedPath)
+    assertEquals(ToolbarSelection.None, model.state.value.toolbar.selection)
+    assertEquals(emptyList(), toasts.host.toasts)
+  }
+
+  private fun TestScope.openedModel(): SpecsPaneModel {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    return model
+  }
+
   private fun model(dispatcher: TestDispatcher) = SpecsPaneModel(
     specs,
     controls,
     SelectionHolder(),
-    ToastQueue(),
+    toasts,
     AppDispatchers(dispatcher, dispatcher, dispatcher),
   ).also(models::add)
 
@@ -191,7 +278,17 @@ class SpecsPaneModelTest {
     override suspend fun projects() = Outcome.Success(listOf(project))
     override suspend fun projectFor(repoRoot: String) = Outcome.Success(project)
     override fun observeTree(projectId: String): Flow<SpecTreeState> = state
-    override fun refreshTree(projectId: String) = Unit
+    var refreshes = 0
+    val deletes = mutableListOf<SpecBundleRef>()
+    var deleteOutcome: SpecDeleteOutcome = SpecDeleteOutcome.Deleted
+
+    override fun refreshTree(projectId: String) {
+      refreshes++
+    }
+    override suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome {
+      deletes += bundle
+      return deleteOutcome
+    }
     override fun control(bundle: SpecBundleRef): Flow<SpecControlState> {
       controlReads++
       return controlState

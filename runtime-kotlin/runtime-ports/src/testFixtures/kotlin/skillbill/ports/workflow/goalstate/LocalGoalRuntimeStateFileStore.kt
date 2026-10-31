@@ -10,6 +10,8 @@ class LocalGoalRuntimeStateFileStore(
 ) : GoalRuntimeStateFileStore {
   override fun directoryExists(path: Path): Boolean = Files.exists(path)
 
+  override fun realPath(path: Path): Path? = if (Files.exists(path)) path.toRealPath() else null
+
   override fun deleteDirectoryTree(path: Path): GoalRuntimeDirectoryDeletion {
     if (!Files.exists(path)) return GoalRuntimeDirectoryDeletion.Absent
     if (path in failingPaths) return GoalRuntimeDirectoryDeletion.Failed("simulated delete failure")

@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecBundleControlView
 import dev.skillbill.desktop.core.domain.model.SpecControlState
+import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
 import dev.skillbill.desktop.core.domain.model.SpecNode
 import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecRunState
@@ -320,6 +321,13 @@ class SpecsPaneModel(
         setToolbar { copy(purgeDialogOpen = false) }
       }
       SpecsAction.ConfirmPurge -> purge()
+      is SpecsAction.OpenRowMenu -> if (findNode(roots(), action.path) is SpecNode.Bundle) {
+        local.value = local.value.copy(rowMenuPath = action.path)
+      }
+      SpecsAction.DismissRowMenu -> local.value = local.value.copy(rowMenuPath = null)
+      is SpecsAction.RequestDelete -> requestDelete(action.path)
+      SpecsAction.KeepSpecFiles -> local.value = local.value.copy(deleteTarget = null)
+      SpecsAction.ConfirmDelete -> deleteBundle()
     }
   }
 
@@ -387,6 +395,8 @@ class SpecsPaneModel(
       projectMenuOpen = false,
       rows = emptyList(),
       toolbar = emptyToolbar(),
+      rowMenuPath = null,
+      deleteTarget = null,
     )
     observeProject(project)
   }
@@ -416,6 +426,7 @@ class SpecsPaneModel(
           storePath = storePath,
           rowsUpdate = treePresentation.rows(roots),
         )
+        dropVanishedBundleTargets(roots)
       }
     }
   }
@@ -741,6 +752,57 @@ class SpecsPaneModel(
         is PurgeOutcome.Refused -> problem(purgeFailure(outcome.reason))
         is PurgeOutcome.Incomplete -> problem(purgeFailure("Run data is still present: ${outcome.leftovers.joinToString(", ")}"))
         is PurgeOutcome.Failed -> problem(purgeFailure(readProblemText(outcome.problem)))
+      }
+    }
+  }
+
+  private fun dropVanishedBundleTargets(roots: List<SpecNode>) {
+    val current = local.value
+    val menu = current.rowMenuPath?.takeIf { findNode(roots, it) is SpecNode.Bundle }
+    val delete = current.deleteTarget?.takeIf { findNode(roots, it.path) is SpecNode.Bundle }
+    if (menu != current.rowMenuPath || delete != current.deleteTarget) local.value = current.copy(rowMenuPath = menu, deleteTarget = delete)
+  }
+
+  private fun requestDelete(path: String) {
+    val bundle = findNode(roots(), path) as? SpecNode.Bundle
+    val current = local.value
+    if (bundle == null || current.deleting) {
+      local.value = current.copy(rowMenuPath = null)
+      return
+    }
+    local.value = current.copy(
+      rowMenuPath = null,
+      deleteTarget = SpecDeleteTarget(bundle.path, bundle.issueKey, bundle.title, bundle.absolutePath),
+    )
+  }
+
+  private fun deleteBundle() {
+    val current = local.value
+    val target = current.deleteTarget ?: return
+    val project = current.project ?: return
+    if (current.deleting) return
+    local.value = current.copy(deleteTarget = null)
+    if (findNode(roots(), target.path) !is SpecNode.Bundle) return
+    if (target.issueKey != null && target.issueKey in controls.reservations.value) {
+      problem(deleteFailure(DELETE_LAUNCHING))
+      return
+    }
+    local.value = local.value.copy(deleting = true)
+    scope.launch {
+      try {
+        when (val outcome = specs.deleteBundle(SpecBundleRef(project.projectId, target.path, project.repoRoot))) {
+          SpecDeleteOutcome.Deleted -> {
+            val selected = local.value.selectedPath
+            if (local.value.project?.projectId == project.projectId &&
+              selected != null && (selected == target.path || selected.startsWith("${target.path}/"))
+            ) invalidateSelection(clearPath = true)
+            specs.refreshTree(project.projectId)
+          }
+          is SpecDeleteOutcome.Refused -> problem(deleteFailure(outcome.reason))
+          is SpecDeleteOutcome.Failed -> problem(deleteFailure(readProblemText(outcome.problem)))
+        }
+      } finally {
+        local.value = local.value.copy(deleting = false)
       }
     }
   }

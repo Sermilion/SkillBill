@@ -100,3 +100,14 @@ sealed interface SpecControlState {
 }
 
 enum class OpenOutcome { Opened, NotOpened }
+
+/** What deleting a spec bundle's folder achieved. Run history in the database is never touched. */
+sealed interface SpecDeleteOutcome {
+  /** The folder is gone, either removed now or already absent. */
+  data object Deleted : SpecDeleteOutcome
+
+  /** The runtime refused, for example while the bundle's goal runs; nothing changed. */
+  data class Refused(val reason: String) : SpecDeleteOutcome
+
+  data class Failed(val problem: ReadProblem) : SpecDeleteOutcome
+}

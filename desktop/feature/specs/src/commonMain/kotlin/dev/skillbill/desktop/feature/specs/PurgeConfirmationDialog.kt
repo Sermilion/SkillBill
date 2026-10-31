@@ -38,3 +38,26 @@ internal fun PurgeConfirmationDialog(key: String, onAction: (SpecsAction) -> Uni
     SbDialogText(PURGE_WARNING)
   }
 }
+
+/** The Delete spec files confirmation: names the bundle and the folder that goes, with Keep spec files focused first. */
+@Composable
+internal fun DeleteSpecFilesDialog(target: SpecDeleteTarget, onAction: (SpecsAction) -> Unit) {
+  val keepFocus = remember { FocusRequester() }
+  LaunchedEffect(Unit) { keepFocus.requestFocus() }
+  ShellLayer { onAction(SpecsAction.KeepSpecFiles) }
+  SbDialog(
+    title = deleteTitle(target),
+    onDismissRequest = { onAction(SpecsAction.KeepSpecFiles) },
+    icon = { CompositionLocalProvider(LocalContentColor provides SkillBillTheme.colors.fg) { SbIcon(LucideIcons.trash) } },
+    actions = {
+      SbButton(KEEP_SPEC_FILES, { onAction(SpecsAction.KeepSpecFiles) }, modifier = Modifier.focusRequester(keepFocus), variant = SbButtonVariant.Ghost)
+      SbButton("Delete spec files", { onAction(SpecsAction.ConfirmDelete) }, variant = SbButtonVariant.DangerSolid)
+    },
+  ) {
+    if (target.issueKey != null) SbDialogText(target.title)
+    SbDialogText(DELETE_INTRO)
+    SbDialogText(target.folder, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fg2))
+    SbDialogText(DELETE_KEEPS)
+    SbDialogText(DELETE_WARNING)
+  }
+}

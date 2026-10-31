@@ -4,12 +4,15 @@ import skillbill.ports.workflow.goalstate.model.GoalRuntimeDirectoryDeletion
 import java.nio.file.Path
 
 /**
- * Port for removing project-store runtime state a goal owns (`<store>/feature-task-tracking/<id>/` and
- * `<store>/run-evidence/<id>/`). Deletion is idempotent: an absent directory reports
- * [GoalRuntimeDirectoryDeletion.Absent].
+ * Port for removing project-store directories: runtime state a goal owns (`<store>/feature-task-tracking/<id>/` and
+ * `<store>/run-evidence/<id>/`) and spec bundle folders under `<store>/specs/`. Deletion is idempotent: an absent
+ * directory reports [GoalRuntimeDirectoryDeletion.Absent].
  */
 interface GoalRuntimeStateFileStore {
   fun directoryExists(path: Path): Boolean
+
+  /** [path] with every symbolic link resolved, or null when nothing exists at [path]. */
+  fun realPath(path: Path): Path?
 
   /** Recursively deletes [path]; an I/O failure is reported as [GoalRuntimeDirectoryDeletion.Failed], never thrown. */
   fun deleteDirectoryTree(path: Path): GoalRuntimeDirectoryDeletion

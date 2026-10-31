@@ -15,6 +15,9 @@ sealed interface ToolbarSelection {
   data class Bundle(val path: String) : ToolbarSelection
 }
 
+/** The bundle a Delete spec files confirmation names: its key and title, and the folder that will be removed. */
+data class SpecDeleteTarget(val path: String, val issueKey: String?, val title: String, val folder: String)
+
 data class SpecsUiState(
   val projects: List<SpecProject> = emptyList(),
   val project: SpecProject? = null,
@@ -28,6 +31,9 @@ data class SpecsUiState(
   val projectMenuOpen: Boolean = false,
   val toolbar: SpecToolbarState = SpecToolbarState(),
   val filtersActive: Boolean = false,
+  val rowMenuPath: String? = null,
+  val deleteTarget: SpecDeleteTarget? = null,
+  val deleting: Boolean = false,
 )
 
 data class SpecToolbarState(
@@ -70,6 +76,11 @@ sealed interface SpecsAction {
   data object RequestPurge : SpecsAction
   data object KeepRunHistory : SpecsAction
   data object ConfirmPurge : SpecsAction
+  data class OpenRowMenu(val path: String) : SpecsAction
+  data object DismissRowMenu : SpecsAction
+  data class RequestDelete(val path: String) : SpecsAction
+  data object KeepSpecFiles : SpecsAction
+  data object ConfirmDelete : SpecsAction
 }
 
 internal const val HINT_SELECT_FOLDER = "Select a spec folder to start, pause or cancel it."
@@ -95,8 +106,17 @@ internal val PURGE_DELETED = listOf("Goal and subtask run history", "Run evidenc
 internal val PURGE_KEPT = listOf("Every spec file in the folder", "Your branch and its commits", "Open pull requests")
 internal const val PURGE_WARNING = "This can’t be undone. Afterwards the spec shows as not started and Start runs it from the first subtask."
 
+internal const val DELETE_SPEC_FILES = "Delete spec files…"
+internal const val KEEP_SPEC_FILES = "Keep spec files"
+internal const val DELETE_INTRO = "This removes the spec folder and every file in it from disk."
+internal const val DELETE_KEEPS = "Run history stays in the database. Use Purge to remove it."
+internal const val DELETE_WARNING = "This can’t be undone."
+internal const val DELETE_LAUNCHING = "A launch for this spec is in flight. Wait for it before deleting the files."
+
 internal fun fileHint(key: String) = "Actions run a whole spec folder, not one subtask. Select $key to control it."
 internal fun cancelPrompt(key: String) = "Cancel $key? The run stops and the goal is marked canceled. Its branch and commits stay."
 internal fun purgeLabel(key: String) = "Purge $key run history"
 internal fun startFailure(summary: String) = "Couldn't start: $summary"
 internal fun purgeFailure(summary: String) = "Couldn't purge: $summary"
+internal fun deleteFailure(summary: String) = "Couldn't delete spec files: $summary"
+internal fun deleteTitle(target: SpecDeleteTarget) = "Delete ${target.issueKey ?: target.title} spec files?"

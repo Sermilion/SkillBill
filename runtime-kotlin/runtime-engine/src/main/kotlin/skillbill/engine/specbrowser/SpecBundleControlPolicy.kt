@@ -10,6 +10,8 @@ private const val START_LABEL = "Start"
 
 private val RUNNING_STATES = setOf(SpecBundleRunState.RUNNING, SpecBundleRunState.PAUSE_REQUESTED)
 
+internal fun SpecBundleRunState.isLive(): Boolean = this in RUNNING_STATES
+
 internal data class SpecBundleControlFacts(
   val issueKey: String?,
   val unavailableReason: String?,
@@ -36,7 +38,7 @@ internal fun specBundleControl(facts: SpecBundleControlFacts): SpecBundleControl
       pauseRequested = false,
       canCancel = false,
       purgeVisible = facts.everStarted,
-      canPurge = facts.everStarted && state !in RUNNING_STATES,
+      canPurge = facts.everStarted && !state.isLive(),
       agentId = options?.agentId,
       agentChoices = options?.agentChoices.orEmpty(),
       unavailableReason = options?.unavailableReason,
