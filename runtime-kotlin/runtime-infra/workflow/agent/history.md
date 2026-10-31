@@ -1,3 +1,15 @@
+## [2026-10-31] SKILL-454 subtask 1: runtime change baseline and git change reads
+Areas: runtime-infra/workflow (git/changes, process), runtime-ports (idestatus/model, workchanges), runtime-engine (work/changes, work/IdeStatusService), runtime-core (di/core, repoTest inventory)
+- WorkDetailItem gains changeBaseline, a sealed WorkChangeBaseline (SubtaskStart, RunStart, TargetMergeBase) where every member carries worktreeRoot. runtime-engine work/changes/WorkChangeBaselines.kt resolves it inside the existing detail read and runs no git. The current goal child's GOAL_SUBTASK_REVIEW_STATE gives SubtaskStart, a feature-task run's resolved branch gives RunStart, and anything else gives TargetMergeBase against the resolved base branch or the default branch. A goal between subtasks gets null. A monitor with a worktree path diffs that worktree.
+- An unreadable child review state or resolved branch records a warning through RuntimeDiagnosticsBestEffortWarning and falls back to TargetMergeBase, so the detail read never throws for it.
+- New WorkChangesPort (reusable), bound in RuntimeComponent as workChangesPort and implemented by GitWorkChangesAdapter. changes() lists tracked changes since the base plus untracked files minus excludedUntrackedPaths, sorted by path with summed counts. fileDiff() returns git's own unified patch text, capped at 1 MiB. Every outcome is a typed result (BaseUnavailable, NotARepository, TooLarge, Binary, Failed), and nothing throws to the caller.
+- Tracked statuses and counts come from one `diff --raw --numstat -z` call, parsed by WorkChangeRecordParser. UntrackedLineCounter counts lines the way git does and treats a NUL byte in the first 8000 bytes as binary.
+- Reusable: captureGitStdout in workflow process/ returns untrimmed git stdout with stderr kept out, a byte cap and an accepted exit set. gitArgv is now internal so the helper shares its pager and rename-limit flags.
+- Validate moved WorkChangeBaselines.kt into engine/work/changes because skillbill.engine.work hit the 12-file sibling ceiling. It also renamed the port model file to WorkChangeBaseline.kt, pinned workChangesPort in the runtime-component inbound API inventory, and removed stray comments in specbrowser and sqlite worklist files that predate this subtask.
+- Limits: non-UTF-8 git output maps to Failed. A tracked patch loads fully before the 1 MiB check. A default branch with no local branch of that name gives BaseUnavailable. CLI and MCP payloads do not expose the baseline. Desktop core/data consumes these types in subtask 2.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-24] SKILL-420 subtask 3: invocation-owned QA environment resources
 Areas: runtime-infra/workflow (workflow.qa), runtime-ports (qa), runtime-contracts (qa, featuretask error codes), runtime-core (di), runtime-engine (QA lifecycle, QA prompt), runtime-cli (qa), docs
 - New QaOwnedResourcePort (register, release, releaseAllFor, reclaimAbandoned) with a file-backed adapter that keeps one record per resource under the QA root resources directory, next to the existing leases directory; invocation ids named leases or resources are now reserved.
