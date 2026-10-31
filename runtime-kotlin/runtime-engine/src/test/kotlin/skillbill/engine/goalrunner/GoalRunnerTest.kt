@@ -120,6 +120,7 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraft
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
@@ -2126,6 +2127,95 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
+  fun `finalize commit-all integrates remote commits pushed from elsewhere instead of blocking`() {
+    val root = Files.createTempDirectory("goal-finalize-integrate")
+    val branch = "feat/SKILL-56-goal"
+    val remote = Files.createDirectory(root.resolve("remote"))
+    val repoRoot = root.resolve("repo")
+    val other = root.resolve("other")
+    finalizeGit(root, "init", "--bare", "-b", "main", remote.toString())
+    finalizeGit(root, "clone", remote.toString(), repoRoot.toString())
+    finalizeIdentity(repoRoot)
+    finalizeCommit(repoRoot, "base.txt", "initial")
+    finalizeGit(repoRoot, "push", "origin", "HEAD:main")
+    finalizeGit(repoRoot, "checkout", "-b", branch)
+    finalizeCommit(repoRoot, "feature.txt", "feature")
+    finalizeGit(repoRoot, "push", "-u", "origin", branch)
+    finalizeGit(root, "clone", "-b", branch, remote.toString(), other.toString())
+    finalizeIdentity(other)
+    finalizeCommit(other, "monitor.txt", "monitor repair")
+    finalizeGit(other, "push", "origin", branch)
+    finalizeCommit(repoRoot, "src/Extra.kt", "local subtask work")
+    val realGit = GitWorkflowGitOperations()
+    val git =
+      CommitAllRecordingGitOperations(
+        dirtyPorcelain = " M src/Extra.kt",
+        currentBranch = branch,
+        push = realGit::pushBranch,
+      )
+    val pullRequests = RecordingPullRequestPort()
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          manifest(subtaskCount = 1)
+            .withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = pullRequests,
+        ).copy(gitOperations = git),
+      )
+
+    val report = runner.run(linearRunRequest(repoRoot))
+
+    assertIs<GoalRunnerRunReport.Completed>(report, "$report")
+    assertEquals(finalizeGit(repoRoot, "rev-parse", "HEAD"), finalizeGit(remote, "rev-parse", "refs/heads/$branch"))
+    assertEquals(
+      listOf("local subtask work", "monitor repair", "feature", "initial"),
+      finalizeGit(repoRoot, "log", "--format=%s").lines(),
+    )
+    assertEquals(1, pullRequests.openCount)
+    root.toFile().deleteRecursively()
+  }
+
+  private fun finalizeCommit(
+    dir: Path,
+    file: String,
+    message: String,
+  ) {
+    Files.createDirectories(dir.resolve(file).parent)
+    Files.writeString(dir.resolve(file), "$message\n")
+    finalizeGit(dir, "add", file)
+    finalizeGit(dir, "commit", "-m", message)
+  }
+
+  private fun finalizeIdentity(dir: Path) {
+    finalizeGit(dir, "config", "user.email", "runtime@example.test")
+    finalizeGit(dir, "config", "user.name", "Runtime")
+    finalizeGit(dir, "config", "commit.gpgsign", "false")
+  }
+
+  private fun finalizeGit(
+    dir: Path,
+    vararg args: String,
+  ): String {
+    val builder =
+      ProcessBuilder(listOf("git", "-C", dir.toString()) + args)
+        .redirectErrorStream(true)
+    builder.environment()["GIT_CONFIG_GLOBAL"] = "/dev/null"
+    builder.environment()["GIT_CONFIG_SYSTEM"] = "/dev/null"
+    val process = builder.start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    val exitCode = process.waitFor()
+    check(exitCode == 0) { "git ${args.joinToString(" ")} failed with $exitCode: $output" }
+    return output
+  }
+
+  @Test
   fun `finalize commit-all blocks when the worktree is not on the feature branch`() {
     val repoRoot = Files.createTempDirectory("goal-wrong-branch-finalize")
     val git =
@@ -2630,6 +2720,7 @@ private class CommitAllRecordingGitOperations(
   private val pushError: String? = null,
   private val commitResult: WorkflowGitCommitResult? = null,
   private val inProgressOperation: String = "",
+  private val push: ((Path, String) -> WorkflowGitOperationResult)? = null,
 ) : GoalReviewReadyGitOperations() {
   var stageAllCalls: Int = 0
   val stagePathsCalls: MutableList<List<String>> = mutableListOf()
@@ -2704,6 +2795,7 @@ private class CommitAllRecordingGitOperations(
     branch: String,
   ): WorkflowGitOperationResult {
     pushedBranches += branch
+    push?.let { return it(repoRoot, branch) }
     return pushError?.let { WorkflowGitOperationResult.Failed(error = it) }
       ?: WorkflowGitOperationResult.Ok(value = branch)
   }

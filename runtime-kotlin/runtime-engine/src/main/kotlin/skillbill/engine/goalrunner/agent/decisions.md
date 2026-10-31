@@ -1,5 +1,13 @@
 # goalrunner boundary decisions
 
+## [2026-10-31] Integrate remote commits before blocking a finalization push
+
+Context: SKILL-453 finalization committed on a local branch while another session had pushed two commits to the same PR branch, one a rebased copy of a local commit. The push was rejected as non-fast-forward. The push helper recovered only when the remote head had been on the local branch, so it refused, and finalization blocked the run with "Remote head ... was never on local branch". The operator had to rebase by hand and resume.
+
+Decision: When a rejected push finds a remote head the local branch never held, the git push helper fetches `origin/<branch>`, rebases the local branch onto it and pushes normally. It does this only for an unprotected branch with one origin push destination, checked out in the repository root, with no tracked uncommitted changes. Git drops local commits whose patch is already upstream. On a rebase conflict the helper aborts the rebase, confirms the branch is back at its original commit and fails with the conflicting paths. That failure still blocks finalization. The lease path for locally rewritten history and the protected-branch refusal are unchanged. Supersedes the "remote commit the local branch never held keeps the push rejected" behavior.
+
+Reason: Several writers push to a goal's PR branch: monitor repairs, chat act turns, the operator. A remote that moved ahead is routine, and the 2026-10-20 rule is that runs warn and continue rather than block. Only a conflict needs a person. Rebasing can bring back a commit a local rewrite meant to drop if the remote still holds it. CI and the PR monitor see that result, so the risk is lower than a blocked run.
+
 ## [2026-10-31] Check review base reachability against the goal branch
 
 Context: Repair diagnosis treats a stored review base as unreachable when it is not an ancestor of the reference commit. An operator may inspect or resume a goal from a checkout that sits on another branch, such as main, which holds none of the goal's commits.

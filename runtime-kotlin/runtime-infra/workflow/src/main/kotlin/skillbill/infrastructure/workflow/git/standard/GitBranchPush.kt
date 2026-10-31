@@ -63,7 +63,7 @@ private fun pushResolvedBranch(
     }
   return if (!initial.timedOut && initial.readFailure == null && initial.exitCode != GIT_FATAL_EXIT_CODE) {
     if (initial.output.contains(REJECTED_MARKER)) {
-      pushRewrittenHistory(branch, head.output.trim(), destination.output, initialError, execute)
+      pushRejected(branch, head.output.trim(), destination.output, initialError, execute)
     } else {
       WorkflowGitOperationResult.Failed(initialError)
     }
@@ -72,18 +72,27 @@ private fun pushResolvedBranch(
   }
 }
 
-private fun pushRewrittenHistory(
+private fun pushRejected(
   branch: String,
   sha: String,
   destinations: String,
   initialError: String,
   execute: (List<String>, Long) -> GitProcessResult,
-): WorkflowGitOperationResult {
-  val remote = integratedRemoteHead(branch, destinations, execute)
-  if (remote !is WorkflowGitOperationResult.Ok) {
-    return WorkflowGitOperationResult.Failed("$initialError ${remote.error}".trimEnd())
+): WorkflowGitOperationResult =
+  when (val plan = rejectedPushPlan(branch, destinations, execute)) {
+    is RejectedPushPlan.Refused -> WorkflowGitOperationResult.Failed("$initialError ${plan.reason}".trimEnd())
+    is RejectedPushPlan.Lease -> pushRewrittenHistory(branch, sha, plan.remoteSha, initialError, execute)
+    RejectedPushPlan.Integrate -> integrateRemoteAndPush(branch, sha, initialError, execute)
   }
-  val args = listOf("push", "--force-with-lease=refs/heads/$branch:${remote.value}", "-u", "origin", branch)
+
+private fun pushRewrittenHistory(
+  branch: String,
+  sha: String,
+  remoteSha: String,
+  initialError: String,
+  execute: (List<String>, Long) -> GitProcessResult,
+): WorkflowGitOperationResult {
+  val args = listOf("push", "--force-with-lease=refs/heads/$branch:$remoteSha", "-u", "origin", branch)
   val lease = execute(args, gitTimeoutSeconds(args))
   val result =
     when {
@@ -101,14 +110,22 @@ private fun pushRewrittenHistory(
   return result
 }
 
-private fun integratedRemoteHead(
+private sealed interface RejectedPushPlan {
+  data class Lease(val remoteSha: String) : RejectedPushPlan
+
+  data object Integrate : RejectedPushPlan
+
+  data class Refused(val reason: String) : RejectedPushPlan
+}
+
+private fun rejectedPushPlan(
   branch: String,
   destinations: String,
   execute: (List<String>, Long) -> GitProcessResult,
-): WorkflowGitOperationResult {
+): RejectedPushPlan {
   val destination = destinations.lineSequence().filter(String::isNotBlank).toList().singleOrNull()
   if (ProtectedBranches.protectedName(branch) != null || destination == null) {
-    return WorkflowGitOperationResult.Failed("")
+    return RejectedPushPlan.Refused("")
   }
   val remote = remoteHead(destination, branch, execute)
   val remoteSha = (remote as? WorkflowGitOperationResult.Ok)?.value.orEmpty()
@@ -116,15 +133,14 @@ private fun integratedRemoteHead(
   return when {
     remoteSha.isBlank() -> {
       recordRecovery("rejected", "rewrite_remote_unresolved")
-      WorkflowGitOperationResult.Failed("Remote verification: ${remote.description}.")
+      RejectedPushPlan.Refused("Remote verification: ${remote.description}.")
     }
-    !reflog.succeeded || remoteSha !in reflog.output.lineSequence().map(String::trim) -> {
-      recordRecovery("rejected", "remote_commits_not_integrated")
-      WorkflowGitOperationResult.Failed(
-        "Remote head $remoteSha was never on local branch '$branch'; integrate it before pushing.",
-      )
+    !reflog.succeeded -> {
+      recordRecovery("rejected", "local_reflog_unreadable")
+      RejectedPushPlan.Refused("Local branch history could not be read: ${reflog.failure}.")
     }
-    else -> WorkflowGitOperationResult.Ok(remoteSha)
+    remoteSha in reflog.output.lineSequence().map(String::trim) -> RejectedPushPlan.Lease(remoteSha)
+    else -> RejectedPushPlan.Integrate
   }
 }
 
@@ -231,7 +247,7 @@ private fun confirmPublished(
   return WorkflowGitOperationResult.Ok(branch)
 }
 
-private fun branchUnchanged(
+internal fun branchUnchanged(
   branch: String,
   sha: String,
   execute: (List<String>, Long) -> GitProcessResult,
@@ -240,7 +256,7 @@ private fun branchUnchanged(
   return current.succeeded && current.output.trim() == sha
 }
 
-private fun recordRecovery(
+internal fun recordRecovery(
   actual: String,
   cause: String,
 ) {
@@ -249,10 +265,10 @@ private fun recordRecovery(
   )
 }
 
-private val GitProcessResult.succeeded: Boolean
+internal val GitProcessResult.succeeded: Boolean
   get() = !timedOut && readFailure == null && exitCode == 0
 
-private val GitProcessResult.failure: String
+internal val GitProcessResult.failure: String
   get() =
     when {
       timedOut -> "timed out"
