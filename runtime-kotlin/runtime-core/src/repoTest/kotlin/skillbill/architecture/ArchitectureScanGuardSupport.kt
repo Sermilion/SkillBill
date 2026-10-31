@@ -57,6 +57,12 @@ private val AMBIENT_CLOCK_FORMS: List<Pair<Regex, String>> =
     Regex("""\bSystem\.currentTimeMillis\s*\(""") to "System.currentTimeMillis()",
   )
 
+private val AMBIENT_PROCESS_FORMS: List<Pair<Regex, String>> =
+  listOf(
+    Regex("""\bSystem\s*\.\s*nanoTime\s*\(""") to "System.nanoTime()",
+    Regex("""\bProcessHandle\s*\.""") to "ProcessHandle.",
+  )
+
 private val AMBIENT_ENVIRONMENT_FORMS: List<Pair<Regex, String>> =
   listOf(
     Regex("""\bSystem\.getenv\s*\(""") to "System.getenv()",
@@ -235,16 +241,43 @@ private fun splitTopLevelParameters(parameters: String): List<String> {
 private typealias AmbientSite = ArchitectureScanSupport.AmbientCallSite
 private typealias AuthoredSuppressionSite = ArchitectureScanSupport.AuthoredSuppression
 
+private fun ambientProcessImportForms(source: String): List<Pair<Regex, String>> =
+  IMPORT_ALIAS_PATTERN.findAll(sourceWithoutCommentsOrLiterals(source))
+    .mapNotNull { match ->
+      val imported = match.groupValues[1]
+      val localName = Regex.escape(match.groupValues[2].ifBlank { imported.substringAfterLast('.') })
+      when {
+        imported == "java.lang.System" ->
+          Regex("""\b$localName\s*\.\s*nanoTime\s*\(""") to "System.nanoTime()"
+        imported == "java.lang.System.nanoTime" ->
+          Regex("""(?<![\w.])$localName\s*\(""") to "System.nanoTime()"
+        imported == "java.lang.ProcessHandle" ->
+          Regex("""\b$localName\s*\.""") to "ProcessHandle."
+        imported.startsWith("java.lang.ProcessHandle.") ->
+          Regex("""(?<![\w.])$localName\s*\(""") to "ProcessHandle."
+        else -> null
+      }
+    }.toList()
+
 private fun ambientSitesInText(
   relativePath: String,
   text: String,
   forms: List<Pair<Regex, String>>,
 ): List<AmbientSite> {
   val sites = mutableListOf<AmbientSite>()
+  val calls = forms.map { (_, call) -> call }.toSet()
+  val resolvedForms =
+    if (AMBIENT_PROCESS_FORMS.any { (_, call) -> call in calls }) {
+      forms + ambientProcessImportForms(text).filter { (_, call) -> call in calls }
+    } else {
+      forms
+    }
   text.lineSequence().forEachIndexed { index, line ->
     val code = codeWithoutComments(line)
-    forms.filter { (pattern, _) -> pattern.containsMatchIn(code) }
-      .forEach { (_, call) -> sites += AmbientSite(relativePath, index + 1, call) }
+    resolvedForms.filter { (pattern, _) -> pattern.containsMatchIn(code) }
+      .map { (_, call) -> call }
+      .distinct()
+      .forEach { call -> sites += AmbientSite(relativePath, index + 1, call) }
   }
   return sites
 }
@@ -276,21 +309,32 @@ private fun unlistedAmbientRows(
     .sorted()
     .map { row -> "$row is not listed in the $guardName baseline." }
 
-fun ArchitectureScanSupport.ambientClockCallSites(scanRoot: String): List<AmbientSite> =
-  ambientSitesUnder(runtimeRoot, scanRoot, AMBIENT_CLOCK_FORMS)
+private fun ambientClockFormsFor(moduleName: String): List<Pair<Regex, String>> =
+  if (moduleName in PrincipleEnforcementInventory.processAdapterModules) {
+    AMBIENT_CLOCK_FORMS
+  } else {
+    AMBIENT_CLOCK_FORMS + AMBIENT_PROCESS_FORMS
+  }
+
+fun ArchitectureScanSupport.ambientClockCallSites(
+  moduleName: String,
+  scanRoot: String,
+): List<AmbientSite> = ambientSitesUnder(runtimeRoot, scanRoot, ambientClockFormsFor(moduleName))
 
 fun ArchitectureScanSupport.encodeAmbientClockSitesInSource(
+  moduleName: String,
   relativePath: String,
   source: String,
-): List<String> = encodeAmbientSites(ambientSitesInText(relativePath, source, AMBIENT_CLOCK_FORMS))
+): List<String> = encodeAmbientSites(ambientSitesInText(relativePath, source, ambientClockFormsFor(moduleName)))
 
 fun ArchitectureScanSupport.ambientClockViolationsInSource(
+  moduleName: String,
   relativePath: String,
   source: String,
   baseline: Set<String>,
 ): List<String> =
   unlistedAmbientRows(
-    encodeAmbientClockSitesInSource(relativePath, source),
+    encodeAmbientClockSitesInSource(moduleName, relativePath, source),
     baseline,
     "ambient-clock",
   )
@@ -334,8 +378,17 @@ internal fun ArchitectureScanSupport.ambientClockDrift(
   readBaseline: (String) -> String = ArchitectureBaselineSupport::readBaseline,
 ): List<String> =
   moduleBaselineDrift(readBaseline, ModuleScanCase::ambientClockBaseline) { scanCase ->
-    encodeAmbientSites(ambientSitesUnder(scanRoot, scanCase.mainScanRoot, AMBIENT_CLOCK_FORMS)).toSet()
+    encodeAmbientSites(
+      ambientSitesUnder(scanRoot, scanCase.mainScanRoot, ambientClockFormsFor(scanCase.moduleName)),
+    ).toSet()
   }
+
+internal fun scanCasesFor(moduleNames: Set<String>): List<PrincipleEnforcementInventory.ModuleArchitectureScanCase> {
+  val cases = PrincipleEnforcementInventory.moduleArchitectureScanCases.filter { it.moduleName in moduleNames }
+  val missing = moduleNames - cases.map { it.moduleName }.toSet()
+  require(missing.isEmpty()) { "No module architecture scan cases exist for: ${missing.sorted().joinToString()}." }
+  return cases
+}
 
 internal fun ArchitectureScanSupport.ambientEnvironmentDrift(
   scanRoot: Path = runtimeRoot,

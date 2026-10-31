@@ -153,6 +153,12 @@ object PrincipleEnforcementInventory {
       "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeBootstrapBindings.kt",
     )
 
+  val processAdapterModules: Set<String> =
+    setOf("runtime-infra:host", "runtime-infra:launcher", "runtime-infra:workflow")
+
+  val injectPropertyExposureModules: Set<String> =
+    setOf("runtime-application", "runtime-cli", "runtime-engine")
+
   data class EnforcedRule(
     val rule: String,
     val test: KClass<*>,
@@ -197,9 +203,12 @@ object PrincipleEnforcementInventory {
         ApplicationPackageAcyclicityArchitectureTest::class,
       ),
       EnforcedRule(
-        "Ambient clock ban: Instant.now, LocalDateTime.now, LocalDate.now, OffsetDateTime.now, " +
-          "ZonedDateTime.now, Clock.systemUTC, and JvmSystemClock.instant require a baseline row in every " +
-          "module main source root.",
+        "A8 ambient effects: Instant.now, LocalDateTime.now, LocalDate.now, OffsetDateTime.now, " +
+          "ZonedDateTime.now, Clock.systemUTC, JvmSystemClock.instant, and System.currentTimeMillis require " +
+          "baseline rows in every module main source root. System.nanoTime and ProcessHandle are scanned in " +
+          "every other module; monotonic-time and process-handle reads are " +
+          "allowed only in the runtime-infra:host, runtime-infra:launcher and runtime-infra:workflow process " +
+          "adapters named by processAdapterModules.",
         RuntimeApplicationAmbientClockArchitectureTest::class,
       ),
       EnforcedRule(
@@ -638,6 +647,12 @@ object PrincipleEnforcementInventory {
       "Deeper noun-family relatedness inside a single area cluster — only cross-area loose-file " +
         "buckets are mechanically provable.",
       "Open harness and capability vocabulary keys — reviewed by hand instead of an enum gate.",
+      "A2 shared-kernel vocabulary ownership — whether a runtime-contracts type has multiple owners or readers, " +
+        "or is foreign vendor vocabulary, depends on intent that no import scan can decide.",
+      "A5 YAGNI / KISS — whether an abstraction, alias or forwarder has a current consumer or justified change " +
+        "is a judgment call that no mechanical scan can decide.",
+      "A11 encapsulation and least visibility — explicitApi can require a visibility choice but cannot decide " +
+        "whether public is narrower than needed.",
     )
 
   const val PRODUCTION_LINE_CEILING: Int = 1200

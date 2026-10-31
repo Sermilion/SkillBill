@@ -386,38 +386,23 @@ class RuntimeLayerBoundaryArchitectureTest {
   }
 
   @Test
-  fun `cli workflow commands delegate to application instead of low level runtimes`() {
-    assertNoBannedImports(
-      files =
-        sourceFiles().filter { file ->
-          file.packageName.startsWith("skillbill.cli") &&
-            !file.packageName.startsWith("skillbill.cli.model")
-        },
-      bannedImports =
-        listOf(
-          "skillbill.db",
-          "skillbill.review",
-          "skillbill.application.telemetry.config.TelemetryConfigRuntime",
-          "skillbill.application.telemetry.sync.TelemetrySyncRuntime",
-          "skillbill.learnings.LearningStore",
-          "skillbill.learnings.LearningsRuntime",
-        ),
-    )
-  }
-
-  @Test
-  fun `mcp workflow calls delegate to application instead of low level runtimes`() {
-    assertNoBannedImports(
-      files = sourceFiles().filter { file -> file.packageName.startsWith("skillbill.mcp") },
-      bannedImports =
-        listOf(
-          "skillbill.db",
-          "skillbill.review",
-          "skillbill.learnings.LearningStore",
-          "skillbill.learnings.LearningsRuntime",
-          "skillbill.application.telemetry.config.TelemetryConfigRuntime",
-        ),
-    )
+  fun `cli and mcp workflow packages delegate to application`() {
+    val files = sourceFiles()
+    val violations =
+      scanCasesFor(DELEGATION_RULES.map { rule -> rule.moduleName }.toSet()).flatMap { scanCase ->
+        val rule = DELEGATION_RULES.single { candidate -> candidate.moduleName == scanCase.moduleName }
+        files
+          .filter { file ->
+            file.packageName.startsWith(rule.packagePrefix) &&
+              (rule.excludedPackagePrefix == null || !file.packageName.startsWith(rule.excludedPackagePrefix))
+          }
+          .flatMap { file ->
+            file.imports
+              .filter { importedName -> rule.bannedImports.any(importedName::startsWith) }
+              .map { importedName -> "${scanCase.moduleName}: ${file.relativePath} imports $importedName" }
+          }
+      }
+    assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }
 
   @Test
@@ -491,6 +476,46 @@ class RuntimeLayerBoundaryArchitectureTest {
     assertTrue(!source.contains("lastUnknown"), "UpdateCheckService must not cache last UNKNOWN results.")
     assertTrue(!source.contains("releasePayloadMalformed"), "Malformed payload flags must stay invocation-local.")
     assertTrue(!source.contains("releaseEntryMalformed"), "Malformed entry flags must stay invocation-local.")
+  }
+
+  private data class DelegationRule(
+    val moduleName: String,
+    val packagePrefix: String,
+    val excludedPackagePrefix: String?,
+    val bannedImports: List<String>,
+  )
+
+  private companion object {
+    val DELEGATION_RULES =
+      listOf(
+        DelegationRule(
+          moduleName = "runtime-cli",
+          packagePrefix = "skillbill.cli",
+          excludedPackagePrefix = "skillbill.cli.model",
+          bannedImports =
+            listOf(
+              "skillbill.db",
+              "skillbill.review",
+              "skillbill.application.telemetry.config.TelemetryConfigRuntime",
+              "skillbill.application.telemetry.sync.TelemetrySyncRuntime",
+              "skillbill.learnings.LearningStore",
+              "skillbill.learnings.LearningsRuntime",
+            ),
+        ),
+        DelegationRule(
+          moduleName = "runtime-mcp",
+          packagePrefix = "skillbill.mcp",
+          excludedPackagePrefix = null,
+          bannedImports =
+            listOf(
+              "skillbill.db",
+              "skillbill.review",
+              "skillbill.learnings.LearningStore",
+              "skillbill.learnings.LearningsRuntime",
+              "skillbill.application.telemetry.config.TelemetryConfigRuntime",
+            ),
+        ),
+      )
   }
 }
 

@@ -3435,3 +3435,14 @@ Goal intake refuses new work without requirements, so pre-planning always has th
 ## 2026-10-30 — SKILL-448 goal-continuation validation repairs
 
 Whole-artifact wire encoding stays at the CLI and MCP projection boundaries. WorkflowService retains typed artifacts in its snapshot views, avoiding both a twelfth constructor collaborator and a map-form round trip inside the application service. The sqlite encoder port exchanges JSON text because runtime-ports forbids serialization-library types; consumers parse only the whole object and never encode the goal-continuation fields. Parse-boundary guards follow the codecs into sqlite rather than selecting deleted domain parsers.
+
+## [2026-10-31] Process adapters own monotonic time and process handles
+
+`PrincipleEnforcementInventory.processAdapterModules` permits `System.nanoTime()`
+and `ProcessHandle` reads only in `runtime-infra:host`, `runtime-infra:launcher`,
+and `runtime-infra:workflow`. These adapters own process observation and bounded
+process waits. Other modules reach those effects through their injected clock or
+process ports. The exemption applies only to these two forms; existing wall-clock
+forms remain governed by each module's baseline. The ambient-process fixture
+checks both rejected engine reads and permitted launcher reads while retaining
+the launcher's wall-clock rejection. Import aliases retain the same scope.

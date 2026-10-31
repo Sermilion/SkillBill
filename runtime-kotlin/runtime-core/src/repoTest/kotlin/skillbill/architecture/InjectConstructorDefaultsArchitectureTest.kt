@@ -3,6 +3,7 @@ package skillbill.architecture
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class InjectConstructorDefaultsArchitectureTest {
   @Test
@@ -38,33 +39,24 @@ class InjectConstructorDefaultsArchitectureTest {
   }
 
   @Test
-  fun `runtime-application inject classes expose no constructor property`() {
+  fun `inject classes expose no constructor property in the property-exposure modules`() {
     val violations =
-      ArchitectureScanSupport.injectConstructorPropertyViolations(
-        baseline = emptySet(),
-        scanRoot = PrincipleEnforcementInventory.RUNTIME_APPLICATION_MAIN,
-      )
+      scanCasesFor(PrincipleEnforcementInventory.injectPropertyExposureModules).flatMap { scanCase ->
+        ArchitectureScanSupport.injectConstructorPropertyViolations(
+          baseline = emptySet(),
+          scanRoot = scanCase.mainScanRoot,
+        ).map { violation -> "${scanCase.moduleName}: $violation" }
+      }
     assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }
 
   @Test
-  fun `runtime-cli inject classes expose no constructor property`() {
-    val violations =
-      ArchitectureScanSupport.injectConstructorPropertyViolations(
-        baseline = emptySet(),
-        scanRoot = PrincipleEnforcementInventory.RUNTIME_CLI_MAIN,
-      )
-    assertEquals(emptyList(), violations, violations.joinToString("\n"))
-  }
-
-  @Test
-  fun `runtime-engine inject classes expose no constructor property`() {
-    val violations =
-      ArchitectureScanSupport.injectConstructorPropertyViolations(
-        baseline = emptySet(),
-        scanRoot = PrincipleEnforcementInventory.RUNTIME_ENGINE_MAIN,
-      )
-    assertEquals(emptyList(), violations, violations.joinToString("\n"))
+  fun `module architecture scan cases cover the catalog and reject unknown modules`() {
+    assertEquals(
+      RuntimeModuleCatalog.declaredGradleModules.filterNot { module -> module == "runtime-infra" },
+      PrincipleEnforcementInventory.moduleArchitectureScanCases.map { scanCase -> scanCase.moduleName },
+    )
+    assertFailsWith<IllegalArgumentException> { scanCasesFor(setOf("runtime-not-in-catalog")) }
   }
 
   @Test

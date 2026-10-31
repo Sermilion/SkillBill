@@ -42,7 +42,7 @@ class ArchitectureBaselineRecorder {
     PrincipleEnforcementInventory.moduleArchitectureScanCases.forEach { scanCase ->
       writeAmbientBaseline(
         baselineDir.resolve(scanCase.ambientClockBaseline),
-        ArchitectureScanSupport.ambientClockCallSites(scanCase.mainScanRoot),
+        ArchitectureScanSupport.ambientClockCallSites(scanCase.moduleName, scanCase.mainScanRoot),
       )
     }
   }

@@ -2427,11 +2427,14 @@ not already baselined fails the build.
 
 `RuntimeApplicationAmbientClockArchitectureTest` bans `Instant.now()`,
 `LocalDateTime.now()`, `LocalDate.now()`, `OffsetDateTime.now()`,
-`ZonedDateTime.now()`, `Clock.systemUTC()`, and `JvmSystemClock.instant()` in
+`ZonedDateTime.now()`, `Clock.systemUTC()`, `JvmSystemClock.instant()`, and
+`System.currentTimeMillis()` in
 every module main source root declared by
 `PrincipleEnforcementInventory.moduleArchitectureScanCases`. One iterating test
 compares each module against its baseline; a rejection fixture seeds a synthetic
 violation into a temporary `runtime-engine` tree and asserts the rule reports it.
+`System.nanoTime()` and `ProcessHandle` are allowed only in the three process
+adapters named by the inventory scope, and the scan reports them in every other module.
 
 Ambient-clock and ambient-environment baseline rows are keyed `path:call:count`,
 grouped per file and call form. Inject-default rows are keyed

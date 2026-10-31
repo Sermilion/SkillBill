@@ -37,6 +37,84 @@ class RuntimeApplicationAmbientClockArchitectureTest {
   }
 
   @Test
+  fun `ambient process forms are reported outside the process adapters`() {
+    val root = Files.createTempDirectory("skillbill-ambient-process-rejection")
+    seedModuleScanTreeWithEngineViolation(
+      root,
+      """
+      package skillbill.engine
+
+      fun elapsed() = System.nanoTime()
+      fun process() = ProcessHandle.current()
+      """.trimIndent(),
+    )
+    val launcherCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == "runtime-infra:launcher" }
+    val launcherPath = "${launcherCase.mainScanRoot}/SyntheticProcess.kt"
+    val launcherFile = root.resolve(launcherPath)
+    Files.createDirectories(launcherFile.parent)
+    Files.writeString(
+      launcherFile,
+      """
+      package skillbill.infrastructure.launcher
+
+      fun elapsed() = System.nanoTime()
+      fun process() = ProcessHandle.current()
+      fun now() = Instant.now()
+      """.trimIndent(),
+    )
+
+    val drift = ArchitectureScanSupport.ambientClockDrift(scanRoot = root, readBaseline = { "" })
+    val engineCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == "runtime-engine" }
+    val expected =
+      listOf(
+        "ProcessHandle.",
+        "System.nanoTime()",
+      ).map { call ->
+        "runtime-engine: $SYNTHETIC_ENGINE_VIOLATION_PATH:$call:1 " +
+          "is not listed in ${engineCase.ambientClockBaseline}."
+      } +
+        listOf(
+          "runtime-infra:launcher: $launcherPath:Instant.now():1 " +
+            "is not listed in ${launcherCase.ambientClockBaseline}.",
+        )
+    assertEquals(expected, drift)
+  }
+
+  @Test
+  fun `ambient process rule reports aliased type and function imports in runtime-engine`() {
+    val root = Files.createTempDirectory("skillbill-ambient-process-alias-rejection")
+    seedModuleScanTreeWithEngineViolation(
+      root,
+      """
+      package skillbill.engine
+
+      import java.lang.System as HostSystem
+      import java.lang.ProcessHandle as HostProcess
+      import java.lang.System.nanoTime as readTicks
+
+      fun elapsed() = HostSystem.nanoTime()
+      fun process() = HostProcess.current()
+      fun ticks() = readTicks()
+      """.trimIndent(),
+    )
+    val engineCase = scanCasesFor(setOf("runtime-engine")).single()
+    val drift = ArchitectureScanSupport.ambientClockDrift(scanRoot = root, readBaseline = { "" })
+    assertEquals(
+      listOf(
+        "runtime-engine: $SYNTHETIC_ENGINE_VIOLATION_PATH:ProcessHandle.:1 " +
+          "is not listed in ${engineCase.ambientClockBaseline}.",
+        "runtime-engine: $SYNTHETIC_ENGINE_VIOLATION_PATH:System.nanoTime():2 " +
+          "is not listed in ${engineCase.ambientClockBaseline}.",
+      ),
+      drift,
+    )
+  }
+
+  @Test
   fun `ambient clock rows key on call and count, not line number`() {
     val onLineFive =
       """
@@ -100,6 +178,7 @@ class RuntimeApplicationAmbientClockArchitectureTest {
   ) {
     val violations =
       ArchitectureScanSupport.ambientClockViolationsInSource(
+        moduleName = "runtime-engine",
         relativePath = EXAMPLE_PATH,
         source = "package skillbill.example\n\n$declaration\n",
         baseline = emptySet(),
@@ -111,7 +190,7 @@ class RuntimeApplicationAmbientClockArchitectureTest {
   }
 
   private fun encode(source: String): List<String> =
-    ArchitectureScanSupport.encodeAmbientClockSitesInSource(EXAMPLE_PATH, source)
+    ArchitectureScanSupport.encodeAmbientClockSitesInSource("runtime-engine", EXAMPLE_PATH, source)
 
   private companion object {
     const val EXAMPLE_PATH = "runtime-kotlin/runtime-example/src/main/kotlin/Example.kt"
