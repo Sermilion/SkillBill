@@ -289,7 +289,7 @@ class WorkflowGoalRunnerManifestStore
                 "Goal manifest is missing during hard reset.",
               )
           captureSelectedChildren(unitOfWork, state.parentWorkflowId, manifest)
-          qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
+          qualityExecution.retireActiveExecution(unitOfWork, state.parentWorkflowId)
           if (!preservePlanning) unitOfWork.goalPlanningPreparations.deleteByGoal(state.parentWorkflowId)
           deleteCapturedChildren(unitOfWork, state.parentWorkflowId, manifest)
           val repositoryIdentity = unitOfWork.goalRunnerControls.controlState(state.parentWorkflowId).repositoryIdentity
@@ -475,7 +475,7 @@ class WorkflowGoalRunnerManifestStore
             )
           }
           historyEvidence.capture(unitOfWork, state.parentWorkflowId, subtaskId, workflowId)
-          qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
+          qualityExecution.retireActiveExecution(unitOfWork, state.parentWorkflowId)
           val deleted =
             unitOfWork.workflowStates.deleteGoalChildWorkflow(
               state.parentWorkflowId,
@@ -618,7 +618,7 @@ class WorkflowGoalRunnerManifestStore
                 )
               val priorChild = priorSubtask?.workflowId ?: priorRestoredChild
               if (priorChild != restoredChild) {
-                qualityExecution.retireForSelectionChange(unit, state.parentWorkflowId)
+                qualityExecution.retireActiveExecution(unit, state.parentWorkflowId)
               }
               val projection =
                 projectionPersistence.saveInTransaction(

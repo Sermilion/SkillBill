@@ -38,7 +38,7 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
     subtaskId: Int,
     options: GoalRunnerScopedReplanOptions,
   ): Pair<GoalRunnerScopedReplanWriteResult, DurableWorkflowArtifacts> {
-    qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
+    qualityExecution.retireActiveExecution(unitOfWork, state.parentWorkflowId)
     val discard = discardPlannedDetails(unitOfWork, state, subtaskId, options)
     val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, listOf(subtaskId), historyEvidence)
     val projection =
@@ -64,7 +64,7 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
   ): Pair<GoalRunnerManifestState, DurableWorkflowArtifacts?> {
     val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, subtaskIds, historyEvidence)
     if (clearedChildIds.isEmpty()) return state to null
-    qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
+    qualityExecution.retireActiveExecution(unitOfWork, state.parentWorkflowId)
     val projection =
       projectionPersistence.saveInTransaction(
         unitOfWork,

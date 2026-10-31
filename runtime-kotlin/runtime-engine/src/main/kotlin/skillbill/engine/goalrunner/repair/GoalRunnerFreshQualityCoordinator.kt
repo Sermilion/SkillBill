@@ -31,7 +31,10 @@ class GoalRunnerFreshQualityCoordinator(
       )
     }
     if (!outcomeStore.chooseFreshGoalQualityExecution(parentWorkflowId)) {
-      return rejected(request, "Parent workflow '$parentWorkflowId' has no ambiguous historical quality state.")
+      return rejected(
+        request,
+        "Parent workflow '$parentWorkflowId' has no ambiguous historical or unsettled quality state.",
+      )
     }
     diagnostics.info(
       "goal ${request.issueKey}: operator chose fresh quality for '$parentWorkflowId'; reason=${request.reason}",

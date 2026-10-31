@@ -80,9 +80,17 @@ ran blocks before QA with "ambiguous historical quality state". When the origina
 quality evidence is gone, record the operator's choice with
 `skill-bill goal fresh-quality <issue-key> --reason <why>`. The parent's quality
 record becomes clean and unstarted, and the next goal run admits a fresh quality
-execution with new cycles. The command refuses while a runner holds the goal and
-when the parent has no ambiguous state. It does not change subtasks, child
-workflows, specs or commits.
+execution with new cycles.
+
+The same command handles a goal that blocks with "The outcome of goal-quality
+step '<step>#<attempt>' is unknown". That happens when the runner died during an
+agent-backed QA or validation step, before the step recorded its outcome. The
+command retires the unsettled quality execution, and the next goal run admits a
+fresh one.
+
+The command refuses while a runner holds the goal, and when the parent has
+neither ambiguous nor unsettled quality state. It does not change subtasks,
+child workflows, specs or commits.
 
 ## Completing a goal outside the runtime
 

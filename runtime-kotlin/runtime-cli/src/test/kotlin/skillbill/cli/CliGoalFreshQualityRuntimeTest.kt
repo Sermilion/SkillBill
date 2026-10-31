@@ -22,7 +22,7 @@ class CliGoalFreshQualityRuntimeTest {
 
     assertEquals(0, chosen.exitCode, chosen.stdout)
     assertEquals(1, repeated.exitCode, repeated.stdout)
-    assertContains(repeated.stdout, "has no ambiguous historical quality state")
+    assertContains(repeated.stdout, "has no ambiguous historical or unsettled quality state")
     assertFalse(resumed.stdout.contains("ambiguous historical quality state"), resumed.stdout)
   }
 

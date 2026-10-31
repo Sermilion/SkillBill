@@ -287,9 +287,11 @@ interface GoalRunnerQualityExecutionStore {
   fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord? = null
 
   /**
-   * Records the operator's choice to discard ambiguous historical quality state. The parent's
-   * quality record becomes clean and unstarted, so the next goal run admits a fresh quality
-   * execution with new cycles. Returns false when the parent holds no historical ambiguity.
+   * Records the operator's choice to discard quality state the runtime cannot judge. Ambiguous
+   * historical state becomes clean and unstarted; an unsettled admitted execution, such as one
+   * whose agent step was interrupted before it recorded an outcome, is retired. Either way the
+   * next goal run admits a fresh quality execution with new cycles. Returns false when the
+   * parent holds neither.
    */
   fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean = false
 

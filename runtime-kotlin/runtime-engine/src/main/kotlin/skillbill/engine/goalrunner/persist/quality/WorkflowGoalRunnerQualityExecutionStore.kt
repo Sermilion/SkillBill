@@ -74,9 +74,14 @@ class WorkflowGoalRunnerQualityExecutionStore
               ?: return@transaction false
           val current = decode(payload)
           validateParentIdentity(current, parentWorkflowId)
-          if (current.readiness != GoalQualityReadiness.HISTORICAL_AMBIGUITY) return@transaction false
-          persist(unitOfWork, parent, current.copy(readiness = CLEAN_UNSTARTED, execution = null))
-          true
+          when {
+            current.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY -> {
+              persist(unitOfWork, parent, current.copy(readiness = CLEAN_UNSTARTED, execution = null))
+              true
+            }
+            current.execution?.status?.isUnsettled() == true -> retireActiveExecution(unitOfWork, parentWorkflowId)
+            else -> false
+          }
         }
       }
 
@@ -313,7 +318,7 @@ class WorkflowGoalRunnerQualityExecutionStore
       }
     }
 
-    internal fun retireForSelectionChange(
+    internal fun retireActiveExecution(
       unitOfWork: UnitOfWork,
       parentWorkflowId: String,
     ): Boolean =
@@ -907,3 +912,5 @@ private fun allowedNextStatuses(status: GoalQualityExecutionStatus): Set<GoalQua
     GoalQualityExecutionStatus.RETIRED,
     -> emptySet()
   }
+
+private fun GoalQualityExecutionStatus.isUnsettled(): Boolean = allowedNextStatuses(this).isNotEmpty()

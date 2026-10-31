@@ -262,3 +262,11 @@ Context: The import looks up the completed plan by issue key and repository iden
 Decision: When the path lookup finds nothing, readiness also accepts a completed plan for the same issue whose governed spec path equals the manifest's project-store parent spec (`specs/...`). This fallback feeds only the readiness choice. Plan linkage and planning timing keep the path-scoped plan. Repository-relative `.feature-specs/` manifests get no fallback.
 
 Reason: The project store is keyed by repository lineage, so every checkout and every past path of one repository shares the same `specs/` bundle. A completed plan in this database that governed that exact bundle, with no subtask started, is the same proof the 2026-10-28 rule asks for. Repository-relative spec paths can repeat across unrelated repositories, so they stay path-scoped. A runtime-engine test covers a plan from another checkout of the same spec and a plan for a different spec.
+
+## [2026-10-31] fresh-quality also retires an unsettled quality execution
+
+Context: A goal runner can die during an agent-backed final quality step, for example when the session that launched it ends. The next run finds the step `running` with no accepted output and blocks with "The outcome of goal-quality step 'qa#1' is unknown ... explicitly retire this quality execution and accept new cycles." No command did that. `goal fresh-quality` accepted only `historical_ambiguity`, `goal repair` reported the goal healthy, and the only commands that retire quality also reset, replan or complete the goal. SKILL-448 finished all 33 subtasks and then stayed blocked at QA.
+
+Decision: `goal fresh-quality` also retires an admitted execution whose status is not settled or retired. It uses the same retirement as reset and replan, now named `retireActiveExecution`, which also clears the finalization repair context. The next run admits a new execution with new cycles. Settled executions are still refused, and so is a live runner. The unknown-outcome message names the command.
+
+Reason: Retiring is the choice the block asks the operator to make, and `fresh-quality` already records operator choices that discard quality state the runtime cannot judge. A settled execution carries a real outcome, so the command leaves it alone. A runtime-engine test covers retiring an unsettled execution and refusing a repeat.
