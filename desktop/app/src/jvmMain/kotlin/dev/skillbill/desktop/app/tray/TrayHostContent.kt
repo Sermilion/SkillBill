@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,6 +14,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
@@ -37,6 +48,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.SystemTray
+import java.awt.event.WindowEvent
+import java.awt.event.WindowFocusListener
 
 @Composable
 fun ApplicationScope.TrayHost(
@@ -154,18 +167,50 @@ fun ApplicationScope.TrayHost(
     undecorated = true,
     resizable = false,
     state = windowState,
+    onPreviewKeyEvent = { event ->
+      if (event.key == Key.Escape && event.type == KeyEventType.KeyDown) {
+        visible = false
+        true
+      } else false
+    },
   ) {
+    val popoverWindow = window
+    DisposableEffect(popoverWindow) {
+      val listener = object : WindowFocusListener {
+        override fun windowGainedFocus(event: WindowEvent) = Unit
+        override fun windowLostFocus(event: WindowEvent) { visible = false }
+      }
+      popoverWindow.addWindowFocusListener(listener)
+      onDispose { popoverWindow.removeWindowFocusListener(listener) }
+    }
+    var cardBounds by remember { mutableStateOf(Rect.Zero) }
     DesktopUiScaleProvider(popoverScale) {
       SkillBillTheme(reducedMotion) {
         // The 380 dp transparent window leaves 10 dp around the 360 dp popover for its shadow.
-        Box(Modifier.fillMaxSize().padding(10.dp), contentAlignment = popoverAlignment) {
-          TrayPopoverContent(
-            state,
-            onAction = model::onAction,
-            onOpen = { intents.send(HostIntent.ShowMain); visible = false },
-            onSettings = { intents.send(HostIntent.OpenSettings); visible = false },
-            onQuit = onQuit,
-          )
+        Box(
+          Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitPointerEventScope {
+              while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type == PointerEventType.Press && event.changes.any { !cardBounds.contains(it.position) }) {
+                  visible = false
+                  event.changes.forEach { it.consume() }
+                }
+              }
+            }
+          }.padding(10.dp),
+          contentAlignment = popoverAlignment,
+        ) {
+          Box(Modifier.onGloballyPositioned { cardBounds = it.boundsInParent() }) {
+            TrayPopoverContent(
+              state,
+              onAction = model::onAction,
+              onOpen = { intents.send(HostIntent.ShowMain); visible = false },
+              onSettings = { intents.send(HostIntent.OpenSettings); visible = false },
+              onQuit = onQuit,
+              onDismiss = { visible = false },
+            )
+          }
         }
       }
     }

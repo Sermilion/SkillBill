@@ -43,6 +43,7 @@ fun TrayPopoverContent(
   onOpen: () -> Unit,
   onSettings: () -> Unit,
   onQuit: () -> Unit,
+  onDismiss: () -> Unit,
 ) {
   val loaded = state.board as? TrayBoard.Loaded
   TrayPopover(
@@ -71,7 +72,12 @@ fun TrayPopoverContent(
         SbButton("Quit", onClick = onQuit, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
       }
     },
-    headerEnd = if (state.stale) ({ StaleIndicator() }) else null,
+    headerEnd = {
+      Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (state.stale) StaleIndicator()
+        SbIconButton(LucideIcons.x, "Close tray popover", onClick = onDismiss, size = SbControlSize.Small)
+      }
+    },
   ) {
     when (val board = state.board) {
       TrayBoard.Loading -> Message("Loading your work")
