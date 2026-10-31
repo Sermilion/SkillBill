@@ -13,7 +13,7 @@ sealed interface ValidationTestProbeParse {
 
 object ValidationTestProbeParser {
   const val LINE_GRAMMAR =
-    "End with exactly one line per probe, in the form " +
+    "For optional telemetry, use one line per test in the form " +
       "`Test probe <test_ref>: <killed|survived|not_run> guards <guarded_ref> repaired <yes|no> reason <text>`."
 
   fun parse(prose: String): ValidationTestProbeParse {

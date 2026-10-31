@@ -35,5 +35,6 @@ outcome instead of only success, driving the named entry point instead of an int
 keeping setup alive through the assertion, then re-probe it once. Never change production code to make
 a probe pass, and never weaken an assertion. Every listed repaired scenario needs one probed test that
 drives its entry point; write one when none exists. When no copy can be made or no targeted test
-command exists, record every probe not_run with the reason and finish on the normal checks. End with
-one test probe line per probe in the grammar the scope gives.
+command exists, record every probe not_run with the reason and finish on the normal checks. Report
+probes in ordinary prose. For optional telemetry, prefer one line per test in the suggested grammar.
+Probe formatting never blocks validation.

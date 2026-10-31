@@ -25,8 +25,9 @@ internal object ValidateProbePrompt {
       "record one not_run probe that says so."
 
   const val VALUE_CONTENT: String =
-    "Report each probe in ordinary prose and end with exactly one test probe line per probe. Survivors are " +
-      "reported, not blocking. ${ValidationTestProbeParser.LINE_GRAMMAR}"
+    "Report each probe in ordinary prose. For best-effort telemetry, prefer one test probe line per test. " +
+      "Survivors and probe formatting never block validation. " +
+      ValidationTestProbeParser.LINE_GRAMMAR
 
   fun directive(scope: ValidateProbeScope): String =
     "$INSTRUCTIONS\n\nBroken-then-repaired scenarios: ${scenarios(scope)}\n" +

@@ -15,7 +15,7 @@ Test probes: after every required check passes, probe at most 6 tests this subta
 
 Broken-then-repaired scenarios: none
 Required criteria: none
-End with exactly one line per probe, in the form `Test probe <test_ref>: <killed|survived|not_run> guards <guarded_ref> repaired <yes|no> reason <text>`.
+For optional telemetry, use one line per test in the form `Test probe <test_ref>: <killed|survived|not_run> guards <guarded_ref> repaired <yes|no> reason <text>`.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -115,7 +115,7 @@ Report each check skipped for unavailable tooling as a warning with its command 
 Complete when every runnable required check passes, even if unavailable tooling prevents other checks. Fix every other check failure in this session; missing tooling alone never blocks validation.
 Gate runs and their evidence are runtime-measured.
 Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings.
-Report each probe in ordinary prose and end with exactly one test probe line per probe. Survivors are reported, not blocking. End with exactly one line per probe, in the form `Test probe <test_ref>: <killed|survived|not_run> guards <guarded_ref> repaired <yes|no> reason <text>`.
+Report each probe in ordinary prose. For best-effort telemetry, prefer one test probe line per test. Survivors and probe formatting never block validation. For optional telemetry, use one line per test in the form `Test probe <test_ref>: <killed|survived|not_run> guards <guarded_ref> repaired <yes|no> reason <text>`.
 
 ## Fallback final output (only when the settlement tools are unavailable)
 End your response with plain prose carrying everything the next phase needs (what this phase

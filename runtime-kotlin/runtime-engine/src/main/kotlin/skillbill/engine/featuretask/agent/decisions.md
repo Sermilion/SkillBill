@@ -701,3 +701,17 @@ Decision: Audit, interaction-trace rechecks and `audit_plan_fix` count only mate
 
 Reason: Repair attempts are a fixed budget and each unreachable case costs a full plan, implement and audit round plus code to maintain. The fix is prompt wording, consistent with the defect-class decision; no semantic revision bump is needed.
 
+
+## [2026-10-31] Validation probe extraction is best effort
+
+Context: SKILL-453 validation passed its required checks but blocked because the prose
+reported two mutations for the same test reference. The probe completion hook requested
+a schema correction that validation's single-session policy never launches.
+
+Decision: Validation accepts completed prose without a probe completion gate. Probe
+extraction remains best effort for telemetry. Missing or malformed probes store an empty
+list and emit a diagnostics warning. The runtime retains the original report and accepts
+valid probe records as before. This supersedes the earlier probe correction requirement.
+
+Reason: Probe formatting does not determine whether project checks passed. Durable
+workflow and telemetry contracts still validate the records the runtime writes.
