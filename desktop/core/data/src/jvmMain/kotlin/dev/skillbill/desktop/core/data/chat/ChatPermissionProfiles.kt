@@ -33,7 +33,7 @@ internal data class ChatPermissionProfile(val tools: String, val allowedTools: L
 internal fun permissionProfile(mode: ChatPermissionMode): ChatPermissionProfile = when (mode) {
   ChatPermissionMode.Act -> ChatPermissionProfile(
     tools = "Read,Grep,Glob,Bash,Edit,Write",
-    allowedTools = listOf("Read", "Grep", "Glob", "Edit", "Write", "Bash(skill-bill)", "Bash(skill-bill *)", "mcp__skill-bill", ISSUE_RULE),
+    allowedTools = listOf("Read", "Grep", "Glob", "Edit", "Write", "Bash", "mcp__skill-bill"),
   )
   ChatPermissionMode.ReadOnly -> ChatPermissionProfile(
     tools = "Read,Grep,Glob,Bash",
@@ -52,7 +52,7 @@ internal fun scopeSystemPrompt(scope: ChatScope, mode: ChatPermissionMode): Stri
   appendLine("Title: ${scope.title}")
   appendLine("Worktree: ${scope.repositoryRoot}")
   appendLine(
-    "You may answer block decisions, unblock and resume this execution, run skill-bill CLI and MCP commands, edit files " +
+    "You may answer block decisions, unblock and resume this execution, run shell commands including skill-bill CLI commands, use skill-bill MCP tools, edit files " +
       "inside the worktree to unblock or finish this execution, and file issues against $SKILL_BILL_REPOSITORY.",
   )
   append(

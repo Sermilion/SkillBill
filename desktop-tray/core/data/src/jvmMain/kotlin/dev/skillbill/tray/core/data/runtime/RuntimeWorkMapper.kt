@@ -204,6 +204,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
 private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {
   GoalRunnerAssessmentState.PENDING -> GoalAssessmentState.PENDING
   GoalRunnerAssessmentState.RUNNING -> GoalAssessmentState.RUNNING
+  GoalRunnerAssessmentState.BLOCKED -> GoalAssessmentState.BLOCKED
   GoalRunnerAssessmentState.COMPLETED -> GoalAssessmentState.COMPLETED
   GoalRunnerAssessmentState.SKIPPED -> GoalAssessmentState.SKIPPED
 }

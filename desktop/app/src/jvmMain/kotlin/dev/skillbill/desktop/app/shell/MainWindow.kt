@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.app.shell
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -165,8 +166,8 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val board by window.board.view.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
-  val right = contributions.firstOrNull { it.slot == PaneSlot.Chat }?.takeIf { panes.chatOpen && topRoute !is SettingsRoute }?.content
-    ?: contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
+  val chat = contributions.firstOrNull { it.slot == PaneSlot.Chat }?.content
+  val right = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
   val bottom = contributions.firstOrNull { it.slot == PaneSlot.Bottom }?.takeIf { panes.terminalOpen && topRoute !is SettingsRoute }?.content
   val navigate: (AppRoute) -> Unit = { route ->
     panes.drawerOpen = false
@@ -190,11 +191,14 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   }
   ShellFrame(sidebar, drawerMode, panes.drawerOpen, onDismissDrawer = { panes.drawerOpen = false }) {
     WorkArea(drawerMode, right, bottom) {
-      AppNavHost(navigator, window.entries, shellProblem(session, board)) { problem ->
-        ProblemStatePanel(
-          problem,
-          onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },
-        )
+      Box(Modifier.fillMaxSize()) {
+        AppNavHost(navigator, window.entries, shellProblem(session, board)) { problem ->
+          ProblemStatePanel(
+            problem,
+            onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },
+          )
+        }
+        if (topRoute !is SettingsRoute) chat?.invoke()
       }
     }
   }

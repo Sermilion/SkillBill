@@ -84,6 +84,7 @@ class DetailFeatureEntry(
       onToggleSpecs = { shellPanes.specsOpen = !shellPanes.specsOpen },
       onToggleTerminal = paneCommands::toggleTerminal,
       chatOpen = shownChatId == item.id,
+      chatPaneOpen = shellPanes.chatOpen,
       chatShortcut = CHAT_SHORTCUT,
       onToggleChat = { chat.toggleChat(item) },
     )

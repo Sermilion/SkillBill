@@ -14,7 +14,7 @@ import dev.skillbill.desktop.core.designsystem.detail.TerminalTabChrome
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
 
-/** The right-hand chat pane: one tab per open execution chat, in opening order, over the active chat's transcript and composer. */
+/** One tab per execution chat, above the active chat's transcript and composer. */
 @Composable
 fun ChatPane(workspace: ChatWorkspace) {
   val state by workspace.tabs.collectAsState()

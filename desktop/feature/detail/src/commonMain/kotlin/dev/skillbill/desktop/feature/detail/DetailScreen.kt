@@ -63,6 +63,7 @@ internal class DetailScreenHost(
   val onToggleSpecs: () -> Unit = {},
   val onToggleTerminal: () -> Unit = {},
   val chatOpen: Boolean = false,
+  val chatPaneOpen: Boolean = false,
   val chatShortcut: String = "",
   val onToggleChat: () -> Unit = {},
 )
@@ -157,7 +158,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         }
       }
       DetailPeek(
-        open = host.detailsPaneOpen && !host.specsOpen,
+        open = host.detailsPaneOpen && !host.specsOpen && !host.chatPaneOpen,
         wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
           selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
         } == true,

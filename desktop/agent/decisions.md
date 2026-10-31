@@ -1,3 +1,8 @@
+## [2026-10-31] Allow shell commands in chat act mode
+Context: The operator wants the chat agent to run shell commands for the selected execution.
+Decision: Act turns allow the Bash tool without command-prefix restrictions and tell the agent it can run shell commands. Running executions retain the existing read-only command allowlist. This supersedes the act-mode command restrictions in the earlier permission decision.
+Reason: Fixing an execution can require Git, build tools and project scripts. The existing pause-and-act flow provides act mode while keeping the execution stopped during changes.
+
 ## [2026-10-31] Start chat turns through a POSIX login shell
 Context: An app launched from the Dock may not inherit the login PATH, so claude, skill-bill and gh may not resolve.
 Decision: ClaudeChatTransport execs claude through $SHELL -l -c when SHELL is sh, bash, zsh, dash or ksh, through /bin/sh for any other shell, and as bare claude when SHELL is unset. Stdout lines before the first JSON object are skipped and recorded as chat.login_output_skipped.
