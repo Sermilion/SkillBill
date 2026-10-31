@@ -259,7 +259,7 @@ internal fun unreachableReviewRepairContext(lookup: UnreachableReviewRepairLooku
     lookup.wedgeFinding?.currentValue
       ?: review?.let { unreachableReviewFailedSha(wedgeClass, it) }
   if (review == null || continuation == null || failedSha == null) return null
-  if (!lookup.wedgeDiagnosis.isUnreachable(lookup.repoRoot, failedSha)) return null
+  if (!lookup.wedgeDiagnosis.isUnreachable(lookup.repoRoot, failedSha, continuation.goalBranch)) return null
   val recovered =
     lookup.gitOperations.recoverGoalSubtaskReviewBaseline(
       lookup.repoRoot,

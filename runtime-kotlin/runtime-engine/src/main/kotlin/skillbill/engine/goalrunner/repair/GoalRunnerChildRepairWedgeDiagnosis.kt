@@ -70,14 +70,33 @@ class GoalRunnerChildRepairWedgeDiagnosis(
     )
   }
 
+  /**
+   * A stored base is unreachable when it is not an ancestor of the goal branch tip. The goal branch, not
+   * the checkout's HEAD, is the reference: an operator may inspect or resume from a checkout sitting on
+   * another branch, and every valid base would then look unreachable. HEAD is the fallback only when the
+   * goal branch is unknown or does not resolve locally.
+   */
   fun isUnreachable(
     repoRoot: Path,
     sha: String,
+    goalBranch: String?,
   ): Boolean {
-    val head = gitOperations.headCommitSha(repoRoot)
-    if (head !is WorkflowGitOperationResult.Ok || head.value.isBlank()) return false
-    val ancestry = gitOperations.isCommitAncestor(repoRoot, sha, head.value.trim())
+    val tip = goalBranchTip(repoRoot, goalBranch) ?: return false
+    val ancestry = gitOperations.isCommitAncestor(repoRoot, sha, tip)
     return ancestry is WorkflowGitOperationResult.Ok && ancestry.value != "true"
+  }
+
+  private fun goalBranchTip(
+    repoRoot: Path,
+    goalBranch: String?,
+  ): String? {
+    val branch = goalBranch?.trim().orEmpty()
+    if (branch.isNotEmpty()) {
+      val resolved = gitOperations.resolveCommit(repoRoot, branch)
+      if (resolved is WorkflowGitOperationResult.Ok && resolved.value.isNotBlank()) return resolved.value.trim()
+    }
+    val head = gitOperations.headCommitSha(repoRoot)
+    return if (head is WorkflowGitOperationResult.Ok && head.value.isNotBlank()) head.value.trim() else null
   }
 
   private fun healthyDiagnosis(
@@ -218,7 +237,8 @@ class GoalRunnerChildRepairWedgeDiagnosis(
       passed += PASSED_REMEDIATION_BASE
       return
     }
-    if (isUnreachable(repoRoot, review.reviewBaseSha)) {
+    val goalBranch = continuationArtifact(artifacts)?.goalBranch
+    if (isUnreachable(repoRoot, review.reviewBaseSha, goalBranch)) {
       wedges +=
         GoalRunnerWedgeFinding(
           wedgeClass = GoalRunnerWedgeClass.UNREACHABLE_REVIEW_BASE,
@@ -231,7 +251,7 @@ class GoalRunnerChildRepairWedgeDiagnosis(
     val remediation = review.remediationBaseSha
     when {
       remediation == null -> passed += PASSED_REMEDIATION_BASE
-      isUnreachable(repoRoot, remediation) ->
+      isUnreachable(repoRoot, remediation, goalBranch) ->
         wedges +=
           GoalRunnerWedgeFinding(
             wedgeClass = GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE,

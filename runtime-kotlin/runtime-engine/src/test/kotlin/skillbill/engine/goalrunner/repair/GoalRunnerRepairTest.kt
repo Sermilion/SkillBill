@@ -321,6 +321,62 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
   }
 
   @Test
+  fun `bases on the goal branch stay reachable when the checkout HEAD is another branch`() {
+    val goalTip = "f".repeat(40)
+    val reviewBase = REACHABLE_SHA
+    val orphan = "a".repeat(40)
+    val workflows = InMemoryWorkflowStates()
+    val workflowId = "wftr-repair-goal-branch-reference"
+    workflows.saveFeatureTaskWorkflow(
+      repairChildRecord(
+        RepairChildRecordArgs(
+          workflowId = workflowId,
+          continuation = continuationMap(includeValidationDepth = true),
+          reviewState = healthyReviewState().copy(reviewBaseSha = reviewBase, remediationBaseSha = orphan),
+        ),
+      ),
+      RUNTIME,
+    )
+    // HEAD sits on main, which contains none of the goal's commits. Only the goal branch tip does.
+    val git =
+      object : WorkflowGitOperations by NoopWorkflowGitOperations {
+        override fun headCommitSha(repoRoot: Path) = WorkflowGitOperationResult.Ok(value = HEAD_SHA)
+
+        override fun resolveCommit(
+          repoRoot: Path,
+          revision: String,
+        ) = if (revision == GOAL_BRANCH) {
+          WorkflowGitOperationResult.Ok(value = goalTip)
+        } else {
+          WorkflowGitOperationResult.Failed(error = "unknown revision '$revision'")
+        }
+
+        override fun isCommitAncestor(
+          repoRoot: Path,
+          ancestorSha: String,
+          descendantSha: String,
+        ) = WorkflowGitOperationResult.Ok(
+          value = (descendantSha == goalTip && ancestorSha == reviewBase).toString(),
+        )
+      }
+
+    val diagnosis =
+      repairStore(workflows, git = git).diagnoseChildWedges(
+        GoalRunnerChildWedgeDiagnosisRequest(
+          workflowId = workflowId,
+          issueKey = ISSUE_KEY,
+          subtaskId = 1,
+          subtasks = listOf(subtask(1, workflowId)),
+          repoRoot = Path.of("."),
+        ),
+      )
+
+    assertEquals(GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE, diagnosis.wedges.single().wedgeClass)
+    assertEquals(orphan, diagnosis.wedges.single().currentValue)
+    assertTrue(PASSED_REVIEW_BASE in diagnosis.passedChecks)
+  }
+
+  @Test
   fun `repair refusal for unreachable review base points to scoped child reset`() {
     val unreachable = "a".repeat(40)
     val workflows = InMemoryWorkflowStates()
