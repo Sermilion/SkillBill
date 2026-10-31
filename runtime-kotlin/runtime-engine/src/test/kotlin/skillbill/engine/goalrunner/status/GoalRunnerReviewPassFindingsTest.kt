@@ -8,7 +8,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class GoalRunnerReviewPassFindingsTest {
-  // The compact summary loses dotted code spans and paths; the projected finding must keep the stored text whole.
   @Test
   fun `stored findings keep their full text, lane and status and drop refuted claims`() {
     val kept =
@@ -30,12 +29,22 @@ class GoalRunnerReviewPassFindingsTest {
     assertEquals(
       listOf(
         GoalRunnerReviewFinding(
-          "F-001", "Minor", "High", "bill-kmp-code-review-ui", "desktop/ChatPane.kt:25",
-          "The tab title reads `session.item.issueKey` from `ChatPane.kt`", ReviewFindingStatus.FIXED,
+          "F-001",
+          "Minor",
+          "High",
+          "bill-kmp-code-review-ui",
+          "desktop/ChatPane.kt:25",
+          "The tab title reads `session.item.issueKey` from `ChatPane.kt`",
+          ReviewFindingStatus.FIXED,
         ),
         GoalRunnerReviewFinding(
-          "F-002", "Minor", null, "bill-kmp-code-review-ui", null,
-          "The tab title reads `session.item.issueKey` from `ChatPane.kt`", ReviewFindingStatus.OPEN,
+          "F-002",
+          "Minor",
+          null,
+          "bill-kmp-code-review-ui",
+          null,
+          "The tab title reads `session.item.issueKey` from `ChatPane.kt`",
+          ReviewFindingStatus.OPEN,
         ),
       ),
       projected,

@@ -108,7 +108,6 @@ data class NumberedFinding(
   val laneSkillName: String? = null,
 )
 
-/** Where a reported finding stands, for display. */
 enum class ReviewFindingStatus {
   OPEN,
   FIXED,
@@ -119,11 +118,6 @@ enum class ReviewFindingStatus {
   ;
 
   companion object {
-    /**
-     * The operator's latest settling feedback wins; then the goal loop's own outcome for the finding; then an
-     * accepted-but-unfixed finding. [feedbackEvent] is a `feedback_events.event_type`, [loopOutcome] a
-     * `review_finding_outcomes.outcome`.
-     */
     fun of(
       feedbackEvent: String?,
       loopOutcome: String?,

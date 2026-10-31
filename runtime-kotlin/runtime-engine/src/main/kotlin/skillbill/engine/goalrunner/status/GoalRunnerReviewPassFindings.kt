@@ -5,10 +5,6 @@ import skillbill.review.model.NumberedFinding
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.parsing.ReviewFindingActionability
 
-/**
- * A review pass's stored findings as the status projection shows them: only the actionable ones, as the compact pass
- * summary keeps, each with its status from [statuses] by finding id, or open when it has none.
- */
 internal fun storedReviewPassFindings(
   findings: List<NumberedFinding>,
   statuses: Map<String, ReviewFindingStatus>,

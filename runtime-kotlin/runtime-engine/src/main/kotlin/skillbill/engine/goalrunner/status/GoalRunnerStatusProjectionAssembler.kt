@@ -609,9 +609,10 @@ class GoalRunnerStatusProjectionAssembler(
         subtaskId = subtask.id,
         reviewPasses =
           GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts)?.passResults.orEmpty().map { pass ->
-            val stored = rawResults[pass.passNumber.toString()]
-              ?.let(GoalSubtaskReviewSummaryReducer::reviewRunId)
-              ?.let { runId -> storedPassFindings(runId, durableRead) }
+            val stored =
+              rawResults[pass.passNumber.toString()]
+                ?.let(GoalSubtaskReviewSummaryReducer::reviewRunId)
+                ?.let { runId -> storedPassFindings(runId, durableRead) }
             GoalRunnerReviewPassResult(
               passNumber = pass.passNumber,
               verdict = pass.verdict.wireValue,
@@ -634,7 +635,6 @@ class GoalRunnerStatusProjectionAssembler(
     }
   }
 
-  // The raw review output per pass number; a decode failure leaves every pass on its compact summary.
   private fun reviewRawResults(
     artifacts: Any,
     durableRead: GoalRunnerStatusDurableReadTracker,
@@ -654,7 +654,6 @@ class GoalRunnerStatusProjectionAssembler(
     val lanes: List<String>,
   )
 
-  // The pass's findings as its review run stored them, each with its status, and the lanes the run applied.
   private fun storedPassFindings(
     runId: String,
     durableRead: GoalRunnerStatusDurableReadTracker,

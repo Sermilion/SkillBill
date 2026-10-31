@@ -87,7 +87,7 @@ internal object ReviewRuntime {
         buildMap {
           while (resultSet.next()) {
             put(
-              resultSet.getString("finding_id"),
+              resultSet.getString(ReviewFindingPayloadKeys.FINDING_ID),
               ReviewFindingStatus.of(resultSet.getString("feedback_event"), resultSet.getString("loop_outcome")),
             )
           }

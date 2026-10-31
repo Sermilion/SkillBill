@@ -176,7 +176,6 @@ data class GoalRunnerSubtaskPhaseResults(
   val audit: GoalRunnerPhaseConclusion? = null,
 )
 
-/** One review pass; [lanes] are the review lanes its run applied, empty when the pass's review run is not stored. */
 data class GoalRunnerReviewPassResult(
   val passNumber: Int,
   val verdict: String,
@@ -185,11 +184,6 @@ data class GoalRunnerReviewPassResult(
   val lanes: List<String> = emptyList(),
 )
 
-/**
- * A pass finding as the review run stored it, with its [status]. A pass whose run is not stored falls back to the
- * compact summary: [ref] and [description] from it, no [confidence], [specialist] or [location], and status
- * [ReviewFindingStatus.OPEN].
- */
 data class GoalRunnerReviewFinding(
   val ref: String,
   val severity: String,

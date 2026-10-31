@@ -152,7 +152,6 @@ internal fun reviewReport(
     unitOfWork.reviews.fetchReviewRunLanes(runId)
       .sortedBy { it.orderIndex }
       .map { it.laneSkillName }
-  // A report's refs are the stored finding ids, so each finding takes its stored status.
   val statuses = unitOfWork.reviews.fetchFindingStatuses(runId)
   return report.copy(
     lanes = recorded.ifEmpty { report.lanes },
