@@ -1,11 +1,41 @@
 package dev.skillbill.desktop.app.tray
 
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import java.awt.Point
 import java.awt.Rectangle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class TrayPopoverPlacementTest {
+  @Test
+  fun `short tray card stays next to the panel inside a taller transparent window`() {
+    val area = Rectangle(0, 2160, 7680, 2160)
+    val anchor = Point(4601, 4286)
+    val frame = IntSize(570, 885)
+    val card = IntSize(540, 332)
+    val position = anchoredTrayPosition(anchor, area, frame.width, frame.height, 24)
+    val offset = anchoredTrayAlignment(anchor, area).align(card, frame, LayoutDirection.Ltr)
+    assertEquals(anchor.y - 24, position.y + offset.y + card.height)
+    assertEquals(anchor.x, position.x + offset.x + card.width / 2)
+  }
+
+  @Test
+  fun `short tray card follows top and side panels`() {
+    val area = Rectangle(0, 0, 1920, 1080)
+    val frame = IntSize(380, 590)
+    val card = IntSize(360, 220)
+    listOf(Point(960, 0), Point(0, 540), Point(1920, 540)).forEach { anchor ->
+      val position = anchoredTrayPosition(anchor, area, frame.width, frame.height, 16)
+      val offset = anchoredTrayAlignment(anchor, area).align(card, frame, LayoutDirection.Ltr)
+      when (anchor.x) {
+        0 -> assertEquals(16, position.x + offset.x)
+        1920 -> assertEquals(1904, position.x + offset.x + card.width)
+        else -> assertEquals(16, position.y + offset.y)
+      }
+    }
+  }
+
   @Test
   fun `KDE mixed scale monitor origins map native activation to the Xwayland icon position`() {
     val layout = """{"outputs":[{"enabled":true,"connected":true,"pos":{"x":0,"y":0},"size":{"width":5120,"height":1440},"scale":1},{"enabled":true,"connected":true,"pos":{"x":0,"y":1440},"size":{"width":7680,"height":2160},"scale":1.5}]}"""

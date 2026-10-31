@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
@@ -51,6 +52,7 @@ fun ApplicationScope.TrayHost(
   val available by availability.state.collectAsState()
   var visible by remember { mutableStateOf(false) }
   var opening by remember { mutableStateOf(false) }
+  var popoverAlignment by remember { mutableStateOf<Alignment>(Alignment.TopCenter) }
   val scope = rememberCoroutineScope()
   val mac = System.getProperty("os.name").contains("mac", true)
   // The macOS popover takes its size and position from the status item in native points, so it keeps the platform density.
@@ -134,7 +136,9 @@ fun ApplicationScope.TrayHost(
           scope.launch {
             try {
               val anchor = trayIconAnchor()
-              windowState.position = withContext(Dispatchers.IO) { placement.position(windowState.size, anchor, 16) }
+              val location = withContext(Dispatchers.IO) { placement.locate(windowState.size, anchor, 16) }
+              windowState.position = location.position
+              popoverAlignment = location.alignment
               visible = true
             } finally { opening = false }
           }
@@ -154,7 +158,7 @@ fun ApplicationScope.TrayHost(
     DesktopUiScaleProvider(popoverScale) {
       SkillBillTheme(reducedMotion) {
         // The 380 dp transparent window leaves 10 dp around the 360 dp popover for its shadow.
-        Box(Modifier.fillMaxSize().padding(10.dp)) {
+        Box(Modifier.fillMaxSize().padding(10.dp), contentAlignment = popoverAlignment) {
           TrayPopoverContent(
             state,
             onAction = model::onAction,
