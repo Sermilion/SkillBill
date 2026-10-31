@@ -220,11 +220,13 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       pipelineSection(item, detail)
       briefingSection(item, detail, onAction)
       activitySection(item, detail, state, onAction)
+      // A standalone run's own result comes right after its activity.
+      standaloneResultSection(item, detail)
+      qaReportSection(item, detail, onAction)
       if (item.kind != WorkKind.Goal) {
         goalQaSection(detail)
         goalAssessmentSection(detail)
       }
-      qaReportSection(item, detail, onAction)
       // Standalone phases and operations keep their dependencies, validation, phase results and spec bundle in the document.
       dependencySection(item, detail, state, onAction)
       validationSection(item, detail)

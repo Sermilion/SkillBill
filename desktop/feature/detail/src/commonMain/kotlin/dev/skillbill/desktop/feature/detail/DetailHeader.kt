@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.detail.DocHeader
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 
@@ -42,8 +43,11 @@ internal fun DetailHeader(
       IdTag(rowKey(item))
       if (item.kind != WorkKind.Goal) item.issueKey?.let { IdTag(it) }
       SbLabel(kindWord(item.kind), SbLabelStyle.Plain)
-      val fresh = item.fresh && !sectionsStale
-      SbLabel(if (fresh) "fresh" else "stale", SbLabelStyle.Dot(if (fresh) colors.stDone else colors.fgFaint))
+      // Freshness only means something while the run can still change; a completed item drops the pill.
+      if (item.lifecycle != Lifecycle.Terminal) {
+        val fresh = item.fresh && !sectionsStale
+        SbLabel(if (fresh) "fresh" else "stale", SbLabelStyle.Dot(if (fresh) colors.stDone else colors.fgFaint))
+      }
     },
     // `.l-row g-1 l-wrap`: the folder and branch buttons, 4 apart, wrapping.
     sub = {

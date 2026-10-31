@@ -216,6 +216,20 @@ data class ExecutionInstance(
   val qaVerdict: QaVerdict?,
   val qaReportText: String?,
   val planReport: PlanRunReport?,
+  val reviewReport: ReviewReport? = null,
+)
+
+/** A standalone review's report as the runtime read it: the canonical verdict token, the prose around the findings, and the findings. */
+data class ReviewReport(val verdict: String?, val summary: String?, val findings: List<ReviewReportFinding>)
+
+/** One reported finding; [specialist] is the review lane that raised it, [location] a `path:line` when the report gave one. */
+data class ReviewReportFinding(
+  val ref: String,
+  val severity: String,
+  val confidence: String?,
+  val specialist: String?,
+  val location: String?,
+  val description: String,
 )
 
 /** The feature a plan run settled and the subtasks it split the feature into; also a goal's spec bundle. */

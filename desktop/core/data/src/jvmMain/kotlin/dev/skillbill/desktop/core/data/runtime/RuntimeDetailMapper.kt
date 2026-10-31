@@ -25,6 +25,8 @@ import dev.skillbill.desktop.core.domain.model.IncidentTelemetry
 import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
+import dev.skillbill.desktop.core.domain.model.ReviewReport
+import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
 import dev.skillbill.desktop.core.domain.model.PlannedSubtask
 import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.ReasonRestoration
@@ -50,6 +52,7 @@ import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import skillbill.ports.idestatus.model.StandalonePlanReport
+import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailList
@@ -194,7 +197,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
       ExecutionInstance(
         it.invocationId, it.executionId, it.lifecycleState, it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(),
         it.finishedAt?.toKotlinInstant(), it.result, it.restoration?.toDomain(), it.qaOutcome?.toDomain(), it.qaReportText,
-        it.planReport?.toDomain(),
+        it.planReport?.toDomain(), it.reviewReport?.toDomain(),
       )
     },
     incident = incident?.toDomain(),
@@ -224,6 +227,9 @@ private fun StandaloneQaOutcome.toDomain(): QaVerdict = when (this) {
 /** An unparseable `recordedAt` drops the QA outcome for this item rather than failing the detail. */
 private fun IdeStatusWorkflowQaOutcome.toDomain(): WorkQaOutcome? =
   runCatching { Instant.parse(recordedAt) }.getOrNull()?.let { WorkQaOutcome(outcome.toDomain(), reason, failureKind, it) }
+
+private fun StandaloneReviewReport.toDomain(): ReviewReport =
+  ReviewReport(verdict, summary, findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description) })
 
 private fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)

@@ -323,7 +323,11 @@ abstract class StandaloneReviewStrategy(
   ): String =
     buildString {
       target.openingLines("$head^", head).forEach(::appendLine)
-      appendLine("Return a findings register with one finding per line, or the exact line NO_FINDINGS when empty.")
+      appendLine(
+        "Return a findings register with one finding per line, written as " +
+          "'[F-001] Severity | Confidence | specialist=<rubric skill name> | path/File.kt:12 | defect description', " +
+          "or the exact line NO_FINDINGS when empty.",
+      )
       appendLine("End with exactly one canonical line: verdict: approved or verdict: changes_requested.")
       append(AgentAddonPromptFormatter.format(run.request.agentAddonSelection))
       appendLine()

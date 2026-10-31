@@ -119,6 +119,22 @@ data class WorkExecutionInstance(
   val qaOutcome: StandaloneQaOutcome? = null,
   val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
+  val reviewReport: StandaloneReviewReport? = null,
+)
+
+data class StandaloneReviewReport(
+  val verdict: String?,
+  val summary: String?,
+  val findings: List<StandaloneReviewReportFinding>,
+)
+
+data class StandaloneReviewReportFinding(
+  val ref: String,
+  val severity: String,
+  val confidence: String?,
+  val specialist: String?,
+  val location: String?,
+  val description: String,
 )
 
 enum class ExecutionReasonRestoration { EXACT, RESTORED, MISSING, AMBIGUOUS, BUDGET_EXCEEDED, MISSING_CONTENT }

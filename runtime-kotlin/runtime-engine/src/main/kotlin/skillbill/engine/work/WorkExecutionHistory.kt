@@ -13,6 +13,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkExecutionInstance
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.time.Instant
 
 private val historyLogger = System.getLogger("skillbill.execution-history")
@@ -109,6 +110,8 @@ internal fun workExecutionHistory(
           it.qaOutcome,
           it.qaReportText,
           it.planReport,
+          reviewReport =
+            if (it.phaseId == SkeletonDefinition.REVIEW.id) StandaloneReviewReportReader.read(reason.text) else null,
         )
       }
   } else {

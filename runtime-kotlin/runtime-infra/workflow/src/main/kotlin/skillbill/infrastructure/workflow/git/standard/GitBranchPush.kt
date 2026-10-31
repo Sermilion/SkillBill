@@ -72,12 +72,6 @@ private fun pushResolvedBranch(
   }
 }
 
-/**
- * A local rebase, amend, or squash of already-published commits makes the plain push non-fast-forward.
- * Replace the remote only when its tip appears in the local branch reflog (git's `--force-if-includes`
- * rule): the local side integrated that work before rewriting it. A remote commit the local branch never
- * held, such as a concurrent repair push, keeps the rejection.
- */
 private fun pushRewrittenHistory(
   branch: String,
   sha: String,
@@ -107,7 +101,6 @@ private fun pushRewrittenHistory(
   return result
 }
 
-/** The remote tip when the local branch reflog holds it; a failure explains why a lease push is unsafe. */
 private fun integratedRemoteHead(
   branch: String,
   destinations: String,
