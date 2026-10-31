@@ -14,6 +14,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -30,6 +31,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -41,6 +43,7 @@ class ChatWorkspaceTest {
   private val chat = FakeExecutionChatRepository()
   private val details = FakeWorkDetailRepository()
   private val controls = FakeWorkControlRepository()
+  private val panes = ShellPanes()
   private val clock = object : Clock {
     override fun now() = epoch
   }
@@ -50,7 +53,7 @@ class ChatWorkspaceTest {
 
   private fun TestScope.workspace(): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock)
+    return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes)
   }
 
   @Test
@@ -81,6 +84,32 @@ class ChatWorkspaceTest {
     assertEquals(listOf(goal.id), cancelled)
     assertNull(workspace.session(goal.id))
     assertTrue(phaseSession.job.isActive)
+  }
+
+  @Test
+  fun `toggling the chat opens another execution's tab beside the active one and hides the pane for the active one without ending it`() = runTest {
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    val operation = workItem("op-1", kind = WorkKind.Operation)
+    details.details = mapOf(phase.id to flowOf(loaded(phase)), operation.id to flowOf(loaded(operation)))
+    val cancelled = mutableListOf<String>()
+    chat.events = { request -> flow<ChatEvent> { try { awaitCancellation() } finally { cancelled += request.scope.executionId } } }
+    val workspace = workspace()
+
+    workspace.open(phase)
+    workspace.toggleChat(operation)
+    runCurrent()
+
+    assertEquals(listOf(phase.id, operation.id), workspace.tabs.value.tabs.map { it.executionId })
+    assertEquals(operation.id, workspace.tabs.value.activeId)
+    assertTrue(workspace.paneOpen.value && panes.chatOpen)
+
+    workspace.toggleChat(operation)
+    runCurrent()
+
+    assertFalse(workspace.paneOpen.value || panes.chatOpen)
+    assertIs<ChatMessage.StateLine>(workspace.session(operation.id)!!.transcript.value.first())
+    assertTrue(workspace.session(operation.id)!!.job.isActive)
+    assertTrue(cancelled.isEmpty())
   }
 
   @Test

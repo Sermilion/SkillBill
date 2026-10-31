@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
@@ -24,11 +25,12 @@ import kotlin.time.Instant
 class ShellKeyboardEscapeTest {
   @Test
   fun `Esc closes an open menu before it leaves the detail under it`() {
-    val navigator = WindowNavigator(OpenSession, SelectionHolder())
+    val selection = SelectionHolder()
+    val navigator = WindowNavigator(OpenSession, selection)
     navigator.navigate(DetailRoute(workItem("goal-1")))
     val input = ShellInput()
     val panes = ShellPanes()
-    val keyboard = ShellKeyboard(navigator, panes, input, CommandMenuState(), TerminalTriggers(NoTerminal))
+    val keyboard = ShellKeyboard(navigator, panes, input, CommandMenuState(), TerminalTriggers(NoTerminal), NoChat, selection)
     var dismissed = false
     val menu = ShellInput.Layer { dismissed = true }
     input.addLayer(menu)
@@ -55,6 +57,14 @@ class ShellKeyboardEscapeTest {
     override fun specProjectSelected(checkout: Path?) = Unit
 
     override fun closeTerminals() = Unit
+  }
+
+  private object NoChat : ChatCommands {
+    override fun toggleChat(item: WorkItem?) = Unit
+
+    override fun openChat(item: WorkItem) = Unit
+
+    override fun closeChats() = Unit
   }
 
   private object OpenSession : DatabaseSessionController {

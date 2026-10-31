@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
@@ -9,6 +11,8 @@ import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.pane.ChatCommands
+import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
@@ -21,6 +25,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
+import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.util.UUID
 import kotlin.time.Clock
@@ -32,22 +37,28 @@ private val PAUSE_WAIT = 5.minutes
 
 /**
  * The window's chats, one per execution id, held in memory only. It is window-scoped: every coroutine is a child of the window
- * scope, and the window ends every chat through [closeAll]. Calls come from the UI thread.
+ * scope, and the window ends every chat through [closeAll]. Calls come from the UI thread. It mirrors [paneOpen] into
+ * [ShellPanes.chatOpen], and hides itself when opening Specs clears that flag; hiding ends no chat.
  */
 @Inject
 @SingleIn(WindowScope::class)
+@ContributesBinding(WindowScope::class, boundType = ChatCommands::class)
 class ChatWorkspace(
   private val chat: ExecutionChatRepository,
   private val details: WorkDetailRepository,
   private val controls: WorkControlRepository,
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
-) {
+  private val panes: ShellPanes,
+) : ChatCommands {
   private val scope = windowScope.scope
   private val turns = ChatTurns(chat, details)
   private val sessions = LinkedHashMap<String, ChatSession>()
   private val resumeJobs = LinkedHashSet<Job>()
   private var observer: Job? = null
+
+  /** Unsent composer text per chat, so switching tabs or hiding the pane keeps it. */
+  internal val drafts = mutableStateMapOf<String, String>()
 
   private val tabState = MutableStateFlow(ChatTabsState())
   val tabs: StateFlow<ChatTabsState> = tabState.asStateFlow()
@@ -55,11 +66,28 @@ class ChatWorkspace(
   private val paneState = MutableStateFlow(false)
   val paneOpen: StateFlow<Boolean> = paneState.asStateFlow()
 
+  init {
+    scope.launch { snapshotFlow { panes.chatOpen }.collect { open -> if (!open && paneState.value) setPaneOpen(false) } }
+  }
+
   fun session(id: String): ChatSession? = sessions[id]
+
+  override fun toggleChat(item: WorkItem?) {
+    val shown = paneState.value && panes.chatOpen
+    when {
+      shown && (item == null || tabState.value.activeId == item.id) -> hide()
+      item != null -> open(item)
+      else -> setPaneOpen(true)
+    }
+  }
+
+  override fun openChat(item: WorkItem) = open(item)
+
+  override fun closeChats() = closeAll()
 
   /** Opens [item]'s chat, or only activates it when it is already open; a new chat shows its state line, then streams the opening turn. */
   fun open(item: WorkItem) {
-    paneState.value = true
+    setPaneOpen(true)
     if (item.id !in sessions) {
       val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]))
       sessions[item.id] = session
@@ -74,7 +102,7 @@ class ChatWorkspace(
         }
       }
     }
-    tabState.update { it.withTab(ChatTab(item.id, item.title, item.kind)) }
+    tabState.update { it.withTab(ChatTab(item.id, item.issueKey ?: item.title, item.kind)) }
     observeActive()
   }
 
@@ -83,13 +111,17 @@ class ChatWorkspace(
     observeActive()
   }
 
-  fun hide() {
-    paneState.value = false
+  fun hide() = setPaneOpen(false)
+
+  private fun setPaneOpen(value: Boolean) {
+    paneState.value = value
+    panes.chatOpen = value
   }
 
   /** Ends [id]'s chat: cancelling its job ends any running turn and its process. A pending resume still runs. */
   fun close(id: String) {
     val session = sessions.remove(id) ?: return
+    drafts.remove(id)
     session.job.cancel()
     tabState.update { it.without(id) }
     observeActive()
@@ -103,6 +135,7 @@ class ChatWorkspace(
     observer = null
     sessions.values.forEach { it.job.cancel() }
     sessions.clear()
+    drafts.clear()
     tabState.value = ChatTabsState()
   }
 
@@ -201,6 +234,8 @@ class ChatWorkspace(
             turns.markGone(it)
           } else if (state.sections !is DetailSections.Pending) {
             it.item = state.header
+            val title = state.header.issueKey ?: state.header.title
+            tabState.update { s -> s.copy(tabs = s.tabs.map { t -> if (t.executionId == it.item.id) t.copy(title = title) else t }) }
             it.modeState.value = modeFor(state.header)
           }
         }

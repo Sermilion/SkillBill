@@ -81,6 +81,7 @@ fun ApplicationScope.MainWindow(
     onDispose {
       window.terminal.close()
       window.specsPane.close()
+      window.chat.closeChats()
       window.scope.scope.cancel()
     }
   }
@@ -126,7 +127,7 @@ fun ApplicationScope.MainWindow(
             val drawerMode = maxWidth < DRAWER_WIDTH
             SideEffect { keyboard.drawerMode = drawerMode }
             val panes = window.panes
-            val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !narrow, drawerMode = drawerMode)
+            val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !panes.chatOpen && !narrow, drawerMode = drawerMode)
             // Below the drawer breakpoint every view header leads with the sidebar toggle, as `.sb-side-toggle`.
             val sidebarToggle: (() -> Unit)? = remember(drawerMode, panes) { if (drawerMode) ({ panes.drawerOpen = !panes.drawerOpen }) else null }
             CompositionLocalProvider(LocalShellLayout provides layout, LocalSidebarToggle provides sidebarToggle) {
@@ -164,7 +165,8 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val board by window.board.view.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
-  val right = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
+  val right = contributions.firstOrNull { it.slot == PaneSlot.Chat }?.takeIf { panes.chatOpen && topRoute !is SettingsRoute }?.content
+    ?: contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
   val bottom = contributions.firstOrNull { it.slot == PaneSlot.Bottom }?.takeIf { panes.terminalOpen && topRoute !is SettingsRoute }?.content
   val navigate: (AppRoute) -> Unit = { route ->
     panes.drawerOpen = false

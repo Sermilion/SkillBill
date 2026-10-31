@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.overlay.ShortcutEntry
 import dev.skillbill.desktop.core.designsystem.overlay.ShortcutGrid
+import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
 
 /** The Cmd key's label on macOS and the Ctrl key's elsewhere. */
 val MOD_KEY: String = if (System.getProperty("os.name").orEmpty().startsWith("Mac")) "⌘" else "Ctrl"
@@ -27,6 +28,7 @@ private val SHORTCUTS = listOf(
   ShortcutEntry("Pause now", "⇧ P"),
   ShortcutEntry("Resume", "R"),
   ShortcutEntry("Toggle details pane", "$MOD_KEY I"),
+  ShortcutEntry("Toggle chat panel", CHAT_SHORTCUT),
   ShortcutEntry("Toggle sidebar", "["),
   ShortcutEntry("Back / close", "esc"),
 )
