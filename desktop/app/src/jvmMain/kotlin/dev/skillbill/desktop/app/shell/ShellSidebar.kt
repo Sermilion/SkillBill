@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.app.keyboard.MOD_KEY
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -70,13 +71,16 @@ fun ShellSidebar(
     SidebarSection("Board", boardExpanded, onToggle = { boardExpanded = !boardExpanded }) {
       BoardSectionKind.entries.forEach { kind ->
         val needsYou = kind == BoardSectionKind.NeedsYou
+        val on = topRoute == WorkRoute(kind)
+        // Same neutral tint as the sidebar's line icons, not the status palette.
+        val leadTint = if (on) SkillBillTheme.colors.fg else SkillBillTheme.colors.fgMuted
         SidebarItem(
           sectionLabel(kind),
           { onNavigate(WorkRoute(kind)) },
-          lead = { StatusIcon(sectionLead(kind), 0.5f) },
+          lead = { StatusIcon(sectionLead(kind), 0.5f, tint = leadTint) },
           count = if (needsYou) null else sectionSizes?.get(kind),
           attention = if (needsYou) sectionSizes?.get(kind) else null,
-          on = topRoute == WorkRoute(kind),
+          on = on,
         )
       }
     }
