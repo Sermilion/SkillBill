@@ -16,7 +16,7 @@ class ChatStoreTest {
   private val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
 
   private fun entry(session: String, at: Long, execution: String = "wf-1", operator: Boolean = true) = ChatHistoryEntry(
-    session, execution, ChatAgent("codex", "gpt-5", "high"), Instant.fromEpochMilliseconds(at),
+    session, execution, ChatAgent("codex", "gpt-5", "high", "/home/operator/.codex-api"), Instant.fromEpochMilliseconds(at), "why blocked?",
     listOfNotNull(ChatHistoryLine(ChatHistoryRole.Operator, "why blocked?").takeIf { operator }, ChatHistoryLine(ChatHistoryRole.Agent, "CI failed.")),
   )
 

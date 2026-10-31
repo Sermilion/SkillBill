@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
 /**
@@ -34,7 +35,7 @@ class CodexChatTransport(
     val command = ChatCommand(
       argv = agentCommand("codex", codexArguments(request, thread), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
-      environment = host.variables,
+      environment = host.variables + request.agent.profile?.let { mapOf(AgentHomeEnvironmentKeys.CODEX_HOME to it) }.orEmpty(),
       stdin = prompt,
     )
     return runChatTurn(launcher, diagnostics, command, CodexStreamDecoder { store.saveAgentSession(request.sessionId, it) })

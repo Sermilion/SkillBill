@@ -24,8 +24,9 @@ import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
-import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.ui.input.ShellLayer
+import java.io.File
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -65,11 +66,14 @@ internal fun savedAgo(savedAt: Instant, now: Instant): String {
   }
 }
 
-/** The chat's first operator message on one line, cut to fit a menu row. */
+/** The session's title on one line, cut to fit a menu row. */
 internal fun resumeLabel(entry: ChatHistoryEntry): String {
-  val first = entry.lines.first { it.role == ChatHistoryRole.Operator }.text.lineSequence().joinToString(" ").trim()
-  return if (first.length > LABEL_LENGTH) first.take(LABEL_LENGTH - 1).trimEnd() + "…" else first
+  val title = entry.title.lineSequence().joinToString(" ").trim().ifEmpty { "${entry.agent.agentId} session" }
+  return if (title.length > LABEL_LENGTH) title.take(LABEL_LENGTH - 1).trimEnd() + "…" else title
 }
+
+/** The profile directory's name without its dot, such as `codex-api`, or the agent id when it runs as the app is configured. */
+internal fun agentName(agent: ChatAgent): String = agent.profile?.let { File(it).name.removePrefix(".") } ?: agent.agentId
 
 /** The `/resume` picker: one row per saved chat of this execution, newest first. */
 @Composable
@@ -77,10 +81,10 @@ internal fun ResumePicker(choices: List<ChatHistoryEntry>, now: Instant, onResum
   ShellLayer(onDismiss)
   SbPopover(expanded = true, onDismissRequest = onDismiss, width = 340.dp) {
     val entries = if (choices.isEmpty()) {
-      listOf(SbMenuEntry.Item("No saved chats for this execution", {}, enabled = false))
+      listOf(SbMenuEntry.Item("No sessions in this worktree yet", {}, enabled = false))
     } else {
       choices.map { entry ->
-        SbMenuEntry.Item(resumeLabel(entry), { onResume(entry) }, endText = "${entry.agent.agentId} · ${savedAgo(entry.updatedAt, now)}")
+        SbMenuEntry.Item(resumeLabel(entry), { onResume(entry) }, endText = "${agentName(entry.agent)} · ${savedAgo(entry.updatedAt, now)}")
       }
     }
     SbMenu(listOf(SbMenuEntry.Head("Resume a chat")) + entries)
@@ -98,6 +102,6 @@ internal fun ResumeHint(onClick: () -> Unit) {
     verticalAlignment = Alignment.CenterVertically,
   ) {
     ChatPill(RESUME_COMMAND, mono = true)
-    BasicText("Resume a saved chat of this execution", style = type.tSm.copy(color = colors.fgMuted))
+    BasicText("Resume an agent session in this worktree", style = type.tSm.copy(color = colors.fgMuted))
   }
 }

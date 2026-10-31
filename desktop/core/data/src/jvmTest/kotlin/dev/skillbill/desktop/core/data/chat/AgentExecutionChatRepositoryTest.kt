@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
+import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -34,7 +35,11 @@ class AgentExecutionChatRepositoryTest {
       error("unused")
     } as RuntimeConfigRepository
     val diagnostics = RecordingDiagnostics()
-    val repository = AgentExecutionChatRepository(setOf(claude), unusedConfig, ChatStore(HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), ""), diagnostics, Clock.System), diagnostics)
+    val repository = run {
+      val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
+      val store = ChatStore(host, diagnostics, Clock.System)
+      AgentExecutionChatRepository(setOf(claude), unusedConfig, store, AgentSessionCatalog(host, FakeAppSettingsRepository(), store, diagnostics), diagnostics)
+    }
 
     val events = repository.send(chatRequest(agent = ChatAgent("codex", null, null))).toList()
 

@@ -116,7 +116,7 @@ private fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolea
 
 internal fun chipText(agent: ChatAgent?): String = when {
   agent == null -> "No agent"
-  agent.model == null -> "${agent.agentId} · default"
-  agent.effort == null -> "${agent.agentId} · ${agent.model}"
-  else -> "${agent.agentId} · ${agent.model} · ${agent.effort}"
+  agent.model == null -> "${agentName(agent)} · default"
+  agent.effort == null -> "${agentName(agent)} · ${agent.model}"
+  else -> "${agentName(agent)} · ${agent.model} · ${agent.effort}"
 }

@@ -38,6 +38,7 @@ private object ChatStoreKeys {
   const val AGENT_ID = "agent_id"
   const val MODEL = "model"
   const val EFFORT = "effort"
+  const val PROFILE = "profile"
   const val UPDATED_AT = "updated_at_ms"
   const val LINES = "lines"
   const val ROLE = "role"
@@ -81,17 +82,21 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
     update(entry.sessionId) {
       it.copy(executionId = entry.executionId, agent = entry.agent, updatedAt = entry.updatedAt, lines = entry.lines)
     }
+    val executionId = entry.executionId ?: return
     synchronized(lock) {
-      chatsOf(entry.executionId).drop(CHATS_PER_EXECUTION).forEach { fileFor(it.sessionId)?.delete() }
+      chatsOf(executionId).drop(CHATS_PER_EXECUTION).forEach { fileFor(it.sessionId)?.delete() }
     }
   }
 
   internal fun savedChats(executionId: String): List<ChatHistoryEntry> = synchronized(lock) {
     sweepOrphans()
-    chatsOf(executionId).filter { stored -> stored.lines.any { it.role == ChatHistoryRole.Operator } }.mapNotNull { stored ->
-      val agent = stored.agent ?: return@mapNotNull null
-      ChatHistoryEntry(stored.sessionId, executionId, agent, stored.updatedAt ?: Instant.DISTANT_PAST, stored.lines)
-    }
+    chatsOf(executionId).mapNotNull(StoredChat::toEntry)
+  }
+
+  /** The app's save of the chat whose own session or agent session is [sessionId], when it holds an operator message. */
+  internal fun savedFor(sessionId: String): ChatHistoryEntry? = synchronized(lock) {
+    (fileFor(sessionId)?.let(::readFile)?.toEntry())
+      ?: allFiles().mapNotNull(::readFile).firstOrNull { it.agentSession == sessionId }?.toEntry()
   }
 
   private fun chatsOf(executionId: String): List<StoredChat> =
@@ -145,6 +150,11 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
   }
 }
 
+private fun StoredChat.toEntry(): ChatHistoryEntry? {
+  val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator } ?: return null
+  return ChatHistoryEntry(sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines)
+}
+
 private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   put(ChatStoreKeys.SESSION_ID, chat.sessionId)
   chat.executionId?.let { put(ChatStoreKeys.EXECUTION_ID, it) }
@@ -152,6 +162,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
     put(ChatStoreKeys.AGENT_ID, agent.agentId)
     agent.model?.let { put(ChatStoreKeys.MODEL, it) }
     agent.effort?.let { put(ChatStoreKeys.EFFORT, it) }
+    agent.profile?.let { put(ChatStoreKeys.PROFILE, it) }
   }
   chat.updatedAt?.let { put(ChatStoreKeys.UPDATED_AT, it.toEpochMilliseconds()) }
   put(
@@ -184,7 +195,7 @@ private fun decode(root: JsonObject, fallbackSessionId: String): StoredChat {
   return StoredChat(
     sessionId = root.string(ChatStoreKeys.SESSION_ID) ?: fallbackSessionId,
     executionId = root.string(ChatStoreKeys.EXECUTION_ID),
-    agent = agentId?.let { ChatAgent(it, root.string(ChatStoreKeys.MODEL), root.string(ChatStoreKeys.EFFORT)) },
+    agent = agentId?.let { ChatAgent(it, root.string(ChatStoreKeys.MODEL), root.string(ChatStoreKeys.EFFORT), root.string(ChatStoreKeys.PROFILE)) },
     updatedAt = (root[ChatStoreKeys.UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
     lines = root.objects(ChatStoreKeys.LINES).mapNotNull { line ->
       val role = ChatHistoryRole.entries.firstOrNull { it.name == line.string(ChatStoreKeys.ROLE) } ?: return@mapNotNull null

@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
@@ -135,7 +136,9 @@ internal class ChatTurns(
       session.endStreaming()
     }
     if (session.started) {
-      chat.saveChat(ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), session.historyLines()))
+      val lines = session.historyLines()
+      val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
+      chat.saveChat(ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines))
     }
   }
 }

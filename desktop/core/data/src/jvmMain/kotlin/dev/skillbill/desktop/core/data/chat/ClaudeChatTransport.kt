@@ -15,7 +15,10 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
-/** Runs each turn as one `claude -p` process in the execution's worktree with permission checks skipped, as executions run. */
+/**
+ * Runs each turn as one `claude -p` process in the execution's worktree with permission checks skipped, as executions run. A
+ * resumed session runs with the config directory it came from, else the one the settings select.
+ */
 @Inject
 @SingleIn(AppScope::class)
 class ClaudeChatTransport(
@@ -27,7 +30,7 @@ class ClaudeChatTransport(
   override val agentId = "claude"
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
-    val homes = SelectedAgentHomes(settings.settings.first().claudeConfigDir, host.userHome).current()
+    val homes = SelectedAgentHomes(request.agent.profile ?: settings.settings.first().claudeConfigDir, host.userHome).current()
     val command = ChatCommand(
       argv = agentCommand("claude", claudeArguments(request), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,

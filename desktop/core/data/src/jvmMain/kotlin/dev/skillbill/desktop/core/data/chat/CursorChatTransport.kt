@@ -15,6 +15,9 @@ import kotlinx.serialization.json.booleanOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
+/** Cursor's config directory, which holds its chats; a resumed session runs with the profile it came from. */
+internal const val CURSOR_CONFIG_DIR = "CURSOR_CONFIG_DIR"
+
 /**
  * Runs each turn as one Cursor `agent --print` stream-json process with `--force`, as executions run. Cursor names its own
  * chat, so later turns resume the chat id the first turn reported, which [ChatStore] keeps across windows.
@@ -36,7 +39,7 @@ class CursorChatTransport(
     val command = ChatCommand(
       argv = agentCommand("agent", cursorArguments(request, chat), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
-      environment = host.variables,
+      environment = host.variables + request.agent.profile?.let { mapOf(CURSOR_CONFIG_DIR to it) }.orEmpty(),
       stdin = prompt,
     )
     return runChatTurn(launcher, diagnostics, command, CursorStreamDecoder { store.saveAgentSession(request.sessionId, it) })

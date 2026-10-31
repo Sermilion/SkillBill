@@ -2,8 +2,11 @@ package dev.skillbill.desktop.core.domain.model
 
 import kotlin.time.Instant
 
-/** The agent a chat turn runs on; a null [model] or [effort] leaves the agent CLI's own default. */
-data class ChatAgent(val agentId: String, val model: String?, val effort: String?)
+/**
+ * The agent a chat turn runs on; a null [model] or [effort] leaves the agent CLI's own default. [profile] is the agent's config
+ * directory, such as `~/.codex-api`, when a resumed session came from it; null runs the agent as the app is configured to.
+ */
+data class ChatAgent(val agentId: String, val model: String?, val effort: String?, val profile: String? = null)
 
 /** [ReadOnly] while the execution runs; [Act] once the operator paused it to act. */
 enum class ChatPermissionMode { ReadOnly, Act }
@@ -53,11 +56,16 @@ enum class ChatHistoryRole { Operator, Agent }
 
 data class ChatHistoryLine(val role: ChatHistoryRole, val text: String)
 
-/** A saved chat a later window can resume: [sessionId] names its agent session and [lines] are its latest messages. */
+/**
+ * A chat `/resume` can continue: [sessionId] names the agent session to resume. [executionId] is set on chats the app saved
+ * and null on sessions read from an agent CLI's own store. [lines] are the latest messages when already known; a listed
+ * agent session leaves them empty until it is opened.
+ */
 data class ChatHistoryEntry(
   val sessionId: String,
-  val executionId: String,
+  val executionId: String?,
   val agent: ChatAgent,
   val updatedAt: Instant,
+  val title: String,
   val lines: List<ChatHistoryLine>,
 )

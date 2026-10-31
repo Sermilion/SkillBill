@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.testing
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
@@ -48,9 +49,12 @@ class FakeExecutionChatRepository(
   /** Saved chats by session id, as the store keeps them. */
   val saved: MutableMap<String, ChatHistoryEntry> = Collections.synchronizedMap(linkedMapOf())
 
-  override suspend fun savedChats(executionId: String): List<ChatHistoryEntry> =
-    saved.values.filter { entry -> entry.executionId == executionId && entry.lines.any { it.role == ChatHistoryRole.Operator } }
-      .sortedByDescending { it.updatedAt }
+  override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
+    saved.values.filter { entry ->
+      entry.sessionId != currentSessionId && entry.executionId == executionId && entry.lines.any { it.role == ChatHistoryRole.Operator }
+    }.sortedByDescending { it.updatedAt }
+
+  override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = entry.lines
 
   override suspend fun saveChat(entry: ChatHistoryEntry) {
     saved[entry.sessionId] = entry
