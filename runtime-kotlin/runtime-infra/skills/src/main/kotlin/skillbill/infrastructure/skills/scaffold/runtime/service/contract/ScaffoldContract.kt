@@ -77,9 +77,15 @@ internal fun validatePointerTargetParity(
       val staticAbs = staticTarget.toAbsolutePath().normalize()
       val pointerAbs = resolvedRoot.resolve(spec.target).normalize()
       if (staticAbs != pointerAbs) {
+        val displayPath =
+          try {
+            staticAbs.relativeTo(resolvedRoot)
+          } catch (_: IllegalArgumentException) {
+            staticAbs
+          }
         issues += "platform-packs/${pack.slug}: pointer '${spec.name}' target '${spec.target}' " +
           "disagrees with static supportingFileTargets which points at " +
-          "'${runCatching { staticAbs.relativeTo(resolvedRoot) }.getOrDefault(staticAbs)}'"
+          "'$displayPath'"
       }
     }
   }

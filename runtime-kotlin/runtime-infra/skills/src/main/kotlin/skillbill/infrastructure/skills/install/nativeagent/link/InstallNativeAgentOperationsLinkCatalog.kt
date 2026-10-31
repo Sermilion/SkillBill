@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install.nativeagent.link
 
 import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
 import skillbill.error.core.ExternalPlatformPackPublishError
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.sourceKind
@@ -11,7 +12,6 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import kotlin.coroutines.cancellation.CancellationException
 
 internal fun stageReviewCatalogPacks(
   platformPacksRoot: Path,
@@ -33,7 +33,8 @@ internal fun stageReviewCatalogPacks(
       }
     }
   desiredPacks.forEach { source ->
-    val failure = runCatching { stageReviewCatalogPack(source, staging) }.exceptionOrNull() ?: return@forEach
+    val failure =
+      catchingNonCancellation { stageReviewCatalogPack(source, staging) }.exceptionOrNull() ?: return@forEach
     throw reviewCatalogStageFailure(platformPacksRoot, source, failure)
   }
 }
@@ -68,7 +69,7 @@ private fun reviewCatalogStageFailure(
   source: Path,
   error: Throwable,
 ): Throwable {
-  if (error is CancellationException || error is ExternalPlatformPackPublishError) return error
+  if (error is ExternalPlatformPackPublishError) return error
   val payload =
     externalPlatformPackTelemetryPayload(
       error,
@@ -146,7 +147,7 @@ internal fun swapReviewCatalogIntoPlace(
 ) {
   var supersededMoved = false
   val publishResult =
-    runCatching {
+    catchingNonCancellation {
       if (Files.exists(catalogRoot, LinkOption.NOFOLLOW_LINKS)) {
         atomicMoveReplacing(catalogRoot, superseded)
         supersededMoved = true
@@ -156,7 +157,7 @@ internal fun swapReviewCatalogIntoPlace(
     }
   publishResult.exceptionOrNull()?.let { error ->
     if (supersededMoved && Files.exists(superseded, LinkOption.NOFOLLOW_LINKS)) {
-      runCatching {
+      catchingNonCancellation {
         if (Files.exists(catalogRoot, LinkOption.NOFOLLOW_LINKS)) {
           deleteRecursively(catalogRoot)
         }

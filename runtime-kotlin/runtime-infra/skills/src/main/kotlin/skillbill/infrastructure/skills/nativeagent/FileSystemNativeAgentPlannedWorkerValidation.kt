@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.nativeagent
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
 import skillbill.infrastructure.skills.nativeagent.rendering.discoverRepoNativeAgentSourceFiles
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
@@ -16,11 +17,14 @@ internal fun validatePlannedNativeAgentWorkers(repoRoot: Path): List<String> {
   val issues = mutableListOf<String>()
   val sources =
     discoverRepoNativeAgentSourceFiles(root).flatMap { path ->
-      runCatching { skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile(path) }
-        .getOrElse { emptyList() }
+      catchingNonCancellation { parseNativeAgentSourceFile(path) }
+        .getOrElse { error ->
+          issues += "${root.relativize(path)}: cannot parse native-agent source: ${error.message.orEmpty()}"
+          emptyList()
+        }
     }
   val manifests =
-    runCatching { discoverPlatformPackManifests(packsRoot) }
+    catchingNonCancellation { discoverPlatformPackManifests(packsRoot) }
       .getOrElse { error ->
         return listOf("platform-packs: cannot derive native-agent worker set: ${error.message.orEmpty()}")
       }

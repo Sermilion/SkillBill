@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringRenderResult
@@ -33,7 +34,7 @@ internal fun validateGovernedSkillDrift(
 ): GovernedSkillDriftReport {
   val root = repoRoot.toAbsolutePath().normalize()
   val targets =
-    runCatching { discoverTargets(root) }.getOrElse { error ->
+    catchingNonCancellation { discoverTargets(root) }.getOrElse { error ->
       return GovernedSkillDriftReport(
         issues = listOf("governed skill drift: cannot discover governed skills: ${error.message.orEmpty()}"),
         skillCount = 0,
@@ -69,7 +70,7 @@ private fun renderTarget(
   pass: String,
   issues: MutableList<String>,
 ): AuthoringRenderResult? =
-  runCatching { renderer(root, target) }
+  catchingNonCancellation { renderer(root, target) }
     .getOrElse { error ->
       issues += "${driftDisplayPath(root, target.contentFile)}: cannot render governed skill '${target.skillName}' " +
         "on $pass pass: ${error.message.orEmpty()}"
@@ -118,7 +119,7 @@ private fun validatePointerRenderability(
             return@forEach
           }
         pack.pointers.forEach { spec ->
-          runCatching { renderPointer(root, pack.packRoot.toPath(), spec) }
+          catchingNonCancellation { renderPointer(root, pack.packRoot.toPath(), spec) }
             .onFailure { error ->
               val pointerFile = pack.packRoot.resolve(spec.skillRelativeDir).resolve(spec.name)
               issues += "${driftDisplayPath(
@@ -138,6 +139,9 @@ private fun driftDisplayPath(
 ): String {
   val resolvedRoot = root.toAbsolutePath().normalize()
   val resolvedPath = path.toAbsolutePath().normalize()
-  return runCatching { resolvedPath.relativeTo(resolvedRoot).toString().replace('\\', '/') }
-    .getOrDefault(resolvedPath.toString())
+  return try {
+    resolvedPath.relativeTo(resolvedRoot).toString().replace('\\', '/')
+  } catch (_: IllegalArgumentException) {
+    resolvedPath.toString()
+  }
 }

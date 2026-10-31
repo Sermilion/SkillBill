@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
@@ -14,6 +15,7 @@ import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanSkill
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -51,7 +53,7 @@ private fun linkSkillToAgent(
       linkTarget = stagingDir.toAbsolutePath().normalize(),
       installedSkillsRoot = installedSkillsRoot.toAbsolutePath().normalize(),
     )
-  return runCatching { createOrSkipSkillLink(context) }
+  return catchingNonCancellation { createOrSkipSkillLink(context) }
     .getOrElse { error -> failedSkillLinkOutcome(context, error) }
 }
 
@@ -139,11 +141,17 @@ private fun failedSkillLinkOutcome(
 }
 
 private fun resolveSymlinkTarget(linkPath: Path): Path? =
-  runCatching {
-    val rawTarget = Files.readSymbolicLink(linkPath)
-    val resolvedTarget = if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget)
-    resolvedTarget.toAbsolutePath().normalize()
-  }.getOrNull()
+  if (!Files.isSymbolicLink(linkPath)) {
+    null
+  } else {
+    try {
+      val rawTarget = Files.readSymbolicLink(linkPath)
+      val resolvedTarget = if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget)
+      resolvedTarget.toAbsolutePath().normalize()
+    } catch (_: IOException) {
+      null
+    }
+  }
 
 private data class SkillLinkContext(
   val skillName: String,

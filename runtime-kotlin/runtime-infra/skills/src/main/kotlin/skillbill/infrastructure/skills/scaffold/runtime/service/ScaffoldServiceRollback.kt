@@ -1,6 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.scaffoldRollbackError
 import skillbill.infrastructure.host.jvm.rollbackDeleteEmptyDirectory
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
@@ -13,7 +14,6 @@ import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.coroutines.cancellation.CancellationException
 
 internal fun rollback(
   txn: ScaffoldTransaction,
@@ -87,7 +87,7 @@ internal fun rollbackRegisteredExternalPlatformPack(
   val home = txn.externalPackConfigHome ?: return
   val store = txn.packSourceConfig ?: return
   val failure =
-    runCatching {
+    catchingNonCancellation {
       store.unregisterExternalPlatformPackSource(
         ExternalPlatformPackSourceUnregisterRequest(
           userHome = home,
@@ -97,7 +97,6 @@ internal fun rollbackRegisteredExternalPlatformPack(
         ),
       )
     }.exceptionOrNull() ?: return
-  if (failure is CancellationException) throw failure
   errors += "external platform pack registration $root: ${failure.message}"
 }
 

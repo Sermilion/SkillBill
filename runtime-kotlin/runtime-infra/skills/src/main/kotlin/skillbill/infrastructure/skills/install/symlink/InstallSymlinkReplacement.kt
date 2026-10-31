@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.symlink
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
-import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.FileSystemException
@@ -25,11 +25,17 @@ internal fun createNewSymlinkWithGuidance(
 }
 
 internal fun resolveSymlinkTarget(linkPath: Path): Path? =
-  runCatching {
-    val rawTarget = Files.readSymbolicLink(linkPath)
-    val resolvedTarget = if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget)
-    resolvedTarget.toAbsolutePath().normalize()
-  }.getOrNull()
+  if (!Files.isSymbolicLink(linkPath)) {
+    null
+  } else {
+    try {
+      val rawTarget = Files.readSymbolicLink(linkPath)
+      val resolvedTarget = if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget)
+      resolvedTarget.toAbsolutePath().normalize()
+    } catch (_: IOException) {
+      null
+    }
+  }
 
 private fun createManagedSymlinkWithGuidance(
   linkPath: Path,
@@ -45,13 +51,13 @@ private fun createManagedSymlinkWithGuidance(
     }
     moveManagedLink(tempLink, linkPath)
   } catch (error: IOException) {
-    restoreOriginalLinkIfNeeded(replaceExisting, oldTarget, linkPath)
+    restoreOriginalLinkIfNeeded(replaceExisting, oldTarget, linkPath, error)
     throw error
   } catch (error: UnsupportedOperationException) {
-    restoreOriginalLinkIfNeeded(replaceExisting, oldTarget, linkPath)
+    restoreOriginalLinkIfNeeded(replaceExisting, oldTarget, linkPath, error)
     throw error
   } finally {
-    runCatching { rollbackDeleteIfExists(tempLink) }
+    tempLink.toFile().delete()
   }
 }
 
@@ -59,9 +65,10 @@ private fun restoreOriginalLinkIfNeeded(
   replaceExisting: Boolean,
   oldTarget: Path?,
   linkPath: Path,
+  failure: Throwable,
 ) {
   if (replaceExisting && oldTarget != null && !Files.exists(linkPath, LinkOption.NOFOLLOW_LINKS)) {
-    runCatching { createSymbolicLinkWithGuidance(linkPath, oldTarget) }
+    catchingNonCancellation { createSymbolicLinkWithGuidance(linkPath, oldTarget) }.onFailure(failure::addSuppressed)
   }
 }
 
@@ -89,7 +96,13 @@ private fun moveManagedLink(
 }
 
 private fun readSymlinkTargetOrNull(linkPath: Path): Path? =
-  runCatching {
-    val rawTarget = Files.readSymbolicLink(linkPath)
-    if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget).toAbsolutePath().normalize()
-  }.getOrNull()
+  if (!Files.isSymbolicLink(linkPath)) {
+    null
+  } else {
+    try {
+      val rawTarget = Files.readSymbolicLink(linkPath)
+      if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget).toAbsolutePath().normalize()
+    } catch (_: IOException) {
+      null
+    }
+  }

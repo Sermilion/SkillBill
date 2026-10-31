@@ -9,6 +9,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.support.required
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 import java.io.Closeable
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -128,8 +129,18 @@ private fun validateSourceSidecarSymlink(
   expectedTarget: Path,
   issues: MutableList<String>,
 ) {
-  val actual = runCatching { sidecar.toRealPath() }.getOrNull()
-  val expected = runCatching { expectedTarget.toRealPath() }.getOrNull()
+  val actual =
+    try {
+      sidecar.toRealPath()
+    } catch (_: IOException) {
+      null
+    }
+  val expected =
+    try {
+      expectedTarget.toRealPath()
+    } catch (_: IOException) {
+      null
+    }
   if (actual != null && expected != null && actual != expected) {
     issues += "${target.contentFile}: supporting sidecar '$fileName' points to $actual instead of $expected"
   }

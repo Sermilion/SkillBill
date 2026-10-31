@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.nativeagent.validation
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_SOURCE_DIR
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
@@ -80,7 +81,7 @@ private fun parseNativeAgentSourcesForValidation(
   issues: MutableList<String>,
 ): List<NativeAgentSource> =
   sourceFiles.flatMap { sourcePath ->
-    runCatching { parseNativeAgentSourceFile(sourcePath) }
+    catchingNonCancellation { parseNativeAgentSourceFile(sourcePath) }
       .getOrElse { error ->
         issues += "${displayPath(root, sourcePath)}: ${error.message.orEmpty()}"
         emptyList()
@@ -106,7 +107,7 @@ private fun validateNativeAgentSources(
         "native agent bodies must be provider-agnostic; conditionals belong in the renderer"
     }
     val composed =
-      runCatching {
+      catchingNonCancellation {
         composeNativeAgentSource(
           root,
           source,
@@ -120,7 +121,7 @@ private fun validateNativeAgentSources(
       issues += "${nativeAgentSourceDisplay(root, source)}: " +
         "composed native agent bodies must be provider-agnostic; conditionals belong in the renderer"
     }
-    runCatching {
+    catchingNonCancellation {
       val pack =
         resolveNativeAgentCompositionTarget(
           root,
@@ -135,7 +136,7 @@ private fun validateNativeAgentSources(
       issues += "${nativeAgentSourceDisplay(root, source)}: ${error.message.orEmpty()}"
     }
     NativeAgentProvider.entries.forEach { provider ->
-      runCatching { provider.render(composed) }.getOrElse { error ->
+      catchingNonCancellation { provider.render(composed) }.getOrElse { error ->
         issues += "${nativeAgentSourceDisplay(root, source)}: cannot render ${provider.directoryName}: " +
           error.message.orEmpty()
       }

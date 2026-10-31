@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.skillremove
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.jvm.rollbackDeletePathEntry
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
@@ -35,19 +36,37 @@ internal class SkillRemoveJvmFileSystemApply(
         "cascadedSkills=${preview.cascadedSkillNames.size} " +
         "filesystemPaths=${preview.filesystemPaths.size}",
     )
-    return runCatching {
-      applyCascadeBody(request, preview, repoRoot, rollbackStash)
-    }.fold(
-      onSuccess = { applied ->
-        log.info(
-          "skill-bill remove success: removedPaths=${applied.removedPaths.size} " +
-            "editedManifests=${applied.editedManifests.size} " +
-            "unlinkedSymlinks=${applied.unlinkedSymlinks.size}",
+    return try {
+      catchingNonCancellation {
+        applyCascadeBody(request, preview, repoRoot, rollbackStash)
+      }.fold(
+        onSuccess = { applied ->
+          log.info(
+            "skill-bill remove success: removedPaths=${applied.removedPaths.size} " +
+              "editedManifests=${applied.editedManifests.size} " +
+              "unlinkedSymlinks=${applied.unlinkedSymlinks.size}",
+          )
+          applied
+        },
+        onFailure = { error -> handleApplyCascadeFailure(error, rollbackStash) },
+      )
+    } catch (cancelled: CancellationException) {
+      logApplyCascadeFailure(cancelled)
+      if (!attemptRollback(rollbackStash)) {
+        cancelled.addSuppressed(
+          SkillBillRollbackException("Skill removal was cancelled AND rollback could not fully restore the repo"),
         )
-        applied
-      },
-      onFailure = { error -> handleApplyCascadeFailure(error, rollbackStash) },
-    )
+      }
+      throw cancelled
+    } catch (interrupted: InterruptedException) {
+      logApplyCascadeFailure(interrupted)
+      if (!attemptRollback(rollbackStash)) {
+        interrupted.addSuppressed(
+          SkillBillRollbackException("Skill removal was cancelled AND rollback could not fully restore the repo"),
+        )
+      }
+      throw interrupted
+    }
   }
 
   fun providerUnlink(provider: SupportedAgent): (NativeAgentLinkRequest) -> List<Path> =

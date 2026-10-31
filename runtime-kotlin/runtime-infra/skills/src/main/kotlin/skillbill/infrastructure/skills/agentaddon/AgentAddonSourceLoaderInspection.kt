@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.agentaddon
 
 import skillbill.agentaddon.model.AgentAddonCatalogueEntry
 import skillbill.agentaddon.model.InvalidAgentAddonCatalogueEntry
+import skillbill.error.core.catchingNonCancellation
 import skillbill.model.FileLocation
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
@@ -23,7 +24,7 @@ internal fun collectAgentAddonCatalogueEntries(
       stream.filter { !it.name.startsWith(".") }.sorted().forEach { sourceRoot ->
         val manifest = sourceRoot.resolve(MANIFEST_FILE)
         val content = sourceRoot.resolve(CONTENT_FILE)
-        runCatching { parseSource(sourceRoot, schemaValidator) }
+        catchingNonCancellation { parseSource(sourceRoot, schemaValidator) }
           .onSuccess { declaration ->
             entries += declaration.toCatalogueEntry()
           }

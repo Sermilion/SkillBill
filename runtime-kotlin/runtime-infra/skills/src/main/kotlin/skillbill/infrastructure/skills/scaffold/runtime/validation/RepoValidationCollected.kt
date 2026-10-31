@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.discoverRepoNativeAgentSourceEntries
 import skillbill.infrastructure.skills.nativeagent.validation.validateRepoNativeAgents
@@ -31,7 +32,7 @@ internal fun collectRepoValidationIssues(
   val platformPacks = validatePlatformPacks(root, issues)
   val portableReviewSkills = discoverPortableReviewSkills(root, issues)
   val nativeAgentSources =
-    runCatching { discoverRepoNativeAgentSourceEntries(root) }
+    catchingNonCancellation { discoverRepoNativeAgentSourceEntries(root) }
       .onFailure { error -> issues += "native agent sources: ${describeDiscoveryFailure(error)}" }
       .getOrDefault(emptyList())
   skillClassDiscoveryFailure(root)?.let { error ->
@@ -87,7 +88,7 @@ internal fun collectRepoValidationIssues(
 
 private fun skillClassDiscoveryFailure(root: Path): Throwable? =
   if (root.resolve(SKILL_CLASSES_DIR).isDirectory()) {
-    runCatching { discoverSkillClasses(root) }.exceptionOrNull()
+    catchingNonCancellation { discoverSkillClasses(root) }.exceptionOrNull()
   } else {
     null
   }

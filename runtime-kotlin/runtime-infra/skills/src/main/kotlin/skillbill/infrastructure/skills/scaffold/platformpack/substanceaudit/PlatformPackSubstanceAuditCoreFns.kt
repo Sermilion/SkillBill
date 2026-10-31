@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.model.toPath
@@ -60,7 +61,7 @@ internal fun discoverManifests(root: Path): Pair<List<PlatformManifest>, List<St
           errors += "platform-packs/${packRoot.name}/platform.yaml: maintained platform pack manifest is missing"
           null
         } else {
-          runCatching { loadPlatformManifest(packRoot) }.getOrElse { error ->
+          catchingNonCancellation { loadPlatformManifest(packRoot) }.getOrElse { error ->
             errors += "platform-packs/${packRoot.name}/platform.yaml: ${error.message ?: error::class.simpleName}"
             null
           }
@@ -78,7 +79,7 @@ internal fun retainManifestsWithReadableDeclaredContent(
   val readable =
     manifests.filter { pack ->
       declaredContentPaths(pack).mapNotNull { path ->
-        runCatching { Files.readString(path) }.exceptionOrNull()?.let { error ->
+        catchingNonCancellation { Files.readString(path) }.exceptionOrNull()?.let { error ->
           val source = path.toAbsolutePath().normalize().relativeTo(root).toString()
           val errorName = error.failureCodeLabel() ?: error::class.simpleName
           "$source: declared authored content is missing or unreadable ($errorName: ${error.message})"

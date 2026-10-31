@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.catchingNonCancellation
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.PlatformPackSelection
@@ -18,7 +19,7 @@ internal fun parseInstallSelectionPayload(
     JsonCodec.anyToStringAnyMap(
       JsonCodec.parseObjectOrNull(rawPayload)?.let(JsonCodec::jsonElementToValue),
     ) ?: throw malformedInstallSelection(path, "Root value must be a JSON object.")
-  return runCatching { payload.toInstallSelection(path) }
+  return catchingNonCancellation { payload.toInstallSelection(path) }
     .getOrElse { error -> throw error.toMalformedInstallSelection(path) }
 }
 

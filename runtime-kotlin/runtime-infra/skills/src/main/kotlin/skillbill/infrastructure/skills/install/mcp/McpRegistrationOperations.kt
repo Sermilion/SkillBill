@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.mcp
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
@@ -160,7 +161,7 @@ object McpRegistrationOperations {
 
     profilePaths.forEach { perProfilePath ->
       val result =
-        runCatching { mutate(perProfilePath) }.getOrElse { error ->
+        catchingNonCancellation { mutate(perProfilePath) }.getOrElse { error ->
           error.rethrowIfCooperativeCancellationOrInterruption()
           failures.add(perProfilePath to error)
           return@forEach

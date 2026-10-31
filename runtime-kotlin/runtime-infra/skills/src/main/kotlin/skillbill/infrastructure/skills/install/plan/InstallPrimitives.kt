@@ -17,6 +17,7 @@ import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.PlatformManifest
 import java.io.FileNotFoundException
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import skillbill.infrastructure.skills.nativeagent.support.claudeSkillTargets as nativeClaudeSkillTargets
@@ -183,7 +184,12 @@ private fun installSkillSymlink(
   Files.createDirectories(target.path.toPath())
   val linkPath = target.path.toPath().resolve(resolvedSkill.fileName)
   if (Files.isSymbolicLink(linkPath)) {
-    val existingTarget = runCatching { Files.readSymbolicLink(linkPath).toAbsolutePath().normalize() }.getOrNull()
+    val existingTarget =
+      try {
+        Files.readSymbolicLink(linkPath).toAbsolutePath().normalize()
+      } catch (_: IOException) {
+        null
+      }
     if (existingTarget == symlinkTarget) {
       return InstallSkillSymlinkOutcome(null, transaction)
     }

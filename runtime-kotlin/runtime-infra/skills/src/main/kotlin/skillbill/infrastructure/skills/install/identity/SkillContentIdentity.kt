@@ -2,11 +2,13 @@ package skillbill.infrastructure.skills.install.identity
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.invalidSkillContentIdentityError
 import skillbill.error.shellcontent.skillContentIdentityMismatchError
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.skills.scaffold.validation.shape.parseSkillFrontmatter
 import skillbill.review.parsing.requireMatch
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -45,7 +47,7 @@ internal data class SkillContentIdentity(
       }
       val content = Files.readAllBytes(contentFile)
       val metadata =
-        runCatching {
+        catchingNonCancellation {
           parseSkillFrontmatter(content.toString(StandardCharsets.UTF_8))
         }.getOrElse { error ->
           invalidIdentity(
@@ -57,7 +59,12 @@ internal data class SkillContentIdentity(
       if (metadata.isEmpty()) {
         invalidIdentity(source.toString(), "content.md frontmatter is missing")
       }
-      val canonical = runCatching { source.toRealPath().toString() }.getOrElse { source.toString() }
+      val canonical =
+        try {
+          source.toRealPath().toString()
+        } catch (_: IOException) {
+          source.toString()
+        }
       return SkillContentIdentity(canonical, sha256Hex(content), metadata.toSortedMap())
     }
 
@@ -103,7 +110,7 @@ internal data class SkillContentIdentity(
             normalizedKey to normalizedValue
           }
           ?: invalidIdentity(stagingDir.toString(), "normalized metadata is missing")
-      return runCatching { SkillContentIdentity(source, digest, metadata.toSortedMap()) }
+      return catchingNonCancellation { SkillContentIdentity(source, digest, metadata.toSortedMap()) }
         .getOrElse { error ->
           invalidIdentity(stagingDir.toString(), error.message ?: "identity values are invalid", error)
         }
@@ -146,7 +153,7 @@ internal data class SkillContentIdentity(
             normalizedKey to normalizedValue
           }
           ?: invalidIdentity(sourceLabel, "normalized metadata is missing")
-      return runCatching { SkillContentIdentity(source, digest, metadata.toSortedMap()) }
+      return catchingNonCancellation { SkillContentIdentity(source, digest, metadata.toSortedMap()) }
         .getOrElse { error ->
           invalidIdentity(sourceLabel, error.message ?: "identity values are invalid", error)
         }

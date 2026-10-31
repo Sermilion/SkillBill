@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.install.symlink.createNewSymlinkWithGuidance
@@ -48,7 +49,7 @@ internal fun materializeAgentPlatformPackViews(
       .toSet()
   val billSharedRoot = plan.request.repoRoot.toPath().toAbsolutePath().normalize().resolve(".bill-shared")
   plan.agents.forEach { agentTarget ->
-    runCatching {
+    catchingNonCancellation {
       selectedManifests.forEach { manifest ->
         val packRoot = manifest.packRoot.toPath().toAbsolutePath().normalize()
         assertExternalPlatformPackTreeReads(packRoot, billSharedRoot)
@@ -80,7 +81,7 @@ internal fun cleanupManagedPlatformPackViews(
   failures: MutableList<InstallApplyIssue>,
 ) {
   plan.agents.forEach { agentTarget ->
-    runCatching {
+    catchingNonCancellation {
       val root = agentTarget.path.toPath().toAbsolutePath().normalize().resolve(PLATFORM_PACKS_DIR)
       if (Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS) && Files.exists(root.resolve(MANAGED_INSTALL_MARKER))) {
         deleteTree(root)
@@ -131,10 +132,10 @@ private fun materializeAgentPlatformPackView(
       atomicMoveReplacing(root, superseded)
       supersededMoved = true
     }
-    val publishResult = runCatching { atomicMoveReplacing(staging, root) }
+    val publishResult = catchingNonCancellation { atomicMoveReplacing(staging, root) }
     publishResult.exceptionOrNull()?.let { error ->
       if (supersededMoved && Files.exists(superseded, LinkOption.NOFOLLOW_LINKS)) {
-        runCatching {
+        catchingNonCancellation {
           if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
             deleteTree(root)
           }

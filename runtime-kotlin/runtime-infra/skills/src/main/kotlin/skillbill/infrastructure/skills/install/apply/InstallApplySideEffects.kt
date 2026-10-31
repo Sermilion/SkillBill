@@ -1,4 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
+
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
@@ -28,7 +30,6 @@ import skillbill.telemetry.parsePositiveTelemetryInt
 import skillbill.telemetry.telemetryLevels
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.coroutines.cancellation.CancellationException
 
 internal fun applyTelemetryIntent(
   plan: InstallPlan,
@@ -42,7 +43,7 @@ internal fun applyTelemetryIntent(
       userHome = plan.request.home.toPath(),
     )
   var configPath = environmentContext.userHome.resolve(".config").resolve("skill-bill").resolve("config.json")
-  return runCatching {
+  return catchingNonCancellation {
     val apply = {
       val existedBefore = Files.exists(configPath)
       val clearedEvents =
@@ -190,7 +191,7 @@ private fun registerMcpAgent(
   mcpRegistrationPort: InstallMcpRegistrationPort,
 ): McpRegistrationApplyOutcome {
   val registration =
-    runCatching {
+    catchingNonCancellation {
       mcpRegistrationPort.registerMcp(
         InstallMcpRegistrationRequest(
           agent = agent.id,
@@ -201,7 +202,6 @@ private fun registerMcpAgent(
         ),
       ).outcome
     }.getOrElse { error ->
-      if (error is CancellationException || error is InterruptedException) throw error
       return failedMcpRegistrationOutcome(
         agent = agent,
         message = error.message.orEmpty(),

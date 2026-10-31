@@ -5,6 +5,7 @@ import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatf
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPackLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.scaffold.model.PlatformManifest
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
@@ -82,8 +83,11 @@ internal fun platformPackRoot(
     } else if (root in additionalPackRoots) {
       root
     } else {
-      runCatching { canonicalSourcePath.relativeTo(canonicalRoot) }
-        .getOrNull()
+      try {
+        canonicalSourcePath.relativeTo(canonicalRoot)
+      } catch (_: IllegalArgumentException) {
+        null
+      }
         ?.firstOrNull()
         ?.toString()
         ?.let(root::resolve)
@@ -97,13 +101,20 @@ internal fun displayPath(
 ): String {
   val resolvedRoot = root.toAbsolutePath().normalize()
   val resolvedPath = path.toAbsolutePath().normalize()
-  return runCatching { resolvedPath.relativeTo(resolvedRoot).toString() }
-    .getOrDefault(resolvedPath.toString())
+  return try {
+    resolvedPath.relativeTo(resolvedRoot).toString()
+  } catch (_: IllegalArgumentException) {
+    resolvedPath.toString()
+  }
 }
 
 private fun canonicalize(path: Path): Path {
   val normalized = path.toAbsolutePath().normalize()
-  return runCatching { normalized.toRealPath() }.getOrDefault(normalized)
+  return try {
+    normalized.toRealPath()
+  } catch (_: IOException) {
+    normalized
+  }
 }
 
 private fun declaredContentPaths(pack: NativeAgentPlatformPack): List<Path> =

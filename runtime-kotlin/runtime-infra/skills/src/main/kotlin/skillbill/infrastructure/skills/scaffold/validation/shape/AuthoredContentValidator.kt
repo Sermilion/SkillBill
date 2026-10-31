@@ -1,6 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.validation.shape
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.resolveSkillClassForSkill
 import skillbill.infrastructure.skills.scaffold.validation.review.headings
 import skillbill.scaffold.model.SkillClassManifest
@@ -54,7 +55,11 @@ internal fun validateAuthoredContent(
   val issues = mutableListOf<String>()
   val visibleLines = bodyVisibleLines(body)
   val hasSelfReferentialPointer = SELF_REFERENTIAL_CONTENT_POINTER_PATTERN.containsMatchIn(body)
-  val skillClass = resolveSkillClassForPath(contentFile)
+  val skillClass =
+    catchingNonCancellation { resolveSkillClassForPath(contentFile) }.getOrElse { error ->
+      issues += "$contentFile: skill class cannot be resolved: ${error.message.orEmpty()}"
+      null
+    }
   val classDeclaresSections = skillClass != null && skillClass.sections.isNotEmpty()
 
   if (hasSelfReferentialPointer) {
@@ -215,5 +220,5 @@ private fun classSectionHeadingClashes(
 
 private fun resolveSkillClassForPath(contentFile: Path): SkillClassManifest? {
   val skillName = contentFile.parent?.fileName?.toString() ?: return null
-  return runCatching { resolveSkillClassForSkill(skillName, contentFile) }.getOrNull()
+  return resolveSkillClassForSkill(skillName, contentFile)
 }

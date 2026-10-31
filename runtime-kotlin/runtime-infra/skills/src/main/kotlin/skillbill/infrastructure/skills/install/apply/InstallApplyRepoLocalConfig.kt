@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.install.apply
 import skillbill.config.model.RepoLocalConfigKey
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.infrastructure.host.system.configDocumentIoException
@@ -39,7 +40,7 @@ private inline fun scaffoldStep(
   failures: MutableList<InstallApplyIssue>,
   step: () -> Path,
 ) {
-  runCatching { step() }.onFailure { error ->
+  catchingNonCancellation { step() }.onFailure { error ->
     error.rethrowIfCooperativeCancellationOrInterruption()
     val issue =
       InstallApplyIssue(

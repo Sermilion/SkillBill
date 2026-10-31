@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.missingContentFile
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentAddonSelectionPolicy
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentGovernedAddonActivation
@@ -87,7 +88,7 @@ internal fun readAddonFile(
   addon: ComposedAddonTarget,
 ): String {
   val bytes =
-    runCatching { Files.readAllBytes(addon.path) }.getOrElse { failure ->
+    catchingNonCancellation { Files.readAllBytes(addon.path) }.getOrElse { failure ->
       throw missingContentFile(addonFailureMessage(root, addon, "is unreadable"), failure)
     }
   return normalizeMarkdownLineEndings(String(bytes, Charsets.UTF_8))

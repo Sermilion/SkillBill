@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.plan.platformSkills
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
@@ -60,7 +61,7 @@ private fun cleanupOneTarget(
   cleanupContext: InstallCleanupContext,
   failures: MutableList<InstallApplyIssue>,
 ) {
-  runCatching {
+  catchingNonCancellation {
     InstallCleanupOperations.cleanupAgentTarget(
       targetDir = targetDir,
       skillNames = cleanupContext.skillNames,

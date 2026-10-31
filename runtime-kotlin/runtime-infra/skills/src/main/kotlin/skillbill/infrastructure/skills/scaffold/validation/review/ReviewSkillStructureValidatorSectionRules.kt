@@ -57,8 +57,11 @@ internal fun displayPath(
   pack: Path,
   path: Path,
 ): String =
-  runCatching { portablePath(pack.relativize(path)) }
-    .getOrDefault(path.toString())
+  try {
+    portablePath(pack.relativize(path))
+  } catch (_: IllegalArgumentException) {
+    path.toString()
+  }
 
 internal fun portablePath(path: Path): String = path.toString().replace('\\', '/')
 

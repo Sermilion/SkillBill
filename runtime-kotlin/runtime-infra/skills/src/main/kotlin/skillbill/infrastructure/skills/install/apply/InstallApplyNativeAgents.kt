@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOutcome
@@ -63,7 +64,7 @@ private fun applyNativeAgentProvider(
   installer: NativeAgentInstaller,
   context: NativeAgentApplyContext,
 ): List<NativeAgentApplyOutcome> =
-  runCatching {
+  catchingNonCancellation {
     installer.link(nativeAgentLinkRequest(context))
   }.fold(
     onSuccess = { outcome -> nativeAgentProviderOutcomes(installer, outcome) },
