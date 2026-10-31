@@ -1,7 +1,11 @@
 package dev.skillbill.desktop.feature.detail
 
+import dev.skillbill.desktop.core.domain.model.ChangeBaseline
+import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -25,7 +29,25 @@ data class DetailUiState(
   val subtaskChoice: SubtaskChoice = SubtaskChoice(),
   /** The previous detail was left by J or K while its Subtasks list had focus, so this one's list takes focus once it shows. */
   val focusSubtaskList: Boolean = false,
+  val changes: ChangesUi = ChangesUi(),
+  /** The read-only diff shown in place of the document; null shows the document. */
+  val diff: DiffUi? = null,
 )
+
+/** The open item's changed files against [baseline]; the section only shows once the detail has loaded. */
+data class ChangesUi(val baseline: ChangeBaseline? = null, val state: ChangesState = ChangesState.Loading)
+
+/** The diff of [file] read against [baseSha] in [worktreeRoot]. */
+data class DiffUi(val file: ChangedFile, val baseSha: String, val worktreeRoot: String, val content: DiffContent)
+
+sealed interface DiffContent {
+  data object Loading : DiffContent
+
+  data class Read(val state: FileDiffState) : DiffContent
+
+  /** A later list no longer names the file. */
+  data object NoLongerChanged : DiffContent
+}
 
 /** A row of the Subtasks index: one subtask by its runtime id, or the final Goal finish row. */
 sealed interface SubtaskKey {
@@ -91,6 +113,15 @@ sealed interface DetailAction {
 
   /** The Subtasks index took focus, which spends [DetailUiState.focusSubtaskList]. */
   data object SubtaskListFocused : DetailAction
+
+  /** A single click on a Changes row shows that file's diff. */
+  data class SelectChangedFile(val file: ChangedFile) : DetailAction
+
+  /** A double click on a Changes row opens the file in the system default application; deleted files are never opened. */
+  data class OpenChangedFile(val file: ChangedFile) : DetailAction
+
+  /** The diff view's back button or Escape returns to the document. */
+  data object CloseDiff : DetailAction
 }
 
 sealed interface DetailEffect {
