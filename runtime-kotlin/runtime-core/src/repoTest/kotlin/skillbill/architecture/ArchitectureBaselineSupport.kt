@@ -11,7 +11,10 @@ internal object ArchitectureBaselineSupport {
 
   fun readBaseline(name: String): String = readBaselineIn(baselineRoot, name)
 
-  internal fun readBaselineIn(directory: Path, name: String): String {
+  internal fun readBaselineIn(
+    directory: Path,
+    name: String,
+  ): String {
     val baseline = directory.resolve(name)
     return if (Files.isRegularFile(baseline)) Files.readString(baseline) else ""
   }
