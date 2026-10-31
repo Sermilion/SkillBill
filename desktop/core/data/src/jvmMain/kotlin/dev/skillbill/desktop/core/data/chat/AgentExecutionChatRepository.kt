@@ -32,6 +32,10 @@ class AgentExecutionChatRepository(
   override suspend fun resolveAgent(item: WorkItem, detail: Detail?, runOptions: RunOptions?): ChatAgent? =
     resolver.resolve(item, detail, runOptions)
 
+  override suspend fun agentFor(agentId: String): ChatAgent = resolver.forAgent(agentId)
+
+  override fun agents(): List<String> = transports.map { it.agentId }.sorted()
+
   override fun supports(agentId: String): Boolean = transports.any { it.agentId == agentId }
 
   override fun send(request: ChatTurnRequest): Flow<ChatEvent> = flow {

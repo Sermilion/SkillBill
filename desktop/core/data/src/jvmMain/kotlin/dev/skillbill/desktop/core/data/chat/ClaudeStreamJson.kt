@@ -3,24 +3,15 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 
-private val toolJson = Json { prettyPrint = true }
-
 /** Decodes one line of `claude --output-format stream-json`; text blocks in `assistant` lines repeat the deltas, so they are skipped. */
 internal fun decodeClaudeLine(line: String): List<ChatEvent> {
   if (line.isBlank()) return emptyList()
-  val root = try {
-    Json.parseToJsonElement(line) as? JsonObject
-  } catch (_: SerializationException) {
-    null
-  } ?: return listOf(ChatEvent.Failed(ChatFailure.StreamMalformed, line.take(200)))
+  val root = parseStreamLine(line) ?: return listOf(ChatEvent.Failed(ChatFailure.StreamMalformed, line.take(200)))
   return when (root.string("type")) {
     "stream_event" -> {
       val delta = root.obj("event")?.obj("delta")
@@ -55,17 +46,5 @@ internal fun decodeClaudeLine(line: String): List<ChatEvent> {
   }
 }
 
-private fun JsonObject.obj(key: String): JsonObject? = get(key) as? JsonObject
-
-private fun JsonObject.string(key: String): String? = (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
-
 private fun JsonObject.contentBlocks(): List<JsonObject> =
   (obj("message")?.get("content") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
-
-private fun JsonElement.renderToolContent(): String = when (this) {
-  is JsonPrimitive -> if (isString) content else toString()
-  is JsonArray -> joinToString("\n") { element ->
-    (element as? JsonObject)?.string("text") ?: toolJson.encodeToString(JsonElement.serializer(), element)
-  }
-  else -> toolJson.encodeToString(JsonElement.serializer(), this)
-}

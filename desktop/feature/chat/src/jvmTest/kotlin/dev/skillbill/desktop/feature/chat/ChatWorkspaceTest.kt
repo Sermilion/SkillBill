@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
 import androidx.compose.runtime.snapshots.Snapshot
+import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -43,7 +44,7 @@ import kotlin.time.Duration.Companion.minutes
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatWorkspaceTest {
-  private val chat = FakeExecutionChatRepository()
+  private val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
   private val details = FakeWorkDetailRepository()
   private val controls = FakeWorkControlRepository()
   private val panes = ShellPanes()
@@ -375,5 +376,32 @@ class ChatWorkspaceTest {
     assertEquals(ChatMessage.Notice(GONE_NOTICE), transcript.last())
     assertTrue(transcript.none { it == ChatMessage.Operator("hello?") })
     assertEquals(1, chat.requests.size)
+  }
+
+  // A switch that kept the old session id would resume a Claude session in Codex, or send Codex only a diff it never saw the base of.
+  @Test
+  fun `switching agents resolves the new agent and opens a new session with the full snapshot`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.agentFor = { ChatAgent(it, "gpt-5", "high") }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val opening = chat.requests.single()
+
+    workspace.switchAgent(item.id, "codex")
+    runCurrent()
+    workspace.send(item.id, "what failed?")
+    runCurrent()
+
+    assertEquals(listOf("codex"), chat.agentForCalls)
+    assertEquals(listOf("claude", "codex"), workspace.agents)
+    val next = chat.requests.last()
+    assertEquals(ChatAgent("codex", "gpt-5", "high"), next.agent)
+    assertTrue(next.firstTurn)
+    assertTrue(next.sessionId != opening.sessionId && next.sessionId == session.sessionId)
+    assertEquals(opening.prompt.removeSuffix(openingInstruction(classify(item))) + "what failed?", next.prompt)
+    assertTrue(session.transcript.value.any { it is ChatMessage.Notice && "codex · gpt-5 · high" in it.text })
   }
 }

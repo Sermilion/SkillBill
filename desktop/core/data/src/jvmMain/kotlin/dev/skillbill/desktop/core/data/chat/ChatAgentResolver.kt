@@ -21,6 +21,10 @@ internal class ChatAgentResolver(
       ?: (runOptions?.agentId?.takeIf(String::isNotBlank) ?: runOptions?.agentChoices?.firstOrNull(String::isNotBlank))
         ?.also { diagnostics.record("chat.agent_fallback") }
       ?: return null
+    return forAgent(agentId)
+  }
+
+  suspend fun forAgent(agentId: String): ChatAgent {
     val document = (machineConfig() as? ConfigRead.Document)?.document as? ConfigDocument.Present
     val directive = document?.values?.executionMatrix?.agents?.get(agentId)?.get(Tier.REASONING)
     if (directive == null) diagnostics.record("chat.matrix_fallback")

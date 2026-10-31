@@ -24,4 +24,16 @@ interface ChatTransportBindings {
   @Provides
   @IntoSet
   fun claude(transport: ClaudeChatTransport): ChatTransport = transport
+
+  @Provides
+  @IntoSet
+  fun codex(transport: CodexChatTransport): ChatTransport = transport
+
+  @Provides
+  @IntoSet
+  fun cursor(transport: CursorChatTransport): ChatTransport = transport
+
+  @Provides
+  @IntoSet
+  fun junie(transport: JunieChatTransport): ChatTransport = transport
 }

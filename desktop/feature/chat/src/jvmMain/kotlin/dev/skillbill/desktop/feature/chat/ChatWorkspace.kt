@@ -78,6 +78,9 @@ class ChatWorkspace(
     scope.launch { snapshotFlow { panes.chatOpen }.collect { open -> if (!open && paneState.value) setPaneOpen(false) } }
   }
 
+  /** The agents a chat can switch to. */
+  val agents: List<String> = chat.agents()
+
   fun session(id: String): ChatSession? = sessions[id]
 
   override fun toggleChat(item: WorkItem?) {
@@ -212,6 +215,23 @@ class ChatWorkspace(
       val stoppedRead = turns.accept(session, stopped) ?: return@launchTurn
       resumeAfter(currentCoroutineContext().job, id, stoppedRead.header)
       turns.turn(session, stoppedRead, ChatPermissionMode.Act, text, prefix = ACT_PREFIX)
+    }
+  }
+
+  /**
+   * Moves [id]'s chat to [agentId] with that agent's reasoning model, or its CLI default when the config sets none. The next
+   * turn opens a new agent session with the full snapshot. Ignored while a turn runs or when [agentId] is already in use.
+   */
+  fun switchAgent(id: String, agentId: String) {
+    val session = sessions[id] ?: return
+    if (session.busyState.value || session.agentState.value?.agentId == agentId) return
+    session.busyState.value = true
+    launchTurn(session) {
+      val agent = chat.agentFor(agentId)
+      session.agentState.value = agent
+      session.agentSupportedState.value = chat.supports(agentId)
+      session.restart(UUID.randomUUID().toString())
+      session.append(ChatMessage.Notice("Switched to ${chipText(agent)}. Its next turn starts a new conversation with the current execution state."))
     }
   }
 

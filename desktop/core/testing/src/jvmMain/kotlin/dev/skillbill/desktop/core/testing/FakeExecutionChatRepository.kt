@@ -25,6 +25,17 @@ class FakeExecutionChatRepository(
     return agent
   }
 
+  /** What [agentFor] answers; by default the agent with the CLI's model. */
+  var agentFor: (String) -> ChatAgent = { ChatAgent(it, null, null) }
+  val agentForCalls: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+  override suspend fun agentFor(agentId: String): ChatAgent {
+    agentForCalls += agentId
+    return agentFor.invoke(agentId)
+  }
+
+  override fun agents(): List<String> = supported.sorted()
+
   override fun supports(agentId: String): Boolean = agentId in supported
 
   override fun send(request: ChatTurnRequest): Flow<ChatEvent> {

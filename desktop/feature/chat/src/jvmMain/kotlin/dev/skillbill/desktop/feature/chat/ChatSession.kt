@@ -14,12 +14,13 @@ import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
 
 /**
- * One execution's chat. [sessionId] names the agent CLI session; [job] parents every turn, so cancelling it ends the turn's
- * process. [delivered] is the snapshot the agent last received and the base of the next diff.
+ * One execution's chat. [sessionId] names the agent CLI session and changes when the operator switches agents; [job] parents
+ * every turn, so cancelling it ends the turn's process. [delivered] is the snapshot the agent last received and the base of
+ * the next diff.
  */
 class ChatSession internal constructor(
   initial: WorkItem,
-  val sessionId: String,
+  sessionId: String,
   internal val job: Job,
   private val clock: Clock = Clock.System,
 ) {
@@ -34,8 +35,18 @@ class ChatSession internal constructor(
       headerState.value = value
     }
 
+  var sessionId: String = sessionId
+    private set
+
   internal var delivered: ExecutionSnapshot? = null
   internal var started: Boolean = false
+
+  /** The next turn opens [newSessionId] and sends the full snapshot, as a first turn does. */
+  internal fun restart(newSessionId: String) {
+    sessionId = newSessionId
+    delivered = null
+    started = false
+  }
 
   private val messages = MutableStateFlow<List<ChatMessage>>(emptyList())
   val transcript: StateFlow<List<ChatMessage>> = messages.asStateFlow()

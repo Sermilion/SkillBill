@@ -13,6 +13,12 @@ interface ExecutionChatRepository {
   /** The execution's agent and its reasoning model, or null when no agent is known. */
   suspend fun resolveAgent(item: WorkItem, detail: Detail?, runOptions: RunOptions?): ChatAgent?
 
+  /** [agentId] with its reasoning model from the machine config, or the CLI's own default when the config sets none. */
+  suspend fun agentFor(agentId: String): ChatAgent
+
+  /** The agent ids a chat can run on, in a stable order. */
+  fun agents(): List<String>
+
   fun supports(agentId: String): Boolean
 
   /** A cold flow that runs one turn per collection and never throws to its collector; cancelling the collection ends the turn. */

@@ -81,7 +81,7 @@ internal fun ModeBadge(mode: ChatPermissionMode, pause: Boolean = false) {
   val hint = when {
     pause -> "Pauses the running execution, acts, then resumes it"
     mode == ChatPermissionMode.Act -> "The agent may change files and the remote"
-    else -> "The agent can inspect but never writes"
+    else -> "The execution is running; changes can collide with it"
   }
   SbTooltip(hint) {
     BasicText(
