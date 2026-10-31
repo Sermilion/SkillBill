@@ -37,6 +37,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -115,7 +116,22 @@ class GoalRunnerFinalization(
       noChangeFinalization(finalState.manifest, request, attempted)?.also { assessmentGate.skipNoChanges(finalState) }
         ?: publication.publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
-    assessmentGate.run(finalState, request)
+    val assessment = assessmentGate.run(finalState, request)
+    GoalAssessmentLoopRules.publicationBlockReason(assessment)?.let { reason ->
+      return stopped(
+        StoppedReportArgs(
+          issueKey = finalState.manifest.issueKey,
+          attempted = attempted,
+          subtaskId = 0,
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason =
+            reason +
+              " Resume explicitly with skill-bill goal resume ${request.issueKey} before running the goal again.",
+          workflowId = finalState.parentWorkflowId,
+          lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
+        ),
+      )
+    }
     return finalizeValidatedPublication(finalState, request, attempted)
   }
 

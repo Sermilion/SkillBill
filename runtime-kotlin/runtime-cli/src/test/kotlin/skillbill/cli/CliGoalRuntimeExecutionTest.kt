@@ -180,7 +180,7 @@ class CliGoalRuntimeExecutionTest {
     assertContains(result.stdout, "2/2 subtasks complete; pending=0; blocked=0")
     assertContains(result.stdout, "PR https://github.com/example/skill-bill/pull/901")
     assertContains(result.stdout, "Monitoring:\nPublished change: ")
-    assertContains(result.stdout, "CI result: CI passed for published commit 'test-commit'")
+    assertContains(result.stdout, "CI result: CI passed for published commit '${"1".repeat(40)}'")
     assertEquals(5, result.stdout.lines().count { it.isNotBlank() })
     assertEquals(listOf(1, 2), launcher.childLaunches.map { it.skillRunRequest.subtaskId })
     assertContains(liveStdout.toString(), "goal SKILL-901: launched runtime executable=")

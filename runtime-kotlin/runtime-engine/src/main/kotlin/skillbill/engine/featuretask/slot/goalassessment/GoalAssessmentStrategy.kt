@@ -49,7 +49,9 @@ class GoalAssessmentStrategy : PhaseStrategy() {
     const val ID = "goal-assessment"
 
     private const val DIRECTIVE: String =
-      "Assess the finished goal as a read-only reviewer. Do not modify repository files, commit, or push. " +
+      "When the operator instructions ask for a repair plan, produce that plan as ordinary prose, " +
+        "without editing files or running builds or tests. Otherwise assess the finished goal as a read-only " +
+        "reviewer. Do not modify repository files, commit, or push. " +
         "The operator instructions carry the parent spec, every subtask spec, the declared interaction " +
         "scenarios and transitional regressions, and the commit range each subtask produced. They are the " +
         "only evidence about intent. Judge each criterion against its spec in the code at the head commit, " +

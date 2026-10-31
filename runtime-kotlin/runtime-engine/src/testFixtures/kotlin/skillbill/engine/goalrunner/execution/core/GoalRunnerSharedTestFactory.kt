@@ -41,6 +41,7 @@ import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.engine.goalrunner.status.GoalRunnerStatusControlVerbs
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -83,7 +84,11 @@ internal object NoopGoalRunnerAssessmentGate : GoalRunnerAssessmentGate {
   override fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): GoalAssessmentRecord = GoalAssessmentRecord(state.manifest.issueKey)
+  ): GoalAssessmentRecord =
+    GoalAssessmentRecord(
+      state.manifest.issueKey,
+      exitReason = GoalAssessmentExitReason.CONVERGED,
+    )
 
   override fun skipNoChanges(state: GoalRunnerManifestState) = Unit
 }
@@ -145,6 +150,7 @@ fun testGoalRunnerStatusService(
         TestRepositoryEnclosingRoot,
         ports.diagnostics,
         repairCoordinator,
+        outcomeStore,
       ),
     repairCoordinator = repairCoordinator,
     acceptanceCoordinator = GoalRunnerAcceptanceCoordinator(manifestStore, ports.gitOperations, clock),

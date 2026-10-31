@@ -22,6 +22,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdoptionComposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -193,7 +194,7 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
     val remaining = (payload[Keys.UNSUCCESSFUL_REMAINING] as Number).toInt()
     val position = (payload[Keys.QUEUE_POSITION] as Number).toInt()
     val size = (payload[Keys.QUEUE_SIZE] as Number).toInt()
-    if (used + remaining != AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES) {
+    if (used + remaining != FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES) {
       return "handoff unsuccessful budget does not total three."
     }
     if (position > size) return "handoff queue position exceeds queue size."

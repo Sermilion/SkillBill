@@ -9,59 +9,30 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionResult
 import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionState
 import skillbill.goalrunner.assessment.model.GoalAssessmentRound
-import skillbill.goalrunner.assessment.model.GoalAssessmentRoundDecision
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
+import skillbill.workflow.model.repair.FocusedRepairAction
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSeverity
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class GoalAssessmentLoopRulesTest {
   @Test
-  fun `a confirmed Major from the current round is fixed and the loop continues`() {
-    val record = recordOf(round(1, finding()))
+  fun `open source defects prevent publication even when the exit claims convergence`() {
+    val record = recordOf(round(1, finding())).copy(exitReason = GoalAssessmentExitReason.CONVERGED)
 
-    assertEquals(GoalAssessmentRoundDecision(fix = true, exit = null), GoalAssessmentLoopRules.decide(record, 1))
+    assertEquals(FocusedRepairAction.Plan("GA-001"), GoalAssessmentLoopRules.next(record))
+    assertTrue(GoalAssessmentLoopRules.publicationBlockReason(record).orEmpty().contains("GA-001"))
   }
 
   @Test
-  fun `a confirmed Major that survived two fix rounds exits as persistent without another fix`() {
-    val record = recordOf(round(1), round(2), round(3, finding(originRound = 1, fixRoundsSurvived = 2)))
-
-    assertEquals(
-      GoalAssessmentRoundDecision(fix = false, exit = GoalAssessmentExitReason.PERSISTENT_FINDING),
-      GoalAssessmentLoopRules.decide(record, 3),
-    )
-  }
-
-  @Test
-  fun `a confirmed Major in the cap round still gets its fix and then exits at the cap`() {
-    val record = recordOf(round(1), round(2), round(3, finding(originRound = 3)))
-
-    assertEquals(
-      GoalAssessmentRoundDecision(fix = true, exit = GoalAssessmentExitReason.ROUND_CAP),
-      GoalAssessmentLoopRules.decide(record, 3),
-    )
-  }
-
-  @Test
-  fun `no confirmed Major converges without a fix`() {
-    val unverified = finding(verification = GoalAssessmentVerification.UNVERIFIED)
-    val refuted = finding(ref = "GA-002", state = GoalAssessmentFindingState.FIXED)
-
-    assertEquals(
-      GoalAssessmentRoundDecision(fix = false, exit = GoalAssessmentExitReason.CONVERGED),
-      GoalAssessmentLoopRules.decide(recordOf(round(1, unverified, refuted)), 1),
-    )
-  }
-
-  @Test
-  fun `a not restored regression alone gets one fix before the loop converges`() {
+  fun `an unrestored regression cannot be accepted without independent verification`() {
     val regression = GoalAssessmentRegressionResult("TR-001", GoalAssessmentRegressionState.NOT_RESTORED, "src/A.kt:3")
+    val record = recordOf(round(1, regressions = listOf(regression)))
 
-    assertEquals(
-      GoalAssessmentRoundDecision(fix = true, exit = GoalAssessmentExitReason.CONVERGED),
-      GoalAssessmentLoopRules.decide(recordOf(round(1, regressions = listOf(regression))), 1),
-    )
+    assertEquals(FocusedRepairAction.Plan("TR-001"), GoalAssessmentLoopRules.next(record))
+    assertNotNull(GoalAssessmentLoopRules.publicationBlockReason(record))
   }
 
   private fun recordOf(vararg rounds: GoalAssessmentRound) =

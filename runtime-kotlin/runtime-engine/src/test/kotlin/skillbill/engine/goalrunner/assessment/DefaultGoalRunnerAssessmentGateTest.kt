@@ -55,14 +55,14 @@ class DefaultGoalRunnerAssessmentGateTest {
         }
       }
 
-    val result = fixture.assess()
+    val result =
+      assertIs<GoalAssessmentRoundResult.Unavailable>(fixture.gate().runRound(fixture.state(), fixture.request(), 1))
 
     val round = result.record.rounds.single()
     val verifierRun = round.assessorRuns.single { it.role == GoalAssessmentRole.VERIFIER }
     assertEquals(GoalAssessmentRunStatus.FAILED, verifierRun.status)
     assertEquals(GoalAssessmentVerification.UNVERIFIED, round.findings.single().verification)
     assertEquals(listOf("GA-001"), result.record.openFindingRefs)
-    assertTrue(result.fixSet.isEmpty)
     assertTrue(fixture.diagnostics.warnings.any { "the verifier" in it }, fixture.diagnostics.warnings.toString())
   }
 
@@ -70,16 +70,25 @@ class DefaultGoalRunnerAssessmentGateTest {
   fun `a re-entered round skips the recorded assessor run and adds no duplicate finding`() {
     val recorded = recordedFirstSubtaskRound()
     val store = AssessmentOutcomeStore(GoalAssessmentRecordRead.Recorded(recorded))
-    val fixture = GoalAssessmentGateFixture(home, store) { NO_FINDING }
+    val fixture =
+      GoalAssessmentGateFixture(home, store) { call ->
+        if (call == AssessmentCall.VERIFIER) "Verify GA-001: confirmed evidence src/Feature.kt:4" else NO_FINDING
+      }
 
     val result = fixture.assess()
 
-    assertEquals(listOf(AssessmentCall.SECOND_SUBTASK, AssessmentCall.CROSS_SUBTASK), fixture.calls)
+    assertEquals(
+      listOf(AssessmentCall.SECOND_SUBTASK, AssessmentCall.CROSS_SUBTASK, AssessmentCall.VERIFIER),
+      fixture.calls,
+    )
     val round = result.record.rounds.single()
-    assertEquals(recorded.rounds.single().findings, round.findings)
+    assertEquals(recorded.rounds.single().findings.single().findingRef, round.findings.single().findingRef)
     val expectedRuns =
       listOf(GoalAssessmentRole.SUBTASK to 1, GoalAssessmentRole.SUBTASK to 2, GoalAssessmentRole.CROSS_SUBTASK to null)
-    assertEquals(expectedRuns, round.assessorRuns.map { it.role to it.subtaskId })
+    assertEquals(
+      expectedRuns + (GoalAssessmentRole.VERIFIER to null),
+      round.assessorRuns.map { it.role to it.subtaskId },
+    )
   }
 
   private fun GoalAssessmentGateFixture.assess(): GoalAssessmentRoundResult.Assessed =
@@ -118,7 +127,7 @@ class DefaultGoalRunnerAssessmentGateTest {
       guardedRef = null,
       subtaskId = 1,
       originRound = 1,
-      verification = GoalAssessmentVerification.NOT_REQUIRED,
+      verification = GoalAssessmentVerification.UNVERIFIED,
       verificationEvidence = "",
       fixRoundsSurvived = 0,
       disposition = GoalAssessmentDisposition.PR_ONLY,

@@ -6,6 +6,10 @@ import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
+import skillbill.workflow.model.repair.FocusedRepairAction
+import skillbill.workflow.model.repair.FocusedRepairStage
+import skillbill.workflow.model.repair.FocusedRepairStrategy
+import skillbill.workflow.model.repair.RepairTargetProgress
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
@@ -31,29 +35,14 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
       )
 
   fun resume(context: FeatureTaskRuntimeRunLoopContext): String? {
-    val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
-    val state = scope.snapshot ?: return null
+    val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    val state = scope?.snapshot ?: return null
     val steps = scope.steps
     val settled = state.stage == AcceptanceCriterionRepairStage.ACCEPTED
     val tracePending = state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED
     val leftAudit = !tracePending && context.hasLeftSlot(PhaseSlot.AUDIT)
     if (steps == null || settled || leftAudit) return null
-    val target =
-      if (state.pendingClarificationQuestion != null) {
-        steps.audit
-      } else {
-        when (state.stage) {
-          AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED ->
-            if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) {
-              steps.audit
-            } else {
-              steps.planning
-            }
-          AcceptanceCriterionRepairStage.REPAIR_RESERVED ->
-            steps.repair
-          else -> steps.audit
-        }
-      }
+    val target = nextStep(state, steps) ?: return null
     val reopened =
       if (target == steps.planning) {
         listOf(target, steps.repair, steps.audit)
@@ -97,18 +86,7 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     state: AcceptanceCriterionRepairState,
     steps: AcceptanceCriterionRepairStepRoles,
   ): Routing {
-    val target =
-      when (state.stage) {
-        AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED ->
-          if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) {
-            steps.audit
-          } else {
-            steps.planning
-          }
-        AcceptanceCriterionRepairStage.REPAIR_RESERVED ->
-          if (state.pendingClarificationQuestion != null) steps.audit else steps.repair
-        else -> steps.audit
-      }
+    val target = nextStep(state, steps) ?: return Routing.Continue
     if (target == steps.planning) {
       if (!FeatureTaskRuntimeRunLoopCheckpointRemediation.establishRemediationCheckpoint(
           context,
@@ -129,6 +107,34 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
       context.runState.coupledRunTransitions.reenterAcceptanceSteps(listOf(target))
     }
     return Routing.Reenter(target)
+  }
+
+  private fun nextStep(
+    state: AcceptanceCriterionRepairState,
+    steps: AcceptanceCriterionRepairStepRoles,
+  ): String? {
+    val stage =
+      when {
+        state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> FocusedRepairStage.DISCOVERY
+        state.pendingClarificationQuestion != null -> FocusedRepairStage.VERIFICATION
+        state.stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED ->
+          if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) {
+            FocusedRepairStage.DISCOVERY
+          } else {
+            FocusedRepairStage.PLANNING
+          }
+        state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED -> FocusedRepairStage.IMPLEMENTATION
+        else -> FocusedRepairStage.VERIFICATION
+      }
+    val refs = (state.pendingAuditRefs + state.unresolvedQueue).distinct()
+    val targets = refs.map { RepairTargetProgress(it, state.unsuccessfulTotals.getOrDefault(it, 0)) }
+    return when (FocusedRepairStrategy.next(targets, stage)) {
+      FocusedRepairAction.Discover, is FocusedRepairAction.Verify -> steps.audit
+      is FocusedRepairAction.Plan -> steps.planning
+      is FocusedRepairAction.Implement -> steps.repair
+      is FocusedRepairAction.Blocked -> steps.audit
+      FocusedRepairAction.Accepted -> null
+    }
   }
 
   fun reviewEntryBlockReason(

@@ -500,7 +500,12 @@ internal class GoalFixtureAgentRunLauncher(
         ?: "preplan"
     return agentRunLaunchFacts(
       agent = SupportedAgent.CODEX,
-      stdout = phasePlanningPayload(phaseId),
+      stdout =
+        if ("# Goal assessment:" in skillRequest.promptOverride.orEmpty()) {
+          "Finding: none"
+        } else {
+          phasePlanningPayload(phaseId)
+        },
       stderr = "",
     )
   }
@@ -899,10 +904,15 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
   override fun createCommit(
     repoRoot: Path,
     message: String,
-  ): WorkflowGitCommitResult = WorkflowGitCommitResult.Committed(commitSha = "test-commit")
+  ): WorkflowGitCommitResult = WorkflowGitCommitResult.Committed(commitSha = "1".repeat(40))
 
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
-    WorkflowGitOperationResult.Ok(value = "test-commit")
+    WorkflowGitOperationResult.Ok(value = "1".repeat(40))
+
+  override fun mergeBaseWithHead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "0".repeat(40))
 
   override fun runtimePhaseHeadCommit(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "1".repeat(40))

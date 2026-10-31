@@ -851,6 +851,11 @@ internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
 }
 
 internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun prepareGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
+    readGoalAssessmentRecord(parentWorkflowId)
+
+  override fun reopenGoalAssessmentForOperatorResume(parentWorkflowId: String): Boolean = false
+
   override fun recordGoalFinalRepairOutput(
     parentWorkflowId: String,
     expectedInvocationId: String,

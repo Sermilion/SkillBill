@@ -11,8 +11,9 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 data class GoalAssessmentFixSet(
   val findingRefs: List<String>,
   val regressionRefs: List<String>,
+  val scenarioRefs: List<String> = emptyList(),
 ) {
-  val isEmpty: Boolean get() = findingRefs.isEmpty() && regressionRefs.isEmpty()
+  val isEmpty: Boolean get() = findingRefs.isEmpty() && regressionRefs.isEmpty() && scenarioRefs.isEmpty()
 }
 
 internal object GoalAssessmentVerdicts {
@@ -64,21 +65,14 @@ internal object GoalAssessmentVerdicts {
       GoalAssessmentVerifierCandidate(it.findingRef, it.path, it.line, it.failureScenario)
     }
 
-  fun withDispositions(findings: List<GoalAssessmentFinding>): List<GoalAssessmentFinding> {
-    val open = findings.filter { it.state == GoalAssessmentFindingState.OPEN }
-    val confirmedPaths =
-      open.filter { it.verification == GoalAssessmentVerification.CONFIRMED }.map { it.path.removePrefix("./") }
-    return findings.map { finding ->
+  fun withDispositions(findings: List<GoalAssessmentFinding>): List<GoalAssessmentFinding> =
+    findings.map { finding ->
       val fix =
-        when {
-          finding.state != GoalAssessmentFindingState.OPEN -> false
-          finding.kind == GoalAssessmentFindingKind.DEFECT && finding.severity.blocksAdvance ->
-            finding.verification == GoalAssessmentVerification.CONFIRMED
-          else -> finding.path.removePrefix("./") in confirmedPaths
-        }
+        finding.state == GoalAssessmentFindingState.OPEN &&
+          finding.kind == GoalAssessmentFindingKind.DEFECT &&
+          finding.verification == GoalAssessmentVerification.CONFIRMED
       finding.copy(disposition = if (fix) GoalAssessmentDisposition.FIX else GoalAssessmentDisposition.PR_ONLY)
     }
-  }
 
   fun fixSetOf(rounds: List<GoalAssessmentRound>): GoalAssessmentFixSet =
     GoalAssessmentFixSet(
@@ -107,12 +101,10 @@ internal object GoalAssessmentVerdicts {
 
   private fun isCarried(finding: GoalAssessmentFinding): Boolean =
     finding.kind == GoalAssessmentFindingKind.DEFECT &&
-      finding.severity.blocksAdvance &&
       finding.verification == GoalAssessmentVerification.CONFIRMED &&
       finding.state == GoalAssessmentFindingState.OPEN
 
   private fun needsVerdict(finding: GoalAssessmentFinding): Boolean =
     finding.kind == GoalAssessmentFindingKind.DEFECT &&
-      finding.severity.blocksAdvance &&
       finding.verification == GoalAssessmentVerification.UNVERIFIED
 }

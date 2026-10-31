@@ -213,6 +213,7 @@ data class GoalRunnerQaFinding(
 )
 
 enum class GoalRunnerAssessmentState(val wireValue: String) {
+  BLOCKED("blocked"),
   PENDING("pending"),
   RUNNING("running"),
   COMPLETED("completed"),

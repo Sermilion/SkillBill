@@ -16,8 +16,8 @@ object GoalAssessmentRecordShape {
   fun issues(record: GoalAssessmentRecord): List<GoalAssessmentRecordIssue> =
     buildList {
       if (record.issueKey.isBlank()) add(GoalAssessmentRecordIssue(Keys.ISSUE_KEY, "must not be blank."))
-      if (record.rounds.size > GoalAssessmentRecord.MAX_ROUNDS) {
-        add(GoalAssessmentRecordIssue(Keys.ROUNDS, "at most ${GoalAssessmentRecord.MAX_ROUNDS} rounds are allowed."))
+      if (record.budgetStartRound !in 1..record.rounds.size + 1) {
+        add(GoalAssessmentRecordIssue(Keys.BUDGET_START_ROUND, "must name a recorded round or the next round."))
       }
       record.rounds.forEachIndexed { index, round -> addAll(roundIssues("${Keys.ROUNDS}[$index]", index + 1, round)) }
       addAll(duplicateFindingRefIssues(record))
@@ -38,6 +38,12 @@ object GoalAssessmentRecordShape {
       }
       if (round.scopeFiles.any(String::isBlank)) {
         add(GoalAssessmentRecordIssue("$path.${Keys.SCOPE_FILES}", "must not hold blank paths."))
+      }
+      if (round.targetRef != null && !TARGET_REF.matches(round.targetRef)) {
+        add(GoalAssessmentRecordIssue("$path.${Keys.TARGET_REF}", "must name a finding, scenario or regression."))
+      }
+      if (round.repairPlan?.isBlank() == true || round.repairPlan != null && round.targetRef == null) {
+        add(GoalAssessmentRecordIssue("$path.${Keys.REPAIR_PLAN}", "must be a nonblank plan for a selected target."))
       }
       addAll(runIssues(path, round))
       round.findings.forEachIndexed { index, finding ->
@@ -116,9 +122,9 @@ object GoalAssessmentRecordShape {
       if ((finding.subtaskId ?: 1) < 1) issue(Keys.SUBTASK_ID, "must be a positive subtask id or null.")
       if (finding.originRound !in 1..roundNumber) issue(Keys.ORIGIN_ROUND, "must be a recorded round up to this one.")
       if (finding.fixRoundsSurvived < 0) issue(Keys.FIX_ROUNDS_SURVIVED, "must not be negative.")
-      val needsVerdict = finding.kind == GoalAssessmentFindingKind.DEFECT && finding.severity.blocksAdvance
+      val needsVerdict = finding.kind == GoalAssessmentFindingKind.DEFECT
       if (needsVerdict == (finding.verification == GoalAssessmentVerification.NOT_REQUIRED)) {
-        issue(Keys.VERIFICATION, "must be not_required exactly for minor and test-value findings.")
+        issue(Keys.VERIFICATION, "must be not_required exactly for test-value findings.")
       }
       val refuted = finding.verification == GoalAssessmentVerification.REFUTED
       if (refuted != (finding.state == GoalAssessmentFindingState.REFUTED)) {
@@ -168,6 +174,7 @@ object GoalAssessmentRecordShape {
     }
   }
 
+  private val TARGET_REF = Regex("(GA|IS|TR)-[0-9]{3}")
   private val HEAD_SHA = Regex("[a-fA-F0-9]{7,64}")
   private val FINDING_REF = Regex("GA-[0-9]{3}")
   private val SCENARIO_REF = Regex("IS-[0-9]{3}")

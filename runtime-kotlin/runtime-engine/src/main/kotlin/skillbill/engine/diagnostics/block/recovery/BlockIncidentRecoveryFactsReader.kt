@@ -11,6 +11,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
@@ -180,7 +181,7 @@ internal object BlockIncidentRecoveryFactsReader {
 
   private fun AcceptanceCriterionRepairState.exhaustedUnresolvedCriterion(): Boolean =
     unresolvedQueue.any {
-      unsuccessfulTotals.getOrDefault(it, 0) >= AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
+      unsuccessfulTotals.getOrDefault(it, 0) >= FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES
     }
 
   private val PENDING_VERDICT_STAGES =

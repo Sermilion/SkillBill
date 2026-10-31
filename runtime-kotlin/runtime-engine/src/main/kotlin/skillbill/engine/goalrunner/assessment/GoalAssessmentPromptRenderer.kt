@@ -70,6 +70,14 @@ internal object GoalAssessmentPromptRenderer {
         is GoalAssessmentFocus.Subtask -> subtaskRole(bundle, focus.subtaskId) + reassessmentText(bundle)
         GoalAssessmentFocus.CrossSubtask -> CROSS_SUBTASK_ROLE + reassessmentText(bundle)
         is GoalAssessmentFocus.Verifier -> verifierRole(focus.candidates)
+        is GoalAssessmentFocus.Scenario ->
+          "Independently verify only scenario ${focus.ref} after its repair. Read source at HEAD and report " +
+            "one Scenario ${focus.ref}: <holds|broken> evidence <path:line citations> line. " +
+            "Do not re-audit accepted items or discover unrelated defects."
+        is GoalAssessmentFocus.Regression ->
+          "Independently verify only regression ${focus.ref} after its repair. Read source at HEAD and report " +
+            "one Regression ${focus.ref}: <restored|not_restored> evidence <path:line citations> line. " +
+            "Do not re-audit accepted items or discover unrelated defects."
       }
 
   private fun reassessmentText(bundle: GoalAssessmentBundle): String =

@@ -3,7 +3,6 @@ package skillbill.engine.goalrunner.assessment
 import org.junit.jupiter.api.io.TempDir
 import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
-import skillbill.engine.goalrunner.qa.GoalPostChangeValidationResult
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
@@ -27,110 +26,83 @@ class GoalAssessmentLoopTest {
   @TempDir lateinit var home: Path
 
   @Test
-  fun `a Major that survives two committed fixes exits as persistent and is scoped to the fix files`() {
+  fun `each finding gets three attempts and independent verification without repeating discovery`() {
+    var verifications = 0
     val fixture =
       GoalAssessmentGateFixture(home, fixedWorktreeStatus = " M src/Feature.kt") { call ->
         when (call) {
-          AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
-          AssessmentCall.VERIFIER -> CONFIRM_FIRST
-          AssessmentCall.FIX -> "GA-001: fixed: src/Feature.kt guards the first call"
+          AssessmentCall.FIRST_SUBTASK ->
+            MAJOR_FINDING +
+              "\nFinding: Minor src/Feature.kt:20 scenario The handler drops the second call"
+          AssessmentCall.VERIFIER ->
+            when (++verifications) {
+              1 -> "$CONFIRM_FIRST\n${verdict(2, "confirmed")}"
+              2, 3 -> CONFIRM_FIRST
+              4 -> REFUTE_FIRST
+              5, 6 -> verdict(2, "confirmed")
+              else -> verdict(2, "refuted")
+            }
+          AssessmentCall.PLAN -> "Repair the selected handler and its sibling production paths."
+          AssessmentCall.FIX -> "fixed: src/Feature.kt handles the selected call"
           else -> NO_FINDING
         }
       }
 
     val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertEquals(7, record.rounds.size)
+    assertEquals(
+      listOf("GA-001", "GA-001", "GA-001", "GA-002", "GA-002", "GA-002", null),
+      record.rounds.map {
+        it.targetRef
+      },
+    )
+    assertEquals(6, fixture.calls.count { it == AssessmentCall.FIX })
+    assertEquals(6, fixture.calls.count { it == AssessmentCall.PLAN })
+    assertEquals(1, fixture.calls.count { it == AssessmentCall.FIRST_SUBTASK })
+    assertEquals(1, fixture.calls.count { it == AssessmentCall.SECOND_SUBTASK })
+    assertEquals(1, fixture.calls.count { it == AssessmentCall.CROSS_SUBTASK })
+    assertEquals(emptyList(), record.openFindingRefs)
+    assertTrue(record.rounds.flatMap { it.findings }.all { it.state == GoalAssessmentFindingState.FIXED })
+    assertTrue(fixture.prompts.getValue(AssessmentCall.FIX).contains("Repair the selected handler"))
+  }
+
+  @Test
+  fun `three no change repairs block and a reload preserves the exhausted budget`() {
+    val fixture =
+      GoalAssessmentGateFixture(home) { call ->
+        when (call) {
+          AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
+          AssessmentCall.VERIFIER -> CONFIRM_FIRST
+          AssessmentCall.FIX -> "GA-001: not fixed: the implementation is unfinished"
+          else -> NO_FINDING
+        }
+      }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val launches = fixture.calls.toList()
+    val reloaded = fixture.gate().run(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.PERSISTENT_FINDING, record.exitReason)
-    assertEquals(listOf("GA-001"), record.openFindingRefs)
-    assertEquals(listOf("GA-001"), record.rounds.flatMap { it.findings }.map { it.findingRef })
-    assertEquals(2, record.rounds.flatMap { it.findings }.single().fixRoundsSurvived)
-    assertEquals(
-      listOf("SKILL-442: goal assessment round 1", "SKILL-442: goal assessment round 2"),
-      fixture.git.createCommitMessages,
-    )
-    val scoped = listOf("src/Feature.kt")
-    assertEquals(listOf(emptyList(), scoped, scoped), record.rounds.map { it.scopeFiles })
-    val expectedCalls =
-      listOf(
-        AssessmentCall.FIRST_SUBTASK,
-        AssessmentCall.SECOND_SUBTASK,
-        AssessmentCall.CROSS_SUBTASK,
-        AssessmentCall.VERIFIER,
-        AssessmentCall.FIX,
-        AssessmentCall.FIRST_SUBTASK,
-        AssessmentCall.SECOND_SUBTASK,
-        AssessmentCall.VERIFIER,
-        AssessmentCall.FIX,
-        AssessmentCall.FIRST_SUBTASK,
-        AssessmentCall.SECOND_SUBTASK,
-        AssessmentCall.VERIFIER,
-      )
-    assertEquals(expectedCalls, fixture.calls)
+    assertEquals(3, fixture.calls.count { it == AssessmentCall.FIX })
+    assertEquals(4, fixture.calls.count { it == AssessmentCall.VERIFIER })
+    assertEquals(3, record.rounds.flatMap { it.findings }.single().fixRoundsSurvived)
+    assertEquals(record, reloaded)
+    assertEquals(launches, fixture.calls)
+    assertTrue(fixture.git.createCommitMessages.isEmpty())
   }
 
   @Test
-  fun `assessment and verifier prompts admit only material defects`() {
-    val fixture =
-      GoalAssessmentGateFixture(home, fixedWorktreeStatus = " M src/Feature.kt") { call ->
-        when (call) {
-          AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
-          AssessmentCall.VERIFIER -> CONFIRM_FIRST
-          AssessmentCall.FIX -> "GA-001: fixed: src/Feature.kt guards the first call"
-          else -> NO_FINDING
-        }
-      }
-
-    fixture.gate().run(fixture.state(), fixture.request())
-
-    listOf(AssessmentCall.FIRST_SUBTASK, AssessmentCall.CROSS_SUBTASK, AssessmentCall.VERIFIER).forEach { call ->
-      assertTrue(MATERIALITY_RULE in fixture.prompts.getValue(call), "$call prompt must carry the materiality rule")
-    }
-    assertTrue("Refute a candidate that is not material" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
-  }
-
-  @Test
-  fun `a new Major every round ends at the round cap after three commits`() {
-    var firstSubtaskCalls = 0
-    var verifierCalls = 0
-    val fixture =
-      GoalAssessmentGateFixture(home, fixedWorktreeStatus = " M src/Feature.kt") { call ->
-        when (call) {
-          AssessmentCall.FIRST_SUBTASK -> {
-            firstSubtaskCalls++
-            val line = 10 * firstSubtaskCalls
-            "Finding: Major src/Feature.kt:$line scenario The handler drops call $firstSubtaskCalls"
-          }
-          AssessmentCall.VERIFIER -> {
-            verifierCalls++
-            when (verifierCalls) {
-              1 -> CONFIRM_FIRST
-              2 -> "${verdict(1, "refuted")}\n${verdict(2, "confirmed")}"
-              else -> "${verdict(2, "refuted")}\n${verdict(3, "confirmed")}"
-            }
-          }
-          AssessmentCall.FIX -> "GA-00$firstSubtaskCalls: fixed: src/Feature.kt"
-          else -> NO_FINDING
-        }
-      }
-
-    val record = fixture.gate().run(fixture.state(), fixture.request())
-
-    assertEquals(GoalAssessmentExitReason.ROUND_CAP, record.exitReason)
-    assertEquals(3, record.rounds.size)
-    assertEquals((1..3).map { "SKILL-442: goal assessment round $it" }, fixture.git.createCommitMessages)
-    assertEquals(listOf("GA-003"), record.openFindingRefs)
-    val states = record.rounds.flatMap { it.findings }.associate { it.findingRef to it.state }
-    assertEquals(GoalAssessmentFindingState.FIXED, states.getValue("GA-001"))
-    assertEquals(GoalAssessmentFindingState.FIXED, states.getValue("GA-002"))
-  }
-
-  @Test
-  fun `a regression only round runs one fix with the regression and converges`() {
+  fun `a regression repair is independently checked and only converges when restored`() {
+    var checks = 0
     val fixture =
       GoalAssessmentGateFixture(home, fixedWorktreeStatus = " M src/Feature.kt") { call ->
         when (call) {
           AssessmentCall.CROSS_SUBTASK ->
             "$NO_FINDING\nRegression TR-001: not_restored evidence src/Feature.kt:3 the legacy path still runs"
+          AssessmentCall.REGRESSION_VERIFY ->
+            "Regression TR-001: ${if (++checks == 1) "not_restored" else "restored"} evidence src/Feature.kt:3"
           AssessmentCall.FIX -> "TR-001: fixed: src/Feature.kt removes the legacy path"
           else -> NO_FINDING
         }
@@ -139,85 +111,41 @@ class GoalAssessmentLoopTest {
     val record = fixture.gate().run(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
-    assertEquals(1, fixture.calls.count { it == AssessmentCall.FIX })
-    assertTrue("TR-001" in fixture.prompts.getValue(AssessmentCall.FIX))
-    assertEquals(listOf("SKILL-442: goal assessment round 1"), fixture.git.createCommitMessages)
+    assertEquals(2, fixture.calls.count { it == AssessmentCall.FIX })
+    assertEquals(2, checks)
+    assertEquals(null, record.rounds.last().fix)
   }
 
   @Test
-  fun `a failed validation is only a warning, the round commit stands and only the fixed subtask is reassessed`() {
-    var verifierCalls = 0
+  fun `a missing verifier verdict blocks instead of accepting an unverified defect`() {
     val fixture =
-      GoalAssessmentGateFixture(home, fixedWorktreeStatus = " M src/A.kt\n M src/B.kt") { call ->
-        when (call) {
-          AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
-          AssessmentCall.VERIFIER -> if (++verifierCalls == 1) CONFIRM_FIRST else REFUTE_FIRST
-          AssessmentCall.FIX -> "GA-001: fixed: src/A.kt and src/B.kt"
-          else -> NO_FINDING
-        }
+      GoalAssessmentGateFixture(home) { call ->
+        if (call == AssessmentCall.FIRST_SUBTASK) MAJOR_FINDING else NO_FINDING
       }
-    fixture.validationResult = GoalPostChangeValidationResult.Stopped("lint", "ktlint failed")
 
     val record = fixture.gate().run(fixture.state(), fixture.request())
 
-    val fix = assertNotNullFix(record.rounds.first())
-    assertEquals(GoalAssessmentFixValidation.FAILED, fix.validation)
-    assertEquals(1, fixture.validations)
-    assertTrue(fixture.diagnostics.warnings.any { "ktlint failed" in it }, fixture.diagnostics.warnings.toString())
-    assertEquals(listOf("SKILL-442: goal assessment round 1"), fixture.git.createCommitMessages)
-    assertEquals(listOf("src/A.kt", "src/B.kt"), fixture.git.stagePathsCalls)
-    assertEquals(listOf("src/A.kt", "src/B.kt"), record.rounds[1].scopeFiles)
-    assertEquals(
-      listOf(AssessmentCall.VERIFIER, AssessmentCall.FIX, AssessmentCall.FIRST_SUBTASK, AssessmentCall.VERIFIER),
-      fixture.calls.drop(3),
-    )
-    assertEquals(GoalAssessmentFindingState.FIXED, record.rounds.flatMap { it.findings }.single().state)
-    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
-    assertEquals(emptyList(), record.openFindingRefs)
+    assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, record.exitReason)
+    assertEquals(listOf("GA-001"), record.openFindingRefs)
+    assertTrue(AssessmentCall.FIX !in fixture.calls)
   }
 
   @Test
-  fun `a fix that changes nothing makes no commit and later rounds only re-verify the carried finding`() {
+  fun `assessment and verifier prompts admit only material defects`() {
     val fixture =
       GoalAssessmentGateFixture(home) { call ->
         when (call) {
           AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
-          AssessmentCall.VERIFIER -> CONFIRM_FIRST
-          AssessmentCall.FIX -> "GA-001: not fixed: the cause is outside this repository"
+          AssessmentCall.VERIFIER -> REFUTE_FIRST
           else -> NO_FINDING
         }
       }
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    fixture.gate().run(fixture.state(), fixture.request())
 
-    assertEquals(GoalAssessmentFixStatus.NO_CHANGE, assertNotNullFix(record.rounds.first()).status)
-    assertTrue(fixture.git.createCommitMessages.isEmpty())
-    assertEquals(3, fixture.calls.count { it == AssessmentCall.VERIFIER })
-    assertEquals(1, fixture.calls.count { it == AssessmentCall.FIRST_SUBTASK })
-    assertEquals(GoalAssessmentExitReason.PERSISTENT_FINDING, record.exitReason)
-  }
-
-  @Test
-  fun `resume continues after the last committed fix without a second commit or re-running the fix`() {
-    val store = AssessmentOutcomeStore(GoalAssessmentRecordRead.Recorded(committedTwoRoundRecord()))
-    val fixture =
-      GoalAssessmentGateFixture(home, store) { call ->
-        when (call) {
-          AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
-          AssessmentCall.VERIFIER -> CONFIRM_FIRST
-          else -> NO_FINDING
-        }
-      }
-    fixture.git.headCommitShaValue = SECOND_FIX_SHA
-
-    val record = fixture.gate().run(fixture.state(), fixture.request())
-
-    assertEquals(GoalAssessmentExitReason.PERSISTENT_FINDING, record.exitReason)
-    assertEquals(3, record.rounds.size)
-    assertEquals(listOf("src/Feature.kt"), record.rounds[2].scopeFiles)
-    assertEquals(listOf(FIRST_FIX_SHA, SECOND_FIX_SHA), record.rounds.take(2).map { it.fix?.commitSha })
-    assertTrue(fixture.git.createCommitMessages.isEmpty())
-    assertTrue(AssessmentCall.FIX !in fixture.calls)
+    listOf(AssessmentCall.FIRST_SUBTASK, AssessmentCall.CROSS_SUBTASK, AssessmentCall.VERIFIER).forEach { call ->
+      assertTrue(MATERIALITY_RULE in fixture.prompts.getValue(call))
+    }
   }
 
   @Test
@@ -241,7 +169,8 @@ class GoalAssessmentLoopTest {
     assertEquals(null, record.rounds.first().fix?.commitSha)
     assertTrue(fixture.git.createCommitMessages.isEmpty())
     assertTrue(fixture.diagnostics.warnings.any { "not the commit this round intended" in it })
-    assertEquals(emptyList(), record.rounds[1].scopeFiles)
+    assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, record.exitReason)
+    assertEquals(1, record.rounds.size)
   }
 
   @Test
@@ -268,9 +197,6 @@ class GoalAssessmentLoopTest {
     word: String,
   ) = "Verify GA-00$number: $word evidence src/Feature.kt:${10 * number}"
 
-  private fun assertNotNullFix(round: GoalAssessmentRound): GoalAssessmentFix =
-    checkNotNull(round.fix) { "Round ${round.round} recorded no fix." }
-
   private fun unrecordedCommitFixture(
     parentSha: String,
     changedPaths: List<String>,
@@ -292,6 +218,8 @@ class GoalAssessmentLoopTest {
         scenarios = emptyList(),
         regressions = emptyList(),
         fix = unrecorded,
+        targetRef = "GA-001",
+        repairPlan = "Repair the handler.",
       )
     val stored = GoalAssessmentRecordRead.Recorded(GoalAssessmentRecord("SKILL-442", listOf(round)))
     val fixture =
@@ -323,44 +251,11 @@ class GoalAssessmentLoopTest {
       state = GoalAssessmentFindingState.OPEN,
     )
 
-  private fun committedTwoRoundRecord(): GoalAssessmentRecord {
-    val finding = confirmedFinding(fixRoundsSurvived = 1)
-
-    fun committed(sha: String) =
-      GoalAssessmentFix(
-        GoalAssessmentFixStatus.COMPLETED,
-        listOf("src/Feature.kt"),
-        sha,
-        GoalAssessmentFixValidation.PASSED,
-      )
-    val first =
-      GoalAssessmentRound(
-        round = 1,
-        headSha = ASSESSMENT_HEAD_SHA,
-        scopeFiles = emptyList(),
-        assessorRuns = emptyList(),
-        findings = listOf(finding),
-        scenarios = emptyList(),
-        regressions = emptyList(),
-        fix = committed(FIRST_FIX_SHA),
-      )
-    val second =
-      first.copy(
-        round = 2,
-        headSha = FIRST_FIX_SHA,
-        scopeFiles = listOf("src/Feature.kt"),
-        findings = emptyList(),
-        fix = committed(SECOND_FIX_SHA),
-      )
-    return GoalAssessmentRecord("SKILL-442", listOf(first, second), openFindingRefs = listOf("GA-001"))
-  }
-
   private companion object {
     const val NO_FINDING = "Finding: none"
     const val MAJOR_FINDING = "Finding: Major src/Feature.kt:10 scenario The handler drops the first call"
     const val CONFIRM_FIRST = "Verify GA-001: confirmed evidence src/Feature.kt:10 drops the first call"
     const val REFUTE_FIRST = "Verify GA-001: refuted evidence src/Feature.kt:10 handles the first call"
     const val FIRST_FIX_SHA = "e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3"
-    const val SECOND_FIX_SHA = "f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4"
   }
 }

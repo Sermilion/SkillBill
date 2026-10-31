@@ -136,8 +136,7 @@ class DefaultGoalRunnerAssessmentGate(
     headSha: String,
   ): String? =
     when {
-      round !in 1..GoalAssessmentRecord.MAX_ROUNDS ->
-        "round $round is outside the ${GoalAssessmentRecord.MAX_ROUNDS} rounds a goal allows"
+      round < 1 -> "round $round must be positive"
       prior.rounds.size > round -> "round $round was superseded by round ${prior.rounds.size}"
       prior.rounds.size < round - 1 -> "round $round cannot start before round ${prior.rounds.size + 1}"
       existing != null && !existing.headSha.equals(headSha, ignoreCase = true) ->

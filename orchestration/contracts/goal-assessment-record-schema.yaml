@@ -3,19 +3,21 @@ $id: https://skill-bill.dev/contracts/goal-assessment-record.yaml
 title: Goal assessment record
 type: object
 additionalProperties: false
-required: [contract_version, issue_key, rounds, exit_reason, open_finding_refs]
+required: [contract_version, issue_key, rounds, exit_reason, open_finding_refs, budget_start_round]
 properties:
-  contract_version: { const: '0.1' }
+  contract_version: { const: '0.2' }
   issue_key: { type: string, pattern: '\S' }
+  budget_start_round: { type: integer, minimum: 1 }
   rounds:
     type: array
-    maxItems: 3
     items:
       type: object
       additionalProperties: false
-      required: [round, head_sha, scope_files, assessor_runs, findings, scenarios, regressions, fix]
+      required: [round, head_sha, scope_files, assessor_runs, findings, scenarios, regressions, fix, target_ref, repair_plan]
       properties:
-        round: { type: integer, minimum: 1, maximum: 3 }
+        round: { type: integer, minimum: 1 }
+        target_ref: { type: [string, 'null'], pattern: '^(GA|IS|TR)-[0-9]{3}$' }
+        repair_plan: { type: [string, 'null'], pattern: '\S' }
         head_sha: { type: string, pattern: '^[a-fA-F0-9]{7,64}$' }
         scope_files:
           type: array
@@ -59,7 +61,7 @@ properties:
               failure_scenario: { type: string, pattern: '\S' }
               guarded_ref: { type: [string, 'null'], pattern: '\S' }
               subtask_id: { type: [integer, 'null'], minimum: 1 }
-              origin_round: { type: integer, minimum: 1, maximum: 3 }
+              origin_round: { type: integer, minimum: 1 }
               verification: { enum: [confirmed, refuted, unverified, not_required] }
               verification_evidence: { type: string }
               fix_rounds_survived: { type: integer, minimum: 0 }

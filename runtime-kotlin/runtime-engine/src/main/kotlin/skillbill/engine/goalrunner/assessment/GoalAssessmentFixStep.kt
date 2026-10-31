@@ -10,6 +10,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.qa.GoalPostChangeValidationResult
 import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFix
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
@@ -37,6 +39,19 @@ internal class GoalAssessmentFixStep(
     fixSet: GoalAssessmentFixSet,
   ): GoalAssessmentRecord {
     val run = FixRun(services, state, request, roundNumber, record)
+    if (run.round().fix == null && run.round().repairPlan == null) {
+      val plan =
+        launch(
+          run,
+          inputText(run, fixSet).replace("# Goal assessment fix:", "# Goal assessment repair plan:") +
+            "\n\nPrepare a read-only repair plan for this selected item. Cover its remaining material defect class " +
+            "and sibling production paths. Name the files, changes, and independent source verification. " +
+            "Exclude immaterial cases. Do not edit files, build, test, validate, commit or push. " +
+            "Return ordinary prose.",
+          SkeletonDefinition.GOAL_ASSESSMENT,
+        )?.takeIf(String::isNotBlank) ?: return run.record
+      if (!run.savePlan(plan)) return run.record
+    }
     var fix = run.round().fix ?: run.save(agentFix(run, fixSet))
     if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.validation == GoalAssessmentFixValidation.NOT_RUN) {
       fix = run.save(validated(run, fix))
@@ -74,13 +89,23 @@ internal class GoalAssessmentFixStep(
   private fun launch(
     run: FixRun,
     text: String,
+    definition: SkeletonDefinition = SkeletonDefinition.GOAL_ASSESSMENT_FIX,
   ): String? {
     val phaseRequest =
       services.phaseRequest(
         run.state,
         run.request,
-        SkeletonDefinition.GOAL_ASSESSMENT_FIX,
-        PhaseInstructions(text, setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX)),
+        definition,
+        PhaseInstructions(
+          text,
+          setOf(
+            if (definition == SkeletonDefinition.GOAL_ASSESSMENT) {
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT
+            } else {
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX
+            },
+          ),
+        ),
       )
     val branch = services.branchOf(run.state)
     val result =
@@ -210,11 +235,17 @@ internal class GoalAssessmentFixStep(
   ): String {
     val findings = run.record.rounds.flatMap { it.findings }.filter { it.findingRef in fixSet.findingRefs }
     val regressions =
-      run.round().regressions.filter { it.regressionRef in fixSet.regressionRefs }
+      run.record.rounds.flatMap { it.regressions }.associateBy { it.regressionRef }.values
+        .filter { it.regressionRef in fixSet.regressionRefs }
         .joinToString("\n") { "- ${it.regressionRef}: ${it.evidence}" }
+    val scenarios =
+      run.record.rounds.flatMap { it.scenarios }.associateBy { it.scenarioRef }.values
+        .filter { it.scenarioRef in fixSet.scenarioRefs }.joinToString("\n") { "- ${it.scenarioRef}: ${it.evidence}" }
     val findingLines = findings.joinToString("\n", transform = ::findingText)
     return listOfNotNull(
       "# Goal assessment fix: ${run.state.manifest.issueKey}",
+      run.round().repairPlan?.let { "## Accepted repair plan\n\n$it" },
+      scenarios.takeIf(String::isNotBlank)?.let { "## Broken interaction scenarios\n\n$it" },
       findingLines.takeIf(String::isNotBlank)?.let { "## Findings to fix\n\n$it" },
       regressions.takeIf(String::isNotBlank)?.let { "## Transitional regressions to restore\n\n$it" },
     ).joinToString("\n\n")
@@ -235,14 +266,31 @@ internal class GoalAssessmentFixStep(
   ) {
     fun round(): GoalAssessmentRound = record.rounds.first { it.round == roundNumber }
 
+    fun savePlan(plan: String): Boolean {
+      record =
+        record.copy(
+          rounds = record.rounds.map { if (it.round == roundNumber) it.copy(repairPlan = plan) else it },
+        )
+      return services.persist(state, record)
+    }
+
     fun save(fix: GoalAssessmentFix): GoalAssessmentFix {
       record = record.copy(rounds = record.rounds.map { if (it.round == roundNumber) it.copy(fix = fix) else it })
-      services.persist(state, record)
+      if (!services.persist(state, record)) {
+        throw SkillBillRuntimeException(
+          GoalAssessmentFailureCode.PERSISTENCE,
+          "The assessment repair outcome could not be persisted.",
+        )
+      }
       return fix
     }
   }
 
   private companion object {
-    val NOT_FIXED = Regex("""(GA|TR)-\d{3}: not fixed: .*""")
+    val NOT_FIXED = Regex("""(GA|TR|IS)-\d{3}: not fixed: .*""")
   }
+}
+
+internal enum class GoalAssessmentFailureCode : RuntimeFailureCode {
+  PERSISTENCE,
 }

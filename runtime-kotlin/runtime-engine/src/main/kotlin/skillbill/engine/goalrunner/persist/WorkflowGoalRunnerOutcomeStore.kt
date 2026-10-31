@@ -8,6 +8,7 @@ import skillbill.engine.diagnostics.block.BlockIncidentCaptureOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
@@ -22,13 +23,11 @@ import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.model.GoalUnknownScenario
-import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.assessment.WorkflowGoalRunnerAssessmentRecording
 import skillbill.engine.goalrunner.persist.assessment.toTraceProbeCounts
 import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -104,9 +103,16 @@ class WorkflowGoalRunnerOutcomeStore
     crashReconciler: FeatureTaskRuntimeCrashReconciler,
     clock: Clock,
     private val blockIncidentCapture: BlockIncidentCapture,
+    phaseRecorder: FeatureTaskRuntimePhaseRecorder,
   ) : GoalRunnerWorkflowOutcomeStore,
     GoalRunnerAttemptLedgerStore,
     GoalRunnerQualityExecutionStore by goalQualityExecution,
+    GoalRunnerAssessmentRecordStore by WorkflowGoalRunnerAssessmentRecording(
+      database,
+      WorkflowEngine(),
+      wireArtifactValidator,
+      phaseRecorder,
+    ),
     GoalRunnerReviewOutcomeStore by WorkflowGoalRunnerReviewBridge(database, WorkflowEngine()) {
     private val engine = WorkflowEngine()
     private val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
@@ -135,7 +141,6 @@ class WorkflowGoalRunnerOutcomeStore
         progressRecording,
         clock,
       )
-    private val assessmentRecording = WorkflowGoalRunnerAssessmentRecording(database, engine, wireArtifactValidator)
     private val terminal =
       WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations, crashReconciler)
     private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile, blockIncidentCapture)
@@ -203,14 +208,6 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? =
       progressRecording.goalFinalRepairContext(parentWorkflowId)
-
-    override fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
-      assessmentRecording.read(parentWorkflowId)
-
-    override fun recordGoalAssessmentRecord(
-      parentWorkflowId: String,
-      record: GoalAssessmentRecord,
-    ): Boolean = assessmentRecording.record(parentWorkflowId, record)
 
     override fun saveGoalHistoryCompletion(
       parentWorkflowId: String,

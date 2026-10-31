@@ -42,10 +42,22 @@ internal const val PARENT_SPEC_MARKER = "PARENT-SPEC-MARKER"
 internal const val FIRST_SUBTASK_SPEC_MARKER = "FIRST-SUBTASK-SPEC-MARKER"
 internal const val SECOND_SUBTASK_SPEC_MARKER = "SECOND-SUBTASK-SPEC-MARKER"
 
-internal enum class AssessmentCall { FIRST_SUBTASK, SECOND_SUBTASK, CROSS_SUBTASK, VERIFIER, FIX }
+internal enum class AssessmentCall {
+  FIRST_SUBTASK,
+  SECOND_SUBTASK,
+  CROSS_SUBTASK,
+  VERIFIER,
+  PLAN,
+  SCENARIO_VERIFY,
+  REGRESSION_VERIFY,
+  FIX,
+}
 
 internal fun assessmentCallOf(prompt: String): AssessmentCall =
   when {
+    "# Goal assessment repair plan:" in prompt -> AssessmentCall.PLAN
+    "Independently verify only scenario" in prompt -> AssessmentCall.SCENARIO_VERIFY
+    "Independently verify only regression" in prompt -> AssessmentCall.REGRESSION_VERIFY
     "# Goal assessment fix:" in prompt -> AssessmentCall.FIX
     "Verify each candidate defect below" in prompt -> AssessmentCall.VERIFIER
     "Assess how the subtasks fit together" in prompt -> AssessmentCall.CROSS_SUBTASK
@@ -59,6 +71,8 @@ internal class AssessmentOutcomeStore(
   private val goalQaOutcome: FeatureTaskQaOutcome? = null,
 ) : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
   val persisted = mutableListOf<GoalAssessmentRecord>()
+
+  override fun prepareGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead = stored
 
   override fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead = stored
 

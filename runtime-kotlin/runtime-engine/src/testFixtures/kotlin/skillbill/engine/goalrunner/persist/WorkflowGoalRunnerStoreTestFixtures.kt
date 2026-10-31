@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestLoader
@@ -215,6 +216,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     workerSupervisor = workerSupervisor,
     crashReconciler = crashReconciler,
     blockIncidentCapture = testBlockIncidentCapture(database, clock),
+    phaseRecorder = testPhaseRecorder(database, workflowSnapshotValidator),
     clock = clock,
   )
 

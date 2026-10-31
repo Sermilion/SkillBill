@@ -148,6 +148,10 @@ interface GoalRunnerWorkflowOutcomeStore :
 }
 
 interface GoalRunnerAssessmentRecordStore {
+  fun prepareGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
+
+  fun reopenGoalAssessmentForOperatorResume(parentWorkflowId: String): Boolean
+
   fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
 
   fun recordGoalAssessmentRecord(

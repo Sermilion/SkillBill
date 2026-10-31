@@ -135,6 +135,7 @@ internal fun DetailSections.goalQaSection(detail: Detail) {
 
 internal fun GoalAssessmentState.word(): String = when (this) {
   GoalAssessmentState.Completed -> "Completed"
+  GoalAssessmentState.Blocked -> "Blocked"
   GoalAssessmentState.Running -> "Running"
   GoalAssessmentState.Pending -> "Pending"
   GoalAssessmentState.Skipped -> "Skipped"

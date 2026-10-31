@@ -229,6 +229,7 @@ private fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)
 
 private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {
+  GoalRunnerAssessmentState.BLOCKED -> GoalAssessmentState.Blocked
   GoalRunnerAssessmentState.PENDING -> GoalAssessmentState.Pending
   GoalRunnerAssessmentState.RUNNING -> GoalAssessmentState.Running
   GoalRunnerAssessmentState.COMPLETED -> GoalAssessmentState.Completed

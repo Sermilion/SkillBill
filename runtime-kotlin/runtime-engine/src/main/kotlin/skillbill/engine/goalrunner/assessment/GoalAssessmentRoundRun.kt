@@ -104,20 +104,25 @@ internal class GoalAssessmentRoundRun(
     if (roundNumber > 1) bundle.copy(reassessmentScope = round.scopeFiles) else bundle
   private var earlier: List<GoalAssessmentRound> = prior.rounds.take(roundNumber - 1)
   private var persisted = true
+  private var verificationReady = true
+  private val previousTarget: String? = earlier.lastOrNull()?.targetRef
 
   fun execute(): GoalAssessmentRoundResult {
     val plan = planned()
     plan.filterNot(::isRecorded).forEach(::runAssessor)
     val usable =
-      plan.isEmpty() ||
-        round.assessorRuns.any { it.role != GoalAssessmentRole.VERIFIER && it.status == COMPLETED }
-    if (!usable) return unavailable("every assessor failed or produced no usable output")
+      plan.all { planned ->
+        round.assessorRuns.any {
+          it.role == planned.role && it.subtaskId == planned.subtaskId && it.status == COMPLETED
+        }
+      }
+    if (!usable) return unavailable("an assessor failed or produced no usable output")
     verify()
+    if (!verificationReady) return unavailable("independent verification did not settle every selected item")
     save()
     val record = recordOf(null)
     if (persisted) return GoalAssessmentRoundResult.Assessed(record, GoalAssessmentVerdicts.fixSetOf(earlier + round))
-    warn("the verified round could not be persisted, so it grants no fix authority.")
-    return GoalAssessmentRoundResult.Assessed(record, GoalAssessmentFixSet(emptyList(), emptyList()))
+    return unavailable("the verified round could not be persisted, so it grants no fix authority")
   }
 
   private fun planned(): List<PlannedRun> {
@@ -126,14 +131,11 @@ internal class GoalAssessmentRoundRun(
       return assessable.map { PlannedRun(GoalAssessmentRole.SUBTASK, it.id) } +
         PlannedRun(GoalAssessmentRole.CROSS_SUBTASK, null)
     }
-    val scope = round.scopeFiles.map(GoalAssessmentScope::normalize).toSet()
-    if (scope.isEmpty()) return emptyList()
-    val attributed = GoalAssessmentScope.fixAttributedSubtasks(prior, roundNumber)
-    val subtasks =
-      assessable.filter { GoalAssessmentScope.subtaskTouched(it, scope) || it.id in attributed }
-        .map { PlannedRun(GoalAssessmentRole.SUBTASK, it.id) }
-    val cross = GoalAssessmentScope.crossSubtaskTouched(prior, roundNumber, scope)
-    return subtasks + listOfNotNull(PlannedRun(GoalAssessmentRole.CROSS_SUBTASK, null).takeIf { cross })
+    return if (previousTarget?.startsWith("IS-") == true || previousTarget?.startsWith("TR-") == true) {
+      listOf(PlannedRun(GoalAssessmentRole.CROSS_SUBTASK, null))
+    } else {
+      emptyList()
+    }
   }
 
   private fun isRecorded(planned: PlannedRun): Boolean =
@@ -156,26 +158,49 @@ internal class GoalAssessmentRoundRun(
       return
     }
     val focus =
-      planned.subtaskId?.let { GoalAssessmentFocus.Subtask(it) } ?: GoalAssessmentFocus.CrossSubtask
+      when {
+        roundNumber == 1 ->
+          planned.subtaskId?.let { GoalAssessmentFocus.Subtask(it) } ?: GoalAssessmentFocus.CrossSubtask
+        previousTarget?.startsWith("IS-") == true -> GoalAssessmentFocus.Scenario(requireNotNull(previousTarget))
+        else -> GoalAssessmentFocus.Regression(requireNotNull(previousTarget))
+      }
     val launched = launch(focus, planned.label())
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseAssessor(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
     (parsed as? GoalAssessmentParse.Malformed)?.let { warn("${planned.label()} output was malformed: ${it.reason}") }
     report?.let { absorb(planned, it) }
-    record(GoalAssessmentRun(planned.role, planned.subtaskId, statusOf(launched, report != null)))
+    if (roundNumber > 1 && report != null) {
+      val settled =
+        report.scenarios.count { it.scenarioRef == previousTarget } +
+          report.regressions.count { it.regressionRef == previousTarget }
+      if (settled != 1) verificationReady = false
+    }
+    record(GoalAssessmentRun(planned.role, planned.subtaskId, statusOf(launched, report != null && verificationReady)))
   }
 
   private fun verify() {
     val candidates =
       GoalAssessmentVerdicts.candidatesOf(round.findings) +
         GoalAssessmentVerdicts.carriedCandidatesOf(earlier.flatMap { it.findings })
-    if (candidates.isEmpty() || round.assessorRuns.any { it.role == GoalAssessmentRole.VERIFIER }) return
+          .filter { it.findingRef == previousTarget }
+    if (candidates.isEmpty()) return
+    round.assessorRuns.firstOrNull { it.role == GoalAssessmentRole.VERIFIER }?.let {
+      verificationReady = it.status == COMPLETED
+      return
+    }
     val launched = launch(GoalAssessmentFocus.Verifier(candidates), "the verifier")
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseVerifier(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
     (parsed as? GoalAssessmentParse.Malformed)?.let { warn("the verifier output was malformed: ${it.reason}") }
-    report?.let { applyVerdicts(it, candidates) }
-    record(GoalAssessmentRun(GoalAssessmentRole.VERIFIER, null, statusOf(launched, report != null)))
+    verificationReady = report != null &&
+      candidates.all { candidate ->
+        val verdicts = report.verdicts.filter { it.findingRef == candidate.findingRef }
+        verdicts.size == 1 && verdicts.single().evidence.isNotBlank()
+      }
+    if (verificationReady) report?.let { applyVerdicts(it, candidates) }
+    record(
+      GoalAssessmentRun(GoalAssessmentRole.VERIFIER, null, statusOf(launched, report != null && verificationReady)),
+    )
   }
 
   private fun statusOf(
@@ -197,11 +222,12 @@ internal class GoalAssessmentRoundRun(
     if (ignored > 0 || report.rejectedLines.isNotEmpty()) {
       warn("the verifier named $ignored unknown candidates and left ${report.rejectedLines.size} lines unparsed.")
     }
-    val applied = GoalAssessmentVerdicts.apply(round.findings, report)
+    val selectedReport = report.copy(verdicts = report.verdicts.filter { it.findingRef in refs })
+    val applied = GoalAssessmentVerdicts.apply(round.findings, selectedReport)
     val unsettled = applied.count { it.findingRef in refs && it.verification == GoalAssessmentVerification.UNVERIFIED }
     if (unsettled > 0) warn("$unsettled candidates stay unverified: the verifier gave no single verdict for them.")
     round = round.copy(findings = applied)
-    earlier = earlier.map { it.copy(findings = GoalAssessmentVerdicts.applyCarried(it.findings, report)) }
+    earlier = earlier.map { it.copy(findings = GoalAssessmentVerdicts.applyCarried(it.findings, selectedReport)) }
   }
 
   private fun absorb(
@@ -213,12 +239,15 @@ internal class GoalAssessmentRoundRun(
     }
     val used = nextRefNumber()
     val carried = GoalAssessmentScope.carriedOf(prior, roundNumber)
-    val fresh = report.findings.filterNot { GoalAssessmentScope.restates(carried, it.path, it.failureScenario) }
+    val fresh =
+      report.findings.filter { roundNumber == 1 }.filterNot {
+        GoalAssessmentScope.restates(carried, it.path, it.failureScenario)
+      }
     val accepted = fresh.take(minOf(MAX_FINDINGS_PER_RUN, MAX_REF_NUMBER - used + 1).coerceAtLeast(0))
     if (accepted.size < fresh.size) warn("${planned.label()} reported more findings than fit; dropped some.")
     val added =
       accepted.mapIndexed { index, candidate ->
-        val needsVerdict = candidate.kind == GoalAssessmentFindingKind.DEFECT && candidate.severity.blocksAdvance
+        val needsVerdict = candidate.kind == GoalAssessmentFindingKind.DEFECT
         GoalAssessmentFinding(
           findingRef = "GA-%03d".format(used + index),
           kind = candidate.kind,
@@ -250,7 +279,7 @@ internal class GoalAssessmentRoundRun(
     reported: List<GoalAssessmentScenarioResult>,
   ): List<GoalAssessmentScenarioResult> {
     val declared = bundle.declared?.scenarios?.map { it.scenarioRef }.orEmpty().toSet()
-    val known = reported.filter { it.scenarioRef in declared }
+    val known = reported.filter { it.scenarioRef in declared && (roundNumber == 1 || it.scenarioRef == previousTarget) }
     if (known.size < reported.size) warn("an assessor settled scenarios the parent spec does not declare; ignored.")
     return (kept + known).groupBy { it.scenarioRef }.values.map { results ->
       results.firstOrNull { it.verdict == GoalAssessmentScenarioVerdict.BROKEN } ?: results.first()
@@ -262,7 +291,10 @@ internal class GoalAssessmentRoundRun(
     reported: List<GoalAssessmentRegressionResult>,
   ): List<GoalAssessmentRegressionResult> {
     val declared = bundle.declared?.transitionalRegressions?.map { it.regressionRef }.orEmpty().toSet()
-    val known = reported.filter { it.regressionRef in declared }
+    val known =
+      reported.filter {
+        it.regressionRef in declared && (roundNumber == 1 || it.regressionRef == previousTarget)
+      }
     if (known.size < reported.size) warn("an assessor settled regressions the parent spec does not declare; ignored.")
     return (kept + known).groupBy { it.regressionRef }.values.map { results ->
       results.firstOrNull { it.state == GoalAssessmentRegressionState.NOT_RESTORED } ?: results.first()
@@ -282,7 +314,7 @@ internal class GoalAssessmentRoundRun(
   private fun save() {
     round = round.copy(findings = GoalAssessmentVerdicts.withDispositions(round.findings))
     earlier = earlier.map { it.copy(findings = GoalAssessmentVerdicts.withDispositions(it.findings)) }
-    persisted = services.persist(state, recordOf(null))
+    persisted = services.persist(state, recordOf(null)) && persisted
   }
 
   private fun unavailable(reason: String): GoalAssessmentRoundResult.Unavailable {

@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
 import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -41,6 +42,7 @@ class GoalRunnerStatusControlVerbs(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val diagnostics: RuntimeDiagnostics,
   private val repairCoordinator: GoalRunnerRepairCoordinator,
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
 ) {
   fun pause(
     issueKey: String,
@@ -255,10 +257,13 @@ class GoalRunnerStatusControlVerbs(
     )
     val before = manifestStore.controlState(loaded.parentWorkflowId)
     val repair = repairCoordinator.repairBeforeResume(issueKey, repoRoot)
+    val assessmentReopened =
+      repair?.status != GoalRunnerRepairStatus.OPERATOR_REQUIRED &&
+        outcomeStore.reopenGoalAssessmentForOperatorResume(loaded.parentWorkflowId)
     val status =
       when {
         repair?.status == GoalRunnerRepairStatus.OPERATOR_REQUIRED -> GoalRunnerResumeStatus.OPERATOR_REQUIRED
-        !before.paused && !before.pauseRequested -> GoalRunnerResumeStatus.NOT_PAUSED
+        !before.paused && !before.pauseRequested && !assessmentReopened -> GoalRunnerResumeStatus.NOT_PAUSED
         manifestStore.resume(loaded.parentWorkflowId) == null -> GoalRunnerResumeStatus.NOT_FOUND
         else -> GoalRunnerResumeStatus.RESUMED
       }

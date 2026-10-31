@@ -1,5 +1,13 @@
 # goalrunner boundary decisions
 
+## [2026-10-31] Share focused repair decisions between audit and goal assessment
+
+Context: Goal assessment stopped after three global rounds and allowed finalization with unresolved source defects. Regression-only repairs could claim convergence before independent verification.
+
+Decision: `FocusedRepairStrategy` owns target selection, repair-stage routing and the three unsuccessful outcome allowance. Acceptance audit and goal assessment both consume it. Their aggregates keep their own evidence and identity checks. Assessment discovers once, plans and repairs one material item at a time, verifies every attempt, and blocks before QA or publication when an item exhausts its allowance. Material minor defects receive verification too. Test-value notes remain report-only. Explicit assessment resume resets the active allowance without deleting rounds.
+
+Compatibility: Assessment record version 0.2 adds selected targets, repair plans and the budget boundary, and removes the global round cap. The existing acceptance-repair contract-version quarantine class also covers goal assessment now that both use focused repair. Runtime execution preserves the rejected 0.1 record as diagnostic evidence before fresh discovery. Ordinary status reads do not regenerate records.
+
 ## [2026-10-29] Let an operator mark a whole goal complete
 Context: A goal whose work landed outside the runtime had no way out. Ordinary out-of-band accept is disabled, and a hard reset of runtime-completed subtasks cannot be restored because they carry no acceptance.
 Decision: `goal complete` accepts every unfinished subtask against one resolved commit, marks them complete, retires any active quality execution and sets `goalCompletedAt` in one transaction. It refuses while a live execution lease exists. The already-complete check lets a subtask whose recorded acceptance matches its commit skip the child history draft requirement.

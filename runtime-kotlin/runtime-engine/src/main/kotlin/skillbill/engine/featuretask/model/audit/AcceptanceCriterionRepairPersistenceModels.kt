@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.model.audit
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.review.spec.model.InteractionScenario
+import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
@@ -185,7 +186,7 @@ class AcceptanceCriterionRepairRunState internal constructor(
       val current = state.currentCriterionRef ?: return null
       val failures = state.outcomes.filter { it.criterionRef == current && !it.successful }
       if (failures.isEmpty()) return null
-      val recent = failures.takeLast(AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES)
+      val recent = failures.takeLast(FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES)
       return buildString {
         appendLine("Earlier unsuccessful repair evidence for $current")
         appendLine(
@@ -229,7 +230,7 @@ class AcceptanceCriterionRepairRunState internal constructor(
       val identity = criterion.originalAlias?.let { "$it ($current)" } ?: current
       val failures = state.unsuccessfulTotals.getOrDefault(current, 0)
       val reserved = state.reservation?.takeIf { it.criterionRef == current }?.reservationId
-      val remaining = (AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES - failures).coerceAtLeast(0)
+      val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - failures).coerceAtLeast(0)
       val authoredQueue =
         state.criteria
           .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }
@@ -237,7 +238,7 @@ class AcceptanceCriterionRepairRunState internal constructor(
       val queuePosition = authoredQueue.indexOf(criterion).takeIf { it >= 0 }?.plus(1)
       val gap = criterion.evidenceRef.takeUnless { it == state.specDigest } ?: "Not assessed."
       return "mode=${state.mode.wireValue}; stage=${state.stage.wireValue}; criterion $identity; " +
-        "retained failures: $failures of ${AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES}; " +
+        "retained failures: $failures of ${FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES}; " +
         "remaining failures: $remaining; queue position: ${queuePosition ?: "unavailable"} of ${authoredQueue.size}; " +
         "live cycle: ${reserved ?: "none"}; " +
         "authored criterion: ${criterion.originalText}; latest gap: $gap" +

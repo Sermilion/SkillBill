@@ -90,6 +90,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.goalrunner.GoalObservabilityArtifacts
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
@@ -426,6 +427,34 @@ class GoalRunnerTest {
 
     assertIs<GoalRunnerRunReport.Completed>(report, "$report")
     assertEquals(listOf("assessment", "qa"), events)
+  }
+
+  @Test
+  fun `exhausted assessment stops before goal QA and pull request publication`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { it.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val events = mutableListOf<String>()
+    val pr = RecordingPullRequestPort()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, pr).copy(
+          assessmentGate = RecordingGoalRunnerAssessmentGate(events, GoalAssessmentExitReason.PERSISTENT_FINDING),
+          qaGate = GoalRunnerQaGate { _, _ -> error("QA must not run before assessment accepts the goal.") },
+        ),
+      )
+
+    val report = assertIs<GoalRunnerRunReport.Stopped>(runner.run(runRequest()))
+
+    assertEquals("goal_assessment", report.stop.lastResumableStep)
+    assertEquals(GoalRunnerStopReason.BLOCKED, report.stop.reason)
+    assertTrue(pr.requests.isEmpty())
+    assertEquals(listOf("assessment"), events)
   }
 
   @Test

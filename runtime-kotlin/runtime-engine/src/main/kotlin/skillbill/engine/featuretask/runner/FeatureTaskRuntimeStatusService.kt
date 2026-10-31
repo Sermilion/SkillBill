@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
@@ -243,7 +244,7 @@ class FeatureTaskRuntimeStatusService(
     originalAlias: String?,
   ): String {
     val failures = state.unsuccessfulTotals.getOrDefault(criterionRef, 0)
-    val remaining = (AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES - failures).coerceAtLeast(0)
+    val remaining = (FocusedRepairStrategy.MAX_UNSUCCESSFUL_OUTCOMES - failures).coerceAtLeast(0)
     val authoredQueue =
       state.criteria
         .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }

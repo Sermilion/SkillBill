@@ -4,6 +4,9 @@ object GoalAssessmentRecordPayloadKeys {
   const val CONTRACT_VERSION = "contract_version"
   const val ISSUE_KEY = "issue_key"
   const val ROUNDS = "rounds"
+  const val BUDGET_START_ROUND = "budget_start_round"
+  const val TARGET_REF = "target_ref"
+  const val REPAIR_PLAN = "repair_plan"
   const val EXIT_REASON = "exit_reason"
   const val OPEN_FINDING_REFS = "open_finding_refs"
   const val ROUND = "round"
@@ -39,4 +42,6 @@ object GoalAssessmentRecordPayloadKeys {
   const val VALIDATION = "validation"
 }
 
-const val GOAL_ASSESSMENT_RECORD_CONTRACT_VERSION = "0.1"
+const val GOAL_ASSESSMENT_RECORD_CONTRACT_VERSION = "0.2"
+
+const val GOAL_ASSESSMENT_RECORD_PREVIOUS_CONTRACT_VERSION = "0.1"
