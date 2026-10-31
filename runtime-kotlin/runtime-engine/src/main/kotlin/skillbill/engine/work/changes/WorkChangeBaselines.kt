@@ -4,77 +4,41 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.persist.taskRuntimeRecordOrNull
 import skillbill.engine.work.IdeStatusProjectionContext
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.goalrunner.goalSubtaskReviewArtifacts
-import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkChangeBaseline
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.taskruntime.artifact.resolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 
+/**
+ * The baseline a work item's changes are diffed against: the merge base of HEAD and the work's own base branch.
+ * A goal uses its manifest's base branch, so a goal stacked on another branch shows only its own changes.
+ * A feature task run uses its resolved branch's base. A standalone phase, or a run with no recorded base,
+ * falls back to the repository's default branch.
+ */
 internal fun workChangeBaseline(
   standalone: StandalonePhaseStatusRecord?,
-  goalStatus: GoalRunnerStatusProjection?,
+  goalManifest: DecompositionManifest?,
   item: WorkItem?,
   context: IdeStatusProjectionContext,
   diagnostics: RuntimeDiagnostics,
 ): WorkChangeBaseline? {
   val worktreeRoot = standalone?.monitorTarget?.worktreePath ?: context.repoRoot.toString()
-  val workflowStates = context.unitOfWork.workflowStates
   return when {
     standalone != null -> WorkChangeBaseline.TargetMergeBase(worktreeRoot, targetBranch = null)
     item?.workflowKind == WorkItemKind.FEATURE_GOAL ->
-      goalStatus?.currentChildWorkflowId?.let { childId ->
-        subtaskBaseline(worktreeRoot, item.workflowId, childId, workflowStates, diagnostics)
-      }
-    item?.workflowKind == WorkItemKind.FEATURE_TASK_RUNTIME ->
-      runBaseline(worktreeRoot, resolvedBranchOrNull(item.workflowId, workflowStates, diagnostics))
+      goalManifest?.baseBranch?.takeIf(String::isNotBlank)?.let { WorkChangeBaseline.TargetMergeBase(worktreeRoot, it) }
+    item?.workflowKind == WorkItemKind.FEATURE_TASK_RUNTIME -> {
+      val resolved = resolvedBranchOrNull(item.workflowId, context.unitOfWork.workflowStates, diagnostics)
+      WorkChangeBaseline.TargetMergeBase(worktreeRoot, resolved?.baseBranch?.takeIf(String::isNotBlank))
+    }
     else -> WorkChangeBaseline.TargetMergeBase(worktreeRoot, targetBranch = null)
   }
 }
-
-private fun subtaskBaseline(
-  worktreeRoot: String,
-  goalWorkflowId: String,
-  childWorkflowId: String,
-  workflowStates: WorkflowStateRepository,
-  diagnostics: RuntimeDiagnostics,
-): WorkChangeBaseline {
-  val read =
-    try {
-      Result.success(
-        taskRuntimeRecordOrNull(workflowStates, childWorkflowId)?.artifacts?.goalSubtaskReviewArtifacts()?.state,
-      )
-    } catch (error: SkillBillRuntimeException) {
-      Result.failure(error)
-    }
-  val state = read.getOrNull()
-  val baseSha = state?.reviewBaseSha?.takeIf(String::isNotBlank)
-  if (state != null && baseSha != null) {
-    return WorkChangeBaseline.SubtaskStart(worktreeRoot, baseSha, state.baselineUntrackedPaths)
-  }
-  val error = read.exceptionOrNull()
-  val cause = error?.message ?: if (state == null) "review state artifact missing" else "review base sha blank"
-  RuntimeDiagnosticsBestEffortWarning.record(
-    diagnostics,
-    "work_change_baseline goal=$goalWorkflowId child=$childWorkflowId " +
-      "value_used=target_merge_base value_expected=goal_subtask_review_state cause=$cause",
-    error,
-  )
-  val baseBranch = resolvedBranchOrNull(childWorkflowId, workflowStates, diagnostics)?.baseBranch
-  return WorkChangeBaseline.TargetMergeBase(worktreeRoot, baseBranch)
-}
-
-private fun runBaseline(
-  worktreeRoot: String,
-  resolved: FeatureTaskRuntimeResolvedBranch?,
-): WorkChangeBaseline =
-  resolved?.reviewBaseSha?.takeIf(String::isNotBlank)?.let { baseSha ->
-    WorkChangeBaseline.RunStart(worktreeRoot, baseSha, resolved.baselineUntrackedPaths)
-  } ?: WorkChangeBaseline.TargetMergeBase(worktreeRoot, resolved?.baseBranch)
 
 private fun resolvedBranchOrNull(
   workflowId: String,

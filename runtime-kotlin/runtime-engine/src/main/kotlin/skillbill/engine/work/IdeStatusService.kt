@@ -418,7 +418,7 @@ class IdeStatusService(
         controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
         incident = incidentSet.incident,
         incidentHistory = incidentSet.incidentHistory,
-        changeBaseline = workChangeBaseline(standalone, goalStatus, item, context, diagnostics),
+        changeBaseline = workChangeBaseline(standalone, goalRead?.page?.manifest, item, context, diagnostics),
       )
     return ProjectedDetailItem(
       detailItem,

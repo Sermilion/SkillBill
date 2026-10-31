@@ -2,20 +2,18 @@ package skillbill.engine.work
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.work.changes.workChangeBaseline
-import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkChangeBaseline
 import skillbill.ports.work.model.WorkItemKind
-import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -43,38 +41,24 @@ class WorkChangeBaselinesTest {
     }
 
   @Test
-  fun `goal with a current child reads the child's subtask start baseline`() {
-    val state =
-      GoalSubtaskReviewState.initial(baseSha, listOf("notes.txt"), CodeReviewExecutionMode.INLINE)
-    val workflows = workflowsWith("w-child", goalChildArtifacts(state))
+  fun `goal diffs against its manifest base branch`() {
+    val baseline = resolveGoal(goalBaseBranch = "feat/SKILL-454")
 
-    val baseline = resolveGoal(workflows, currentChild = "w-child")
-
-    assertEquals(WorkChangeBaseline.SubtaskStart("/repo", baseSha, listOf("notes.txt")), baseline)
+    assertEquals(WorkChangeBaseline.TargetMergeBase("/repo", "feat/SKILL-454"), baseline)
   }
 
   @Test
-  fun `goal between subtasks has no baseline`() {
-    assertNull(resolveGoal(IdeStatusWorkflowStates(), currentChild = null))
+  fun `goal without a manifest base branch has no baseline`() {
+    assertNull(resolveGoal(goalBaseBranch = null))
+    assertNull(resolveGoal(goalBaseBranch = " "))
   }
 
   @Test
-  fun `goal child with an undecodable review state falls back to the merge base and warns`() {
-    val corrupt = mapOf(DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label() to mapOf("x" to 1))
-    val workflows = workflowsWith("w-child", corrupt)
-
-    val baseline = resolveGoal(workflows, currentChild = "w-child")
-
-    assertEquals(WorkChangeBaseline.TargetMergeBase("/repo", null), baseline)
-    assertTrue(warnings.single().contains("child=w-child"))
-  }
-
-  @Test
-  fun `feature task run with a resolved branch yields its run start baseline`() {
+  fun `feature task run diffs against its resolved base branch`() {
     val branch =
       FeatureTaskRuntimeResolvedBranch(
-        branch = "feat/SKILL-454",
-        baseBranch = "main",
+        branch = "feat/SKILL-455",
+        baseBranch = "feat/SKILL-454",
         reviewBaseSha = baseSha,
         baselineUntrackedPaths = listOf("scratch.md"),
       )
@@ -88,7 +72,18 @@ class WorkChangeBaselinesTest {
 
     val baseline = workChangeBaseline(null, null, item, context(workflows), diagnostics)
 
-    assertEquals(WorkChangeBaseline.RunStart("/repo", baseSha, listOf("scratch.md")), baseline)
+    assertEquals(WorkChangeBaseline.TargetMergeBase("/repo", "feat/SKILL-454"), baseline)
+  }
+
+  @Test
+  fun `feature task run with an undecodable branch falls back to the default branch and warns`() {
+    val corrupt = mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_RESOLVED_BRANCH.label() to mapOf("x" to 1))
+    val item = workItem("w-run", WorkItemKind.FEATURE_TASK_RUNTIME, "running", "2026-08-06T10:00:00Z")
+
+    val baseline = workChangeBaseline(null, null, item, context(workflowsWith("w-run", corrupt)), diagnostics)
+
+    assertEquals(WorkChangeBaseline.TargetMergeBase("/repo", null), baseline)
+    assertTrue(warnings.single().contains("workflow=w-run"))
   }
 
   @Test
@@ -99,37 +94,22 @@ class WorkChangeBaselinesTest {
     assertEquals(WorkChangeBaseline.TargetMergeBase("/wt/12", null), baseline)
   }
 
-  private fun resolveGoal(
-    workflows: IdeStatusWorkflowStates,
-    currentChild: String?,
-  ): WorkChangeBaseline? {
+  private fun resolveGoal(goalBaseBranch: String?): WorkChangeBaseline? {
     val goal = workItem("goal-1", WorkItemKind.FEATURE_GOAL, "running", "2026-08-06T10:00:00Z")
-    val status =
-      GoalRunnerStatusProjection(
-        issueKey = "SKILL-148",
-        completeCount = 0,
-        pendingCount = 1,
-        blockedCount = 0,
-        currentSubtaskId = currentChild?.let { 1 },
-        currentStep = null,
-        activeAgent = null,
-        currentChildWorkflowId = currentChild,
-      )
-    return workChangeBaseline(null, status, goal, context(workflows), diagnostics)
+    val manifest =
+      goalBaseBranch?.let { base ->
+        DecompositionManifest(
+          issueKey = "SKILL-455",
+          featureName = "changes",
+          parentSpecPath = "spec.md",
+          baseBranch = base,
+          featureBranch = "feat/SKILL-455",
+          currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "start"),
+          subtasks = emptyList(),
+        )
+      }
+    return workChangeBaseline(null, manifest, goal, context(IdeStatusWorkflowStates()), diagnostics)
   }
-
-  private fun goalChildArtifacts(state: GoalSubtaskReviewState): Map<String, Any?> =
-    mapOf(
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label() to
-        FeatureTaskRuntimeGoalContinuationArtifact(
-          issueKey = "SKILL-148",
-          subtaskId = 1,
-          suppressPr = true,
-          goalBranch = "feat/SKILL-148",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
-        ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
-      DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label() to state.toPersistenceWire(),
-    )
 
   private fun workflowsWith(
     workflowId: String,

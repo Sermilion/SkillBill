@@ -29,7 +29,7 @@ internal fun DetailSections.changesSection(changes: ChangesUi, onAction: (Detail
   section("changes", "Changes", count = listed?.files?.size?.toString()) {
     when (val state = changes.state) {
       ChangesState.Loading -> notice("changes-loading") { Hint("Loading changes") }
-      ChangesState.NoSubtask -> notice("changes-none") { Hint("No subtask is running") }
+      ChangesState.NoSubtask -> notice("changes-none") { Hint("No base branch to diff against yet") }
       is ChangesState.BaseUnavailable -> notice("changes-base") { Hint("Base commit unavailable: ${state.reason}") }
       is ChangesState.NotARepository -> notice("changes-repo") { Hint("${state.worktreeRoot} is not a git repository") }
       is ChangesState.Unavailable -> notice("changes-problem") { Hint(readProblemText(state.problem)) }
