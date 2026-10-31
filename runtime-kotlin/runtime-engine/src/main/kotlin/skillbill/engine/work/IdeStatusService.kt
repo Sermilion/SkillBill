@@ -11,6 +11,7 @@ import skillbill.engine.work.control.workDisplayPriority
 import skillbill.engine.work.control.workLiveSection
 import skillbill.engine.work.control.workPauseEligible
 import skillbill.engine.work.control.workRequiresAttention
+import skillbill.engine.work.incident.WorkIncidentProjectionBuilder
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
 import skillbill.engine.work.model.IdeStatusQueryWorkReport

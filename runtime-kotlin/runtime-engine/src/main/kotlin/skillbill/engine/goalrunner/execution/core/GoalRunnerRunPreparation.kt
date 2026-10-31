@@ -106,6 +106,7 @@ class GoalRunnerRunPreparation(
             workflowId = acceptedBlockReference?.sourceWorkflowId ?: state.manifest.workflowIdFor(subtaskId),
             acceptedBlockReference = acceptedBlockReference,
             historicalBlockReference = acceptedBlockReference,
+            recoveryCommand = repair.recoveryCommand,
             lastResumableStep =
               state.manifest.subtasks
                 .firstOrNull { it.id == subtaskId }

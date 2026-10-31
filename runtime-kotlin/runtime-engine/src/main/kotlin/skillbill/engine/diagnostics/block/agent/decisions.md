@@ -1,3 +1,8 @@
+## [2026-10-31] Key parent-level goal blocks by their cause
+Context: A goal parent stays on plan_subtasks while children and finalization run, so every parent block without a causing child resolved to the same step, attempt and generation. SKILL-453 blocked at validate and later at final quality. The second block reused the first incident, and the panel kept showing a cause that was already fixed.
+Decision: A parent block with no causing child carries a block cause of the requested resume step and failure code. The cause is part of the goal alias and is stored on goal_block_identity and on the accepted block reference. A retained identity is reused only when its cause matches. Records without a cause keep the old alias format.
+Reason: The same cause replayed should map to one incident, and a different cause should open a new one. Storing the cause lets every site that rebuilds the canonical alias reproduce it.
+
 ## [2026-10-23] Reconcile durable submission intent before creating another issue
 Context: GitHub can accept a create before the response is lost, and a process can stop between posting a comment and recording its result.
 Decision: Persist sanitized submission intent and pending comment snapshots, search by fingerprint before create, and reconcile incident comment markers under per-report ownership outside database transactions.

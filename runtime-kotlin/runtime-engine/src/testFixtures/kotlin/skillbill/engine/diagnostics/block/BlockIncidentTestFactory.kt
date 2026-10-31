@@ -6,7 +6,7 @@ import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryInterrup
 import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
-import skillbill.engine.work.WorkIncidentProjectionBuilder
+import skillbill.engine.work.incident.WorkIncidentProjectionBuilder
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.InMemoryBlockIncidentSpool

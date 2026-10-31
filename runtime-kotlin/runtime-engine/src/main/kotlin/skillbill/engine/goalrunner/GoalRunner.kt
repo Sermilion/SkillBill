@@ -173,6 +173,8 @@ class GoalRunner(
         causingAcceptedBlockReference = acceptedChildBlockReference,
         historicalBlockReference = stop.historicalBlockReference,
         stopReason = stop.reason,
+        failureCode = stop.failureCode,
+        recoveryCommand = stop.recoveryCommand,
         executionGeneration = executionGeneration,
         executionOwnerToken = executionOwnerToken,
       ),

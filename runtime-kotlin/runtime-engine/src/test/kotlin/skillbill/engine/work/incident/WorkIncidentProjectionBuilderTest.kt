@@ -1,4 +1,4 @@
-package skillbill.engine.work
+package skillbill.engine.work.incident
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

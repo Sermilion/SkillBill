@@ -1,10 +1,12 @@
-package skillbill.engine.work
+package skillbill.engine.work.incident
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.BlockIncidentLiveReferenceResolution
 import skillbill.engine.diagnostics.block.BlockIncidentLiveReferenceResolver
 import skillbill.engine.diagnostics.block.recovery.BlockIncidentProjectionAssessment
 import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.WorkIncidentEvidence
@@ -76,7 +78,7 @@ class WorkIncidentProjectionBuilder(
           unit.blockIncidentRecoveries.latest(it.occurrence.occurrenceToken)?.status !=
             BlockIncidentRecoveryAttemptStatus.RESUMED
         }
-        ?.let { project(unit, it, assessmentKind = "current") }
+        ?.let { project(unit, it, assessmentKind = CURRENT_ASSESSMENT) }
     val history =
       (incidents + currentIncident?.let { listOf(it) }.orEmpty())
         .distinctBy { it.occurrence.occurrenceToken }
@@ -124,7 +126,14 @@ class WorkIncidentProjectionBuilder(
       cause = diagnosis?.cause,
       certainty = diagnosis?.certainty ?: BlockIncidentCertainty.UNKNOWN,
       responsibleCategory = diagnosis?.responsibleCategory ?: BlockIncidentResponsibleCategory.UNRESOLVED,
-      nextAction = nextAction(incident, eligibility, noWorkaround, report, diagnosis),
+      nextAction =
+        nextAction(
+          incident,
+          eligibility,
+          report,
+          diagnosis,
+          if (assessmentKind == CURRENT_ASSESSMENT) unblockCommand(unit, incident) else null,
+        ),
       noWorkaroundKnown = noWorkaround,
       prerequisites = prerequisites,
       evidence =
@@ -139,6 +148,22 @@ class WorkIncidentProjectionBuilder(
       settledAt = diagnosis?.completedAt,
     )
   }
+
+  private fun unblockCommand(
+    unit: UnitOfWork,
+    incident: BlockIncident,
+  ): String? =
+    try {
+      WorkIncidentUnblockCommands.resolve(unit, incident)
+    } catch (error: SkillBillRuntimeException) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Work incident unblock command unavailable; seam=work_detail_projection; " +
+          "incident=${incident.occurrence.occurrenceToken}",
+        error,
+      )
+      null
+    }
 
   private fun recordAssessment(
     incident: BlockIncident,
@@ -186,14 +211,26 @@ class WorkIncidentProjectionBuilder(
   private fun nextAction(
     incident: BlockIncident,
     eligibility: BlockIncidentRecoveryEligibilityResult?,
-    noWorkaround: Boolean,
     report: WorkIncidentReportProjection,
     diagnosis: BlockIncidentDiagnosisRecord?,
-  ): String =
-    when {
+    unblockCommand: String?,
+  ): String {
+    val noWorkaround = diagnosis?.noWorkaroundKnown ?: false
+    val remedy =
+      workIncidentRemedy(
+        WorkIncidentRemedyFacts(
+          incidentToken = incident.occurrence.occurrenceToken,
+          unblockCommand = unblockCommand,
+          responsibleCategory = diagnosis?.responsibleCategory,
+          noWorkaroundKnown = noWorkaround,
+          reportStatus = report.status,
+        ),
+      )
+    return when {
       eligibility is BlockIncidentRecoveryEligibilityResult.Available -> eligibility.preview.label
       eligibility is BlockIncidentRecoveryEligibilityResult.NeedsPrerequisites ->
         eligibility.instructions.firstOrNull()?.instruction.orEmpty()
+      remedy != null -> remedy
       noWorkaround && report.status in setOf(ProductReportStatus.DELIVERED, ProductReportStatus.LINKED_EXISTING) ->
         "No known workaround. The block has been reported."
       noWorkaround -> "No known workaround."
@@ -202,6 +239,7 @@ class WorkIncidentProjectionBuilder(
         "Waiting for investigation."
       else -> diagnosis?.whatHappened ?: incident.occurrence.reason
     }
+  }
 
   private fun recoveryProjection(
     eligibility: BlockIncidentRecoveryEligibilityResult?,
@@ -221,6 +259,7 @@ class WorkIncidentProjectionBuilder(
 
   private companion object {
     const val HISTORY_LIMIT = 10
+    const val CURRENT_ASSESSMENT = "current"
     const val MAX_DIAGNOSTIC_REASON_CHARS = 160
   }
 }

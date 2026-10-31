@@ -134,4 +134,6 @@ internal data class StoppedReportArgs(
   val incidentToken: String? = null,
   val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val failureCode: String? = null,
+  val recoveryCommand: String? = null,
 )

@@ -1,5 +1,6 @@
 package skillbill.engine.diagnostics.block
 
+import skillbill.engine.diagnostics.block.BlockIncidentAliases.withBlockCause
 import skillbill.error.blockincident.BlockIncidentFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
@@ -23,7 +24,7 @@ internal object BlockIncidentAcceptedReferenceResolver {
         reference.executionGeneration,
         reference.attempt,
         reference.childIncidentToken,
-      )
+      ).withBlockCause(reference.blockCause)
     val sourceAliasValue = reference.sourceAliasValue
     val sourceAlias =
       when {

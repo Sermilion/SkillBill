@@ -27,6 +27,7 @@ internal data class BlockIncidentIdentity(
   val alias: BlockIncidentAlias,
   val sourceAlias: BlockIncidentAlias? = null,
   val failureFacts: BlockIncidentFailureFacts? = null,
+  val blockCause: String? = null,
 ) {
   val failureCode: String? get() = failureFacts?.failureCode
   val failureDisposition: FeatureTaskRuntimeFailureDisposition? get() = failureFacts?.failureDisposition
@@ -43,6 +44,7 @@ internal data class BlockIncidentIdentity(
       childIncidentToken = childIncidentToken,
       sourceAliasKind = sourceAlias?.kind?.wireValue,
       sourceAliasValue = sourceAlias?.value,
+      blockCause = blockCause,
     )
 
   fun artifactEntry(): Pair<String, Any?> =
@@ -60,6 +62,7 @@ internal data class BlockIncidentIdentity(
         BlockIncidentIdentityKeys.SOURCE_ALIAS_VALUE to sourceAlias?.value,
       ).apply {
         failureFacts?.let { put(BlockIncidentIdentityKeys.FAILURE_FACTS, it.toArtifactMap()) }
+        blockCause?.let { put(BlockIncidentIdentityKeys.BLOCK_CAUSE, it) }
       },
     )
 
@@ -135,6 +138,10 @@ internal data class BlockIncidentIdentity(
           ),
         sourceAlias = sourceAlias(value),
         failureFacts = failureFacts(value),
+        blockCause =
+          value[BlockIncidentIdentityKeys.BLOCK_CAUSE]?.let {
+            (it as? String)?.takeIf(String::isNotBlank) ?: invalidIdentity()
+          },
       )
     }
 
@@ -190,6 +197,7 @@ private object BlockIncidentIdentityKeys {
   const val FAILURE_FACTS = "failure_facts"
   const val FAILURE_CODE = "failure_code"
   const val FAILURE_DISPOSITION = "failure_disposition"
+  const val BLOCK_CAUSE = "block_cause"
 }
 
 internal object BlockIncidentDisplacementKeys {

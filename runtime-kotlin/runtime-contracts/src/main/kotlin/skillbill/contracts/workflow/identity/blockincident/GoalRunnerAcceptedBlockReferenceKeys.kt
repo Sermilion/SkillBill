@@ -12,4 +12,5 @@ object GoalRunnerAcceptedBlockReferenceKeys {
   const val CHILD_INCIDENT_TOKEN = "child_incident_token"
   const val SOURCE_ALIAS_KIND = "source_alias_kind"
   const val SOURCE_ALIAS_VALUE = "source_alias_value"
+  const val BLOCK_CAUSE = "block_cause"
 }

@@ -7,6 +7,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentAliases.withBlockCause
 import skillbill.engine.diagnostics.block.BlockIncidentFailureFacts
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
@@ -14,6 +15,7 @@ import skillbill.engine.diagnostics.block.OperatorBlockRetryArtifactKeys
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWriteResult
+import skillbill.engine.goalrunner.persist.blockincident.GoalBlockArtifactKeys
 import skillbill.engine.goalrunner.persist.blockincident.WorkflowGoalRunnerAcceptedBlockOutcomeBinding
 import skillbill.engine.goalrunner.persist.blockincident.WorkflowGoalRunnerHistoricalBlockObservation
 import skillbill.engine.goalrunner.persist.blockincident.availableWhen
@@ -95,6 +97,7 @@ class WorkflowGoalRunnerBlockWrites(
         stopReason = request.stopReason,
         failureCode = request.failureCode,
         failureDisposition = request.failureDisposition,
+        recoveryCommand = request.recoveryCommand,
       ),
       workflowStates,
       blockIncidents,
@@ -160,6 +163,7 @@ class WorkflowGoalRunnerBlockWrites(
         ?.takeIf { it.sourceWorkflowId == write.causingChildWorkflowId }
     val childToken = acceptedCause?.incidentToken
     val causalChildWorkflowId = childToken?.let { acceptedCause.sourceWorkflowId }
+    val blockCause = if (childToken == null) write.blockCause() else null
     return GoalBlockCandidate(
       stepId = stepId,
       stepAttemptCount = stepAttemptCount,
@@ -170,11 +174,24 @@ class WorkflowGoalRunnerBlockWrites(
       retainedIdentity =
         retainable?.takeIf {
           it.stepId == stepId && it.attempt == acceptedAttempt &&
-            it.childWorkflowId == causalChildWorkflowId && it.childIncidentToken == childToken
+            it.childWorkflowId == causalChildWorkflowId && it.childIncidentToken == childToken &&
+            it.blockCause == blockCause
         },
+      blockCause = blockCause,
       alias =
-        BlockIncidentAliases.goal(write.record.workflowId, stepId, executionGeneration, acceptedAttempt, childToken),
+        BlockIncidentAliases.goal(
+          write.record.workflowId,
+          stepId,
+          executionGeneration,
+          acceptedAttempt,
+          childToken,
+        ).withBlockCause(blockCause),
     )
+  }
+
+  private fun GoalRunnerBlockWrite.blockCause(): String {
+    val failure = failureCode ?: stopReason?.name ?: "unclassified"
+    return "$lastResumableStep/$failure"
   }
 
   private fun definitionStepIds(write: GoalRunnerBlockWrite): List<String> =
@@ -265,7 +282,7 @@ class WorkflowGoalRunnerBlockWrites(
         reference.executionGeneration,
         reference.attempt,
         reference.childIncidentToken,
-      )
+      ).withBlockCause(reference.blockCause)
     val referenceAlias =
       BlockIncidentAliasKind.entries.firstOrNull { it.wireValue == reference.aliasKind }
         ?.let { BlockIncidentAlias(it, reference.aliasValue) }
@@ -293,6 +310,7 @@ class WorkflowGoalRunnerBlockWrites(
         alias = canonical,
         sourceAlias = referenceSourceAlias ?: referenceAlias?.takeIf { it != canonical },
         failureFacts = referencedIdentity?.failureFacts,
+        blockCause = reference.blockCause,
       )
     val currentAttemptCount = write.record.steps.firstOrNull { it.stepId == reference.blockedStepId }?.attemptCount
     persistBlock(
@@ -355,6 +373,11 @@ class WorkflowGoalRunnerBlockWrites(
             WorkflowArtifactPatch.from(
               buildMap {
                 put(DecompositionManifestPayloadKeys.BLOCKED_REASON, write.blockedReason)
+                if (write.recoveryCommand != null ||
+                  write.record.artifacts.containsKey(GoalBlockArtifactKeys.BLOCKED_RECOVERY_COMMAND)
+                ) {
+                  put(GoalBlockArtifactKeys.BLOCKED_RECOVERY_COMMAND, write.recoveryCommand)
+                }
                 write.supervisionEvent?.let { event -> put("supervision_event", event.toPersistenceWire()) }
                 putAll(mapOf(blockIdentity.artifactEntry()))
                 putAll(WorkflowGoalRunnerAcceptedBlockOutcomeBinding.patch(write.record, blockIdentity))
@@ -620,6 +643,7 @@ private data class GoalBlockCandidate(
   val causalChildWorkflowId: String?,
   val acceptedCause: GoalRunnerAcceptedBlockReference?,
   val retainedIdentity: BlockIncidentIdentity?,
+  val blockCause: String?,
   val alias: BlockIncidentAlias,
 ) {
   internal fun identity(existingOwnerToken: String?): BlockIncidentIdentity {
@@ -644,6 +668,7 @@ private data class GoalBlockCandidate(
             ?: BlockIncidentAliases.token(alias),
         alias = alias,
         sourceAlias = sourceAlias,
+        blockCause = blockCause,
       )
   }
 }

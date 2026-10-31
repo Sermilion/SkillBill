@@ -295,6 +295,13 @@ class GoalRunnerRepairCoordinator(
               ?.status
               ?.decompositionStatus()
           val childProgress = outcomeStore.progress(workflowId)
+          val recoveryCommand =
+            recommendedDurableChildRecoveryCommand(
+              context.request.issueKey,
+              diagnosis.subtaskId,
+              subtaskStatus,
+              childProgress,
+            )
           return GoalRunnerRepairResult(
             issueKey = context.request.issueKey,
             status = GoalRunnerRepairStatus.OPERATOR_REQUIRED,
@@ -305,12 +312,8 @@ class GoalRunnerRepairCoordinator(
             appliedRepairs = applied,
             refusalReason =
               "Review remediation for subtask ${diagnosis.subtaskId} could not be recovered. " +
-                "Recover with: '${recommendedDurableChildRecoveryCommand(
-                  context.request.issueKey,
-                  diagnosis.subtaskId,
-                  subtaskStatus,
-                  childProgress,
-                )}'.",
+                "Recover with: '$recoveryCommand'.",
+            recoveryCommand = recoveryCommand,
           )
         }
       }

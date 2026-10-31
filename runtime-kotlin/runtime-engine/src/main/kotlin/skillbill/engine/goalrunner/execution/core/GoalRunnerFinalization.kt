@@ -36,6 +36,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.model.GoalPullRequestStatus
@@ -154,7 +155,12 @@ class GoalRunnerFinalization(
         writeGoalHistory(finalState, request, attempted, invocationId)?.let { return it }
         invocationId to qaResult
       } catch (failure: SkillBillRuntimeException) {
-        return writeHistoryStopped(finalState, attempted, failure.message ?: "Final goal state could not be saved.")
+        return writeHistoryStopped(
+          finalState,
+          attempted,
+          failure.message ?: "Final goal state could not be saved.",
+          failure.failureCodeLabel(),
+        )
       }
     return commitAndPublish(finalState, request, attempted, prepared.first, prepared.second)
   }
@@ -407,6 +413,7 @@ class GoalRunnerFinalization(
     state: GoalRunnerManifestState,
     attempted: List<Int>,
     reason: String,
+    failureCode: String? = null,
   ): GoalRunnerRunReport =
     stopped(
       StoppedReportArgs(
@@ -417,6 +424,7 @@ class GoalRunnerFinalization(
         blockedReason = reason,
         workflowId = state.parentWorkflowId,
         lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
+        failureCode = failureCode,
       ),
     )
 
