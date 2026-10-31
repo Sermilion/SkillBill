@@ -30,21 +30,21 @@ class RuntimeDetailReadsTest {
     runBlocking {
       val root = Files.createTempDirectory("runtime-detail-reads")
       val sessionJob = SupervisorJob()
-      try {
-        val database = root.resolve("work.db")
-        val runtime = RuntimeComponent::class.create(
-          RuntimeContext(
-            EnvironmentContext(
-              database.toString(),
-              environment = mapOf("SKILL_BILL_TEST" to "1"),
-              userHome = root,
-              repositoryRoot = root,
-            ),
-            TransportContext(),
-            WorkflowOpsContext(),
-            OptionalCallbacks(),
+      val database = root.resolve("work.db")
+      val runtime = RuntimeComponent::class.create(
+        RuntimeContext(
+          EnvironmentContext(
+            database.toString(),
+            environment = mapOf("SKILL_BILL_TEST" to "1"),
+            userHome = root,
+            repositoryRoot = root,
           ),
-        )
+          TransportContext(),
+          WorkflowOpsContext(),
+          OptionalCallbacks(),
+        ),
+      )
+      try {
         val now = Instant.now()
         runtime.databaseSession.transaction { unit ->
           unit.standalonePhaseStatuses.register(
@@ -65,6 +65,7 @@ class RuntimeDetailReadsTest {
         assertNotNull(loaded.sections.runOptions)
       } finally {
         sessionJob.cancel()
+        runtime.databaseReadConnections.release()
         Files.walk(root).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
       }
     }
