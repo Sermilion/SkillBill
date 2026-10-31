@@ -35,7 +35,7 @@ private val RUNTIME_SPAN = Regex(
 private val COMMON_BRANCHES = setOf("main", "master", "develop", "dev", "trunk")
 
 /** After the word "branch", a name is a branch when it is a common trunk name or has a separator or digit no plain word has. */
-private fun looksLikeBranch(candidate: String): Boolean =
+fun looksLikeBranch(candidate: String): Boolean =
   candidate in COMMON_BRANCHES || candidate.any { it == '/' || it == '-' || it == '_' || it == '.' || it.isDigit() }
 
 private val TRAILING_PUNCTUATION = Regex("""[.,;:!?]+$""")

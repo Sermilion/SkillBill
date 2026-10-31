@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat
 
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -22,11 +23,14 @@ import com.mikepenz.markdown.model.DefaultMarkdownColors
 import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.markdownPadding
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.runtimeTextStyles
 
 @Composable
 internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
+  val runtimeStyles = runtimeTextStyles()
+  val annotator = remember(runtimeStyles) { chatMarkdownAnnotator(runtimeStyles) }
   SelectionContainer {
     Markdown(
       content = text,
@@ -59,6 +63,7 @@ internal fun ChatMarkdown(text: String, modifier: Modifier = Modifier) {
         textLink = TextLinkStyles(SpanStyle(color = colors.accentText, textDecoration = TextDecoration.Underline)),
         table = type.tSm,
       ),
+      annotator = annotator,
       padding = markdownPadding(block = 8.dp, listIndent = 16.dp),
       dimens = markdownDimens(tableCellPadding = 10.dp, tableCellWidth = 150.dp, tableCornerSize = SkillBillRadius.md),
       components = markdownComponents(
