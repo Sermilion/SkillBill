@@ -92,8 +92,9 @@ class SpecBrowserService(
     bundlePath: String,
     preferredRepoRoot: Path?,
   ): SpecBundleDeletion {
+    val project = locate(projectId, preferredRepoRoot)
     val specsRoot =
-      locate(projectId, preferredRepoRoot)?.specsRoot?.toAbsolutePath()?.normalize()
+      project?.specsRoot?.toAbsolutePath()?.normalize()
         ?: return SpecBundleDeletion.Refused(NO_SPEC_FOLDER_REASON)
     val directory = specsRoot.resolve(bundlePath).normalize()
     if (!directory.startsWith(specsRoot) || directory == specsRoot) {
@@ -106,7 +107,7 @@ class SpecBrowserService(
       when {
         realDirectory != realRoot.resolve(specsRoot.relativize(directory)) -> LINKED_BUNDLE_REASON
         !isBundleDirectory(realDirectory) -> NOT_A_BUNDLE_REASON
-        control(projectId, bundlePath, preferredRepoRoot).runState.isLive() -> LIVE_BUNDLE_REASON
+        goalHoldsBundle(project.repoRoot, realDirectory) -> LIVE_BUNDLE_REASON
         else -> null
       }
     return refusal?.let(SpecBundleDeletion::Refused) ?: deleteDirectory(realDirectory)
@@ -118,6 +119,16 @@ class SpecBrowserService(
       GoalRuntimeDirectoryDeletion.Absent -> SpecBundleDeletion.Absent
       is GoalRuntimeDirectoryDeletion.Failed -> SpecBundleDeletion.Failed(deletion.reason)
     }
+
+  // A bundle without an issue key, a checkout or a database has no goal, as in control().
+  private fun goalHoldsBundle(
+    repoRoot: Path?,
+    directory: Path,
+  ): Boolean {
+    val manifest = manifestCache.read(directory.resolve(DECOMPOSITION_MANIFEST_FILENAME))
+    val issueKey = rawSpecBundle(directory.fileName.toString(), manifest).issueKey ?: return false
+    return repoRoot != null && holdsRunner(liveGoals.goal(repoRoot, issueKey))
+  }
 
   private fun isBundleDirectory(directory: Path): Boolean =
     manifests.isRegularFile(directory.resolve(DECOMPOSITION_MANIFEST_FILENAME)) ||

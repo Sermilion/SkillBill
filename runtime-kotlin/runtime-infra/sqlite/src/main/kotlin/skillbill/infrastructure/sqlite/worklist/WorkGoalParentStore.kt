@@ -52,13 +52,16 @@ internal fun readWorkGoalParentCandidatePage(
   require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
   val manifest = "$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}"
   val continuation = "$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}"
+  // The indexed issue_key column narrows the scan before any artifacts_json is parsed; rows without the column stay
+  // in, and the manifest key below remains the exact match.
   return connection.prepareStatement(
     """
     SELECT workflow_id, json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.STATUS}') AS manifest_status,
       EXISTS(SELECT 1 FROM json_each(artifacts_json, '$manifest.${DecompositionPlanningPayloadKeys.SUBTASKS}')
         WHERE json_extract(value, '$.${SharedPayloadKeys.STATUS}') NOT IN (?, ?)) AS unsettled
     FROM feature_task_workflows
-    WHERE mode = ? AND json_type(artifacts_json, '$manifest') = 'object'
+    WHERE (UPPER(TRIM(issue_key)) = UPPER(TRIM(?)) OR issue_key IS NULL)
+      AND mode = ? AND json_type(artifacts_json, '$manifest') = 'object'
       AND json_type(artifacts_json, '$continuation') IS NULL
       AND json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.ISSUE_KEY}') = ?
       AND (? IS NULL OR COALESCE(
@@ -72,7 +75,7 @@ internal fun readWorkGoalParentCandidatePage(
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
-      DecompositionStatus.COMPLETE.wireValue, DecompositionStatus.SKIPPED.wireValue,
+      DecompositionStatus.COMPLETE.wireValue, DecompositionStatus.SKIPPED.wireValue, issueKey,
       FeatureTaskWorkflowMode.RUNTIME.wireValue, issueKey, repositoryIdentity,
       repositoryIdentity, repositoryIdentity, limit, offset,
     )
