@@ -17,9 +17,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -66,6 +69,9 @@ class ChatWorkspace(
   private val paneState = MutableStateFlow(false)
   val paneOpen: StateFlow<Boolean> = paneState.asStateFlow()
 
+  override val shownChatId: StateFlow<String?> =
+    combine(paneState, tabState, ::shownId).stateIn(scope, SharingStarted.Eagerly, null)
+
   init {
     scope.launch { snapshotFlow { panes.chatOpen }.collect { open -> if (!open && paneState.value) setPaneOpen(false) } }
   }
@@ -73,9 +79,9 @@ class ChatWorkspace(
   fun session(id: String): ChatSession? = sessions[id]
 
   override fun toggleChat(item: WorkItem?) {
-    val shown = paneState.value && panes.chatOpen
+    val shown = shownId(paneState.value && panes.chatOpen, tabState.value)
     when {
-      shown && (item == null || tabState.value.activeId == item.id) -> hide()
+      shown != null && (item == null || shown == item.id) -> hide()
       item != null -> open(item)
       else -> setPaneOpen(true)
     }
@@ -112,6 +118,9 @@ class ChatWorkspace(
   }
 
   fun hide() = setPaneOpen(false)
+
+  // The one test of "which chat the pane shows", read by [toggleChat] and [shownChatId] alike.
+  private fun shownId(open: Boolean, tabs: ChatTabsState): String? = tabs.activeId.takeIf { open }
 
   private fun setPaneOpen(value: Boolean) {
     paneState.value = value

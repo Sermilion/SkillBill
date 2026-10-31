@@ -74,6 +74,7 @@ class DetailFeatureEntry(
       }
     }
     val terminalOpen by paneCommands.terminalOpen.collectAsState()
+    val shownChatId by chat.shownChatId.collectAsState()
     val host = DetailScreenHost(
       detailsPaneOpen = shellPanes.detailsPaneOpen,
       detailsShortcut = DETAILS_SHORTCUT,
@@ -82,7 +83,7 @@ class DetailFeatureEntry(
       terminalOpen = terminalOpen,
       onToggleSpecs = { shellPanes.specsOpen = !shellPanes.specsOpen },
       onToggleTerminal = paneCommands::toggleTerminal,
-      chatOpen = shellPanes.chatOpen,
+      chatOpen = shownChatId == item.id,
       chatShortcut = CHAT_SHORTCUT,
       onToggleChat = { chat.toggleChat(item) },
     )

@@ -60,6 +60,8 @@ class ShellKeyboardEscapeTest {
   }
 
   private object NoChat : ChatCommands {
+    override val shownChatId = MutableStateFlow<String?>(null)
+
     override fun toggleChat(item: WorkItem?) = Unit
 
     override fun openChat(item: WorkItem) = Unit

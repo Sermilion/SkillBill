@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -110,6 +111,36 @@ class ChatWorkspaceTest {
     assertIs<ChatMessage.StateLine>(workspace.session(operation.id)!!.transcript.value.first())
     assertTrue(workspace.session(operation.id)!!.job.isActive)
     assertTrue(cancelled.isEmpty())
+  }
+
+  @Test
+  fun `the shown chat id follows the active tab while the pane shows and clears when the pane hides or Specs opens`() = runTest {
+    val goal = workItem("SKILL-1")
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
+    chat.events = { flow<ChatEvent> { awaitCancellation() } }
+    val workspace = workspace()
+
+    workspace.open(goal)
+    runCurrent()
+    assertEquals(goal.id, workspace.shownChatId.value)
+
+    workspace.toggleChat(phase)
+    runCurrent()
+    assertTrue(workspace.paneOpen.value)
+    assertEquals(phase.id, workspace.shownChatId.value)
+
+    workspace.toggleChat(phase)
+    runCurrent()
+    assertNull(workspace.shownChatId.value)
+
+    workspace.toggleChat(phase)
+    runCurrent()
+    assertEquals(phase.id, workspace.shownChatId.value)
+    panes.specsOpen = true
+    Snapshot.sendApplyNotifications()
+    runCurrent()
+    assertNull(workspace.shownChatId.value)
   }
 
   @Test
