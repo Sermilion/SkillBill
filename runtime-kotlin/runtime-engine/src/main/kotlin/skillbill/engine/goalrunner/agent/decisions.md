@@ -1,5 +1,13 @@
 # goalrunner boundary decisions
 
+## [2026-10-31] Check review base reachability against the goal branch
+
+Context: Repair diagnosis treats a stored review base as unreachable when it is not an ancestor of the reference commit. An operator may inspect or resume a goal from a checkout that sits on another branch, such as main, which holds none of the goal's commits.
+
+Decision: The reference is the goal branch tip. HEAD is the fallback only when the goal branch is unknown or does not resolve locally.
+
+Reason: Against HEAD on another branch, every valid base would look unreachable and repair would report a false wedge.
+
 ## [2026-10-31] Share focused repair decisions between audit and goal assessment
 
 Context: Goal assessment stopped after three global rounds and allowed finalization with unresolved source defects. Regression-only repairs could claim convergence before independent verification.

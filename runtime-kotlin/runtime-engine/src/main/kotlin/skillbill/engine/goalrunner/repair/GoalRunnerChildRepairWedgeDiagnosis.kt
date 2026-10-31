@@ -70,12 +70,6 @@ class GoalRunnerChildRepairWedgeDiagnosis(
     )
   }
 
-  /**
-   * A stored base is unreachable when it is not an ancestor of the goal branch tip. The goal branch, not
-   * the checkout's HEAD, is the reference: an operator may inspect or resume from a checkout sitting on
-   * another branch, and every valid base would then look unreachable. HEAD is the fallback only when the
-   * goal branch is unknown or does not resolve locally.
-   */
   fun isUnreachable(
     repoRoot: Path,
     sha: String,

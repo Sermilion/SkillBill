@@ -474,10 +474,7 @@ class IdeStatusProjector(
     if (lifecycle == IdeStatusLifecycleState.BLOCKED) {
       val reason = projection?.currentSubtaskBlockedReason ?: projection?.planning?.reason ?: goalBlockedReason
       val exact = reason?.takeIf(String::isNotBlank)
-      return GoalPauseReasonProjection(
-        exact?.let { IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, it) },
-        exact,
-      )
+      return GoalPauseReasonProjection(blockedGoalPauseReason(exact, projection?.currentSubtaskId), exact)
     }
     if (lifecycle != IdeStatusLifecycleState.PAUSED) return GoalPauseReasonProjection(null, null)
     val durableReason = projection?.pauseReason
@@ -704,3 +701,11 @@ internal val GOAL_ASSESSMENT_STEPS =
   )
 
 private val IN_PROGRESS_ASSESSMENT = setOf(GoalRunnerAssessmentState.PENDING, GoalRunnerAssessmentState.RUNNING)
+
+internal fun blockedGoalPauseReason(
+  reason: String?,
+  currentSubtaskId: Int?,
+): IdeStatusPauseReason? =
+  reason
+    ?.takeIf { currentSubtaskId != null }
+    ?.let { IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, it) }

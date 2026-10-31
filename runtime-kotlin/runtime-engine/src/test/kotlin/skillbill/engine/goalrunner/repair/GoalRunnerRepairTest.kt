@@ -337,7 +337,6 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
       ),
       RUNTIME,
     )
-    // HEAD sits on main, which contains none of the goal's commits. Only the goal branch tip does.
     val git =
       object : WorkflowGitOperations by NoopWorkflowGitOperations {
         override fun headCommitSha(repoRoot: Path) = WorkflowGitOperationResult.Ok(value = HEAD_SHA)
