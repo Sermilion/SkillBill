@@ -21,7 +21,11 @@ import kotlinx.coroutines.flow.firstOrNull
 internal const val GONE_NOTICE = "This execution is no longer in the open database."
 internal const val UNREADABLE_NOTICE = "Execution detail could not be read; the agent sees the summary only."
 internal const val NO_AGENT_NOTICE = "No agent is recorded for this execution and no default agent is configured."
-internal const val ACT_PREFIX = "The operator paused this execution so you can act on it."
+internal const val ACT_PREFIX =
+  "The operator paused this execution so you can act on it. When this turn ends the app resumes it; " +
+    "do not resume, relaunch or continue it yourself."
+
+internal const val ALREADY_RUNNING_NOTICE = "The execution is already running again; the app did not relaunch it."
 
 /** The one mode rule: a running or active execution is only read; anything else may be acted on. */
 internal fun modeFor(header: WorkItem): ChatPermissionMode =

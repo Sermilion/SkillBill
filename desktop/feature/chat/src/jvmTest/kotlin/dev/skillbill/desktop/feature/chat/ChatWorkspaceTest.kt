@@ -16,6 +16,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -179,9 +180,77 @@ class ChatWorkspaceTest {
     val act = chat.requests.last()
     assertEquals(ChatPermissionMode.Act, act.mode)
     assertTrue(act.prompt.startsWith(ACT_PREFIX), act.prompt)
+    assertTrue(act.prompt.contains("do not resume, relaunch or continue it yourself"), act.prompt)
+    val fresh = item.copy(lifecycle = Lifecycle.Paused, running = false, agentId = "codex")
+    header.value = loaded(fresh)
+    runCurrent()
     workspace.close(item.id)
     runCurrent()
     assertEquals(listOf("pauseNow", "launch"), controls.calls.map { it.control })
+    assertEquals(fresh, controls.calls.last().item)
+    assertEquals("codex", controls.calls.last().agentId)
+  }
+
+  @Test
+  fun `pause and act does not relaunch an execution the agent resumed during the turn`() = runTest {
+    val item = workItem("SKILL-1")
+    val header = MutableStateFlow(loaded(item))
+    details.details = mapOf(item.id to header)
+    val done = CompletableDeferred<Unit>()
+    chat.events = { request ->
+      if (request.mode == ChatPermissionMode.Act) {
+        flow { done.await(); emit(ChatEvent.Completed) }
+      } else {
+        flowOf(ChatEvent.Completed)
+      }
+    }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+
+    workspace.pauseAndAct(item.id, "fix the test and carry on")
+    runCurrent()
+    header.value = loaded(item.copy(lifecycle = Lifecycle.Paused, running = false))
+    runCurrent()
+    header.value = loaded(item.copy(lifecycle = Lifecycle.Active, running = true))
+    runCurrent()
+    done.complete(Unit)
+    runCurrent()
+
+    assertEquals(listOf("pauseNow"), controls.calls.map { it.control })
+    val transcript = workspace.session(item.id)!!.transcript.value
+    assertTrue(transcript.none { it is ChatMessage.Error }, transcript.toString())
+    assertEquals(ChatMessage.Notice(ALREADY_RUNNING_NOTICE), transcript.last())
+  }
+
+  @Test
+  fun `pause and act does not relaunch an execution that finished during the turn`() = runTest {
+    val item = workItem("SKILL-1")
+    val header = MutableStateFlow(loaded(item))
+    details.details = mapOf(item.id to header)
+    val done = CompletableDeferred<Unit>()
+    chat.events = { request ->
+      if (request.mode == ChatPermissionMode.Act) {
+        flow { done.await(); emit(ChatEvent.Completed) }
+      } else {
+        flowOf(ChatEvent.Completed)
+      }
+    }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+
+    workspace.pauseAndAct(item.id, "finish it")
+    runCurrent()
+    header.value = loaded(item.copy(lifecycle = Lifecycle.Paused, running = false))
+    runCurrent()
+    header.value = loaded(item.copy(lifecycle = Lifecycle.Terminal, running = false))
+    runCurrent()
+    done.complete(Unit)
+    runCurrent()
+
+    assertEquals(listOf("pauseNow"), controls.calls.map { it.control })
+    assertTrue(workspace.session(item.id)!!.transcript.value.none { it is ChatMessage.Error })
   }
 
   @Test

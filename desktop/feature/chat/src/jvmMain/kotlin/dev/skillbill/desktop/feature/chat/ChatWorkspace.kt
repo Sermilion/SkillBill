@@ -5,6 +5,7 @@ import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
@@ -159,7 +160,8 @@ class ChatWorkspace(
 
   /**
    * Pauses a running execution, waits for it to stop, runs [text] in act mode and then relaunches it, even when the turn fails
-   * or its tab closes. On an execution that is not running it is a plain [send].
+   * or its tab closes. The relaunch is skipped when, after the turn, the execution is already running, finished or gone.
+   * On an execution that is not running it is a plain [send].
    */
   fun pauseAndAct(id: String, text: String) {
     val session = accept(id, text) ?: return
@@ -217,19 +219,43 @@ class ChatWorkspace(
     }
   }
 
-  // A window-scope job, so closing the tab does not cancel it; only closeAll does.
+  // A window-scope job, so closing the tab does not cancel it; only closeAll does. It re-reads the execution after the turn,
+  // because the agent may have resumed, finished or removed it, and relaunches only one that is still stopped.
   private fun resumeAfter(turn: Job, id: String, header: WorkItem) {
     val resume = scope.launch {
       turn.join()
-      val outcome = controls.launch(header, header.agentId)
+      val fresh = turns.freshRead(header)
+      if (fresh?.sections is DetailSections.Gone) {
+        sessions[id]?.let(turns::markGone)
+        return@launch
+      }
+      val current = fresh?.header
+      if (current != null && skipRelaunch(id, current)) return@launch
+      val outcome = controls.launch(current ?: header, current?.agentId ?: header.agentId)
       if (outcome is ControlOutcome.Refused || outcome is ControlOutcome.Failed) {
-        sessions[id]?.append(
-          ChatMessage.Error(null, "Couldn't resume the execution: ${outcome.problemDetail()}. Resume it from the detail controls."),
-        )
+        val after = turns.freshRead(header)?.takeIf { it.sections !is DetailSections.Gone }?.header
+        if (after != null && modeFor(after) == ChatPermissionMode.ReadOnly) {
+          sessions[id]?.append(ChatMessage.Notice(ALREADY_RUNNING_NOTICE))
+        } else {
+          sessions[id]?.append(
+            ChatMessage.Error(null, "Couldn't resume the execution: ${outcome.problemDetail()}. Resume it from the detail controls."),
+          )
+        }
       }
     }
     resumeJobs += resume
     resume.invokeOnCompletion { resumeJobs -= resume }
+  }
+
+  // True, after noting why, when the execution is already running or finished, so the app must not relaunch it.
+  private fun skipRelaunch(id: String, current: WorkItem): Boolean {
+    val notice = when {
+      modeFor(current) == ChatPermissionMode.ReadOnly -> ALREADY_RUNNING_NOTICE
+      current.lifecycle == Lifecycle.Terminal -> "The execution finished during this turn; the app did not relaunch it."
+      else -> return false
+    }
+    sessions[id]?.append(ChatMessage.Notice(notice))
+    return true
   }
 
   // Keeps the active session's header, mode and gone state current while its tab is shown.
