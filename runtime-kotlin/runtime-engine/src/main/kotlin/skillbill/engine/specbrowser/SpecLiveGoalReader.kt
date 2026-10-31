@@ -66,10 +66,6 @@ internal class SpecLiveGoalReader(
     }
   }
 
-  /**
-   * The goal for [issueKey] as the tree overlays it, without control options or purge ownership. A failed projection
-   * propagates, so a caller guarding a destructive action never reads it as "no goal".
-   */
   fun goal(
     repoRoot: Path,
     issueKey: String,

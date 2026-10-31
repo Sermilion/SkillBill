@@ -120,7 +120,6 @@ class SpecBrowserService(
       is GoalRuntimeDirectoryDeletion.Failed -> SpecBundleDeletion.Failed(deletion.reason)
     }
 
-  // A bundle without an issue key, a checkout or a database has no goal, as in control().
   private fun goalHoldsBundle(
     repoRoot: Path?,
     directory: Path,

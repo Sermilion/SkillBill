@@ -52,8 +52,6 @@ internal fun readWorkGoalParentCandidatePage(
   require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
   val manifest = "$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}"
   val continuation = "$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}"
-  // The indexed issue_key column narrows the scan before any artifacts_json is parsed; rows without the column stay
-  // in, and the manifest key below remains the exact match.
   return connection.prepareStatement(
     """
     SELECT workflow_id, json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.STATUS}') AS manifest_status,
