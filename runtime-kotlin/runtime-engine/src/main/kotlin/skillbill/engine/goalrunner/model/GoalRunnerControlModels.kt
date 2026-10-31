@@ -1,26 +1,26 @@
 package skillbill.engine.goalrunner.model
 
-enum class GoalRunnerPauseStatus(val wireValue: String) {
+public enum class GoalRunnerPauseStatus(public val wireValue: String) {
   NOT_FOUND("not_found"),
   CHANGED_TARGET("changed_target"),
   PAUSED("paused"),
   REQUESTED("requested"),
 }
 
-data class GoalRunnerPauseResult(
-  val issueKey: String,
-  val parentWorkflowId: String? = null,
-  val status: GoalRunnerPauseStatus,
-  val paused: Boolean = false,
-  val pauseRequested: Boolean = false,
-  val pauseReason: String? = null,
+public data class GoalRunnerPauseResult(
+  public val issueKey: String,
+  public val parentWorkflowId: String? = null,
+  public val status: GoalRunnerPauseStatus,
+  public val paused: Boolean = false,
+  public val pauseRequested: Boolean = false,
+  public val pauseReason: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
   }
 }
 
-enum class GoalRunnerStopStatus(val wireValue: String) {
+public enum class GoalRunnerStopStatus(public val wireValue: String) {
   STOPPED("stopped"),
   ALREADY_STOPPED("already_stopped"),
   NO_LIVE_LEASE("no_live_lease"),
@@ -33,34 +33,34 @@ enum class GoalRunnerStopStatus(val wireValue: String) {
   NOT_FOUND("not_found"),
 }
 
-data class GoalRunnerStopVerbResult(
-  val issueKey: String,
-  val status: GoalRunnerStopStatus,
-  val parentWorkflowId: String? = null,
-  val pauseReason: String? = null,
-  val pausedAt: String? = null,
-  val terminationAttempted: Boolean = false,
-  val terminationFailureCode: String? = null,
+public data class GoalRunnerStopVerbResult(
+  public val issueKey: String,
+  public val status: GoalRunnerStopStatus,
+  public val parentWorkflowId: String? = null,
+  public val pauseReason: String? = null,
+  public val pausedAt: String? = null,
+  public val terminationAttempted: Boolean = false,
+  internal val terminationFailureCode: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
   }
 }
 
-enum class GoalRunnerResumeStatus(val wireValue: String) {
+public enum class GoalRunnerResumeStatus(public val wireValue: String) {
   NOT_FOUND("not_found"),
   NOT_PAUSED("not_paused"),
   RESUMED("resumed"),
   OPERATOR_REQUIRED("operator_required"),
 }
 
-data class GoalRunnerResumeResult(
-  val issueKey: String,
-  val parentWorkflowId: String? = null,
-  val status: GoalRunnerResumeStatus,
-  val clearedPauseReason: String? = null,
-  val appliedRepairs: List<GoalRunnerAppliedRepair> = emptyList(),
-  val refusalReason: String? = null,
+public data class GoalRunnerResumeResult(
+  public val issueKey: String,
+  public val parentWorkflowId: String? = null,
+  public val status: GoalRunnerResumeStatus,
+  public val clearedPauseReason: String? = null,
+  public val appliedRepairs: List<GoalRunnerAppliedRepair> = emptyList(),
+  public val refusalReason: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

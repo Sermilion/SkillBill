@@ -25,15 +25,15 @@ internal const val CI_WAITING_OPERATION_PREFIX: String = "Waiting for CI"
 internal fun isCiWaitingOperation(operationName: String?): Boolean =
   operationName?.startsWith(CI_WAITING_OPERATION_PREFIX) == true
 
-fun interface GoalRunnerCiMonitor {
-  fun monitor(
+public fun interface GoalRunnerCiMonitor {
+  public fun monitor(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): PhaseRunResult
 }
 
 @Inject
-class DefaultGoalRunnerCiMonitor(
+public class DefaultGoalRunnerCiMonitor(
   private val phaseRunEntry: PhaseRunEntry,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val clock: Clock,
@@ -200,7 +200,7 @@ class DefaultGoalRunnerCiMonitor(
     }
 }
 
-const val GOAL_FINALIZATION_OPERATION_KIND: String = "goal_finalization"
+public const val GOAL_FINALIZATION_OPERATION_KIND: String = "goal_finalization"
 private const val MAX_OPERATION_NAME_LENGTH = 160
 private const val MAX_VISIBLE_CHECKS = 4
 private const val MAX_CHECK_NAME_LENGTH = 48

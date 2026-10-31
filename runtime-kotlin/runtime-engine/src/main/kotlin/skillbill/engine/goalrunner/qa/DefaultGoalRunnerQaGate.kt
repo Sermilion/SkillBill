@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 
 @Inject
-class DefaultGoalRunnerQaGate(
+public class DefaultGoalRunnerQaGate(
   private val phaseRunEntry: PhaseRunEntry,
   private val phasePlans: PhaseRunPlanResolver,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,

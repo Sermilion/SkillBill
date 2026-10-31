@@ -6,7 +6,7 @@ import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import java.nio.file.Path
 
-fun canonicalRepository(
+internal fun canonicalRepository(
   repoRoot: Path,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): Path =
@@ -14,7 +14,7 @@ fun canonicalRepository(
     repositoryEnclosingRootPort.enclosingRepositoryRoot(repoRoot),
   )
 
-fun canonicalStore(
+internal fun canonicalStore(
   store: ProjectStoreLocation,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): ProjectStoreLocation =
@@ -23,7 +23,7 @@ fun canonicalStore(
     specsRoot = repositoryEnclosingRootPort.canonicalPath(store.specsRoot),
   )
 
-fun resolvedGovernedPath(
+internal fun resolvedGovernedPath(
   canonicalRepository: Path,
   canonicalStore: ProjectStoreLocation,
   governingPath: String,
@@ -33,7 +33,7 @@ fun resolvedGovernedPath(
   return repositoryEnclosingRootPort.optionalRealPath(lexical) ?: lexical
 }
 
-fun resolvedSubSpecPath(
+internal fun resolvedSubSpecPath(
   canonicalRepository: Path,
   canonicalStore: ProjectStoreLocation,
   specPath: String,

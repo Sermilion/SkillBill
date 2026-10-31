@@ -29,33 +29,33 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Path
 
 /** How a standalone plan run ended. */
-sealed interface StandalonePlanResult {
+public sealed interface StandalonePlanResult {
   /** The plan authored a verified spec bundle and settled. */
-  data class Completed(
-    val workflowId: String,
-    val parentSpecPath: String,
-    val decompositionManifestPath: String,
-    val subtaskSpecPaths: List<String>,
+  public data class Completed(
+    public val workflowId: String,
+    public val parentSpecPath: String,
+    public val decompositionManifestPath: String,
+    public val subtaskSpecPaths: List<String>,
   ) : StandalonePlanResult
 
   /** The plan opened or resumed but could not settle; the workflow stays resumable. */
-  data class Blocked(
-    val workflowId: String,
-    val reason: String,
+  public data class Blocked(
+    public val workflowId: String,
+    public val reason: String,
   ) : StandalonePlanResult
 
   /** The plan was not opened or resumed; [workflowId] names the plan workflow in the way, when one exists. */
-  data class Refused(
-    val reason: String,
-    val workflowId: String? = null,
+  public data class Refused(
+    public val reason: String,
+    public val workflowId: String? = null,
   ) : StandalonePlanResult
 }
 
-data class StandalonePlanLaunch(
-  val agentId: String? = null,
-  val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+public data class StandalonePlanLaunch(
+  public val agentId: String? = null,
+  public val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 ) {
-  fun forPhase(target: String): StandalonePhaseLaunch =
+  public fun forPhase(target: String): StandalonePhaseLaunch =
     StandalonePhaseLaunch(
       agentId = agentId,
       arguments =
@@ -70,7 +70,7 @@ data class StandalonePlanLaunch(
 }
 
 @Inject
-class StandalonePlanRun(
+public class StandalonePlanRun(
   private val intakePreparation: GoalIntakePreparation,
   private val planLookup: PlanWorkflowLookup,
   private val entry: FeatureTaskRuntimeRunEntry,
@@ -83,9 +83,9 @@ class StandalonePlanRun(
   private val reopening: PlanSubtasksReopening,
   private val planReports: StandalonePlanReportBuilder,
 ) {
-  fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
+  public fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
 
-  fun replanSubtasks(
+  internal fun replanSubtasks(
     replan: PlanSubtasksReplan,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
@@ -145,7 +145,7 @@ class StandalonePlanRun(
   ): FeatureTaskRuntimeRunInput =
     input.copy(eventSink = statusPublisherFactory.compose(input.eventSink::emit, publisher))
 
-  fun run(
+  public fun run(
     issueKey: String,
     suppliedIntake: String?,
     repoRoot: Path,

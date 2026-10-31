@@ -33,7 +33,7 @@ import java.time.Duration
 private const val GRACEFUL_TERMINATION_WAIT_MILLIS: Long = 5_000
 
 @Inject
-class GoalRunnerStatusControlVerbs(
+public class GoalRunnerStatusControlVerbs(
   private val manifestStore: GoalRunnerManifestStore,
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
@@ -42,7 +42,7 @@ class GoalRunnerStatusControlVerbs(
   private val diagnostics: RuntimeDiagnostics,
   private val repairCoordinator: GoalRunnerRepairCoordinator,
 ) {
-  fun pause(
+  public fun pause(
     issueKey: String,
     repoRoot: Path,
     expectedParentWorkflowId: String? = null,
@@ -82,7 +82,7 @@ class GoalRunnerStatusControlVerbs(
     )
   }
 
-  fun stop(
+  public fun stop(
     issueKey: String,
     repoRoot: Path,
     expectedParentWorkflowId: String? = null,
@@ -236,7 +236,7 @@ class GoalRunnerStatusControlVerbs(
     }
   }
 
-  fun resume(
+  public fun resume(
     issueKey: String,
     repoRoot: Path,
   ): GoalRunnerResumeResult {

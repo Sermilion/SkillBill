@@ -45,7 +45,7 @@ import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 
 @Inject
-class GoalRunner(
+public class GoalRunner(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val goalPlanningSource: GoalPlanningSource,
@@ -58,7 +58,7 @@ class GoalRunner(
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val intakePreparation: GoalIntakePreparation,
 ) {
-  fun admitIntake(
+  public fun admitIntake(
     intake: String,
     repoRoot: Path,
   ): GoalIntakeAdmission {
@@ -88,11 +88,11 @@ class GoalRunner(
   ): GoalIntakeAdmission? =
     intakePreparation.issueKeyForExistingSpec(intake, repoRoot)?.let(GoalIntakeAdmission::Admitted)
 
-  fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
+  public fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
     manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&
       intakePreparation.prepare(request) == null
 
-  fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
+  public fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
     runPreparation.guardEntry({
       it is GoalRunnerRunReport.Stopped &&
         it.stop.reason in ACCEPTED_GOAL_BLOCK_REASONS

@@ -19,11 +19,11 @@ import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifac
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 
 @Inject
-class UnaddressedFindingsLedgerService(
+public class UnaddressedFindingsLedgerService(
   private val database: DatabaseSessionFactory,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun ledger(issueKey: String): UnaddressedFindingsLedger? =
+  public fun ledger(issueKey: String): UnaddressedFindingsLedger? =
     database.read { unitOfWork ->
       if (!unitOfWork.unaddressedFindings.issueExists(issueKey)) {
         null
@@ -41,7 +41,7 @@ class UnaddressedFindingsLedgerService(
       }
     }
 
-  fun verificationDispositions(issueKey: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
+  public fun verificationDispositions(issueKey: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
     database.read { unitOfWork ->
       if (!unitOfWork.unaddressedFindings.issueExists(issueKey)) {
         null
@@ -50,7 +50,7 @@ class UnaddressedFindingsLedgerService(
       }
     }
 
-  fun repairLedgersByWorkflow(issueKey: String): Map<String, FeatureTaskRuntimeRepairLedger>? =
+  public fun repairLedgersByWorkflow(issueKey: String): Map<String, FeatureTaskRuntimeRepairLedger>? =
     database.read { unitOfWork ->
       if (!unitOfWork.unaddressedFindings.issueExists(issueKey)) {
         null

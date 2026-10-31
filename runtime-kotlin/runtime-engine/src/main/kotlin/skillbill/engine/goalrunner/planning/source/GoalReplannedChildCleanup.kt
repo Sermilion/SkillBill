@@ -7,10 +7,10 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 
 @Inject
-class GoalReplannedChildCleanup(
+public class GoalReplannedChildCleanup(
   private val manifestStore: GoalRunnerManifestStore,
 ) {
-  fun clear(
+  public fun clear(
     state: GoalRunnerManifestState,
     replannedSubtaskIds: Set<Int>,
   ): GoalRunnerManifestState {

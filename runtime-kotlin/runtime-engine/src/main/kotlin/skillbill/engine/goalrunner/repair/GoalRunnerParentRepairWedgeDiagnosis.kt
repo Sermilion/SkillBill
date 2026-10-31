@@ -7,10 +7,10 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import java.time.Clock
 
-const val PASSED_PARENT_EXECUTION_LEASE: String = "parent_execution_lease_absent_or_unexpired"
-const val PASSED_PARENT_PAUSE_STATE: String = "parent_pause_not_runner_interrupted"
+public const val PASSED_PARENT_EXECUTION_LEASE: String = "parent_execution_lease_absent_or_unexpired"
+public const val PASSED_PARENT_PAUSE_STATE: String = "parent_pause_not_runner_interrupted"
 
-data class GoalRunnerParentWedgeDiagnosis(
+internal data class GoalRunnerParentWedgeDiagnosis(
   val wedges: List<GoalRunnerWedgeFinding> = emptyList(),
   val passedChecks: List<String> = emptyList(),
 ) {

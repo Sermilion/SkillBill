@@ -10,12 +10,12 @@ import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 
 @Inject
-class GoalRunnerFinalReconciliation(
+public class GoalRunnerFinalReconciliation(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val progressReader: GoalRunnerProgressReader,
 ) {
-  fun reconcile(
+  public fun reconcile(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     ledger: GoalRunnerLedgerRecorder,

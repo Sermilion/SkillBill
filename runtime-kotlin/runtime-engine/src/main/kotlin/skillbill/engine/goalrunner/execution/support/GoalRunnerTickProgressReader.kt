@@ -14,18 +14,18 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import java.nio.file.Path
 import java.time.Clock
 
-val RUNTIME_WORKFLOW_ID_PREFIX: String = WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix
+internal val RUNTIME_WORKFLOW_ID_PREFIX: String = WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix
 
-const val MAX_VALIDATION_QUALITY_RETRIES = 3
+internal const val MAX_VALIDATION_QUALITY_RETRIES = 3
 
-val CHILD_WORKFLOW_BLOCK_REASONS: Set<GoalRunnerStopReason> =
+internal val CHILD_WORKFLOW_BLOCK_REASONS: Set<GoalRunnerStopReason> =
   setOf(
     GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
     GoalRunnerStopReason.TIMEOUT,
     GoalRunnerStopReason.INTERRUPTED,
   )
 
-fun isFeatureSpecPath(path: String): Boolean {
+public fun isFeatureSpecPath(path: String): Boolean {
   val normalized = path.trim().trimEnd('/').removeSurrounding("\"").removePrefix("./")
   val dotted = if (normalized.startsWith(".")) normalized else ".$normalized"
   return dotted == LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY ||
@@ -48,12 +48,12 @@ internal fun goalRunnerRepositoryContentIdentity(
   return gitOperations.scopedContentFingerprint(repoRoot, paths)
 }
 
-internal data class GoalRunnerProgressState(
-  val subtask: DecompositionSubtask,
-  val childProgress: GoalRunnerWorkflowProgress?,
+public data class GoalRunnerProgressState(
+  public val subtask: DecompositionSubtask,
+  public val childProgress: GoalRunnerWorkflowProgress?,
 )
 
-class GoalRunnerTickProgressReader(
+public class GoalRunnerTickProgressReader(
   private val manifestStore: GoalRunnerManifestStore,
   private val progressReader: GoalRunnerProgressReader,
   private val issueKey: String,
@@ -65,7 +65,7 @@ class GoalRunnerTickProgressReader(
   private var cachedHasValue: Boolean = false
   private var cached: GoalRunnerProgressState? = null
 
-  internal fun progressState(): GoalRunnerProgressState? {
+  public fun progressState(): GoalRunnerProgressState? {
     val now = clock.millis()
     if (cachedHasValue && now >= cachedAtMillis && now - cachedAtMillis < TICK_MEMO_WINDOW_MILLIS) {
       return cached

@@ -6,14 +6,14 @@ import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 
-interface GoalChildPlanningHydratorPort {
-  fun hydrate(
+public interface GoalChildPlanningHydratorPort {
+  public fun hydrate(
     unitOfWork: GoalRunnerPersistenceSession,
     setup: GoalRunnerChildWorkflowSetup,
     request: GoalChildPlanningHydrationRequest,
   ): GoalChildPlanningHydrateResult
 
-  fun requireMatchingImport(
+  public fun requireMatchingImport(
     unitOfWork: GoalRunnerPersistenceSession,
     existing: WorkflowStateSnapshot,
     setup: GoalRunnerChildWorkflowSetup,

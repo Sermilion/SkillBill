@@ -15,7 +15,7 @@ import skillbill.workflow.engine.model.WorkflowStepUpdates
 import java.time.Clock
 
 @Inject
-class GoalChildPlanningHydratorPortAdapter(
+public class GoalChildPlanningHydratorPortAdapter(
   clock: Clock,
 ) : GoalChildPlanningHydratorPort {
   private val hydrator = GoalChildPlanningHydrator(clock)

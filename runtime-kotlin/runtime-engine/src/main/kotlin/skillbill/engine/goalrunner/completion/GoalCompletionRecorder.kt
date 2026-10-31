@@ -9,7 +9,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.time.Clock
 
 @Inject
-class GoalCompletionRecorder(
+public class GoalCompletionRecorder(
   private val manifestStore: GoalRunnerManifestStore,
   private val clock: Clock,
   private val checkpoint: DatabaseCheckpoint,

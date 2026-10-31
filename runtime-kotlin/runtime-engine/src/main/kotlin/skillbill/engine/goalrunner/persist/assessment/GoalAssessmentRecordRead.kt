@@ -2,14 +2,14 @@ package skillbill.engine.goalrunner.persist.assessment
 
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 
-sealed interface GoalAssessmentRecordRead {
-  data object Absent : GoalAssessmentRecordRead
+public sealed interface GoalAssessmentRecordRead {
+  public data object Absent : GoalAssessmentRecordRead
 
-  data class Recorded(
-    val record: GoalAssessmentRecord,
+  public data class Recorded(
+    public val record: GoalAssessmentRecord,
   ) : GoalAssessmentRecordRead
 
-  data class Corrupt(
-    val reason: String,
+  public data class Corrupt(
+    public val reason: String,
   ) : GoalAssessmentRecordRead
 }

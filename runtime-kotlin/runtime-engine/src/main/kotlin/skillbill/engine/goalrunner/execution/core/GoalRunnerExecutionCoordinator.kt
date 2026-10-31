@@ -24,34 +24,34 @@ import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.CancellationException
 
-interface GoalRunnerExecutionCoordinator {
-  fun <T> runOwned(
+public interface GoalRunnerExecutionCoordinator {
+  public fun <T> runOwned(
     parentWorkflowId: String,
     block: () -> T,
   ): GoalRunnerOwnedRun<T>
 
-  fun <T> runOwnedWithChildAdmission(
+  public fun <T> runOwnedWithChildAdmission(
     parentWorkflowId: String,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
     block: () -> T,
   ): GoalRunnerOwnedRun<T>
 
-  fun <T> runOwnedWithLease(
+  public fun <T> runOwnedWithLease(
     parentWorkflowId: String,
     block: (Long, String?) -> T,
   ): GoalRunnerOwnedRun<T>
 
-  fun <T> runOwnedWithChildAdmissionLease(
+  public fun <T> runOwnedWithChildAdmissionLease(
     parentWorkflowId: String,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
     block: (Long, String?) -> T,
   ): GoalRunnerOwnedRun<T>
 }
 
-sealed interface GoalRunnerOwnedRun<out T> {
-  data class Completed<T>(val value: T) : GoalRunnerOwnedRun<T>
+public sealed interface GoalRunnerOwnedRun<out T> {
+  public data class Completed<T>(public val value: T) : GoalRunnerOwnedRun<T>
 
-  data class AlreadyRunning(val reason: String) : GoalRunnerOwnedRun<Nothing>
+  public data class AlreadyRunning(public val reason: String) : GoalRunnerOwnedRun<Nothing>
 }
 
 private fun alreadyRunningReason(
@@ -72,7 +72,7 @@ private sealed interface LeaseAcquisition {
 }
 
 @Inject
-class DefaultGoalRunnerExecutionCoordinator(
+public class DefaultGoalRunnerExecutionCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val clock: Clock,
@@ -300,7 +300,7 @@ class DefaultGoalRunnerExecutionCoordinator(
     }
   }
 
-  fun recordInterruption(parentWorkflowId: String) {
+  internal fun recordInterruption(parentWorkflowId: String) {
     daemonThreadPort.runWithJoinBudget(
       action = {
         val result =

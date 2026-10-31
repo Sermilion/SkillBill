@@ -2,13 +2,13 @@ package skillbill.engine.goalrunner.model
 
 import java.nio.file.Path
 
-data class GoalRunnerResetRequest(
-  val issueKey: String,
-  val hard: Boolean,
-  val preservePlanning: Boolean = false,
-  val subtaskId: Int? = null,
-  val deleteChildWorkflow: Boolean = false,
-  val repoRoot: Path? = null,
+public data class GoalRunnerResetRequest(
+  public val issueKey: String,
+  public val hard: Boolean,
+  public val preservePlanning: Boolean = false,
+  public val subtaskId: Int? = null,
+  public val deleteChildWorkflow: Boolean = false,
+  public val repoRoot: Path? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -24,38 +24,38 @@ data class GoalRunnerResetRequest(
   }
 }
 
-data class GoalRunnerResetResult(
-  val issueKey: String,
-  val mode: String,
-  val parentWorkflowId: String,
-  val before: GoalRunnerResetSnapshot,
-  val after: GoalRunnerResetSnapshot,
-  val recovery: GoalRunnerChildRecoveryDiagnostic? = null,
-  val branchActionTaken: String? = null,
-  val refusalReason: String? = null,
-  val remedyCommand: String? = null,
+public data class GoalRunnerResetResult(
+  public val issueKey: String,
+  public val mode: String,
+  public val parentWorkflowId: String,
+  public val before: GoalRunnerResetSnapshot,
+  public val after: GoalRunnerResetSnapshot,
+  public val recovery: GoalRunnerChildRecoveryDiagnostic? = null,
+  public val branchActionTaken: String? = null,
+  public val refusalReason: String? = null,
+  public val remedyCommand: String? = null,
 )
 
-data class GoalRunnerChildRecoveryDiagnostic(
-  val subtaskId: Int,
-  val workflowId: String,
-  val classification: String,
-  val recoveryCommand: String?,
+public data class GoalRunnerChildRecoveryDiagnostic(
+  public val subtaskId: Int,
+  public val workflowId: String,
+  public val classification: String,
+  public val recoveryCommand: String?,
 )
 
-data class GoalRunnerResetSnapshot(
-  val status: String,
-  val currentSubtaskId: Int?,
-  val currentAction: String,
-  val subtasks: List<GoalRunnerResetSubtaskSnapshot>,
+public data class GoalRunnerResetSnapshot(
+  public val status: String,
+  public val currentSubtaskId: Int?,
+  public val currentAction: String,
+  public val subtasks: List<GoalRunnerResetSubtaskSnapshot>,
 )
 
-data class GoalRunnerResetSubtaskSnapshot(
-  val id: Int,
-  val status: String,
-  val branch: String?,
-  val workflowId: String?,
-  val commitSha: String?,
-  val blockedReason: String?,
-  val lastResumableStep: String?,
+public data class GoalRunnerResetSubtaskSnapshot(
+  public val id: Int,
+  public val status: String,
+  public val branch: String?,
+  public val workflowId: String?,
+  public val commitSha: String?,
+  public val blockedReason: String?,
+  public val lastResumableStep: String?,
 )

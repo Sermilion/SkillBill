@@ -12,13 +12,13 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-data class GoalSubtaskIdentity(
+internal data class GoalSubtaskIdentity(
   val workflowId: String,
   val issueKey: String,
   val subtaskId: Int,
 )
 
-data class HistoryArtifactAppend(
+internal data class HistoryArtifactAppend(
   val workflowId: String,
   val latestFamily: DurableWorkflowArtifactFamily?,
   val historyFamily: DurableWorkflowArtifactFamily,
@@ -26,55 +26,55 @@ data class HistoryArtifactAppend(
   val entryMap: GoalRunnerWirePayload,
 )
 
-data class GoalContinuationCandidate(
-  val family: WorkflowFamily,
-  val snapshot: WorkflowStateSnapshot,
-  val goalContinuation: GoalContinuation,
-  val outcome: GoalRunnerStoredOutcome?,
+public data class GoalContinuationCandidate(
+  public val family: WorkflowFamily,
+  public val snapshot: WorkflowStateSnapshot,
+  public val goalContinuation: GoalContinuation,
+  public val outcome: GoalRunnerStoredOutcome?,
 )
 
-data class GoalRunnerBlockRequest(
-  val workflowId: String,
-  val blockedReason: String,
-  val lastResumableStep: String,
-  val supervisionEvent: GoalRunnerSupervisionEvent? = null,
-  val causingChildWorkflowId: String? = null,
-  val executionGeneration: Long? = null,
-  val executionOwnerToken: String? = null,
-  val failureExitCode: Int? = null,
-  val failureThrowableType: String? = null,
-  val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
-  val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
-  val stopReason: GoalRunnerStopReason? = null,
-  val failureCode: String? = null,
-  val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+public data class GoalRunnerBlockRequest(
+  public val workflowId: String,
+  public val blockedReason: String,
+  public val lastResumableStep: String,
+  internal val supervisionEvent: GoalRunnerSupervisionEvent? = null,
+  internal val causingChildWorkflowId: String? = null,
+  public val executionGeneration: Long? = null,
+  internal val executionOwnerToken: String? = null,
+  internal val failureExitCode: Int? = null,
+  internal val failureThrowableType: String? = null,
+  internal val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  public val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  public val stopReason: GoalRunnerStopReason? = null,
+  public val failureCode: String? = null,
+  public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
 )
 
-data class GoalRunnerBlockWrite(
-  val family: WorkflowFamily,
-  val record: WorkflowStateSnapshot,
-  val blockedReason: String,
-  val lastResumableStep: String,
-  val supervisionEvent: GoalRunnerSupervisionEvent?,
-  val causingChildWorkflowId: String? = null,
-  val executionGeneration: Long? = null,
-  val failureExitCode: Int? = null,
-  val failureThrowableType: String? = null,
-  val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
-  val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
-  val stopReason: GoalRunnerStopReason? = null,
-  val failureCode: String? = null,
-  val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+internal data class GoalRunnerBlockWrite(
+  public val family: WorkflowFamily,
+  public val record: WorkflowStateSnapshot,
+  public val blockedReason: String,
+  public val lastResumableStep: String,
+  internal val supervisionEvent: GoalRunnerSupervisionEvent?,
+  internal val causingChildWorkflowId: String? = null,
+  public val executionGeneration: Long? = null,
+  internal val failureExitCode: Int? = null,
+  internal val failureThrowableType: String? = null,
+  internal val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  public val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  public val stopReason: GoalRunnerStopReason? = null,
+  public val failureCode: String? = null,
+  public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
 )
 
 internal data class GoalRunnerBlockWriteResult(
-  val stepId: String,
-  val observation: BlockIncidentObservation,
-  val acceptedBlockReference: GoalRunnerAcceptedBlockReference,
+  public val stepId: String,
+  public val observation: BlockIncidentObservation,
+  public val acceptedBlockReference: GoalRunnerAcceptedBlockReference,
 )
 
-data class GoalRunnerAcceptedBlock(
-  val stepId: String,
-  val incidentToken: String?,
-  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+public data class GoalRunnerAcceptedBlock(
+  public val stepId: String,
+  public val incidentToken: String?,
+  public val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )

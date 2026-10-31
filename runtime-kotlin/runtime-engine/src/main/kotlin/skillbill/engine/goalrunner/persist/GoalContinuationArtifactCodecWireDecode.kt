@@ -5,7 +5,7 @@ import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequest
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 
-fun GoalRunnerSupervisionEvent.toArtifactsMap(): Map<String, Any?> =
+public fun GoalRunnerSupervisionEvent.toArtifactsMap(): Map<String, Any?> =
   linkedMapOf(
     "phase" to phase,
     "reason" to reason,
@@ -19,9 +19,9 @@ fun GoalRunnerSupervisionEvent.toArtifactsMap(): Map<String, Any?> =
     "last_output_at" to lastOutputAt,
   )
 
-const val WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT = 50
+public const val WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT: Int = 50
 
-fun GoalRunnerWorkerSubtaskRequestOutcome.toPersistenceWire(): Map<String, Any?> =
+public fun GoalRunnerWorkerSubtaskRequestOutcome.toPersistenceWire(): Map<String, Any?> =
   when (this) {
     is GoalRunnerWorkerSubtaskRequestOutcome.Accepted ->
       linkedMapOf(
@@ -54,7 +54,7 @@ fun GoalRunnerWorkerSubtaskRequestOutcome.toPersistenceWire(): Map<String, Any?>
       )
   }
 
-fun GoalRunnerWorkerSubtaskRequest.toPersistenceWire(): Map<String, Any?> =
+public fun GoalRunnerWorkerSubtaskRequest.toPersistenceWire(): Map<String, Any?> =
   linkedMapOf<String, Any?>(
     "name" to name,
     "spec_path" to specPath,

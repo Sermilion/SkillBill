@@ -7,17 +7,17 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.asGoalRunnerIntOrNull
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 
-fun List<GoalContinuationCandidate>.authoritativeOutcomesBySubtask(): Map<Int, GoalRunnerStoredOutcome> =
+public fun List<GoalContinuationCandidate>.authoritativeOutcomesBySubtask(): Map<Int, GoalRunnerStoredOutcome> =
   groupBy { candidate -> candidate.goalContinuation.subtaskId }
     .mapNotNull { (subtaskId, candidates) ->
       candidates.selectAuthoritativeOutcome()?.let { outcome -> subtaskId to outcome }
     }
     .toMap()
 
-fun List<GoalContinuationCandidate>.selectAuthoritativeOutcome(): GoalRunnerStoredOutcome? =
+public fun List<GoalContinuationCandidate>.selectAuthoritativeOutcome(): GoalRunnerStoredOutcome? =
   selectAuthoritativeCandidate()?.outcome
 
-fun List<GoalContinuationCandidate>.selectAuthoritativeCandidate(): GoalContinuationCandidate? {
+public fun List<GoalContinuationCandidate>.selectAuthoritativeCandidate(): GoalContinuationCandidate? {
   val completeWinner =
     asSequence()
       .filter { candidate -> candidate.outcome?.status == GoalRunnerTerminalStatus.COMPLETE }
@@ -32,7 +32,7 @@ fun List<GoalContinuationCandidate>.selectAuthoritativeCandidate(): GoalContinua
   return fallbackWinner
 }
 
-fun staleRunningReason(
+internal fun staleRunningReason(
   staleWorkflowId: String,
   issueKey: String,
   subtaskId: Int,
@@ -52,7 +52,7 @@ fun staleRunningReason(
       "subtask $subtaskId because it was no longer active."
   )
 
-fun Map<String, Any?>.matchesGoalContinuation(
+public fun Map<String, Any?>.matchesGoalContinuation(
   issueKey: String,
   subtaskId: Int,
 ): Boolean {
@@ -61,7 +61,7 @@ fun Map<String, Any?>.matchesGoalContinuation(
   return candidateIssueKey == issueKey && candidateSubtaskId == subtaskId
 }
 
-fun Map<String, Any?>.toMissingResultPrefixOutcomeArtifact(
+public fun Map<String, Any?>.toMissingResultPrefixOutcomeArtifact(
   issueKey: String,
   subtaskId: Int,
   workflowId: String,
@@ -84,9 +84,9 @@ fun Map<String, Any?>.toMissingResultPrefixOutcomeArtifact(
       ?.let { put("blocked_reason", it) }
   }
 
-fun GoalRunnerTerminalStatus.toGoalContinuationWireStatus(): String = wireValue
+public fun GoalRunnerTerminalStatus.toGoalContinuationWireStatus(): String = wireValue
 
-fun maxHistorySequence(
+internal fun maxHistorySequence(
   artifacts: Map<String, Any?>,
   historyFamily: DurableWorkflowArtifactFamily,
   current: Int?,

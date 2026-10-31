@@ -3,12 +3,12 @@ package skillbill.engine.goalrunner.execution.support
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.goalrunner.model.GoalRunnerControlState
 
-class GoalRunnerValidationQualityPendingState(
+public class GoalRunnerValidationQualityPendingState(
   private val manifestStore: GoalRunnerManifestStore,
 ) {
   private var parentWorkflowId: String = ""
 
-  fun bind(parentWorkflowId: String) {
+  public fun bind(parentWorkflowId: String) {
     this.parentWorkflowId = parentWorkflowId
   }
 
@@ -18,9 +18,10 @@ class GoalRunnerValidationQualityPendingState(
     manifestStore.updateControlState(parentWorkflowId, transform)
   }
 
-  fun validationQualityRetryCount(subtaskId: Int): Int = control().validationQualityRetriesBySubtask[subtaskId] ?: 0
+  internal fun validationQualityRetryCount(subtaskId: Int): Int =
+    control().validationQualityRetriesBySubtask[subtaskId] ?: 0
 
-  fun incrementValidationQualityRetry(subtaskId: Int): Int {
+  internal fun incrementValidationQualityRetry(subtaskId: Int): Int {
     var next = 0
     update { state ->
       next = (state.validationQualityRetriesBySubtask[subtaskId] ?: 0) + 1
@@ -29,7 +30,7 @@ class GoalRunnerValidationQualityPendingState(
     return next
   }
 
-  fun storePendingReAttemptCause(
+  internal fun storePendingReAttemptCause(
     subtaskId: Int,
     cause: String,
   ) {
@@ -38,7 +39,7 @@ class GoalRunnerValidationQualityPendingState(
     }
   }
 
-  fun takePendingReAttemptCause(subtaskId: Int): String? {
+  internal fun takePendingReAttemptCause(subtaskId: Int): String? {
     var cause: String? = null
     update { state ->
       cause = state.pendingReAttemptCauseBySubtask[subtaskId]
@@ -47,7 +48,7 @@ class GoalRunnerValidationQualityPendingState(
     return cause
   }
 
-  fun storePendingCausingLoopEntry(
+  internal fun storePendingCausingLoopEntry(
     subtaskId: Int,
     entry: String,
   ) {
@@ -56,7 +57,7 @@ class GoalRunnerValidationQualityPendingState(
     }
   }
 
-  fun takePendingCausingLoopEntry(subtaskId: Int): String? {
+  internal fun takePendingCausingLoopEntry(subtaskId: Int): String? {
     var entry: String? = null
     update { state ->
       entry = state.pendingCausingLoopEntryBySubtask[subtaskId]

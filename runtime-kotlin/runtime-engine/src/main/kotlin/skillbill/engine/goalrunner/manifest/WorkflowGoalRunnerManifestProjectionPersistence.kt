@@ -24,13 +24,13 @@ import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 
-internal data class SavedManifestProjection(
-  internal val state: GoalRunnerManifestState,
-  internal val projectionArtifacts: DurableWorkflowArtifacts,
+public data class SavedManifestProjection(
+  public val state: GoalRunnerManifestState,
+  public val projectionArtifacts: DurableWorkflowArtifacts,
 )
 
 @Inject
-class WorkflowGoalRunnerManifestProjectionPersistence(
+public class WorkflowGoalRunnerManifestProjectionPersistence(
   private val database: DatabaseSessionFactory,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val decompositionManifestWriter: DecompositionManifestWriter,
@@ -39,9 +39,10 @@ class WorkflowGoalRunnerManifestProjectionPersistence(
   private val decompositionManifestStore: DecompositionManifestStore,
 ) {
   private val engine = WorkflowEngine()
-  private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
+  private val parentProjection: GoalParentProjectionWriter =
+    GoalParentProjectionWriter(engine, decompositionManifestValidator)
 
-  internal fun save(state: GoalRunnerManifestState): SavedManifestProjection =
+  public fun save(state: GoalRunnerManifestState): SavedManifestProjection =
     database.transaction { unitOfWork -> saveInTransaction(unitOfWork, state) }
 
   internal fun saveInTransaction(

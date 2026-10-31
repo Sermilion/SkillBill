@@ -15,7 +15,7 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.time.Clock
 
-class GoalRunnerLedgerRecorder(
+public class GoalRunnerLedgerRecorder(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val request: GoalRunnerRunRequest,
   private val clock: Clock,

@@ -6,7 +6,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 
-fun GoalRunnerManifestStore.effectiveAgentAddonSelection(
+public fun GoalRunnerManifestStore.effectiveAgentAddonSelection(
   parentWorkflowId: String,
   request: GoalRunnerRunRequest,
 ): AgentAddonSelection =
@@ -30,7 +30,7 @@ internal fun effectiveGoalRunnerReviewPolicy(
         ?: CodeReviewExecutionMode.DEFAULT,
   )
 
-fun goalRunnerReviewPolicyMismatch(
+internal fun goalRunnerReviewPolicyMismatch(
   parentWorkflowId: String,
   requestedReviewMode: CodeReviewExecutionMode?,
   persisted: GoalRunnerReviewPolicy,

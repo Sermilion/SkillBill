@@ -21,7 +21,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.time.Clock
 
 @Inject
-class DefaultGoalRunnerAssessmentGate(
+public class DefaultGoalRunnerAssessmentGate(
   phaseRunEntry: PhaseRunEntry,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   gitOperations: WorkflowGitOperations,

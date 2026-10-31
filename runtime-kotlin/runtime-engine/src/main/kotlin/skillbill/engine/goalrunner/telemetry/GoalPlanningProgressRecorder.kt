@@ -13,11 +13,11 @@ import java.time.Clock
 internal const val GOAL_PLANNING_OPERATION_KIND = "goal_planning"
 
 @Inject
-class GoalPlanningProgressRecorder(
+public class GoalPlanningProgressRecorder(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val clock: Clock,
 ) {
-  internal fun sink(
+  public fun sink(
     parentWorkflowId: String,
     issueKey: String,
     agentId: String,

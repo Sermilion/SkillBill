@@ -14,14 +14,14 @@ import java.time.Clock
 private const val MAX_ABANDON_REASON_CHARS: Int = 1000
 
 @Inject
-class GoalRunnerNoChangeChildCloser(
+public class GoalRunnerNoChangeChildCloser(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val workflowService: WorkflowService,
 ) {
   private val engine = WorkflowEngine()
 
-  fun closeAccepted(
+  internal fun closeAccepted(
     parentWorkflowId: String,
     subtaskId: Int,
     workflowId: String,
@@ -51,7 +51,7 @@ class GoalRunnerNoChangeChildCloser(
       true
     }
 
-  fun abandon(
+  public fun abandon(
     workflowId: String,
     reason: String,
   ): String? {

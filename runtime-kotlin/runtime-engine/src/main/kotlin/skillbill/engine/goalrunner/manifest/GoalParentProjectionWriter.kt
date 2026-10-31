@@ -17,11 +17,11 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
-internal class GoalParentProjectionWriter(
+public class GoalParentProjectionWriter(
   private val engine: WorkflowEngine,
   private val validator: DecompositionManifestValidator,
 ) {
-  fun artifacts(
+  public fun artifacts(
     manifest: DecompositionManifest,
     existing: DurableWorkflowArtifacts = DurableWorkflowArtifacts.EMPTY,
   ): WorkflowArtifactPatch =
@@ -35,7 +35,7 @@ internal class GoalParentProjectionWriter(
       ),
     )
 
-  fun rewrite(
+  public fun rewrite(
     unitOfWork: GoalRunnerPersistenceSession,
     existing: WorkflowStateSnapshot,
   ) {

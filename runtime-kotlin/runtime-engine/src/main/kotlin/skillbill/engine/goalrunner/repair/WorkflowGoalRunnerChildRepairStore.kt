@@ -15,7 +15,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine
 
-class WorkflowGoalRunnerChildRepairStore
+public class WorkflowGoalRunnerChildRepairStore
   @Inject
   constructor(
     private val database: DatabaseSessionFactory,

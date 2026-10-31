@@ -16,24 +16,24 @@ import java.io.UncheckedIOException
 import java.nio.file.Path
 
 @Inject
-class StandalonePlanReportBuilder(
+public class StandalonePlanReportBuilder(
   private val manifestStore: GoalRunnerManifestStore,
   private val fileStore: DecompositionManifestStore,
   private val projectStore: ProjectStorePort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun manifestExists(
+  internal fun manifestExists(
     issueKey: String,
     repoRoot: Path,
   ): Boolean = manifestStore.readByIssueKey(issueKey, repoRoot) != null
 
-  fun build(
+  public fun build(
     issueKey: String,
     repoRoot: Path,
   ): StandalonePlanReport? =
     manifestStore.readByIssueKeyIfPresent(issueKey, repoRoot)?.manifest?.let { report(it, repoRoot) }
 
-  fun seededFeatureName(
+  public fun seededFeatureName(
     issueKey: String,
     repoRoot: Path,
   ): String? {
@@ -52,7 +52,7 @@ class StandalonePlanReportBuilder(
       ?.second
   }
 
-  fun report(
+  public fun report(
     manifest: DecompositionManifest,
     repoRoot: Path,
   ): StandalonePlanReport {

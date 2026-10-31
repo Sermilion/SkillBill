@@ -20,7 +20,7 @@ internal fun goalReviewEmissionEnvelope(rawResult: String): FeatureTaskRuntimeWo
     .envelopeWireMap()
 }
 
-fun taskRuntimeRecordOrNull(
+internal fun taskRuntimeRecordOrNull(
   workflowStates: WorkflowStateRepository,
   workflowId: String,
 ): WorkflowStateSnapshot? =
@@ -30,7 +30,7 @@ fun taskRuntimeRecordOrNull(
     null
   }
 
-fun featureTaskRecordForLegacyControls(
+internal fun featureTaskRecordForLegacyControls(
   workflowStates: WorkflowStateRepository,
   workflowId: String,
 ): WorkflowStateSnapshot? = workflowStates.getFeatureTaskWorkflow(workflowId)?.toSnapshot()

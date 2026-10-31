@@ -34,7 +34,7 @@ import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddr
 import java.nio.file.Path
 
 @Inject
-class GoalRunnerPurgeCoordinator(
+public class GoalRunnerPurgeCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val gitOperations: WorkflowGitOperations,
   private val projectionAssembler: GoalRunnerStatusProjectionAssembler,
@@ -50,7 +50,7 @@ class GoalRunnerPurgeCoordinator(
   private val specBundleReset =
     GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator, projectStore, diagnostics)
 
-  fun purge(
+  public fun purge(
     request: GoalRunnerPurgeRequest,
     expectedObservation: DatabaseFileObservation? = null,
   ): GoalRunnerPurgeResult {

@@ -8,7 +8,7 @@ import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryHeadingKind
 import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import skillbill.text.sha256HexUtf8
 
-object GoalPlanningSharedContextPacketValidation {
+public object GoalPlanningSharedContextPacketValidation {
   private val BOUNDARY_MEMORY_FIELDS =
     setOf(
       GoalPlanningSharedContextPacketPayloadKeys.CATALOG,
@@ -38,7 +38,7 @@ object GoalPlanningSharedContextPacketValidation {
     )
   private val DISPOSITIONS = GoalPlanningSubtaskPlanningDisposition.entries.map { it.wireValue }.toSet()
 
-  fun requireValidCatalog(value: Any?) {
+  internal fun requireValidCatalog(value: Any?) {
     val boundaryMemory =
       value as? Map<*, *>
         ?: invalidGoalPlanningSharedContextPacket(
@@ -136,7 +136,7 @@ object GoalPlanningSharedContextPacketValidation {
     }
   }
 
-  fun normalizedSubtasks(value: Any?): List<Map<String, Any?>> {
+  internal fun normalizedSubtasks(value: Any?): List<Map<String, Any?>> {
     val entries =
       value as? List<*>
         ?: invalidGoalPlanningSharedContextPacket(
@@ -254,8 +254,8 @@ object GoalPlanningSharedContextPacketValidation {
     }
   }
 
-  fun isStringMap(value: Any?): Boolean =
+  internal fun isStringMap(value: Any?): Boolean =
     value is Map<*, *> && value.keys.all { it is String } && value.values.all { it is String }
 
-  fun digest(packet: Map<String, Any?>): String = sha256HexUtf8(JsonCodec.mapToJsonString(packet))
+  public fun digest(packet: Map<String, Any?>): String = sha256HexUtf8(JsonCodec.mapToJsonString(packet))
 }

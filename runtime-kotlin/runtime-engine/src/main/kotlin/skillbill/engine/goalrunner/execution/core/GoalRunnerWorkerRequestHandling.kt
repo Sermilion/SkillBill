@@ -15,7 +15,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.workflow.decomposition.model.DecompositionManifest
 
 @Inject
-class GoalRunnerWorkerRequestHandler(
+public class GoalRunnerWorkerRequestHandler(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
 ) {

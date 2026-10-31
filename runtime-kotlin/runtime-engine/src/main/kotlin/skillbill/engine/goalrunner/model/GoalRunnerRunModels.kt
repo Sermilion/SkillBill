@@ -11,21 +11,21 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import java.nio.file.Path
 import kotlin.time.Duration
 
-data class GoalRunnerRunRequest(
-  val issueKey: String,
-  val repoRoot: Path,
-  val invokedAgentId: String,
-  val configuredAgentOverrideId: String? = null,
-  val timeout: Duration? = null,
-  val progressIdleTimeout: Duration? = null,
-  val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
-  val eventSink: GoalRunnerEventSink = GoalRunnerEventSink.NONE,
-  val codeReviewMode: CodeReviewExecutionMode? = null,
-  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
-  val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
-  val stopAfterSubtaskId: Int? = null,
-  val intake: String? = null,
-  val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+public data class GoalRunnerRunRequest(
+  public val issueKey: String,
+  public val repoRoot: Path,
+  public val invokedAgentId: String,
+  public val configuredAgentOverrideId: String? = null,
+  public val timeout: Duration? = null,
+  public val progressIdleTimeout: Duration? = null,
+  public val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+  public val eventSink: GoalRunnerEventSink = GoalRunnerEventSink.NONE,
+  public val codeReviewMode: CodeReviewExecutionMode? = null,
+  public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  public val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
+  public val stopAfterSubtaskId: Int? = null,
+  public val intake: String? = null,
+  public val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
   internal val executionGeneration: Long? = null,
 ) {
   init {
@@ -42,99 +42,99 @@ data class GoalRunnerRunRequest(
   }
 }
 
-sealed interface GoalRunnerRunEvent {
-  val issueKey: String
+public sealed interface GoalRunnerRunEvent {
+  public val issueKey: String
 
-  data class Started(override val issueKey: String) : GoalRunnerRunEvent
+  public data class Started(override val issueKey: String) : GoalRunnerRunEvent
 
-  data class SubtaskStarted(
+  public data class SubtaskStarted(
     override val issueKey: String,
-    val subtaskId: Int,
-    val action: String,
-    val currentStepId: String? = null,
+    public val subtaskId: Int,
+    public val action: String,
+    public val currentStepId: String? = null,
   ) : GoalRunnerRunEvent
 
-  data class SubtaskCompleted(
+  public data class SubtaskCompleted(
     override val issueKey: String,
-    val subtaskId: Int,
-    val currentStepId: String? = null,
+    public val subtaskId: Int,
+    public val currentStepId: String? = null,
   ) : GoalRunnerRunEvent
 
-  data class SubtaskStopped(
+  public data class SubtaskStopped(
     override val issueKey: String,
-    val subtaskId: Int,
-    val reason: String,
-    val blockedReason: String,
-    val currentStepId: String? = null,
-    val parentWorkflowId: String? = null,
-    val workflowId: String? = null,
+    public val subtaskId: Int,
+    public val reason: String,
+    public val blockedReason: String,
+    public val currentStepId: String? = null,
+    public val parentWorkflowId: String? = null,
+    public val workflowId: String? = null,
   ) : GoalRunnerRunEvent
 
-  data class SubtaskReviewSummary(
+  public data class SubtaskReviewSummary(
     override val issueKey: String,
-    val subtaskId: Int,
-    val passNumber: Int,
-    val verdict: String,
-    val findingCount: Int,
-    val unresolvedFindingCount: Int,
-    val findings: List<GoalSubtaskReviewCompactFinding>,
+    public val subtaskId: Int,
+    public val passNumber: Int,
+    public val verdict: String,
+    public val findingCount: Int,
+    public val unresolvedFindingCount: Int,
+    public val findings: List<GoalSubtaskReviewCompactFinding>,
   ) : GoalRunnerRunEvent
 
-  data class ResumeRepaired(
+  public data class ResumeRepaired(
     override val issueKey: String,
-    val repairs: List<GoalRunnerAppliedRepair>,
+    public val repairs: List<GoalRunnerAppliedRepair>,
   ) : GoalRunnerRunEvent
 
-  data class Completed(
+  public data class Completed(
     override val issueKey: String,
-    val completedCount: Int,
-    val pendingCount: Int,
-    val blockedCount: Int,
-    val pullRequestStatus: GoalPullRequestStatus,
-    val pullRequestUrl: String?,
+    public val completedCount: Int,
+    public val pendingCount: Int,
+    public val blockedCount: Int,
+    public val pullRequestStatus: GoalPullRequestStatus,
+    public val pullRequestUrl: String?,
   ) : GoalRunnerRunEvent
 }
 
-fun interface GoalRunnerEventSink {
-  fun emit(event: GoalRunnerRunEvent)
+public fun interface GoalRunnerEventSink {
+  public fun emit(event: GoalRunnerRunEvent)
 
-  companion object {
-    val NONE: GoalRunnerEventSink = GoalRunnerEventSink {}
+  public companion object {
+    public val NONE: GoalRunnerEventSink = GoalRunnerEventSink {}
   }
 }
 
-sealed interface GoalSubtaskQaSummary {
-  data object NotComposed : GoalSubtaskQaSummary
+public sealed interface GoalSubtaskQaSummary {
+  public data object NotComposed : GoalSubtaskQaSummary
 
-  data object NotRecorded : GoalSubtaskQaSummary
+  public data object NotRecorded : GoalSubtaskQaSummary
 
-  data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalSubtaskQaSummary
+  public data class Recorded(public val outcome: FeatureTaskQaOutcome) : GoalSubtaskQaSummary
 }
 
-data class GoalUnknownScenario(
-  val scenarioRef: String,
-  val reason: String?,
+public data class GoalUnknownScenario(
+  public val scenarioRef: String,
+  public val reason: String?,
 )
 
-sealed interface GoalSubtaskUnknownScenarios {
-  data object Absent : GoalSubtaskUnknownScenarios
+public sealed interface GoalSubtaskUnknownScenarios {
+  public data object Absent : GoalSubtaskUnknownScenarios
 
-  data object Empty : GoalSubtaskUnknownScenarios
+  public data object Empty : GoalSubtaskUnknownScenarios
 
-  data class Malformed(val reason: String) : GoalSubtaskUnknownScenarios
+  public data class Malformed(public val reason: String) : GoalSubtaskUnknownScenarios
 
-  data class Recorded(val scenarios: List<GoalUnknownScenario>) : GoalSubtaskUnknownScenarios
+  public data class Recorded(public val scenarios: List<GoalUnknownScenario>) : GoalSubtaskUnknownScenarios
 }
 
-sealed interface GoalQaSummary {
-  data object RanPerSubtask : GoalQaSummary
+public sealed interface GoalQaSummary {
+  public data object RanPerSubtask : GoalQaSummary
 
-  data object NotRecorded : GoalQaSummary
+  public data object NotRecorded : GoalQaSummary
 
-  data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalQaSummary
+  public data class Recorded(public val outcome: FeatureTaskQaOutcome) : GoalQaSummary
 
-  data class Warned(
-    val reason: String,
-    val outcome: FeatureTaskQaOutcome?,
+  public data class Warned(
+    public val reason: String,
+    public val outcome: FeatureTaskQaOutcome?,
   ) : GoalQaSummary
 }

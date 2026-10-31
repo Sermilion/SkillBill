@@ -51,15 +51,15 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-fun interface GoalPlanningSource {
-  fun prepare(
+public fun interface GoalPlanningSource {
+  public fun prepare(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalPlanningSweepOutcome
 }
 
 @Inject
-class PlanWorkflowGoalPlanningSource(
+public class PlanWorkflowGoalPlanningSource(
   private val planRun: StandalonePlanRun,
   private val database: DatabaseSessionFactory,
   private val repositories: RepositoryEnclosingRootPort,

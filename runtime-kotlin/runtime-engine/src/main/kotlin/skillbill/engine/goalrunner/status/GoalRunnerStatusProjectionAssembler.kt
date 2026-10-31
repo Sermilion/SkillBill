@@ -76,7 +76,7 @@ import java.time.Clock
 import java.time.Instant
 
 @Inject
-class GoalRunnerStatusProjectionAssembler(
+public class GoalRunnerStatusProjectionAssembler(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery,
@@ -88,7 +88,7 @@ class GoalRunnerStatusProjectionAssembler(
   private val runtimeStatusService: FeatureTaskRuntimeStatusService?,
   private val clock: Clock,
 ) {
-  fun project(
+  public fun project(
     loadedState: GoalRunnerManifestState,
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusProjection {
@@ -127,7 +127,7 @@ class GoalRunnerStatusProjectionAssembler(
     }
   }
 
-  fun projectWorkflow(
+  internal fun projectWorkflow(
     parentWorkflowId: String,
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusProjection? =
@@ -193,7 +193,7 @@ class GoalRunnerStatusProjectionAssembler(
       throw interrupted
     }
 
-  fun reconcileSubtaskPage(
+  public fun reconcileSubtaskPage(
     parentWorkflowId: String,
     request: GoalRunnerStatusRequest,
     subtasks: List<DecompositionSubtask>,

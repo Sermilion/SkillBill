@@ -8,11 +8,11 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionState
 import skillbill.goalrunner.assessment.model.GoalAssessmentRound
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 
-data class GoalAssessmentFixSet(
-  val findingRefs: List<String>,
-  val regressionRefs: List<String>,
+public data class GoalAssessmentFixSet(
+  internal val findingRefs: List<String>,
+  internal val regressionRefs: List<String>,
 ) {
-  val isEmpty: Boolean get() = findingRefs.isEmpty() && regressionRefs.isEmpty()
+  public val isEmpty: Boolean get() = findingRefs.isEmpty() && regressionRefs.isEmpty()
 }
 
 internal object GoalAssessmentVerdicts {

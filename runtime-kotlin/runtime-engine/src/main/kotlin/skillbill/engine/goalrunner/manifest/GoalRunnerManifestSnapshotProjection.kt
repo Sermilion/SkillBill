@@ -8,7 +8,7 @@ import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.workflow.decomposition.model.DecompositionManifest
 
-fun DecompositionManifest.toResetSnapshot(): GoalRunnerResetSnapshot =
+public fun DecompositionManifest.toResetSnapshot(): GoalRunnerResetSnapshot =
   GoalRunnerResetSnapshot(
     status = status,
     currentSubtaskId = currentSubtaskIntent.subtaskId.takeIf { it > 0 },
@@ -27,7 +27,7 @@ fun DecompositionManifest.toResetSnapshot(): GoalRunnerResetSnapshot =
       },
   )
 
-fun GoalObservabilityProgressEvent.toStatusMap(): Map<String, Any?> =
+public fun GoalObservabilityProgressEvent.toStatusMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.ISSUE_KEY to issueKey,
     SharedPayloadKeys.SUBTASK_ID to subtaskId,
@@ -39,7 +39,7 @@ fun GoalObservabilityProgressEvent.toStatusMap(): Map<String, Any?> =
     "timestamp" to timestamp,
   )
 
-fun Map<Int, GoalRunnerOutOfBandAcceptance>.toAcceptedSubtasks(): List<GoalRunnerAcceptedSubtask> =
+public fun Map<Int, GoalRunnerOutOfBandAcceptance>.toAcceptedSubtasks(): List<GoalRunnerAcceptedSubtask> =
   values.sortedBy(GoalRunnerOutOfBandAcceptance::subtaskId).map { acceptance ->
     GoalRunnerAcceptedSubtask(
       subtaskId = acceptance.subtaskId,

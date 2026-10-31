@@ -67,7 +67,7 @@ import java.time.Clock
 import java.time.ZoneOffset
 
 @Inject
-class WorkflowGoalRunnerBlockWrites(
+public class WorkflowGoalRunnerBlockWrites(
   private val clock: Clock,
 ) {
   private val engine = WorkflowEngine()
@@ -622,7 +622,7 @@ private data class GoalBlockCandidate(
   val retainedIdentity: BlockIncidentIdentity?,
   val alias: BlockIncidentAlias,
 ) {
-  internal fun identity(existingOwnerToken: String?): BlockIncidentIdentity {
+  fun identity(existingOwnerToken: String?): BlockIncidentIdentity {
     val ownerIdentity =
       when {
         existingOwnerToken != null && existingOwnerToken == retainedIdentity?.incidentToken -> retainedIdentity
@@ -648,9 +648,9 @@ private data class GoalBlockCandidate(
   }
 }
 
-internal data class OperatorBlockedPhaseReopenRequest(
-  val phaseId: String,
-  val reason: String,
-  val recoveryAttempt: BlockIncidentRecoveryAttempt? = null,
-  val targetWorkflowId: String? = null,
+public data class OperatorBlockedPhaseReopenRequest(
+  internal val phaseId: String,
+  internal val reason: String,
+  internal val recoveryAttempt: BlockIncidentRecoveryAttempt? = null,
+  internal val targetWorkflowId: String? = null,
 )

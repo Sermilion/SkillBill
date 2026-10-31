@@ -43,7 +43,7 @@ import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
-class GoalChildHistoryEvidenceStore(
+public class GoalChildHistoryEvidenceStore(
   private val snapshots: WorkflowSnapshotValidator,
   private val wireArtifacts: FeatureTaskRuntimeWireArtifactValidator,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanValidator,

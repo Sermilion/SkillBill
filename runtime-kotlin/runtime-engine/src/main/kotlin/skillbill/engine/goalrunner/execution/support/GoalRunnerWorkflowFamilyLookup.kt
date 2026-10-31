@@ -7,7 +7,7 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
 
-fun decodeGoalAgentAddonSelection(raw: Any?): AgentAddonSelection {
+public fun decodeGoalAgentAddonSelection(raw: Any?): AgentAddonSelection {
   val values = raw ?: return AgentAddonSelection()
   val entries =
     values as? List<*>

@@ -14,7 +14,7 @@ import skillbill.ports.agentrun.model.exitCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.time.Clock
 
-internal class GoalRunnerObservabilityEmitter(
+public class GoalRunnerObservabilityEmitter(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,

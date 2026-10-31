@@ -29,7 +29,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigi
 import java.nio.file.Path
 
 @Inject
-class GoalIntakePreparation(
+public class GoalIntakePreparation(
   private val manifestStore: GoalRunnerManifestStore,
   private val specWriter: FeatureSpecPreparationWriter,
   private val specPathResolver: FeatureSpecPathResolverPort,
@@ -37,12 +37,12 @@ class GoalIntakePreparation(
   private val projectStore: ProjectStorePort,
   private val legacySpecIntake: LegacySpecIntake,
 ) : PlanSpecIntakePreparation {
-  fun issueKeyForExistingSpec(
+  internal fun issueKeyForExistingSpec(
     intake: String,
     repoRoot: Path,
   ): String? = referencedSpecPath(intake, repoRoot)?.let { GoalIntake.parse(it.toString()).issueKey }
 
-  fun issueKeyOf(intake: String): String = GoalIntake.parse(intake).issueKey
+  public fun issueKeyOf(intake: String): String = GoalIntake.parse(intake).issueKey
 
   internal fun missingNewWorkInput(
     intake: GoalIntake,
@@ -54,7 +54,7 @@ class GoalIntakePreparation(
       null
     }
 
-  fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? =
+  public fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? =
     manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
 
   override fun resolvePlanSpec(

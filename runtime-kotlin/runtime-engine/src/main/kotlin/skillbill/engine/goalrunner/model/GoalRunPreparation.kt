@@ -2,7 +2,7 @@ package skillbill.engine.goalrunner.model
 
 import skillbill.goalrunner.model.GoalRunnerRunReport
 
-sealed interface GoalRunPreparation {
+internal sealed interface GoalRunPreparation {
   data class Prepared(
     val state: GoalRunnerManifestState,
     val request: GoalRunnerRunRequest,

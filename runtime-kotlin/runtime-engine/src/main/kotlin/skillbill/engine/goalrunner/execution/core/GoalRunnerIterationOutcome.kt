@@ -55,7 +55,7 @@ import skillbill.workflow.model.decompositionStatus
 import java.time.Clock
 
 @Inject
-class GoalRunnerIterationOutcome(
+public class GoalRunnerIterationOutcome(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val finalization: GoalRunnerFinalization,
@@ -271,7 +271,7 @@ class GoalRunnerIterationOutcome(
     }
   }
 
-  fun safeProgress(workflowId: String): GoalRunnerWorkflowProgress? = progressReader.safeProgress(workflowId)
+  internal fun safeProgress(workflowId: String): GoalRunnerWorkflowProgress? = progressReader.safeProgress(workflowId)
 
   private fun recordStoppedLedgerEntries(
     args: RecordStoppedLedgerEntriesArgs,

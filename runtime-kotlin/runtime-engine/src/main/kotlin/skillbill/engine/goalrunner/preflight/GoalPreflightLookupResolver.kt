@@ -16,7 +16,7 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 
-class GoalPreflightLookupResolver(
+internal class GoalPreflightLookupResolver(
   private val gateBlockBuilder: GoalPreflightGateBlockBuilder,
 ) {
   fun resolve(input: GoalPreflightLookupInput): GoalPreflightResult =

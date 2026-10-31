@@ -12,14 +12,14 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.time.Clock
 
 @Inject
-class GoalRunnerFreshQualityCoordinator(
+public class GoalRunnerFreshQualityCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun choose(request: GoalRunnerFreshQualityRequest): GoalRunnerFreshQualityResult {
+  public fun choose(request: GoalRunnerFreshQualityRequest): GoalRunnerFreshQualityResult {
     val loaded =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
         ?: return rejected(request, "No prepared goal exists for '${request.issueKey}'.")

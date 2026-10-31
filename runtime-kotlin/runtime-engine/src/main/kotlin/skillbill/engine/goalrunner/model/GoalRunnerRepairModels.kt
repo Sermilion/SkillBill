@@ -6,7 +6,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import java.nio.file.Path
 
-enum class GoalRunnerWedgeClass(val wireValue: String, val durableField: String) {
+public enum class GoalRunnerWedgeClass(public val wireValue: String, internal val durableField: String) {
   MISSING_VALIDATION_DEPTH("missing_validation_depth", "validation_depth"),
   MISSING_QUALITY_GATE_SELECTION("missing_quality_gate_selection", "quality_gate_selection"),
   UNREACHABLE_REVIEW_BASE("unreachable_review_base", "review_base_sha"),
@@ -19,15 +19,15 @@ enum class GoalRunnerWedgeClass(val wireValue: String, val durableField: String)
   STALE_RUNNER_INTERRUPTED_PAUSE("stale_runner_interrupted_pause", "pause_state"),
   ;
 
-  companion object {
-    fun fromWire(value: String): GoalRunnerWedgeClass? = entries.firstOrNull { it.wireValue == value }
+  internal companion object {
+    internal fun fromWire(value: String): GoalRunnerWedgeClass? = entries.firstOrNull { it.wireValue == value }
   }
 
-  val operatorRequired: Boolean
+  internal val operatorRequired: Boolean
     get() = this == PHASE_OUTPUT_CONTRACT_INCOMPATIBLE
 }
 
-enum class GoalRunnerRepairStatus(val wireValue: String) {
+public enum class GoalRunnerRepairStatus(public val wireValue: String) {
   INSPECTED("inspected"),
   REPAIRED("repaired"),
   HEALTHY("healthy"),
@@ -37,11 +37,11 @@ enum class GoalRunnerRepairStatus(val wireValue: String) {
   NOT_FOUND("not_found"),
 }
 
-data class GoalRunnerRepairRequest(
-  val issueKey: String,
-  val apply: Boolean = false,
-  val subtaskId: Int? = null,
-  val repoRoot: Path? = null,
+public data class GoalRunnerRepairRequest(
+  public val issueKey: String,
+  public val apply: Boolean = false,
+  public val subtaskId: Int? = null,
+  public val repoRoot: Path? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -49,73 +49,73 @@ data class GoalRunnerRepairRequest(
   }
 }
 
-data class GoalRunnerWedgeFinding(
-  val wedgeClass: GoalRunnerWedgeClass,
-  val field: String,
-  val currentValue: String?,
-  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+public data class GoalRunnerWedgeFinding(
+  public val wedgeClass: GoalRunnerWedgeClass,
+  public val field: String,
+  public val currentValue: String?,
+  public val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )
 
-data class GoalRunnerChildWedgeDiagnosis(
-  val subtaskId: Int,
-  val workflowId: String?,
-  val wedges: List<GoalRunnerWedgeFinding> = emptyList(),
-  val passedChecks: List<String> = emptyList(),
+public data class GoalRunnerChildWedgeDiagnosis(
+  public val subtaskId: Int,
+  public val workflowId: String?,
+  public val wedges: List<GoalRunnerWedgeFinding> = emptyList(),
+  public val passedChecks: List<String> = emptyList(),
 ) {
-  val isHealthy: Boolean get() = wedges.isEmpty()
+  public val isHealthy: Boolean get() = wedges.isEmpty()
 }
 
-data class GoalRunnerChildWedgeDiagnosisRequest(
-  val workflowId: String,
-  val issueKey: String,
-  val subtaskId: Int,
-  val subtasks: List<DecompositionSubtask>,
-  val repoRoot: Path,
+public data class GoalRunnerChildWedgeDiagnosisRequest(
+  public val workflowId: String,
+  public val issueKey: String,
+  public val subtaskId: Int,
+  public val subtasks: List<DecompositionSubtask>,
+  public val repoRoot: Path,
 )
 
-data class GoalRunnerChildWedgeRepairRequest(
-  val workflowId: String,
-  val issueKey: String,
-  val subtaskId: Int,
-  val wedgeClasses: List<GoalRunnerWedgeClass>,
-  val repoRoot: Path,
-  val wedgeFindings: List<GoalRunnerWedgeFinding> = emptyList(),
+public data class GoalRunnerChildWedgeRepairRequest(
+  public val workflowId: String,
+  public val issueKey: String,
+  public val subtaskId: Int,
+  internal val wedgeClasses: List<GoalRunnerWedgeClass>,
+  public val repoRoot: Path,
+  internal val wedgeFindings: List<GoalRunnerWedgeFinding> = emptyList(),
 )
 
-data class GoalRunnerChildRepairApplyRequest(
-  val unitOfWork: GoalRunnerPersistenceSession,
-  val workflowId: String,
-  val issueKey: String,
-  val subtaskId: Int,
-  val wedgeClasses: List<GoalRunnerWedgeClass>,
-  val repoRoot: Path,
-  val wedgeFindings: List<GoalRunnerWedgeFinding> = emptyList(),
+public data class GoalRunnerChildRepairApplyRequest(
+  public val unitOfWork: GoalRunnerPersistenceSession,
+  public val workflowId: String,
+  public val issueKey: String,
+  public val subtaskId: Int,
+  internal val wedgeClasses: List<GoalRunnerWedgeClass>,
+  public val repoRoot: Path,
+  internal val wedgeFindings: List<GoalRunnerWedgeFinding> = emptyList(),
 )
 
-data class GoalRunnerChildRepairApplyResult(
-  val repairs: List<GoalRunnerAppliedRepair> = emptyList(),
-  val manifestProjectionArtifacts: DurableWorkflowArtifacts? = null,
+public data class GoalRunnerChildRepairApplyResult(
+  public val repairs: List<GoalRunnerAppliedRepair> = emptyList(),
+  internal val manifestProjectionArtifacts: DurableWorkflowArtifacts? = null,
 )
 
-data class GoalRunnerAppliedRepair(
-  val subtaskId: Int,
-  val workflowId: String,
-  val wedgeClass: GoalRunnerWedgeClass,
-  val field: String,
-  val priorValue: String?,
-  val newValue: String?,
+public data class GoalRunnerAppliedRepair(
+  public val subtaskId: Int,
+  public val workflowId: String,
+  public val wedgeClass: GoalRunnerWedgeClass,
+  public val field: String,
+  public val priorValue: String?,
+  public val newValue: String?,
 )
 
-data class GoalRunnerRepairResult(
-  val issueKey: String,
-  val status: GoalRunnerRepairStatus,
-  val parentWorkflowId: String? = null,
-  val parentWedges: List<GoalRunnerWedgeFinding> = emptyList(),
-  val parentPassedChecks: List<String> = emptyList(),
-  val diagnoses: List<GoalRunnerChildWedgeDiagnosis> = emptyList(),
-  val appliedRepairs: List<GoalRunnerAppliedRepair> = emptyList(),
-  val refusalReason: String? = null,
-  val liveLeaseWorkflowId: String? = null,
+public data class GoalRunnerRepairResult(
+  public val issueKey: String,
+  public val status: GoalRunnerRepairStatus,
+  public val parentWorkflowId: String? = null,
+  public val parentWedges: List<GoalRunnerWedgeFinding> = emptyList(),
+  public val parentPassedChecks: List<String> = emptyList(),
+  public val diagnoses: List<GoalRunnerChildWedgeDiagnosis> = emptyList(),
+  public val appliedRepairs: List<GoalRunnerAppliedRepair> = emptyList(),
+  public val refusalReason: String? = null,
+  public val liveLeaseWorkflowId: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

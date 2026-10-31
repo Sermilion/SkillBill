@@ -51,7 +51,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.time.Clock
 
 @Inject
-class GoalRunnerLaunchReconciler(
+public class GoalRunnerLaunchReconciler(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val progressReader: GoalRunnerProgressReader,

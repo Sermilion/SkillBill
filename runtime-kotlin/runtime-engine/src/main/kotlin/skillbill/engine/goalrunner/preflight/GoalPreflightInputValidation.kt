@@ -9,7 +9,7 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Path
 
-object GoalPreflightInputValidation {
+internal object GoalPreflightInputValidation {
   fun requireInvokedAgentId(invokedAgentId: String) {
     if (invokedAgentId.isBlank()) {
       throw invalidFeatureTaskExecutionIdentitySchema(

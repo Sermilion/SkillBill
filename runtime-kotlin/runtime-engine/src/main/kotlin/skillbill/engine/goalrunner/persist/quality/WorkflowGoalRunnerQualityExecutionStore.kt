@@ -41,9 +41,9 @@ import java.security.MessageDigest
 import java.sql.SQLException
 import kotlin.coroutines.cancellation.CancellationException
 
-class WorkflowGoalRunnerQualityExecutionStore
+public class WorkflowGoalRunnerQualityExecutionStore
   @Inject
-  constructor(
+  public constructor(
     private val database: DatabaseSessionFactory,
     private val snapshotValidator: WorkflowSnapshotValidator,
     private val artifactValidator: FeatureTaskRuntimeWireArtifactValidator,

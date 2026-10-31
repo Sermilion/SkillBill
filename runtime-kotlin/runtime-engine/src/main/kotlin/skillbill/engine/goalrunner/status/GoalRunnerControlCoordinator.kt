@@ -28,11 +28,11 @@ import java.nio.file.Path
 import java.time.Clock
 
 internal class GoalRunnerControlCoordinator(
-  internal val database: DatabaseSessionFactory,
-  internal val decompositionManifestValidator: DecompositionManifestValidator,
-  internal val clock: Clock,
-  internal val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-  internal val saveProjection: (UnitOfWork, GoalRunnerManifestState) -> SavedManifestProjection,
+  val database: DatabaseSessionFactory,
+  val decompositionManifestValidator: DecompositionManifestValidator,
+  val clock: Clock,
+  val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  val saveProjection: (UnitOfWork, GoalRunnerManifestState) -> SavedManifestProjection,
 ) {
   fun controlState(parentWorkflowId: String): GoalRunnerControlState =
     database.read { unitOfWork -> unitOfWork.goalRunnerControls.controlState(parentWorkflowId) }

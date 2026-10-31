@@ -20,7 +20,7 @@ internal data class GoalRunnerBranchPlan(
   val validateBase: Boolean,
 )
 
-fun DecompositionManifest.toPullRequestRequest(
+public fun DecompositionManifest.toPullRequestRequest(
   repoRoot: Path,
   goalQaSummary: GoalQaSummary = GoalQaSummary.NotRecorded,
   goalAssessment: GoalAssessmentRecordRead = GoalAssessmentRecordRead.Absent,

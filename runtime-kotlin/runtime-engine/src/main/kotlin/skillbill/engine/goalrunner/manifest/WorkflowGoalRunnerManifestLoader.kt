@@ -34,7 +34,7 @@ import java.time.Clock
 import kotlin.random.Random
 
 @Inject
-class WorkflowGoalRunnerManifestLoader(
+public class WorkflowGoalRunnerManifestLoader(
   private val database: DatabaseSessionFactory,
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val decompositionManifestStore: DecompositionManifestStore,

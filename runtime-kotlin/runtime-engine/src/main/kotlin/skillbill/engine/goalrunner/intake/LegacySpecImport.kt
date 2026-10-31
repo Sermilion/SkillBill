@@ -15,23 +15,23 @@ import skillbill.workflow.model.WorkflowStatus
 import java.io.IOException
 import java.nio.file.Path
 
-data class LegacySpecImportResult(
-  val sourceRoot: Path,
-  val specsRoot: Path,
-  val imported: List<String>,
-  val alreadyInStore: List<String>,
-  val inFlight: List<String>,
-  val failed: List<String>,
+public data class LegacySpecImportResult(
+  public val sourceRoot: Path,
+  public val specsRoot: Path,
+  public val imported: List<String>,
+  public val alreadyInStore: List<String>,
+  public val inFlight: List<String>,
+  public val failed: List<String>,
 )
 
 @Inject
-class LegacySpecImport(
+public class LegacySpecImport(
   private val database: DatabaseSessionFactory,
   private val projectStore: ProjectStorePort,
   private val fileStore: DecompositionManifestStore,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun import(
+  public fun import(
     repoRoot: Path,
     sourceRoot: Path? = null,
   ): LegacySpecImportResult {

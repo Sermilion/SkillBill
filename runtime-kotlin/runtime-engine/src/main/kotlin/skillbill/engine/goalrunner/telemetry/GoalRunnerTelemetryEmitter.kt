@@ -27,7 +27,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 
-class GoalRunnerTelemetryEmitter(
+public class GoalRunnerTelemetryEmitter(
   private val telemetry: GoalLifecycleTelemetryEmitter,
   private val clock: Clock,
   private val state: GoalRunnerManifestState,
@@ -48,7 +48,7 @@ class GoalRunnerTelemetryEmitter(
   private var startPersisted = false
   private var terminalSettled = false
 
-  fun goalStarted() {
+  public fun goalStarted() {
     telemetry.goalStarted(
       GoalStartedRequest(
         issueKey = state.manifest.issueKey,
@@ -65,11 +65,11 @@ class GoalRunnerTelemetryEmitter(
     startPersisted = true
   }
 
-  fun markSubtaskStarted(subtaskId: Int) {
+  internal fun markSubtaskStarted(subtaskId: Int) {
     subtaskStartedAt.putIfAbsent(subtaskId, clock.instant())
   }
 
-  fun emitNewlyTerminalSubtasks(
+  internal fun emitNewlyTerminalSubtasks(
     manifest: DecompositionManifest,
     attempted: List<Int>,
   ) {
@@ -117,7 +117,7 @@ class GoalRunnerTelemetryEmitter(
       null
     }
 
-  fun goalFinished(
+  public fun goalFinished(
     manifest: DecompositionManifest,
     report: GoalRunnerRunReport,
   ) {
@@ -153,7 +153,7 @@ class GoalRunnerTelemetryEmitter(
     terminalSettled = true
   }
 
-  fun goalFailed() {
+  internal fun goalFailed() {
     if (!startPersisted || terminalSettled) return
     val finishedAt = clock.instant()
     telemetry.goalFinished(
@@ -231,7 +231,7 @@ class GoalRunnerTelemetryEmitter(
       else -> "blocked"
     }
 
-  fun goalIssueFinished(
+  public fun goalIssueFinished(
     manifest: DecompositionManifest,
     report: GoalRunnerRunReport,
   ) {

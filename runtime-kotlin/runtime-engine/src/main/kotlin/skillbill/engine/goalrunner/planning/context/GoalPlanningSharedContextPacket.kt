@@ -11,8 +11,8 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 
-object GoalPlanningSharedContextPacket {
-  const val VERSION = "0.4"
+internal object GoalPlanningSharedContextPacket {
+  const val VERSION: String = "0.4"
   const val LEGACY_VERSION_0_3 = "0.3"
   const val LEGACY_VERSION_0_2 = "0.2"
   const val LEGACY_VERSION_0_1 = "0.1"
@@ -371,7 +371,7 @@ internal fun invalidGoalPlanningSharedContextPacket(
     cause = cause,
   )
 
-object GoalPlanningSpecCanonicalization {
+internal object GoalPlanningSpecCanonicalization {
   private const val FRONTMATTER_FENCE = "---"
   private val STATUS_FRONTMATTER_LINE = Regex("^status\\s*:.*$")
 

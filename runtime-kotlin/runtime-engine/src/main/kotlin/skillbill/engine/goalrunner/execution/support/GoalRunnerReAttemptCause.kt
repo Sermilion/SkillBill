@@ -10,7 +10,7 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-fun reAttemptCauseFor(
+internal fun reAttemptCauseFor(
   reason: GoalRunnerStopReason,
   childLoopIterations: Map<String, Int>,
 ): String? {
@@ -26,19 +26,19 @@ fun reAttemptCauseFor(
   }
 }
 
-fun causingLoopEntryFor(childLoopIterations: Map<String, Int>): String? =
+internal fun causingLoopEntryFor(childLoopIterations: Map<String, Int>): String? =
   childLoopIterations.entries
     .sortedWith(compareBy({ loopReAttemptPriority(it.key) }, { it.key }))
     .firstOrNull()
     ?.let { (loopId, edgeIteration) -> "$loopId:$edgeIteration" }
 
-fun loopReAttemptPriority(loopId: String): Int =
+internal fun loopReAttemptPriority(loopId: String): Int =
   if (FeatureTaskRuntimePhaseWorkflowDefinition.isRegenerationLoopId(loopId)) 0 else 1
 
-fun confirmedAliveKillDiagnosticClass(liveness: GoalRunnerLivenessSnapshot?): String? =
+internal fun confirmedAliveKillDiagnosticClass(liveness: GoalRunnerLivenessSnapshot?): String? =
   if (liveness?.aliveAtKill == true) GoalRunnerLaunchFacts.DIAGNOSTIC_CLASS_CONFIRMED_ALIVE_KILL else null
 
-fun recoverySafeAction(
+internal fun recoverySafeAction(
   issueKey: String,
   subtaskId: Int,
   progress: GoalRunnerWorkflowProgress?,

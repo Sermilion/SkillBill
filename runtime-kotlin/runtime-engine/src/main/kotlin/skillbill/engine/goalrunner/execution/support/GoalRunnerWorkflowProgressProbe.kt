@@ -6,12 +6,12 @@ import skillbill.ports.agentrun.model.AgentRunProgressLabelProbe
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 
-fun progressProbe(
+public fun progressProbe(
   reader: GoalRunnerTickProgressReader,
   subtaskId: Int,
 ): AgentRunProgressProbe = GoalRunnerWorkflowProgressProbe(reader = reader, subtaskId = subtaskId)
 
-class GoalRunnerWorkflowProgressProbe(
+public class GoalRunnerWorkflowProgressProbe(
   private val reader: GoalRunnerTickProgressReader,
   private val subtaskId: Int,
 ) : AgentRunProgressProbe,
@@ -37,7 +37,7 @@ class GoalRunnerWorkflowProgressProbe(
     }
 }
 
-fun declaredProgressProbe(reader: GoalRunnerTickProgressReader): AgentRunDeclaredProgressProbe =
+public fun declaredProgressProbe(reader: GoalRunnerTickProgressReader): AgentRunDeclaredProgressProbe =
   AgentRunDeclaredProgressProbe {
     reader.progressState()
       ?.childProgress
@@ -50,7 +50,7 @@ fun declaredProgressProbe(reader: GoalRunnerTickProgressReader): AgentRunDeclare
       }
   }
 
-fun DecompositionSubtask.progressToken(): String =
+public fun DecompositionSubtask.progressToken(): String =
   listOf(
     status,
     workflowId.orEmpty(),

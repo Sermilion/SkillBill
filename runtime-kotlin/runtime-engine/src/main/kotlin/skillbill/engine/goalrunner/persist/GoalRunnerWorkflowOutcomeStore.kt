@@ -40,21 +40,21 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 
-interface GoalRunnerTerminalOutcomeStore {
-  fun terminalOutcome(
+public interface GoalRunnerTerminalOutcomeStore {
+  public fun terminalOutcome(
     workflowId: String,
     issueKey: String,
     subtaskId: Int,
   ): GoalRunnerStoredOutcome?
 
-  fun terminalOutcome(
+  public fun terminalOutcome(
     unitOfWork: UnitOfWork,
     workflowId: String,
     issueKey: String,
     subtaskId: Int,
   ): GoalRunnerStoredOutcome? = terminalOutcome(workflowId, issueKey, subtaskId)
 
-  fun recoverAndPersistTerminalOutcome(
+  public fun recoverAndPersistTerminalOutcome(
     workflowId: String,
     parentWorkflowId: String,
     issueKey: String,
@@ -62,7 +62,7 @@ interface GoalRunnerTerminalOutcomeStore {
     repoRoot: Path,
   ): GoalRunnerStoredOutcome?
 
-  fun recoverMissingResultPrefixOutput(
+  public fun recoverMissingResultPrefixOutput(
     workflowId: String,
     parentWorkflowId: String,
     issueKey: String,
@@ -71,32 +71,32 @@ interface GoalRunnerTerminalOutcomeStore {
   ): GoalRunnerStoredOutcome?
 }
 
-interface GoalRunnerReviewOutcomeStore {
-  fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState?
+public interface GoalRunnerReviewOutcomeStore {
+  public fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState?
 
-  fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection?
+  public fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection?
 
-  fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded
+  public fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded
 
-  fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios
+  public fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios
 
-  fun recordedTraceProbeCounts(workflowId: String): GoalSubtaskTraceProbeCounts = GoalSubtaskTraceProbeCounts()
+  public fun recordedTraceProbeCounts(workflowId: String): GoalSubtaskTraceProbeCounts = GoalSubtaskTraceProbeCounts()
 
   /** The admitted plan's QA selection once the child has a stored plan, else [requested]; null keeps a pre-QA plan. */
-  fun childQaSelection(
+  public fun childQaSelection(
     workflowId: String,
     requested: FeatureTaskRuntimeQaSelection?,
   ): FeatureTaskRuntimeQaSelection? = requested
 
-  fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult>
+  public fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult>
 
-  fun acknowledgeGoalReviewPass(
+  public fun acknowledgeGoalReviewPass(
     workflowId: String,
     passNumber: Int,
   ): Boolean
 }
 
-interface GoalRunnerWorkflowOutcomeStore :
+public interface GoalRunnerWorkflowOutcomeStore :
   GoalRunnerQualityExecutionStore,
   GoalRunnerTerminalOutcomeStore,
   GoalRunnerReviewOutcomeStore,
@@ -106,38 +106,38 @@ interface GoalRunnerWorkflowOutcomeStore :
   GoalRunnerRestoredChildStore,
   GoalRunnerAssessmentRecordStore,
   GoalRunnerWorkflowOutcomeMutationStore {
-  fun hasQaComposedPlan(workflowId: String): Boolean
+  public fun hasQaComposedPlan(workflowId: String): Boolean
 
-  fun recordGoalFinalRepairOutput(
+  public fun recordGoalFinalRepairOutput(
     parentWorkflowId: String,
     expectedInvocationId: String,
     output: GoalFinalRepairOutput,
   ): Boolean
 
-  fun recordGoalFinalRepairWarning(
+  public fun recordGoalFinalRepairWarning(
     parentWorkflowId: String,
     expectedInvocationId: String,
     warning: String?,
   ): Boolean
 
-  fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext?
+  public fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext?
 
-  fun saveGoalHistoryCompletion(
+  public fun saveGoalHistoryCompletion(
     parentWorkflowId: String,
     expectedInvocationId: String,
     completion: GoalHistoryCompletion,
   ): Boolean
 
-  fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion?
+  public fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion?
 
-  fun goalHistoryWriterEntries(
+  public fun goalHistoryWriterEntries(
     parentWorkflowId: String,
     expectedSelection: List<Pair<Int, String?>>,
   ): List<GoalHistoryWriterEntry>
 
-  fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
+  public fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
 
-  fun manifestReconciliationInputs(
+  public fun manifestReconciliationInputs(
     issueKey: String,
     parentWorkflowId: String,
   ): GoalRunnerManifestReconciliationInputs =
@@ -147,19 +147,19 @@ interface GoalRunnerWorkflowOutcomeStore :
     )
 }
 
-interface GoalRunnerAssessmentRecordStore {
-  fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
+public interface GoalRunnerAssessmentRecordStore {
+  public fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
 
-  fun recordGoalAssessmentRecord(
+  public fun recordGoalAssessmentRecord(
     parentWorkflowId: String,
     record: GoalAssessmentRecord,
   ): Boolean
 }
 
-interface GoalRunnerAttemptLedgerStore {
-  fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary
+public interface GoalRunnerAttemptLedgerStore {
+  public fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary
 
-  fun readAttemptLedgerSummaryForSubtasks(
+  public fun readAttemptLedgerSummaryForSubtasks(
     issueKey: String,
     subtaskIds: Set<Int>,
   ): GoalRunnerAttemptLedgerSummary =
@@ -174,13 +174,13 @@ interface GoalRunnerAttemptLedgerStore {
     }
 }
 
-interface GoalRunnerWorkflowOutcomeMutationStore {
-  fun authoritativeOutcomes(
+public interface GoalRunnerWorkflowOutcomeMutationStore {
+  public fun authoritativeOutcomes(
     issueKey: String,
     parentWorkflowId: String,
   ): Map<Int, GoalRunnerStoredOutcome>
 
-  fun authoritativeOutcomesForSubtasks(
+  public fun authoritativeOutcomesForSubtasks(
     issueKey: String,
     parentWorkflowId: String,
     subtaskIds: Set<Int>,
@@ -190,14 +190,14 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
       parentWorkflowId,
     ).filterKeys(subtaskIds::contains)
 
-  fun authoritativeOutcomesForSubtasks(
+  public fun authoritativeOutcomesForSubtasks(
     unitOfWork: UnitOfWork,
     issueKey: String,
     parentWorkflowId: String,
     subtaskIds: Set<Int>,
   ): Map<Int, GoalRunnerStoredOutcome> = authoritativeOutcomesForSubtasks(issueKey, parentWorkflowId, subtaskIds)
 
-  fun reconcileAuthoritativeOutcomes(
+  public fun reconcileAuthoritativeOutcomes(
     issueKey: String,
     parentWorkflowId: String,
     activeWorkflowIds: Set<String> = emptySet(),
@@ -205,9 +205,9 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
     repoRoot: Path? = null,
   ): Map<Int, GoalRunnerStoredOutcome>
 
-  fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock?
+  public fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock?
 
-  fun reopenBlockedPhaseForOperatorResume(
+  public fun reopenBlockedPhaseForOperatorResume(
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
@@ -216,31 +216,31 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
   ): Boolean
 }
 
-interface GoalRunnerRestoredChildStore {
-  fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference>
+public interface GoalRunnerRestoredChildStore {
+  public fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference>
 
-  fun restoredGoalChildWorkflowId(
+  public fun restoredGoalChildWorkflowId(
     parentWorkflowId: String,
     subtaskId: Int,
   ): String?
 
-  fun restoredGoalChildWorkflowId(
+  public fun restoredGoalChildWorkflowId(
     unitOfWork: UnitOfWork,
     parentWorkflowId: String,
     subtaskId: Int,
   ): String? = restoredGoalChildWorkflowId(parentWorkflowId, subtaskId)
 }
 
-interface GoalRunnerGoalChildHistoryDraftStore : GoalChildHistoryDraftWriter {
-  fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft>
+public interface GoalRunnerGoalChildHistoryDraftStore : GoalChildHistoryDraftWriter {
+  public fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft>
 
-  fun hasRequiredGoalChildHistoryDraft(
+  public fun hasRequiredGoalChildHistoryDraft(
     parentWorkflowId: String,
     subtaskId: Int,
     childWorkflowId: String,
   ): Boolean
 
-  fun hasRequiredGoalChildHistoryDraft(
+  public fun hasRequiredGoalChildHistoryDraft(
     unitOfWork: UnitOfWork,
     parentWorkflowId: String,
     subtaskId: Int,
@@ -248,71 +248,71 @@ interface GoalRunnerGoalChildHistoryDraftStore : GoalChildHistoryDraftWriter {
   ): Boolean = hasRequiredGoalChildHistoryDraft(parentWorkflowId, subtaskId, childWorkflowId)
 }
 
-interface GoalRunnerWorkflowProgressStore {
-  fun progress(workflowId: String): GoalRunnerWorkflowProgress?
+public interface GoalRunnerWorkflowProgressStore {
+  public fun progress(workflowId: String): GoalRunnerWorkflowProgress?
 
-  fun progress(
+  public fun progress(
     unitOfWork: UnitOfWork,
     workflowId: String,
   ): GoalRunnerWorkflowProgress? = progress(workflowId)
 
-  fun recordObservabilityEvent(request: GoalRunnerObservabilityRecordRequest): Boolean
+  public fun recordObservabilityEvent(request: GoalRunnerObservabilityRecordRequest): Boolean
 
-  fun recordProgressEvent(request: GoalRunnerProgressEventRecordRequest): Boolean
+  public fun recordProgressEvent(request: GoalRunnerProgressEventRecordRequest): Boolean
 
-  fun progressEvents(workflowId: String): List<GoalProgressEvent>
+  public fun progressEvents(workflowId: String): List<GoalProgressEvent>
 }
 
-interface GoalRunnerWorkflowLedgerWriteStore {
-  fun recordAttemptLedgerEntry(request: GoalRunnerAttemptLedgerRecordRequest): Boolean
+public interface GoalRunnerWorkflowLedgerWriteStore {
+  public fun recordAttemptLedgerEntry(request: GoalRunnerAttemptLedgerRecordRequest): Boolean
 
-  fun recordWorkerSubtaskRequestOutcomes(
+  public fun recordWorkerSubtaskRequestOutcomes(
     workflowId: String,
     outcomes: List<GoalRunnerWorkerSubtaskRequestOutcome>,
   ): Boolean
 
-  fun ledgerSequenceWatermarks(issueKey: String): GoalRunnerLedgerSequenceWatermarks
+  public fun ledgerSequenceWatermarks(issueKey: String): GoalRunnerLedgerSequenceWatermarks
 
-  fun childWorkflowLoopIterations(workflowId: String): Map<String, Int>
+  public fun childWorkflowLoopIterations(workflowId: String): Map<String, Int>
 }
 
-interface GoalRunnerQualityExecutionStore {
-  fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord?
+public interface GoalRunnerQualityExecutionStore {
+  public fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord?
 
   /**
    * Records the operator's choice to discard ambiguous historical quality state. The parent's
    * quality record becomes clean and unstarted, so the next goal run admits a fresh quality
    * execution with new cycles. Returns false when the parent holds no historical ambiguity.
    */
-  fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean
+  public fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean
 
-  fun resolvedGoalQualityChildIds(
+  public fun resolvedGoalQualityChildIds(
     parentWorkflowId: String,
     expectedSelection: List<Pair<Int, String?>>,
   ): List<String>
 
-  fun admitGoalQualityExecution(
+  public fun admitGoalQualityExecution(
     parentWorkflowId: String,
     baselineContentFingerprint: String,
     governingInputs: GoalQualityExecutionInputs,
     executionPlans: GoalQualityExecutionPlans,
   ): GoalQualityExecutionRecord
 
-  fun transitionGoalQualityExecution(
+  public fun transitionGoalQualityExecution(
     parentWorkflowId: String,
     expectedInvocationId: String,
     expected: GoalQualityExecutionRecord,
     next: GoalQualityExecutionRecord,
   ): Boolean
 
-  fun goalQualityPhaseProgress(
+  public fun goalQualityPhaseProgress(
     parentWorkflowId: String,
     invocationId: String,
     definitionId: String,
     acceptedPlan: String,
   ): GoalQualityPhaseProgress
 
-  fun persistGoalQualityPhaseProgress(
+  public fun persistGoalQualityPhaseProgress(
     parentWorkflowId: String,
     invocationId: String,
     definitionId: String,

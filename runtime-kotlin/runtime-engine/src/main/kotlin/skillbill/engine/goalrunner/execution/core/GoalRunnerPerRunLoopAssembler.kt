@@ -5,7 +5,7 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 
 @Inject
-class GoalRunnerPerRunLoopAssembler(
+public class GoalRunnerPerRunLoopAssembler(
   private val manifestStore: GoalRunnerManifestStore,
   private val goalPlanningSource: GoalPlanningSource,
   private val reconciliation: GoalRunnerFinalReconciliation,

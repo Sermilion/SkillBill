@@ -10,25 +10,25 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 
-data class GoalRunnerChildExecutionPlanAdmission(
-  val workflowId: String,
-  val expected: ValidatedFeatureTaskRuntimeExecutionPlan,
+public data class GoalRunnerChildExecutionPlanAdmission(
+  public val workflowId: String,
+  public val expected: ValidatedFeatureTaskRuntimeExecutionPlan,
 )
 
-data class GoalRunnerChildWorkflowSetup(
-  val subtaskId: Int,
-  val workflowId: String,
-  val goalBranch: String,
-  val normalizedIssueKey: String,
-  val repositoryIdentity: String,
-  val governedSpecPath: String,
-  val reviewBaseline: GoalSubtaskReviewBaseline,
-  val reviewPolicy: GoalRunnerReviewPolicy,
-  val planningHydration: GoalChildPlanningHydrationRequest? = null,
-  val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
-  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
-  val operatorResumePhaseId: String? = null,
-  val operatorResumeReason: String? = null,
+public data class GoalRunnerChildWorkflowSetup(
+  public val subtaskId: Int,
+  public val workflowId: String,
+  public val goalBranch: String,
+  public val normalizedIssueKey: String,
+  public val repositoryIdentity: String,
+  public val governedSpecPath: String,
+  public val reviewBaseline: GoalSubtaskReviewBaseline,
+  public val reviewPolicy: GoalRunnerReviewPolicy,
+  internal val planningHydration: GoalChildPlanningHydrationRequest? = null,
+  public val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
+  public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  internal val operatorResumePhaseId: String? = null,
+  internal val operatorResumeReason: String? = null,
 ) {
   init {
     require(subtaskId > 0) { "subtaskId must be positive." }
@@ -43,15 +43,15 @@ data class GoalRunnerChildWorkflowSetup(
   }
 }
 
-data class GoalChildPlanningHydrationRequest(
-  val identity: GoalPlanningIdentity,
-  val provenance: GoalPlanningContractProvenance,
-  val descriptor: GovernedGoalSubtaskDescriptor,
-  val planWorkflowId: String? = null,
+public data class GoalChildPlanningHydrationRequest(
+  public val identity: GoalPlanningIdentity,
+  public val provenance: GoalPlanningContractProvenance,
+  public val descriptor: GovernedGoalSubtaskDescriptor,
+  public val planWorkflowId: String? = null,
 )
 
-data class GoalChildPlanningHydrationResult(
-  val currentStepId: String,
-  val stepUpdates: WorkflowStepUpdates,
-  val artifacts: WorkflowArtifactPatch,
+public data class GoalChildPlanningHydrationResult(
+  public val currentStepId: String,
+  public val stepUpdates: WorkflowStepUpdates,
+  public val artifacts: WorkflowArtifactPatch,
 )

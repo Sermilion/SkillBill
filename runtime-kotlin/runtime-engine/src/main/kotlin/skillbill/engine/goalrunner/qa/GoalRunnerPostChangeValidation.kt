@@ -6,15 +6,15 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
-sealed interface GoalPostChangeValidationResult {
-  data object Passed : GoalPostChangeValidationResult
+public sealed interface GoalPostChangeValidationResult {
+  public data object Passed : GoalPostChangeValidationResult
 
-  data class Stopped(val stepId: String, val reason: String) : GoalPostChangeValidationResult
+  public data class Stopped(public val stepId: String, public val reason: String) : GoalPostChangeValidationResult
 }
 
 /** Runs the full validation definition on a goal's tree after a stage changed it, under the goal's identity. */
-fun interface GoalRunnerPostChangeValidation {
-  fun run(
+public fun interface GoalRunnerPostChangeValidation {
+  public fun run(
     request: PhaseRunRequest,
     parentWorkflowId: String,
     branch: String,
@@ -22,7 +22,7 @@ fun interface GoalRunnerPostChangeValidation {
 }
 
 @Inject
-class DefaultGoalRunnerPostChangeValidation(
+public class DefaultGoalRunnerPostChangeValidation(
   private val phaseRunEntry: PhaseRunEntry,
 ) : GoalRunnerPostChangeValidation {
   override fun run(

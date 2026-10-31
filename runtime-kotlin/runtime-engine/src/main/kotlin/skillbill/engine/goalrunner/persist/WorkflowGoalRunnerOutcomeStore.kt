@@ -81,20 +81,20 @@ import java.nio.file.Path
 import java.time.Clock
 
 internal data class RecoverMissingResultPrefixTerminalOutcomeArgs(
-  internal val unitOfWork: UnitOfWork,
-  internal val workflowStates: WorkflowStateRepository,
-  internal val family: WorkflowFamily,
-  internal val record: WorkflowStateSnapshot,
-  internal val output: GoalRunnerWirePayload,
-  internal val issueKey: String,
-  internal val subtaskId: Int,
-  internal val parentWorkflowId: String,
-  internal val workflowId: String,
+  val unitOfWork: UnitOfWork,
+  val workflowStates: WorkflowStateRepository,
+  val family: WorkflowFamily,
+  val record: WorkflowStateSnapshot,
+  val output: GoalRunnerWirePayload,
+  val issueKey: String,
+  val subtaskId: Int,
+  val parentWorkflowId: String,
+  val workflowId: String,
 )
 
-class WorkflowGoalRunnerOutcomeStore
+public class WorkflowGoalRunnerOutcomeStore
   @Inject
-  constructor(
+  public constructor(
     private val database: DatabaseSessionFactory,
     private val workflowSnapshotValidator: WorkflowSnapshotValidator,
     wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,

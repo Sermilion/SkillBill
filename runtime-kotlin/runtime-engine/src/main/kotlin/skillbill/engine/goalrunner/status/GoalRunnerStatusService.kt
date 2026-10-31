@@ -33,7 +33,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import java.nio.file.Path
 
 @Inject
-class GoalRunnerStatusService(
+public class GoalRunnerStatusService(
   private val manifestStore: GoalRunnerManifestStore,
   private val controlVerbs: GoalRunnerStatusControlVerbs,
   private val repairCoordinator: GoalRunnerRepairCoordinator,
@@ -44,25 +44,25 @@ class GoalRunnerStatusService(
   private val purgeCoordinator: GoalRunnerPurgeCoordinator,
   private val freshQualityCoordinator: GoalRunnerFreshQualityCoordinator,
 ) {
-  fun status(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? {
+  public fun status(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? {
     return manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
       ?.let { loadedState -> projectionAssembler.projectWorkflow(loadedState.parentWorkflowId, request) }
   }
 
-  fun statusForWorkflow(
+  public fun statusForWorkflow(
     parentWorkflowId: String,
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusProjection? = projectionAssembler.projectWorkflow(parentWorkflowId, request)
 
-  fun reconcileSubtaskPage(
+  public fun reconcileSubtaskPage(
     parentWorkflowId: String,
     request: GoalRunnerStatusRequest,
     subtasks: List<DecompositionSubtask>,
   ): List<DecompositionSubtask> = projectionAssembler.reconcileSubtaskPage(parentWorkflowId, request, subtasks)
 
-  fun statusRefresh(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? = status(request)
+  public fun statusRefresh(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? = status(request)
 
-  fun pause(
+  public fun pause(
     issueKey: String,
     repoRoot: Path? = null,
     expectedParentWorkflowId: String? = null,
@@ -73,7 +73,7 @@ class GoalRunnerStatusService(
       expectedParentWorkflowId,
     )
 
-  fun stop(
+  public fun stop(
     issueKey: String,
     repoRoot: Path? = null,
     expectedParentWorkflowId: String? = null,
@@ -88,16 +88,16 @@ class GoalRunnerStatusService(
       beforeAdmission,
     )
 
-  fun resume(
+  public fun resume(
     issueKey: String,
     repoRoot: Path? = null,
   ): GoalRunnerResumeResult = controlVerbs.resume(issueKey, effectiveGoalRepoRoot(repoRoot, repositoryRoot))
 
-  fun reset(request: GoalRunnerResetRequest): GoalRunnerResetResult? = resetReplanCoordinator.reset(request)
+  public fun reset(request: GoalRunnerResetRequest): GoalRunnerResetResult? = resetReplanCoordinator.reset(request)
 
-  fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult = purge(request, null)
+  public fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult = purge(request, null)
 
-  fun purge(
+  public fun purge(
     request: GoalRunnerPurgeRequest,
     expectedObservation: DatabaseFileObservation?,
   ): GoalRunnerPurgeResult =
@@ -106,24 +106,25 @@ class GoalRunnerStatusService(
       expectedObservation,
     )
 
-  fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? = resetReplanCoordinator.replan(request)
+  public fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? = resetReplanCoordinator.replan(request)
 
-  fun hardResetPreflight(issueKey: String): List<GoalRunnerAcceptedSubtask> =
+  public fun hardResetPreflight(issueKey: String): List<GoalRunnerAcceptedSubtask> =
     resetReplanCoordinator.hardResetPreflight(issueKey)
 
-  fun repair(request: GoalRunnerRepairRequest): GoalRunnerRepairResult = repairCoordinator.repair(request)
+  public fun repair(request: GoalRunnerRepairRequest): GoalRunnerRepairResult = repairCoordinator.repair(request)
 
-  fun accept(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult = acceptanceCoordinator.accept(request)
+  public fun accept(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult = acceptanceCoordinator.accept(request)
 
-  fun freshQuality(request: GoalRunnerFreshQualityRequest): GoalRunnerFreshQualityResult =
+  public fun freshQuality(request: GoalRunnerFreshQualityRequest): GoalRunnerFreshQualityResult =
     freshQualityCoordinator.choose(
       request.copy(repoRoot = effectiveGoalRepoRoot(request.repoRoot, repositoryRoot)),
     )
 
-  fun complete(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult = acceptanceCoordinator.complete(request)
+  public fun complete(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult =
+    acceptanceCoordinator.complete(request)
 }
 
-fun effectiveGoalRepoRoot(
+internal fun effectiveGoalRepoRoot(
   repoRoot: Path?,
   repositoryRoot: RepositoryRoot,
 ): Path = repoRoot ?: repositoryRoot.path

@@ -14,12 +14,12 @@ import skillbill.workflow.decomposition.model.SpecSource
 import java.nio.file.Path
 
 @Inject
-class GoalSpecScratchCleanup(
+public class GoalSpecScratchCleanup(
   private val specScratchStore: SpecScratchStore,
   private val projectStore: ProjectStorePort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun deleteCompletedSubtaskSpec(
+  internal fun deleteCompletedSubtaskSpec(
     manifest: DecompositionManifest,
     subtaskId: Int,
     repoRoot: Path,
@@ -40,7 +40,7 @@ class GoalSpecScratchCleanup(
       }
   }
 
-  fun deleteGoalSpecBundle(
+  internal fun deleteGoalSpecBundle(
     manifest: DecompositionManifest,
     repoRoot: Path,
   ) {

@@ -39,7 +39,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
 @Inject
-class GoalRunnerRunPreparation(
+public class GoalRunnerRunPreparation(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
@@ -165,7 +165,7 @@ class GoalRunnerRunPreparation(
     }
   }
 
-  fun prepareRun(
+  internal fun prepareRun(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalRunPreparation {
@@ -210,7 +210,7 @@ class GoalRunnerRunPreparation(
     )
   }
 
-  fun existingChildExecutionPlanAdmission(
+  internal fun existingChildExecutionPlanAdmission(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalRunnerChildExecutionPlanAdmission? {

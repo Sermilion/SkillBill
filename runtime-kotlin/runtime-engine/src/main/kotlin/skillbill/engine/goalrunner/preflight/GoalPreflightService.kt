@@ -18,7 +18,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 
 @Inject
-class GoalPreflightService(
+public class GoalPreflightService(
   private val continuationLookup: FeatureTaskContinuationLookupService,
   private val manifestStore: GoalRunnerManifestStore,
   agentAddonSelectionPort: AgentAddonSelectionPort,
@@ -37,7 +37,7 @@ class GoalPreflightService(
     )
   private val lookupResolver = GoalPreflightLookupResolver(gateBlockBuilder)
 
-  fun preflight(request: GoalPreflightRequest): GoalPreflightResult {
+  public fun preflight(request: GoalPreflightRequest): GoalPreflightResult {
     GoalPreflightInputValidation.requireInvokedAgentId(request.invokedAgentId)
     GoalPreflightInputValidation.requireOptionalIdentity("agent_override_id", request.agentOverrideId)
     val root = GoalPreflightInputValidation.resolveRepositoryRoot(request.repoRoot, repositoryEnclosingRootPort)

@@ -4,17 +4,17 @@ import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationResult
 import skillbill.engine.goalrunner.planning.model.GoalChildPlanningHydration
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 
-sealed interface GoalChildPlanningHydrateResult {
-  data class Hydrated(
-    val result: GoalChildPlanningHydrationResult,
+public sealed interface GoalChildPlanningHydrateResult {
+  public data class Hydrated(
+    public val result: GoalChildPlanningHydrationResult,
   ) : GoalChildPlanningHydrateResult
 
-  data class Conflicted(
-    val conflict: GoalPlanningPreparationConflict,
+  public data class Conflicted(
+    public val conflict: GoalPlanningPreparationConflict,
   ) : GoalChildPlanningHydrateResult
 }
 
-sealed interface GoalChildPlanningHydrationOutcome {
+internal sealed interface GoalChildPlanningHydrationOutcome {
   data class Hydrated(
     val hydration: GoalChildPlanningHydration,
   ) : GoalChildPlanningHydrationOutcome

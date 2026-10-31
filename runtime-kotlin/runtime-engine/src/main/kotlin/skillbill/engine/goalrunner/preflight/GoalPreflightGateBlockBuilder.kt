@@ -32,7 +32,7 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 
-class GoalPreflightGateBlockBuilder(
+internal class GoalPreflightGateBlockBuilder(
   private val manifestStore: GoalRunnerManifestStore,
   private val agentAddonSelectionPort: AgentAddonSelectionPort,
   private val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort,

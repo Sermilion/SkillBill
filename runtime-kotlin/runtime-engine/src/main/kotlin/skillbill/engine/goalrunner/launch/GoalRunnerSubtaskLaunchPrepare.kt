@@ -68,7 +68,7 @@ import java.time.Clock
 import kotlin.random.Random
 
 @Inject
-class GoalRunnerSubtaskLaunchPrepare(
+public class GoalRunnerSubtaskLaunchPrepare(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val gitOperations: WorkflowGitOperations,
@@ -81,7 +81,7 @@ class GoalRunnerSubtaskLaunchPrepare(
   private val projectStore: ProjectStorePort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun goalReviewBaseline(
+  internal fun goalReviewBaseline(
     state: GoalRunnerManifestState,
     subtaskId: Int,
     request: GoalRunnerRunRequest,
@@ -192,7 +192,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     )
   }
 
-  fun emitGoalReviewSummaries(
+  internal fun emitGoalReviewSummaries(
     issueKey: String,
     subtaskId: Int,
     workflowId: String,

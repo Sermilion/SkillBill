@@ -8,14 +8,14 @@ import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeRepairRequest
 import skillbill.ports.workflow.WorkflowStateRepository
 import java.nio.file.Path
 
-interface GoalRunnerChildRepairStore {
-  fun diagnoseChildWedges(request: GoalRunnerChildWedgeDiagnosisRequest): GoalRunnerChildWedgeDiagnosis
+public interface GoalRunnerChildRepairStore {
+  public fun diagnoseChildWedges(request: GoalRunnerChildWedgeDiagnosisRequest): GoalRunnerChildWedgeDiagnosis
 
-  fun applyChildWedgeRepairs(request: GoalRunnerChildWedgeRepairRequest): GoalRunnerChildRepairApplyResult
+  public fun applyChildWedgeRepairs(request: GoalRunnerChildWedgeRepairRequest): GoalRunnerChildRepairApplyResult
 }
 
-interface GoalRunnerChildRepairRunnerPort {
-  fun diagnose(
+public interface GoalRunnerChildRepairRunnerPort {
+  public fun diagnose(
     workflowStates: WorkflowStateRepository,
     workflowId: String,
     issueKey: String,
@@ -23,5 +23,5 @@ interface GoalRunnerChildRepairRunnerPort {
     repoRoot: Path,
   ): GoalRunnerChildWedgeDiagnosis
 
-  fun apply(request: GoalRunnerChildRepairApplyRequest): GoalRunnerChildRepairApplyResult
+  public fun apply(request: GoalRunnerChildRepairApplyRequest): GoalRunnerChildRepairApplyResult
 }

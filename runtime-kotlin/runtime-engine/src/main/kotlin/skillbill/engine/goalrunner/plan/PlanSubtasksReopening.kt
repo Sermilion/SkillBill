@@ -20,7 +20,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Path
 import java.time.Clock
 
-data class PlanSubtasksReplan(
+internal data class PlanSubtasksReplan(
   val issueKey: String,
   val planWorkflowId: String,
   val repoRoot: Path,
@@ -30,7 +30,7 @@ data class PlanSubtasksReplan(
 )
 
 @Inject
-class PlanSubtasksReopening(
+public class PlanSubtasksReopening(
   private val database: DatabaseSessionFactory,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val planBundles: FeatureTaskRuntimeDecomposeTerminalRecorder,
@@ -38,7 +38,7 @@ class PlanSubtasksReopening(
 ) {
   private val engine = WorkflowEngine()
 
-  fun reopenWithRebasedBundle(replan: PlanSubtasksReplan): Boolean {
+  internal fun reopenWithRebasedBundle(replan: PlanSubtasksReplan): Boolean {
     if (!reopenAtPlanSubtasks(replan.planWorkflowId)) return false
     rebasePlanBundle(replan)
     return true
@@ -53,7 +53,7 @@ class PlanSubtasksReopening(
       }
   }
 
-  fun reopenAtPlanSubtasks(planWorkflowId: String): Boolean =
+  internal fun reopenAtPlanSubtasks(planWorkflowId: String): Boolean =
     database.transaction { unitOfWork ->
       val snapshot = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, planWorkflowId)
       if (snapshot == null || !snapshot.hasPlanSubtasksStep()) {

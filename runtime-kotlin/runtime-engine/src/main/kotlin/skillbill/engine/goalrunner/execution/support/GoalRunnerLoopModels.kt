@@ -19,8 +19,8 @@ import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 
-internal data class GoalRunnerIterationPendingState(
-  val validationQualityState: GoalRunnerValidationQualityPendingState,
+public data class GoalRunnerIterationPendingState(
+  internal val validationQualityState: GoalRunnerValidationQualityPendingState,
 )
 
 internal class GoalRunnerAttemptState {

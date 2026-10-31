@@ -11,17 +11,17 @@ import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 
-internal data class GoalRunnerLaunchReconciliation(
-  val refreshed: GoalRunnerManifestState,
-  val reconciled: GoalRunnerReconciledOutcome,
-  val launchOutcome: AgentRunLaunchOutcome,
-  val diagnostics: GoalRunnerLaunchDiagnostics? = null,
+public data class GoalRunnerLaunchReconciliation(
+  public val refreshed: GoalRunnerManifestState,
+  public val reconciled: GoalRunnerReconciledOutcome,
+  public val launchOutcome: AgentRunLaunchOutcome,
+  public val diagnostics: GoalRunnerLaunchDiagnostics? = null,
 )
 
-internal data class GoalRunnerLaunchDiagnostics(
-  val diagnosticClass: String,
-  val recoverableJsonPresent: Boolean,
-  val nextSafeAction: String,
+public data class GoalRunnerLaunchDiagnostics(
+  public val diagnosticClass: String,
+  public val recoverableJsonPresent: Boolean,
+  public val nextSafeAction: String,
 )
 
 internal data class GoalRunnerMissingResultPrefixRecovery(
@@ -107,7 +107,7 @@ internal fun childOutputHasJsonLikeContent(
 ): Boolean =
   listOf(stdout, stderr).any { output -> output.contains('{') || output.contains('}') || output.contains("RESULT:") }
 
-fun Map<String, Any?>.isImplementationReturnContract(): Boolean =
+public fun Map<String, Any?>.isImplementationReturnContract(): Boolean =
   keys.containsAll(
     setOf(
       ImplementationReturnContractPayloadKeys.TASKS_COMPLETED,
@@ -119,6 +119,6 @@ fun Map<String, Any?>.isImplementationReturnContract(): Boolean =
     ),
   )
 
-fun Map<String, Any?>.isRuntimeTerminalEnvelope(): Boolean =
+public fun Map<String, Any?>.isRuntimeTerminalEnvelope(): Boolean =
   goalContinuationTerminalStatus(this[SharedPayloadKeys.STATUS]?.toString()) != null &&
     this[SharedPayloadKeys.WORKFLOW_ID]?.toString().orEmpty().isNotBlank()

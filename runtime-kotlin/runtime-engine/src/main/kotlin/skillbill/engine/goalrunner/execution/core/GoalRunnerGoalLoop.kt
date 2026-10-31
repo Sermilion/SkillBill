@@ -40,7 +40,7 @@ internal class GoalRunnerGoalLoop(
 ) {
   private val attemptState = GoalRunnerAttemptState()
 
-  internal fun driveGoalLoop(args: DriveGoalLoopArgs): GoalRunnerIterationResult {
+  fun driveGoalLoop(args: DriveGoalLoopArgs): GoalRunnerIterationResult {
     var state = args.initialState
     var currentPlanning = args.planning
     var terminalReport: GoalRunnerRunReport? = preflightPolicyBlockedReport(state, args.request, args.ledger)

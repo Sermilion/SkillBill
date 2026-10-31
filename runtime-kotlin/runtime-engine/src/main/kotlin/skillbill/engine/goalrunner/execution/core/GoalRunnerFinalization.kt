@@ -67,7 +67,7 @@ import java.nio.file.Path
 import java.security.MessageDigest
 
 @Inject
-class GoalRunnerFinalization(
+public class GoalRunnerFinalization(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val specScratchCleanup: GoalSpecScratchCleanup,
   private val gitOperations: WorkflowGitOperations,
@@ -79,7 +79,7 @@ class GoalRunnerFinalization(
   private val finalHistoryWriter: GoalRunnerFinalHistoryWriter,
   private val publication: GoalRunnerPullRequests,
 ) {
-  fun requireCompletedChildrenHaveDrafts(state: GoalRunnerManifestState) {
+  internal fun requireCompletedChildrenHaveDrafts(state: GoalRunnerManifestState) {
     state.manifest.subtasks
       .filter {
         it.status.decompositionStatus() in
@@ -105,7 +105,7 @@ class GoalRunnerFinalization(
       }
   }
 
-  fun finalizePublication(
+  internal fun finalizePublication(
     finalState: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     attempted: List<Int>,
@@ -495,7 +495,7 @@ class GoalRunnerFinalization(
     )
   }
 
-  fun deleteCompletedSubtaskSpecScratch(
+  internal fun deleteCompletedSubtaskSpecScratch(
     manifest: DecompositionManifest,
     subtaskId: Int,
     request: GoalRunnerRunRequest,
@@ -663,7 +663,7 @@ private data class GoalHistoryWriteInput(
 )
 
 @Inject
-class GoalRunnerPullRequests(
+public class GoalRunnerPullRequests(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val pullRequestPort: GoalPullRequestPort,
   private val pullRequestIdentityLookup: PullRequestIdentityLookup,
@@ -671,7 +671,7 @@ class GoalRunnerPullRequests(
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun openPullRequest(
+  internal fun openPullRequest(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     qaResult: GoalQaGateResult,
@@ -750,7 +750,7 @@ class GoalRunnerPullRequests(
     }
   }
 
-  fun publishedGoalResult(
+  internal fun publishedGoalResult(
     finalState: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     attempted: List<Int>,
@@ -788,12 +788,12 @@ class GoalRunnerPullRequests(
     request: GoalRunnerRunRequest,
   ) = specScratchCleanup.deleteGoalSpecBundle(manifest, request.repoRoot)
 
-  fun resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
+  internal fun resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
     resolveUnaddressedFindingsLedger(unaddressedFindingsLedgerService, issueKey)
 }
 
-fun interface GoalRunnerFinalHistoryWriter {
-  fun run(
+public fun interface GoalRunnerFinalHistoryWriter {
+  public fun run(
     request: PhaseRunRequest,
     parentWorkflowId: String,
     branch: String,
@@ -801,7 +801,7 @@ fun interface GoalRunnerFinalHistoryWriter {
 }
 
 @Inject
-class PhaseRunGoalFinalHistoryWriter(
+public class PhaseRunGoalFinalHistoryWriter(
   private val phaseRunEntry: PhaseRunEntry,
 ) : GoalRunnerFinalHistoryWriter {
   override fun run(

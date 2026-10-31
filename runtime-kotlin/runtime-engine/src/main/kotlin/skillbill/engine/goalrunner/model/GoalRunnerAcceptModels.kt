@@ -3,13 +3,13 @@ package skillbill.engine.goalrunner.model
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import java.nio.file.Path
 
-data class GoalRunnerAcceptRequest(
-  val issueKey: String,
-  val subtaskId: Int,
-  val commitSha: String,
-  val reason: String,
-  val repoRoot: Path? = null,
-  val restoreAfterHardReset: Boolean = false,
+public data class GoalRunnerAcceptRequest(
+  public val issueKey: String,
+  public val subtaskId: Int,
+  public val commitSha: String,
+  public val reason: String,
+  public val repoRoot: Path? = null,
+  public val restoreAfterHardReset: Boolean = false,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -19,25 +19,25 @@ data class GoalRunnerAcceptRequest(
   }
 }
 
-sealed interface GoalRunnerAcceptResult {
-  data class Accepted(
-    val issueKey: String,
-    val parentWorkflowId: String,
-    val subtaskId: Int,
-    val commitSha: String,
-    val reason: String,
-    val acceptedAt: String,
-    val after: GoalRunnerResetSnapshot,
+public sealed interface GoalRunnerAcceptResult {
+  public data class Accepted(
+    public val issueKey: String,
+    public val parentWorkflowId: String,
+    public val subtaskId: Int,
+    public val commitSha: String,
+    public val reason: String,
+    public val acceptedAt: String,
+    public val after: GoalRunnerResetSnapshot,
   ) : GoalRunnerAcceptResult
 
-  data class Rejected(val issueKey: String, val reason: String) : GoalRunnerAcceptResult
+  public data class Rejected(public val issueKey: String, public val reason: String) : GoalRunnerAcceptResult
 }
 
-data class GoalRunnerCompleteRequest(
-  val issueKey: String,
-  val commitSha: String,
-  val reason: String,
-  val repoRoot: Path? = null,
+public data class GoalRunnerCompleteRequest(
+  public val issueKey: String,
+  public val commitSha: String,
+  public val reason: String,
+  public val repoRoot: Path? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -46,37 +46,37 @@ data class GoalRunnerCompleteRequest(
   }
 }
 
-sealed interface GoalRunnerCompleteResult {
-  data class Completed(
-    val issueKey: String,
-    val parentWorkflowId: String,
-    val commitSha: String,
-    val reason: String,
-    val completedAt: String,
-    val acceptedSubtaskIds: List<Int>,
-    val before: GoalRunnerResetSnapshot,
-    val after: GoalRunnerResetSnapshot,
+public sealed interface GoalRunnerCompleteResult {
+  public data class Completed(
+    public val issueKey: String,
+    public val parentWorkflowId: String,
+    public val commitSha: String,
+    public val reason: String,
+    public val completedAt: String,
+    public val acceptedSubtaskIds: List<Int>,
+    public val before: GoalRunnerResetSnapshot,
+    public val after: GoalRunnerResetSnapshot,
   ) : GoalRunnerCompleteResult
 
-  data class Rejected(val issueKey: String, val reason: String) : GoalRunnerCompleteResult
+  public data class Rejected(public val issueKey: String, public val reason: String) : GoalRunnerCompleteResult
 }
 
-sealed interface GoalRunnerAcceptanceEvidence {
-  data class Resolved(val commitSha: String) : GoalRunnerAcceptanceEvidence
+public sealed interface GoalRunnerAcceptanceEvidence {
+  public data class Resolved(public val commitSha: String) : GoalRunnerAcceptanceEvidence
 
-  data class Rejected(val reason: String) : GoalRunnerAcceptanceEvidence
+  public data class Rejected(public val reason: String) : GoalRunnerAcceptanceEvidence
 }
 
-sealed interface GoalChildHistoryAcceptanceRestoreResult {
-  data class Restored(
-    val state: GoalRunnerManifestState,
-    val acceptance: GoalRunnerOutOfBandAcceptance,
+public sealed interface GoalChildHistoryAcceptanceRestoreResult {
+  public data class Restored(
+    public val state: GoalRunnerManifestState,
+    public val acceptance: GoalRunnerOutOfBandAcceptance,
   ) : GoalChildHistoryAcceptanceRestoreResult
 
-  data class Refused(val reason: String) : GoalChildHistoryAcceptanceRestoreResult
+  public data class Refused(public val reason: String) : GoalChildHistoryAcceptanceRestoreResult
 }
 
-data class GoalRunnerRestoredChildReference(
-  val childWorkflowId: String,
-  val acceptance: GoalRunnerOutOfBandAcceptance,
+public data class GoalRunnerRestoredChildReference(
+  public val childWorkflowId: String,
+  public val acceptance: GoalRunnerOutOfBandAcceptance,
 )

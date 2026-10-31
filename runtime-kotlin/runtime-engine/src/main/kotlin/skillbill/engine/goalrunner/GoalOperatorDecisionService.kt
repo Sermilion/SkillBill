@@ -13,12 +13,12 @@ import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 
 @Inject
-class GoalOperatorDecisionService(
+public class GoalOperatorDecisionService(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val phaseRecorder: FeatureTaskRuntimePhaseRecorder,
 ) {
-  fun record(request: GoalRunnerOperatorDecisionRequest): GoalRunnerOperatorDecisionResult {
+  public fun record(request: GoalRunnerOperatorDecisionRequest): GoalRunnerOperatorDecisionResult {
     when (val resolved = resolveChildWorkflow(request)) {
       is ResolvedChildWorkflow.Rejected -> return resolved.result
       is ResolvedChildWorkflow.Ok -> {
@@ -101,9 +101,9 @@ class GoalOperatorDecisionService(
     data class Rejected(val result: GoalRunnerOperatorDecisionResult.Rejected) : ResolvedChildWorkflow()
 
     data class Ok(
-      val parentWorkflowId: String,
-      val childWorkflowId: String,
-      val subtaskStatus: DecompositionStatus?,
+      public val parentWorkflowId: String,
+      public val childWorkflowId: String,
+      public val subtaskStatus: DecompositionStatus?,
     ) : ResolvedChildWorkflow()
   }
 }

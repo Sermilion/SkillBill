@@ -40,7 +40,7 @@ import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 
 @Inject
-class GoalRunnerResetReplanCoordinator(
+public class GoalRunnerResetReplanCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val gitOperations: WorkflowGitOperations,
@@ -49,7 +49,7 @@ class GoalRunnerResetReplanCoordinator(
   private val repositoryRoot: RepositoryRoot,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
-  fun reset(request: GoalRunnerResetRequest): GoalRunnerResetResult? {
+  public fun reset(request: GoalRunnerResetRequest): GoalRunnerResetResult? {
     val loaded = loadResetState(request) ?: return null
     if (request.deleteChildWorkflow) return deleteIncompatibleChildWorkflow(request, loaded)
     reconcileResetState(loaded)
@@ -158,7 +158,7 @@ class GoalRunnerResetReplanCoordinator(
     return saved
   }
 
-  fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? {
+  public fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? {
     val loaded =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
         ?: return null
@@ -195,7 +195,7 @@ class GoalRunnerResetReplanCoordinator(
     return toReplanResult(request, loaded, written, beforeSubtasks)
   }
 
-  fun hardResetPreflight(issueKey: String): List<GoalRunnerAcceptedSubtask> {
+  public fun hardResetPreflight(issueKey: String): List<GoalRunnerAcceptedSubtask> {
     val state = manifestStore.loadDurableByIssueKey(issueKey) ?: return emptyList()
     return manifestStore.outOfBandAcceptances(state.parentWorkflowId).toAcceptedSubtasks()
   }

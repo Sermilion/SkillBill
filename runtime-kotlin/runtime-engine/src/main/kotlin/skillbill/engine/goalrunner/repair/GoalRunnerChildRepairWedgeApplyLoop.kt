@@ -43,7 +43,7 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 import java.nio.file.Path
 import java.time.Clock
 
-class GoalRunnerChildRepairWedgeApplyLoop(
+internal class GoalRunnerChildRepairWedgeApplyLoop(
   private val engine: WorkflowEngine,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val gitOperations: WorkflowGitOperations,
@@ -218,7 +218,7 @@ internal data class UnreachableReviewRepairContext(
   val baselineUntrackedPaths: List<String>,
 )
 
-fun unreachableReviewFailedSha(
+internal fun unreachableReviewFailedSha(
   wedgeClass: GoalRunnerWedgeClass,
   review: GoalSubtaskReviewState,
 ): String? =
@@ -438,7 +438,7 @@ internal fun recordChildRepairWedge(
   state.evidenceEntries += childRepairWedgeEvidenceMap(repair, state.clock)
 }
 
-fun childRepairWedgeEvidenceMap(
+internal fun childRepairWedgeEvidenceMap(
   repair: GoalRunnerAppliedRepair,
   clock: Clock,
 ): Map<String, Any?> =
@@ -452,6 +452,6 @@ fun childRepairWedgeEvidenceMap(
     "repaired_at" to clock.instant().toString(),
   )
 
-fun continuationArtifactFromMap(artifacts: Map<String, Any?>): FeatureTaskRuntimeGoalContinuationArtifact? {
+internal fun continuationArtifactFromMap(artifacts: Map<String, Any?>): FeatureTaskRuntimeGoalContinuationArtifact? {
   return DurableWorkflowArtifacts.fromMap(artifacts).goalContinuationArtifact()
 }

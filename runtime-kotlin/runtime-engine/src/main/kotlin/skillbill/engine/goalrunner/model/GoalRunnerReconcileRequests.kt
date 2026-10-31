@@ -8,7 +8,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
 
-data class CrashReconcileExpiredWorkerRequest(
+internal data class CrashReconcileExpiredWorkerRequest(
   val workflowStates: WorkflowStateRepository,
   val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   val workflowId: String,
@@ -17,7 +17,7 @@ data class CrashReconcileExpiredWorkerRequest(
   val row: WorkflowStateRecord,
 )
 
-data class StaleRunningCandidatesBlockRequest(
+internal data class StaleRunningCandidatesBlockRequest(
   val unitOfWork: UnitOfWork,
   val normalizedIssueKey: String,
   val candidates: List<GoalContinuationCandidate>,
@@ -26,7 +26,7 @@ data class StaleRunningCandidatesBlockRequest(
   val gate: GoalRunnerReconcileGate,
 )
 
-data class GoalRunnerManifestReconciliationInputs(
-  val outcomes: Map<Int, GoalRunnerStoredOutcome>,
-  val restoredChildren: Map<Int, GoalRunnerRestoredChildReference>,
+public data class GoalRunnerManifestReconciliationInputs(
+  internal val outcomes: Map<Int, GoalRunnerStoredOutcome>,
+  internal val restoredChildren: Map<Int, GoalRunnerRestoredChildReference>,
 )

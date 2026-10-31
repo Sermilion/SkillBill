@@ -54,12 +54,12 @@ import java.nio.file.Path
 import java.time.Clock
 
 internal data class SavedGoalChildWorkflow(
-  internal val state: GoalRunnerManifestState,
-  internal val projectionArtifacts: DurableWorkflowArtifacts,
+  val state: GoalRunnerManifestState,
+  val projectionArtifacts: DurableWorkflowArtifacts,
 )
 
 @Inject
-class WorkflowGoalRunnerChildWorkflowPersistence(
+public class WorkflowGoalRunnerChildWorkflowPersistence(
   private val planningHydrator: GoalChildPlanningHydratorPort,
   decompositionManifestValidator: DecompositionManifestValidator,
   private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
@@ -70,7 +70,8 @@ class WorkflowGoalRunnerChildWorkflowPersistence(
   private val qualityExecution: WorkflowGoalRunnerQualityExecutionStore,
 ) {
   private val engine = WorkflowEngine()
-  private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
+  private val parentProjection: GoalParentProjectionWriter =
+    GoalParentProjectionWriter(engine, decompositionManifestValidator)
   private val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
 
   internal fun saveInTransaction(

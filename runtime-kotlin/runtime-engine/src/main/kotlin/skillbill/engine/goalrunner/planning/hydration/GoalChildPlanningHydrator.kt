@@ -66,7 +66,7 @@ private sealed interface PreparationRead {
   data class Conflicted(val conflict: GoalPlanningPreparationConflict) : PreparationRead
 }
 
-class GoalChildPlanningHydrator(
+internal class GoalChildPlanningHydrator(
   private val clock: Clock,
 ) {
   private val payloadValidator = PreparedPlanningPayloadValidator()

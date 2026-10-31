@@ -3,12 +3,12 @@ package skillbill.engine.goalrunner.model
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import java.nio.file.Path
 
-data class GoalRunnerOperatorDecisionRequest(
-  val issueKey: String,
-  val subtaskId: Int,
-  val decision: GoalSubtaskOperatorDecision,
-  val repoRoot: Path? = null,
-  val instructions: String? = null,
+public data class GoalRunnerOperatorDecisionRequest(
+  public val issueKey: String,
+  public val subtaskId: Int,
+  public val decision: GoalSubtaskOperatorDecision,
+  public val repoRoot: Path? = null,
+  public val instructions: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -16,22 +16,22 @@ data class GoalRunnerOperatorDecisionRequest(
   }
 }
 
-sealed interface GoalRunnerOperatorDecisionResult {
-  data class Recorded(
-    val issueKey: String,
-    val parentWorkflowId: String,
-    val subtaskId: Int,
-    val workflowId: String,
-    val decision: String,
+public sealed interface GoalRunnerOperatorDecisionResult {
+  public data class Recorded(
+    public val issueKey: String,
+    public val parentWorkflowId: String,
+    public val subtaskId: Int,
+    public val workflowId: String,
+    public val decision: String,
   ) : GoalRunnerOperatorDecisionResult
 
-  data class Rejected(val issueKey: String, val reason: String) : GoalRunnerOperatorDecisionResult
+  public data class Rejected(public val issueKey: String, public val reason: String) : GoalRunnerOperatorDecisionResult
 }
 
-data class GoalRunnerFreshQualityRequest(
-  val issueKey: String,
-  val reason: String,
-  val repoRoot: Path? = null,
+public data class GoalRunnerFreshQualityRequest(
+  public val issueKey: String,
+  public val reason: String,
+  public val repoRoot: Path? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -39,12 +39,12 @@ data class GoalRunnerFreshQualityRequest(
   }
 }
 
-sealed interface GoalRunnerFreshQualityResult {
-  data class Chosen(
-    val issueKey: String,
-    val parentWorkflowId: String,
-    val reason: String,
+public sealed interface GoalRunnerFreshQualityResult {
+  public data class Chosen(
+    public val issueKey: String,
+    public val parentWorkflowId: String,
+    public val reason: String,
   ) : GoalRunnerFreshQualityResult
 
-  data class Rejected(val issueKey: String, val reason: String) : GoalRunnerFreshQualityResult
+  public data class Rejected(public val issueKey: String, public val reason: String) : GoalRunnerFreshQualityResult
 }

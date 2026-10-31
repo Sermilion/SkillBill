@@ -23,8 +23,8 @@ import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Path
 
-interface GoalRunnerStatusManifestQueries {
-  fun statusManifestPage(
+public interface GoalRunnerStatusManifestQueries {
+  public fun statusManifestPage(
     parentWorkflowId: String,
     issueKey: String,
     offset: Int,
@@ -32,103 +32,103 @@ interface GoalRunnerStatusManifestQueries {
     repoRoot: Path?,
   ): GoalRunnerStatusManifestPage?
 
-  fun statusParentWorkflowId(
+  public fun statusParentWorkflowId(
     issueKey: String,
     repoRoot: Path?,
   ): String?
 }
 
-interface GoalRunnerManifestQueries {
-  fun loadByIssueKey(
+public interface GoalRunnerManifestQueries {
+  public fun loadByIssueKey(
     issueKey: String,
     repoRoot: Path? = null,
   ): GoalRunnerManifestState?
 
-  fun readByIssueKey(
+  public fun readByIssueKey(
     issueKey: String,
     repoRoot: Path? = null,
   ): GoalRunnerManifestState?
 
-  fun readByIssueKeyIfPresent(
+  public fun readByIssueKeyIfPresent(
     issueKey: String,
     repoRoot: Path? = null,
   ): GoalRunnerManifestState?
 
-  fun loadDurableByIssueKey(
+  public fun loadDurableByIssueKey(
     issueKey: String,
     repoRoot: Path? = null,
   ): GoalRunnerManifestState?
 
-  fun controlState(parentWorkflowId: String): GoalRunnerControlState
+  public fun controlState(parentWorkflowId: String): GoalRunnerControlState
 
-  fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease?
+  public fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease?
 
-  fun reviewMode(parentWorkflowId: String): CodeReviewExecutionMode?
+  public fun reviewMode(parentWorkflowId: String): CodeReviewExecutionMode?
 
-  fun reviewPolicy(parentWorkflowId: String): GoalRunnerReviewPolicy?
+  public fun reviewPolicy(parentWorkflowId: String): GoalRunnerReviewPolicy?
 
-  fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance>
+  public fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance>
 }
 
-interface GoalRunnerManifestPauseCommands {
-  fun requestPause(parentWorkflowId: String): GoalRunnerControlState?
+public interface GoalRunnerManifestPauseCommands {
+  public fun requestPause(parentWorkflowId: String): GoalRunnerControlState?
 
-  fun pauseNow(
+  public fun pauseNow(
     parentWorkflowId: String,
     reason: String,
     pausedAt: String,
     overwriteExistingReason: Boolean = false,
   ): GoalRunnerControlState?
 
-  fun requestPauseByIssueKey(
+  public fun requestPauseByIssueKey(
     issueKey: String,
     repoRoot: Path? = null,
   ): GoalRunnerPausePersistenceResult?
 
-  fun resume(parentWorkflowId: String): GoalRunnerManifestState?
+  public fun resume(parentWorkflowId: String): GoalRunnerManifestState?
 
-  fun pauseAtBoundary(state: GoalRunnerManifestState): GoalRunnerManifestState
+  public fun pauseAtBoundary(state: GoalRunnerManifestState): GoalRunnerManifestState
 }
 
-interface GoalRunnerManifestLeaseCommands {
-  fun acquireExecutionLease(
+public interface GoalRunnerManifestLeaseCommands {
+  public fun acquireExecutionLease(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String? = null,
   ): Boolean
 
-  fun acquireExecutionLeaseFenced(
+  public fun acquireExecutionLeaseFenced(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwner: GoalRunnerExecutionLease?,
   ): Boolean
 
-  fun acquireExecutionLeaseWithChildAdmission(
+  public fun acquireExecutionLeaseWithChildAdmission(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String?,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean
 
-  fun acquireExecutionLeaseWithChildAdmissionFenced(
+  public fun acquireExecutionLeaseWithChildAdmissionFenced(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwner: GoalRunnerExecutionLease?,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean
 
-  fun heartbeatExecutionLease(
+  public fun heartbeatExecutionLease(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
   ): Boolean
 
-  fun releaseExecutionLease(
+  public fun releaseExecutionLease(
     parentWorkflowId: String,
     ownerToken: String,
     generation: Long,
   ): Boolean
 
-  fun releaseExecutionLeaseIfExpired(
+  public fun releaseExecutionLeaseIfExpired(
     parentWorkflowId: String,
     ownerToken: String,
     generation: Long,
@@ -136,65 +136,65 @@ interface GoalRunnerManifestLeaseCommands {
   ): Boolean
 }
 
-interface GoalRunnerManifestExecutionCommands :
+public interface GoalRunnerManifestExecutionCommands :
   GoalRunnerManifestPauseCommands,
   GoalRunnerManifestLeaseCommands
 
-interface GoalRunnerManifestControlWrites {
-  fun restoreOutOfBandAcceptance(
+public interface GoalRunnerManifestControlWrites {
+  public fun restoreOutOfBandAcceptance(
     state: GoalRunnerManifestState,
     acceptance: GoalRunnerOutOfBandAcceptance,
   ): GoalChildHistoryAcceptanceRestoreResult
 
-  fun bindRepositoryIdentity(
+  public fun bindRepositoryIdentity(
     parentWorkflowId: String,
     repositoryIdentity: String,
   ): GoalRunnerControlState
 
-  fun persistStopAfterSubtask(
+  public fun persistStopAfterSubtask(
     parentWorkflowId: String,
     subtaskId: Int,
   ): GoalRunnerControlState
 
-  fun authorizeSubtaskLaunch(
+  public fun authorizeSubtaskLaunch(
     state: GoalRunnerManifestState,
     subtaskId: Int,
   ): GoalRunnerLaunchAuthorization
 
-  fun authorizePlanningLaunch(parentWorkflowId: String): AgentRunSpawnAuthorization?
+  public fun authorizePlanningLaunch(parentWorkflowId: String): AgentRunSpawnAuthorization?
 
-  fun persistControlState(
+  public fun persistControlState(
     parentWorkflowId: String,
     state: GoalRunnerControlState,
   ): GoalRunnerControlState
 
-  fun updateControlState(
+  public fun updateControlState(
     parentWorkflowId: String,
     update: (GoalRunnerControlState) -> GoalRunnerControlState,
   ): GoalRunnerControlState
 
-  fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState
+  public fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState
 
-  fun persistReviewMode(
+  public fun persistReviewMode(
     parentWorkflowId: String,
     mode: CodeReviewExecutionMode,
   ): CodeReviewExecutionMode
 
-  fun persistReviewPolicy(
+  public fun persistReviewPolicy(
     parentWorkflowId: String,
     policy: GoalRunnerReviewPolicy,
   ): GoalRunnerReviewPolicy
 }
 
-interface GoalRunnerManifestStateWrites {
-  fun planningStatus(
+public interface GoalRunnerManifestStateWrites {
+  public fun planningStatus(
     parentWorkflowId: String,
     orderedSubtaskIds: List<Int>,
     blockedSubtaskId: Int? = null,
     blockedReason: String? = null,
   ): GoalPlanningStatusSnapshot?
 
-  fun planningStatusFromSummary(
+  public fun planningStatusFromSummary(
     parentWorkflowId: String,
     summary: GoalPlanningStatusSummary,
     blockedSubtaskId: Int?,
@@ -207,49 +207,49 @@ interface GoalRunnerManifestStateWrites {
       blockedReason,
     )
 
-  fun save(state: GoalRunnerManifestState): GoalRunnerManifestState
+  public fun save(state: GoalRunnerManifestState): GoalRunnerManifestState
 
-  fun saveRuntimeState(state: GoalRunnerManifestState): GoalRunnerManifestState
+  public fun saveRuntimeState(state: GoalRunnerManifestState): GoalRunnerManifestState
 
-  fun saveCompletedSubtaskAtBoundary(
+  public fun saveCompletedSubtaskAtBoundary(
     state: GoalRunnerManifestState,
     subtaskId: Int,
   ): GoalRunnerCompletionPersistenceResult
 
-  fun saveHardReset(
+  public fun saveHardReset(
     state: GoalRunnerManifestState,
     preservePlanning: Boolean = false,
   ): GoalRunnerManifestState
 
-  fun deleteIncompatibleChildWorkflow(
+  public fun deleteIncompatibleChildWorkflow(
     state: GoalRunnerManifestState,
     subtaskId: Int,
     workflowId: String,
   ): GoalRunnerManifestState
 
-  fun saveScopedReplan(
+  public fun saveScopedReplan(
     state: GoalRunnerManifestState,
     subtaskId: Int,
     options: GoalRunnerScopedReplanOptions,
   ): GoalRunnerScopedReplanWriteResult
 
-  fun clearReplannedChildWorkflows(
+  public fun clearReplannedChildWorkflows(
     state: GoalRunnerManifestState,
     subtaskIds: List<Int>,
   ): GoalRunnerManifestState
 
-  fun saveNewChildWorkflow(
+  public fun saveNewChildWorkflow(
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
   ): GoalRunnerChildWorkflowSaveResult
 }
 
-interface GoalRunnerManifestCompletionWrites {
+public interface GoalRunnerManifestCompletionWrites {
   /**
    * Accepts every unfinished subtask against [commitSha], retires any active quality execution and
    * records goal completion at [completedAt] in one transaction.
    */
-  fun saveOperatorGoalCompletion(
+  public fun saveOperatorGoalCompletion(
     state: GoalRunnerManifestState,
     commitSha: String,
     reason: String,
@@ -257,11 +257,11 @@ interface GoalRunnerManifestCompletionWrites {
   ): GoalRunnerManifestState
 }
 
-interface GoalRunnerManifestPurgeCommands {
-  fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String>
+public interface GoalRunnerManifestPurgeCommands {
+  public fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String>
 
   /** Finds every decomposed parent for [issueKey] under the repository identity of [repoRoot]. */
-  fun discoverPurgeOwnership(
+  public fun discoverPurgeOwnership(
     issueKey: String,
     repoRoot: Path,
   ): GoalPurgeOwnership
@@ -270,19 +270,19 @@ interface GoalRunnerManifestPurgeCommands {
    * Keeps the manifest-recorded [candidateIds] that provably belong to this goal: same issue key and repository
    * identity, or a goal child of one of [parentWorkflowIds]. Unverifiable ids are not owned and are dropped.
    */
-  fun verifyOwnedWorkflowIds(
+  public fun verifyOwnedWorkflowIds(
     candidateIds: Set<String>,
     parentWorkflowIds: Set<String>,
     issueKey: String,
     repoRoot: Path,
   ): Set<String>
 
-  fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
+  public fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
 
-  fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts
+  public fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts
 }
 
-interface GoalRunnerManifestStore :
+public interface GoalRunnerManifestStore :
   GoalRunnerManifestQueries,
   GoalRunnerStatusManifestQueries,
   GoalRunnerManifestExecutionCommands,

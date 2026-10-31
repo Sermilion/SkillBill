@@ -6,21 +6,21 @@ import skillbill.contracts.issuekey.goalIntakeSpecBundleDirectory
 import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 
-internal data class GoalIntake(
-  val issueKey: String,
-  val requirements: String,
-  val featureName: String?,
-  val hasRequirements: Boolean,
+public data class GoalIntake(
+  public val issueKey: String,
+  public val requirements: String,
+  public val featureName: String?,
+  internal val hasRequirements: Boolean,
 ) {
-  companion object {
-    fun parse(text: String): GoalIntake =
+  internal companion object {
+    internal fun parse(text: String): GoalIntake =
       parseOrNull(text)
         ?: invalid(
           "issue_key",
           "supply a tracker issue key or link. A local workflow identity is not assigned.",
         )
 
-    fun parseOrNull(text: String): GoalIntake? {
+    internal fun parseOrNull(text: String): GoalIntake? {
       val intake = text.trim()
       if (intake.isBlank()) {
         return null

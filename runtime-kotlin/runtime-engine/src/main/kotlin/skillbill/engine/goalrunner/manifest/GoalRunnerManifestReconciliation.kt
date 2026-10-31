@@ -24,7 +24,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.workflowStatus
 import java.nio.file.Path
 
-fun reconcileGoalManifest(
+internal fun reconcileGoalManifest(
   state: GoalRunnerManifestState,
   authoritativeOutcomes: Map<Int, GoalRunnerStoredOutcome>,
   acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
@@ -45,7 +45,7 @@ fun reconcileGoalManifest(
     .withParentStatus().withDerivedCurrentIntent()
 }
 
-fun pruneEligibleCheckpointRefsForManifest(
+internal fun pruneEligibleCheckpointRefsForManifest(
   manifest: DecompositionManifest,
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,

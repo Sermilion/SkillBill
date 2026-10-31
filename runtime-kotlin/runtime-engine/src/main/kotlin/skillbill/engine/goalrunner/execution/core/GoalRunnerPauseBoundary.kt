@@ -14,7 +14,7 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerStopReason
 
 @Inject
-class GoalRunnerProgressReader(
+public class GoalRunnerProgressReader(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
 ) {
   internal fun read(workflowId: String): GoalRunnerChildProgressRead =
@@ -37,7 +37,7 @@ class GoalRunnerProgressReader(
       throw interrupted
     }
 
-  fun safeProgress(workflowId: String): GoalRunnerWorkflowProgress? =
+  internal fun safeProgress(workflowId: String): GoalRunnerWorkflowProgress? =
     when (val read = read(workflowId)) {
       is GoalRunnerChildProgressRead.Present -> read.progress
       is GoalRunnerChildProgressRead.Absent -> null
@@ -46,7 +46,7 @@ class GoalRunnerProgressReader(
 }
 
 @Inject
-class GoalRunnerPauseBoundary(
+public class GoalRunnerPauseBoundary(
   private val manifestStore: GoalRunnerManifestStore,
 ) {
   internal fun pauseBeforeLaunch(

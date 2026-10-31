@@ -47,7 +47,7 @@ import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Path
 import java.time.Clock
 
-class WorkflowGoalRunnerManifestStore
+public class WorkflowGoalRunnerManifestStore
   @Inject
   constructor(
     private val database: DatabaseSessionFactory,

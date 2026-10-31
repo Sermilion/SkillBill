@@ -23,12 +23,12 @@ import java.time.Clock
 import java.time.ZoneOffset
 
 @Inject
-class GoalRunnerAcceptanceCoordinator(
+public class GoalRunnerAcceptanceCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val gitOperations: WorkflowGitOperations,
   private val clock: Clock,
 ) {
-  fun accept(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult {
+  public fun accept(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult {
     val rejection = acceptanceRejection(request)
     if (rejection != null) {
       return GoalRunnerAcceptResult.Rejected(request.issueKey, rejection)
@@ -64,7 +64,7 @@ class GoalRunnerAcceptanceCoordinator(
     )
   }
 
-  fun complete(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult {
+  public fun complete(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult {
     val repoRoot =
       request.repoRoot
         ?: return GoalRunnerCompleteResult.Rejected(

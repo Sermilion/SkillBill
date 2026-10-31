@@ -5,7 +5,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.UnaddressedFindingsLedger
 
-fun resolveUnaddressedFindingsLedger(
+internal fun resolveUnaddressedFindingsLedger(
   service: UnaddressedFindingsLedgerService?,
   issueKey: String,
 ): UnaddressedFindingsLedger? {

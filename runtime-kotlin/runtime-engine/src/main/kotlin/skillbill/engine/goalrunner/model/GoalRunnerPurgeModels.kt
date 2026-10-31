@@ -2,42 +2,42 @@ package skillbill.engine.goalrunner.model
 
 import java.nio.file.Path
 
-data class GoalRunnerPurgeRequest(
-  val issueKey: String,
-  val repoRoot: Path? = null,
+public data class GoalRunnerPurgeRequest(
+  public val issueKey: String,
+  public val repoRoot: Path? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
   }
 }
 
-data class GoalPurgeOwnership(
-  val manifests: List<GoalRunnerManifestState>,
-  val parentWorkflowIds: Set<String>,
-  val unclassifiedWorkflows: List<String> = emptyList(),
-  val planWorkflowIds: Set<String> = emptySet(),
-  val siblingWorktreeWorkflows: List<String> = emptyList(),
+public data class GoalPurgeOwnership(
+  public val manifests: List<GoalRunnerManifestState>,
+  public val parentWorkflowIds: Set<String>,
+  internal val unclassifiedWorkflows: List<String> = emptyList(),
+  public val planWorkflowIds: Set<String> = emptySet(),
+  internal val siblingWorktreeWorkflows: List<String> = emptyList(),
 )
 
-enum class GoalRunnerPurgeSpecActionKind { DELETED, RESET, RESTORED }
+public enum class GoalRunnerPurgeSpecActionKind { DELETED, RESET, RESTORED }
 
-data class GoalRunnerPurgeSpecAction(
-  val path: String,
-  val kind: GoalRunnerPurgeSpecActionKind,
+public data class GoalRunnerPurgeSpecAction(
+  public val path: String,
+  public val kind: GoalRunnerPurgeSpecActionKind,
 )
 
-data class GoalRunnerPurgeResult(
-  val issueKey: String,
-  val parentWorkflowIds: List<String> = emptyList(),
-  val deletedChildWorkflowIds: List<String> = emptyList(),
-  val removedRowCounts: Map<String, Int> = emptyMap(),
-  val removedPaths: List<String> = emptyList(),
-  val specBundleActions: List<GoalRunnerPurgeSpecAction> = emptyList(),
-  val checkpointRefsPruned: Int = 0,
-  val leftovers: List<String> = emptyList(),
-  val refusalReason: String? = null,
+public data class GoalRunnerPurgeResult(
+  public val issueKey: String,
+  public val parentWorkflowIds: List<String> = emptyList(),
+  public val deletedChildWorkflowIds: List<String> = emptyList(),
+  public val removedRowCounts: Map<String, Int> = emptyMap(),
+  public val removedPaths: List<String> = emptyList(),
+  public val specBundleActions: List<GoalRunnerPurgeSpecAction> = emptyList(),
+  public val checkpointRefsPruned: Int = 0,
+  public val leftovers: List<String> = emptyList(),
+  public val refusalReason: String? = null,
 ) {
-  val nothingToRemove: Boolean
+  public val nothingToRemove: Boolean
     get() =
       refusalReason == null &&
         leftovers.isEmpty() &&

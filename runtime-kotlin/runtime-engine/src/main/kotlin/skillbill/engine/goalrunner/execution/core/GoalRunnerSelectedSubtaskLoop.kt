@@ -56,7 +56,7 @@ private sealed interface NoChangePauseGate {
 }
 
 @Inject
-class GoalRunnerSelectedSubtaskLoop(
+public class GoalRunnerSelectedSubtaskLoop(
   private val manifestStore: GoalRunnerManifestStore,
   private val subtaskLauncher: GoalRunnerSubtaskLauncher,
   private val reconciler: GoalRunnerLaunchReconciler,

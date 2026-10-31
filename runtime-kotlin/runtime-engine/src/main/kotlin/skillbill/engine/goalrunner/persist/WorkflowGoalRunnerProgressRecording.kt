@@ -576,7 +576,7 @@ internal class WorkflowGoalRunnerProgressRecording(
       historyEvidence.hasRequired(unitOfWork, parentWorkflowId, subtaskId, childWorkflowId)
     }
 
-  internal fun isCurrentGoalChild(
+  fun isCurrentGoalChild(
     unitOfWork: UnitOfWork,
     parentWorkflowId: String,
     subtaskId: Int,

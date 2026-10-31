@@ -36,7 +36,7 @@ import java.nio.file.Path
 import java.time.Clock
 
 @Inject
-class GoalRunnerRepairCoordinator(
+public class GoalRunnerRepairCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -49,7 +49,7 @@ class GoalRunnerRepairCoordinator(
 ) {
   private val parentWedgeDiagnosis = GoalRunnerParentRepairWedgeDiagnosis(clock)
 
-  fun repair(request: GoalRunnerRepairRequest): GoalRunnerRepairResult {
+  public fun repair(request: GoalRunnerRepairRequest): GoalRunnerRepairResult {
     val repoRoot = request.repoRoot ?: repositoryRoot.path
     val loaded =
       manifestStore.loadByIssueKey(request.issueKey, repoRoot)
@@ -106,7 +106,7 @@ class GoalRunnerRepairCoordinator(
     }
   }
 
-  fun repairBeforeResume(
+  internal fun repairBeforeResume(
     issueKey: String,
     repoRoot: Path,
   ): GoalRunnerRepairResult? {

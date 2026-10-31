@@ -7,15 +7,15 @@ import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 
-sealed interface GoalPlanningSweepOutcome {
-  data class PreparedAll(
-    val identity: GoalPlanningIdentity? = null,
-    val provenance: GoalPlanningContractProvenance? = null,
-    val descriptors: List<GovernedGoalSubtaskDescriptor> = emptyList(),
-    val planWorkflowId: String? = null,
-    val state: GoalRunnerManifestState? = null,
+public sealed interface GoalPlanningSweepOutcome {
+  public data class PreparedAll(
+    public val identity: GoalPlanningIdentity? = null,
+    public val provenance: GoalPlanningContractProvenance? = null,
+    public val descriptors: List<GovernedGoalSubtaskDescriptor> = emptyList(),
+    public val planWorkflowId: String? = null,
+    public val state: GoalRunnerManifestState? = null,
   ) : GoalPlanningSweepOutcome {
-    fun hydrationFor(subtaskId: Int) =
+    internal fun hydrationFor(subtaskId: Int) =
       identity?.let { expectedIdentity ->
         val expectedProvenance = requireNotNull(provenance)
         val descriptor = descriptors.singleOrNull { it.subtaskId == subtaskId } ?: return@let null
@@ -28,11 +28,11 @@ sealed interface GoalPlanningSweepOutcome {
       }
   }
 
-  data class Stopped(
-    val issueKey: String,
-    val currentSubtaskId: Int,
-    val reason: GoalRunnerStopReason,
-    val blockedReason: String,
-    val lastResumableStep: String,
+  public data class Stopped(
+    public val issueKey: String,
+    public val currentSubtaskId: Int,
+    public val reason: GoalRunnerStopReason,
+    public val blockedReason: String,
+    public val lastResumableStep: String,
   ) : GoalPlanningSweepOutcome
 }

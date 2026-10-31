@@ -31,7 +31,7 @@ private const val OPERATION_LITERAL_INDEX = 2
 private const val OPERATION_ATTEMPT_INDEX = 3
 
 @Inject
-class GoalPlanningLogService(
+public class GoalPlanningLogService(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val database: DatabaseSessionFactory,
@@ -39,7 +39,7 @@ class GoalPlanningLogService(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun log(request: GoalPlanningLogRequest): GoalPlanningLog {
+  public fun log(request: GoalPlanningLogRequest): GoalPlanningLog {
     val parentWorkflowId =
       manifestStore
         .readByIssueKey(request.issueKey, request.repoRoot)

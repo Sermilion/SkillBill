@@ -16,7 +16,7 @@ import java.nio.file.Path
 import java.time.Clock
 
 @Inject
-class GoalRunnerChildRepairOperations(
+public class GoalRunnerChildRepairOperations(
   database: DatabaseSessionFactory,
   workflowSnapshotValidator: WorkflowSnapshotValidator,
   wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,

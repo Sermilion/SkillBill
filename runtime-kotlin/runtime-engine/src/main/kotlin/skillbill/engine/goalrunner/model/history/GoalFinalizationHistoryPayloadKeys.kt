@@ -1,6 +1,6 @@
 package skillbill.engine.goalrunner.model.history
 
-object GoalFinalizationHistoryPayloadKeys {
+internal object GoalFinalizationHistoryPayloadKeys {
   const val CONTRACT_VERSION = "contract_version"
   const val REPAIR_CONTEXT = "repair_context"
   const val OUTPUTS = "outputs"

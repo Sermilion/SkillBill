@@ -6,17 +6,17 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconc
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 
 @Inject
-class PlanWorkflowLookup(
+public class PlanWorkflowLookup(
   private val lookupService: FeatureTaskContinuationLookupService,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
 ) {
-  fun lookup(
+  public fun lookup(
     issueKey: String,
     repositoryIdentity: String,
     workflowId: String?,
   ): FeatureTaskContinuationLookupResult = lookupService.lookupPlan(issueKey, repositoryIdentity, workflowId)
 
-  fun lookupAfterCrashRecovery(
+  internal fun lookupAfterCrashRecovery(
     issueKey: String,
     repositoryIdentity: String,
   ): FeatureTaskContinuationLookupResult {

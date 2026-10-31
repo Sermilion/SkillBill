@@ -24,16 +24,16 @@ import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Path
 import java.time.Clock
 
-const val PASSED_VALIDATION_DEPTH: String = "validation_depth_present"
-const val PASSED_QUALITY_GATE_SELECTION: String = "quality_gate_selection_present"
-const val PASSED_REVIEW_BASE: String = "review_base_reachable"
-const val PASSED_REMEDIATION_BASE: String = "remediation_base_reachable_or_absent"
-const val PASSED_CONTINUATION_OUTCOME: String = "continuation_outcome_corroborated_or_absent"
-const val PASSED_UPSTREAM_OUTPUT: String = "upstream_output_present"
-const val PASSED_PHASE_OUTPUT_CONTRACT: String = "phase_output_contract_compatible"
-const val PASSED_WORKER_LEASE: String = "worker_lease_absent_or_unexpired"
+public const val PASSED_VALIDATION_DEPTH: String = "validation_depth_present"
+public const val PASSED_QUALITY_GATE_SELECTION: String = "quality_gate_selection_present"
+public const val PASSED_REVIEW_BASE: String = "review_base_reachable"
+public const val PASSED_REMEDIATION_BASE: String = "remediation_base_reachable_or_absent"
+public const val PASSED_CONTINUATION_OUTCOME: String = "continuation_outcome_corroborated_or_absent"
+public const val PASSED_UPSTREAM_OUTPUT: String = "upstream_output_present"
+public const val PASSED_PHASE_OUTPUT_CONTRACT: String = "phase_output_contract_compatible"
+public const val PASSED_WORKER_LEASE: String = "worker_lease_absent_or_unexpired"
 
-class GoalRunnerChildRepairWedgeDiagnosis(
+internal class GoalRunnerChildRepairWedgeDiagnosis(
   private val gitOperations: WorkflowGitOperations,
   private val clock: Clock,
 ) {

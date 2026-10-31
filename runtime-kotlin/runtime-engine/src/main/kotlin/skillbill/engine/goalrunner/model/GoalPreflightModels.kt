@@ -7,7 +7,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.nio.file.Path
 
-data class GoalPreflightLookupInput(
+internal data class GoalPreflightLookupInput(
   val lookup: FeatureTaskContinuationLookupResult,
   val normalizedIssueKey: String,
   val manifest: DecompositionManifest?,
@@ -16,68 +16,68 @@ data class GoalPreflightLookupInput(
   val root: Path,
 )
 
-data class GoalPreflightRequest(
-  val issueKey: String,
-  val repoRoot: Path,
-  val invokedAgentId: String,
-  val agentOverrideId: String? = null,
-  val requestedReviewMode: CodeReviewExecutionMode? = null,
-  val requestedAgentAddonSlugs: List<String> = emptyList(),
-  val userHome: Path = Path.of("."),
-  val environment: Map<String, String> = emptyMap(),
+public data class GoalPreflightRequest(
+  public val issueKey: String,
+  public val repoRoot: Path,
+  public val invokedAgentId: String,
+  public val agentOverrideId: String? = null,
+  public val requestedReviewMode: CodeReviewExecutionMode? = null,
+  public val requestedAgentAddonSlugs: List<String> = emptyList(),
+  public val userHome: Path = Path.of("."),
+  public val environment: Map<String, String> = emptyMap(),
 )
 
-data class GoalPreflightResult(
-  val verdict: String,
-  val issueKey: String,
-  val candidate: FeatureTaskContinuationCandidate? = null,
-  val candidates: List<FeatureTaskContinuationCandidate> = emptyList(),
-  val goal: GoalContinuationCandidate? = null,
-  val gateBlock: GoalPreflightGateBlock? = null,
-  val rehydrateTargets: List<GoalPreflightRehydrateTarget> = emptyList(),
-  val manifestMissing: Boolean = false,
+public data class GoalPreflightResult(
+  public val verdict: String,
+  public val issueKey: String,
+  public val candidate: FeatureTaskContinuationCandidate? = null,
+  public val candidates: List<FeatureTaskContinuationCandidate> = emptyList(),
+  public val goal: GoalContinuationCandidate? = null,
+  public val gateBlock: GoalPreflightGateBlock? = null,
+  public val rehydrateTargets: List<GoalPreflightRehydrateTarget> = emptyList(),
+  public val manifestMissing: Boolean = false,
 )
 
-data class GoalPreflightGateBlock(
-  val issueKey: String,
-  val featureName: String,
-  val subtasks: List<GoalPreflightSubtask>,
-  val expectedFirstRunnableSubtask: Int?,
-  val childAgent: String,
-  val childAgentOverride: String?,
-  val reviewMode: String,
-  val agentAddons: List<GoalPreflightAgentAddon>,
+public data class GoalPreflightGateBlock(
+  public val issueKey: String,
+  public val featureName: String,
+  public val subtasks: List<GoalPreflightSubtask>,
+  public val expectedFirstRunnableSubtask: Int?,
+  public val childAgent: String,
+  public val childAgentOverride: String?,
+  public val reviewMode: String,
+  public val agentAddons: List<GoalPreflightAgentAddon>,
 )
 
-data class GoalPreflightSubtask(
-  val id: Int,
-  val name: String,
-  val status: String,
-  val dependencies: List<GoalPreflightDependency>,
+public data class GoalPreflightSubtask(
+  public val id: Int,
+  public val name: String,
+  public val status: String,
+  public val dependencies: List<GoalPreflightDependency>,
 )
 
-data class GoalPreflightDependency(
-  val subtaskId: Int,
-  val optional: Boolean,
-  val skipped: Boolean,
-  val note: String,
+public data class GoalPreflightDependency(
+  public val subtaskId: Int,
+  public val optional: Boolean,
+  public val skipped: Boolean,
+  public val note: String,
 )
 
-data class GoalPreflightAgentAddon(
-  val slug: String,
-  val description: String,
+public data class GoalPreflightAgentAddon(
+  public val slug: String,
+  public val description: String,
 )
 
-data class GoalPreflightRehydrateTarget(
-  val issueKey: String,
-  val linearIssueId: String?,
-  val targetPath: String,
+public data class GoalPreflightRehydrateTarget(
+  public val issueKey: String,
+  public val linearIssueId: String?,
+  public val targetPath: String,
 )
 
-object GoalPreflightVerdict {
-  const val NEW_WORK = "new_work"
-  const val RESUMABLE = "resumable"
-  const val ALREADY_RUNNING = "already_running"
-  const val TERMINAL_ONLY = "terminal_only"
-  const val GOAL_CONTINUATION = "goal_continuation"
+public object GoalPreflightVerdict {
+  public const val NEW_WORK: String = "new_work"
+  public const val RESUMABLE: String = "resumable"
+  public const val ALREADY_RUNNING: String = "already_running"
+  public const val TERMINAL_ONLY: String = "terminal_only"
+  public const val GOAL_CONTINUATION: String = "goal_continuation"
 }
