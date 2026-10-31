@@ -168,3 +168,8 @@ Context: Benchmark runs must not alter a supplied store or the user's settings, 
 Decision: Snapshot supplied databases through a read-only SQLite connection, use a temporary home and an opt-in task, and use fresh class loaders for cold-start samples.
 Reason: The snapshot includes WAL changes without writing the source; the temporary home isolates preferences.
 
+
+## [2026-10-31] Run runtime calls on the shared IO pool
+Context: `DatabaseDispatcher` capped runtime reads and writes at two. Cancelled reads keep their slot until they finish, so a burst of spec tree reads after a delete held up the refresh behind them.
+Decision: Run runtime calls on `Dispatchers.IO` without a separate cap.
+Reason: The IO pool already bounds blocking threads. SQLite in WAL mode runs concurrent readers beside one writer, and no caller relies on the cap for mutual exclusion.

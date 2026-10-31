@@ -57,7 +57,7 @@ internal suspend fun BenchmarkComponent.closeSession() {
 interface BenchmarkProviders {
   @Provides
   @SingleIn(AppScope::class)
-  fun databaseDispatcher(): DatabaseDispatcher = DatabaseDispatcher(Dispatchers.IO.limitedParallelism(2))
+  fun databaseDispatcher(): DatabaseDispatcher = DatabaseDispatcher()
 
   @Provides
   fun clock(): Clock = Clock.System
