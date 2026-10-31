@@ -1,10 +1,12 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.launcher.process.support.newLauncherSha256Digest
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
@@ -15,6 +17,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
@@ -70,7 +73,7 @@ internal fun AgentRunLivenessSnapshot?.detailsSuffix(): String =
   } ?: ""
 
 internal sealed interface ProcessStart {
-  data class Started(val process: Process) : ProcessStart
+  data class Started(val tree: AgentRunProcessTree) : ProcessStart
 
   data class Failed(val error: Exception) : ProcessStart
 }
@@ -104,48 +107,52 @@ internal class Utf8Drain(
   internal val stateLock = Any()
   internal val worker =
     thread(start = false, isDaemon = true, name = "skillbill-agent-run-output-drain") {
-      runCatching {
-        input.use { stream ->
-          val buffer = ByteArray(DEFAULT_DRAIN_BUFFER_BYTES)
-          val decoder =
-            StandardCharsets.UTF_8.newDecoder()
-              .onMalformedInput(CodingErrorAction.REPLACE)
-              .onUnmappableCharacter(CodingErrorAction.REPLACE)
-          val carry = ByteBuffer.allocate(DEFAULT_DRAIN_BUFFER_BYTES + UTF8_MAX_BYTES_PER_CODE_POINT)
-          val decoded = CharBuffer.allocate(DEFAULT_DRAIN_BUFFER_BYTES)
-          while (!frozen) {
-            val read = stream.read(buffer)
-            if (read == -1) {
-              break
-            }
-            val frozenBeforeRead =
-              synchronized(stateLock) {
-                if (frozen) {
-                  true
-                } else {
-                  totalByteSize += read
-                  digest.update(buffer, 0, read)
-                  false
-                }
+      try {
+        catchingNonCancellation {
+          input.use { stream ->
+            val buffer = ByteArray(DEFAULT_DRAIN_BUFFER_BYTES)
+            val decoder =
+              StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPLACE)
+                .onUnmappableCharacter(CodingErrorAction.REPLACE)
+            val carry = ByteBuffer.allocate(DEFAULT_DRAIN_BUFFER_BYTES + UTF8_MAX_BYTES_PER_CODE_POINT)
+            val decoded = CharBuffer.allocate(DEFAULT_DRAIN_BUFFER_BYTES)
+            while (!frozen) {
+              val read = stream.read(buffer)
+              if (read == -1) {
+                break
               }
-            if (frozenBeforeRead) return@use
-            carry.put(buffer, 0, read)
-            carry.flip()
-            decodeAvailable(decoded) { decoder.decode(carry, decoded, false) }
-            carry.compact()
+              val frozenBeforeRead =
+                synchronized(stateLock) {
+                  if (frozen) {
+                    true
+                  } else {
+                    totalByteSize += read
+                    digest.update(buffer, 0, read)
+                    false
+                  }
+                }
+              if (frozenBeforeRead) return@use
+              carry.put(buffer, 0, read)
+              carry.flip()
+              decodeAvailable(decoded) { decoder.decode(carry, decoded, false) }
+              carry.compact()
 
-            synchronized(stateLock) {
-              if (!frozen) output.write(buffer, 0, read)
+              synchronized(stateLock) {
+                if (!frozen) output.write(buffer, 0, read)
+              }
             }
+            if (frozen) return@use
+            carry.flip()
+            decodeAvailable(decoded) { decoder.decode(carry, decoded, true) }
+            decodeAvailable(decoded) { decoder.flush(decoded) }
           }
-          if (frozen) return@use
-          carry.flip()
-          decodeAvailable(decoded) { decoder.decode(carry, decoded, true) }
-          decodeAvailable(decoded) { decoder.flush(decoded) }
-        }
-      }.onFailure { failure ->
-        workerFailure = failure
-      }.also {
+        }.onFailure { failure -> workerFailure = failure }
+      } catch (interrupted: InterruptedException) {
+        workerFailure = interrupted
+      } catch (cancelled: CancellationException) {
+        workerFailure = cancelled
+      } finally {
         workerCompleted = true
       }
     }
@@ -162,7 +169,10 @@ internal class Utf8Drain(
     worker.join(DRAIN_JOIN_TIMEOUT_MILLIS)
     var incomplete = workerFailure != null || !workerCompleted || worker.isAlive
     if (worker.isAlive) {
-      runCatching { input.close() }
+      try {
+        input.close()
+      } catch (_: IOException) {
+      }
       worker.join(DRAIN_JOIN_TIMEOUT_MILLIS)
       incomplete = workerFailure != null || !workerCompleted || worker.isAlive
     }

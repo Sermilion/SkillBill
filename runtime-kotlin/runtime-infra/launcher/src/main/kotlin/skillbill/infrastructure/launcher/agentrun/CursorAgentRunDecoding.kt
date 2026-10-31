@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import skillbill.infrastructure.launcher.review.CursorReviewStreamError
 import skillbill.infrastructure.launcher.review.CursorReviewStreamForbiddenOperationError
@@ -52,10 +53,12 @@ private fun parseCursorStreamLines(lines: List<String>): CursorStreamParse {
     totalByteCount <= CURSOR_STREAM_MAX_TOTAL_BYTES
   }.filter(String::isNotBlank).forEach { line ->
     val event =
-      runCatching { structuredOutputMapper.readTree(line) }.getOrElse {
+      try {
+        structuredOutputMapper.readTree(line)
+      } catch (error: JsonProcessingException) {
         throw CursorReviewStreamMalformedError(
           "Malformed Cursor stream JSONL line: ${line.take(CURSOR_STREAM_MALFORMED_LINE_PREVIEW_CHARS)}",
-          it,
+          error,
         )
       }
     decodedEnvelope = true

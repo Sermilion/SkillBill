@@ -31,11 +31,14 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Optional
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Handler
 import java.util.logging.LogRecord
 import java.util.logging.Logger
+import java.util.stream.Stream
 import kotlin.coroutines.cancellation.CancellationException
 
 class JvmAgentRunProcessRunnerTest {
@@ -318,7 +321,7 @@ class JvmAgentRunProcessRunnerTest {
   fun `reap destroys a process that exits and does not forcibly kill it`() {
     val process = FakeReapableProcess(staysAlive = false)
 
-    JvmAgentRunProcessRunner.reapLiveProcesses(listOf(process))
+    JvmAgentRunProcessRunner.reapLiveProcesses(listOf(AgentRunProcessTree(process)))
 
     assertEquals(1, process.destroyCount)
     assertEquals(0, process.forcibleCount)
@@ -328,10 +331,11 @@ class JvmAgentRunProcessRunnerTest {
   fun `reap forcibly kills a process that stays alive after destroy`() {
     val process = FakeReapableProcess(staysAlive = true)
 
-    JvmAgentRunProcessRunner.reapLiveProcesses(listOf(process))
+    JvmAgentRunProcessRunner.reapLiveProcesses(listOf(AgentRunProcessTree(process)))
 
     assertEquals(1, process.destroyCount)
     assertEquals(1, process.forcibleCount)
+    assertFalse(process.isAlive)
   }
 
   @Test
@@ -519,6 +523,7 @@ private class FakeReapableProcess(
   private val staysAlive: Boolean,
   private val streamsAvailable: Boolean = false,
 ) : Process() {
+  private var alive = true
   var destroyCount = 0
     private set
   var forcibleCount = 0
@@ -536,17 +541,52 @@ private class FakeReapableProcess(
 
   override fun destroy() {
     destroyCount++
+    if (!staysAlive) alive = false
   }
 
   override fun destroyForcibly(): Process {
     forcibleCount++
+    alive = false
     return this
   }
 
-  override fun isAlive(): Boolean = staysAlive
+  override fun isAlive(): Boolean = alive
+
+  override fun toHandle(): ProcessHandle =
+    object : ProcessHandle {
+      override fun pid(): Long = 1L
+
+      override fun parent(): Optional<ProcessHandle> = Optional.empty()
+
+      override fun children(): Stream<ProcessHandle> = Stream.empty()
+
+      override fun descendants(): Stream<ProcessHandle> = Stream.empty()
+
+      override fun info(): ProcessHandle.Info = error("unused")
+
+      override fun onExit(): CompletableFuture<ProcessHandle> =
+        CompletableFuture.failedFuture(IllegalStateException("exit observation failed"))
+
+      override fun supportsNormalTermination(): Boolean = true
+
+      override fun destroy(): Boolean {
+        this@FakeReapableProcess.destroy()
+        return true
+      }
+
+      override fun destroyForcibly(): Boolean {
+        if (!alive) return false
+        this@FakeReapableProcess.destroyForcibly()
+        return true
+      }
+
+      override fun isAlive(): Boolean = alive
+
+      override fun compareTo(other: ProcessHandle): Int = pid().compareTo(other.pid())
+    }
 
   override fun waitFor(
     timeout: Long,
     unit: TimeUnit,
-  ): Boolean = !staysAlive
+  ): Boolean = !alive
 }

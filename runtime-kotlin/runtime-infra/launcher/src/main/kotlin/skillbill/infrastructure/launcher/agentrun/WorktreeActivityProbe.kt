@@ -32,8 +32,9 @@ internal class WorktreeActivityProbe(
   private fun scanToken(): String? {
     if (!Files.isDirectory(root)) return null
     val stats = WorktreeActivityStats()
-    runCatching {
+    try {
       Files.walkFileTree(root, WorktreeActivityVisitor(root, stats))
+    } catch (_: IOException) {
     }
     return stats.token()
   }

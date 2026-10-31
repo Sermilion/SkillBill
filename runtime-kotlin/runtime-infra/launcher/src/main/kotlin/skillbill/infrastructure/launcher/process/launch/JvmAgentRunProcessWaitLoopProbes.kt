@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
@@ -9,7 +10,6 @@ import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunProgressLabelProbe
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
-import java.util.concurrent.CancellationException
 
 internal fun ProcessWaitLoop.pollWorkflowProgress(nowNanos: Long) {
   val read = request.probes.progressProbe.readProgressToken(degradation)
@@ -26,7 +26,7 @@ internal fun ProcessWaitLoop.pollWorkflowProgress(nowNanos: Long) {
     lastProgressInstant = clock.instant()
     fileActivityWindowStartNanos = null
     writeProgressLabel(nowNanos)
-    request.probes.activityStampSink.safeStamp(AgentActivityLabel.DURABLE_PROGRESS)
+    request.probes.activityStampSink.safeStamp(AgentActivityLabel.DURABLE_PROGRESS, degradation)
   }
 }
 
@@ -35,7 +35,7 @@ internal fun ProcessWaitLoop.pollOutputActivity(nowNanos: Long) {
   if (observedMillis != lastObservedOutputMillis) {
     lastObservedOutputMillis = observedMillis
     lastOutputNanos = nowNanos
-    request.probes.activityStampSink.safeStamp(AgentActivityLabel.STDOUT)
+    request.probes.activityStampSink.safeStamp(AgentActivityLabel.STDOUT, degradation)
   }
 }
 
@@ -55,8 +55,8 @@ internal fun ProcessWaitLoop.pollFileActivity(nowNanos: Long) {
       fileActivityWindowStartNanos = nowNanos
     }
     writeActivityLabel()
-    request.probes.activityStampSink.safeStamp(AgentActivityLabel.WORKTREE_WRITE)
-    request.probes.worktreeEditObserver.safeObserve()
+    request.probes.activityStampSink.safeStamp(AgentActivityLabel.WORKTREE_WRITE, degradation)
+    request.probes.worktreeEditObserver.safeObserve(degradation)
   }
 }
 
@@ -125,13 +125,17 @@ internal fun ProcessWaitLoop.writeActivityLabel() {
   )
 }
 
-internal fun AgentRunActivityStampSink.safeStamp(label: AgentActivityLabel) {
-  runCatching { stamp(label) }
-    .onFailure { failure -> if (failure is CancellationException) throw failure }
+internal fun AgentRunActivityStampSink.safeStamp(
+  label: AgentActivityLabel,
+  degradation: ProcessRunDegradationRecorder,
+) {
+  catchingNonCancellation { stamp(label) }
+    .onFailure { failure -> degradation.recordProbeFailure("activity_stamp", failure) }
 }
 
-internal fun AgentRunWorktreeEditObserver.safeObserve() {
-  runCatching { observe() }
+internal fun AgentRunWorktreeEditObserver.safeObserve(degradation: ProcessRunDegradationRecorder) {
+  catchingNonCancellation { observe() }
+    .onFailure { failure -> degradation.recordProbeFailure("worktree_edit_observe", failure) }
 }
 
 internal data class ProbeRead<T>(
@@ -163,10 +167,9 @@ private inline fun <T> readProbe(
   seam: String,
   read: () -> T?,
 ): ProbeRead<T> =
-  runCatching { read() }.fold(
+  catchingNonCancellation { read() }.fold(
     onSuccess = { value -> ProbeRead(value = value, failed = false) },
     onFailure = { failure ->
-      if (failure is CancellationException) throw failure
       recorder.recordProbeFailure(seam, failure)
       ProbeRead(value = null, failed = true)
     },

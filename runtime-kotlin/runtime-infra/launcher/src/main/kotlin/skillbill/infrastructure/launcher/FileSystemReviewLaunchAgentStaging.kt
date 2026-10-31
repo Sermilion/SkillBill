@@ -90,11 +90,9 @@ class FileSystemReviewLaunchAgentStaging(
   }
 
   private fun provider(agentId: String): NativeAgentProvider? =
-    runCatching {
-      SupportedAgent.fromWire(agentId)
-        .takeIf { agent -> agent == SupportedAgent.CURSOR }
-        ?.let(NativeAgentProvider::forSupportedAgent)
-    }.getOrNull()
+    SupportedAgent.fromWireOrNull(agentId)
+      ?.takeIf { agent -> agent == SupportedAgent.CURSOR }
+      ?.let(NativeAgentProvider::forSupportedAgent)
 
   private fun fail(
     logicalName: String,

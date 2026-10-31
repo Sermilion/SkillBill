@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
@@ -108,7 +109,7 @@ internal fun exportRunDegradationEvidence(
   }
   val line = if (payload.endsWith("\n")) payload else "$payload\n"
   val sinkFailure =
-    runCatching {
+    catchingNonCancellation {
       outputSink.write(AgentRunOutputStream.STDERR, line)
     }.exceptionOrNull() ?: return
   degradationExportLogger.warning(

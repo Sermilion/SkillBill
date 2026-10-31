@@ -49,7 +49,7 @@ internal fun ProcessWaitLoop.pollDeclaredProgress(nowNanos: Long) {
   }
   val latest = declaredTracker.latestEvent
   if (latest != null && latest.sequenceNumber != previousSequence) {
-    request.probes.activityStampSink.safeStamp(AgentActivityLabel.TOOL_STREAM)
+    request.probes.activityStampSink.safeStamp(AgentActivityLabel.TOOL_STREAM, degradation)
   }
 }
 

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.host.skillBillStateDir
 import skillbill.model.EnvironmentContext
 import java.io.IOException
@@ -28,7 +29,7 @@ class AgentRunScratchSpace(
 ) {
   fun <T> withScratch(block: (Path?) -> T): T {
     val directory =
-      runCatching { create() }.getOrElse { failure ->
+      catchingNonCancellation { create() }.getOrElse { failure ->
         logger.warning("skillbill agent run: scratch directory unavailable under '$root': ${failure.message}")
         return block(null)
       }
@@ -58,8 +59,15 @@ class AgentRunScratchSpace(
 
   private fun ownedByLiveProcess(directory: Path): Boolean {
     val pid =
-      runCatching { directory.resolve(OWNER_FILE).readText().trim().toLong() }.getOrNull()
-        ?: return false
+      try {
+        directory.resolve(OWNER_FILE).readText().trim().toLongOrNull()
+      } catch (failure: IOException) {
+        logger.warning(
+          "skillbill agent run: scratch directory '$directory' has no readable owner; " +
+            "treating it as abandoned: ${failure.message}",
+        )
+        null
+      } ?: return false
     return pid == ownerPid || isProcessAlive(pid)
   }
 

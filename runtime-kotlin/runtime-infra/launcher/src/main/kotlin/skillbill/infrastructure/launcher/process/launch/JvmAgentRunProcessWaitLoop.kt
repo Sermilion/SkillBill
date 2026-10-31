@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.GoalRunnerLivenessClassifier
 import skillbill.goalrunner.model.GoalRunnerLivenessDecision
 import skillbill.goalrunner.model.GoalRunnerLivenessInputs
@@ -14,7 +15,6 @@ import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.nio.charset.StandardCharsets
 import java.time.Clock
 import java.time.Instant
-import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 import kotlin.time.DurationUnit
 
@@ -23,7 +23,7 @@ internal fun writeAndCloseStdin(
   stdinText: String?,
   degradation: ProcessRunDegradationRecorder,
 ) {
-  runCatching {
+  catchingNonCancellation {
     process.outputStream.use { output ->
       if (stdinText != null) {
         output.write(stdinText.toByteArray(StandardCharsets.UTF_8))
@@ -41,13 +41,14 @@ internal data class ProcessWait(
 )
 
 internal class ProcessWaitLoop(
-  internal val process: Process,
+  internal val tree: AgentRunProcessTree,
   internal val request: AgentRunProcessRequest,
   internal val outputTracker: OutputObservationTracker,
   internal val lifecycleEmitter: ProcessLifecycleEmitter,
   internal val clock: Clock,
   internal val degradation: ProcessRunDegradationRecorder,
 ) {
+  internal val process: Process get() = tree.process
   internal val timeoutMillis =
     request.timing.timeout
       ?.toLong(DurationUnit.MILLISECONDS)
@@ -92,6 +93,8 @@ internal class ProcessWaitLoop(
       if (Thread.interrupted()) {
         throw InterruptedException()
       }
+      catchingNonCancellation { tree.refresh() }
+        .onFailure { failure -> degradation.recordCleanupFailure("process_tree_discovery", failure) }
       wait = nextWait()
     }
     return wait
@@ -321,7 +324,7 @@ internal class ProcessLifecycleEmitter(
     processAlive: Boolean,
     outcome: GoalProgressOutcome,
   ) {
-    runCatching {
+    catchingNonCancellation {
       request.probes.progressEmitter.emit(
         AgentRunProgressEmission(
           eventKind = kind,
@@ -333,10 +336,7 @@ internal class ProcessLifecycleEmitter(
           authoritative = false,
         ),
       )
-    }.onFailure { failure ->
-      if (failure is CancellationException) throw failure
-      degradation.recordLifecyclePublicationFailure(failure)
-    }
+    }.onFailure(degradation::recordLifecyclePublicationFailure)
   }
 
   private companion object {
