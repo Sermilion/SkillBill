@@ -50,9 +50,12 @@ internal const val PAUSE_TIMEOUT_NOTICE =
   "The app asked the execution to pause, but it did not stop within 5 minutes, so this turn did not run. " +
     "If it pauses later, resume it from the detail controls."
 
+internal const val CLEARED_NOTICE =
+  "Cleared the chat. The next turn starts a new conversation with the current execution state."
+
 /**
  * The window's chats, one per execution id. Each finished turn saves the chat's latest lines through [ExecutionChatRepository],
- * and `/resume` swaps a chat for a saved one of the same execution. It is window-scoped: every coroutine is a child of the window
+ * `/resume` swaps a chat for a saved one of the same execution, and `/clear` starts it over. It is window-scoped: every coroutine is a child of the window
  * scope, and the window ends every chat through [closeAll]. Calls come from the UI thread. It mirrors [paneOpen] into
  * [ShellPanes.chatOpen], and hides itself when opening Specs clears that flag; hiding ends no chat.
  */
@@ -241,6 +244,24 @@ class ChatWorkspace(
       session.agentSupportedState.value = chat.supports(agentId)
       session.restart(UUID.randomUUID().toString())
       session.append(ChatMessage.Notice("Switched to ${chipText(agent)}. Its next turn starts a new conversation with the current execution state."))
+    }
+  }
+
+  /**
+   * Starts [id]'s chat over for `/clear`: a running turn ends, the transcript keeps only the state line, and the next turn opens
+   * a new agent session on the same agent with the full snapshot. Earlier finished turns stay saved for `/resume`. Ignored once
+   * the execution left the database.
+   */
+  fun clear(id: String) {
+    val session = sessions[id] ?: return
+    session.resumeChoicesState.value = null
+    if (session.goneState.value) return
+    val running = session.turnJob
+    session.busyState.value = true
+    launchTurn(session) {
+      running?.cancelAndJoin()
+      session.restart(UUID.randomUUID().toString())
+      session.replaceTranscript(listOf(stateCard(session.item), ChatMessage.Notice(CLEARED_NOTICE)))
     }
   }
 

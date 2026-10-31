@@ -489,4 +489,41 @@ class ChatWorkspaceTest {
     assertEquals("claude", resumed.agent.agentId)
     assertTrue("execution.title" in resumed.prompt && resumed.prompt.endsWith("what next?"))
   }
+
+  // A clear that kept the session id would continue the old conversation; one that left the turn running would stream its
+  // reply into the cleared chat.
+  @Test
+  fun `clearing ends the running turn, keeps only the state line, and opens a new session on the same agent`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val cancelled = mutableListOf<String>()
+    chat.events = { request ->
+      if (request.firstTurn && request.prompt.endsWith("what next?")) flowOf(ChatEvent.TextDelta("Rerun it."), ChatEvent.Completed)
+      else flow { try { awaitCancellation() } finally { cancelled += request.sessionId } }
+    }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val opening = chat.requests.single()
+    val agent = session.agent.value
+
+    workspace.clear(item.id)
+    runCurrent()
+
+    assertEquals(listOf(opening.sessionId), cancelled)
+    assertFalse(session.busy.value)
+    assertEquals(agent, session.agent.value)
+    val transcript = session.transcript.value
+    assertIs<ChatMessage.StateLine>(transcript.first())
+    assertEquals(ChatMessage.Notice(CLEARED_NOTICE), transcript.drop(1).single())
+
+    workspace.send(item.id, "what next?")
+    runCurrent()
+
+    val next = chat.requests.last()
+    assertTrue(next.firstTurn)
+    assertTrue(next.sessionId != opening.sessionId && next.sessionId == session.sessionId)
+    assertTrue("execution.title" in next.prompt)
+  }
 }
