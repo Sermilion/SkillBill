@@ -254,3 +254,11 @@ Context: The quality gate blocks a parent marked `historical_ambiguity` and asks
 Decision: `skill-bill goal fresh-quality <issue-key> --reason <why>` moves the parent's quality record from `historical_ambiguity` to `clean_unstarted` in one transaction. It refuses while the parent execution lease is live and when the record holds no ambiguity. It is a separate command, not a `goal repair` wedge, because `goal resume` applies repair clears automatically and this choice discards history only an operator can judge.
 
 Reason: The ambiguity guard exists so the runtime never guesses. The guess belongs to the operator, and the runtime needs a durable way to record it. A CLI test drives the recovered-database block, the choice, a refused repeat and a run that no longer blocks.
+
+## [2026-10-31] Import readiness finds the completed plan by its project-store spec, not only by checkout path
+
+Context: The import looks up the completed plan by issue key and repository identity. That identity is the checkout's real path, so a plan made in another linked worktree, or before the repository moved, does not match. SKILL-454 was planned on 2026-10-30, the repository then moved to another path, and the goal launched on 2026-10-31 imported the project-store manifest with no matching plan. It wrote `historical_ambiguity`, finished all three subtasks, and blocked before final quality with no quality history behind it.
+
+Decision: When the path lookup finds nothing, readiness also accepts a completed plan for the same issue whose governed spec path equals the manifest's project-store parent spec (`specs/...`). This fallback feeds only the readiness choice. Plan linkage and planning timing keep the path-scoped plan. Repository-relative `.feature-specs/` manifests get no fallback.
+
+Reason: The project store is keyed by repository lineage, so every checkout and every past path of one repository shares the same `specs/` bundle. A completed plan in this database that governed that exact bundle, with no subtask started, is the same proof the 2026-10-28 rule asks for. Repository-relative spec paths can repeat across unrelated repositories, so they stay path-scoped. A runtime-engine test covers a plan from another checkout of the same spec and a plan for a different spec.

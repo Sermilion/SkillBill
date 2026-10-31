@@ -144,6 +144,12 @@ class DecompositionWorkflowContinuation(
       } else {
         null
       }
+    val qualityPlanWorkflowId =
+      if (existing == null) {
+        planWorkflowId ?: unitOfWork.workflowStates.findCompletedPlanWorkflowIdForProjectSpec(manifest)
+      } else {
+        null
+      }
     val imported =
       engine.updateRecord(
         WorkflowFamily.TASK_RUNTIME.definition,
@@ -155,7 +161,7 @@ class DecompositionWorkflowContinuation(
           artifactsPatch =
             parentProjectionArtifacts(manifest, validator, base.artifacts).withImportedPlan(planWorkflowId).let {
                 patch ->
-              if (existing == null) patch.withImportedGoalQualityReadiness(manifest, planWorkflowId) else patch
+              if (existing == null) patch.withImportedGoalQualityReadiness(manifest, qualityPlanWorkflowId) else patch
             },
           sessionId = base.sessionId.orEmpty(),
           replaceArtifacts = true,

@@ -17,6 +17,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -54,7 +55,40 @@ class GoalImportQualityReadinessTest {
     )
   }
 
-  private fun importedReadiness(subtask: DecompositionSubtask): Any? {
+  @Test
+  fun `importing a goal into another checkout of the planned project spec leaves final quality admissible`() {
+    assertEquals(
+      GoalQualityReadiness.CLEAN_UNSTARTED.wireValue,
+      importedReadiness(
+        DecompositionSubtask(1, "Filters", "specs/APP-123-filters/subtask.md"),
+        plan = PlanIdentity(OLD_CHECKOUT, "specs/APP-123-filters/spec.md"),
+        importIdentity = NEW_CHECKOUT,
+      ),
+    )
+  }
+
+  @Test
+  fun `importing a goal whose only completed plan governs another spec keeps quality history ambiguous`() {
+    assertEquals(
+      GoalQualityReadiness.HISTORICAL_AMBIGUITY.wireValue,
+      importedReadiness(
+        DecompositionSubtask(1, "Filters", "specs/APP-123-filters/subtask.md"),
+        plan = PlanIdentity(OLD_CHECKOUT, "specs/APP-123-other/spec.md"),
+        importIdentity = NEW_CHECKOUT,
+      ),
+    )
+  }
+
+  private data class PlanIdentity(
+    val repositoryIdentity: String,
+    val governedSpecPath: String,
+  )
+
+  private fun importedReadiness(
+    subtask: DecompositionSubtask,
+    plan: PlanIdentity? = null,
+    importIdentity: String? = null,
+  ): Any? {
     val home = Files.createTempDirectory("goal-import-quality-readiness")
     val clock = Clock.fixed(Instant.parse("2026-10-28T10:00:00Z"), ZoneOffset.UTC)
     val database = sqliteSessionFactoryForTests(home, environment = emptyMap(), clock = clock)
@@ -69,7 +103,7 @@ class GoalImportQualityReadinessTest {
         subtasks = listOf(subtask),
       )
     try {
-      database.transaction { unit -> seedCompletedPlan(unit, manifest.issueKey) }
+      database.transaction { unit -> seedCompletedPlan(unit, manifest.issueKey, plan) }
       val loader =
         WorkflowGoalRunnerManifestLoader(
           database,
@@ -79,7 +113,7 @@ class GoalImportQualityReadinessTest {
           Random(1),
           testProjectStore,
         )
-      val imported = assertNotNull(loader.importFromManifestProjection(manifest))
+      val imported = assertNotNull(loader.importFromManifestProjection(manifest, importIdentity))
       val parent =
         assertNotNull(
           database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, imported.parentWorkflowId) },
@@ -94,6 +128,7 @@ class GoalImportQualityReadinessTest {
   private fun seedCompletedPlan(
     unit: UnitOfWork,
     issueKey: String,
+    identity: PlanIdentity?,
   ) {
     val plan =
       WorkflowEngine().openRecord(WorkflowFamily.TASK_RUNTIME.definition, "plan-workflow", "ftr", "plan")
@@ -110,5 +145,21 @@ class GoalImportQualityReadinessTest {
             ),
         )
     unit.workflowStates.saveRecord(WorkflowFamily.TASK_RUNTIME, plan.toRecord().copy(issueKey = issueKey))
+    identity?.let {
+      unit.workflowStates.saveFeatureTaskExecutionIdentity(
+        FeatureTaskExecutionIdentity(
+          workflowId = plan.workflowId,
+          normalizedIssueKey = issueKey,
+          repositoryIdentity = it.repositoryIdentity,
+          governedSpecPath = it.governedSpecPath,
+          mode = FeatureTaskWorkflowMode.RUNTIME,
+        ),
+      )
+    }
+  }
+
+  private companion object {
+    const val OLD_CHECKOUT = "repo-root-realpath-v1:/home/me/projects/app"
+    const val NEW_CHECKOUT = "repo-root-realpath-v1:/mnt/work/projects/app"
   }
 }

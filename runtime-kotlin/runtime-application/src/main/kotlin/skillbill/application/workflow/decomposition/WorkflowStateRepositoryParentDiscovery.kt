@@ -4,6 +4,7 @@ import skillbill.application.workflow.decomposition.model.DecomposedParentForPur
 import skillbill.application.workflow.decomposition.model.DecomposedParentsForPurge
 import skillbill.application.workflow.decomposition.model.UnclassifiedPurgeRow
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
@@ -136,6 +137,15 @@ fun WorkflowStateRepository.findCompletedPlanWorkflowId(
     .filter { it.workflowStatus.workflowStatus() == WorkflowStatus.COMPLETED && it.isPlanWorkflow() }
     .maxWithOrNull(compareBy<WorkflowStateRecord> { it.hasPlanSubtasksStep() }.thenBy { it.updatedAt.orEmpty() })
     ?.workflowId
+
+fun WorkflowStateRepository.findCompletedPlanWorkflowIdForProjectSpec(manifest: DecompositionManifest): String? {
+  val parentSpecPath = manifest.parentSpecPath.takeIf { it.startsWith(ProjectStoreLayout.SPECS_PREFIX) } ?: return null
+  return listFeatureTaskWorkflowsForIssue(normalizeRequiredIssueKey(manifest.issueKey), repositoryIdentity = null)
+    .filter { it.workflowStatus.workflowStatus() == WorkflowStatus.COMPLETED && it.isPlanWorkflow() }
+    .filter { getFeatureTaskExecutionIdentity(it.workflowId)?.governedSpecPath == parentSpecPath }
+    .maxWithOrNull(compareBy<WorkflowStateRecord> { it.hasPlanSubtasksStep() }.thenBy { it.updatedAt.orEmpty() })
+    ?.workflowId
+}
 
 fun WorkflowStateRepository.findLatestPlanWorkflowId(
   issueKey: String,

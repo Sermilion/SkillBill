@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
+import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowIdForProjectSpec
 import skillbill.application.workflow.decomposition.findDecomposedParentOrCorruptFallback
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.importedPlanStepUpdates
@@ -123,6 +124,12 @@ class WorkflowGoalRunnerManifestLoader(
         } else {
           null
         }
+      val qualityPlanWorkflowId =
+        if (existing == null) {
+          planWorkflowId ?: unitOfWork.workflowStates.findCompletedPlanWorkflowIdForProjectSpec(manifest)
+        } else {
+          null
+        }
       val planningTime = unitOfWork.planWorkflowTiming(planWorkflowId)
       val imported =
         engine.updateRecord(
@@ -134,7 +141,7 @@ class WorkflowGoalRunnerManifestLoader(
             stepUpdates = if (existing != null) null else importedPlanStepUpdates(planWorkflowId),
             artifactsPatch =
               parentProjection.artifacts(manifest, base.artifacts).withImportedPlan(planWorkflowId).let { patch ->
-                if (existing == null) patch.withImportedGoalQualityReadiness(manifest, planWorkflowId) else patch
+                if (existing == null) patch.withImportedGoalQualityReadiness(manifest, qualityPlanWorkflowId) else patch
               },
             sessionId = base.sessionId.orEmpty(),
             replaceArtifacts = true,
