@@ -1,3 +1,56 @@
+## [2026-10-31] Start chat turns through a POSIX login shell
+Context: An app launched from the Dock may not inherit the login PATH, so claude, skill-bill and gh may not resolve.
+Decision: ClaudeChatTransport execs claude through $SHELL -l -c when SHELL is sh, bash, zsh, dash or ksh, through /bin/sh for any other shell, and as bare claude when SHELL is unset. Stdout lines before the first JSON object are skipped and recorded as chat.login_output_skipped.
+Reason: The login profile supplies PATH. Fish and other non-POSIX shells expand $0 and $@ differently, so they cannot run the exec wrapper. Profiles can print to stdout, and decoding those lines would end the turn as StreamMalformed.
+
+## [2026-10-31] Treat login-shell exit 127 as a missing claude binary
+Context: Criterion 2 maps a start IOException to BinaryMissing and a non-zero exit without a result to ProcessFailed. Behind the login-shell wrapper, a missing claude is shell exit 127, not an IOException.
+Decision: Exit 127 without a result line maps to BinaryMissing. Any other exit without a result, including 0, maps to ProcessFailed with the last 2000 stderr characters.
+Reason: Without the 127 case a missing binary reads as a process failure, and IS-003 cannot hold. Exit 0 without a result counts as a failure so a turn never ends silently.
+
+## [2026-10-31] Bound the chat stderr drain and tolerate a closed stdout
+Context: A descendant of claude can hold stderr open after claude exits, and stdout can close while the launcher is reading it.
+Decision: ProcessChatLauncher waits at most STDERR_DRAIN_MS (2 seconds) for the stderr drain and reports the tail read so far. An IOException while reading stdout ends the line stream, and Exited still reports the exit code and stderr tail.
+Reason: An unbounded join would hang the turn after claude exits. Dropping Exited on a read error would hide the failure from the transport.
+
+## [2026-10-31] Run chat turns restricted, prompt-free and without the prompt snapshot
+Context: Claude Code 2.1.314 snapshots the first turn's system prompt and replays it on every resume by default.
+Decision: Every turn passes --restricted, the mode's --tools and --allowedTools, --permission-mode dontAsk, --permission-prompts none and --system-prompt-snapshot off. The read-only profile has no Edit or Write and allows named read-only skill-bill commands and MCP tools plus gh issue create on Sermilion/SkillBill. Turns never bypass permissions or disable session persistence.
+Reason: A headless turn cannot answer permission prompts, so anything outside the allowlist must be denied outright. The mode can change between turns, so the scope prompt has to be sent fresh on each one.
+
+## [2026-10-31] Let the chat workspace own pause, act and resume
+Context: A chat must not change a running execution unless the operator asks, but the operator may want a fix mid-run and may close the tab while the act turn streams.
+Decision: Turns for a running or Active execution use the read-only profile. pauseAndAct calls pauseNow when pauseEligible, else cancel when controlEligible, waits for a detail header with running false, runs the turn in act mode, then relaunches with the execution's agent. The relaunch is a window-scope job that joins the act turn; closing the tab cancels the turn but not the relaunch, and closeAll() cancels pending relaunches before it cancels sessions.
+Reason: Closing a tab or a failed turn should not strand the execution paused. Quitting the window mid-act should leave it paused rather than relaunched against a half-finished change. If sessions were cancelled first, the waiting relaunch would see its turn end and launch anyway.
+Alternatives considered: Letting the agent pause and resume through skill-bill commands, rejected by plan decision D1; parenting the relaunch to the session job, which drops it when the tab closes.
+
+## [2026-10-31] Advance chat context only after the agent responds
+Context: A turn can fail before the CLI session starts, for example when the agent binary is missing.
+Decision: A session marks itself started and records the delivered snapshot only after the turn emits a TextDelta, ToolUse or Completed event. A turn that emitted only Failed leaves both unchanged.
+Reason: The next turn then goes out as a first turn with --session-id and the full snapshot. Without this, the agent would get a diff against context it never received, or a resume of a session that does not exist.
+
+## [2026-10-31] Show unsupported chat agents instead of switching to Claude
+Context: Only Claude has a chat transport, while executions also run on codex, cursor and junie.
+Decision: AgentExecutionChatRepository emits one failed AgentUnsupported event, records chat.agent_unsupported and starts no process. The tab shows "Chat is not available for agent <id> yet" and Send stays disabled.
+Reason: The chat must use the execution's agent. A silent switch to Claude would answer with a different agent and model than the one running the execution.
+Revisit when: A ChatTransport exists for another agent.
+
+## [2026-10-31] Share the right slot between chat and Specs
+Context: The chat pane and the Specs pane both want the main window's right side.
+Decision: ShellPanes keeps specsOpen and chatOpen exclusive; setting one clears the other. ChatWorkspace mirrors its pane state into chatOpen and hides the pane without ending sessions when Specs opens. The details pane stays hidden while chat is open.
+Reason: One right pane at a time leaves the work area width and drawer behaviour unchanged (plan decision D6).
+
+## [2026-10-31] Extend terminal pane chrome and SbInput for the chat
+Context: The chat needs tabbed pane chrome and a composer where Shift+Enter adds a newline. SbInput was single-line at a fixed height, and TerminalPaneChrome hard-coded terminal labels and controls.
+Decision: Option B from the subtask spec: add icon, noun, shortcut labels and nullable new-tab, resize and rename callbacks to TerminalPaneChrome, and multiline to SbInput. Defaults keep existing callers unchanged, and no component or token was added.
+Reason: It keeps the Shift+Enter requirement and gives the chat its own accessible labels instead of "terminal" ones.
+Alternatives considered: Option A, dropping Shift+Enter and using the chrome as written, which would label the chat's controls as terminal ones.
+
+## [2026-10-31] Put the app jar first on the packaged class path
+Context: Sorting the packaged jars can place ComposeNativeTray's own libLinuxTray.so ahead of the app's patched copy.
+Decision: The launcher orders its own jar before the other app entries and the runtime jars. AppClassLoaderTest checks that the patched resource wins.
+Reason: Otherwise the tray patches applied by build-tray.sh never load in the packaged app.
+
 ## [2026-10-30] Require equal read_schema in the desktop runtime gate
 Context: desktop-tray's gate accepts an installed runtime with the same commit but a different read_schema.
 Decision: InstalledRuntimeBuildGate returns Available only when both identity records parse, describe the same build, carry equal read_schema and report a supported compatibility. Every refusal folds into NotInstalled, Unreadable or Mismatched with the reinstall command.
