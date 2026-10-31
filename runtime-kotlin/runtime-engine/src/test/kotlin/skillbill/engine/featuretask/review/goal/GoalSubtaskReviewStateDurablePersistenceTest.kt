@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.runloop.observability.paused
 import skillbill.engine.featuretask.runner.disposition
-import skillbill.engine.goalrunner.status.completed
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations

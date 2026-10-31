@@ -63,14 +63,14 @@ import java.time.Instant
 
 public const val GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY: String = "goal_child_repair_evidence"
 
-internal data class WorkflowRowAdvance(
-  val currentStepId: String,
-  val workflowStatus: String,
-  val stepUpdates: List<FeatureTaskRuntimePhaseStepWireUpdate>? = null,
-  val terminalInstant: Instant? = null,
+public data class WorkflowRowAdvance internal constructor(
+  internal val currentStepId: String,
+  internal val workflowStatus: String,
+  internal val stepUpdates: List<FeatureTaskRuntimePhaseStepWireUpdate>? = null,
+  internal val terminalInstant: Instant? = null,
 ) {
-  companion object {
-    fun keepFrom(record: WorkflowStateSnapshot): WorkflowRowAdvance =
+  internal companion object {
+    internal fun keepFrom(record: WorkflowStateSnapshot): WorkflowRowAdvance =
       WorkflowRowAdvance(currentStepId = record.currentStepId, workflowStatus = record.workflowStatus.wireValue)
   }
 }
@@ -297,7 +297,7 @@ public class FeatureTaskRuntimeWorkflowPersistence
       return payload.toImplementationProgress("workflow-artifact:${family.label()}")
     }
 
-    internal fun persistArtifactsPatch(
+    public fun persistArtifactsPatch(
       workflowStates: WorkflowStateRepository,
       record: WorkflowStateSnapshot,
       patch: Map<String, Any?>,
@@ -459,20 +459,20 @@ public class FeatureTaskRuntimeWorkflowPersistence
     }
   }
 
-internal object FeatureTaskRuntimeWorkflowArtifactPatches {
-  fun clearGoalContinuationOutcome(): Map<String, Any?> =
+public object FeatureTaskRuntimeWorkflowArtifactPatches {
+  public fun clearGoalContinuationOutcome(): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME.entry(null))
 
-  fun goalContinuationArtifact(entry: Any): Map<String, Any?> =
+  public fun goalContinuationArtifact(entry: Any): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(entry))
 
-  fun goalSubtaskReviewState(entry: Any): Map<String, Any?> =
+  public fun goalSubtaskReviewState(entry: Any): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(entry))
 
-  fun goalReviewBaseRecoveries(entries: List<Any?>): Map<String, Any?> =
+  public fun goalReviewBaseRecoveries(entries: List<Any?>): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.GOAL_REVIEW_BASE_RECOVERIES.entry(entries))
 
-  fun goalChildRepairEvidence(entries: List<Any?>): Map<String, Any?> =
+  public fun goalChildRepairEvidence(entries: List<Any?>): Map<String, Any?> =
     mapOf(GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY to entries)
 }
 

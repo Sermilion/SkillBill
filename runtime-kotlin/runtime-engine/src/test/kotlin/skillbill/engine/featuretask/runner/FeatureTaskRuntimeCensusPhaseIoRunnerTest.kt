@@ -338,15 +338,6 @@ private fun seededReviewFinding(): String =
   }
   """.trimIndent()
 
-internal fun disposition(
-  findingId: String,
-  disposition: String,
-  reason: String? = null,
-): String {
-  val reasonField = reason?.let { ""","reason":"$it"""" }.orEmpty()
-  return """{"finding_id":"$findingId","disposition":"$disposition","boundary_context_unavailable":true$reasonField}"""
-}
-
 private fun proseDisposition(
   findingId: String,
   disposition: String,

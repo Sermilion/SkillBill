@@ -21,7 +21,7 @@ public class FeatureTaskRuntimePhaseQuery
   constructor(
     private val database: DatabaseSessionFactory,
   ) {
-    internal fun existingWorkflowMode(workflowId: String): FeatureTaskWorkflowMode? =
+    public fun existingWorkflowMode(workflowId: String): FeatureTaskWorkflowMode? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.readFeatureTaskWorkflowHeader(workflowId)?.mode
       }
@@ -50,7 +50,7 @@ public class FeatureTaskRuntimePhaseQuery
         )?.phaseRecords()
       }
 
-    internal fun loadPhaseResultArtifacts(workflowId: String): DurableWorkflowArtifacts? =
+    public fun loadPhaseResultArtifacts(workflowId: String): DurableWorkflowArtifacts? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
           workflowId,
@@ -63,7 +63,7 @@ public class FeatureTaskRuntimePhaseQuery
         )
       }
 
-    internal fun visitPhaseLedger(
+    public fun visitPhaseLedger(
       workflowId: String,
       consume: (FeatureTaskRuntimePhaseLedgerEntry) -> Unit,
     ): Boolean =

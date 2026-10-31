@@ -4,7 +4,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 
 internal fun normalizeRepoPath(path: String): String = path.trim().removeSurrounding("\"").removePrefix("./")
 
-internal fun parseGitPorcelainPaths(output: String): List<String> =
+public fun parseGitPorcelainPaths(output: String): List<String> =
   output
     .lineSequence()
     .map(String::trimEnd)

@@ -49,11 +49,13 @@ internal object WireVocabularyGovernedSeamInventory {
             "application/workflow/Decomposition",
             "application/featurespec/",
             "infrastructure/contracts/workflow/DecompositionManifest",
-            "engine/goalrunner/manifest/WorkflowGoalRunnerManifest",
-            "engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
-            "engine/goalrunner/planning/GoalPlanningShared",
-            "engine/goalrunner/planning/context/GoalPlanningSharedContextPacketPayloadKeys",
-            "engine/goalrunner/model/ImplementationReturnContractPayloadKeys",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/manifest/WorkflowGoalRunnerManifest",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/planning/GoalPlanningShared",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/planning/context/" +
+              "GoalPlanningSharedContextPacketPayloadKeys",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/model/" +
+              "ImplementationReturnContractPayloadKeys",
             "cli/workflow/WorkflowContinueCliBranchMapsDecomposition",
           ),
       ),
@@ -82,7 +84,7 @@ internal object WireVocabularyGovernedSeamInventory {
         governedRelativePathMarkers =
           listOf(
             "infrastructure/sqlite/workflow/artifact/",
-            "engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
           ),
       ),
       GovernedPayloadSeam(
@@ -92,8 +94,9 @@ internal object WireVocabularyGovernedSeamInventory {
           listOf(
             "contracts/workflow/goal/GoalQualityExecutionPayloadKeys",
             "goalrunner/model/quality/GoalQualityExecution",
-            "engine/goalrunner/persist/quality/GoalQualityExecutionCodec",
-            "engine/goalrunner/persist/quality/WorkflowGoalRunnerQualityExecutionStore",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/quality/GoalQualityExecutionCodec",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/quality/" +
+              "WorkflowGoalRunnerQualityExecutionStore",
           ),
       ),
       GovernedPayloadSeam(

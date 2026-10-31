@@ -85,7 +85,7 @@ public data class SubtaskAgentAttribution(
   val participatingAgentIds: List<String>,
 )
 
-internal fun runningPhaseAgentId(
+public fun runningPhaseAgentId(
   phaseQuery: FeatureTaskRuntimePhaseQuery,
   workflowId: String,
 ): String? =

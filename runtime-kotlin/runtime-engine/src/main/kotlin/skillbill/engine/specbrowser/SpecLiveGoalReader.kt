@@ -1,7 +1,7 @@
 package skillbill.engine.specbrowser
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
-import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.engine.work.control.model.WorkRunOptions

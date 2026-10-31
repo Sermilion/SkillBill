@@ -10,11 +10,10 @@ import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.runner.OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS
 import skillbill.engine.featuretask.runner.operatorDecisionPause
-import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
-import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
-import skillbill.engine.goalrunner.status.completed
+import skillbill.engine.goal.GoalManifestProjectionReader
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.GoalRunnerStatusRequest
+import skillbill.engine.goal.StandalonePlanReportPort
 import skillbill.engine.work.eligibility.standaloneLaunchAgent
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.error.core.SkillBillRuntimeException
@@ -89,12 +88,12 @@ private data class ChildOptionalContext(
 @Inject
 public class IdeStatusProjector(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
-  private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val goalRunnerStatusService: GoalRunnerStatusPort,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
-  private val manifestStore: GoalRunnerManifestStore,
+  private val manifestStore: GoalManifestProjectionReader,
   private val diagnostics: RuntimeDiagnostics,
   private val qaCapabilities: QaCapabilityResolver,
-  private val planReports: StandalonePlanReportBuilder,
+  private val planReports: StandalonePlanReportPort,
 ) {
   private val workflowEngine = WorkflowEngine()
 
@@ -109,7 +108,7 @@ public class IdeStatusProjector(
       return registeredBranch
     }
     if (registeredBranch == currentBranch || registeredBranch == "HEAD") return registeredBranch
-    val state = item.issueKey?.let { manifestStore.loadDurableByIssueKey(it, repoRoot) }
+    val state = item.issueKey?.let { manifestStore.read(it, repoRoot) }
     val manifest =
       state?.manifest?.takeIf {
         state.parentWorkflowId == item.workflowId
@@ -260,7 +259,7 @@ public class IdeStatusProjector(
     context: IdeStatusProjectionContext,
   ): IdeStatusProjection? {
     val issueKey = candidate.issueKey ?: return null
-    val manifestState = manifestStore.loadDurableByIssueKey(issueKey, context.repoRoot) ?: return null
+    val manifestState = manifestStore.read(issueKey, context.repoRoot) ?: return null
     val projection =
       goalRunnerStatusService.status(
         GoalRunnerStatusRequest(
@@ -302,7 +301,7 @@ public class IdeStatusProjector(
           includeCompletedSubtaskValidation = false,
         ),
       )
-    val featureName = manifestStore.loadDurableByIssueKey(issueKey, context.repoRoot)?.manifest?.featureName
+    val featureName = manifestStore.read(issueKey, context.repoRoot)?.manifest?.featureName
     return assembleGoalStatusSnapshot(candidate, context, issueKey, projection, featureName)
   }
 
@@ -676,7 +675,7 @@ public class IdeStatusProjector(
   ): String =
     if (family == WorkflowFamily.TASK_RUNTIME) {
       candidate.issueKey
-        ?.let { manifestStore.loadDurableByIssueKey(it, context.repoRoot) }
+        ?.let { manifestStore.read(it, context.repoRoot) }
         ?.takeIf { it.parentWorkflowId == candidate.workflowId }
         ?.manifest?.featureName?.takeIf(String::isNotBlank)
         ?: IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)

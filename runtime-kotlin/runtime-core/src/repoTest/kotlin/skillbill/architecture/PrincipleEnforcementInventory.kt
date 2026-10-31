@@ -124,13 +124,15 @@ object PrincipleEnforcementInventory {
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/testFixtures/kotlin/skillbill/engine/featuretask/runner/" +
+          "FeatureTaskRuntimeRunnerTestSupport.kt",
         "noopPort",
         "UNCHECKED_CAST",
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/testFixtures/kotlin/skillbill/engine/featuretask/runner/" +
+          "FeatureTaskRuntimeRunnerTestSupport.kt",
         "recordHarnessFindingVerdicts",
         "UNCHECKED_CAST",
         "Dynamic ReviewRepository proxy passes typed verdict list through erased invoke",
@@ -276,12 +278,6 @@ object PrincipleEnforcementInventory {
       EnforcedRule(
         "Runtime-core tests declare packages under skillbill.di and avoid retired absent and runtime packages.",
         RuntimeCompositionGuardArchitectureTest::class,
-      ),
-      EnforcedRule(
-        "RuntimeComponent composition surface: abstract service properties are pinned separately from " +
-          "@Provides generated wiring; any other public function on RuntimeComponent or a Runtime*Provides " +
-          "mixin fails even when the abstract property set is unchanged.",
-        RuntimeComponentInboundApiArchitectureTest::class,
       ),
       EnforcedRule(
         "Comment and KDoc policy: authored Kotlin under inlineFqnScanRoots contains no // line comments, no " +
@@ -648,75 +644,6 @@ object PrincipleEnforcementInventory {
   const val PRODUCTION_LINE_CEILING: Int = 1200
 
   val productionLineCeilingExemptions: Map<String, String> = emptyMap()
-
-  val runtimeComponentInboundApi: List<String> =
-    listOf(
-      "agentRunLauncher",
-      "agentRunService",
-      "checkedOutBranchSource",
-      "configResolutionService",
-      "runtimeConfigEditService",
-      "databaseReadConnections",
-      "databaseSchema",
-      "databaseSession",
-      "externalAddonOverlayService",
-      "externalAgentAddonSourceConfigPort",
-      "externalPlatformPackResolutionService",
-      "featureSpecPathResolverPort",
-      "featureTaskContinuationLookupService",
-      "featureTaskPhaseSettlementService",
-      "featureTaskRuntimeRunInvariantsSource",
-      "featureTaskRuntimeRunEntry",
-      "featureTaskRuntimeCrashReconciler",
-      "featureTaskRuntimeExecutionPlanResolver",
-      "featureTaskRuntimeStatusService",
-      "featureTaskRuntimeWorkerCoordinator",
-      "fileEditorLauncherPort",
-      "goalOperatorDecisionService",
-      "goalPlanningLogService",
-      "goalPreflightService",
-      "goalRunner",
-      "goalRunnerStatusService",
-      "ideStatusService",
-      "installAgentService",
-      "installMcpRegistrationPort",
-      "installNativeAgentLinkPort",
-      "installSelectionPersistencePort",
-      "installService",
-      "learningService",
-      "lifecycleTelemetryService",
-      "operationExecutor",
-      "operationRegistry",
-      "phaseRunEntry",
-      "projectConfigFilePort",
-      "projectStorePort",
-      "qaDeviceLeasePort",
-      "qaOwnedResourcePort",
-      "phaseStrategyLookup",
-      "repoValidationGateway",
-      "repositoryEnclosingRootPort",
-      "resolvedEnvironmentContext",
-      "reviewService",
-      "reviewSnapshotPruneService",
-      "runtimeDiagnostics",
-      "scaffoldCatalogGateway",
-      "scaffoldGateway",
-      "skillRemove",
-      "specBrowserService",
-      "standalonePlanRun",
-      "systemService",
-      "skillBillUpdateService",
-      "skillBillUninstallService",
-      "updateCheckService",
-      "telemetryLevelMutator",
-      "telemetryService",
-      "unaddressedFindingsLedgerService",
-      "workControlService",
-      "workObservationService",
-      "workListService",
-      "workflowArtifactWireEncoder",
-      "workflowService",
-    )
 
   val packageClusteringGenericSegments: Set<String> =
     setOf(

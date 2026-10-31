@@ -39,7 +39,7 @@ public class PhaseRunPlanResolver(
   private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  internal fun resolveGoalQualityExecutionPlan(
+  public fun resolveGoalQualityExecutionPlan(
     request: PhaseRunRequest,
     workflowId: String,
   ): String =
@@ -63,7 +63,7 @@ public class PhaseRunPlanResolver(
       )
     }
 
-  internal fun validateGoalQualityExecutionPlan(
+  public fun validateGoalQualityExecutionPlan(
     encoded: String,
     expectedDefinitionId: String,
     expectedAgentId: String,

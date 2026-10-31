@@ -115,7 +115,7 @@ public class StandalonePhaseStatusEventSink(
     }
   }
 
-  internal fun settlePlan(
+  public fun settlePlan(
     result: String,
     workflowId: String? = null,
     report: StandalonePlanReport? = null,
@@ -133,7 +133,7 @@ public class StandalonePhaseStatusEventSink(
     }
   }
 
-  internal fun publishPlanReport(report: () -> StandalonePlanReport?) {
+  public fun publishPlanReport(report: () -> StandalonePlanReport?) {
     catchingNonCancellation {
       val built = report() ?: return@catchingNonCancellation
       ensureRegistered(null)
@@ -144,7 +144,7 @@ public class StandalonePhaseStatusEventSink(
     }
   }
 
-  internal fun settleBlocked(
+  public fun settleBlocked(
     reason: String,
     workflowId: String? = null,
     stepId: String? = null,
@@ -221,7 +221,7 @@ public class StandalonePhaseStatusEventSink(
       }
     }
 
-  internal fun settleFailure(
+  public fun settleFailure(
     error: Throwable,
     workflowId: String? = null,
   ) {

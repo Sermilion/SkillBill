@@ -5,7 +5,7 @@ import skillbill.error.core.isCooperativeCancellation
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
-internal fun DatabaseCheckpoint.truncateWalBestEffort(
+public fun DatabaseCheckpoint.truncateWalBestEffort(
   diagnostics: RuntimeDiagnostics,
   boundary: String,
 ) {

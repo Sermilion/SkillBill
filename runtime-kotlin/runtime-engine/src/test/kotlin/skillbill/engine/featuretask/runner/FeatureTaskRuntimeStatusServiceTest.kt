@@ -21,8 +21,8 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
+import skillbill.engine.featuretask.testing.decodeWorkflowArtifactsForTest
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
-import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory

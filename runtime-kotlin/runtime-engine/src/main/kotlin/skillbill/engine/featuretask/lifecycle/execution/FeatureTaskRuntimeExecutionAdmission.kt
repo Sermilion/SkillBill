@@ -388,7 +388,7 @@ public class FeatureTaskRuntimeExecutionAdmission(
     val receipt: RuntimeMigrationReceipt?,
   )
 
-  internal fun requireCompatibleDescriptor(
+  public fun requireCompatibleDescriptor(
     states: WorkflowStateRepository,
     workflowId: String,
     expected: ValidatedFeatureTaskRuntimeExecutionPlan?,

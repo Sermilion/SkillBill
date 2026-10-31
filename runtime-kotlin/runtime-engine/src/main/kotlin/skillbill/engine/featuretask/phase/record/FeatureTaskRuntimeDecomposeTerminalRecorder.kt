@@ -131,7 +131,7 @@ public class FeatureTaskRuntimeDecomposeTerminalRecorder(
       true
     }
 
-  internal fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
+  public fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
     database.read { unitOfWork ->
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
         ?.artifacts

@@ -1,6 +1,6 @@
 package skillbill.engine.work
 
-import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusWorkflowFamily

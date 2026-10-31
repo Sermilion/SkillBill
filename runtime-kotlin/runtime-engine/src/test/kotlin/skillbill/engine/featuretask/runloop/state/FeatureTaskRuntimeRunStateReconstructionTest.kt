@@ -22,7 +22,6 @@ import skillbill.engine.featuretask.slot.state.PhaseAuditLedgerResume
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.featuretask.slot.validJsonOutput
-import skillbill.engine.goalrunner.status.completed
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics

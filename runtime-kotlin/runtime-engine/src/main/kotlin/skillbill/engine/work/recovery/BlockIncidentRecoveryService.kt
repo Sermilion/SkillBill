@@ -7,8 +7,8 @@ import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.containableUnlessInterrupted
 import skillbill.engine.featuretask.incident.recovery.recordBlockIncidentRecoveryOutcome
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
-import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
-import skillbill.engine.goalrunner.status.releaseExecutionLeaseIfExpired
+import skillbill.engine.goal.GoalBlockRecoveryPort
+import skillbill.engine.goal.releaseExecutionLeaseIfExpired
 import skillbill.engine.work.observation.workerOwnership
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -26,7 +26,6 @@ import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
-import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
@@ -80,8 +79,8 @@ public class BlockIncidentRecoveryService(
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
   private val identifiers: IdentifierGeneratorPort,
-  private val decompositionManifestValidator: DecompositionManifestValidator,
   private val actions: BlockIncidentRecoveryActions,
+  private val parentProjection: GoalBlockRecoveryPort,
   private val telemetry: BlockIncidentTelemetryPort?,
   private val reportDelivery: ProductReportDelivery?,
 ) {
@@ -128,7 +127,6 @@ public class BlockIncidentRecoveryService(
   }
 
   private val engine = WorkflowEngine()
-  private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
   private val resume = BlockIncidentRecoveryResume(database, clock, identifiers, diagnostics)
 
   internal fun preview(request: BlockIncidentRecoveryRequest): BlockIncidentRecoveryResult {

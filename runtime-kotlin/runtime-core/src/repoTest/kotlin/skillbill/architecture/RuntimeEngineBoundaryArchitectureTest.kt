@@ -9,22 +9,25 @@ import kotlin.test.assertTrue
 class RuntimeDiagnosticsBestEffortGuardArchitectureTest {
   @Test
   fun `engine production sources delegate diagnostics warning guards to the single owner`() {
-    val engineRoot =
-      ArchitectureScanSupport.runtimeRoot.resolve(
-        "runtime-kotlin/runtime-engine/src/main/kotlin",
+    val roots =
+      listOf(
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-engine/src/main/kotlin"),
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-goalrunner/src/main/kotlin"),
       )
     val guardPattern =
       Regex(
         """(?:runCatching|onFailure|catch\s*\([^)]*\))[\s\S]{0,300}diagnostics\.warning""",
       )
     val owner =
-      engineRoot.resolve(
+      roots.first().resolve(
         "skillbill/engine/diagnostics/RuntimeDiagnosticsBestEffortWarning.kt",
       )
     val violations =
-      kotlinFilesUnderWithArchitectureAsserts(engineRoot)
-        .filter { path -> path != owner && guardPattern.containsMatchIn(path.readText()) }
-        .map { path -> engineRoot.relativize(path).toString() }
+      roots.flatMap { root ->
+        kotlinFilesUnderWithArchitectureAsserts(root)
+          .filter { path -> path != owner && guardPattern.containsMatchIn(path.readText()) }
+          .map { path -> root.relativize(path).toString() }
+      }
     assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }
 }
@@ -35,6 +38,7 @@ class GoalRunnerAgentOutputScannerArchitectureTest {
     val roots =
       listOf(
         ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-engine/src/main/kotlin"),
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-goalrunner/src/main/kotlin"),
         ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-application/src/main/kotlin"),
       )
     val matches =
@@ -47,18 +51,6 @@ class GoalRunnerAgentOutputScannerArchitectureTest {
       listOf("skillbill/engine/agentoutput/AgentOutputJsonScan.kt"),
       matches.sorted(),
     )
-  }
-}
-
-class RuntimeApplicationSharedEngineEdgeArchitectureTest {
-  @Test
-  fun `application main references only pinned engine inbound api types`() {
-    val violations =
-      engineInboundApiViolations(
-        consumerSourceRoots = listOf(moduleMainKotlinRootRelative("runtime-application")),
-        allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-      )
-    assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }
 }
 

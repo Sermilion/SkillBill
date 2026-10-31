@@ -1,6 +1,6 @@
 package skillbill.engine.work.control
 
-import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
+import skillbill.engine.goal.GoalRunnerStopStatus
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 

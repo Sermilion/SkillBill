@@ -43,7 +43,7 @@ public class FeatureTaskRuntimeDecompositionPlanner(
     path: Path,
   ): String = repoRelativePath(repoRoot, projectStore.resolve(repoRoot), path)
 
-  internal fun existingParentSpec(
+  public fun existingParentSpec(
     repoRoot: Path,
     issueKey: String,
   ): Path? =

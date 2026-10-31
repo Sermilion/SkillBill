@@ -5,7 +5,7 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 
-internal fun workflowFamilyFor(
+public fun workflowFamilyFor(
   workflowStates: WorkflowStateRepository,
   workflowId: String,
 ): WorkflowFamily? {

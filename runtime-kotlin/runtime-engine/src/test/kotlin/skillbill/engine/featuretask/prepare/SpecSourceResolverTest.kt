@@ -8,7 +8,6 @@ import skillbill.application.decomposition.specSource
 import skillbill.application.decomposition.writeDecompositionManifestText
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
-import skillbill.engine.goalrunner.manifest
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent

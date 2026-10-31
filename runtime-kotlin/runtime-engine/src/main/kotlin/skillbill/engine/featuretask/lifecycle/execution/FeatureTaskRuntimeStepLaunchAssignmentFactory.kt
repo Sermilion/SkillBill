@@ -14,10 +14,10 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 
 public data class StepLaunchAssignmentInputs(
-  val invokedAgentId: String,
-  val agentAssignment: FeatureTaskRuntimeAgentAssignment,
-  val modelAssignment: FeatureTaskRuntimeModelAssignment,
-  val environmentKind: LaunchEnvironmentKind = LaunchEnvironmentKind.INHERITED,
+  public val invokedAgentId: String,
+  public val agentAssignment: FeatureTaskRuntimeAgentAssignment,
+  public val modelAssignment: FeatureTaskRuntimeModelAssignment,
+  public val environmentKind: LaunchEnvironmentKind = LaunchEnvironmentKind.INHERITED,
 )
 
 @Inject
@@ -37,8 +37,8 @@ public class FeatureTaskRuntimeStepLaunchResolver(
     )
 }
 
-internal object FeatureTaskRuntimeStepLaunchAssignmentFactory {
-  internal fun resolve(
+public object FeatureTaskRuntimeStepLaunchAssignmentFactory {
+  public fun resolve(
     launcher: AgentRunLauncher,
     lookup: PhaseStrategyLookup,
     facts: PhaseStrategySelectionFacts,

@@ -766,8 +766,8 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
       reason,
     )
 
-  internal companion object {
-    const val MAX_REPAIR_TURNS: Int = 3
+  public companion object {
+    public const val MAX_REPAIR_TURNS: Int = 3
 
     private fun operatorResumeRepairTurns(repairsUsed: Int): Int =
       if (repairsUsed >= MAX_REPAIR_TURNS) 0 else repairsUsed

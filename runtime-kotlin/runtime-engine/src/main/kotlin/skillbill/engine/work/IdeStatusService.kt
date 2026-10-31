@@ -3,8 +3,8 @@ package skillbill.engine.work
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
-import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.GoalRunnerStatusRequest
 import skillbill.engine.work.eligibility.workControlEligible
 import skillbill.engine.work.eligibility.workDisplayGroup
 import skillbill.engine.work.eligibility.workDisplayPriority
@@ -92,7 +92,7 @@ public class IdeStatusService(
   private val clock: Clock,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
-  private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val goalRunnerStatusService: GoalRunnerStatusPort,
   private val diagnostics: RuntimeDiagnostics,
   private val incidentProjectionBuilder: WorkIncidentProjectionBuilder,
 ) {

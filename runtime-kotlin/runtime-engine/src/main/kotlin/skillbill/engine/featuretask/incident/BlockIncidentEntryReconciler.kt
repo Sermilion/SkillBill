@@ -61,7 +61,7 @@ public class BlockIncidentEntryReconciler(
     if (dispatchProductReports) dispatchReports()
   }
 
-  internal fun <T> guardEntry(
+  public fun <T> guardEntry(
     blocked: (T) -> Boolean,
     run: () -> T,
   ): T {

@@ -3,8 +3,8 @@ package skillbill.engine.work.recovery
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
 import skillbill.engine.featuretask.lifecycle.remediation.StandaloneIncidentRecoveryRequest
-import skillbill.engine.goalrunner.persist.OperatorBlockedPhaseReopenRequest
-import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
+import skillbill.engine.goal.GoalBlockRecoveryPort
+import skillbill.engine.goal.OperatorBlockedPhaseReopenRequest
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAction
@@ -13,7 +13,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 
 @Inject
 public class BlockIncidentRecoveryActions(
-  private val goalWrites: WorkflowGoalRunnerBlockWrites,
+  private val goalWrites: GoalBlockRecoveryPort,
   private val standaloneRecovery: FeatureTaskRuntimeStandaloneIncidentRecovery,
 ) {
   internal fun apply(

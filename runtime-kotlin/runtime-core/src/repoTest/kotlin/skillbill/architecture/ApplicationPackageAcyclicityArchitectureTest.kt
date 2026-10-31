@@ -333,24 +333,27 @@ class ApplicationPackageAcyclicityArchitectureTest {
         "skillbill.engine.goalrunner.model" to "skillbill.engine.goalrunner",
         "skillbill.engine.goalrunner.planning.model" to "skillbill.engine.goalrunner.planning",
       )
-    val engineRoot =
-      ArchitectureScanSupport.runtimeRoot.resolve(
-        "runtime-kotlin/runtime-engine/src/main/kotlin",
+    val roots =
+      listOf(
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-engine/src/main/kotlin"),
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-goalrunner/src/main/kotlin"),
       )
     val violations =
-      ArchitectureScanSupport.kotlinFilesUnder(engineRoot).flatMap { sourceFile ->
-        val source = sourceFile.readText()
-        val declaredPackage = ArchitectureScanSupport.declaredPackage(source)
-        if (declaredPackage == null) {
-          emptyList()
-        } else {
-          forbiddenEdges.flatMap { (modelPackage, parentPackage) ->
-            if (declaredPackage != modelPackage) {
-              emptyList()
-            } else {
-              ArchitectureScanSupport.declaredImports(source)
-                .filter { imported -> imported == parentPackage || imported.startsWith("$parentPackage.") }
-                .map { imported -> "${engineRoot.relativize(sourceFile)}: $modelPackage -> $imported" }
+      roots.flatMap { root ->
+        ArchitectureScanSupport.kotlinFilesUnder(root).flatMap { sourceFile ->
+          val source = sourceFile.readText()
+          val declaredPackage = ArchitectureScanSupport.declaredPackage(source)
+          if (declaredPackage == null) {
+            emptyList()
+          } else {
+            forbiddenEdges.flatMap { (modelPackage, parentPackage) ->
+              if (declaredPackage != modelPackage) {
+                emptyList()
+              } else {
+                ArchitectureScanSupport.declaredImports(source)
+                  .filter { imported -> imported == parentPackage || imported.startsWith("$parentPackage.") }
+                  .map { imported -> "${root.relativize(sourceFile)}: $modelPackage -> $imported" }
+              }
             }
           }
         }

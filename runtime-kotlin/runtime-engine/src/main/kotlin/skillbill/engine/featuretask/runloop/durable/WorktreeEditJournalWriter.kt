@@ -26,7 +26,7 @@ public class WorktreeEditJournalWriter(
   private val diagnostics: RuntimeDiagnostics,
   private val gitOperations: WorkflowGitOperations,
 ) {
-  internal fun observer(
+  public fun observer(
     repoRoot: Path,
     resolveWorkflowId: () -> String?,
     resolvePhaseId: () -> String?,

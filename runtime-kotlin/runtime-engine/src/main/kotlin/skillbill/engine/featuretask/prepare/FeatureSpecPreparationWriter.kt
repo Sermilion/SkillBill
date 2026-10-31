@@ -62,14 +62,14 @@ public class FeatureSpecPreparationWriter(
     )
   }
 
-  internal fun plannedParentSpecPath(
+  public fun plannedParentSpecPath(
     repoRoot: Path,
     issueKey: String,
     featureName: String,
   ): Path =
     projectStore.resolve(repoRoot).specsRoot.resolve(parentDirectoryName(issueKey, featureName)).resolve(SPEC_FILE)
 
-  internal fun writeParentSpecOnly(
+  public fun writeParentSpecOnly(
     repoRoot: Path,
     decision: FeatureSpecPreparationDecision,
     featureName: String,

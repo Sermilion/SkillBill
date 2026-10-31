@@ -68,7 +68,7 @@ public class FeatureTaskQaOutcomeRecorder(
     }
   }
 
-  internal fun recordWarning(
+  public fun recordWarning(
     workflowId: String,
     warning: String,
   ) {
@@ -85,7 +85,7 @@ public class FeatureTaskQaOutcomeRecorder(
     }
   }
 
-  internal fun recordContainedFailure(
+  public fun recordContainedFailure(
     workflowId: String,
     kind: FeatureTaskQaFailureKind,
     reason: String,

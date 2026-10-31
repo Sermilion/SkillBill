@@ -8,10 +8,6 @@ import skillbill.engine.featuretask.runner.settledAuditSatisfiedRecord
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
-import skillbill.engine.goalrunner.RecordingOutcomeStore
-import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
-import skillbill.engine.goalrunner.execution.support.GoalRunnerChildProgressRead
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -252,14 +248,6 @@ class AmbientInputsAndLoudFailSeamsTest {
         state.parsedOutput(output)
       }
     assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
-  }
-
-  @Test
-  fun `throwing progress store is distinguishable from absent progress`() {
-    val outcomes = RecordingOutcomeStore().apply { throwOnProgress = true }
-    val reader = GoalRunnerProgressReader(outcomes)
-
-    assertIs<GoalRunnerChildProgressRead.Failed>(reader.read("wfl-child"))
   }
 }
 

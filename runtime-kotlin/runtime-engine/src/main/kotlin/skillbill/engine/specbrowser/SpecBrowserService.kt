@@ -3,7 +3,7 @@ package skillbill.engine.specbrowser
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.runtime.RuntimeSingleton
-import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goal.GoalIssueStartedReader
 import skillbill.engine.specbrowser.model.SpecBrowserCounts
 import skillbill.engine.specbrowser.model.SpecBrowserProject
 import skillbill.engine.specbrowser.model.SpecBrowserSnapshot
@@ -30,7 +30,7 @@ public class SpecBrowserService(
   private val database: DatabaseSessionFactory,
   status: IdeStatusService,
   runs: WorkRunActions,
-  private val goals: GoalRunnerManifestStore,
+  private val goals: GoalIssueStartedReader,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
   private val manifestCache = SpecManifestCache(manifests, validator)
@@ -88,11 +88,11 @@ public class SpecBrowserService(
     repoRoot: Path,
     treeStatus: SpecBrowserStatus,
   ): SpecBundleControlFacts {
-    val ownership = goals.discoverPurgeOwnership(issueKey, repoRoot)
+    val everStarted = goals.hasStarted(issueKey, repoRoot)
     return SpecBundleControlFacts(
       issueKey = issueKey,
       unavailableReason = null,
-      everStarted = ownership.parentWorkflowIds.isNotEmpty() || ownership.planWorkflowIds.isNotEmpty(),
+      everStarted = everStarted,
       treeStatus = treeStatus,
       live = liveGoals.controlFacts(repoRoot, issueKey),
     )

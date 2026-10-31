@@ -52,12 +52,24 @@ class PlanningProjectionNoopValidatorGuardTest {
   @Test
   fun `only the enumerated tests may use the Noop planning-projection validator`() {
     val testRoots =
-      listOf(
-        runtimeRoot.resolve("runtime-application/src/test"),
-        runtimeRoot.resolve("runtime-domain/src/test"),
-        runtimeRoot.resolve("runtime-cli/src/test"),
-        runtimeRoot.resolve("runtime-engine/src/test"),
-      )
+      RuntimeModuleCatalog.declaredGradleModules.map { module ->
+        runtimeRoot.resolve(RuntimeModuleCatalog.gradleModuleIdToDirectoryPath(module)).resolve("src/test")
+      }
+    val relocatedFixtures =
+      RuntimeModuleCatalog.declaredGradleModules.flatMap { module ->
+        val root =
+          runtimeRoot.resolve(
+            RuntimeModuleCatalog.gradleModuleIdToDirectoryPath(module),
+          ).resolve("src/testFixtures")
+        if (!Files.isDirectory(root)) {
+          emptyList()
+        } else {
+          Files.walk(root).use { paths ->
+            paths.filter { Files.isRegularFile(it) && it.extension == "kt" && it.name in permittedConsumers }
+              .filter { Files.readString(it).contains(noopSymbol) }.map { it.name }.toList()
+          }
+        }
+      }
 
     val actualConsumers =
       testRoots
@@ -70,7 +82,7 @@ class PlanningProjectionNoopValidatorGuardTest {
               .toList()
           }
         }
-        .toSet()
+        .toSet() + relocatedFixtures
 
     assertEquals(
       permittedConsumers.keys,

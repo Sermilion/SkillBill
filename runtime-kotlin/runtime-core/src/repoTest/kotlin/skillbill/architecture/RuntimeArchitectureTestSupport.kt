@@ -26,43 +26,6 @@ internal fun rawMapViolationsUnder(root: Path): List<String> =
   kotlinFilesUnderWithArchitectureAsserts(root)
     .flatMap { path -> findRawMapViolations(sourceFile(path)) }
 
-internal fun engineInboundApiViolations(
-  consumerSourceRoots: List<String>,
-  allowedTypes: Set<String>,
-): List<String> {
-  val violations = mutableListOf<String>()
-  consumerSourceRoots.forEach { relativeRoot ->
-    val root = runtimeArchitectureRoot.resolve(relativeRoot)
-    val sourceFiles = kotlinFilesUnderWithArchitectureAsserts(root)
-    sourceFiles.forEach { path ->
-      val relativePath = architecturePathLabel(path)
-      val source = Files.readString(path)
-      source.lineSequence()
-        .flatMap { line ->
-          Regex("""skillbill\.engine\.[A-Za-z0-9_.]+""")
-            .findAll(line)
-            .map { it.value }
-            .mapNotNull { reference ->
-              engineInboundApiViolationMessage(relativePath, reference, allowedTypes)
-            }
-        }
-        .forEach { violation -> violations += violation }
-    }
-  }
-  return violations.distinct().sorted()
-}
-
-internal fun engineInboundApiViolationMessage(
-  relativePath: String,
-  referencedType: String,
-  allowedTypes: Set<String>,
-): String? =
-  if (referencedType in allowedTypes) {
-    null
-  } else {
-    "$relativePath references unpinned engine type $referencedType"
-  }
-
 internal fun mainPackageRootsForModule(moduleName: String): Set<String> {
   val root = moduleMainKotlinRoot(moduleName)
   return kotlinFilesUnderWithArchitectureAsserts(root)
@@ -76,6 +39,10 @@ internal fun mainPackageRootsForModule(moduleName: String): Set<String> {
 }
 
 internal fun mainPackageRootForPackageName(packageName: String): String {
+  RuntimeModuleCatalog.moduleMainPackageRoots.values
+    .filter { root -> packageName == root || packageName.startsWith("$root.") }
+    .maxByOrNull(String::length)
+    ?.let { return it }
   val segments = packageName.split('.')
   return when {
     segments.size >= 3 && segments[0] == "skillbill" && segments[1] == "infrastructure" ->

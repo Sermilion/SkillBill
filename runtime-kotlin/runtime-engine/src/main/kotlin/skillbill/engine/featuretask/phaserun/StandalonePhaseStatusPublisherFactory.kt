@@ -77,7 +77,7 @@ public class StandalonePhaseStatusPublisherFactory(
     )
   }
 
-  internal fun registerWorkflow(
+  public fun registerWorkflow(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,

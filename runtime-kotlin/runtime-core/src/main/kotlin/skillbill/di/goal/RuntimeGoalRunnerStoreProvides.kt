@@ -2,11 +2,11 @@ package skillbill.di.goal
 
 import me.tatarka.inject.annotations.Provides
 import skillbill.engine.featuretask.model.execution.GoalChildHistoryDraftWriter
+import skillbill.engine.featuretask.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.engine.featuretask.slot.intake.PlanSpecIntakePreparation
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
-import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
@@ -14,7 +14,7 @@ import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorP
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairRunnerPort
 
-internal interface RuntimeGoalRunnerStoreProvides {
+internal interface RuntimeGoalRunnerStoreProvides : RuntimeGoalRunnerProjectionProvides {
   @Provides
   fun goalRunnerManifestStore(store: WorkflowGoalRunnerManifestStore): GoalRunnerManifestStore = store
 

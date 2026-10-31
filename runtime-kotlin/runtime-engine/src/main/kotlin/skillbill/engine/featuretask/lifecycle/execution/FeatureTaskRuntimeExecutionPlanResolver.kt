@@ -47,7 +47,7 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  internal fun resolveCreation(
+  public fun resolveCreation(
     request: FeatureTaskRuntimeExecutionPlanCreationRequest,
   ): ValidatedFeatureTaskRuntimeExecutionPlan {
     val repoRoot = request.repoRoot
@@ -88,7 +88,7 @@ public class FeatureTaskRuntimeExecutionPlanResolver(
     return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encodeExecution(plan, inputs), validator)
   }
 
-  internal fun creationQualityGate(
+  public fun creationQualityGate(
     repoRoot: Path,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
   ): FeatureTaskRuntimeQualityGateSelection? {

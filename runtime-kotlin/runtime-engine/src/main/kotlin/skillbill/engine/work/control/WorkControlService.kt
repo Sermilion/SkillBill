@@ -1,9 +1,9 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
-import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.goal.GoalRunnerPauseStatus
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.GoalRunnerStopStatus
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
@@ -28,7 +28,7 @@ import java.nio.file.Path
 public class WorkControlService(
   private val database: DatabaseSessionFactory,
   private val status: IdeStatusService,
-  private val controls: GoalRunnerStatusService,
+  private val controls: GoalRunnerStatusPort,
   private val cancellation: WorkCancellation,
   private val runs: WorkRunActions,
   private val recovery: WorkControlRecovery,

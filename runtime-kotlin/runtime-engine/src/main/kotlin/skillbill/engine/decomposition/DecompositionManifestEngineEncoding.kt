@@ -5,7 +5,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.model.DecompositionManifest
 
-internal fun encodeDecompositionManifestYaml(
+public fun encodeDecompositionManifestYaml(
   manifest: DecompositionManifest,
   validator: DecompositionManifestValidator,
   fileStore: DecompositionManifestStore,

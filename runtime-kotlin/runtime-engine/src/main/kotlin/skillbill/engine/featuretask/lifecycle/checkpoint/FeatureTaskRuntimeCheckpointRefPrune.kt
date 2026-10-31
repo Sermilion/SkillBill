@@ -44,9 +44,9 @@ internal fun subtaskCommitSupersededOnPublishedBranch(
 }
 
 public data class FeatureTaskRuntimeCheckpointRefPruneResult(
-  val attempted: Boolean,
-  val deletedRefCount: Int,
-  val skippedReason: String? = null,
+  public val attempted: Boolean,
+  public val deletedRefCount: Int,
+  public val skippedReason: String? = null,
 )
 
 public fun featureTaskRuntimeSubtaskCheckpointRefPrefix(
@@ -178,14 +178,14 @@ public fun WorkflowGitOperations.deleteListedCheckpointRefs(
   return FeatureTaskRuntimeCheckpointRefPruneResult(attempted = true, deletedRefCount = deleted)
 }
 
-internal fun pruneCompletedSubtaskCheckpointRefs(
+public fun pruneCompletedSubtaskCheckpointRefs(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   request: FeatureTaskRuntimeCheckpointRefPruneRequest,
   record: (String) -> Unit,
 ): FeatureTaskRuntimeCheckpointRefPruneResult = gitOperations.pruneSubtaskCheckpointRefs(repoRoot, request, record)
 
-internal fun pruneGoalPurgeCheckpointRefs(
+public fun pruneGoalPurgeCheckpointRefs(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   issueKey: String,

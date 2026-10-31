@@ -172,7 +172,7 @@ public class FeatureTaskContinuationLookupService(
       ),
     )
 
-  internal fun lookupPlan(
+  public fun lookupPlan(
     issueKey: String,
     repositoryIdentity: String,
     workflowId: String? = null,
@@ -187,7 +187,7 @@ public class FeatureTaskContinuationLookupService(
       ),
     )
 
-  internal fun lookupIfPresent(
+  public fun lookupIfPresent(
     issueKey: String,
     repositoryIdentity: String,
     workflowId: String? = null,

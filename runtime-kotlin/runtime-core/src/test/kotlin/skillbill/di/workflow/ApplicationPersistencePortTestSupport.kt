@@ -24,13 +24,13 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
-import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.testExecutionPlan
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.missingCompositionLayer
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
@@ -1230,7 +1230,7 @@ internal fun testWorkflowService(
     decompositionManifestValidator = DecompositionManifestSchemaValidator(),
     decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
     repositoryRoot = RepositoryRoot(Path.of("").toAbsolutePath().normalize()),
-    goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
+    goalObservabilityEventValidator = featureTaskRuntimeWireArtifactValidatorForTest(),
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
     projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),

@@ -1,18 +1,18 @@
 package skillbill.cli.goal.control
 
+import skillbill.engine.goal.GoalRunnerPauseResult
+import skillbill.engine.goal.GoalRunnerPauseStatus
+import skillbill.engine.goal.GoalRunnerResumeStatus
+import skillbill.engine.goal.GoalRunnerStopStatus
+import skillbill.engine.goal.GoalRunnerStopVerbResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
-import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
-import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
 import skillbill.engine.goalrunner.model.GoalRunnerRepairResult
 import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
 import skillbill.engine.goalrunner.model.GoalRunnerResetResult
-import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
-import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
-import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 
 internal fun goalPauseExitCode(result: GoalRunnerPauseResult): Int =
   if (result.status == GoalRunnerPauseStatus.NOT_FOUND) 1 else 0

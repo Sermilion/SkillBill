@@ -26,7 +26,7 @@ public class BlockIncidentCapture(
   private val spool: BlockIncidentSpool,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  internal fun capture(observation: BlockIncidentObservation): BlockIncidentCaptureOutcome {
+  public fun capture(observation: BlockIncidentObservation): BlockIncidentCaptureOutcome {
     val alias =
       try {
         BlockIncidentAliases.fallback(observation)

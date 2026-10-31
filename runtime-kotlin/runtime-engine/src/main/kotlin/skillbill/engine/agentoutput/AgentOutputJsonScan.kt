@@ -1,6 +1,6 @@
 package skillbill.engine.agentoutput
 
-internal fun topLevelJsonObjectCandidates(text: String): List<String> {
+public fun topLevelJsonObjectCandidates(text: String): List<String> {
   val candidates = mutableListOf<String>()
   var depth = 0
   var start = -1

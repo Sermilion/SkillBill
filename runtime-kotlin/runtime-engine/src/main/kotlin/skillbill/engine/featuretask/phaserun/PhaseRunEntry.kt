@@ -126,13 +126,13 @@ public class PhaseRunEntry(
     }
   }
 
-  internal fun runForGoal(
+  public fun runForGoal(
     request: PhaseRunRequest,
     parentWorkflowId: String,
     expectedBranch: String,
   ): PhaseRunResult = runInternal(request, parentWorkflowId, parentWorkflowId, expectedBranch)
 
-  internal fun runForGoalQuality(
+  public fun runForGoalQuality(
     request: PhaseRunRequest,
     parentWorkflowId: String,
     invocationId: String,

@@ -10,7 +10,7 @@ import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.create
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
-import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.goal.GoalRunnerStatusRequest
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation

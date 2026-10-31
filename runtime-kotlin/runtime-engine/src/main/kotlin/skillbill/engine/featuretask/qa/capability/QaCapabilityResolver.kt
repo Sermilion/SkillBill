@@ -32,7 +32,7 @@ public class QaCapabilityResolver(
   private val gitOperations: WorkflowGitOperations,
   private val installedCatalog: InstalledPlatformPackCatalogPort,
 ) {
-  internal fun resolve(repoRoot: Path): QaCapabilityResolution =
+  public fun resolve(repoRoot: Path): QaCapabilityResolution =
     when (val paths = gitOperations.trackedPaths(repoRoot)) {
       is WorkflowGitNameListResult.Listed -> resolve(paths.names)
       is WorkflowGitNameListResult.Failed ->

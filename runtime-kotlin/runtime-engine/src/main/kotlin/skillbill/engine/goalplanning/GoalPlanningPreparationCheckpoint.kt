@@ -24,7 +24,7 @@ public class GoalPlanningPreparationCheckpoint(
 ) {
   private val gate = GoalPlanningPreparationProjectionGate(envelopeValidator)
 
-  internal fun findStoredSubtaskPlan(
+  public fun findStoredSubtaskPlan(
     identity: GoalPlanningIdentity,
     subtaskId: Int,
     governedSubSpecPath: String,
@@ -39,7 +39,7 @@ public class GoalPlanningPreparationCheckpoint(
       is SharedGoalPreplanLookupResult.Conflicted -> throw result.conflict.toFailure()
     }
 
-  internal fun findSharedPreplanResult(identity: GoalPlanningIdentity): SharedGoalPreplanLookupResult =
+  public fun findSharedPreplanResult(identity: GoalPlanningIdentity): SharedGoalPreplanLookupResult =
     when (val result = database.read { it.goalPlanningPreparations.findSharedPreplan(identity) }) {
       is SharedGoalPreplanLookupResult.Found ->
         SharedGoalPreplanLookupResult.Found(

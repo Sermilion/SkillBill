@@ -13,6 +13,7 @@ object RuntimeModuleCatalog {
       "runtime-core",
       "runtime-domain",
       "runtime-engine",
+      "runtime-goalrunner",
       "runtime-infra",
       "runtime-infra:host",
       "runtime-infra:contracts",
@@ -40,7 +41,7 @@ object RuntimeModuleCatalog {
         ),
       "runtime-core" to
         ModuleEdgeExpectation(
-          api = setOf("runtime-application", "runtime-engine", "runtime-ports"),
+          api = setOf("runtime-application", "runtime-engine", "runtime-goalrunner", "runtime-ports"),
           implementation =
             setOf(
               "runtime-domain",
@@ -57,6 +58,11 @@ object RuntimeModuleCatalog {
       "runtime-engine" to
         ModuleEdgeExpectation(
           api = setOf("runtime-contracts", "runtime-domain", "runtime-ports"),
+          implementation = setOf("runtime-application"),
+        ),
+      "runtime-goalrunner" to
+        ModuleEdgeExpectation(
+          api = setOf("runtime-engine"),
           implementation = setOf("runtime-application"),
         ),
       "runtime-domain" to
@@ -136,6 +142,7 @@ object RuntimeModuleCatalog {
               "runtime-core",
               "runtime-domain",
               "runtime-engine",
+              "runtime-goalrunner",
               "runtime-ports",
             ),
         ),
@@ -149,6 +156,7 @@ object RuntimeModuleCatalog {
               "runtime-core",
               "runtime-domain",
               "runtime-engine",
+              "runtime-goalrunner",
               "runtime-ports",
             ),
         ),
@@ -177,6 +185,16 @@ object RuntimeModuleCatalog {
         setOf(
           "runtime-application",
           "runtime-domain",
+          "runtime-infra:contracts",
+          "runtime-infra:sqlite",
+          "runtime-infra:workflow",
+          "runtime-ports",
+        ),
+      "runtime-goalrunner" to
+        setOf(
+          "runtime-application",
+          "runtime-domain",
+          "runtime-engine",
           "runtime-infra:contracts",
           "runtime-infra:sqlite",
           "runtime-ports",
@@ -231,6 +249,7 @@ object RuntimeModuleCatalog {
       "runtime-cli" to "skillbill.cli",
       "runtime-core" to "skillbill.di",
       "runtime-engine" to "skillbill.engine",
+      "runtime-goalrunner" to "skillbill.engine.goalrunner",
       "runtime-infra:host" to "skillbill.infrastructure.host",
       "runtime-infra:contracts" to "skillbill.infrastructure.contracts",
       "runtime-infra:skills" to "skillbill.infrastructure.skills",

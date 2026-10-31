@@ -6,7 +6,7 @@ import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 
-internal fun GoalPlanningPreparationConflict.toFailure(): SkillBillRuntimeException =
+public fun GoalPlanningPreparationConflict.toFailure(): SkillBillRuntimeException =
   incompatibleGoalPlanningPreparationRecoveryError(workflowId, subtaskId, reason, cause)
 
 internal fun GoalSubtaskPlanLookupResult.planOrThrow(): GoalSubtaskPlanCheckpoint? =
