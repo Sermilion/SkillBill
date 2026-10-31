@@ -1,7 +1,6 @@
 package skillbill.application.review.parallel.runner
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewReportContract
@@ -162,7 +161,6 @@ class ParallelCodeReviewRunner(
     try {
       action()
     } catch (error: SkillBillRuntimeException) {
-      error.rethrowIfCooperativeCancellationOrInterruption()
       if (!standaloneReportOnly(initial)) throw error
       onFailure(error)
     }
@@ -223,7 +221,6 @@ class ParallelCodeReviewRunner(
             adjudicationOutcome.citationDiagnostics,
       )
     } catch (error: SkillBillRuntimeException) {
-      error.rethrowIfCooperativeCancellationOrInterruption()
       if (
         initial.request.reportContract !=
         ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY

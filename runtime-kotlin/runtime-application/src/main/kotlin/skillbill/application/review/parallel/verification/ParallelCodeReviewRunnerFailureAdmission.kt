@@ -23,7 +23,6 @@ import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import java.io.IOException
-import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class ParallelCodeReviewRunnerFailureAdmission(
@@ -164,19 +163,19 @@ internal fun parallelCodeReviewInlineTerminalStatus(
   }
 
 internal fun parallelCodeReviewCaptureLane(lane: () -> ParallelReviewLaneOutcome): ParallelReviewLaneOutcome {
-  val outcome = runCatching { lane() }
-  if (outcome.isSuccess) return outcome.getOrThrow()
-  val error = outcome.exceptionOrNull()!!
-  val terminal =
-    when (error) {
-      is CancellationException, is InterruptedException -> error
-      is IOException, is SkillBillRuntimeException -> return ParallelReviewLaneOutcome(
-        success = false,
-        rawOutput = "",
-        failureReason =
-          "lane launch threw ${error.failureCodeLabel() ?: error::class.simpleName}: ${error.message ?: "no detail"}",
-      )
-      else -> error
-    }
-  throw terminal
+  try {
+    return lane()
+  } catch (error: IOException) {
+    return failedLane(error)
+  } catch (error: SkillBillRuntimeException) {
+    return failedLane(error)
+  }
 }
+
+private fun failedLane(error: Exception): ParallelReviewLaneOutcome =
+  ParallelReviewLaneOutcome(
+    success = false,
+    rawOutput = "",
+    failureReason =
+      "lane launch threw ${error.failureCodeLabel() ?: error::class.simpleName}: ${error.message ?: "no detail"}",
+  )

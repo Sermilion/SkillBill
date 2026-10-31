@@ -3,6 +3,7 @@ package skillbill.application.scaffold
 import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.model.ScaffoldInvocationOutcome
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.install.model.ExternalAddonSource
 import skillbill.ports.repository.toFileLocation
@@ -78,7 +79,7 @@ private fun registerExternalAddonSourceAfterSuccess(
   if (externalAddonOverlayService == null || dryRun) return null
   val addOn = request as? ScaffoldCommandRequest.AddOn ?: return null
   val sourcePath = addOn.addonLocationPath?.takeIf(String::isNotBlank) ?: return null
-  return runCatching {
+  return catchingNonCancellation {
     externalAddonOverlayService.registerSource(
       home = userHome,
       source = ExternalAddonSource(Path.of(sourcePath).toFileLocation(), addOn.platform),

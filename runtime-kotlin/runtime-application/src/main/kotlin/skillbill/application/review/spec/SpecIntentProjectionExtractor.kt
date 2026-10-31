@@ -2,7 +2,6 @@ package skillbill.application.review.spec
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.resolvedParentSpecPath
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.application.review.packet.toProjectionPayload
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -103,8 +102,7 @@ class SpecIntentProjectionExtractor(
     }
     return try {
       SpecIntentSourceRead.Read(fileStore.readText(path).toByteArray(Charsets.UTF_8))
-    } catch (error: IOException) {
-      error.rethrowIfCooperativeCancellationOrInterruption()
+    } catch (_: IOException) {
       unavailable(path, "unreadable")
     }
   }

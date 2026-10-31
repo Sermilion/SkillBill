@@ -112,6 +112,37 @@ class TelemetryAutoSyncDiagnosticTest {
   }
 
   @Test
+  fun `captureException records a warning when outbox enqueue fails`() {
+    val diagnostics = RecordingDiagnostics()
+    val service =
+      telemetryService(
+        diagnostics,
+        failingEnqueue = false,
+        enqueueFailure = IllegalStateException("offline"),
+      )
+
+    service.captureException("implement", IllegalStateException("phase failed"))
+
+    assertTrue(diagnostics.warnings.any { it.first == TELEMETRY_CAPTURE_FAILURE_SIGNATURE })
+  }
+
+  @Test
+  fun `captureException propagates cancellation without a diagnostics record`() {
+    val diagnostics = RecordingDiagnostics()
+    val service =
+      telemetryService(
+        diagnostics,
+        failingEnqueue = false,
+        enqueueFailure = CancellationException("shutdown"),
+      )
+
+    assertFailsWith<CancellationException> {
+      service.captureException("implement", IllegalStateException("phase failed"))
+    }
+    assertTrue(diagnostics.warnings.isEmpty())
+  }
+
+  @Test
   fun `the reserved test install id never reaches the hosted relay from sync or auto sync`() {
     val diagnostics = RecordingDiagnostics()
     val relay = RecordingTelemetryRelay()
@@ -157,12 +188,17 @@ class TelemetryAutoSyncDiagnosticTest {
   private fun telemetryService(
     diagnostics: RuntimeDiagnostics,
     failingEnqueue: Boolean,
+    enqueueFailure: Throwable? = null,
     reconciliationFailure: Throwable? = null,
     interruptSignal: InterruptSignalPort = NoopInterruptSignalPort,
   ): TelemetryService =
     telemetryService(
       diagnostics = diagnostics,
-      database = DiagnosticDatabaseSessionFactory(PendingOutbox(failingEnqueue), reconciliationFailure),
+      database =
+        DiagnosticDatabaseSessionFactory(
+          PendingOutbox(enqueueFailure ?: if (failingEnqueue) IllegalStateException("outbox unavailable") else null),
+          reconciliationFailure,
+        ),
       interruptSignal = interruptSignal,
     )
 
@@ -173,7 +209,7 @@ class TelemetryAutoSyncDiagnosticTest {
   ): TelemetryService =
     telemetryService(
       diagnostics = diagnostics,
-      database = DiagnosticDatabaseSessionFactory(PendingOutbox(failingEnqueue = false)),
+      database = DiagnosticDatabaseSessionFactory(PendingOutbox(enqueueFailure = null)),
       settingsProvider = settingsProvider,
       telemetryClient = telemetryClient,
     )
@@ -306,15 +342,13 @@ private class DiagnosticTelemetryConfigStore : TelemetryConfigStore {
 }
 
 private class PendingOutbox(
-  private val failingEnqueue: Boolean,
+  private val enqueueFailure: Throwable?,
 ) : TelemetryOutboxRepository {
   override fun enqueue(
     event: TelemetryOutboxEvent,
     payloadJson: String,
   ): Long {
-    if (failingEnqueue && event == TelemetryOutboxEvent.RUNTIME_EXCEPTION) {
-      error("outbox unavailable")
-    }
+    if (event == TelemetryOutboxEvent.RUNTIME_EXCEPTION) enqueueFailure?.let { throw it }
     return 1L
   }
 

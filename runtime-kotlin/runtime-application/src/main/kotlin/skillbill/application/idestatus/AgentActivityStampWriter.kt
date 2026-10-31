@@ -1,8 +1,7 @@
 package skillbill.application.idestatus
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.getOrElseUnlessCooperative
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.AgentActivityStamp
@@ -29,8 +28,14 @@ class AgentActivityStampWriter(
   ): AgentRunActivityStampSink =
     AgentRunActivityStampSink { label ->
       val workflowId =
-        runCatching { resolveWorkflowId() }
-          .getOrElseUnlessCooperative { null }
+        catchingNonCancellation { resolveWorkflowId() }
+          .getOrElse { error ->
+            warn(
+              "seam=agent_activity_stamp_workflow_id value_expected=workflow_id value_used=skipped " +
+                "cause=${causeOf(error)}",
+            )
+            null
+          }
           ?.takeIf(String::isNotBlank)
           ?: return@AgentRunActivityStampSink
       record(
@@ -110,7 +115,7 @@ class AgentActivityStampWriter(
     stamp: AgentActivityStamp,
   ): Boolean {
     val outcome =
-      runCatching {
+      catchingNonCancellation {
         database.selfManagedWrite { unitOfWork ->
           writeStamp(unitOfWork.agentActivityStamps, context.workflowId, stamp)
           context.parentWorkflowId?.let { parentId ->
@@ -118,18 +123,13 @@ class AgentActivityStampWriter(
           }
         }
       }
-    outcome.exceptionOrNull()?.rethrowIfCooperativeCancellationOrInterruption()
     val error = outcome.exceptionOrNull()
     if (error != null) {
-      val cause =
-        (error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty())
-          .take(MAX_DIAGNOSTIC_CAUSE_LENGTH)
-      runCatching {
-        diagnostics.warning(
-          "seam=agent_activity_stamp_persist value_expected=persisted_stamp value_used=failed " +
-            "workflow_id=${context.workflowId} label=${stamp.label.wireValue} cause=$cause",
-        )
-      }
+      val cause = causeOf(error)
+      warn(
+        "seam=agent_activity_stamp_persist value_expected=persisted_stamp value_used=failed " +
+          "workflow_id=${context.workflowId} label=${stamp.label.wireValue} cause=$cause",
+      )
       return false
     }
     return true
@@ -141,6 +141,14 @@ class AgentActivityStampWriter(
     stamp: AgentActivityStamp,
   ) {
     repository.record(workflowId, stamp)
+  }
+
+  private fun causeOf(error: Throwable): String =
+    (error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty())
+      .take(MAX_DIAGNOSTIC_CAUSE_LENGTH)
+
+  private fun warn(message: String) {
+    catchingNonCancellation { diagnostics.warning(message) }
   }
 
   private data class StampContext(

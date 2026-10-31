@@ -1,12 +1,12 @@
 package skillbill.application.review.parallel.planning
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.error.core.catchingNonCancellation
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.diff.model.ReviewDiffQuery
 
@@ -137,9 +137,8 @@ internal fun ParallelCodeReviewRunnerPlanning.detectStack(
   evidence: ReviewDiffEvidence,
 ): ParallelCodeReviewPlanned<ParallelCodeReviewStackDetection> {
   val manifests =
-    runCatching { installedManifests() }
+    catchingNonCancellation { installedManifests() }
       .getOrElse { e ->
-        e.rethrowIfCooperativeCancellationOrInterruption()
         return ParallelCodeReviewPlanned.Failed(
           ParallelCodeReviewPlanningFailure.StackUndetected(
             "Installed platform pack discovery failed: ${e.message ?: e.javaClass.simpleName}. " +

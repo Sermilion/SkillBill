@@ -1,9 +1,9 @@
 package skillbill.application.telemetry.service
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.model.BlockIncidentTelemetryAvailability
 import skillbill.ports.blockincident.model.BlockIncidentTelemetryState
@@ -73,10 +73,9 @@ class BlockIncidentTelemetry(
     val setting = (loaded as? TelemetrySettingsLoad.Loaded)?.settings
     if (setting?.level == OFF_LEVEL) {
       val occurrence =
-        runCatching {
+        catchingNonCancellation {
           database.read { unit -> unit.blockIncidents.find(incidentToken)?.occurrence }
         }.getOrElse { error ->
-          error.rethrowIfCooperativeCancellationOrInterruption()
           diagnostics.warning("Block incident telemetry identifiers are unreadable while disabled.", error)
           null
         }
@@ -98,14 +97,13 @@ class BlockIncidentTelemetry(
       )
     }
     val occurrence =
-      runCatching {
+      catchingNonCancellation {
         database.read { unit -> unit.blockIncidents.find(incidentToken)?.occurrence }
       }.getOrElse { error ->
-        error.rethrowIfCooperativeCancellationOrInterruption()
         diagnostics.warning("Block incident telemetry identifiers are unreadable.", error)
         null
       }
-    return runCatching {
+    return catchingNonCancellation {
       val latest = database.read { unit -> unit.telemetryOutbox.latestByCorrelation(REPORT_EVENTS, incidentToken) }
       val state =
         when {
@@ -122,7 +120,6 @@ class BlockIncidentTelemetry(
         occurrence?.invocationId,
       )
     }.getOrElse { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       diagnostics.warning("Block incident telemetry availability is unreadable.", error)
       BlockIncidentTelemetryAvailability(
         BlockIncidentTelemetryState.UNAVAILABLE,
@@ -135,10 +132,9 @@ class BlockIncidentTelemetry(
   }
 
   private fun loadSettings(): TelemetrySettingsLoad =
-    runCatching {
+    catchingNonCancellation {
       settings.loadOrUnavailable()
     }.getOrElse { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       diagnostics.warning("Block incident telemetry settings are unavailable.", error)
       TelemetrySettingsLoad.Unavailable(error.javaClass.simpleName)
     }
@@ -148,7 +144,7 @@ class BlockIncidentTelemetry(
     incident: BlockIncidentOccurrence,
     fields: MutableMap<String, Any?>.(String) -> Unit,
   ) {
-    runCatching {
+    catchingNonCancellation {
       val level =
         settings.loadOrUnavailable().let { result ->
           (result as? TelemetrySettingsLoad.Loaded)?.settings?.level
@@ -170,7 +166,6 @@ class BlockIncidentTelemetry(
         }
       database.transaction { unit -> unit.telemetryOutbox.enqueue(event, JsonCodec.mapToJsonString(payload)) }
     }.getOrElse { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       diagnostics.warning("Block incident telemetry could not be enqueued.", error)
     }
   }

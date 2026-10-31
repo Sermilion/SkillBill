@@ -1,8 +1,8 @@
 package skillbill.application.runtimepersistence
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
@@ -84,9 +84,8 @@ class RuntimeOwnedPersistenceBoundary(
     onFailure: (Exception) -> T,
     block: () -> T,
   ): T {
-    val outcome = runCatching(block)
+    val outcome = catchingNonCancellation(block)
     val error = outcome.exceptionOrNull() ?: return outcome.getOrThrow()
-    error.rethrowIfCooperativeCancellationOrInterruption()
     if (error is Exception && !error.isOwnedFactUnavailable()) {
       return onFailure(error)
     }
@@ -110,7 +109,7 @@ class RuntimeOwnedPersistenceBoundary(
     error: Exception,
   ) {
     val cause = causeOf(error)
-    runCatching {
+    catchingNonCancellation {
       diagnostics.warning(
         "seam=$seam value_expected=$expected value_used=$used cause=$cause",
       )

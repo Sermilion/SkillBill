@@ -1,5 +1,6 @@
 package skillbill.application.reviewevidence
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.review.context.model.commit.ReviewCommitSource
 
 internal object SharedReviewEvidenceCodec {
@@ -24,7 +25,7 @@ internal object SharedReviewEvidenceCodec {
     }
 
   internal fun decode(payload: String): SharedReviewEvidenceRecord? =
-    runCatching {
+    catchingNonCancellation {
       val reader = FieldReader(payload)
       require(reader.next() == VERSION) { "Unknown shared review evidence payload version." }
       val aggregateDiff = reader.next()

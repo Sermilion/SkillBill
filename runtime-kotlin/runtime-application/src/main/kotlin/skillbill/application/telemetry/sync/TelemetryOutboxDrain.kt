@@ -1,5 +1,6 @@
 package skillbill.application.telemetry.sync
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.telemetry.model.TELEMETRY_DELIVERY_ATTEMPT_BUDGET
@@ -16,7 +17,6 @@ import skillbill.telemetry.model.TelemetrySyncStatus
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import kotlin.coroutines.cancellation.CancellationException
 
 internal const val CLAIM_LEASE_MINUTES: Long = 5
 
@@ -125,14 +125,8 @@ private fun acknowledgeBatch(
   syncedTotal: Int,
 ): Acknowledgement {
   val settlement =
-    runCatching { request.outboxRepository.markSynced(eventIds, claimToken) }
+    catchingTelemetryFailure(request.interruptSignal) { request.outboxRepository.markSynced(eventIds, claimToken) }
       .getOrElse { thrown ->
-        if (thrown.isCooperativeCancellation()) {
-          rethrowCancellation(thrown)
-        }
-        if (thrown is InterruptedException) {
-          rethrowInterrupted(thrown, request.interruptSignal)
-        }
         if (thrown !is Exception) {
           rethrowUnexpected(thrown)
         }
@@ -158,19 +152,13 @@ private fun acknowledgeBatch(
 
 private fun settleFailedDelivery(args: FailedDelivery): SyncResult? {
   val settlement =
-    runCatching {
+    catchingTelemetryFailure(args.request.interruptSignal) {
       if (args.consumesAttempt) {
         args.request.outboxRepository.markFailed(args.eventIds, args.claimToken, args.message)
       } else {
         args.request.outboxRepository.markUnconfirmed(args.eventIds, args.claimToken, args.message)
       }
     }.getOrElse { thrown ->
-      if (thrown.isCooperativeCancellation()) {
-        rethrowCancellation(thrown)
-      }
-      if (thrown is InterruptedException) {
-        rethrowInterrupted(thrown, args.request.interruptSignal)
-      }
       if (thrown !is Exception) {
         rethrowUnexpected(thrown)
       }
@@ -187,14 +175,8 @@ private fun attemptDelivery(
   rows: List<TelemetryOutboxRecord>,
 ): TelemetryDeliveryReport {
   val report =
-    runCatching { request.client.sendBatch(request.settings, rows) }
+    catchingTelemetryFailure(request.interruptSignal) { request.client.sendBatch(request.settings, rows) }
       .getOrElse { thrown ->
-        if (thrown.isCooperativeCancellation()) {
-          rethrowCancellation(thrown)
-        }
-        if (thrown is InterruptedException) {
-          rethrowInterrupted(thrown, request.interruptSignal)
-        }
         if (thrown !is Exception) {
           rethrowUnexpected(thrown)
         }
@@ -298,15 +280,21 @@ private fun batchBudget(
   return pendingEvents / batchSize + 1
 }
 
-private fun Throwable.isCooperativeCancellation(): Boolean = this is CancellationException
-
-private fun rethrowCancellation(error: Throwable): Nothing = throw error
+internal inline fun <T> catchingTelemetryFailure(
+  interruptSignal: InterruptSignalPort,
+  block: () -> T,
+): Result<T> =
+  try {
+    catchingNonCancellation(block)
+  } catch (interrupted: InterruptedException) {
+    rethrowInterrupted(interrupted, interruptSignal)
+  }
 
 internal fun rethrowInterrupted(
   error: InterruptedException,
   interruptSignal: InterruptSignalPort,
 ): Nothing {
-  runCatching { interruptSignal.restore() }.exceptionOrNull()?.let { restorationFailure ->
+  catchingNonCancellation { interruptSignal.restore() }.exceptionOrNull()?.let { restorationFailure ->
     if (restorationFailure !== error) {
       error.addSuppressed(restorationFailure)
     }

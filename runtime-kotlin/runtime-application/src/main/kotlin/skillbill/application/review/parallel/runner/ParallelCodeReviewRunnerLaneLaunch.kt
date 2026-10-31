@@ -1,7 +1,6 @@
 package skillbill.application.review.parallel.runner
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.getOrElseUnlessCooperative
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
@@ -25,6 +24,7 @@ import skillbill.application.review.parallel.verification.ParallelCodeReviewRunn
 import skillbill.application.review.parallel.verification.parallelCodeReviewCaptureLane
 import skillbill.application.review.parallel.verification.parallelCodeReviewInlineTerminalStatus
 import skillbill.application.review.parallel.verification.parallelCodeReviewNoOpResumeOutcome
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.terminalStatus
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -165,14 +165,14 @@ class ParallelCodeReviewRunnerLaneLaunch(
     request: ParallelCodeReviewRequest,
   ): ParallelCodeReviewGovernedEvidenceBind {
     val broker =
-      runCatching { parentEvidenceBroker(selected, request.repoRoot) }
-        .getOrElseUnlessCooperative {
+      catchingNonCancellation { parentEvidenceBroker(selected, request.repoRoot) }
+        .getOrElse {
           return ParallelCodeReviewGovernedEvidenceBind.Unbound(
             ReviewEvidenceBoundaryAccounting.GOVERNED_EVIDENCE_SEAM,
             ParallelCodeReviewGovernedEvidenceBindFault.CONSTRUCTION,
           )
         }
-    return runCatching {
+    return catchingNonCancellation {
       val evidenceReads = ReviewEvidenceReadCount()
       val onEvidenceRead = evidenceReadCallback(request, evidenceReads)
       ParallelCodeReviewGovernedEvidenceBind.Bound(
@@ -180,7 +180,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
         governedEvidenceEndpointBinder.bind(broker.accounting().lane, broker, onEvidenceRead),
         evidenceReads,
       )
-    }.getOrElseUnlessCooperative {
+    }.getOrElse {
       ParallelCodeReviewGovernedEvidenceBind.Unbound(
         ReviewEvidenceBoundaryAccounting.GOVERNED_EVIDENCE_SEAM,
         ParallelCodeReviewGovernedEvidenceBindFault.ENDPOINT,
