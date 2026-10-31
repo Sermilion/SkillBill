@@ -37,6 +37,7 @@ import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.host.HostIntent
 import dev.skillbill.desktop.app.host.HostIntents
 import dev.skillbill.desktop.app.tray.macos.MacStatusItemBridge
+import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import dev.skillbill.desktop.core.domain.model.ReadProblem
@@ -162,6 +163,7 @@ fun ApplicationScope.TrayHost(
   if (visible) Window(
     onCloseRequest = { visible = false },
     title = "Skill Bill tray",
+    icon = skillBillIcon(),
     transparent = true,
     alwaysOnTop = true,
     undecorated = true,

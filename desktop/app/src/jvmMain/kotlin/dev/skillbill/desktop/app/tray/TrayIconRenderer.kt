@@ -11,7 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -19,7 +19,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 object TrayIconRenderer {
   @Composable
   fun Content(state: TrayStatus, running: Int, showOverlay: Boolean) {
-    val icon = painterResource("icons/skill-bill.svg")
+    val icon = skillBillIcon()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
       Image(icon, contentDescription = null, modifier = Modifier.fillMaxSize())
       if (showOverlay && state == TrayStatus.Running && running > 0) {

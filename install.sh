@@ -1862,6 +1862,8 @@ install_desktop_app_launcher() {
 Name=Skill Bill
 Type=Application
 Exec=$quoted_launcher
+Icon=$app_target/lib/Skill Bill.png
+StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt
 Terminal=false
 Categories=Development;
 ENTRY

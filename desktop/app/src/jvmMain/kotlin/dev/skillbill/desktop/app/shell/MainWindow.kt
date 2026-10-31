@@ -28,6 +28,7 @@ import dev.skillbill.desktop.app.keyboard.ShortcutSheet
 import dev.skillbill.desktop.app.keyboard.KeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.app.keyboard.toKeyPress
+import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
@@ -89,6 +90,7 @@ fun ApplicationScope.MainWindow(
     onCloseRequest = onCloseRequest,
     visible = visible,
     title = "Skill Bill",
+    icon = skillBillIcon(),
     state = rememberWindowState(size = remember(uiScale) { comfortableWindowSize(uiScale) }, position = WindowPosition(Alignment.Center)),
     onPreviewKeyEvent = { event ->
       val press = event.toKeyPress()

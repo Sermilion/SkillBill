@@ -890,6 +890,8 @@ else
 fi
 if [[ "$TOKEN" == "linux-x64" ]]; then
   [[ -f "$FAKE_HOME/.local/share/applications/skillbill.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
+  grep -Fxq "Icon=$DESKTOP_APP/lib/Skill Bill.png" "$FAKE_HOME/.local/share/applications/skillbill.desktop" && pass "Linux desktop entry uses the packaged icon" || fail "Linux desktop entry has no packaged icon"
+  grep -Fxq 'StartupWMClass=dev-skillbill-desktop-app-DesktopLauncherKt' "$FAKE_HOME/.local/share/applications/skillbill.desktop" && pass "Linux desktop entry matches the app window" || fail "Linux desktop entry has no matching window identity"
 fi
 
 echo ""

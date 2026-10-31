@@ -19,6 +19,7 @@ import androidx.compose.ui.window.application
 import dev.skillbill.desktop.app.shell.ProblemStatePanel
 import dev.skillbill.desktop.app.shell.ShellFrame
 import dev.skillbill.desktop.app.shell.ShellProblem
+import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.data.runtime.InstalledRuntimeBuildGate
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -40,7 +41,7 @@ fun runRuntimeUnavailable(runtimeRoot: String, appRecordPath: String): Array<Str
         runtimeJars = installation.runtimeJars.map(Path::toString).toTypedArray()
         exitApplication()
       }
-      is RuntimeAvailability.Unavailable -> Window(onCloseRequest = ::exitApplication, title = "Skill Bill") {
+      is RuntimeAvailability.Unavailable -> Window(onCloseRequest = ::exitApplication, title = "Skill Bill", icon = skillBillIcon()) {
         SkillBillTheme(reducedMotion = false) {
           ShellFrame(sidebar = null, drawerMode = false, drawerOpen = false, onDismissDrawer = {}) {
             // No sidebar here, so the state sits in the content panel inset 8 dp on every side, as the main window's panel.
