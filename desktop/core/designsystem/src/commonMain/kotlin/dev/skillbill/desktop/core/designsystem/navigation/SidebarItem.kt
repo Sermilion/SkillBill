@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -71,9 +72,13 @@ fun SidebarItem(
       horizontalArrangement = Arrangement.spacedBy(9.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      when {
-        lead != null -> lead()
-        icon != null -> CompositionLocalProvider(LocalContentColor provides if (on) colors.fg else colors.fgMuted) { SbIcon(icon) }
+      if (lead != null || icon != null) {
+        Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+          when {
+            lead != null -> lead()
+            icon != null -> CompositionLocalProvider(LocalContentColor provides if (on) colors.fg else colors.fgMuted) { SbIcon(icon) }
+          }
+        }
       }
       BasicText(label, Modifier.weight(1f), style = type.tBaseMedium.copy(color = textColor), maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (attention != null && attention > 0) {
