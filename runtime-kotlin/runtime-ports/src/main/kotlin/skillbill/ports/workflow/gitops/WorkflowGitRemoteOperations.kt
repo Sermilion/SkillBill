@@ -13,6 +13,16 @@ interface WorkflowGitRemoteOperations {
     branch: String,
   ): WorkflowGitOperationResult
 
+  /**
+   * Pushes a branch the runtime owns, such as a goal's PR branch. A rejected push first rebases onto the
+   * remote commits, as [pushBranch] does; when that rebase fails, it replaces the remote branch with a
+   * lease on the remote head it just read.
+   */
+  fun pushOwnedBranch(
+    repoRoot: Path,
+    branch: String,
+  ): WorkflowGitOperationResult = pushBranch(repoRoot, branch)
+
   fun pushBranchWithLease(
     repoRoot: Path,
     branch: String,

@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
+import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -71,6 +72,7 @@ class ChatWorkspace(
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
   private val panes: ShellPanes,
+  private val selection: SelectionHolder,
 ) : ChatCommands {
   private val scope = windowScope.scope
   private val turns = ChatTurns(chat, details, clock)
@@ -119,17 +121,21 @@ class ChatWorkspace(
   fun open(item: WorkItem) {
     setPaneOpen(true)
     val existing = tabState.value.tabs.firstOrNull { it.executionId == item.id }
-    if (existing != null) activate(existing.id) else start(item, item.id)
+    if (existing != null) activate(existing.id) else start(item, item.id, opening = true)
   }
 
-  /** Starts another chat on the execution that chat [fromId] is about, with its own agent session and opening turn. */
-  fun newChat(fromId: String) {
-    val from = sessions[fromId] ?: return
+  /**
+   * Starts another chat on the active chat's execution, or on the window's selected execution when no tab is open. Only an
+   * execution's first open chat streams the opening turn; a further one shows its state line and waits for the operator.
+   */
+  fun newChat() {
+    val item = tabState.value.activeId?.let(sessions::get)?.item ?: selection.item.value ?: return
+    if (tabState.value.tabs.none { it.executionId == item.id }) return open(item)
     setPaneOpen(true)
-    start(from.item, UUID.randomUUID().toString())
+    start(item, UUID.randomUUID().toString(), opening = false)
   }
 
-  private fun start(item: WorkItem, id: String) {
+  private fun start(item: WorkItem, id: String, opening: Boolean) {
     val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]), clock, id)
     sessions[id] = session
     followUnprompted(session)
@@ -137,7 +143,11 @@ class ChatWorkspace(
     session.busyState.value = true
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
-      turns.turn(session, read, modeFor(read.header), openingInstruction(classify(read.header)))
+      if (opening) {
+        turns.turn(session, read, modeFor(read.header), openingInstruction(classify(read.header)))
+      } else {
+        turns.prepare(session, read)
+      }
     }
     tabState.update { it.withTab(ChatTab(id, item.id, item.issueKey ?: item.title, item.kind, it.nextOrdinal(item.id))) }
     observeActive()

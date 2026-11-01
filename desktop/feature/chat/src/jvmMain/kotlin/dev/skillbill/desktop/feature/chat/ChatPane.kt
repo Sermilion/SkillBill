@@ -30,7 +30,7 @@ fun ChatPane(workspace: ChatWorkspace) {
       onCancelRename = {},
       renameFieldGate = { _, _ -> Modifier },
       onCloseTab = workspace::close,
-      onNewTab = state.activeId?.let { active -> { workspace.newChat(active) } },
+      onNewTab = workspace::newChat,
       onResizeBy = null,
       onClose = workspace::hide,
       icon = LucideIcons.bot,
@@ -40,7 +40,7 @@ fun ChatPane(workspace: ChatWorkspace) {
     ) {
       val session = state.activeId?.let(workspace::session)
       if (session == null) {
-        EmptyState(title = "No chats", icon = LucideIcons.bot, body = "Open an execution and press $CHAT_SHORTCUT to chat about it.")
+        EmptyState(title = "No chats", icon = LucideIcons.bot, body = "Open an execution and press $CHAT_SHORTCUT or + to chat about it.")
       } else {
         key(session) {
           Column(Modifier.fillMaxSize()) {

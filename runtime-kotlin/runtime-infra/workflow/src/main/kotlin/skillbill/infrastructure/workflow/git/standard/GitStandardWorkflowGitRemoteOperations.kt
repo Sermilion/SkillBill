@@ -10,6 +10,11 @@ internal object GitStandardWorkflowGitRemoteOperations : WorkflowGitRemoteOperat
     branch: String,
   ): WorkflowGitOperationResult = gitPushBranch(repoRoot, branch, withLease = false)
 
+  override fun pushOwnedBranch(
+    repoRoot: Path,
+    branch: String,
+  ): WorkflowGitOperationResult = gitPushBranch(repoRoot, branch, withLease = false, owned = true)
+
   override fun pushBranchWithLease(
     repoRoot: Path,
     branch: String,

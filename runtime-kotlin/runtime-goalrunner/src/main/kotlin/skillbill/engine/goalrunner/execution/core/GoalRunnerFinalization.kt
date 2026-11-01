@@ -629,7 +629,7 @@ public class GoalRunnerFinalization(
     request: GoalRunnerRunRequest,
     featureBranch: String,
   ): String? {
-    val pushed = gitOperations.pushBranch(request.repoRoot, featureBranch)
+    val pushed = gitOperations.pushOwnedBranch(request.repoRoot, featureBranch)
     return if (pushed is WorkflowGitOperationResult.Ok) {
       null
     } else {
@@ -650,7 +650,7 @@ public class GoalRunnerFinalization(
     }
     if (unpushed.value.trim() != "true") return null
     return requireFeatureBranchForFinalize(featureBranch, repoRoot)
-      ?: gitOperations.pushBranch(repoRoot, featureBranch)
+      ?: gitOperations.pushOwnedBranch(repoRoot, featureBranch)
         .takeIf { it !is WorkflowGitOperationResult.Ok }
         ?.let { "Goal finalization found unpushed commits on '$featureBranch' but could not push: ${it.error}" }
   }

@@ -5,8 +5,7 @@ Areas: runtime-infra/workflow (git/changes), runtime-ports (workchanges, workcha
 - GitChangeReads.kt in git/changes holds the shared probe, merge-base, cat-file, capture and patch helpers plus the trackedListArgs and trackedPatchArgs builders, so list and patch reads share diff options by construction. reusable
 - GitOutsideCommitReader lists branch commits (merge base..HEAD, oldest first) that no subtask range contains; a null range end means HEAD. More than 200 returns TooMany before any per-commit diff. Each outside commit is diffed against its first parent; a parentless commit gives Failed. Per-file patches reuse committedFileDiff(parent, sha).
 - WorkChangeScopesService (engine work/changes/scope, RuntimeComponent.workChangeScopesService) reads every goal subtask in manifest order, 100 per page. startSha comes from the child review state, else the previous endSha with one best-effort warning. endSha prefers the manifest commitSha, then the commit-push artifact, then startSha for COMPLETED_NO_CHANGE. rangesSupported is true only for SAME_BRANCH_COMMIT_PER_SUBTASK. reusable
-- Validate fix: a child with a commit-push artifact but no review state made goalSubtaskReviewArtifacts throw and drop the commit SHA. The service now reads the commit-push artifact first and decodes the review state in its own try.
-- Validate also renamed GitChangeReadSupport.kt to GitChangeReads.kt for the spillover file-name guard, split functions for detekt ReturnCount, and stubbed the new members in desktop ChangeObservationsTest.FakePort.
+- The service reads the commit-push artifact separately from review state, so a missing review state does not discard the commit SHA.
 - Limits: no test covers the manifest commitSha winning over the artifact when both exist. No CLI, MCP or contract YAML exposes these reads; the desktop consumes them (see desktop history).
 Feature flag: N/A
 Acceptance criteria: 3/3 implemented
