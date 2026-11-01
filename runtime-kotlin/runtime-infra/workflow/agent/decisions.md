@@ -1,3 +1,9 @@
+## [2026-10-31] Outside-commit reads fail on an unknown subtask range SHA
+Context: outsideCommits subtracts every subtask range from the branch commits. A range SHA from the goal record may no longer exist in the repository.
+Decision: When a range's fromSha or non-null toSha is not a commit, the read returns BaseUnavailable naming that SHA instead of skipping the range. The reader probes both range SHAs only after a rev-list call fails.
+Reason: Skipping the range would report that subtask's own commits as outside commits, which looks like valid data and is wrong.
+Revisit when: subtask ranges come from a source that guarantees reachable commits.
+
 ## [2026-10-31] Change list and patch reads capture raw git stdout
 Context: runGitCommand and the other helpers route through invokeGitProcess, which merges stderr into stdout and trims the result. Trimming drops a trailing blank context line from a patch, and merged stderr such as CRLF warnings corrupts -z records.
 Decision: The change list, untracked list and per-file patch reads go through captureGitStdout. It writes stdout to a temp file with stderr kept out, applies a byte cap and an accepted exit-code set, and returns the text untrimmed. Scalar probes (rev-parse, merge-base, cat-file -e) still use runGitCommand.

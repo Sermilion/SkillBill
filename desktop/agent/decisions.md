@@ -3,6 +3,7 @@ Context: The changes panel polls git for the open execution every 3 seconds whil
 Decision: ChangeObservations calls workChangesPort on the IO dispatcher, outside RuntimeReads. RuntimeWorkChangesRepository owns one Mutex, passed into every session call, that serializes each changes and fileDiff read. Only the open execution's baseline is read; board rows never call this repository.
 Reason: One app-wide lock keeps at most one git process for this feature running, including across a database session switch, which a session-scoped lock would not cover.
 Revisit when: The app needs change lists for several executions at once.
+Superseded by: Share one git lock and an immutable committed-change cache across change scopes (2026-10-31)
 
 ## [2026-10-31] Resume agent CLI sessions of the worktree with /resume
 Context: The operator needs to pick up an earlier conversation in the chat, as `claude --resume` does in a terminal, on every chat agent and every agent profile (`~/.claude-*`, `~/.codex-*`, `~/.cursor-*`). Chats lived in memory, and codex, cursor and junie kept their resume handles in in-memory maps.
