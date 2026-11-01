@@ -1,3 +1,9 @@
+## [2026-11-01] The gate finds nested Gradle projects when the root has no wrapper
+
+Context: Packs declare `./gradlew`, and `validation_gate.gradle_wrapper` names one wrapper. A repository with several Gradle projects under its root, such as this one with `desktop/` and `runtime-kotlin/`, had no setting that covered all of them, so the build gate could not run after `qa_fix`.
+Decision: When the root has no `gradlew` and no wrapper is configured, the file-system gate runner runs the pack command once in each non-hidden direct child directory with an executable `gradlew`. It merges the results and fails if any project fails. A root wrapper or a configured wrapper still runs alone.
+Reason: The record keeps the pack command text because the coordinator matches it against the required command, and admitted plan digests stay unchanged. Deeper layouts still use the setting.
+
 ## [2026-11-01] A gate command that cannot start has a known outcome
 
 Context: The build gate records a pending operation before it runs the command, so an interruption stays detectable. A launch failure left that record in place, and goal QA reported "unknown after interruption" and hard-blocked the goal when the command had simply never started. SKILL-457 hit this when the pack's `./gradlew` was not at the repository root.

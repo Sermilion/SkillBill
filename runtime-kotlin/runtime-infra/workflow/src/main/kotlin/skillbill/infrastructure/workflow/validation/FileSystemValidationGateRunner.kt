@@ -40,6 +40,17 @@ class FileSystemValidationGateRunner(
     baselineEnvironment: MutableMap<String, String>,
     gateJvm: GateJvmDisposition,
   ): ValidationGateRunResult {
+    val projectRequests = nestedProjectRequests(request)
+    if (projectRequests.isEmpty()) return runCommand(request, baselineEnvironment, gateJvm)
+    val runs = projectRequests.map { projectRequest -> runCommand(projectRequest, baselineEnvironment, gateJvm) }
+    return mergeNestedProjectRuns(request, runs)
+  }
+
+  private fun runCommand(
+    request: ValidationGateRunRequest,
+    baselineEnvironment: MutableMap<String, String>,
+    gateJvm: GateJvmDisposition,
+  ): ValidationGateRunResult {
     val started = System.nanoTime()
     val artifactFloor = clock.instant().truncatedTo(ChronoUnit.SECONDS)
     val outputFile = Files.createTempFile("skillbill-validation-gate", ".out")
