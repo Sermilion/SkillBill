@@ -89,6 +89,7 @@ skill-bill qa lease acquire --invocation <invocation id> --device <serial>
 ## Exercise the criteria
 
 - Derive flows from the run's acceptance criteria only. Do not add flows the criteria do not ask for; report anything else you notice as a finding.
+- Run every flow the criteria describe on the app built from the QA checkout. Do not inspect git history, diffs, or source to decide whether the change is present. Missing or wrong behavior is a finding. Skip only when the tools to perform QA are unavailable.
 - Prefer existing automation. Reuse instrumentation tests (`./gradlew connectedDebugAndroidTest` filtered to the screens the criteria cover) or Maestro flows already in the repository before writing new steps.
 - Otherwise drive the app with `adb shell input tap|text|swipe|keyevent`, reading positions from `adb shell uiautomator dump`.
 - After each step that matters, capture `adb exec-out screencap -p` and a `uiautomator dump` into the invocation directory.

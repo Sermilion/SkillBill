@@ -110,12 +110,7 @@ internal object QaPromptSections {
     |  Backend isolation requirements below apply only to backend and web targets, including in mixed runs.
     |- Derive flows from this run's acceptance criteria. Do not add flows the criteria do not ask for; report anything
     |  else you notice as a finding.
-    |- Test the acceptance criteria against the tree in the QA checkout, whatever branch it is. Whether that tree
-    |  differs from the base branch, `main`, or the remote does not matter: a missing diff is never a reason to skip.
-    |  Use `empty_scope` only when no acceptance criterion names behavior to exercise.
-    |- When an acceptance criterion is only an issue key or a tracker URL, read that issue through a connected tracker
-    |  and test its requirements and acceptance criteria. If no tracker can read it, settle `skipped` with reason
-    |  `empty_scope` and name the reference you could not read.
+    |$SCOPE_RULES
     |- QA never blocks the run. A missing report is recorded with a warning and the run continues, so report
     |  honestly: a listed flow left untested means `incomplete`.
     |- Launching or loading the app alone is never a pass. `passed` needs at least one exercised flow with an
@@ -136,6 +131,18 @@ internal object QaPromptSections {
     |  after the report is written.
       """.trimMargin()
   }
+
+  private val SCOPE_RULES: String =
+    """
+    |- Build the QA checkout as it is and run every flow the acceptance criteria describe. Do not inspect git
+    |  history, branches, diffs, or source code to decide whether the change is present or whether a flow is worth
+    |  running. Behavior that is missing or wrong is a failed assertion and a finding, never a reason to skip a flow.
+    |- Skip a target or leave a flow untested only when the tools needed to perform QA are unavailable: no usable
+    |  device, simulator, browser driver, toolchain, or environment. Name the missing tool and how to provide it.
+    |- When an acceptance criterion is only an issue key or a tracker URL, read that issue through a connected tracker
+    |  and test its requirements and acceptance criteria. If no tracker tool can read it, settle `skipped` with
+    |  reason `empty_scope` and name the reference you could not read. `empty_scope` has no other use.
+    """.trimMargin()
 
   private val ENVIRONMENT_AND_ISOLATION_RULES: String =
     """

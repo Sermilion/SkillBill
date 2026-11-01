@@ -63,6 +63,7 @@ skill-bill qa lease acquire --invocation <invocation id> --device <udid>
 ## Exercise the criteria
 
 - Derive flows from the run's acceptance criteria only. Do not add flows the criteria do not ask for; report anything else you notice as a finding.
+- Run every flow the criteria describe on the app built from the QA checkout. Do not inspect git history, diffs, or source to decide whether the change is present. Missing or wrong behavior is a finding. Skip only when the tools to perform QA are unavailable.
 - Prefer existing automation. Reuse the project's XCUITest schemes for the screens the criteria cover before writing new steps.
 - Otherwise drive the device through the Appium XCUITest driver with WebDriverAgent. Save screenshots and page source after each step that matters.
 - Keep only the log excerpt that explains a failure, saved as a file under the invocation directory.
