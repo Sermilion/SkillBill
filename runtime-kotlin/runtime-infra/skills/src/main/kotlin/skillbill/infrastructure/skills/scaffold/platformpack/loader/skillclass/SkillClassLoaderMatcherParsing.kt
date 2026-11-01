@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
 import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.scaffold.model.SkillClassMatcher
+import java.util.regex.PatternSyntaxException
 
 internal fun parseExcludeExactList(
   classId: String,
@@ -28,9 +29,12 @@ internal fun parseMatcherPattern(
   patternString: String?,
 ): Regex? =
   patternString?.let { source ->
-    runCatching { Regex(source) }.getOrElse { error ->
+    try {
+      Regex(source)
+    } catch (error: PatternSyntaxException) {
       throw invalidManifestSchema(
         "Skill class '$classId': matcher #$index pattern '$source' is not a valid regex: ${error.message}",
+        error,
       )
     }
   }

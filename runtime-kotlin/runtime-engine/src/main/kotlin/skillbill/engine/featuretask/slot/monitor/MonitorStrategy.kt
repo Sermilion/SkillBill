@@ -29,7 +29,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-class MonitorStrategy(
+public class MonitorStrategy(
   private val identityLookup: PullRequestIdentityLookup,
   checksLookup: PullRequestChecksLookup,
 ) : PhaseStrategy(),
@@ -145,8 +145,8 @@ class MonitorStrategy(
     }
   }
 
-  companion object {
-    const val ID = "monitor-ci"
+  public companion object {
+    public const val ID: String = "monitor-ci"
 
     private const val MONITOR_DIRECTIVE: String =
       "This phase does not launch an agent. The runtime watches every check reported for the pull request " +
@@ -163,9 +163,9 @@ class MonitorStrategy(
         "useful event, such as a check starting or settling. Attribute runner capacity only to observed evidence; " +
         "if no capacity detail is available, say it is unavailable and do not query administrative APIs. " +
         "Do not infer a commit link, check state, elapsed time, or runner capacity. " +
-        "Monitoring waits while checks are pending. " +
-        "If no check has been reported within an hour, or a " +
-        "GitHub CLI cannot report checks, monitoring blocks."
+        "Monitoring waits while checks are pending. A failed GitHub identity or checks read is recorded and retried " +
+        "as unknown for that round; it does not establish that CI has not started. If no check has been reported " +
+        "within an hour after a usable no-check observation, monitoring blocks."
 
     private const val MONITOR_FIX_DIRECTIVE: String =
       "Monitor repair completion requires both a fix for the recorded failure and passing runnable local " +

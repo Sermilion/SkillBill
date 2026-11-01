@@ -2,14 +2,13 @@ package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
-import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
 import skillbill.workflow.engine.model.RequiredArtifactPresenceResolver
 import skillbill.workflow.engine.model.ResolvedRequiredArtifact
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
@@ -72,22 +71,7 @@ internal object FeatureTaskRuntimeRequiredArtifactPresenceResolver : RequiredArt
 
   private fun goalContinuationQualityGateSelection(
     snapshot: WorkflowSnapshotView,
-  ): FeatureTaskRuntimeQualityGateSelection? {
-    val raw =
-      snapshot.artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY]
-        ?: return null
-    val rawMap =
-      raw as? Map<*, *>
-        ?: throw invalidWorkflowStateSchemaError(
-          "Feature-task-runtime goal-continuation artifact must decode to an object.",
-        )
-    val continuationMap =
-      JsonCodec.anyToStringAnyMap(rawMap)
-        ?: throw invalidWorkflowStateSchemaError(
-          "Feature-task-runtime goal-continuation artifact must decode to an object with string keys.",
-        )
-    return FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(continuationMap).qualityGateSelection
-  }
+  ): FeatureTaskRuntimeQualityGateSelection? = snapshot.artifacts.goalContinuationArtifact()?.qualityGateSelection
 
   private fun completedPhaseIds(snapshot: WorkflowSnapshotView): Set<String> =
     decodePhaseRecords(snapshot)

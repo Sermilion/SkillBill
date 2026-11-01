@@ -41,10 +41,8 @@ private fun parseQaSelection(
 ): FeatureTaskRuntimeQaSelection =
   try {
     FeatureTaskRuntimeQaSelection.fromWire(raw)
-  } catch (error: SkillBillRuntimeException) {
+  } catch (_: SkillBillRuntimeException) {
     throw UsageError(
       "Unknown $source value '$raw'. Allowed: ${FeatureTaskRuntimeQaSelection.entries.joinToString { it.wireValue }}.",
-    ).also { usage ->
-      runCatching { usage.initCause(error) }
-    }
+    )
   }

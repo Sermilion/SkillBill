@@ -14,7 +14,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AgentPreplanStrategy : PhaseStrategy() {
+public class AgentPreplanStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to
@@ -58,8 +58,8 @@ class AgentPreplanStrategy : PhaseStrategy() {
     }
   }
 
-  companion object {
-    const val ID = "agent-preplan"
+  public companion object {
+    public const val ID: String = "agent-preplan"
 
     private const val FEATURE_SPEC_INTAKE =
       "/skillbill/engine/featuretask/slot/preplan/feature-spec-intake.md"

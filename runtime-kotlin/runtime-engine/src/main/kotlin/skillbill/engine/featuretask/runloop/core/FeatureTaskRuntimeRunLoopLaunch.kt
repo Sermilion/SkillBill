@@ -9,7 +9,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-object FeatureTaskRuntimeRunLoopLaunch {
+internal object FeatureTaskRuntimeRunLoopLaunch {
   internal fun capturePhaseContentIdentities(
     request: FeatureTaskRuntimeRunFacts,
     coupledTransitions: FeatureTaskRuntimeRunTransitionOwner,
@@ -158,47 +158,47 @@ internal sealed interface AttemptResult {
   }
 }
 
-internal sealed interface PhaseOutcome {
-  data class Completed(
+public sealed interface PhaseOutcome {
+  public data class Completed(
     val output: FeatureTaskRuntimePhaseOutput,
   ) : PhaseOutcome
 
-  data class Blocked(
+  public data class Blocked(
     val reason: String,
     override val failureCode: String? = null,
   ) : PhaseOutcome
 
-  data class Paused(
+  public data class Paused(
     val reason: String,
   ) : PhaseOutcome
 
-  data class RegenerateProducer(
+  public data class RegenerateProducer(
     val producerPhaseId: String,
   ) : PhaseOutcome
 
-  val completedOutput: FeatureTaskRuntimePhaseOutput? get() = (this as? Completed)?.output
+  public val completedOutput: FeatureTaskRuntimePhaseOutput? get() = (this as? Completed)?.output
 
-  val blockedReason: String? get() = (this as? Blocked)?.reason
+  public val blockedReason: String? get() = (this as? Blocked)?.reason
 
-  val failureCode: String? get() = (this as? Blocked)?.failureCode
+  public val failureCode: String? get() = (this as? Blocked)?.failureCode
 
-  val pausedReason: String? get() = (this as? Paused)?.reason
+  public val pausedReason: String? get() = (this as? Paused)?.reason
 
-  val regenerationTargetPhaseId: String? get() = (this as? RegenerateProducer)?.producerPhaseId
+  public val regenerationTargetPhaseId: String? get() = (this as? RegenerateProducer)?.producerPhaseId
 
-  companion object {
-    fun completed(output: FeatureTaskRuntimePhaseOutput): PhaseOutcome = Completed(output)
+  public companion object {
+    public fun completed(output: FeatureTaskRuntimePhaseOutput): PhaseOutcome = Completed(output)
 
-    fun blocked(
+    public fun blocked(
       reason: String,
       failureCode: String? = null,
     ): PhaseOutcome = Blocked(reason, failureCode)
 
-    fun paused(reason: String): PhaseOutcome = Paused(reason)
+    public fun paused(reason: String): PhaseOutcome = Paused(reason)
 
-    fun regenerateProducer(producerPhaseId: String): PhaseOutcome = RegenerateProducer(producerPhaseId)
+    internal fun regenerateProducer(producerPhaseId: String): PhaseOutcome = RegenerateProducer(producerPhaseId)
   }
 }
 
-const val LEGACY_PLANNING_PROJECTION_LAUNCH_SEAM_REJECTION =
+internal const val LEGACY_PLANNING_PROJECTION_LAUNCH_SEAM_REJECTION =
   "rejected an upstream bounded planning projection at the launch seam"

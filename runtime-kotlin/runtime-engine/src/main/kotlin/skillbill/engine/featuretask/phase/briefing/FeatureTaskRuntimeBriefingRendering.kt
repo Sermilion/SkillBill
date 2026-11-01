@@ -9,7 +9,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
-fun StringBuilder.appendRepositoryCheckpoint(
+public fun StringBuilder.appendRepositoryCheckpoint(
   handoff: FeatureTaskRuntimePhaseHandoff,
   envelope: FeatureTaskRuntimeHandoffEnvelope,
 ) {
@@ -31,7 +31,7 @@ fun StringBuilder.appendRepositoryCheckpoint(
   appendLine()
 }
 
-fun StringBuilder.appendProjections(envelope: FeatureTaskRuntimeHandoffEnvelope) {
+public fun StringBuilder.appendProjections(envelope: FeatureTaskRuntimeHandoffEnvelope) {
   val visible = envelope.promptVisibleProjections
   if (visible.isEmpty()) {
     appendLine("(none)")
@@ -42,10 +42,10 @@ fun StringBuilder.appendProjections(envelope: FeatureTaskRuntimeHandoffEnvelope)
   }
 }
 
-fun escapeBriefingLineBreaks(value: String): String =
+internal fun escapeBriefingLineBreaks(value: String): String =
   value.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
 
-fun StringBuilder.appendAllowlistedRunInvariants(
+public fun StringBuilder.appendAllowlistedRunInvariants(
   handoff: FeatureTaskRuntimePhaseHandoff,
   allowlist: Set<FeatureTaskRuntimeRunInvariantPromptField>,
 ) {
@@ -76,7 +76,7 @@ fun StringBuilder.appendAllowlistedRunInvariants(
   }
 }
 
-fun StringBuilder.appendAcceptanceCriteria(handoff: FeatureTaskRuntimePhaseHandoff) {
+public fun StringBuilder.appendAcceptanceCriteria(handoff: FeatureTaskRuntimePhaseHandoff) {
   appendLine("acceptance_criteria:")
   handoff.runInvariants.acceptanceCriteria.forEachIndexed { index, criterion ->
     val identified =
@@ -127,7 +127,7 @@ private fun derivedContextInstruction(
     else -> null
   }
 
-fun renderFeatureTaskRuntimePhaseBriefing(
+internal fun renderFeatureTaskRuntimePhaseBriefing(
   handoff: FeatureTaskRuntimePhaseHandoff,
   envelope: FeatureTaskRuntimeHandoffEnvelope,
   invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,

@@ -24,7 +24,7 @@ import skillbill.di.core.create
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.model.EnvironmentContext
-import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.infrastructure.host.JdkRuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import java.nio.file.Files
 import java.nio.file.Path
@@ -48,10 +48,7 @@ object PackagedDataSmoke {
         ),
       )
       val now = Instant.now()
-      val owner = JdkFeatureTaskRuntimeWorkerSupervisor(object : RuntimeDiagnostics {
-        override fun warning(message: String, error: Throwable?) = Unit
-        override fun error(message: String, error: Throwable?) = Unit
-      }, JdkHostPlatformPort).currentProcess()
+      val owner = JdkFeatureTaskRuntimeWorkerSupervisor(JdkRuntimeDiagnostics(), JdkHostPlatformPort).currentProcess()
       runtime.databaseSession.transaction { unit ->
         unit.standalonePhaseStatuses.register(
           StandalonePhaseStatusRegistration(

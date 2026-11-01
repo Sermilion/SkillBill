@@ -8,8 +8,8 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal data class MonitorRepairStepRoles(val monitor: String, val repair: String, val publication: String) {
-  fun hasCorrectedProducerSemantics(
+public data class MonitorRepairStepRoles(val monitor: String, val repair: String, val publication: String) {
+  internal fun hasCorrectedProducerSemantics(
     recorded: RecordedMonitorExecutionSemantics?,
     supportedPlan: ResolvedPhaseExecutionPlan,
   ): Boolean {

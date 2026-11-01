@@ -1,0 +1,124 @@
+package skillbill.engine.goalrunner.preflight
+
+import skillbill.application.continuation.model.GoalContinuationCandidate
+import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
+import skillbill.engine.goal.GoalPreflightRequest
+import skillbill.engine.goal.GoalPreflightResult
+import skillbill.engine.goal.GoalPreflightVerdict
+import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
+import skillbill.goalrunner.model.GoalContinuation
+import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.decompositionStatus
+import java.nio.file.Path
+
+internal class GoalPreflightLookupResolver(
+  private val gateBlockBuilder: GoalPreflightGateBlockBuilder,
+) {
+  fun resolve(input: GoalPreflightLookupInput): GoalPreflightResult =
+    when (input.lookup) {
+      FeatureTaskContinuationLookupResult.NoMatch ->
+        noMatchResult(input.normalizedIssueKey, input.manifest, input.request, input.root, input.manifestState)
+      is FeatureTaskContinuationLookupResult.Resumable ->
+        resumableResult(input.lookup, input.normalizedIssueKey, input.manifestState, input.request, input.root)
+      is FeatureTaskContinuationLookupResult.AlreadyRunning ->
+        alreadyRunningResult(input.lookup, input.normalizedIssueKey)
+      is FeatureTaskContinuationLookupResult.TerminalOnly -> terminalOnlyResult(input.lookup, input.normalizedIssueKey)
+      is FeatureTaskContinuationLookupResult.GoalContinuation ->
+        goalContinuationResult(
+          input.normalizedIssueKey,
+          input.lookup.candidate,
+          input.manifestState,
+          input.request,
+          input.root,
+        )
+      is FeatureTaskContinuationLookupResult.NeedsIdentityRepair ->
+        throw invalidFeatureTaskExecutionIdentitySchema(input.lookup.workflowId, input.lookup.summary)
+    }
+
+  private fun noMatchResult(
+    issueKey: String,
+    manifest: DecompositionManifest?,
+    request: GoalPreflightRequest,
+    root: Path,
+    manifestState: GoalRunnerManifestState?,
+  ): GoalPreflightResult {
+    val activeManifest =
+      manifest?.takeUnless {
+        it.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
+      }
+    return GoalPreflightResult(
+      verdict = GoalPreflightVerdict.NEW_WORK,
+      issueKey = issueKey,
+      gateBlock =
+        activeManifest?.let {
+          gateBlockBuilder.build(request, it, root, manifestState?.parentWorkflowId)
+        },
+      rehydrateTargets = activeManifest?.let { gateBlockBuilder.rehydrateTargets(root, it) }.orEmpty(),
+      manifestMissing = manifest == null,
+    )
+  }
+
+  private fun resumableResult(
+    lookup: FeatureTaskContinuationLookupResult.Resumable,
+    issueKey: String,
+    manifestState: GoalRunnerManifestState?,
+    request: GoalPreflightRequest,
+    root: Path,
+  ): GoalPreflightResult =
+    GoalPreflightResult(
+      verdict = GoalPreflightVerdict.RESUMABLE,
+      issueKey = issueKey,
+      candidate = lookup.candidate,
+      gateBlock =
+        manifestState?.manifest?.let {
+          gateBlockBuilder.build(request, it, root, manifestState.parentWorkflowId)
+        },
+      rehydrateTargets = manifestState?.manifest?.let { gateBlockBuilder.rehydrateTargets(root, it) }.orEmpty(),
+    )
+
+  private fun alreadyRunningResult(
+    lookup: FeatureTaskContinuationLookupResult.AlreadyRunning,
+    issueKey: String,
+  ): GoalPreflightResult =
+    GoalPreflightResult(
+      verdict = GoalPreflightVerdict.ALREADY_RUNNING,
+      issueKey = issueKey,
+      candidate = lookup.candidate,
+    )
+
+  private fun terminalOnlyResult(
+    lookup: FeatureTaskContinuationLookupResult.TerminalOnly,
+    issueKey: String,
+  ): GoalPreflightResult =
+    GoalPreflightResult(
+      verdict = GoalPreflightVerdict.TERMINAL_ONLY,
+      issueKey = issueKey,
+      candidates = lookup.candidates,
+    )
+
+  private fun goalContinuationResult(
+    issueKey: String,
+    candidate: GoalContinuationCandidate,
+    manifestState: GoalRunnerManifestState?,
+    request: GoalPreflightRequest,
+    root: Path,
+  ): GoalPreflightResult {
+    val manifest =
+      manifestState?.manifest ?: throw invalidDecompositionManifestSchema(
+        sourceLabel = issueKey,
+        reason = "goal continuation has no readable decomposition manifest",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_MISSING_MANIFEST,
+      )
+    return GoalPreflightResult(
+      verdict = GoalPreflightVerdict.GOAL_CONTINUATION,
+      issueKey = issueKey,
+      goal = candidate,
+      gateBlock = gateBlockBuilder.build(request, manifest, root, candidate.parentWorkflowId),
+      rehydrateTargets = gateBlockBuilder.rehydrateTargets(root, manifest),
+    )
+  }
+}

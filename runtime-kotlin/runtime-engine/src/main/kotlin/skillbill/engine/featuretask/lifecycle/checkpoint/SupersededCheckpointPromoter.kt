@@ -7,8 +7,8 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
-internal class SupersededCheckpointPromoter(
-  private val gitOperations: WorkflowGitOperations,
+public class SupersededCheckpointPromoter(
+  public val gitOperations: WorkflowGitOperations,
 ) {
   internal fun FeatureTaskRuntimeSubtaskCommitDecision.promote(
     repoRoot: Path,

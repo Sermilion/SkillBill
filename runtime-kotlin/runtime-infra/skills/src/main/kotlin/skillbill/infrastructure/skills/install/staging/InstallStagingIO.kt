@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install.staging
 
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.agentaddon.AgentAddonPointer
+import skillbill.infrastructure.skills.install.identity.AUTHORED_SKILL_CONTENT_FILENAME
 import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.normalizeMarkdownLineEndings
@@ -23,7 +24,6 @@ import java.util.logging.Logger
 
 internal const val INSTALL_STAGING_SKILL_FILENAME = "SKILL.md"
 internal const val INSTALL_STAGING_CONTENT_HASH_FILENAME = ".content-hash"
-internal const val AUTHORED_SKILL_CONTENT_FILENAME = "content.md"
 
 private val log: Logger = Logger.getLogger("skillbill.install.InstallStagingIO")
 

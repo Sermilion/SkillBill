@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.report.QaRetainedResource
-import skillbill.engine.operation.core.worktreeBaseline
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaDeviceLeaseFailure
@@ -35,7 +34,7 @@ import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
 
 @Inject
-class QaExecutionLifecycle(
+public class QaExecutionLifecycle(
   private val workspaces: QaWorkspacePort,
   private val leases: QaDeviceLeasePort,
   private val capabilities: QaCapabilityResolver,
@@ -321,8 +320,8 @@ class QaExecutionLifecycle(
 }
 
 internal data class QaExecutionResult<T>(
-  val value: T,
-  val retainedResources: List<QaRetainedResource>,
-  val expected: QaExpectedIdentity,
-  val warnings: List<String> = emptyList(),
+  public val value: T,
+  public val retainedResources: List<QaRetainedResource>,
+  public val expected: QaExpectedIdentity,
+  public val warnings: List<String> = emptyList(),
 )

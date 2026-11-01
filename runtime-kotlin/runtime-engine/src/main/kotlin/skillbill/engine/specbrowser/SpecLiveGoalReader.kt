@@ -1,11 +1,11 @@
 package skillbill.engine.specbrowser
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
-import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.engine.work.control.model.WorkRunOptions
-import skillbill.engine.work.control.workPauseEligible
+import skillbill.engine.work.eligibility.workPauseEligible
 import skillbill.engine.work.pagination.readLiveIssueKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.idestatus.model.IdeStatusLifecycleState

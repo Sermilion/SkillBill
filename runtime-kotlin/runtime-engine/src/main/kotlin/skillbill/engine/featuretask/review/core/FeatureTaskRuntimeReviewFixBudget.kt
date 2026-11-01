@@ -10,7 +10,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-fun reviewFixCapExhaustion(
+internal fun reviewFixCapExhaustion(
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>?,
   goalReviewCapReached: Boolean?,
 ): Boolean? {
@@ -22,12 +22,12 @@ fun reviewFixCapExhaustion(
   }
 }
 
-fun auditGapIterationCount(ledger: List<FeatureTaskRuntimePhaseLedgerEntry>?): Int? {
+internal fun auditGapIterationCount(ledger: List<FeatureTaskRuntimePhaseLedgerEntry>?): Int? {
   if (ledger == null) return null
   return ledger.count(::isAuditGapRound)
 }
 
-internal fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean =
+public fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean =
   when (entry.action) {
     FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE ->
       entry.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID ||
@@ -40,15 +40,16 @@ internal fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean
   }
 
 @Inject
-class FeatureTaskRuntimeReviewFixBudget(
+public class FeatureTaskRuntimeReviewFixBudget(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
 ) {
-  fun reviewFixCapExhaustion(workflowId: String): Boolean? =
+  internal fun reviewFixCapExhaustion(workflowId: String): Boolean? =
     reviewFixCapExhaustion(
       recorder.loadPhaseLedger(workflowId),
       goalContinuationRecorder.reviewState(workflowId)?.reviewCapReached,
     )
 
-  fun auditGapIterationCount(workflowId: String): Int? = auditGapIterationCount(recorder.loadPhaseLedger(workflowId))
+  internal fun auditGapIterationCount(workflowId: String): Int? =
+    auditGapIterationCount(recorder.loadPhaseLedger(workflowId))
 }

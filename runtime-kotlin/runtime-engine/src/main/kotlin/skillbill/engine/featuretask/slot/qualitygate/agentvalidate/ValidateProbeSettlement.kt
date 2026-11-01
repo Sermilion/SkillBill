@@ -86,7 +86,7 @@ internal object ValidateProbeSettlement {
     RuntimeDiagnosticsBestEffortWarning.record(
       site.diagnostics,
       "Validation test probe settlement for workflow ${site.workflowId}, phase '${site.phaseId}' " +
-        "could not extract test probes from the prose report. " +
+        "expected the test_probes artifact after one correction and got a malformed report. " +
         "An empty test_probes list is stored and validation settles on its normal checks. " +
         "Cause: ${boundedSchemaGateDetail(malformed.reason)}",
     )

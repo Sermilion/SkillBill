@@ -2,6 +2,8 @@ package skillbill.infrastructure.workflow.goalplanning
 
 import skillbill.goalrunner.planning.GoalPlanningExcludedPaths
 import skillbill.review.model.repositoryRelativePathViolation
+import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -105,12 +107,21 @@ internal fun goalPlanningNormalizeFindingPath(findingPath: String): String? {
 }
 
 private fun goalPlanningSortedChildDirectories(directory: Path): List<Path>? =
-  runCatching {
+  try {
     Files.list(directory).use { entries ->
       entries.filter { path -> Files.isDirectory(path) }
         .sorted()
         .toList()
     }
-  }.getOrNull()
+  } catch (_: IOException) {
+    null
+  } catch (_: UncheckedIOException) {
+    null
+  }
 
-private fun Path.toRealPathOrNull(): Path? = runCatching { toRealPath() }.getOrNull()
+private fun Path.toRealPathOrNull(): Path? =
+  try {
+    toRealPath()
+  } catch (_: IOException) {
+    null
+  }

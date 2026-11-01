@@ -257,7 +257,7 @@ class CliInstallPlanApplyRuntimeTest {
     val telemetry = payload.mapValue("telemetry")
     assertEquals("off", telemetry["level"])
     assertEquals("success", telemetry["status"])
-    assertEquals(overrideConfig.toString(), telemetry["config_path"])
+    assertEquals(overrideConfig.toRealPath().toString(), telemetry["config_path"])
     assertEquals(1, telemetry["cleared_events"])
     assertTrue(Files.exists(overrideConfig), "off must rewrite the config in place, not delete it")
     val disabledConfig = Files.readString(overrideConfig)
@@ -739,8 +739,8 @@ class CliInstallPlanApplyRuntimeTest {
 private val supportedAgents = setOf("claude", "codex", "junie", "cursor")
 
 private fun installPlanApplyFixture(): InstallPlanApplyFixture {
-  val home = Files.createTempDirectory("skillbill-cli-install-plan-apply-home")
-  val repoRoot = Files.createTempDirectory("skillbill-cli-install-plan-apply-repo")
+  val home = Files.createTempDirectory("skillbill-cli-install-plan-apply-home").toRealPath()
+  val repoRoot = Files.createTempDirectory("skillbill-cli-install-plan-apply-repo").toRealPath()
   seedCliBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
   seedCliBaseSkill(repoRoot, "bill-code-review")
   seedCliBaseSkill(repoRoot, "bill-code-check")
@@ -750,8 +750,8 @@ private fun installPlanApplyFixture(): InstallPlanApplyFixture {
 }
 
 private fun installByteEquivalenceFixture(): InstallPlanApplyFixture {
-  val home = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-home")
-  val repoRoot = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-repo")
+  val home = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-home").toRealPath()
+  val repoRoot = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-repo").toRealPath()
   Files.createDirectories(repoRoot.resolve("platform-packs"))
   seedCliBaseSkill(repoRoot, "bill-code-review")
   seedCliBaseSkill(repoRoot, "bill-code-check")

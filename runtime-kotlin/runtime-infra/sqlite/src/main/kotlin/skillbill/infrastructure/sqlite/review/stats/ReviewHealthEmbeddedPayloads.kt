@@ -5,6 +5,7 @@ import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
+import skillbill.infrastructure.sqlite.review.core.stringValue
 
 internal fun embeddedReviewPayloads(row: Map<String, Any?>): List<ReviewHealthPayload> {
   val rawChildSteps = row.stringValue("child_steps_json")

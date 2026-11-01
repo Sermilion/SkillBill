@@ -13,6 +13,7 @@ object RuntimeModuleCatalog {
       "runtime-core",
       "runtime-domain",
       "runtime-engine",
+      "runtime-goalrunner",
       "runtime-infra",
       "runtime-infra:host",
       "runtime-infra:contracts",
@@ -40,7 +41,7 @@ object RuntimeModuleCatalog {
         ),
       "runtime-core" to
         ModuleEdgeExpectation(
-          api = setOf("runtime-application", "runtime-engine", "runtime-ports"),
+          api = setOf("runtime-application", "runtime-engine", "runtime-goalrunner", "runtime-ports"),
           implementation =
             setOf(
               "runtime-domain",
@@ -57,6 +58,11 @@ object RuntimeModuleCatalog {
       "runtime-engine" to
         ModuleEdgeExpectation(
           api = setOf("runtime-contracts", "runtime-domain", "runtime-ports"),
+          implementation = setOf("runtime-application"),
+        ),
+      "runtime-goalrunner" to
+        ModuleEdgeExpectation(
+          api = setOf("runtime-engine"),
           implementation = setOf("runtime-application"),
         ),
       "runtime-domain" to
@@ -136,6 +142,7 @@ object RuntimeModuleCatalog {
               "runtime-core",
               "runtime-domain",
               "runtime-engine",
+              "runtime-goalrunner",
               "runtime-ports",
             ),
         ),
@@ -149,6 +156,7 @@ object RuntimeModuleCatalog {
               "runtime-core",
               "runtime-domain",
               "runtime-engine",
+              "runtime-goalrunner",
               "runtime-ports",
             ),
         ),
@@ -157,43 +165,6 @@ object RuntimeModuleCatalog {
           api = setOf("runtime-contracts", "runtime-domain"),
           implementation = emptySet(),
         ),
-    )
-
-  val mainProjectDependenciesByModule: Map<String, Set<String>> =
-    moduleEdgeExpectations.mapValues { (_, expectation) -> expectation.api + expectation.implementation }
-
-  val testFixturesProjectDependenciesByModule: Map<String, Set<String>> =
-    mapOf(
-      "runtime-application" to
-        setOf(
-          "runtime-infra:host",
-          "runtime-infra:contracts",
-          "runtime-infra:workflow",
-          "runtime-ports",
-        ),
-      "runtime-contracts" to emptySet(),
-      "runtime-core" to emptySet(),
-      "runtime-engine" to
-        setOf(
-          "runtime-application",
-          "runtime-domain",
-          "runtime-infra:contracts",
-          "runtime-infra:sqlite",
-          "runtime-ports",
-        ),
-      "runtime-domain" to emptySet(),
-      "runtime-infra" to emptySet(),
-      "runtime-infra:host" to setOf("runtime-ports"),
-      "runtime-infra:contracts" to emptySet(),
-      "runtime-infra:skills" to setOf("runtime-domain", "runtime-ports"),
-      "runtime-infra:launcher" to emptySet(),
-      "runtime-infra:workflow" to emptySet(),
-      "runtime-infra:http" to emptySet(),
-      "runtime-infra:sqlite" to
-        setOf("runtime-contracts", "runtime-domain", "runtime-infra:contracts", "runtime-ports"),
-      "runtime-cli" to emptySet(),
-      "runtime-mcp" to emptySet(),
-      "runtime-ports" to emptySet(),
     )
 
   val declaredSubsystemPackages: List<String> =
@@ -231,6 +202,7 @@ object RuntimeModuleCatalog {
       "runtime-cli" to "skillbill.cli",
       "runtime-core" to "skillbill.di",
       "runtime-engine" to "skillbill.engine",
+      "runtime-goalrunner" to "skillbill.engine.goalrunner",
       "runtime-infra:host" to "skillbill.infrastructure.host",
       "runtime-infra:contracts" to "skillbill.infrastructure.contracts",
       "runtime-infra:skills" to "skillbill.infrastructure.skills",

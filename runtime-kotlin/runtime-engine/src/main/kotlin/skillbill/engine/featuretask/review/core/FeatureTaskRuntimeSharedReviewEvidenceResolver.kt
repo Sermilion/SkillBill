@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.review.core
 
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
+import skillbill.application.reviewevidence.parseOrRejection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.model.ReviewDiffQuery
@@ -19,13 +20,13 @@ import java.nio.file.Path
 import java.util.logging.Level
 import java.util.logging.Logger
 
-private val log: Logger = Logger.getLogger(FeatureTaskRuntimeSharedReviewEvidenceResolver::class.java.name)
+public val log: Logger = Logger.getLogger(FeatureTaskRuntimeSharedReviewEvidenceResolver::class.java.name)
 
-class FeatureTaskRuntimeSharedReviewEvidenceResolver(
-  private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
-  private val diffResolver: DiffResolverPort,
+public class FeatureTaskRuntimeSharedReviewEvidenceResolver(
+  public val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
+  public val diffResolver: DiffResolverPort,
 ) {
-  fun resolve(
+  public fun resolve(
     repoRoot: Path,
     workflowId: String?,
     checkpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
@@ -128,7 +129,7 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
     }
 }
 
-private fun FeatureTaskRuntimeSharedEvidenceResolveOutcome.toMeasurementOutcome():
+public fun FeatureTaskRuntimeSharedEvidenceResolveOutcome.toMeasurementOutcome():
   FeatureTaskRuntimeSharedEvidenceOutcome =
   when (this) {
     FeatureTaskRuntimeSharedEvidenceResolveOutcome.DERIVATION ->

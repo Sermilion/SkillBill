@@ -30,6 +30,7 @@ import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_REVIEWED_PATH
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_SPECIALIST_ISSUE_KEY
+import skillbill.engine.featuretask.slot.codereview.InlineReviewLaneRecorder
 import skillbill.engine.featuretask.slot.codereview.InlineReviewLanesSection
 import skillbill.engine.featuretask.slot.codereview.InlineReviewRubricResolver
 import skillbill.engine.featuretask.slot.codereview.LaneScript
@@ -209,7 +210,7 @@ class PhaseReviewRunTest {
   }
 
   private fun laneRecordingResolver(recorded: MutableList<Pair<String, List<ReviewRunLane>>>) =
-    object : InlineReviewRubricResolver {
+    object : InlineReviewRubricResolver, InlineReviewLaneRecorder {
       override fun resolve(request: ParallelCodeReviewRequest) =
         ParallelCodeReviewPlanned.Ready<String?>("Prefer focused tests.")
 
@@ -452,6 +453,8 @@ class PhaseReviewRunTest {
 
   private class RecordingDiagnostics : RuntimeDiagnostics {
     val warnings = mutableListOf<String>()
+
+    override fun info(message: String) = Unit
 
     override fun warning(
       message: String,

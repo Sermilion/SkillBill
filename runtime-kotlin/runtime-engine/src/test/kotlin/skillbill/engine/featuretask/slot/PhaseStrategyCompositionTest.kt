@@ -43,7 +43,6 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
-import skillbill.engine.goalrunner.intake.testPlanIntake
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
@@ -155,7 +154,7 @@ class PhaseStrategyCompositionTest {
 
   private val strategies =
     listOf(
-      RuntimeIntakeStrategy { testPlanIntake() },
+      RuntimeIntakeStrategy { error("Policy lookups must not prepare intake.") },
       AgentPreplanStrategy(),
       PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1),
       ImplementThenSimplifyStrategy(),

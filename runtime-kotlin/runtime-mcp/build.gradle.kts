@@ -17,6 +17,7 @@ dependencies {
   implementation(project(":runtime-core"))
   implementation(project(":runtime-domain"))
   implementation(project(":runtime-engine"))
+  implementation(project(":runtime-goalrunner"))
   implementation(project(":runtime-ports"))
   implementation(libs.kotlin.inject.runtime)
   implementation(libs.kotlinx.serialization.json)

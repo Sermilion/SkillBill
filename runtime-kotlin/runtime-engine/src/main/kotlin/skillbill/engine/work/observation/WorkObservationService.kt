@@ -10,11 +10,11 @@ import skillbill.ports.taskruntime.WorkOwnerExitObserver
 import java.time.Instant
 
 @Inject
-class WorkObservationService(
+public class WorkObservationService(
   private val database: DatabaseSessionFactory,
   private val exits: WorkOwnerExitObserver,
 ) {
-  fun observeOwners(
+  public fun observeOwners(
     ids: List<String>,
     observedAt: Instant,
     onExit: () -> Unit,
@@ -39,11 +39,12 @@ class WorkObservationService(
       }
         ?: throw databaseMissing(database.resolveDbPath().toString(), DatabaseAccessOperation.READ)
     val registrations = mutableListOf<AutoCloseable>()
-    runCatching {
+    var registered = false
+    try {
       owners.forEach { exits.observe(it, onExit)?.let(registrations::add) }
-    }.onFailure { failure ->
-      registrations.forEach { it.close() }
-      throw failure
+      registered = true
+    } finally {
+      if (!registered) registrations.forEach { it.close() }
     }
     return WorkObservationRegistration(deadlines.filter { it > observedAt }.minOrNull(), registrations)
   }

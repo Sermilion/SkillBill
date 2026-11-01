@@ -3,10 +3,8 @@ package skillbill.application.workflow.decomposition
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
 import skillbill.application.workflow.model.DecompositionRuntimeWriteArgs
 import skillbill.application.workflow.model.WorkflowContinueResult
+import skillbill.application.workflow.persist.migrateLegacyGoalRunnerControls
 import skillbill.application.workflow.persist.toReopenInput
-import skillbill.application.workflow.service.ContinuationStepResult
-import skillbill.application.workflow.service.migrateLegacyGoalRunnerControls
-import skillbill.application.workflow.service.withDecompositionRuntime
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator

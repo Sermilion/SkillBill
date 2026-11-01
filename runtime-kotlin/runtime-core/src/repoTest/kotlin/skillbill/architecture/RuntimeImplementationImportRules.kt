@@ -110,11 +110,17 @@ private fun runtimeComponentPublicAbiEdges(runtimeRoot: Path): RuntimeComponentP
       null -> unknownTypes += typeName
       else ->
         when {
-          importedName.startsWith("skillbill.application.") -> projectEdges += ":runtime-application"
-          importedName.startsWith("skillbill.engine.") -> projectEdges += ":runtime-engine"
-          importedName.startsWith("skillbill.ports.") -> projectEdges += ":runtime-ports"
-          importedName.startsWith("skillbill.model.") -> projectEdges += ":runtime-ports"
-          else -> unknownTypes += importedName
+          importedName.startsWith("skillbill.ports.") || importedName.startsWith("skillbill.model.") ->
+            projectEdges += ":runtime-ports"
+          else -> {
+            val apiModules = RuntimeModuleCatalog.moduleEdgeExpectations.getValue("runtime-core").api
+            val owner =
+              RuntimeModuleCatalog.moduleMainPackageRoots.entries
+                .filter { (module, root) -> module in apiModules && importedName.startsWith("$root.") }
+                .maxByOrNull { (_, root) -> root.length }
+                ?.key
+            if (owner == null) unknownTypes += importedName else projectEdges += ":$owner"
+          }
         }
     }
   }

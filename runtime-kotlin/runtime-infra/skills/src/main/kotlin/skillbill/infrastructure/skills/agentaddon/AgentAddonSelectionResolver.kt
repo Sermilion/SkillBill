@@ -6,6 +6,7 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
@@ -98,7 +99,7 @@ class AgentAddonSelectionResolver(
   }
 
   private fun parseAgent(id: String): String =
-    runCatching {
+    catchingNonCancellation {
       SupportedAgent.parseAgentAddonId(
         id,
       ).wireValue

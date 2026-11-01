@@ -70,12 +70,18 @@ import skillbill.engine.featuretask.runner.terminalBlockedReasonFrom
 import skillbill.engine.featuretask.slot.PhaseAcceptedOutputPersistence
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.blockedOutputRetryCorrection
+import skillbill.engine.featuretask.slot.checksImmediateConsumerProjection
+import skillbill.engine.featuretask.slot.earlyOutput
+import skillbill.engine.featuretask.slot.fingerprintsCompletedRepository
+import skillbill.engine.featuretask.slot.settleCompletedRound
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -116,7 +122,7 @@ internal data class FinaliseSubtaskCommitArgs(
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
 )
 
-object PhaseOutputGate {
+internal object PhaseOutputGate {
   internal fun rejectedOutputTargeting(args: RejectedOutputTargetingArgs): RejectedOutputTargeting =
     RejectedOutputTargeting(
       phaseId = args.phaseId,
@@ -241,7 +247,7 @@ object PhaseOutputGate {
     childOutput: FeatureTaskRuntimeChildOutput?,
   ) {
     val output = childOutput ?: return
-    runCatching {
+    catchingNonCancellation {
       recordRejectedOutput(
         context.progress,
         context.recorder,

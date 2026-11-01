@@ -1,12 +1,14 @@
 package skillbill.infrastructure.skills.scaffold.pointer
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -73,7 +75,7 @@ private fun validatePackPointersDriftAndMissing(
       issues += "${displayPointer(repoRoot, pointerFile)}: declared pointer is missing on disk"
       return@forEach
     }
-    runCatching { renderPointer(repoRoot, pack.packRoot.toPath(), spec) }
+    catchingNonCancellation { renderPointer(repoRoot, pack.packRoot.toPath(), spec) }
       .onFailure { error ->
         issues += "${displayPointer(repoRoot, pointerFile)}: cannot render pointer: ${error.message.orEmpty()}"
       }
@@ -153,10 +155,19 @@ private fun looksLikePointerFile(path: Path): Boolean {
   if (Files.isSymbolicLink(path)) {
     return true
   }
-  val size = runCatching { Files.size(path) }.getOrNull() ?: 0L
+  val size =
+    try {
+      Files.size(path)
+    } catch (_: IOException) {
+      0L
+    }
   val text =
     if (size in 1..POINTER_FILE_MAX_BYTES) {
-      runCatching { Files.readString(path) }.getOrNull().orEmpty()
+      try {
+        Files.readString(path)
+      } catch (_: IOException) {
+        ""
+      }
     } else {
       ""
     }
@@ -171,6 +182,9 @@ private fun displayPointer(
 ): String {
   val resolvedRoot = repoRoot.toAbsolutePath().normalize()
   val resolvedPath = path.toAbsolutePath().normalize()
-  return runCatching { resolvedPath.relativeTo(resolvedRoot).toString().replace('\\', '/') }
-    .getOrDefault(resolvedPath.toString())
+  return try {
+    resolvedPath.relativeTo(resolvedRoot).toString().replace('\\', '/')
+  } catch (_: IllegalArgumentException) {
+    resolvedPath.toString()
+  }
 }

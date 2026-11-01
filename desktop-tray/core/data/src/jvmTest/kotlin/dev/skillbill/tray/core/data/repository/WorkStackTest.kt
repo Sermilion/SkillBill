@@ -1,5 +1,7 @@
 package dev.skillbill.tray.core.data.repository
 
+import skillbill.engine.goal.GoalRunnerStatusRequest
+
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.contracts.persistence.DesktopReadSchema
 import dev.skillbill.tray.core.data.ScriptedSignals
@@ -399,6 +401,7 @@ class WorkStackTest {
           sessionId = "owned-test"))
         unit.workflowStates.saveFeatureTaskWorkflow(parent.toRecord().copy(issueKey = "SKILL-423"), FeatureTaskWorkflowMode.RUNTIME)
         val process = JdkFeatureTaskRuntimeWorkerSupervisor(object : RuntimeDiagnostics {
+          override fun info(message: String) = Unit
           override fun warning(message: String, error: Throwable?) = Unit
           override fun error(message: String, error: Throwable?) = Unit
         }, JdkHostPlatformPort).currentProcess()
@@ -417,7 +420,7 @@ class WorkStackTest {
       val runtime = RuntimeComponent::class.create(RuntimeContext(
         EnvironmentContext(fixture.dbPath.toString(), environment = emptyMap(), userHome = fixture.tempDir,
           repositoryRoot = fixture.tempDir), TransportContext(), WorkflowOpsContext(), OptionalCallbacks()))
-      val statusRequest = skillbill.engine.goalrunner.model.GoalRunnerStatusRequest("SKILL-423",
+      val statusRequest = GoalRunnerStatusRequest("SKILL-423",
         repoRoot = fixture.tempDir, pruneCheckpointRefs = false, includeCompletedSubtaskValidation = false)
       val originalStatus = assertNotNull(runtime.goalRunnerStatusService.status(statusRequest))
       val boundedStatus = assertNotNull(runtime.goalRunnerStatusService.statusForWorkflow("older-goal", statusRequest))

@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
@@ -38,12 +39,14 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
   }
 
   @Test
-  fun `store root resolves beneath the project store and never beneath the checkout or user home`() {
-    val resolved = artifactDir(request("fp-1"))
+  fun `store root resolves at the exact injected project-store address outside the checkout`() {
+    val resolution = store.resolved(request("fp-1"), CountingDeriver())
+    val resolved = projectStore.root.resolve(assertNotNull(resolution.storePath)).toAbsolutePath().normalize()
 
     assertTrue(resolved.startsWith(projectStore.root.toAbsolutePath().normalize()))
     assertFalse(resolved.startsWith(repoRoot.toAbsolutePath().normalize()))
-    assertFalse(resolved.startsWith(Path.of(System.getProperty("user.home")).toAbsolutePath().normalize()))
+    assertEquals(projectStore.root.toAbsolutePath().normalize().resolve("run-evidence/wf-1/fp-1"), resolved)
+    assertTrue(Files.isRegularFile(resolved.resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.PAYLOAD_FILE_NAME)))
   }
 
   @Test

@@ -141,7 +141,7 @@ internal fun workExecutionHistory(
   }
 }
 
-internal fun reviewReport(
+public fun reviewReport(
   record: StandalonePhaseStatusRecord,
   text: String?,
   unitOfWork: UnitOfWork,

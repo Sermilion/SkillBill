@@ -1,8 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service.contract
 
-import skillbill.error.shellcontent.missingSupportingFileTargetError
-import skillbill.infrastructure.skills.scaffold.platformpack.selectedPlatformManifests
-import skillbill.infrastructure.skills.scaffold.runtime.service.support.featureAddonPointerSpecsFor
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path
 import kotlin.io.path.relativeTo
@@ -67,20 +64,6 @@ internal fun supportingFileTargets(repoRoot: Path): Map<String, Path> =
     "peak-hours-warner.md" to repoRoot.resolve(ORCHESTRATION_SIDECARS.getValue("peak-hours-warner")),
   )
 
-internal fun requireSupportingFileTarget(
-  skillName: String,
-  fileName: String,
-  repoRoot: Path,
-  selectedPlatformManifests: List<PlatformManifest> = emptyList(),
-): Path =
-  supportingFileTargets(repoRoot)[fileName]
-    ?: featureAddonPointerSpecsFor(skillName, selectedPlatformManifests)
-      .firstOrNull { spec -> spec.name == fileName }
-      ?.let { spec -> repoRoot.toAbsolutePath().normalize().resolve(spec.target).normalize() }
-    ?: throw missingSupportingFileTargetError(
-      "Runtime supporting file '$fileName' is not registered for '$skillName'.",
-    )
-
 internal fun validatePointerTargetParity(
   repoRoot: Path,
   packs: List<PlatformManifest>,
@@ -94,9 +77,15 @@ internal fun validatePointerTargetParity(
       val staticAbs = staticTarget.toAbsolutePath().normalize()
       val pointerAbs = resolvedRoot.resolve(spec.target).normalize()
       if (staticAbs != pointerAbs) {
+        val displayPath =
+          try {
+            staticAbs.relativeTo(resolvedRoot)
+          } catch (_: IllegalArgumentException) {
+            staticAbs
+          }
         issues += "platform-packs/${pack.slug}: pointer '${spec.name}' target '${spec.target}' " +
           "disagrees with static supportingFileTargets which points at " +
-          "'${runCatching { staticAbs.relativeTo(resolvedRoot) }.getOrDefault(staticAbs)}'"
+          "'$displayPath'"
       }
     }
   }

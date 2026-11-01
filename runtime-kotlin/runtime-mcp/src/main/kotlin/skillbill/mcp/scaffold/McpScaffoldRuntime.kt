@@ -3,10 +3,10 @@ package skillbill.mcp.scaffold
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.runScaffoldInvocation
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.catchingNonCancellation
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
 import skillbill.mcp.shared.McpToolPayloadKeys
-import kotlin.coroutines.cancellation.CancellationException
 
 internal fun newSkillScaffold(
   arguments: McpToolArguments,
@@ -16,7 +16,7 @@ internal fun newSkillScaffold(
   val dryRun = arguments.boolean(McpToolPayloadKeys.DRY_RUN)
   val orchestrated = arguments.boolean(McpToolPayloadKeys.ORCHESTRATED)
   val environment = component.resolvedEnvironmentContext
-  return runCatching {
+  return catchingNonCancellation {
     val invocation =
       runScaffoldInvocation(
         component.scaffoldGateway,
@@ -39,7 +39,6 @@ internal fun newSkillScaffold(
     )
   }.getOrElse { error ->
     when (error) {
-      is CancellationException -> throw error
       is Exception ->
         scaffoldFailureMap(
           sessionId = "nss-unknown",

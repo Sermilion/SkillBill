@@ -1,32 +1,32 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
+import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.nio.file.Path
 import java.time.Clock
 import java.util.UUID
-import java.util.concurrent.CancellationException
 
-data class StandalonePhaseLaunch(
-  val agentId: String? = null,
-  val arguments: List<String>? = null,
-  val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+public data class StandalonePhaseLaunch(
+  public val agentId: String? = null,
+  public val arguments: List<String>? = null,
+  public val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
-class StandalonePhaseStatusPublisherFactory(
-  private val database: DatabaseSessionFactory,
-  private val registrations: StandalonePhaseRegistrationFactory,
-  private val clock: Clock,
-  private val diagnostics: RuntimeDiagnostics,
-  private val blockIncidentCapture: BlockIncidentCapture,
+public class StandalonePhaseStatusPublisherFactory(
+  public val database: DatabaseSessionFactory,
+  public val registrations: StandalonePhaseRegistrationFactory,
+  public val clock: Clock,
+  public val diagnostics: RuntimeDiagnostics,
+  public val blockIncidentCapture: BlockIncidentCapture,
 ) {
-  fun forPhase(
+  public fun forPhase(
     repoRoot: Path,
     phaseId: String,
     invocationId: String,
@@ -58,7 +58,7 @@ class StandalonePhaseStatusPublisherFactory(
     )
   }
 
-  fun forPlan(
+  public fun forPlan(
     repoRoot: Path,
     issueKey: String,
     phaseId: String,
@@ -77,22 +77,21 @@ class StandalonePhaseStatusPublisherFactory(
     )
   }
 
-  fun registerWorkflow(
+  public fun registerWorkflow(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,
     workBranch: String? = null,
   ) {
-    runCatching {
+    catchingNonCancellation {
       val registration = registrations.workflowRegistration(repoRoot, issueKey, workflowId, workBranch)
       database.transaction { unitOfWork -> unitOfWork.standalonePhaseStatuses.registerWorkflow(registration) }
     }.onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status workflow registration failed", error)
     }
   }
 
-  fun compose(
+  public fun compose(
     stdout: (FeatureTaskRuntimeRunEvent) -> Unit,
     status: StandalonePhaseStatusEventSink,
   ): FeatureTaskRuntimeRunEventSink =

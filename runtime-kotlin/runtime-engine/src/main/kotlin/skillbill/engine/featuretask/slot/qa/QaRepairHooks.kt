@@ -9,7 +9,9 @@ import skillbill.engine.featuretask.qa.report.QaPhaseOutputKeys
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.report.QaRetainedFindingRequest
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationHooks
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseStepFailure
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
@@ -31,7 +33,9 @@ internal class QaRepairHooks(
   private val outcomes: FeatureTaskQaOutcomeRecorder,
   private val reports: QaReportSettlement,
   private val stops: QaStopContinuation,
-) : PhaseStepHooks<PhaseQaStepBinding> {
+) : PhaseStepHooks<PhaseQaStepBinding>,
+  PhaseFailureContinuationHooks<PhaseQaStepBinding>,
+  PhaseLaunchPromptHooks<PhaseQaStepBinding> {
   override fun failureContinuationOutput(
     run: PhaseRun,
     failure: PhaseStepFailure,

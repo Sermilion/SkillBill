@@ -30,7 +30,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
@@ -94,6 +93,23 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
   override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
+
+  override val launchPromptContext: String = ""
+
+  override fun qualityGateAbsent(stepName: String) = Unit
+
+  override fun qualityCheckStarted(
+    stepName: String,
+    detectedStack: String,
+    initialFailureCount: Int,
+  ) = Unit
+
+  override fun qualityCheckFinished(
+    stepName: String,
+    finalFailureCount: Int,
+    failingCheckNames: List<String>,
+    iterations: Int,
+  ) = Unit
 
   override fun recordReviewRun(
     reviewRunId: String,
@@ -170,7 +186,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 }
 
 @Inject
-class FeatureTaskRuntimeRunLoopDurableLaunch(
+public class FeatureTaskRuntimeRunLoopDurableLaunch(
   private val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
   private val activityStampWriter: AgentActivityStampWriter,
   private val worktreeEditJournalWriter: WorktreeEditJournalWriter,
@@ -184,7 +200,7 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
   ): PhaseRunFanOut =
     FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(state, facts, stepId, decompositionPlanner, runLoopEntry)
 
-  internal fun bindings(
+  public fun bindings(
     facts: FeatureTaskRuntimeRunFacts,
     state: PhaseRunState,
     run: PhaseRun,
@@ -196,7 +212,7 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
     guardPhase: String,
   ): FeatureTaskRuntimeBranchSetupOutcome = branchSetupRunner.ensureFeatureBranch(facts, telemetry, guardPhase)
 
-  internal fun observation(
+  public fun observation(
     facts: FeatureTaskRuntimeRunFacts,
     stepName: String,
   ): PhaseLaunchObservation =

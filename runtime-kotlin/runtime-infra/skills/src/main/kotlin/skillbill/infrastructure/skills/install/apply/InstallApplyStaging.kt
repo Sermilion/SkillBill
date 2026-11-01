@@ -2,21 +2,21 @@ package skillbill.infrastructure.skills.install.apply
 
 import skillbill.infrastructure.skills.agentaddon.AgentAddonPointer
 import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
+import skillbill.infrastructure.skills.install.identity.agentAddonPointersForSkill
+import skillbill.infrastructure.skills.install.identity.authoredStagingNames
 import skillbill.infrastructure.skills.install.identity.installedSkillContentIdentity
 import skillbill.infrastructure.skills.install.identity.requireMatchingSkillContentIdentity
 import skillbill.infrastructure.skills.install.identity.suppliedSkillContentIdentity
+import skillbill.infrastructure.skills.install.identity.validateAgentAddonPointerNamespace
 import skillbill.infrastructure.skills.install.staging.GeneratedSupportPointer
+import skillbill.infrastructure.skills.install.staging.InstallContentHashInputs
 import skillbill.infrastructure.skills.install.staging.InternalStagingPreparation
 import skillbill.infrastructure.skills.install.staging.PreparedInternalStaging
 import skillbill.infrastructure.skills.install.staging.ReuseInstallStagingInput
 import skillbill.infrastructure.skills.install.staging.StageInstalledSkillInput
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
-import skillbill.infrastructure.skills.install.staging.content.InstallContentHashInputs
-import skillbill.infrastructure.skills.install.staging.content.agentAddonPointersForSkill
-import skillbill.infrastructure.skills.install.staging.content.authoredStagingNames
-import skillbill.infrastructure.skills.install.staging.content.computeInstallContentHash
-import skillbill.infrastructure.skills.install.staging.content.validateAgentAddonPointerNamespace
+import skillbill.infrastructure.skills.install.staging.computeInstallContentHash
 import skillbill.infrastructure.skills.install.staging.generatedSupportPointersFor
 import skillbill.infrastructure.skills.install.staging.installedSkillStagingDir
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot

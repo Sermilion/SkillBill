@@ -12,27 +12,27 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-internal data class BlockIncidentFailureFacts(
-  val failureCode: String?,
-  val failureDisposition: FeatureTaskRuntimeFailureDisposition?,
+public data class BlockIncidentFailureFacts(
+  public val failureCode: String?,
+  public val failureDisposition: FeatureTaskRuntimeFailureDisposition?,
 )
 
-internal data class BlockIncidentIdentity(
-  val stepId: String,
-  val attempt: Int?,
-  val generation: Long?,
-  val childWorkflowId: String?,
-  val childIncidentToken: String?,
-  val incidentToken: String,
-  val alias: BlockIncidentAlias,
-  val sourceAlias: BlockIncidentAlias? = null,
-  val failureFacts: BlockIncidentFailureFacts? = null,
-  val blockCause: String? = null,
+public data class BlockIncidentIdentity(
+  public val stepId: String,
+  public val attempt: Int?,
+  public val generation: Long?,
+  public val childWorkflowId: String?,
+  public val childIncidentToken: String?,
+  public val incidentToken: String,
+  public val alias: BlockIncidentAlias,
+  public val sourceAlias: BlockIncidentAlias? = null,
+  public val failureFacts: BlockIncidentFailureFacts? = null,
+  public val blockCause: String? = null,
 ) {
-  val failureCode: String? get() = failureFacts?.failureCode
-  val failureDisposition: FeatureTaskRuntimeFailureDisposition? get() = failureFacts?.failureDisposition
+  public val failureCode: String? get() = failureFacts?.failureCode
+  public val failureDisposition: FeatureTaskRuntimeFailureDisposition? get() = failureFacts?.failureDisposition
 
-  fun acceptedReference(workflowId: String): GoalRunnerAcceptedBlockReference =
+  public fun acceptedReference(workflowId: String): GoalRunnerAcceptedBlockReference =
     GoalRunnerAcceptedBlockReference(
       sourceWorkflowId = workflowId,
       blockedStepId = stepId,
@@ -47,7 +47,7 @@ internal data class BlockIncidentIdentity(
       blockCause = blockCause,
     )
 
-  fun artifactEntry(): Pair<String, Any?> =
+  public fun artifactEntry(): Pair<String, Any?> =
     DurableWorkflowArtifactFamily.GOAL_BLOCK_IDENTITY.entry(
       linkedMapOf<String, Any?>(
         SharedPayloadKeys.STEP_ID to stepId,
@@ -72,13 +72,13 @@ internal data class BlockIncidentIdentity(
       BlockIncidentIdentityKeys.FAILURE_DISPOSITION to failureDisposition?.wireValue,
     )
 
-  companion object {
+  public companion object {
     private fun invalidIdentity(): Nothing =
       throw invalidWorkflowStateSchemaError(
         "Invalid durable block incident identity.",
       )
 
-    fun matchesBlockedAttempt(
+    internal fun matchesBlockedAttempt(
       artifacts: Map<String, Any?>,
       stepId: String,
       attempt: Int?,
@@ -87,7 +87,7 @@ internal data class BlockIncidentIdentity(
       currentAttempt?.takeIf { it > 0 } == attempt ||
         previousBlockedAttempt(artifacts, stepId)?.takeIf { it > 0 } == attempt
 
-    fun acceptedFor(
+    public fun acceptedFor(
       artifacts: Map<String, Any?>,
       steps: List<WorkflowStepState>,
       blockedStepId: String?,
@@ -117,7 +117,7 @@ internal data class BlockIncidentIdentity(
       return (previous[FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT] as? Number)?.toInt()
     }
 
-    fun fromArtifacts(artifacts: Map<String, Any?>): BlockIncidentIdentity? {
+    public fun fromArtifacts(artifacts: Map<String, Any?>): BlockIncidentIdentity? {
       val raw = DurableWorkflowArtifactFamily.GOAL_BLOCK_IDENTITY.value(artifacts) ?: return null
       val value = raw as? Map<*, *> ?: invalidIdentity()
       val attempt =
@@ -176,16 +176,16 @@ internal data class BlockIncidentIdentity(
   }
 }
 
-internal fun GoalRunnerAcceptedBlockReference.boundTo(
+public fun GoalRunnerAcceptedBlockReference.boundTo(
   workflowId: String,
   blockedStepId: String?,
 ): GoalRunnerAcceptedBlockReference? = takeIf { it.sourceWorkflowId == workflowId && it.blockedStepId == blockedStepId }
 
-internal object OperatorBlockRetryArtifactKeys {
-  const val REASON = "reason"
-  const val RETRIED_AT = "retried_at"
-  const val PREVIOUS_BLOCKED_REASON = "previous_blocked_reason"
-  const val PREVIOUS_BLOCKED_RECORD = "previous_blocked_record"
+public object OperatorBlockRetryArtifactKeys {
+  public const val REASON: String = "reason"
+  public const val RETRIED_AT: String = "retried_at"
+  public const val PREVIOUS_BLOCKED_REASON: String = "previous_blocked_reason"
+  public const val PREVIOUS_BLOCKED_RECORD: String = "previous_blocked_record"
 }
 
 private object BlockIncidentIdentityKeys {
@@ -200,14 +200,14 @@ private object BlockIncidentIdentityKeys {
   const val BLOCK_CAUSE = "block_cause"
 }
 
-internal object BlockIncidentDisplacementKeys {
-  const val ACCEPTED_BLOCK_REFERENCE = "accepted_block_reference"
-  const val ADDITIONAL_ACCEPTED_BLOCK_REFERENCES = "additional_accepted_block_references"
-  const val EXECUTION_GENERATION = "execution_generation"
-  const val ALIAS_KIND = "alias_kind"
-  const val ALIAS_VALUE = "alias_value"
-  const val INCIDENT_TOKEN = "incident_token"
-  const val CHILD_INCIDENT_TOKEN = "child_incident_token"
-  const val SOURCE_ALIAS_KIND = "source_alias_kind"
-  const val SOURCE_ALIAS_VALUE = "source_alias_value"
+public object BlockIncidentDisplacementKeys {
+  public const val ACCEPTED_BLOCK_REFERENCE: String = "accepted_block_reference"
+  public const val ADDITIONAL_ACCEPTED_BLOCK_REFERENCES: String = "additional_accepted_block_references"
+  public const val EXECUTION_GENERATION: String = "execution_generation"
+  public const val ALIAS_KIND: String = "alias_kind"
+  public const val ALIAS_VALUE: String = "alias_value"
+  public const val INCIDENT_TOKEN: String = "incident_token"
+  public const val CHILD_INCIDENT_TOKEN: String = "child_incident_token"
+  public const val SOURCE_ALIAS_KIND: String = "source_alias_kind"
+  public const val SOURCE_ALIAS_VALUE: String = "source_alias_value"
 }

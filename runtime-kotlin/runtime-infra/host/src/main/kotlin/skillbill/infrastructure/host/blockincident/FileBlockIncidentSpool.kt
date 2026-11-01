@@ -158,7 +158,11 @@ class FileBlockIncidentSpool(
         "Unreadable block incident spool record was discarded: $fileName.",
       failure,
     )
-    runCatching { Files.deleteIfExists(this) }
+    try {
+      Files.deleteIfExists(this)
+    } catch (cleanup: IOException) {
+      diagnostics.warning("Block incident spool could not delete unreadable record $fileName.", cleanup)
+    }
     return null
   }
 

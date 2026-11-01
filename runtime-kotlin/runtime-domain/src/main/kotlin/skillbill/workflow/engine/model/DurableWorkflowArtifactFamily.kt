@@ -94,4 +94,13 @@ enum class DurableWorkflowArtifactFamily(
   }
 
   fun label(): String = key
+
+  companion object {
+    val TYPED_RECORD_FAMILIES: Set<DurableWorkflowArtifactFamily> =
+      setOf(
+        FEATURE_TASK_RUNTIME_GOAL_CONTINUATION,
+        FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION,
+        FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT,
+      )
+  }
 }

@@ -1,9 +1,10 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
-import skillbill.infrastructure.skills.install.apply.createNewSymlinkWithGuidance
-import skillbill.infrastructure.skills.install.apply.createReplacementSymlinkWithGuidance
 import skillbill.infrastructure.skills.install.nativeagent.InstallNativeAgentResult
 import skillbill.infrastructure.skills.install.nativeagent.inventory.isCanonicalNativeAgentArtifactTarget
+import skillbill.infrastructure.skills.install.symlink.createNewSymlinkWithGuidance
+import skillbill.infrastructure.skills.install.symlink.createReplacementSymlinkWithGuidance
+import skillbill.infrastructure.skills.install.symlink.resolveSymlinkTarget
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.install.model.AgentTarget
 import skillbill.model.toPath
@@ -31,25 +32,6 @@ internal fun installNativeAgentFile(
     decision = decideInstallAction(linkPath.toPath(), resolvedSource, managedSourceRoots, ownership),
     beforeMutation = beforeMutation,
   )
-}
-
-internal fun uninstallNativeAgentFiles(
-  sources: List<Path>,
-  candidateDirs: List<Path>,
-): List<Path> {
-  val removed = mutableListOf<Path>()
-  sources.forEach { source ->
-    val resolvedSource = source.toAbsolutePath().normalize()
-    candidateDirs.forEach { targetDir ->
-      val linkPath = targetDir.resolve(resolvedSource.fileName)
-      val existingTarget = if (Files.isSymbolicLink(linkPath)) resolveSymlinkTarget(linkPath) else null
-      if (existingTarget == resolvedSource) {
-        Files.deleteIfExists(linkPath)
-        removed.add(linkPath)
-      }
-    }
-  }
-  return removed
 }
 
 private fun applyInstallDecision(
@@ -120,10 +102,3 @@ private fun decideInstallAction(
     else -> InstallAction.Skip
   }
 }
-
-internal fun resolveSymlinkTarget(linkPath: Path): Path? =
-  runCatching {
-    val rawTarget = Files.readSymbolicLink(linkPath)
-    val resolvedTarget = if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget)
-    resolvedTarget.toAbsolutePath().normalize()
-  }.getOrNull()

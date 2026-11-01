@@ -2,6 +2,8 @@ package skillbill.engine.diagnostics.block.report
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.containableUnlessInterrupted
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -14,22 +16,21 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentResponsib
 import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportSanitizer
 import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportStatus
 import java.time.Clock
-import java.util.concurrent.CancellationException
 
 @Inject
-class ProductReportScheduler(
+public class ProductReportScheduler(
   private val database: DatabaseSessionFactory,
   private val runtimeFacts: ProductReportRuntimeFactsCollector,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val telemetry: BlockIncidentTelemetryPort?,
 ) {
-  fun schedule(
+  internal fun schedule(
     incident: BlockIncidentOccurrence,
     diagnosis: BlockIncidentDiagnosisRecord,
     recoveryAttempts: List<BlockIncidentRecoveryAttempt>,
   ) {
-    runCatching {
+    catchingNonCancellation {
       val eligible =
         database.transaction { unit ->
           val marker = unit.blockIncidents.rolloutActivatedAt()
@@ -54,27 +55,20 @@ class ProductReportScheduler(
         }
       val result = created.report
       if (result.status in TERMINAL_REPORT_STATUSES && (created.reportInserted || created.linkInserted)) {
-        runCatching {
+        catchingNonCancellation {
           telemetry?.reported(incident, result)
         }.getOrElse { error ->
-          error.rethrowIfCancellation()
+          containableUnlessInterrupted(error)
           RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Product report creation telemetry failed.", error)
         }
       }
     }.getOrElse { error ->
-      error.rethrowIfCancellation()
+      containableUnlessInterrupted(error)
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "Product report scheduling failed; the diagnosis remains settled.",
         error,
       )
-    }
-  }
-
-  private fun Throwable.rethrowIfCancellation() {
-    if (this !is Exception) throw this
-    if (this is CancellationException || this is InterruptedException || Thread.currentThread().isInterrupted) {
-      throw this
     }
   }
 

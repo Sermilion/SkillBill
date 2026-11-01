@@ -200,6 +200,8 @@ class ApplicationCooperativeFailureBoundaryTest {
     val root = IOException("store-down")
     val diagnostics =
       object : RuntimeDiagnostics {
+        override fun info(message: String) = Unit
+
         override fun warning(
           message: String,
           error: Throwable?,
@@ -320,6 +322,8 @@ private class FailingDatabase(private val failure: Throwable) : DatabaseSessionF
 }
 
 private object NoopRuntimeDiagnostics : RuntimeDiagnostics {
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,
@@ -332,6 +336,8 @@ private object NoopRuntimeDiagnostics : RuntimeDiagnostics {
 }
 
 private class RecordingDiagnostics : RuntimeDiagnostics {
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

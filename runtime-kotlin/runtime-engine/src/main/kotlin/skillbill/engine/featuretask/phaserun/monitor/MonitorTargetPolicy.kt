@@ -12,7 +12,7 @@ import java.net.URI
 import java.net.URISyntaxException
 
 private val SAFE_REF_NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._/-]*$")
-private val OBJECT_ID = Regex("^[0-9a-f]{40}([0-9a-f]{24})?$")
+public val OBJECT_ID: Regex = Regex("^[0-9a-f]{40}([0-9a-f]{24})?$")
 private val REF_NAME_FORBIDDEN_FRAGMENTS = listOf("..", "//", "/.", "@{")
 private val REF_NAME_FORBIDDEN_SUFFIXES = listOf("/", ".", ".lock")
 

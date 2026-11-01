@@ -100,7 +100,7 @@ internal data class VerifyQaReport(
 }
 
 @Inject
-class VerifyQaStep(
+public class VerifyQaStep(
   private val execution: QaExecutionLifecycle,
   private val settlement: QaReportSettlement,
   private val diagnostics: RuntimeDiagnostics,

@@ -1,7 +1,5 @@
 package skillbill.workflow.taskruntime.model.persistence
 
-import skillbill.agentaddon.model.AgentAddonSelection
-import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
@@ -9,6 +7,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_RUN_INVARIA
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.FeatureTaskRuntimeCommitPushResultArtifact
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.goalrunner.goalContinuationOutcomeArtifact
@@ -39,7 +38,6 @@ import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_RESOLVED_BRANCH_ARTI
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_REVIEW_GENERATION_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
-import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.artifact.decomposeTerminal
@@ -61,8 +59,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputR
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
-import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
-import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
@@ -139,10 +135,10 @@ class FeatureTaskRuntimePersistenceModelsTest {
               "retried_at" to "2026-09-24T10:00:00Z",
             ),
           FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY to
-            mapOf(
-              "field" to "validation_depth",
-              "adopted_value" to "full",
-              "reason" to "legacy artifact",
+            FeatureTaskRuntimeGoalContinuationFieldAdoption(
+              field = "validation_depth",
+              adoptedValue = "full",
+              reason = "legacy artifact",
             ),
         ),
       )
@@ -1038,14 +1034,17 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
     assertEquals(
       valid,
       DurableWorkflowArtifacts.fromMap(
-        mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to valid.toArtifactMap()),
+        mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to valid),
       ).goalContinuationArtifact(),
     )
     assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
         mapOf(
           FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to
-            valid.toArtifactMap() + ("subtask_id" to 2.7),
+            UndecodedTypedArtifact(
+              jsonText = """{"issue_key":"SKILL-372","subtask_id":2.7}""",
+              failure = invalidWorkflowStateSchemaError("Goal-continuation artifact subtask_id must be an integer."),
+            ),
         ),
       ).goalContinuationArtifact()
     }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
@@ -1053,152 +1052,6 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
       DurableWorkflowArtifacts.fromMap(mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to null))
         .goalContinuationArtifact()
     }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-  }
-
-  @Test
-  fun `goal-continuation artifact retains the immutable review mode and optional parallel lane`() {
-    val artifact =
-      FeatureTaskRuntimeGoalContinuationArtifact(
-        issueKey = "SKILL-119",
-        subtaskId = 2,
-        suppressPr = true,
-        goalBranch = "feat/SKILL-119-subtask-2",
-        parentWorkflowId = "wfl-parent",
-        codeReviewMode = CodeReviewExecutionMode.DELEGATED,
-        validationDepth = ValidationDepth.FULL,
-        agentAddonSelection =
-          AgentAddonSelection(
-            listOf(
-              PersistedAgentAddonSelectionEntry(
-                "helper",
-                "/repo/agent-addons/helper/agent-addon.yaml",
-                "a".repeat(64),
-              ),
-            ),
-          ),
-      )
-
-    assertEquals(artifact, FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(artifact.toArtifactMap()))
-  }
-
-  @Test
-  fun `goal-continuation artifact round-trips explicit depths and preserves absent validation_depth`() {
-    val full =
-      FeatureTaskRuntimeGoalContinuationArtifact(
-        issueKey = "SKILL-173",
-        subtaskId = 1,
-        suppressPr = true,
-        goalBranch = "feat/SKILL-173",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
-        validationDepth = ValidationDepth.FULL,
-      )
-    assertEquals(full, FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(full.toArtifactMap()))
-    assertEquals("full", full.toArtifactMap()["validation_depth"])
-
-    assertEquals(
-      full,
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(
-        full.toArtifactMap() + ("validation_depth" to "build_only"),
-      ),
-    )
-
-    val absentKey =
-      linkedMapOf<String, Any?>(
-        "issue_key" to "SKILL-173",
-        "subtask_id" to 1,
-        "suppress_pr" to true,
-        "goal_branch" to "feat/SKILL-173",
-        "code_review_mode" to "inline",
-      )
-    val absent = FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(absentKey)
-    assertNull(absent.validationDepth)
-    assertNull(absent.toArtifactMap()["validation_depth"])
-    assertNull(
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(absent.toArtifactMap()).validationDepth,
-    )
-  }
-
-  @Test
-  fun `goal-continuation artifact rejects missing mode unknown fields and blank parallel lane`() {
-    val complete =
-      FeatureTaskRuntimeGoalContinuationArtifact(
-        issueKey = "SKILL-119",
-        subtaskId = 2,
-        suppressPr = true,
-        goalBranch = "feat/SKILL-119-subtask-2",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
-      ).toArtifactMap()
-
-    assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete - "code_review_mode")
-    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-    assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("unexpected" to true))
-    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-    assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("parallel_review_agent" to ""))
-    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-    assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("validation_depth" to "partial"))
-    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-    assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("code_review_mode" to "partial"))
-    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-    assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(
-        complete + ("quality_gate_selection" to "unknown"),
-      )
-    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-  }
-
-  @Test
-  fun `goal-continuation decode rejects non-positive subtask ids with a typed schema error`() {
-    val malformed =
-      mapOf(
-        "issue_key" to "SKILL-119",
-        "subtask_id" to 0,
-        "suppress_pr" to true,
-        "goal_branch" to "feat/SKILL-119-subtask-2",
-        "code_review_mode" to "inline",
-      )
-
-    assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(malformed)
-    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
-  }
-
-  @Test
-  fun `goal-continuation artifact round-trips quality_gate_selection and absent decodes as validate`() {
-    val build =
-      FeatureTaskRuntimeGoalContinuationArtifact(
-        issueKey = "SKILL-204",
-        subtaskId = 1,
-        suppressPr = true,
-        goalBranch = "feat/SKILL-204",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
-        qualityGateSelection = BUILD,
-      )
-    assertEquals("build", build.toArtifactMap()["quality_gate_selection"])
-    assertEquals(
-      build,
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(build.toArtifactMap()),
-    )
-
-    val absent =
-      FeatureTaskRuntimeGoalContinuationArtifact(
-        issueKey = "SKILL-204",
-        subtaskId = 2,
-        suppressPr = true,
-        goalBranch = "feat/SKILL-204",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
-      )
-    assertNull(absent.toArtifactMap()["quality_gate_selection"])
-    assertEquals(
-      VALIDATE,
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(
-        absent.toArtifactMap() + ("quality_gate_selection" to "validate"),
-      ).qualityGateSelection,
-    )
   }
 
   @Test

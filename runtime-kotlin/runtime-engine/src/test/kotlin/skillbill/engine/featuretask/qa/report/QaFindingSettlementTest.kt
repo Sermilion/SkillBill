@@ -21,6 +21,8 @@ class QaFindingSettlementTest {
   private val warnings = mutableListOf<String>()
   private val diagnostics =
     object : RuntimeDiagnostics {
+      override fun info(message: String) = Unit
+
       override fun warning(
         message: String,
         error: Throwable?,

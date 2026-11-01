@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
@@ -133,7 +134,7 @@ internal fun discoverPortableReviewSkills(
       .sorted()
       .forEach { packRoot ->
         reviewSkills +=
-          runCatching { loadPlatformManifest(packRoot).declaredCodeReviewSkillNames() }
+          catchingNonCancellation { loadPlatformManifest(packRoot).declaredCodeReviewSkillNames() }
             .onFailure { error ->
               issues += "${packRoot.relativeTo(root)}/platform.yaml: ${describeDiscoveryFailure(error)}"
             }

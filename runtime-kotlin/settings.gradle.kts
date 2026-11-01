@@ -27,6 +27,7 @@ include(
   "runtime-core",
   "runtime-domain",
   "runtime-engine",
+  "runtime-goalrunner",
   "runtime-infra",
   "runtime-infra:host",
   "runtime-infra:contracts",

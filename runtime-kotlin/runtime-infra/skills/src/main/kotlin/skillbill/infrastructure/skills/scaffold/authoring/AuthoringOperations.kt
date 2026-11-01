@@ -1,8 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionContext
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
+import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentRegenerationRequest
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
 import skillbill.ports.scaffold.model.ScaffoldSkillStatus

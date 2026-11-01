@@ -3,8 +3,8 @@ package skillbill.infrastructure.sqlite.review.stage
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.review.stats.reviewPlatformSlug
-import skillbill.infrastructure.sqlite.review.stats.summarizeFindingRows
+import skillbill.infrastructure.sqlite.review.core.reviewPlatformSlug
+import skillbill.infrastructure.sqlite.review.core.summarizeFindingRows
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.learnings.model.LearningScope
 import skillbill.review.attribution.normalizeRoutedSkill
@@ -29,7 +29,7 @@ internal fun reviewFinishedPayload(
 ): ReviewFinishedTelemetry {
   val stats = filterReviewFinishedSummary(summarizeFindingRows(findingRows), level)
   val learningsSection = buildLearningsSection(connection, reviewSummary.reviewSessionId.orEmpty(), level)
-  val normalizedStack = normalizeStackLabel(reviewSummary.detectedStack)
+  val normalizedStack = normalizeStackLabel(reviewSummary.detectedStack, routedSkillPlatformSlugs.values)
   val normalizedRoutedSkill = normalizeRoutedSkill(reviewSummary.routedSkill)
   val normalizedPlatformSlug =
     reviewPlatformSlug(

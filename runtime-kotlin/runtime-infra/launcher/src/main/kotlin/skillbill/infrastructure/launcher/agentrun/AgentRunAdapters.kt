@@ -1,7 +1,9 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessEnvironmentFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessProbeFields
@@ -25,6 +27,7 @@ import skillbill.ports.agentrun.model.ReportedLaunchIdentity
 import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
 
@@ -60,7 +63,7 @@ internal class ProcessAgentRunAdapter(
   ): AgentRunLaunchFacts {
     val decoder = command.outputDecoder ?: commandBuilder.outputDecoder
     val decoded =
-      runCatching { decoder.decode(result.stdout) }.getOrElse { error ->
+      catchingNonCancellation { decoder.decode(result.stdout) }.getOrElse { error ->
         if (!decoder.undecodable(error)) throw error
 
         DecodedAgentRunOutput(text = "", rawOutputPreview = result.stdout.take(RAW_OUTPUT_PREVIEW_MAX_CHARS))
@@ -260,9 +263,9 @@ interface AgentRunOutputDecoder {
    * Decoder-declared classification of a decode failure. A decoder that owns a transport it cannot
    * always parse says so here; the launcher then degrades that launch to an empty harvest with a
    * bounded preview instead of promoting undecodable bytes to phase output. Decoders that treat
-   * every failure as fatal inherit the default and keep propagating.
+   * every failure as fatal return false and keep propagating.
    */
-  fun undecodable(error: Throwable): Boolean = false
+  fun undecodable(error: Throwable): Boolean
 
   companion object {
     val PLAIN = decoder { DecodedAgentRunOutput(it) }
@@ -286,6 +289,8 @@ interface AgentRunOutputDecoder {
     private fun decoder(body: (String) -> DecodedAgentRunOutput): AgentRunOutputDecoder =
       object : AgentRunOutputDecoder {
         override fun decode(stdout: String): DecodedAgentRunOutput = body(stdout)
+
+        override fun undecodable(error: Throwable): Boolean = false
       }
   }
 }
@@ -293,22 +298,21 @@ interface AgentRunOutputDecoder {
 internal val structuredOutputMapper: ObjectMapper by lazy { ObjectMapper() }
 
 private fun decodeClaudeJson(stdout: String): DecodedAgentRunOutput =
-  runCatching {
+  try {
     val root = structuredOutputMapper.readTree(stdout.trim())
     DecodedAgentRunOutput(
       text = root.path("result").takeIf { it.isTextual }?.asText().orEmpty(),
       reportedIdentity = reportedClaudeIdentity(root.path("modelUsage")),
     )
-  }.getOrElse { DecodedAgentRunOutput(stdout) }
+  } catch (_: JsonProcessingException) {
+    DecodedAgentRunOutput(stdout)
+  }
 
 private fun decodeClaudeStreamJson(stdout: String): DecodedAgentRunOutput {
   val terminal =
     stdout.lineSequence()
       .filter(String::isNotBlank)
-      .mapNotNull { line ->
-
-        runCatching { structuredOutputMapper.readTree(line) }.getOrNull()
-      }
+      .mapNotNull(::readJsonLineOrNull)
       .lastOrNull { event -> event.path("type").takeIf { it.isTextual }?.asText() == "result" }
 
       ?: return DecodedAgentRunOutput(
@@ -337,9 +341,19 @@ private fun reportedClaudeIdentity(modelUsage: JsonNode): ReportedLaunchIdentity
   if (identities.isEmpty()) {
     return ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED)
   }
-  return runCatching { ReportedLaunchIdentity.Reported(identities) }
-    .getOrElse { ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.MALFORMED) }
+  return if (identities.all(LAUNCH_MODEL_TOKEN_PATTERN::matches)) {
+    ReportedLaunchIdentity.Reported(identities)
+  } else {
+    ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.MALFORMED)
+  }
 }
+
+private fun readJsonLineOrNull(line: String): JsonNode? =
+  try {
+    structuredOutputMapper.readTree(line)
+  } catch (_: JsonProcessingException) {
+    null
+  }
 
 private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
   var text: String? = null
@@ -348,7 +362,7 @@ private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
   var sessionId: String? = null
   stdout.lineSequence().filter(String::isNotBlank).forEach { line ->
 
-    runCatching { structuredOutputMapper.readTree(line) }.getOrNull()?.let { event ->
+    readJsonLineOrNull(line)?.let { event ->
       decodedEnvelope = true
       val eventType = event.path("type").asText()
       when (eventType) {

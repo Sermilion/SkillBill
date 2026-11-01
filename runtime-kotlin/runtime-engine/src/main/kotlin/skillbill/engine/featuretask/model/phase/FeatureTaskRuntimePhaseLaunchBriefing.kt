@@ -10,17 +10,17 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.phaseartifacts.schemaError
 
-data class FeatureTaskRuntimePhaseLaunchBriefing(
-  val phaseId: String,
-  val specReference: String,
-  val featureSize: String,
-  val acceptanceCriteria: List<String>,
-  val mandatesAndOverrides: List<String>,
-  val handoffEnvelope: FeatureTaskRuntimeHandoffEnvelope,
-  val derivedContextKeys: List<String>,
-  val briefingText: String,
-  val drivingVerdict: String? = null,
-  val projectInstructions: FeatureTaskRuntimePhaseProjectInstructionsRecord? = null,
+public data class FeatureTaskRuntimePhaseLaunchBriefing(
+  public val phaseId: String,
+  public val specReference: String,
+  public val featureSize: String,
+  public val acceptanceCriteria: List<String>,
+  public val mandatesAndOverrides: List<String>,
+  public val handoffEnvelope: FeatureTaskRuntimeHandoffEnvelope,
+  public val derivedContextKeys: List<String>,
+  public val briefingText: String,
+  public val drivingVerdict: String? = null,
+  public val projectInstructions: FeatureTaskRuntimePhaseProjectInstructionsRecord? = null,
 ) {
   init {
     require(phaseId.isNotBlank()) { "FeatureTaskRuntimePhaseLaunchBriefing.phaseId must be non-blank." }
@@ -36,7 +36,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
     require(briefingText.isNotBlank()) { "FeatureTaskRuntimePhaseLaunchBriefing.briefingText must be non-blank." }
   }
 
-  fun asBriefingArtifactEntry(): Any = briefingArtifactWireMap()
+  public fun asBriefingArtifactEntry(): Any = briefingArtifactWireMap()
 
   internal fun briefingArtifactWireMap(): Map<String, Any?> =
     linkedMapOf(
@@ -56,7 +56,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
       }
     }
 
-  companion object {
+  public companion object {
     internal fun fromBriefingArtifactWire(raw: Map<String, Any?>): FeatureTaskRuntimePhaseLaunchBriefing {
       val unknownFields = raw.keys - ALLOWED_FIELDS - FeatureTaskRuntimeHandoffSourceRef.RETIRED_PRIOR_GAP_MEMORY_WIRE
       if (unknownFields.isNotEmpty()) {
@@ -153,7 +153,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
       kind: String,
     ): String = "Feature-task-runtime briefing artifact map is missing required $kind field '$key'."
 
-    const val CONTRACT_VERSION: String = FEATURE_TASK_RUNTIME_PHASE_LAUNCH_BRIEFING_CONTRACT_VERSION
+    public const val CONTRACT_VERSION: String = FEATURE_TASK_RUNTIME_PHASE_LAUNCH_BRIEFING_CONTRACT_VERSION
 
     private val ALLOWED_FIELDS: Set<String> =
       setOf(
@@ -173,7 +173,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
   }
 }
 
-data class FeatureTaskRuntimePhaseProjectInstructionsRecord(
-  val path: String,
-  val sha256: String,
+public data class FeatureTaskRuntimePhaseProjectInstructionsRecord(
+  public val path: String,
+  public val sha256: String,
 )

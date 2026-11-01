@@ -3,7 +3,7 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.JsonCodec
 import skillbill.infrastructure.sqlite.review.stats.ReviewFinishedPayloadBuildRequest
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.model.toReviewFinishedTelemetryPayload
 import skillbill.review.parsing.ReviewParser

@@ -9,6 +9,10 @@ import skillbill.engine.featuretask.runloop.observability.paused
 import skillbill.engine.featuretask.runner.BRANCH_SETUP_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.buffersIncompleteOutput
+import skillbill.engine.featuretask.slot.state.dropsResumedCompletion
+import skillbill.engine.featuretask.slot.state.tracksReviewPasses
+import skillbill.engine.featuretask.slot.state.withholdsDurableOutput
 import skillbill.engine.featuretask.validation.RuntimeGateRecordIntegrity
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -31,7 +35,7 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFindi
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
-internal class FeatureTaskRuntimeRunState(
+public class FeatureTaskRuntimeRunState(
   initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   transitions: FeatureTaskRuntimeTransitionDeclaration,
   private val durableInitialLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
@@ -57,7 +61,7 @@ internal class FeatureTaskRuntimeRunState(
   private var transitionOwnership:
     Pair<FeatureTaskRuntimeRunLoopSession, FeatureTaskRuntimeRunTransitionOwner>? = null
 
-  fun transitionOwnerFor(session: FeatureTaskRuntimeRunLoopSession): FeatureTaskRuntimeRunTransitionOwner {
+  public fun transitionOwnerFor(session: FeatureTaskRuntimeRunLoopSession): FeatureTaskRuntimeRunTransitionOwner {
     val existing = transitionOwnership
     if (existing != null) {
       check(existing.first === session) { "Run progress cannot be paired with a different session." }
@@ -111,7 +115,7 @@ internal class FeatureTaskRuntimeRunState(
     completedReviewPassNumber = source.completedReviewPassNumber
   }
 
-  val progressSnapshot: FeatureTaskRuntimeProgressSnapshotAccess
+  public val progressSnapshot: FeatureTaskRuntimeProgressSnapshotAccess
     get() =
       detachedProgressObservations(FeatureTaskRuntimeRunState(this))
 
@@ -723,23 +727,23 @@ private fun recentBlockedReasons(
     .take(2)
     .map(FeatureTaskRuntimePhaseLedgerEntry::blockedReason)
 
-data class ExplicitResumeStart(
+public data class ExplicitResumeStart(
   val phaseId: String,
   val reopen: Boolean,
 )
 
-internal data class FeatureTaskRuntimeNonOutputAttempt(
+public data class FeatureTaskRuntimeNonOutputAttempt(
   val paused: Boolean,
   val reason: String,
 )
 
-val NON_OUTPUT_LEDGER_ACTIONS =
+internal val NON_OUTPUT_LEDGER_ACTIONS =
   setOf(
     FeatureTaskRuntimePhaseLedgerAction.BLOCKED,
     FeatureTaskRuntimePhaseLedgerAction.PAUSED,
   )
 
-const val REVIEW_INVALIDATION_AGENT_ID: String = "audit-gate-migration"
+internal const val REVIEW_INVALIDATION_AGENT_ID: String = "audit-gate-migration"
 
 internal data class InFlightReentry(
   val destinationPhaseId: String,

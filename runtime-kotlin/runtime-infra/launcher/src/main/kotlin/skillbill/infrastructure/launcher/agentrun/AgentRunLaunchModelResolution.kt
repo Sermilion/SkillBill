@@ -28,7 +28,7 @@ internal fun resolveAgentRunLaunchModel(
   providerEnvironment: Map<String, String>,
 ): EffectiveLaunchModel {
   val agent =
-    runCatching { SupportedAgent.fromNormalizedId(request.agentId) }.getOrNull()
+    SupportedAgent.fromWireOrNull(request.agentId)
       ?: return passThroughLaunchModel(request.requestedModel, request.requestedEffort)
   if (agent != SupportedAgent.CLAUDE) {
     return passThroughLaunchModel(request.requestedModel, request.requestedEffort)

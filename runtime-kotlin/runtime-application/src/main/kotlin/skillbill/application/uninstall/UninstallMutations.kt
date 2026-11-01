@@ -1,10 +1,10 @@
 package skillbill.application.uninstall
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.application.scaffold.InstallAgentService
 import skillbill.application.uninstall.model.DesktopRemoval
 import skillbill.application.uninstall.model.LauncherRemoval
 import skillbill.application.uninstall.model.UninstallPlan
+import skillbill.error.core.catchingNonCancellation
 import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
@@ -25,7 +25,7 @@ internal fun cleanupAgentInstallTargets(
   recorder: UninstallMutationRecorder,
 ) {
   plan.agentTargets.forEach { target ->
-    runCatching {
+    catchingNonCancellation {
       installAgentService.cleanupAgentTarget(
         targetDir = target,
         skillNames = plan.skillNames,
@@ -37,7 +37,6 @@ internal fun cleanupAgentInstallTargets(
       removed += cleanup.removed.map(Path::toString)
       skipped += cleanup.skipped.map(Path::toString)
     }.onFailure { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       recorder.recordFailure("agent cleanup failed for $target", error)
     }
   }
@@ -60,7 +59,7 @@ internal fun cleanupNativeAgentInstallLinks(
       home = plan.home,
     )
   NativeAgentLinkProvider.entries.forEach { provider ->
-    runCatching {
+    catchingNonCancellation {
       installNativeAgentLinkPort.unlinkNativeAgents(
         InstallNativeAgentLinkOperationRequest(
           provider = provider,
@@ -69,7 +68,6 @@ internal fun cleanupNativeAgentInstallLinks(
       )
     }.onSuccess { result -> removed += result.unlinked.map(Path::toString) }
       .onFailure { error ->
-        error.rethrowIfCooperativeCancellationOrInterruption()
         recorder.recordFailure("native agent cleanup failed for ${provider.name.lowercase()}", error)
       }
   }
@@ -82,7 +80,7 @@ internal fun cleanupMcpRegistrations(
   recorder: UninstallMutationRecorder,
 ) {
   plan.mcpAgents.forEach { agent ->
-    runCatching {
+    catchingNonCancellation {
       installMcpRegistrationPort.unregisterMcp(
         InstallMcpUnregistrationRequest(
           agent = agent,
@@ -99,7 +97,6 @@ internal fun cleanupMcpRegistrations(
         }
       }
     }.onFailure { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       recorder.recordFailure("MCP cleanup failed for $agent", error)
     }
   }
@@ -120,8 +117,7 @@ internal fun removeLauncher(
     return
   }
   val target =
-    runCatching { fileSystem.readSymbolicLink(launcher.path) }.getOrElse { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
+    catchingNonCancellation { fileSystem.readSymbolicLink(launcher.path) }.getOrElse { error ->
       recorder.recordFailure("could not read launcher ${launcher.path}", error)
       return
     }
@@ -129,10 +125,9 @@ internal fun removeLauncher(
     skipped += "${launcher.path} (points to $target)"
     return
   }
-  runCatching { fileSystem.deleteIfExists(launcher.path) }
+  catchingNonCancellation { fileSystem.deleteIfExists(launcher.path) }
     .onSuccess { removed += launcher.path.toString() }
     .onFailure { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       recorder.recordFailure("could not remove launcher ${launcher.path}", error)
     }
 }
@@ -147,10 +142,9 @@ internal fun removeDesktop(
   desktop.launcher?.let { removeLauncher(fileSystem, it, removed, skipped, recorder) }
   desktop.files.forEach { file ->
     if (!fileSystem.exists(file)) return@forEach
-    runCatching { fileSystem.deleteIfExists(file) }
+    catchingNonCancellation { fileSystem.deleteIfExists(file) }
       .onSuccess { removed += file.toString() }
       .onFailure { error ->
-        error.rethrowIfCooperativeCancellationOrInterruption()
         recorder.recordFailure("could not remove $file", error)
       }
   }
@@ -166,10 +160,9 @@ internal fun removeRecursively(
   if (!fileSystem.exists(path) && !fileSystem.isSymbolicLink(path)) {
     return
   }
-  runCatching { fileSystem.removeTree(path) }
+  catchingNonCancellation { fileSystem.removeTree(path) }
     .onSuccess { entries -> entries.forEach { entry -> removed += entry.toString() } }
     .onFailure { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       recorder.recordFailure("could not remove $path", error)
     }
 }
@@ -198,8 +191,7 @@ internal fun removeInstallState(
     return
   }
   val entries =
-    runCatching { fileSystem.listImmediateDirectoryNames(stateRoot) }.getOrElse { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
+    catchingNonCancellation { fileSystem.listImmediateDirectoryNames(stateRoot) }.getOrElse { error ->
       recorder.recordFailure("could not list install state under $stateRoot", error)
       return
     }
@@ -218,10 +210,9 @@ private fun removeRecursivelyExcept(
   recorder: UninstallMutationRecorder,
 ) {
   if (!fileSystem.exists(path) && !fileSystem.isSymbolicLink(path)) return
-  runCatching { fileSystem.removeTreeExcept(path, retainedPaths) }
+  catchingNonCancellation { fileSystem.removeTreeExcept(path, retainedPaths) }
     .onSuccess { entries -> entries.forEach { entry -> removed += entry.toString() } }
     .onFailure { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
       recorder.recordFailure("could not remove $path", error)
     }
 }

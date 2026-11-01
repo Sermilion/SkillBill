@@ -9,7 +9,7 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 
-fun AdmittedFeatureTaskRuntimeExecution.requireCurrent(
+public fun AdmittedFeatureTaskRuntimeExecution.requireCurrent(
   states: WorkflowStateRepository,
   workflowId: String,
 ) {

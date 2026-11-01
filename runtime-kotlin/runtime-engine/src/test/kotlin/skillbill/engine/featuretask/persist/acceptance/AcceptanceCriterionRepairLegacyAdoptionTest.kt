@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
 import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairAuxiliarySchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -64,15 +65,19 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
             )
           val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_ADOPTION
           assertEquals(
-            JsonCodec.valueToJsonString(
-              original.artifacts - DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.label(),
+            SqliteWorkflowArtifactWireEncoder().encode(
+              DurableWorkflowArtifacts.fromMap(
+                original.artifacts - DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.label(),
+              ),
             ),
-            JsonCodec.valueToJsonString(
-              f.snapshot().artifacts -
-                setOf(
-                  family.label(),
-                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.label(),
-                ),
+            SqliteWorkflowArtifactWireEncoder().encode(
+              DurableWorkflowArtifacts.fromMap(
+                f.snapshot().artifacts -
+                  setOf(
+                    family.label(),
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.label(),
+                  ),
+              ),
             ),
           )
           assertEquals(
@@ -96,7 +101,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
           assertEquals(emptyMap(), discovered.unsuccessfulTotals)
           assertEquals(emptyList(), discovered.outcomes)
           assertEquals(
-            JsonCodec.valueToJsonString(original.artifacts),
+            SqliteWorkflowArtifactWireEncoder().encode(original.artifacts),
             JsonCodec.valueToJsonString(
               receipt.receipt[Keys.ORIGINAL_ARTIFACTS],
             ),
@@ -133,6 +138,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
             git,
             f.source,
             testProjectStore,
+            SqliteWorkflowArtifactWireEncoder(),
           )
         for (revision in 1..3) {
           val bytes = ArchivedAuditExecutionPlanFixture.legacyAuditPlan(execution, revision)
@@ -157,7 +163,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
             ContractFeatureTaskRuntimePhaseOutputMigration(),
           )
           assertEquals(
-            JsonCodec.valueToJsonString(original.artifacts),
+            SqliteWorkflowArtifactWireEncoder().encode(original.artifacts),
             JsonCodec.valueToJsonString(
               receipt[Keys.ORIGINAL_ARTIFACTS],
             ),
@@ -296,7 +302,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
           f.binding.specDigest,
           "d".repeat(64),
           "e".repeat(64),
-        ).asWorkflowArtifactEntry(),
+        ),
       ),
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
         FeatureTaskRuntimeGoalContinuationArtifact(
@@ -308,7 +314,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
           CodeReviewExecutionMode.INLINE,
           ValidationDepth.FULL,
           gate,
-        ).asWorkflowArtifactEntry(),
+        ),
       ),
     )
   }

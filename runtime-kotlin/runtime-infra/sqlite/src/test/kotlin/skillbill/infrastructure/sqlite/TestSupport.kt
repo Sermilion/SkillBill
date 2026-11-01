@@ -1,13 +1,10 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.telemetry.STALE_SESSION_THRESHOLD_SECONDS
-import skillbill.infrastructure.sqlite.telemetry.StaleSessionReconciliationPolicy
-import skillbill.infrastructure.sqlite.telemetry.reconcileStaleFeatureTaskRuntimeSessions
-import skillbill.infrastructure.sqlite.telemetry.reconcileStaleTelemetrySessions
-import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.STALE_SESSION_THRESHOLD_SECONDS
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.StaleSessionReconciliationPolicy
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.reconcileStaleFeatureTaskRuntimeSessions
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.reconcileStaleTelemetrySessions
 import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
 import skillbill.ports.telemetry.model.TelemetryReconciliationResult
 import skillbill.ports.workflow.WorkflowSnapshotValidator

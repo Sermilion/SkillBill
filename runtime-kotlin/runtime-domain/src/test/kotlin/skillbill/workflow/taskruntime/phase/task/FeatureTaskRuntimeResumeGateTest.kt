@@ -3,6 +3,7 @@ package skillbill.workflow.taskruntime.phase.task
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
@@ -13,6 +14,7 @@ import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.persistence.UndecodedTypedArtifact
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.time.Instant
 import kotlin.test.Test
@@ -191,13 +193,11 @@ class FeatureTaskRuntimeResumeGateTest {
           DurableWorkflowArtifacts.fromMap(
             mapOf(
               FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to
-                mapOf(
-                  "issue_key" to "SKILL-351",
-                  "subtask_id" to 1,
-                  "suppress_pr" to true,
-                  "goal_branch" to "feat/SKILL-351",
-                  "code_review_mode" to "inline",
-                  "quality_gate_selection" to false,
+                UndecodedTypedArtifact(
+                  jsonText =
+                    """{"issue_key":"SKILL-351","subtask_id":1,"suppress_pr":true,"goal_branch":"feat/SKILL-351",""" +
+                      """"code_review_mode":"inline","quality_gate_selection":false}""",
+                  failure = invalidWorkflowStateSchemaError("Goal-continuation quality_gate_selection is invalid."),
                 ),
             ),
           ),

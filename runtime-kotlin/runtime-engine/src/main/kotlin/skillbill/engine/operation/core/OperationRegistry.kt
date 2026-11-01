@@ -1,6 +1,6 @@
 package skillbill.engine.operation.core
 
-class OperationRegistry(
+public class OperationRegistry(
   operations: List<Operation>,
 ) {
   private val byId: Map<String, Operation> =
@@ -11,7 +11,7 @@ class OperationRegistry(
       registered
     }
 
-  val ids: List<String> get() = byId.keys.toList()
+  public val ids: List<String> get() = byId.keys.toList()
 
-  fun find(operationId: String): Operation? = byId[operationId]
+  internal fun find(operationId: String): Operation? = byId[operationId]
 }

@@ -7,6 +7,7 @@ import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.migration.RuntimeMigrationReceipt
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
@@ -22,14 +23,14 @@ import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import java.nio.file.Path
 
 @Inject
-class FeatureTaskRuntimeExecutionEntry(
+public class FeatureTaskRuntimeExecutionEntry(
   private val database: DatabaseSessionFactory,
   private val admission: FeatureTaskRuntimeExecutionAdmission,
   private val resolver: FeatureTaskRuntimeExecutionPlanResolver,
   private val repositories: RepositoryEnclosingRootPort,
   private val identities: FeatureTaskExecutionIdentityResolver,
 ) {
-  fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution {
+  internal fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution {
     val root = repositories.canonicalPath(request.repoRoot)
     val expected =
       identities.expected(
@@ -48,16 +49,23 @@ class FeatureTaskRuntimeExecutionEntry(
         request.workflowId,
       )
     var receipt: RuntimeMigrationReceipt? = null
-    return runCatching {
-      database.transaction { unit ->
-        val accepted = admission.admit(unit, request.workflowId, inputs, expected)
-        receipt = accepted.migrationReceipt
-        requireMatchingRequest(request, accepted)
-        accepted
-      }
-    }.onFailure {
-      receipt?.let { admission.recordTransactionOutcome(it, committed = false) }
-    }.getOrThrow().also { admission.recordTransactionOutcome(it.migrationReceipt, committed = true) }
+    var committed = false
+    return try {
+      val result =
+        catchingNonCancellation {
+          database.transaction { unit ->
+            val accepted = admission.admit(unit, request.workflowId, inputs, expected)
+            receipt = accepted.migrationReceipt
+            requireMatchingRequest(request, accepted)
+            accepted
+          }
+        }.getOrThrow()
+      committed = true
+      admission.recordTransactionOutcome(result.migrationReceipt, committed = true)
+      result
+    } finally {
+      if (!committed) receipt?.let { admission.recordTransactionOutcome(it, committed = false) }
+    }
   }
 
   private fun requireMatchingRequest(
@@ -80,7 +88,7 @@ class FeatureTaskRuntimeExecutionEntry(
   private fun CodeReviewExecutionMode.toRuntimeSelection() = RuntimeReviewSelection.valueOf(name)
 }
 
-internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
+public fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
   projectStore: ProjectStorePort,
   workflowId: String,
   repoRoot: Path,
@@ -105,19 +113,19 @@ internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
   }
 
 @Inject
-class FeatureTaskExecutionIdentityResolver(
+public class FeatureTaskExecutionIdentityResolver(
   private val repositories: RepositoryEnclosingRootPort,
   private val projectStore: ProjectStorePort,
 ) {
-  fun repositoryIdentity(repoRoot: Path): String = repositories.repositoryIdentity(repoRoot)
+  internal fun repositoryIdentity(repoRoot: Path): String = repositories.repositoryIdentity(repoRoot)
 
-  fun governedSpecPath(
+  internal fun governedSpecPath(
     workflowId: String,
     repoRoot: Path,
     specPath: Path,
   ): String = repositories.governedFeatureTaskSpecPath(projectStore, workflowId, repoRoot, specPath)
 
-  fun expected(
+  internal fun expected(
     workflowId: String,
     issueKey: String,
     repoRoot: Path,

@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.phase.prompt.directives.phasePromptHeader
 import skillbill.engine.featuretask.phase.prompt.directives.terminalRetryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.testValueDisciplineDirective
 
-fun phasePromptLeadingSections(
+internal fun phasePromptLeadingSections(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   sections: PhaseStepPromptSections,
 ): List<String> {
@@ -33,7 +33,7 @@ fun phasePromptLeadingSections(
   )
 }
 
-fun phasePromptMiddleSections(
+internal fun phasePromptMiddleSections(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   sections: PhaseStepPromptSections,
 ): List<String> =
@@ -51,7 +51,7 @@ private fun projectInstructionsSection(instructions: PhaseProjectInstructionsRes
       it.content.trimEnd()
   }.orEmpty()
 
-fun phasePromptTrailingSections(
+internal fun phasePromptTrailingSections(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   sections: PhaseStepPromptSections,
 ): List<String> =
@@ -69,7 +69,7 @@ fun phasePromptTrailingSections(
       ),
   )
 
-private fun settlementTarget(
+public fun settlementTarget(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   sections: PhaseStepPromptSections,
 ): FeatureTaskRuntimePhaseSettlementTarget? =

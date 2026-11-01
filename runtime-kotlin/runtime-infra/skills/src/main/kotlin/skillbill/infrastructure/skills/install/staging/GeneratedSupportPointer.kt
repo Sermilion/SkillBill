@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.staging
 
 import skillbill.infrastructure.skills.scaffold.platformpack.selectedPlatformManifests
-import skillbill.infrastructure.skills.scaffold.runtime.service.contract.requireSupportingFileTarget
+import skillbill.infrastructure.skills.scaffold.runtime.service.support.requireSupportingFileTarget
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path

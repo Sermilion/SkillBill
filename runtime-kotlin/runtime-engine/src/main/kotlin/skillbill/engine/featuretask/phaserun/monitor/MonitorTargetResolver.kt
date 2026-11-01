@@ -11,10 +11,10 @@ import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import java.nio.file.Path
 
 @Inject
-class MonitorTargetResolver(
+public class MonitorTargetResolver(
   private val source: MonitorPullRequestSource,
 ) {
-  fun resolve(
+  internal fun resolve(
     callerRoot: Path,
     selector: MonitorTargetSelector,
   ): MonitorTargetResolution =

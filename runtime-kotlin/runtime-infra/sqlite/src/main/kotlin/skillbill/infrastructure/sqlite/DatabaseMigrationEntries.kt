@@ -4,6 +4,9 @@ import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
+import skillbill.infrastructure.sqlite.core.migration.DatabaseReviewColumnMigrations
+import skillbill.infrastructure.sqlite.core.migration.ReviewAttributionBackfillMigration
+import skillbill.infrastructure.sqlite.core.migration.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.addDelegatedReviewLifecycleProjection
 import skillbill.infrastructure.sqlite.core.migration.addGoalRunnerControlState
 import skillbill.infrastructure.sqlite.core.migration.addGoalRunnerControls
@@ -15,12 +18,11 @@ import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigratio
 import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
 import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMigration
-import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
-import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
+import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
@@ -42,14 +44,13 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalAssessmentCounts
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalSubtaskTraceProbeCounts
-import skillbill.infrastructure.sqlite.core.migration.area.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
+import skillbill.infrastructure.sqlite.core.migration.diagnosticevidence.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
 import skillbill.infrastructure.sqlite.core.migration.ensureSchemaColumnsAndHeals
 import skillbill.infrastructure.sqlite.core.migration.persistGoalPlanningRepairEvidence
 import skillbill.infrastructure.sqlite.core.migration.persistLegacyGoalPlanningRepairEvidence
 import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenceByAgent
-import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
@@ -929,11 +930,16 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 94,
+      name = "add-goal-continuation-columns",
+      operation = ::addGoalContinuationColumns,
+    ) +
+    DatabaseMigration(
+      version = 95,
       name = "rebuild-work-board-readable-phase-titles",
       operation = WorkBoardReadModelRebuildMigration::apply,
     ) +
     DatabaseMigration(
-      version = 95,
+      version = 96,
       name = "record-standalone-review-run-id",
       operation = ::recordStandaloneReviewRunId,
     )

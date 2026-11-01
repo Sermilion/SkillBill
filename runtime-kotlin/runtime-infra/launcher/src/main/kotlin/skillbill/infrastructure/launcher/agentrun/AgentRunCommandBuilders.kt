@@ -18,6 +18,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import skillbill.review.context.model.launch.ReviewConversationIsolation
 import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -51,7 +52,7 @@ internal interface AgentRunCommandBuilder {
   fun continuation(
     command: AgentRunCommand,
     diagnostics: RuntimeDiagnostics,
-  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)?
 }
 
 internal val GoalContinuationEnvironment: Map<String, String> =
@@ -142,7 +143,11 @@ private fun anthropicEndpointHost(baseUrl: String): String? {
   val trimmed = baseUrl.trim()
   if (trimmed.isEmpty()) return null
   val candidate = if ("://" in trimmed) trimmed else "https://$trimmed"
-  return runCatching { URI(candidate).host }.getOrNull()?.lowercase()
+  return try {
+    URI(candidate).host
+  } catch (_: URISyntaxException) {
+    null
+  }?.lowercase()
 }
 
 internal val ANTHROPIC_MODEL_ALIASES = setOf("opus", "sonnet", "haiku")
@@ -164,6 +169,11 @@ internal class ClaudeAgentRunCommandBuilder(
   override val agent: SupportedAgent = SupportedAgent.CLAUDE
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CLAUDE_JSON
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
+
+  override fun continuation(
+    command: AgentRunCommand,
+    diagnostics: RuntimeDiagnostics,
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)

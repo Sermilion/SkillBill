@@ -35,7 +35,7 @@ data class AgentRunProcessProbeFields(
   val declaredProgressProbe: AgentRunDeclaredProgressProbe = AgentRunDeclaredProgressProbe.NONE,
   val mcpStartupProbe: AgentRunMcpStartupProbe = AgentRunMcpStartupProbe.NONE,
   val progressEmitter: AgentRunProgressEmitter = AgentRunProgressEmitter.NONE,
-  val activityProbe: AgentRunActivityProbe = AgentRunActivityProbe.NONE,
+  val activityProbe: AgentRunActivityProbe? = null,
   val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
   val idlePolicy: AgentRunIdlePolicy = AgentRunIdlePolicy.DB_PROGRESS_ONLY,

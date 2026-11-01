@@ -32,6 +32,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Logger
 
 private class HeldOwnership(
   val admission: HeldAdmission,
@@ -76,7 +77,7 @@ class GitMonitorResources(
           MonitorAdmissionBlock.LIVE_OWNER,
           directory,
           "Another invocation holds the admission lock for ${request.target.pullRequest.url}.",
-          runCatching { MonitorAdmissionFiles.read(directory) }.getOrNull()?.let(::summaryOf),
+          readAdmissionRecord(directory)?.let(::summaryOf),
         )
       is AdmissionAttempt.Held -> admit(attempt.admission, request)
     }
@@ -263,7 +264,7 @@ class GitMonitorResources(
   override fun settle(request: MonitorSettleRequest): MonitorSettlement {
     val fence = request.fence
     val ownership = held[fence.directory]?.takeIf { it.matches(fence) }
-    val record = ownership?.let { runCatching { MonitorAdmissionFiles.read(fence.directory) }.getOrNull() }
+    val record = ownership?.let { readAdmissionRecord(fence.directory) }
     if (ownership == null || record == null || !record.isOwnedBy(fence)) {
       ownership?.let { release(fence, it) }
       return MonitorSettlement.FenceLost("The ownership of ${fence.directory} is no longer held by this invocation.")
@@ -506,6 +507,19 @@ class GitMonitorResources(
       record.state,
     )
 
+  private fun readAdmissionRecord(directory: Path): MonitorOwnershipRecord? =
+    try {
+      MonitorAdmissionFiles.read(directory)
+    } catch (error: SkillBillRuntimeException) {
+      monitorResourcesLog.warning(
+        "Standalone monitor ownership record could not be read from $directory: ${error.message}",
+      )
+      null
+    }
+
   private fun MonitorOwnershipRecord.isOwnedBy(fence: MonitorFence): Boolean =
     ownerToken == fence.ownerToken && generation == fence.generation
 }
+
+private val monitorResourcesLog: Logger =
+  Logger.getLogger("skillbill.infrastructure.workflow.monitor.GitMonitorResources")

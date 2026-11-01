@@ -132,6 +132,8 @@ class SkillBillUninstallCooperativeCancellationTest {
 }
 
 private object NoopRuntimeDiagnostics : RuntimeDiagnostics {
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

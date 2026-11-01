@@ -71,10 +71,13 @@ internal fun startRunningRuntimeGoalChild(fixture: GoalCliFixture): String {
     connection.prepareStatement(
       "UPDATE feature_task_workflows SET artifacts_json = json_set(artifacts_json, '$.goal_continuation', " +
         "json((SELECT json_extract(artifacts_json, '$.goal_continuation') FROM feature_task_workflows " +
-        "WHERE workflow_id = ?))) WHERE workflow_id = ? AND mode = 'runtime'",
+        "WHERE workflow_id = ?))), (parent_workflow_id, goal_subtask_id, goal_issue_key) = " +
+        "(SELECT parent_workflow_id, goal_subtask_id, goal_issue_key FROM feature_task_workflows " +
+        "WHERE workflow_id = ?) WHERE workflow_id = ? AND mode = 'runtime'",
     ).use { statement ->
       statement.setString(1, childWorkflowId)
-      statement.setString(2, runtimeWorkflow["workflow_id"] as String)
+      statement.setString(2, childWorkflowId)
+      statement.setString(3, runtimeWorkflow["workflow_id"] as String)
       assertEquals(1, statement.executeUpdate())
     }
     connection.prepareStatement(

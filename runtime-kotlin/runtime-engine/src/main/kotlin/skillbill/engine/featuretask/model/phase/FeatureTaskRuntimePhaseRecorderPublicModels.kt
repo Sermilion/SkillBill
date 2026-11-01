@@ -9,7 +9,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDiagnosticFai
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
 
-data class GoalReviewPhaseCompletionRequest(
+public data class GoalReviewPhaseCompletionRequest(
   val phaseState: FeatureTaskRuntimePhaseStateRequest,
   val verdict: FeatureTaskRuntimeVerdict,
   val unresolvedFindingCount: Int,
@@ -19,7 +19,7 @@ data class GoalReviewPhaseCompletionRequest(
   val commitFocusedAccounting: GoalSubtaskCommitFocusedAccounting? = null,
 )
 
-data class FeatureTaskRuntimeProjectionRejection(
+public data class FeatureTaskRuntimeProjectionRejection(
   val workflowId: String,
   val consumerPhaseId: String,
   val projectionContractId: String,
@@ -29,34 +29,34 @@ data class FeatureTaskRuntimeProjectionRejection(
   val sourceLabel: String,
 )
 
-sealed class FeatureTaskRuntimeProducerOutputRead {
-  data class Found(val evidence: ProducerOutputEvidence) : FeatureTaskRuntimeProducerOutputRead()
+public sealed class FeatureTaskRuntimeProducerOutputRead {
+  public data class Found(val evidence: ProducerOutputEvidence) : FeatureTaskRuntimeProducerOutputRead()
 
-  data object Absent : FeatureTaskRuntimeProducerOutputRead()
+  public data object Absent : FeatureTaskRuntimeProducerOutputRead()
 
-  data class Unreadable(
-    val failureClass: FeatureTaskRuntimeDiagnosticFailureClass,
+  public data class Unreadable(
+    public val failureClass: FeatureTaskRuntimeDiagnosticFailureClass,
   ) : FeatureTaskRuntimeProducerOutputRead()
 }
 
-data class ProducerOutputQueryArgs(
-  val workflowId: String,
-  val phaseId: String,
-  val attempt: Int,
-  val agentId: String,
-  val generation: Int,
+public data class ProducerOutputQueryArgs(
+  public val workflowId: String,
+  public val phaseId: String,
+  public val attempt: Int,
+  public val agentId: String,
+  public val generation: Int,
 )
 
-data class AppendCheckpointIdentityArgs(
-  val workflowId: String,
-  val issueKey: String,
-  val subtaskId: String,
-  val branch: String,
-  val phaseId: String,
-  val attemptCount: Int,
-  val loopId: String?,
-  val generation: Int,
-  val parentSha: String?,
-  val ownedPaths: List<String>,
-  val commitSha: String,
+public data class AppendCheckpointIdentityArgs(
+  public val workflowId: String,
+  public val issueKey: String,
+  public val subtaskId: String,
+  public val branch: String,
+  public val phaseId: String,
+  public val attemptCount: Int,
+  public val loopId: String?,
+  public val generation: Int,
+  public val parentSha: String?,
+  public val ownedPaths: List<String>,
+  public val commitSha: String,
 )

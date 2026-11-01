@@ -1,3 +1,12 @@
+## [2026-10-31] SKILL-448 architecture assessment work packages
+Areas: runtime-contracts, domain, ports, engine, goalrunner, application, infra (SQLite, workflow, host, launcher, skills), CLI, MCP, core architecture guards
+- Removed engine back-edges, extracted `runtime-goalrunner` with explicit API, and replaced distributed cycle checks with a catalog-driven exact-package SCC census.
+- Added typed goal-continuation query columns and moved its JSON codec ownership to SQLite; replaced null-object interface defaults and broad `runCatching` capture with explicit capabilities and cancellation-aware handling.
+- Reusable: relocate declarations toward their consumers, derive architecture coverage from the module catalog, and keep query columns synchronized with the durable artifact in one write.
+- The engine and goal-runner SCC census files remain, so package cycles are still recorded rather than fully removed. The desktop work packages were dropped; no desktop changes are included.
+Feature flag: N/A
+Acceptance criteria: 4/5 implemented
+
 ## [2026-10-30] SKILL-447 desktop runtime services
 Areas: runtime-engine, runtime-ports, runtime-contracts, runtime-infra, runtime-application, runtime-core, desktop-tray
 - Added bounded change signals and session-scoped pooled reads, a persisted board projection, typed controls, lifecycle checkpoints and latest-tick journal retention.

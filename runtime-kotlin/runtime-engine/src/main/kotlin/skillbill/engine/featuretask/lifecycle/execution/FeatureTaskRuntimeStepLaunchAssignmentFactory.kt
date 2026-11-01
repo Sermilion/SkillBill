@@ -13,19 +13,19 @@ import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 
-data class StepLaunchAssignmentInputs(
-  val invokedAgentId: String,
-  val agentAssignment: FeatureTaskRuntimeAgentAssignment,
-  val modelAssignment: FeatureTaskRuntimeModelAssignment,
-  val environmentKind: LaunchEnvironmentKind = LaunchEnvironmentKind.INHERITED,
+public data class StepLaunchAssignmentInputs(
+  public val invokedAgentId: String,
+  public val agentAssignment: FeatureTaskRuntimeAgentAssignment,
+  public val modelAssignment: FeatureTaskRuntimeModelAssignment,
+  public val environmentKind: LaunchEnvironmentKind = LaunchEnvironmentKind.INHERITED,
 )
 
 @Inject
-class FeatureTaskRuntimeStepLaunchResolver(
+public class FeatureTaskRuntimeStepLaunchResolver(
   private val launcher: AgentRunLauncher,
   private val lookup: PhaseStrategyLookup,
 ) {
-  fun resolve(
+  public fun resolve(
     facts: PhaseStrategySelectionFacts,
     inputs: StepLaunchAssignmentInputs,
   ): Map<String, StepLaunchAssignment> =
@@ -37,8 +37,8 @@ class FeatureTaskRuntimeStepLaunchResolver(
     )
 }
 
-object FeatureTaskRuntimeStepLaunchAssignmentFactory {
-  fun resolve(
+public object FeatureTaskRuntimeStepLaunchAssignmentFactory {
+  public fun resolve(
     launcher: AgentRunLauncher,
     lookup: PhaseStrategyLookup,
     facts: PhaseStrategySelectionFacts,

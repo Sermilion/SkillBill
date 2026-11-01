@@ -4,12 +4,12 @@ import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorWorktree
 import java.nio.file.Path
 
-data class MonitorExecutionContext(
-  val target: MonitorResolvedTarget,
-  val callerRoot: Path,
-  val primaryRoot: Path,
-  val worktree: MonitorWorktree,
-  val ownerToken: String,
-  val generation: Long,
-  val pinnedBaseSha: String,
+public data class MonitorExecutionContext(
+  public val target: MonitorResolvedTarget,
+  public val callerRoot: Path,
+  public val primaryRoot: Path,
+  public val worktree: MonitorWorktree,
+  public val ownerToken: String,
+  public val generation: Long,
+  public val pinnedBaseSha: String,
 )

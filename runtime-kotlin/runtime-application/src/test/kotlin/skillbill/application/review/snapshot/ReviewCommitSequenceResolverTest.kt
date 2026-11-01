@@ -7,6 +7,7 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceProjection
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.parse
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.DiffResolverPortDefaults
 import skillbill.ports.diff.model.ReviewCommitMetadata

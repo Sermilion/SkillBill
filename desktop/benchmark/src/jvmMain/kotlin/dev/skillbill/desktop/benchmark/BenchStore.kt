@@ -9,7 +9,7 @@ import skillbill.di.core.create
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.model.EnvironmentContext
-import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.infrastructure.host.JdkRuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -197,10 +197,7 @@ private fun registerBenchmarkWorker(
   )
   unit.workflowStates.saveFeatureTaskWorkflow(row, FeatureTaskWorkflowMode.RUNTIME)
   val process = JdkFeatureTaskRuntimeWorkerSupervisor(
-    object : RuntimeDiagnostics {
-      override fun warning(message: String, error: Throwable?) = Unit
-      override fun error(message: String, error: Throwable?) = Unit
-    },
+    JdkRuntimeDiagnostics(),
     JdkHostPlatformPort,
   ).currentProcess()
   val ownership = FeatureTaskRuntimeWorkerOwnership(
@@ -215,8 +212,5 @@ private fun registration(root: Path, namespace: String, id: String, issue: Strin
   StandalonePhaseStatusRegistration(
     "repo-root-realpath-v1:${root.toAbsolutePath()}", "benchmark-$namespace", issue, "bench-workflow-$id", id, "review", "execution-$id", "active", "review",
     startedAt, "benchmark-writer-$namespace", 1, leaseExpiresAt,
-    JdkFeatureTaskRuntimeWorkerSupervisor(object : RuntimeDiagnostics {
-      override fun warning(message: String, error: Throwable?) = Unit
-      override fun error(message: String, error: Throwable?) = Unit
-    }, JdkHostPlatformPort).currentProcess(),
+    JdkFeatureTaskRuntimeWorkerSupervisor(JdkRuntimeDiagnostics(), JdkHostPlatformPort).currentProcess(),
   )

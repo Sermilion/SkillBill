@@ -1,6 +1,6 @@
 package skillbill.ports.taskruntime.model
 
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
+import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 
 data class ValidatedFeatureTaskRuntimeExecutionPlan private constructor(
   private val canonicalJson: String,

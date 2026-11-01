@@ -2,6 +2,9 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseFindingVerdictHooks
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
+import skillbill.engine.featuretask.slot.PhaseRepositoryFingerprintHooks
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
@@ -12,7 +15,11 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal class ImplementFixStep : PhaseStepHooks<PhaseImplementFixStepBinding> {
+internal class ImplementFixStep :
+  PhaseStepHooks<PhaseImplementFixStepBinding>,
+  PhaseRepositoryFingerprintHooks,
+  PhaseFindingVerdictHooks<PhaseImplementFixStepBinding>,
+  PhaseLaunchPromptHooks<PhaseImplementFixStepBinding> {
   val policy =
     PhaseStepPolicy(
       mutating = true,

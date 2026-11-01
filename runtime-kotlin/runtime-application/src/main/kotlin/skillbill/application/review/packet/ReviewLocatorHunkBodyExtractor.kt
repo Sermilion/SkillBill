@@ -1,6 +1,6 @@
 package skillbill.application.review.packet
 
-import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
+import skillbill.ports.review.model.ReviewStoredHunkBodyExtractor
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 
 internal object ReviewLocatorHunkBodyExtractor : ReviewStoredHunkBodyExtractor {

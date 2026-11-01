@@ -1,6 +1,7 @@
 package skillbill.application.workflow.persist
 
 import skillbill.contracts.JsonCodec
+import skillbill.ports.workflow.PlainWorkflowArtifactWireEncoder
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
@@ -31,7 +32,10 @@ class WorkflowStateSchemaWireBaselineTest {
       )
     val snapshotJson =
       JsonCodec.mapToJsonString(
-        WorkflowWireProjections.snapshotMap(engine.snapshotView(definition, record)).toPayload(),
+        WorkflowWireProjections.snapshotMap(
+          engine.snapshotView(definition, record),
+          PlainWorkflowArtifactWireEncoder,
+        ).toPayload(),
       ) + "\n"
     val stepJson = record.toRecord().stepsJson + "\n"
 

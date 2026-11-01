@@ -45,12 +45,12 @@ import skillbill.di.scaffold.RuntimeScaffoldValidationProvides
 import skillbill.di.telemetry.RuntimeTelemetryProvides
 import skillbill.di.workflow.RuntimeWorkflowProvides
 import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
-import skillbill.engine.diagnostics.block.investigation.EvidenceBlockIncidentInvestigator
-import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFactsReader
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.block.report.ProductReportScheduler
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
+import skillbill.engine.featuretask.incident.investigation.EvidenceBlockIncidentInvestigator
+import skillbill.engine.featuretask.incident.report.BlockIncidentLaunchFactsReader
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
@@ -92,6 +92,7 @@ import skillbill.infrastructure.workflow.git.lineage.GitRepositoryLineage
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.blockincident.BlockIncidentContractValidator
@@ -109,7 +110,6 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.editor.FileEditorLauncherPort
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
-import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
@@ -127,6 +127,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.ports.validation.RepoValidationGateway
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import java.time.Clock
 
@@ -351,6 +352,7 @@ abstract class RuntimeComponent(
   abstract val skillBillUninstallService: SkillBillUninstallService
   abstract val telemetryLevelMutator: TelemetryLevelMutator
   abstract val telemetryService: TelemetryService
+  abstract val workflowArtifactWireEncoder: WorkflowArtifactWireEncoder
   abstract val workflowService: WorkflowService
   abstract val workListService: WorkListService
   abstract val workControlService: WorkControlService

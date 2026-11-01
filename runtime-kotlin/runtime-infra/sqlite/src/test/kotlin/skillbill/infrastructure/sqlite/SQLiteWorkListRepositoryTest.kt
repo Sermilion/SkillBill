@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition

@@ -3,15 +3,16 @@ package skillbill.cli.kernel.payload
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.persist.WorkflowWireProjections
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 
-internal fun WorkflowUpdateResult.toPayload(): Map<String, Any?> =
+internal fun WorkflowUpdateResult.toPayload(encoder: WorkflowArtifactWireEncoder): Map<String, Any?> =
   when (this) {
     is WorkflowUpdateResult.Ok ->
       LinkedHashMap(
         WorkflowWireProjections.updateAcknowledgementMap(acknowledgement).toPayload(),
       ).apply {
         launchProjection?.let {
-          put("launch_projection", WorkflowWireProjections.inputProjectionMap(it).toPayload())
+          put("launch_projection", WorkflowWireProjections.inputProjectionMap(it, encoder).toPayload())
         }
         val quotedDbPath = "'${dbPath.replace("'", "'\"'\"'")}'"
         val quotedWorkflowId = "'${acknowledgement.workflowId.replace("'", "'\"'\"'")}'"

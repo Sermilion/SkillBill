@@ -25,7 +25,7 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Path
 
-class FeatureTaskRuntimeGoalReviewInputBuilder(
+internal class FeatureTaskRuntimeGoalReviewInputBuilder(
   private val database: DatabaseSessionFactory,
   private val patcher: FeatureTaskRuntimeGoalContinuationArtifactPatcher,
   private val persistGoalReviewInput: (

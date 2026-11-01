@@ -1,6 +1,6 @@
 package skillbill.ports.process.model
 
-import skillbill.ports.process.DEFAULT_INSTALLER_PROCESS_DEADLINE_SECONDS
+const val DEFAULT_INSTALLER_PROCESS_DEADLINE_SECONDS: Long = 600L
 
 data class InstallerProcessRequest(
   val executable: String,

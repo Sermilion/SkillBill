@@ -1,5 +1,6 @@
 package skillbill.engine.operation.unittestvalue
 
+import skillbill.engine.featuretask.persist.UnitTestPathClassifier
 import skillbill.engine.operation.core.Operation
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
@@ -12,7 +13,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import java.nio.file.Path
 
-class UnitTestValueCheckOperation(
+public class UnitTestValueCheckOperation(
   private val gitOperations: WorkflowGitOperations,
 ) : Operation {
   override val id: String = "unit-test-value-check"

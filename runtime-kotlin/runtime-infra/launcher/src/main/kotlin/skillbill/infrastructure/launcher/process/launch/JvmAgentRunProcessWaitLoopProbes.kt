@@ -1,0 +1,176 @@
+package skillbill.infrastructure.launcher.process.launch
+
+import skillbill.error.core.catchingNonCancellation
+import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
+import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
+import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
+import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.ports.agentrun.model.AgentRunProgressLabelProbe
+import skillbill.ports.agentrun.model.AgentRunProgressProbe
+import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+
+internal fun ProcessWaitLoop.pollWorkflowProgress(nowNanos: Long) {
+  val read = request.probes.progressProbe.readProgressToken(degradation)
+  if (read.failed) return
+  val progressToken = read.value
+  if (progressToken == null && lastProgressToken != null) {
+    lastProgressToken = null
+    degradation.recordProbeAbsence("progress_token")
+    return
+  }
+  if (progressToken != lastProgressToken) {
+    lastProgressToken = progressToken
+    lastWorkflowProgressNanos = nowNanos
+    lastProgressInstant = clock.instant()
+    fileActivityWindowStartNanos = null
+    writeProgressLabel(nowNanos)
+    request.probes.activityStampSink.safeStamp(AgentActivityLabel.DURABLE_PROGRESS, degradation)
+  }
+}
+
+internal fun ProcessWaitLoop.pollOutputActivity(nowNanos: Long) {
+  val observedMillis = outputTracker.lastObservedAt()?.toEpochMilli() ?: return
+  if (observedMillis != lastObservedOutputMillis) {
+    lastObservedOutputMillis = observedMillis
+    lastOutputNanos = nowNanos
+    request.probes.activityStampSink.safeStamp(AgentActivityLabel.STDOUT, degradation)
+  }
+}
+
+internal fun ProcessWaitLoop.pollFileActivity(nowNanos: Long) {
+  val read = request.probes.activityProbe.readActivityToken(degradation)
+  if (read.failed) return
+  val activityToken = read.value
+  if (activityToken == null && lastActivityToken != null) {
+    lastActivityToken = null
+    degradation.recordProbeAbsence("activity_token")
+    return
+  }
+  if (activityToken != lastActivityToken) {
+    lastActivityToken = activityToken
+    lastActivityInstant = clock.instant()
+    if (fileActivityWindowStartNanos == null) {
+      fileActivityWindowStartNanos = nowNanos
+    }
+    writeActivityLabel()
+    request.probes.activityStampSink.safeStamp(AgentActivityLabel.WORKTREE_WRITE, degradation)
+    request.probes.worktreeEditObserver.safeObserve(degradation)
+  }
+}
+
+internal fun ProcessWaitLoop.pollStatusHeartbeat(nowNanos: Long) {
+  val alive = process.isAlive
+  if (alive) lastLiveHeartbeatNanos = nowNanos
+  if (nowNanos - lastStatusHeartbeatNanos < statusHeartbeatNanos) return
+  lastStatusHeartbeatNanos = nowNanos
+  lifecycleEmitter.emitHeartbeat(alive)
+  request.probes.progressProbe.readProgressLabel(degradation).value?.takeIf(String::isNotBlank)?.let { label ->
+    lastProgressLabel = label
+    observeWorkflowStepLabel(label, nowNanos)
+  }
+  val workflowLabel = lastProgressLabel?.takeIf(String::isNotBlank)
+  val activityLabel = lastActivityLabel?.takeIf(String::isNotBlank)
+  val details =
+    listOfNotNull(
+      workflowLabel?.let { "workflow: $it" },
+      activityLabel?.let { "file activity: $it" },
+    ).joinToString("; ")
+      .takeIf(String::isNotBlank)
+      ?.let { "; $it" }
+      .orEmpty()
+  request.launch.outputSink.write(
+    AgentRunOutputStream.STDERR,
+    "skill-bill: status heartbeat (${request.timing.statusHeartbeatInterval}): child run still active$details\n",
+  )
+}
+
+internal fun ProcessWaitLoop.writeProgressLabel(nowNanos: Long) {
+  request.probes.progressProbe.readProgressLabel(degradation).value
+    ?.takeIf(String::isNotBlank)
+    ?.let { label ->
+      lastProgressLabel = label
+      lastSnapshotInstant = clock.instant()
+      observeWorkflowStepLabel(label, nowNanos)
+      request.launch.outputSink.write(AgentRunOutputStream.STDERR, "skill-bill: workflow progress: $label\n")
+    }
+}
+
+internal fun ProcessWaitLoop.observeWorkflowStepLabel(
+  label: String,
+  nowNanos: Long,
+) {
+  val step = parseWorkflowIdAndStep(label).second ?: return
+  if (lastObservedWorkflowStep != null && lastObservedWorkflowStep != step) {
+    resetWallClock(nowNanos)
+  }
+  lastObservedWorkflowStep = step
+}
+
+internal fun ProcessWaitLoop.writeActivityLabel() {
+  val activityLabel = request.probes.activityProbe.readActivityLabel(degradation).value?.takeIf(String::isNotBlank)
+  if (activityLabel != null) {
+    lastActivityLabel = activityLabel
+  }
+  val workflowLabel = request.probes.progressProbe.readProgressLabel(degradation).value?.takeIf(String::isNotBlank)
+  val suffix =
+    listOfNotNull(activityLabel, workflowLabel).joinToString("; ")
+      .takeIf(String::isNotBlank)
+      ?.let { label -> ": $label" }
+      .orEmpty()
+  request.launch.outputSink.write(
+    AgentRunOutputStream.STDERR,
+    "skill-bill: file activity observed; durable workflow progress is still pending$suffix\n",
+  )
+}
+
+internal fun AgentRunActivityStampSink.safeStamp(
+  label: AgentActivityLabel,
+  degradation: ProcessRunDegradationRecorder,
+) {
+  catchingNonCancellation { stamp(label) }
+    .onFailure { failure -> degradation.recordProbeFailure("activity_stamp", failure) }
+}
+
+internal fun AgentRunWorktreeEditObserver.safeObserve(degradation: ProcessRunDegradationRecorder) {
+  catchingNonCancellation { observe() }
+    .onFailure { failure -> degradation.recordProbeFailure("worktree_edit_observe", failure) }
+}
+
+internal data class ProbeRead<T>(
+  val value: T?,
+  val failed: Boolean,
+)
+
+internal fun AgentRunProgressProbe.readProgressToken(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
+  readProbe(recorder, "progress_token") { progressToken() }
+
+internal fun AgentRunProgressProbe.readProgressLabel(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
+  readProbe(recorder, "progress_label") { (this as? AgentRunProgressLabelProbe)?.progressLabel() }
+
+internal fun AgentRunActivityProbe?.readActivityToken(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
+  readProbe(recorder, "activity_token") { this?.activityToken() }
+
+internal fun AgentRunActivityProbe?.readActivityLabel(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
+  readProbe(recorder, "activity_label") { this?.activityLabel() }
+
+internal fun AgentRunDeclaredProgressProbe.readDeclaredProgress(
+  recorder: ProcessRunDegradationRecorder,
+): ProbeRead<AgentRunDeclaredProgressSnapshot> = readProbe(recorder, "declared_progress") { latestDeclaredProgress() }
+
+internal fun AgentRunMcpStartupProbe.readStartupObserved(recorder: ProcessRunDegradationRecorder): ProbeRead<Boolean> =
+  readProbe(recorder, "mcp_startup") { startupObserved() }
+
+private inline fun <T> readProbe(
+  recorder: ProcessRunDegradationRecorder,
+  seam: String,
+  read: () -> T?,
+): ProbeRead<T> =
+  catchingNonCancellation { read() }.fold(
+    onSuccess = { value -> ProbeRead(value = value, failed = false) },
+    onFailure = { failure ->
+      recorder.recordProbeFailure(seam, failure)
+      ProbeRead(value = null, failed = true)
+    },
+  )

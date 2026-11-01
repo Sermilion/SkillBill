@@ -7,14 +7,10 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-fun interface AgentRunActivityProbe {
+interface AgentRunActivityProbe {
   fun activityToken(): String?
 
-  fun activityLabel(): String? = null
-
-  companion object {
-    val NONE: AgentRunActivityProbe = AgentRunActivityProbe { null }
-  }
+  fun activityLabel(): String?
 }
 
 data class AgentRunIdleSignals(

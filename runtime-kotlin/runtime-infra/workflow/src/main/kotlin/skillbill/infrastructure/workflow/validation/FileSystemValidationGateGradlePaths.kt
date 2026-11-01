@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.validation
 
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -41,7 +42,12 @@ internal object FileSystemValidationGateGradlePaths {
     return canonicalizeMaybeMissing(absolute).startsWith(canonicalRepo)
   }
 
-  fun canonicalizeExisting(path: Path): Path = runCatching { path.toRealPath() }.getOrDefault(path)
+  fun canonicalizeExisting(path: Path): Path =
+    try {
+      path.toRealPath()
+    } catch (_: IOException) {
+      path
+    }
 
   fun parseGradleTaskPath(taskPath: String): Pair<String, String> {
     val segments = taskPath.trim(':').split(':').filter { it.isNotEmpty() }

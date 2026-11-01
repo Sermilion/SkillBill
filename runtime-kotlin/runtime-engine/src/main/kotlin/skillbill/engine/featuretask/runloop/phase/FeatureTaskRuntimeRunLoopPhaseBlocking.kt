@@ -47,13 +47,14 @@ import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptScope
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.state.tracksReviewPasses
 import skillbill.workflow.model.goalreview.GOAL_SUBTASK_REVIEW_BLOCKER_SEVERITY
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 
-object FeatureTaskRuntimeRunLoopPhaseBlocking {
+internal object FeatureTaskRuntimeRunLoopPhaseBlocking {
   internal fun blockStepInPhase(
     context: PhaseCheckpointRemediationContext,
     block: PhaseBlockRequest,

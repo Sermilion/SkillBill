@@ -4,10 +4,10 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
 
-data class FeatureTaskRuntimeBriefingProjectionInputs(
-  val handoff: FeatureTaskRuntimePhaseHandoff,
-  val declarations: List<PhaseHandoffProjectionDeclaration>,
-  val workflowId: String?,
-  val sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference?,
-  val addonContentBySlug: Map<String, String>,
+internal data class FeatureTaskRuntimeBriefingProjectionInputs(
+  public val handoff: FeatureTaskRuntimePhaseHandoff,
+  public val declarations: List<PhaseHandoffProjectionDeclaration>,
+  public val workflowId: String?,
+  public val sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference?,
+  public val addonContentBySlug: Map<String, String>,
 )

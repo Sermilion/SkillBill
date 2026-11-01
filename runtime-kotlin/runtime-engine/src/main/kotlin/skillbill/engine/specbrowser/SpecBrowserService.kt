@@ -3,7 +3,7 @@ package skillbill.engine.specbrowser
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.runtime.RuntimeSingleton
-import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goal.GoalIssueStartedReader
 import skillbill.engine.specbrowser.model.SpecBrowserCounts
 import skillbill.engine.specbrowser.model.SpecBrowserProject
 import skillbill.engine.specbrowser.model.SpecBrowserSnapshot
@@ -25,7 +25,7 @@ import java.nio.file.Path
 
 @RuntimeSingleton
 @Inject
-class SpecBrowserService(
+public class SpecBrowserService(
   private val catalog: ProjectCatalogPort,
   private val projectStore: ProjectStorePort,
   private val manifests: DecompositionManifestStore,
@@ -33,7 +33,7 @@ class SpecBrowserService(
   private val database: DatabaseSessionFactory,
   status: IdeStatusService,
   runs: WorkRunActions,
-  private val goals: GoalRunnerManifestStore,
+  private val goals: GoalIssueStartedReader,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val files: GoalRuntimeStateFileStore,
 ) {
@@ -41,15 +41,15 @@ class SpecBrowserService(
   private val treeReader = SpecTreeReader(manifests, manifestCache)
   private val liveGoals = SpecLiveGoalReader(database, status, runs, repositoryEnclosingRootPort)
 
-  fun projects(): List<SpecBrowserProject> = catalog.list().filter { it.hasSpecs }.map { project(it, null) }
+  public fun projects(): List<SpecBrowserProject> = catalog.list().filter { it.hasSpecs }.map { project(it, null) }
 
-  fun projectFor(repoRoot: Path): SpecBrowserProject {
+  public fun projectFor(repoRoot: Path): SpecBrowserProject {
     val location = projectStore.resolve(repoRoot)
     val name = displayName(repoRoot, location.projectId)
     return SpecBrowserProject(location.projectId, name, location.specsRoot, repoRoot)
   }
 
-  fun snapshot(
+  public fun snapshot(
     projectId: String,
     preferredRepoRoot: Path?,
   ): SpecBrowserSnapshot {
@@ -61,7 +61,7 @@ class SpecBrowserService(
     return SpecBrowserSnapshot(project, tree.roots, tree.counts, tree.anyInProgress, read.failure)
   }
 
-  fun control(
+  public fun control(
     projectId: String,
     bundlePath: String,
     preferredRepoRoot: Path?,
@@ -87,7 +87,7 @@ class SpecBrowserService(
     return specBundleControl(facts)
   }
 
-  fun deleteBundle(
+  public fun deleteBundle(
     projectId: String,
     bundlePath: String,
     preferredRepoRoot: Path?,
@@ -138,11 +138,11 @@ class SpecBrowserService(
     repoRoot: Path,
     treeStatus: SpecBrowserStatus,
   ): SpecBundleControlFacts {
-    val ownership = goals.discoverPurgeOwnership(issueKey, repoRoot)
+    val everStarted = goals.hasStarted(issueKey, repoRoot)
     return SpecBundleControlFacts(
       issueKey = issueKey,
       unavailableReason = null,
-      everStarted = ownership.parentWorkflowIds.isNotEmpty() || ownership.planWorkflowIds.isNotEmpty(),
+      everStarted = everStarted,
       treeStatus = treeStatus,
       live = liveGoals.controlFacts(repoRoot, issueKey),
     )

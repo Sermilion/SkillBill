@@ -3,7 +3,9 @@ package skillbill.engine.featuretask.runner
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 
@@ -47,7 +49,7 @@ internal data class SlotBaselineDurableBundle(
           "workflow $WORKFLOW_ID was not persisted"
         }
       val artifacts =
-        JsonCodec.parseObjectOrNull(record.artifactsJson)
+        JsonCodec.parseObjectOrNull(SqliteWorkflowArtifactWireEncoder().encode(record.toSnapshot().artifacts))
           ?.let(JsonCodec::jsonElementToValue)
           ?.let(JsonCodec::anyToStringAnyMap)
           .orEmpty()

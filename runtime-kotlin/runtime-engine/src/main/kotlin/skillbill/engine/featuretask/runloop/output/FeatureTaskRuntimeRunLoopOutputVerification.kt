@@ -64,7 +64,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import java.nio.file.Path
 
-object FeatureTaskRuntimeRunLoopOutputVerification {
+internal object FeatureTaskRuntimeRunLoopOutputVerification {
   internal fun implementationObligations(run: PhaseRun): FeatureTaskRuntimeImplementationObligations =
     FeatureTaskRuntimeImplementationObligations(
       plannedTaskIds = emptyList(),

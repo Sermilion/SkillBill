@@ -38,7 +38,14 @@ internal class StandalonePullRequestWatcher(
     data class Moved(val headSha: String) : Observation
 
     data object NotYetVisible : Observation
+
+    data object Unknown : Observation
   }
+
+  private data class PollRound(
+    val outcome: PullRequestCiOutcome? = null,
+    val startTimeoutEligible: Boolean = false,
+  )
 
   private data class Progress(val at: Instant? = null, val names: List<String>? = null)
 
@@ -59,13 +66,14 @@ internal class StandalonePullRequestWatcher(
     val startedAt = now()
     val state = WatchState(heads, adoptHead, startedAt + refreshGrace)
     while (true) {
-      val outcome =
+      val round =
         if (cancelled()) {
-          PullRequestCiOutcome.Blocked(CANCELLED_REASON)
+          PollRound(PullRequestCiOutcome.Blocked(CANCELLED_REASON))
         } else {
-          poll(pullRequest, onCiRunning, state) ?: startTimeout(startedAt, state)
+          poll(pullRequest, onCiRunning, state)
         }
-      if (outcome != null) return outcome
+      round.outcome?.let { return it }
+      if (round.startTimeoutEligible) startTimeout(startedAt, state)?.let { return it }
       sleep(pollInterval)
     }
   }
@@ -74,11 +82,11 @@ internal class StandalonePullRequestWatcher(
     pullRequest: MonitorPullRequestIdentity,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     state: WatchState,
-  ): PullRequestCiOutcome? =
+  ): PollRound =
     when (val observation = observe(pullRequest, state.heads)) {
-      is Observation.Settled -> observation.outcome
-      Observation.NotYetVisible -> null
-      is Observation.Moved -> adopt(observation.headSha, state)
+      is Observation.Settled -> PollRound(observation.outcome)
+      Observation.NotYetVisible, Observation.Unknown -> PollRound()
+      is Observation.Moved -> PollRound(adopt(observation.headSha, state))
       is Observation.Open -> pollChecks(pullRequest, observation, onCiRunning, state)
     }
 
@@ -101,10 +109,10 @@ internal class StandalonePullRequestWatcher(
     open: Observation.Open,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     state: WatchState,
-  ): PullRequestCiOutcome? {
+  ): PollRound {
     val reported = checks.checks(pullRequest)
     if (reported is PullRequestChecks.Unavailable) {
-      return confirmed(pullRequest, state.heads, PullRequestCiOutcome.Unavailable(reported.reason))
+      return confirmUnavailable(pullRequest, state.heads)
     }
     val reportedChecks = (reported as? PullRequestChecks.Reported)?.checks.orEmpty()
     if (reportedChecks.isNotEmpty()) state.ciStarted = true
@@ -113,10 +121,33 @@ internal class StandalonePullRequestWatcher(
         ?.takeUnless { it is PullRequestCiOutcome.Failed && !refreshed(reportedChecks, state) }
     if (verdict == null) {
       state.progress = reportRunning(pullRequest, reportedChecks, onCiRunning, state.progress)
-      return null
+      return PollRound(startTimeoutEligible = reportedChecks.isEmpty())
     }
-    return confirmed(pullRequest, state.heads, verdict)
+    return when (val confirmation = observe(pullRequest, state.heads)) {
+      is Observation.Settled -> PollRound(confirmation.outcome)
+      Observation.NotYetVisible ->
+        PollRound(
+          PullRequestCiOutcome.Unavailable("The pull request head changed while its checks were being observed."),
+        )
+      Observation.Unknown -> PollRound()
+      is Observation.Moved -> PollRound()
+      is Observation.Open -> PollRound(verdict)
+    }
   }
+
+  private fun confirmUnavailable(
+    pullRequest: MonitorPullRequestIdentity,
+    heads: StandaloneWatchHeads,
+  ): PollRound =
+    when (val confirmation = observe(pullRequest, heads)) {
+      is Observation.Settled -> PollRound(confirmation.outcome)
+      Observation.NotYetVisible ->
+        PollRound(
+          PullRequestCiOutcome.Unavailable("The pull request head changed while its checks were being observed."),
+        )
+      is Observation.Moved -> PollRound()
+      is Observation.Open, Observation.Unknown -> PollRound()
+    }
 
   private fun startTimeout(
     startedAt: Instant,
@@ -130,7 +161,7 @@ internal class StandalonePullRequestWatcher(
     heads: StandaloneWatchHeads,
   ): Observation =
     when (val lookup = source.pullRequest(pullRequest.repository, pullRequest.number)) {
-      is MonitorPullRequestLookup.Failed -> Observation.Settled(PullRequestCiOutcome.Unavailable(lookup.reason))
+      is MonitorPullRequestLookup.Failed -> Observation.Unknown
       MonitorPullRequestLookup.Missing -> Observation.Settled(PullRequestCiOutcome.NoPullRequest)
       is MonitorPullRequestLookup.Found -> observeFound(lookup.pullRequest, heads)
     }
@@ -151,19 +182,6 @@ internal class StandalonePullRequestWatcher(
       else -> Observation.Moved(headSha)
     }
   }
-
-  private fun confirmed(
-    pullRequest: MonitorPullRequestIdentity,
-    heads: StandaloneWatchHeads,
-    observed: PullRequestCiOutcome,
-  ): PullRequestCiOutcome? =
-    when (val latest = observe(pullRequest, heads)) {
-      is Observation.Settled -> latest.outcome
-      Observation.NotYetVisible ->
-        PullRequestCiOutcome.Unavailable("The pull request head changed while its checks were being observed.")
-      is Observation.Moved -> null
-      is Observation.Open -> observed
-    }
 
   private fun refreshed(
     reportedChecks: List<PullRequestCheck>,

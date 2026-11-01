@@ -54,6 +54,8 @@ class WriteHistoryMeasurementTest {
 private class RecordingDiagnostics : RuntimeDiagnostics {
   val warnings = mutableListOf<String>()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

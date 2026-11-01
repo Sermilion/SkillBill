@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureVerifyWorkflowStateStore
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership

@@ -17,8 +17,8 @@ import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPat
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
@@ -49,11 +49,13 @@ internal object WireVocabularyGovernedSeamInventory {
             "application/workflow/Decomposition",
             "application/featurespec/",
             "infrastructure/contracts/workflow/DecompositionManifest",
-            "engine/goalrunner/manifest/WorkflowGoalRunnerManifest",
-            "engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
-            "engine/goalrunner/planning/GoalPlanningShared",
-            "engine/goalrunner/planning/context/GoalPlanningSharedContextPacketPayloadKeys",
-            "engine/goalrunner/model/ImplementationReturnContractPayloadKeys",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/manifest/WorkflowGoalRunnerManifest",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/planning/GoalPlanningShared",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/planning/context/" +
+              "GoalPlanningSharedContextPacketPayloadKeys",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/model/" +
+              "ImplementationReturnContractPayloadKeys",
             "cli/workflow/WorkflowContinueCliBranchMapsDecomposition",
           ),
       ),
@@ -81,8 +83,8 @@ internal object WireVocabularyGovernedSeamInventory {
         schemaRepoRelativePath = GOAL_CONTINUATION_ARTIFACT_SCHEMA_AUTHORITY,
         governedRelativePathMarkers =
           listOf(
-            "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifact",
-            "engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
+            "infrastructure/sqlite/workflow/artifact/",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
           ),
       ),
       GovernedPayloadSeam(
@@ -92,8 +94,9 @@ internal object WireVocabularyGovernedSeamInventory {
           listOf(
             "contracts/workflow/goal/GoalQualityExecutionPayloadKeys",
             "goalrunner/model/quality/GoalQualityExecution",
-            "engine/goalrunner/persist/quality/GoalQualityExecutionCodec",
-            "engine/goalrunner/persist/quality/WorkflowGoalRunnerQualityExecutionStore",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/quality/GoalQualityExecutionCodec",
+            "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/quality/" +
+              "WorkflowGoalRunnerQualityExecutionStore",
           ),
       ),
       GovernedPayloadSeam(
@@ -101,7 +104,7 @@ internal object WireVocabularyGovernedSeamInventory {
         schemaRepoRelativePath = GOAL_RUNNER_CONTROLS_AUTHORITY,
         governedRelativePathMarkers =
           listOf(
-            "application/workflow/service/LegacyGoalRunnerControlMigration",
+            "application/workflow/persist/LegacyGoalRunnerControlMigration",
             "infrastructure/sqlite/workflow/goalrunner/runner/LegacyGoalRunnerControlLedgerMigration",
             "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodePolicies",
             "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreEncode",

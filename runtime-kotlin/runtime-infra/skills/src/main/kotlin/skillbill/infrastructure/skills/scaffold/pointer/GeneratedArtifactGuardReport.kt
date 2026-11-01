@@ -208,6 +208,9 @@ private fun displayGuardPath(
 ): String {
   val resolvedRoot = root.toAbsolutePath().normalize()
   val resolvedPath = path.toAbsolutePath().normalize()
-  return runCatching { resolvedPath.relativeTo(resolvedRoot).toString().replace('\\', '/') }
-    .getOrDefault(resolvedPath.toString())
+  return try {
+    resolvedPath.relativeTo(resolvedRoot).toString().replace('\\', '/')
+  } catch (_: IllegalArgumentException) {
+    resolvedPath.toString()
+  }
 }

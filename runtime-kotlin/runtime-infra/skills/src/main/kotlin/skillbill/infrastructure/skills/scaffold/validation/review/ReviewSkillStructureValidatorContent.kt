@@ -3,7 +3,6 @@ package skillbill.infrastructure.skills.scaffold.validation.review
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentBundle
-import skillbill.infrastructure.skills.scaffold.authoring.parentViolation
 import skillbill.infrastructure.skills.scaffold.platformpack.packRootsBySlug
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import java.io.IOException

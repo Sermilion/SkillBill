@@ -3,7 +3,7 @@ package skillbill.engine.work
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 
-object IdeStatusBranchScope {
+internal object IdeStatusBranchScope {
   fun matchesCandidate(
     candidate: IdeStatusCandidate,
     branch: String,

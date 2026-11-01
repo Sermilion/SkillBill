@@ -33,7 +33,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.telemetry.estimation.estimateTokens
 import kotlin.time.Duration.Companion.minutes
 
-class DefaultPhaseRunner(
+public class DefaultPhaseRunner(
   private val launcher: GoalRunnerSubtaskLauncher,
   private val gitOperations: WorkflowGitOperations,
 ) : PhaseRunner {

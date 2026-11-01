@@ -164,12 +164,25 @@ fun Any?.asExactLongOrNull(): Long? =
     is Short -> toLong()
     is Int -> toLong()
     is Long -> this
-    is BigInteger -> runCatching { longValueExact() }.getOrNull()
-    is BigDecimal -> runCatching { longValueExact() }.getOrNull()
-    is Double -> runCatching { BigDecimal(toString()).longValueExact() }.getOrNull()
-    is Float -> runCatching { BigDecimal(toString()).longValueExact() }.getOrNull()
+    is BigInteger -> takeIf { bitLength() < Long.SIZE_BITS }?.toLong()
+    is BigDecimal -> {
+      try {
+        longValueExact()
+      } catch (_: ArithmeticException) {
+        null
+      }
+    }
+    is Double -> if (isFinite()) exactLongOrNull() else null
+    is Float -> if (isFinite()) exactLongOrNull() else null
     is String -> toLongOrNull()
     else -> null
+  }
+
+private fun Number.exactLongOrNull(): Long? =
+  try {
+    BigDecimal(toString()).longValueExact()
+  } catch (_: ArithmeticException) {
+    null
   }
 
 private fun Any?.asStringKeyMap(): Map<String, Any?>? =

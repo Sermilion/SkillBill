@@ -9,14 +9,14 @@ import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import java.nio.file.Path
 import kotlin.time.Duration
 
-data class FeatureTaskRuntimeExecutionPlanCreationRequest(
-  val repoRoot: Path,
-  val definition: SkeletonDefinition,
-  val reviewMode: CodeReviewExecutionMode,
-  val qualityGate: FeatureTaskRuntimeQualityGateSelection?,
-  val validationDepth: ValidationDepth,
-  val timeout: Duration?,
-  val workflowId: String? = null,
-  val stepLaunchAssignments: Map<String, StepLaunchAssignment> = emptyMap(),
-  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+public data class FeatureTaskRuntimeExecutionPlanCreationRequest(
+  public val repoRoot: Path,
+  public val definition: SkeletonDefinition,
+  public val reviewMode: CodeReviewExecutionMode,
+  public val qualityGate: FeatureTaskRuntimeQualityGateSelection?,
+  public val validationDepth: ValidationDepth,
+  public val timeout: Duration?,
+  public val workflowId: String? = null,
+  public val stepLaunchAssignments: Map<String, StepLaunchAssignment> = emptyMap(),
+  public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
 )

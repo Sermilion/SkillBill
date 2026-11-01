@@ -1,6 +1,7 @@
 package skillbill.infrastructure.host
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
@@ -43,9 +44,7 @@ class JdkBoundedWorkFanOutPort : BoundedWorkFanOutPort {
 }
 
 private fun <T> capture(unit: () -> T): Result<T> {
-  val result = runCatching { unit() }
-  (result.exceptionOrNull() as? CancellationException)?.let { throw it }
-  return result
+  return catchingNonCancellation { unit() }
 }
 
 private fun <T> await(task: Future<Result<T>>): Result<T> =

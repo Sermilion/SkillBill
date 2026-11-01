@@ -5,6 +5,18 @@ import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 
+fun ReviewDiffEvidence.Companion.parseAttributable(diff: String): ReviewDiffEvidence? =
+  parseAttributableReviewDiffEvidence(diff)
+
+fun ReviewDiffEvidence.Companion.parse(diff: String): ReviewDiffEvidence =
+  when (val result = parseOrRejection(diff)) {
+    is ReviewDiffEvidenceParseResult.Parsed -> result.evidence
+    is ReviewDiffEvidenceParseResult.Rejected -> throw IllegalArgumentException(result.reason)
+  }
+
+fun ReviewDiffEvidence.Companion.parseOrRejection(diff: String): ReviewDiffEvidenceParseResult =
+  parseReviewDiffEvidenceOrRejection(diff)
+
 internal fun parseAttributableReviewDiffEvidence(diff: String): ReviewDiffEvidence? =
   diffRecords(diff).takeIf { it.isNotEmpty() }?.let {
     (

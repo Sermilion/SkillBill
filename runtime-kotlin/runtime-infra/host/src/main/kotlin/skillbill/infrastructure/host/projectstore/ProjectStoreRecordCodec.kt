@@ -36,7 +36,7 @@ internal data class StoredProject(
 
 internal object ProjectStoreRecordCodec {
   fun parse(raw: String): ProjectStoreRecord {
-    val payload = runCatching { objectPayload(raw) }.getOrNull() ?: throw invalid("parse error: not a JSON object")
+    val payload = objectPayload(raw) ?: throw invalid("parse error: not a JSON object")
     val version = payload[ProjectStoreRecordKeys.CONTRACT_VERSION]
     if (version != PROJECT_STORE_RECORD_CONTRACT_VERSION) throw invalid("contract_version ${version ?: "missing"}")
     return ProjectStoreRecord(

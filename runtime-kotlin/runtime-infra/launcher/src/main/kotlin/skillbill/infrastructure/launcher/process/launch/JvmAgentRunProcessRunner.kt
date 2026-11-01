@@ -1,14 +1,10 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.infrastructure.host.jvm.GateJvmResolver
-import skillbill.infrastructure.launcher.process.waitloop.ProcessLifecycleEmitter
-import skillbill.infrastructure.launcher.process.waitloop.ProcessWait
-import skillbill.infrastructure.launcher.process.waitloop.ProcessWaitLoop
-import skillbill.infrastructure.launcher.process.waitloop.readStartupObserved
-import skillbill.infrastructure.launcher.process.waitloop.writeAndCloseStdin
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -17,9 +13,12 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration.between
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
+import kotlin.time.Duration
+import kotlin.time.toKotlinDuration
 
 @Inject
 class JvmAgentRunProcessRunner(
@@ -50,17 +49,24 @@ class JvmAgentRunProcessRunner(
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
     var startedProcess: ProcessStart? = null
+    var settled = false
     val authorized =
-      runCatching {
-        request.review.spawnAuthorization?.withAuthorization {
-          startProcess(request).also { startedProcess = it }
-        } ?: AgentRunSpawnAuthorizationResult.Authorized(startProcess(request).also { startedProcess = it })
-      }.getOrElse { failure ->
-        cleanupProcessStart(startedProcess)
-        throw failure
+      try {
+        (
+          request.review.spawnAuthorization?.withAuthorization {
+            startProcess(request).also { startedProcess = it }
+          } ?: AgentRunSpawnAuthorizationResult.Authorized(startProcess(request).also { startedProcess = it })
+        ).also { settled = true }
+      } finally {
+        if (!settled) {
+          cleanupProcessStart(startedProcess)
+        }
       }
     return when (authorized) {
-      is AgentRunSpawnAuthorizationResult.Denied -> spawnDenied(authorized)
+      is AgentRunSpawnAuthorizationResult.Denied -> {
+        cleanupProcessStart(startedProcess)
+        spawnDenied(authorized)
+      }
       is AgentRunSpawnAuthorizationResult.Authorized -> settleProcessStart(authorized.value, request)
     }
   }
@@ -84,15 +90,15 @@ class JvmAgentRunProcessRunner(
       is ProcessStart.Failed -> spawnFailure(processStart.error)
       is ProcessStart.Started ->
         runStartedProcess(
-          process = processStart.process,
-          stdoutStream = processStart.process.inputStream,
-          stderrStream = processStart.process.errorStream,
+          tree = processStart.tree,
+          stdoutStream = processStart.tree.process.inputStream,
+          stderrStream = processStart.tree.process.errorStream,
           request = request,
         )
     }
 
   companion object {
-    private val liveProcesses = ConcurrentHashMap.newKeySet<Process>()
+    private val liveProcesses = ConcurrentHashMap.newKeySet<AgentRunProcessTree>()
     private val liveEndpoints =
       ConcurrentHashMap.newKeySet<GovernedReviewEvidenceEndpointHandle>()
 
@@ -103,7 +109,14 @@ class JvmAgentRunProcessRunner(
             reapLiveProcesses(liveProcesses.toList())
             liveEndpoints.toList().forEach { endpoint ->
               liveEndpoints.remove(endpoint)
-              runCatching { endpoint.close() }
+              cleanupStep(
+                onFailure = { failure ->
+                  agentRunTeardownLogger.warning(
+                    "skillbill agent run: endpoint teardown failed at shutdown; " +
+                      "endpoint=${boundedTeardownFailureDetail(failure)}",
+                  )
+                },
+              ) { endpoint.close() }
             }
           }
         },
@@ -113,9 +126,9 @@ class JvmAgentRunProcessRunner(
     internal fun closeEndpoint(request: AgentRunProcessRequest) {
       val endpoint = request.review.reviewEvidenceEndpoint ?: return
       liveEndpoints.remove(endpoint)
-      runCatching { endpoint.close() }.onFailure { failure ->
+      catchingNonCancellation { endpoint.close() }.onFailure { failure ->
         val sinkDelivered =
-          runCatching {
+          catchingNonCancellation {
             request.launch.outputSink.write(
               AgentRunOutputStream.STDERR,
               "governed review evidence endpoint teardown failed: ${failure.message.orEmpty()}\n",
@@ -144,42 +157,102 @@ class JvmAgentRunProcessRunner(
     private const val TEARDOWN_FAILURE_DETAIL_LIMIT = 240
 
     internal fun drainLiveProcesses(timeoutMillis: Long): Boolean {
-      val snapshot = liveProcesses.toList()
-      snapshot.forEach { process -> runCatching { process.destroy() } }
-      val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
-      snapshot.forEach { process ->
-        val remaining = (deadline - System.nanoTime()).coerceAtLeast(0L)
-        runCatching { process.waitFor(remaining, TimeUnit.NANOSECONDS) }
-        if (process.isAlive) runCatching { process.destroyForcibly() }
-      }
-      snapshot.forEach { process ->
-        runCatching { process.waitFor(DESTROY_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS) }
-      }
-      return snapshot.none(Process::isAlive)
+      return settleOwnedTrees(liveProcesses.toList(), timeoutMillis, removeSettled = true)
     }
 
-    internal fun reapLiveProcesses(processes: List<Process>) {
-      processes.forEach { process -> runCatching { process.destroy() } }
-      processes.forEach { process ->
-        runCatching { process.waitFor(DESTROY_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS) }
-        if (process.isAlive) runCatching { process.destroyForcibly() }
+    internal fun reapLiveProcesses(trees: List<AgentRunProcessTree>) {
+      settleOwnedTrees(trees, DESTROY_WAIT_TIMEOUT_MILLIS, removeSettled = true)
+    }
+
+    private fun settleOwnedTrees(
+      trees: List<AgentRunProcessTree>,
+      graceMillis: Long,
+      removeSettled: Boolean,
+    ): Boolean {
+      var interrupted = Thread.interrupted()
+      val startedAt = System.nanoTime()
+      val budgetNanos = TimeUnit.MILLISECONDS.toNanos(graceMillis.coerceAtLeast(0L))
+      val settleNanos = TimeUnit.MILLISECONDS.toNanos(DESTROY_WAIT_TIMEOUT_MILLIS).coerceAtMost(budgetNanos / 2)
+      val graceDeadline = startedAt + budgetNanos - settleNanos
+      val settleDeadline = startedAt + budgetNanos
+      trees.forEach { tree -> treeResult("discovery") { tree.refresh() } }
+      trees.forEach { tree -> treeResult("graceful_termination") { tree.signalGracefully() } }
+      interrupted = awaitOwnedTrees(trees, graceDeadline, "graceful_wait", interrupted)
+      trees.forEach { tree -> treeResult("forced_termination") { tree.signalForcibly() } }
+      interrupted = awaitOwnedTrees(trees, settleDeadline, "forced_wait", interrupted)
+      val stopped = trees.map { tree -> treeResult("exit_confirmation") { tree.confirmedExited() } == true }
+      trees.zip(stopped).forEach { (tree, isStopped) ->
+        if (isStopped && removeSettled) liveProcesses.remove(tree)
+        if (!isStopped) {
+          logTreeFailure(
+            "tree_unsettled",
+            IllegalStateException("owned process tree remains live or unconfirmed"),
+          )
+        }
       }
+      if (interrupted) Thread.currentThread().interrupt()
+      return stopped.all { it }
+    }
+
+    private fun awaitOwnedTrees(
+      trees: List<AgentRunProcessTree>,
+      deadline: Long,
+      operation: String,
+      alreadyInterrupted: Boolean,
+    ): Boolean {
+      var interrupted = alreadyInterrupted
+      trees.forEach { tree ->
+        val remaining = (deadline - System.nanoTime()).coerceAtLeast(0L)
+        if (!interrupted && remaining > 0L) {
+          try {
+            catchingNonCancellation { tree.awaitExit(remaining, TimeUnit.NANOSECONDS) }
+              .onFailure { failure -> logTreeFailure(operation, failure) }
+          } catch (failure: InterruptedException) {
+            interrupted = true
+            Thread.interrupted()
+            logTreeFailure(operation, failure)
+          }
+        }
+      }
+      return interrupted
+    }
+
+    private fun <T> treeResult(
+      operation: String,
+      action: () -> T,
+    ): T? =
+      try {
+        catchingNonCancellation(action).onFailure { failure -> logTreeFailure(operation, failure) }.getOrNull()
+      } catch (failure: InterruptedException) {
+        Thread.currentThread().interrupt()
+        logTreeFailure(operation, failure)
+        null
+      }
+
+    private fun logTreeFailure(
+      operation: String,
+      failure: Throwable,
+    ) {
+      agentRunTeardownLogger.warning(
+        "skillbill agent run: process tree $operation failed; detail=${boundedTeardownFailureDetail(failure)}",
+      )
     }
   }
 
   private fun runStartedProcess(
-    process: Process,
+    tree: AgentRunProcessTree,
     stdoutStream: InputStream,
     stderrStream: InputStream,
     request: AgentRunProcessRequest,
   ): AgentRunProcessResult {
+    val process = tree.process
     val degradation = ProcessRunDegradationRecorder()
     val outputTracker = OutputObservationTracker(clock)
     val lifecycleEmitter = ProcessLifecycleEmitter(request, degradation)
     val resources =
       createProcessResources(
         ProcessResourceRequest(
-          process,
+          tree,
           stdoutStream,
           stderrStream,
           request,
@@ -198,17 +271,16 @@ class JvmAgentRunProcessRunner(
       writeAndCloseStdin(process, request.launch.stdinText, degradation)
       lifecycleEmitter.emitStarted(process.isAlive)
       waitResult =
-        runCatching {
-          waitForProcess(process, request, outputTracker, lifecycleEmitter, degradation)
+        try {
+          Result.success(waitForProcess(tree, request, outputTracker, lifecycleEmitter, degradation))
+        } catch (interrupted: InterruptedException) {
+          Result.failure(interrupted)
         }
-      waitResult.exceptionOrNull()
-        ?.takeUnless { it is InterruptedException }
-        ?.let(::rethrow)
     } catch (failure: IOException) {
       primaryFailure = failure
       rethrow(failure)
     } finally {
-      cleanupFailure = runCatching { resources.lifetime.release(waitResult) }.exceptionOrNull()
+      cleanupFailure = catchingNonCancellation { resources.lifetime.release(waitResult) }.exceptionOrNull()
       exportRunDegradationEvidence(degradation, request.launch.outputSink)
       if (primaryFailure != null && cleanupFailure != null && cleanupFailure !== primaryFailure) {
         primaryFailure.addSuppressed(cleanupFailure)
@@ -236,7 +308,7 @@ class JvmAgentRunProcessRunner(
   )
 
   private data class ProcessResourceRequest(
-    val process: Process,
+    val tree: AgentRunProcessTree,
     val stdoutStream: InputStream,
     val stderrStream: InputStream,
     val request: AgentRunProcessRequest,
@@ -262,7 +334,7 @@ class JvmAgentRunProcessRunner(
     return ProcessResources(
       stdout = stdout,
       stderr = stderr,
-      lifetime = ProcessRunLifetime(args.process, liveProcesses, stdout, stderr, args.degradation),
+      lifetime = ProcessRunLifetime(args.tree, liveProcesses, stdout, stderr, args.degradation),
     )
   }
 
@@ -359,12 +431,12 @@ class JvmAgentRunProcessRunner(
   }
 
   private fun waitForProcess(
-    process: Process,
+    tree: AgentRunProcessTree,
     request: AgentRunProcessRequest,
     outputTracker: OutputObservationTracker,
     lifecycleEmitter: ProcessLifecycleEmitter,
     degradation: ProcessRunDegradationRecorder,
-  ): ProcessWait = ProcessWaitLoop(process, request, outputTracker, lifecycleEmitter, clock, degradation).wait()
+  ): ProcessWait = ProcessWaitLoop(tree, request, outputTracker, lifecycleEmitter, clock, degradation).wait()
 
   private fun spawnFailure(error: Exception): AgentRunProcessResult =
     AgentRunProcessResult(
@@ -376,14 +448,20 @@ class JvmAgentRunProcessRunner(
       spawnFailed = true,
     )
 
-  private fun startProcess(request: AgentRunProcessRequest): ProcessStart =
-    try {
-      ProcessStart.Started(buildProcess(request).start())
-    } catch (error: IOException) {
-      ProcessStart.Failed(error)
-    } catch (error: SecurityException) {
-      ProcessStart.Failed(error)
-    }
+  private fun startProcess(request: AgentRunProcessRequest): ProcessStart {
+    val process =
+      try {
+        buildProcess(request).start()
+      } catch (error: IOException) {
+        return ProcessStart.Failed(error)
+      } catch (error: SecurityException) {
+        return ProcessStart.Failed(error)
+      }
+    val tree = AgentRunProcessTree(process)
+    liveProcesses.add(tree)
+    treeResult("initial_discovery") { tree.refresh() }
+    return ProcessStart.Started(tree)
+  }
 
   private fun buildProcess(request: AgentRunProcessRequest): ProcessBuilder =
     ProcessBuilder(request.launch.command)
@@ -392,8 +470,41 @@ class JvmAgentRunProcessRunner(
 
   private fun cleanupProcessStart(start: ProcessStart?) {
     when (start) {
-      is ProcessStart.Started -> reapLiveProcesses(listOf(start.process))
+      is ProcessStart.Started -> reapLiveProcesses(listOf(start.tree))
       is ProcessStart.Failed, null -> Unit
     }
   }
 }
+
+internal fun runAgentRunContinuations(
+  request: AgentRunProcessRequest,
+  clock: Clock,
+  run: (AgentRunProcessRequest) -> AgentRunProcessResult,
+): AgentRunProcessResult {
+  val startedAt = clock.instant()
+  var current = request
+  while (true) {
+    val result = run(current)
+    if (!result.canContinue()) return result
+    val next = request.launch.continuation?.invoke(result) ?: return result
+    val elapsed = between(startedAt, clock.instant()).toKotlinDuration().coerceAtLeast(Duration.ZERO)
+    val timeout = request.timing.timeout?.minus(elapsed)
+    val deadline = request.timing.operationDeadline?.minus(elapsed)
+    if (timeout?.isPositive() == false || deadline?.isPositive() == false) {
+      return result.copy(exitStatus = null, timedOut = true)
+    }
+    current =
+      request.copy(
+        launch = next.copy(outputSink = request.launch.outputSink, continuation = request.launch.continuation),
+        timing = request.timing.copy(timeout = timeout, operationDeadline = deadline),
+      )
+  }
+}
+
+private fun AgentRunProcessResult.canContinue(): Boolean =
+  when {
+    timedOut || interrupted -> false
+    spawnFailed || spawnDenied != null -> false
+    outputCaptureIncomplete || stdoutTruncated -> false
+    else -> exitStatus != null && exitStatus != 0
+  }

@@ -10,15 +10,7 @@ internal object KotlinCommentPolicyScanSupport {
 
   data class CommentPolicyViolation(val lineNumber: Int, val kind: String)
 
-  private val runtimeRoot: Path =
-    Path.of("").toAbsolutePath().normalize().let { start ->
-      var dir: Path? = start
-      while (dir != null) {
-        if (Files.isDirectory(dir.resolve("runtime-kotlin"))) return@let dir
-        dir = dir.parent
-      }
-      start
-    }
+  private val runtimeRoot: Path = ArchitectureScanSupport.runtimeRoot
 
   private val KOTLIN_SOURCE_EXTENSIONS: Set<String> = setOf("kt", "kts")
 

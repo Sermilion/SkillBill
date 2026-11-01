@@ -10,7 +10,7 @@ import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 
-class FeatureTaskRuntimeReviewCheckpointRecorder(
+internal class FeatureTaskRuntimeReviewCheckpointRecorder(
   database: DatabaseSessionFactory,
   workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,

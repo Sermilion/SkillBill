@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
@@ -31,6 +32,7 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Logger
 import kotlin.concurrent.thread
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -39,6 +41,18 @@ private const val UNIX_SOCKET_PATH_LIMIT = 103
 private const val TEMP_SUFFIX_DIGITS = 20
 private const val PER_LAUNCH_PREFIX = "skill-bill-review-evidence-"
 private const val SOCKET_FILE_NAME = "evidence.sock"
+private val endpointLogger = Logger.getLogger("skillbill.review.evidence.endpoint")
+
+private fun bestEffort(
+  step: String,
+  action: () -> Unit,
+) {
+  catchingNonCancellation(action).onFailure { failure ->
+    endpointLogger.warning(
+      "skillbill governed review endpoint: $step failed: ${failure.message ?: failure::class.simpleName}",
+    )
+  }
+}
 
 @Inject
 class UnixSocketGovernedReviewEvidenceEndpointBinder(
@@ -90,19 +104,21 @@ class GovernedReviewEvidenceEndpoint private constructor(
   override fun close() {
     if (closed) return
     closed = true
-    runCatching { channel.close() }
+    bestEffort("channel_close") { channel.close() }
     acceptor.interrupt()
     deleteDirectory()
   }
 
   private fun deleteDirectory() {
-    runCatching { rollbackDeleteIfExists(descriptor.socketPath) }
-    runCatching { rollbackDeleteIfExists(descriptor.mcpConfigPath) }
-    runCatching { rollbackDeleteIfExists(GovernedReviewMcpConfigWriter.tomlConfigPath(descriptor.mcpConfigPath)) }
+    bestEffort("delete socket") { rollbackDeleteIfExists(descriptor.socketPath) }
+    bestEffort("delete MCP config") { rollbackDeleteIfExists(descriptor.mcpConfigPath) }
+    bestEffort("delete TOML config") {
+      rollbackDeleteIfExists(GovernedReviewMcpConfigWriter.tomlConfigPath(descriptor.mcpConfigPath))
+    }
     val cursorConfig = GovernedReviewMcpConfigWriter.cursorProjectConfigPath(descriptor.mcpConfigPath)
-    runCatching { rollbackDeleteIfExists(cursorConfig) }
-    runCatching { rollbackDeleteIfExists(cursorConfig.parent) }
-    runCatching { rollbackDeleteIfExists(directory) }
+    bestEffort("delete Cursor config") { rollbackDeleteIfExists(cursorConfig) }
+    bestEffort("delete Cursor config directory") { rollbackDeleteIfExists(cursorConfig.parent) }
+    bestEffort("delete endpoint directory") { rollbackDeleteIfExists(directory) }
   }
 
   private fun acceptLoop() {
@@ -113,7 +129,21 @@ class GovernedReviewEvidenceEndpoint private constructor(
         } catch (_: IOException) {
           return
         } ?: return
-      runCatching { connection.use { serve(it) } }
+      try {
+        catchingNonCancellation { connection.use { serve(it) } }
+          .onFailure { failure ->
+            if (!closed) {
+              endpointLogger.warning(
+                "skillbill governed review endpoint: request serving failed: " +
+                  "${failure.message ?: failure::class.simpleName}",
+              )
+            }
+          }
+      } catch (_: InterruptedException) {
+        return
+      } catch (_: CancellationException) {
+        return
+      }
     }
   }
 
@@ -282,7 +312,7 @@ class GovernedReviewEvidenceEndpoint private constructor(
       } catch (error: CancellationException) {
         failure = error
       } catch (error: IOException) {
-        runCatching { rollbackDeleteIfExists(directory) }
+        bestEffort("rollback endpoint directory") { rollbackDeleteIfExists(directory) }
         failure =
           SkillBillRuntimeException(
             GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
@@ -291,7 +321,7 @@ class GovernedReviewEvidenceEndpoint private constructor(
           )
       } catch (error: SkillBillRuntimeException) {
         error.rethrowUnless(error.isShellContentContractFailure())
-        runCatching { rollbackDeleteIfExists(directory) }
+        bestEffort("rollback endpoint directory") { rollbackDeleteIfExists(directory) }
         failure =
           SkillBillRuntimeException(
             GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
@@ -308,19 +338,21 @@ class GovernedReviewEvidenceEndpoint private constructor(
       socketPath: Path,
       directory: Path,
     ) {
-      runCatching { channel.close() }
-      runCatching { rollbackDeleteIfExists(socketPath) }
-      runCatching { rollbackDeleteIfExists(directory.resolve("mcp.json")) }
-      runCatching {
+      bestEffort("channel_close") { channel.close() }
+      bestEffort("delete socket") { rollbackDeleteIfExists(socketPath) }
+      bestEffort("delete MCP config") { rollbackDeleteIfExists(directory.resolve("mcp.json")) }
+      bestEffort("delete TOML config") {
         rollbackDeleteIfExists(
           GovernedReviewMcpConfigWriter.tomlConfigPath(directory.resolve("mcp.json")),
         )
       }
       val cursorConfig = directory.resolve(".cursor").resolve("mcp.json")
-      runCatching { rollbackDeleteIfExists(cursorConfig) }
-      runCatching { rollbackDeleteIfExists(directory.resolve(".cursor").resolve("cli.json")) }
-      runCatching { rollbackDeleteIfExists(cursorConfig.parent) }
-      runCatching { rollbackDeleteIfExists(directory) }
+      bestEffort("delete Cursor config") { rollbackDeleteIfExists(cursorConfig) }
+      bestEffort("delete Cursor CLI config") {
+        rollbackDeleteIfExists(directory.resolve(".cursor").resolve("cli.json"))
+      }
+      bestEffort("delete Cursor config directory") { rollbackDeleteIfExists(cursorConfig.parent) }
+      bestEffort("delete endpoint directory") { rollbackDeleteIfExists(directory) }
     }
 
     private fun privateDirectory(): Path =

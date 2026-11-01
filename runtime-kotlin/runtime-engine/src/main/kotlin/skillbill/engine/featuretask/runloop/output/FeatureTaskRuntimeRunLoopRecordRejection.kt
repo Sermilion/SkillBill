@@ -118,20 +118,20 @@ internal fun scrubOffVocabularyVerdictQuote(text: String): String {
   }
 }
 
-const val OFF_VOCABULARY_VERDICT_OPEN = "off-vocabulary verdict '"
+internal const val OFF_VOCABULARY_VERDICT_OPEN = "off-vocabulary verdict '"
 
-const val OFF_VOCABULARY_VERDICT_CLOSE_BOUNDARY = "' and no"
+internal const val OFF_VOCABULARY_VERDICT_CLOSE_BOUNDARY = "' and no"
 
-val OFFENDING_VALUE_APPENDIX_PATTERN =
+internal val OFFENDING_VALUE_APPENDIX_PATTERN =
   Regex("""(?:\s*[—-]\s*)?offending value:.*$""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 
-val EXPECTED_ACTUAL_LIST_PATTERN =
+internal val EXPECTED_ACTUAL_LIST_PATTERN =
   Regex("""\bexpected=\[[^\]]*]\s*actual=\[[^\]]*]\.?""", RegexOption.IGNORE_CASE)
 
-val BOUNDED_REF_LENGTH_CAP_PATTERN =
+internal val BOUNDED_REF_LENGTH_CAP_PATTERN =
   Regex("""(?:allows|must be) at most ([0-9][0-9,]*) characters""", RegexOption.IGNORE_CASE)
 
-val SCHEMA_DETAIL_TYPE_WORDS =
+internal val SCHEMA_DETAIL_TYPE_WORDS =
   setOf(
     "array",
     "boolean",
@@ -142,4 +142,4 @@ val SCHEMA_DETAIL_TYPE_WORDS =
     "string",
   )
 
-const val MIN_RESPONSE_STRING_VALUE_LENGTH = 4
+internal const val MIN_RESPONSE_STRING_VALUE_LENGTH = 4

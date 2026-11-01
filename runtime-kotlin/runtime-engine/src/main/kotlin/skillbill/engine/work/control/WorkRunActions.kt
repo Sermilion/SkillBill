@@ -2,20 +2,20 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
-import skillbill.engine.goalrunner.goalRepositoryIdentity
-import skillbill.engine.goalrunner.model.GoalPreflightGateBlock
-import skillbill.engine.goalrunner.model.GoalPreflightRequest
-import skillbill.engine.goalrunner.model.GoalPreflightResult
-import skillbill.engine.goalrunner.model.GoalPreflightVerdict
-import skillbill.engine.goalrunner.preflight.GoalPreflightService
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
-import skillbill.engine.goalrunner.status.executionLivenessBlocksIdleSafeRefresh
+import skillbill.engine.goal.GoalPreflightGateBlock
+import skillbill.engine.goal.GoalPreflightPort
+import skillbill.engine.goal.GoalPreflightRequest
+import skillbill.engine.goal.GoalPreflightResult
+import skillbill.engine.goal.GoalPreflightVerdict
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.executionLivenessBlocksIdleSafeRefresh
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
+import skillbill.engine.work.eligibility.recordedLaunchAgent
 import skillbill.engine.work.observation.workerOwnership
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -36,7 +36,6 @@ import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -44,19 +43,19 @@ import java.nio.file.Path
 import java.time.Clock
 
 @Inject
-class WorkRunActions(
+public class WorkRunActions(
   private val database: DatabaseSessionFactory,
   private val status: IdeStatusService,
-  private val goals: GoalRunnerStatusService,
+  private val goals: GoalRunnerStatusPort,
   private val branches: CheckedOutBranchSource,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val launcher: WorkRunLauncher,
   private val clock: Clock,
-  private val preflight: GoalPreflightService,
+  private val preflight: GoalPreflightPort,
   private val environment: EnvironmentContext,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
-  fun startGoal(
+  internal fun startGoal(
     repoRoot: Path,
     issueKey: String,
     agentId: String?,
@@ -93,7 +92,7 @@ class WorkRunActions(
     }
   }
 
-  fun launch(
+  internal fun launch(
     target: WorkRunTarget,
     agentId: String?,
   ): WorkControlResult {
@@ -342,27 +341,6 @@ class WorkRunActions(
     phase?.agentEnvironment
       ?: item.snapshot.workflowId?.let(unit.standalonePhaseStatuses::latestWorkflowExecution)?.agentEnvironment
       ?: emptyMap()
-}
-
-internal fun standaloneLaunchAgent(
-  record: StandalonePhaseStatusRecord,
-  unit: UnitOfWork,
-): String? =
-  (record.launchAgentId ?: recordedLaunchAgent(record.workflowId, unit))?.takeIf { it in SupportedAgent.supportedIds }
-
-private fun recordedLaunchAgent(
-  workflowId: String?,
-  unit: UnitOfWork,
-): String? {
-  val workflow = workflowId?.let { unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it) } ?: return null
-  val plan =
-    JsonCodec.anyToStringAnyMap(
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(workflow.artifacts),
-    )
-  val assignments = plan?.get(FeatureTaskRuntimeExecutionPlanKeys.STEP_LAUNCH_ASSIGNMENTS) as? List<*> ?: return null
-  val records = assignments.mapNotNull(JsonCodec::anyToStringAnyMap)
-  val current = records.firstOrNull { it[FeatureTaskRuntimeExecutionPlanKeys.STEP_ID] == workflow.currentStepId }
-  return (current ?: records.firstOrNull())?.get(FeatureTaskRuntimeExecutionPlanKeys.AGENT_ID) as? String
 }
 
 internal fun goalStartRefusal(result: GoalPreflightResult): String? {

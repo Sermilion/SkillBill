@@ -3,15 +3,17 @@ package skillbill.mcp.workflow
 import skillbill.application.workflow.persist.WorkflowWireProjections
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 
 internal fun workflowSnapshotMcpMap(
   snapshot: WorkflowSnapshotView,
+  encoder: WorkflowArtifactWireEncoder,
   goalObservability: GoalObservabilityEvent?,
 ): LinkedHashMap<String, Any?> =
-  LinkedHashMap(WorkflowWireProjections.snapshotMap(snapshot).toPayload()).apply {
+  LinkedHashMap(WorkflowWireProjections.snapshotMap(snapshot, encoder).toPayload()).apply {
     goalObservabilitySummary(goalObservability)?.let { summary ->
       put(WorkflowWirePayloadKeys.GOAL_OBSERVABILITY, summary)
     }

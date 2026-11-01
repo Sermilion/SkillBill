@@ -1,13 +1,15 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.skills.install.nativeagent.InstallNativeAgentResult
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryReconcileRequest
+import skillbill.infrastructure.skills.install.symlink.resolveSymlinkTarget
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderOverrides
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderResult
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
@@ -16,6 +18,7 @@ import skillbill.install.model.AgentTarget
 import skillbill.model.toPath
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.coroutines.cancellation.CancellationException
 
 internal fun linkProviderAgentsBody(args: NativeAgentLinkProviderBodyArgs): NativeAgentLinkOutcome {
   val generated =
@@ -162,6 +165,14 @@ internal fun linkProviderAgentsWithJournal(
   journal: ProviderMutationJournal,
   block: () -> NativeAgentLinkOutcome,
 ): NativeAgentLinkOutcome =
-  runCatching(block).onFailure { error ->
-    journal.restore().forEach { suppressed -> error.addSuppressed(suppressed) }
-  }.getOrThrow()
+  try {
+    catchingNonCancellation(block).onFailure { error ->
+      journal.restore().forEach { suppressed -> error.addSuppressed(suppressed) }
+    }.getOrThrow()
+  } catch (cancelled: CancellationException) {
+    journal.restore().forEach(cancelled::addSuppressed)
+    throw cancelled
+  } catch (interrupted: InterruptedException) {
+    journal.restore().forEach(interrupted::addSuppressed)
+    throw interrupted
+  }

@@ -1,7 +1,7 @@
 package skillbill.infrastructure.sqlite.review.stage
 
 import skillbill.infrastructure.sqlite.columnNames
-import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
+import skillbill.infrastructure.sqlite.core.migration.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.tempDbConnection
 import skillbill.infrastructure.sqlite.worklist.required
 import skillbill.review.context.model.packet.ReviewLaneSegmentAccounting

@@ -1,15 +1,18 @@
 package skillbill.application.decomposition
 
 import skillbill.application.decomposition.model.DecompositionManifestProjectionFailurePersistence
-import skillbill.application.decomposition.model.RetryDecompositionManifestProjectionArgs
 import skillbill.contracts.decomposition.DecompositionManifestProjectionFailurePayloadKeys
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import java.nio.file.Path
 
 internal fun retryDecompositionManifestProjectionFromAuthoritativeState(
   args: RetryDecompositionManifestProjectionArgs,
@@ -43,6 +46,16 @@ internal fun retryDecompositionManifestProjectionFromAuthoritativeState(
   }
   return outcome
 }
+
+internal data class RetryDecompositionManifestProjectionArgs(
+  val database: DatabaseSessionFactory,
+  val engine: WorkflowEngine,
+  val decompositionManifestWriter: DecompositionManifestWriter,
+  val decompositionManifestValidator: DecompositionManifestValidator,
+  val decompositionManifestStore: DecompositionManifestStore,
+  val repoRoot: Path,
+  val workflowId: String,
+)
 
 fun persistDecompositionManifestProjectionFailure(
   engine: WorkflowEngine,

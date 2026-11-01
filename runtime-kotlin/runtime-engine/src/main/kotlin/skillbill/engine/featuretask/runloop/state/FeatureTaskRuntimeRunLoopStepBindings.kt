@@ -44,6 +44,7 @@ import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseBoundStepHooks
+import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
@@ -921,7 +922,10 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
   ): Int? {
     requireActiveReviewBinding()
     val loopRules = (environment.selectedOwnerOf(acceptedPhaseId) as? PhaseLoopCapability)?.loopRules
-    check(reviewStepId == acceptedPhaseId && loopRules?.resumesInFlightReentry(reentryLoopId) == true)
+    check(
+      reviewStepId == acceptedPhaseId &&
+        (loopRules as? PhaseInFlightReentryRules)?.resumesInFlightReentry(reentryLoopId) == true,
+    )
     return environment.coupledRunTransitions.persistReviewGenerationInvalidation(
       recorder = environment.recorder,
       workflowId = workflowId,

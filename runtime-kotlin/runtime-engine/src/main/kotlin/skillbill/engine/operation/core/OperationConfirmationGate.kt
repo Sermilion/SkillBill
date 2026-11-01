@@ -10,12 +10,12 @@ import java.time.Clock
 import java.util.UUID
 
 @Inject
-class OperationConfirmationGate(
+public class OperationConfirmationGate(
   private val proposals: OperationProposalRepository,
   private val gitOperations: WorkflowGitOperations,
   private val clock: Clock,
 ) {
-  fun propose(
+  internal fun propose(
     operation: ConfirmableOperation,
     context: OperationContext,
     proposed: OperationRunResult.Proposed,
@@ -35,7 +35,7 @@ class OperationConfirmationGate(
     return OperationOutcome.AwaitingConfirmation(token, proposed.summary)
   }
 
-  fun confirm(
+  internal fun confirm(
     operation: ConfirmableOperation,
     context: OperationContext,
     token: String,
@@ -43,7 +43,7 @@ class OperationConfirmationGate(
     val proposal = proposals.find(token) ?: return unknownToken(token)
     val confirmed = ConfirmedOperationProposal(token, proposal.proposalValue, proposal.anchors.operationValues)
     return refusal(operation, context, proposal)
-      ?: operation.admit(context, confirmed)
+      ?: (operation as? ConfirmAdmission)?.admit(context, confirmed)
       ?: consumeAndExecute(operation, context, confirmed)
   }
 

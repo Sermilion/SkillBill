@@ -8,9 +8,9 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
-const val PHASE_PROMPT_TEMPLATE_INDENT = "      "
+public const val PHASE_PROMPT_TEMPLATE_INDENT: String = "      "
 
-val forwardPhaseOrder: String =
+internal val forwardPhaseOrder: String =
   FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
     .filterNot {
       it in FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds ||
@@ -18,7 +18,7 @@ val forwardPhaseOrder: String =
     }
     .joinToString(" -> ")
 
-fun operatorBlockRetryDirective(
+internal fun operatorBlockRetryDirective(
   phaseId: String,
   retry: FeatureTaskRuntimeOperatorBlockRetry?,
 ): String {
@@ -43,7 +43,7 @@ fun operatorBlockRetryDirective(
     """.trimIndent()
 }
 
-fun phasePromptHeader(
+internal fun phasePromptHeader(
   issueKey: String,
   phaseId: String,
   taskDirective: String,
@@ -71,7 +71,7 @@ fun phasePromptHeader(
   }
 }
 
-fun installedRuntimeAuthorityDirective(settlesThroughTools: Boolean): String =
+internal fun installedRuntimeAuthorityDirective(settlesThroughTools: Boolean): String =
   if (settlesThroughTools) "$TOOL_SETTLEMENT_AUTHORITY\n\n$CHECKOUT_CONTRACT_WORK" else PROSE_OUTPUT_AUTHORITY
 
 private val TOOL_SETTLEMENT_AUTHORITY: String =
@@ -101,10 +101,10 @@ private val CHECKOUT_CONTRACT_WORK: String =
   contract; use checkout schemas when examining the feature under work.
   """.trimIndent()
 
-fun ceremonyScalingOf(briefing: FeatureTaskRuntimePhaseLaunchBriefing): FeatureTaskRuntimeCeremonyScaling =
+internal fun ceremonyScalingOf(briefing: FeatureTaskRuntimePhaseLaunchBriefing): FeatureTaskRuntimeCeremonyScaling =
   FeatureTaskRuntimePhaseWorkflowQueries.ceremonyScaling(FeatureTaskRuntimeFeatureSize.fromWire(briefing.featureSize))
 
-fun ceremonyDirective(
+internal fun ceremonyDirective(
   briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   stepLine: String?,
 ): String {

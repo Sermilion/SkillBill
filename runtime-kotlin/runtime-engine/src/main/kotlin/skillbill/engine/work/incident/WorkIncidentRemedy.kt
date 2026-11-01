@@ -1,7 +1,7 @@
 package skillbill.engine.work.incident
 
+import skillbill.contracts.workflow.goal.GoalBlockArtifactKeys
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
-import skillbill.engine.goalrunner.persist.blockincident.GoalBlockArtifactKeys
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -13,7 +13,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentResponsibleCategory
 import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportStatus
 
-const val SKILL_BILL_NEW_ISSUE_URL: String = "https://github.com/Sermilion/SkillBill/issues/new"
+public const val SKILL_BILL_NEW_ISSUE_URL: String = "https://github.com/Sermilion/SkillBill/issues/new"
 
 internal data class WorkIncidentRemedyFacts(
   val incidentToken: String,

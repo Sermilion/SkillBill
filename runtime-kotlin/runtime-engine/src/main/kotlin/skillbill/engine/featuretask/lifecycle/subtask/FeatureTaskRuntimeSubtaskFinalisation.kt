@@ -14,13 +14,15 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
-class FeatureTaskRuntimeSubtaskFinalisation(
-  val gitOperations: WorkflowGitOperations,
-  val repoRoot: Path,
-  val record: (String) -> Unit,
-  val recordCommit: (commitSha: String, stagedPaths: List<String>) -> String?,
+public class FeatureTaskRuntimeSubtaskFinalisation(
+  public val gitOperations: WorkflowGitOperations,
+  public val repoRoot: Path,
+  public val record: (String) -> Unit,
+  public val recordCommit: (commitSha: String, stagedPaths: List<String>) -> String?,
 ) {
-  fun finalise(request: FeatureTaskRuntimeSubtaskFinaliseRequest): FeatureTaskRuntimeSubtaskFinalisationResult {
+  internal fun finalise(
+    request: FeatureTaskRuntimeSubtaskFinaliseRequest,
+  ): FeatureTaskRuntimeSubtaskFinalisationResult {
     val dirtyOrError = gitOperations.dirtyImplementationPaths(repoRoot)
     if (dirtyOrError is DirtyPathsError) return blocked(dirtyOrError.reason)
     val dirty = dirtyOrError as DirtyPaths
@@ -45,16 +47,16 @@ class FeatureTaskRuntimeSubtaskFinalisation(
   }
 }
 
-internal sealed interface FinalisationStagingOutcome
+public sealed interface FinalisationStagingOutcome
 
-internal data class FinalisationStagingReady(val restoreState: WorkflowGitIndexSnapshot) :
+public data class FinalisationStagingReady(val restoreState: WorkflowGitIndexSnapshot) :
   FinalisationStagingOutcome
 
-internal data class FinalisationStagingBlocked(
+public data class FinalisationStagingBlocked(
   val result: FeatureTaskRuntimeSubtaskFinalisationBlocked,
 ) : FinalisationStagingOutcome
 
-internal fun FeatureTaskRuntimeSubtaskFinalisation.prepareStaging(stageable: List<String>): FinalisationStagingOutcome {
+public fun FeatureTaskRuntimeSubtaskFinalisation.prepareStaging(stageable: List<String>): FinalisationStagingOutcome {
   if (stageable.isEmpty()) return FinalisationStagingReady(restoreState = WorkflowGitIndexSnapshot.EMPTY)
   val indexSnapshot =
     when (val snapshot = gitOperations.captureIndexState(repoRoot, stageable)) {
@@ -73,7 +75,7 @@ internal fun FeatureTaskRuntimeSubtaskFinalisation.prepareStaging(stageable: Lis
   return FinalisationStagingReady(restoreState = indexSnapshot)
 }
 
-fun FeatureTaskRuntimeSubtaskFinalisation.commitAndPush(
+public fun FeatureTaskRuntimeSubtaskFinalisation.commitAndPush(
   request: FeatureTaskRuntimeSubtaskFinaliseRequest,
   stageable: List<String>,
   restoreState: WorkflowGitIndexSnapshot,
@@ -170,7 +172,7 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.finalizeCommittedSubtask(
   )
 }
 
-fun FeatureTaskRuntimeSubtaskFinalisation.restoring(
+public fun FeatureTaskRuntimeSubtaskFinalisation.restoring(
   error: String,
   paths: List<String>,
   snapshot: WorkflowGitIndexSnapshot,
@@ -184,7 +186,7 @@ fun FeatureTaskRuntimeSubtaskFinalisation.restoring(
   }
 }
 
-private fun FeatureTaskRuntimeSubtaskFinalisation.publishUnchangedHead(
+public fun FeatureTaskRuntimeSubtaskFinalisation.publishUnchangedHead(
   request: FeatureTaskRuntimeSubtaskFinaliseRequest,
 ): FeatureTaskRuntimeSubtaskFinalisationResult {
   val head = gitOperations.headCommitSha(repoRoot)
@@ -204,10 +206,10 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.publishUnchangedHead(
   )
 }
 
-internal const val NOTHING_TO_COMMIT_NOTE: String =
+public const val NOTHING_TO_COMMIT_NOTE: String =
   "subtask finalisation found no repository changes to commit; continuing with the current head"
 
-fun FeatureTaskRuntimeSubtaskFinalisation.blocked(reason: String) =
+public fun FeatureTaskRuntimeSubtaskFinalisation.blocked(reason: String): FeatureTaskRuntimeSubtaskFinalisationBlocked =
   FeatureTaskRuntimeSubtaskFinalisationBlocked(
     "needs_human: subtask finalisation could not complete because $reason.",
   )

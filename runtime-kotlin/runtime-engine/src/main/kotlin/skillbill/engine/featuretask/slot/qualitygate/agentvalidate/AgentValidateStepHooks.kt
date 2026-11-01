@@ -2,10 +2,12 @@ package skillbill.engine.featuretask.slot.qualitygate.agentvalidate
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseConsumerProjectionHooks
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.state.PhaseCompletedReceiptResume
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
-import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseResumedCompletionInvalidation
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -13,7 +15,9 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
-internal object AgentValidateStepHooks : PhaseStepHooks<PhaseQualityGateStepBinding> {
+internal object AgentValidateStepHooks :
+  PhaseStepHooks<PhaseQualityGateStepBinding>,
+  PhaseConsumerProjectionHooks {
   override val checksImmediateConsumerProjection: Boolean = true
 
   override fun interpretedOutput(
@@ -24,7 +28,7 @@ internal object AgentValidateStepHooks : PhaseStepHooks<PhaseQualityGateStepBind
   ): NormalizedFeatureTaskRuntimePhaseOutput = ValidateProbeSettlement.settle(run, context, output)
 }
 
-internal object AgentValidateResumeRules : PhaseResumeRules {
+internal object AgentValidateResumeRules : PhaseCompletedReceiptResume, PhaseResumedCompletionInvalidation {
   override val requiresValidCompletedOutput = true
 
   override fun invalidatesResumedCompletion(

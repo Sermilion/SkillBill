@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
+import skillbill.ports.review.model.ReviewStoredHunkBodyExtractor
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.accounting.ReviewLaneIdentity

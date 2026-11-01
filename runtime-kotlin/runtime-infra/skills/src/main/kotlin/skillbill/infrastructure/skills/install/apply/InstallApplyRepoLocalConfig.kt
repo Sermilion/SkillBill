@@ -3,16 +3,18 @@ package skillbill.infrastructure.skills.install.apply
 import skillbill.config.model.RepoLocalConfigKey
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.infrastructure.host.system.configDocumentIoException
-import skillbill.infrastructure.skills.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
 import skillbill.model.toPath
 import skillbill.ports.projectstore.ProjectStorePort
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.nio.channels.ClosedByInterruptException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -39,8 +41,11 @@ private inline fun scaffoldStep(
   failures: MutableList<InstallApplyIssue>,
   step: () -> Path,
 ) {
-  runCatching { step() }.onFailure { error ->
-    error.rethrowIfCooperativeCancellationOrInterruption()
+  catchingNonCancellation { step() }.onFailure { error ->
+    if (error is InterruptedIOException || error is ClosedByInterruptException) {
+      Thread.currentThread().interrupt()
+      throw error
+    }
     val issue =
       InstallApplyIssue(
         kind = kind,

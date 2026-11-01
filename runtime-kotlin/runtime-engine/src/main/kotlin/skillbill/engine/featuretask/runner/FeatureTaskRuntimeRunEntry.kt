@@ -4,10 +4,10 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
-import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.application.workflow.service.openFeatureTask
 import skillbill.contracts.JsonCodec
-import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
+import skillbill.engine.featuretask.incident.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
@@ -60,7 +60,7 @@ private sealed interface RepairInspection {
 private const val INTAKE_PASS_CRITERION = "Intake writes or keeps the parent spec before run invariants are read."
 
 @Inject
-class FeatureTaskRuntimeRunEntry(
+public class FeatureTaskRuntimeRunEntry(
   private val workflowService: WorkflowService,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val workerCoordinator: FeatureTaskRuntimeWorkerCoordinator,
@@ -77,7 +77,7 @@ class FeatureTaskRuntimeRunEntry(
     const val MAX_DIAGNOSTIC_ID = 128
   }
 
-  fun run(
+  public fun run(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
   ): FeatureTaskRuntimeRunReport =
@@ -521,7 +521,7 @@ class FeatureTaskRuntimeRunEntry(
     if (goalChild) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE
 }
 
-private fun FeatureTaskRuntimeRunInvariantsRead.requireInvariants() =
+public fun FeatureTaskRuntimeRunInvariantsRead.requireInvariants(): FeatureTaskRuntimeRunInvariants =
   when (this) {
     is FeatureTaskRuntimeRunInvariantsRead.Read -> invariants
     is FeatureTaskRuntimeRunInvariantsRead.Rejected -> throw IllegalArgumentException(reason)

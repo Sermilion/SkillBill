@@ -6,9 +6,9 @@ import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
+import skillbill.infrastructure.skills.install.identity.installedSkillSlug
+import skillbill.infrastructure.skills.install.identity.isContentManagedSkill
 import skillbill.infrastructure.skills.install.identity.suppliedSkillContentIdentity
-import skillbill.infrastructure.skills.install.staging.content.installedSkillSlug
-import skillbill.infrastructure.skills.install.staging.content.isContentManagedSkill
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
 import skillbill.install.model.InstallPlanSkill

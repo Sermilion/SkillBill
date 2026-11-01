@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.monitor
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import me.tatarka.inject.annotations.Inject
@@ -7,6 +8,7 @@ import skillbill.infrastructure.workflow.github.GhCommandRunner
 import skillbill.infrastructure.workflow.github.ProcessGhCommandRunner
 import skillbill.infrastructure.workflow.github.describeFailure
 import skillbill.infrastructure.workflow.process.runGitCommand
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorPullRequestSource
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequest
@@ -15,6 +17,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestSummary
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import java.io.IOException
 import java.nio.file.Path
 
 private const val LISTING_OUTPUT_BYTES: Long = 256L * 1024 * 1024
@@ -26,10 +29,12 @@ private val REMOTE_URL =
 
 class GhMonitorPullRequestSource internal constructor(
   private val gh: GhCommandRunner,
+  private val diagnostics: RuntimeDiagnostics,
 ) : MonitorPullRequestSource {
   @Inject
-  constructor() : this(
+  constructor(diagnostics: RuntimeDiagnostics) : this(
     ProcessGhCommandRunner(maxOutputBytes = LISTING_OUTPUT_BYTES, deadlineSeconds = LISTING_DEADLINE_SECONDS),
+    diagnostics,
   )
 
   private val mapper: ObjectMapper by lazy { ObjectMapper() }
@@ -54,15 +59,42 @@ class GhMonitorPullRequestSource internal constructor(
     val result = gh.run(Path.of("."), apiArgs(repository, "pulls/$number"))
     return when {
       result.exitCode != 0 && NOT_FOUND_MARKER in result.stdout -> MonitorPullRequestLookup.Missing
-      result.exitCode != 0 -> MonitorPullRequestLookup.Failed(result.describeFailure())
-      else ->
-        runCatching { mapper.readTree(result.stdout) }.getOrNull()
-          ?.takeIf(JsonNode::isObject)
-          ?.let { parseMonitorPullRequest(it, repository) }
-          ?.let { MonitorPullRequestLookup.Found(withRepositoryPush(it)) }
-          ?: MonitorPullRequestLookup.Failed("GitHub returned an unparsable or incomplete pull request.")
+      result.exitCode != 0 -> {
+        val reason = result.describeFailure()
+        diagnostics.warning("monitor poll pull request lookup failed for ${repository.slug}#$number: $reason")
+        MonitorPullRequestLookup.Failed(reason)
+      }
+      else -> {
+        val json = readTreeOrNull(result.stdout, "pull request lookup")
+        val pullRequest =
+          json
+            ?.takeIf(JsonNode::isObject)
+            ?.let { parseMonitorPullRequest(it, repository) }
+        if (pullRequest != null) {
+          MonitorPullRequestLookup.Found(withRepositoryPush(pullRequest))
+        } else {
+          val reason = "GitHub returned an unparsable or incomplete pull request."
+          if (json != null) {
+            diagnostics.warning("monitor poll pull request lookup failed for ${repository.slug}#$number: $reason")
+          }
+          MonitorPullRequestLookup.Failed(reason)
+        }
+      }
     }
   }
+
+  private fun readTreeOrNull(
+    stdout: String,
+    operation: String,
+  ): JsonNode? =
+    try {
+      val json = mapper.readTree(stdout)
+      if (json == null) diagnostics.warning("monitor poll $operation returned empty GitHub output")
+      json
+    } catch (error: JsonProcessingException) {
+      diagnostics.warning("monitor poll $operation returned unparsable GitHub output", error)
+      null
+    }
 
   private fun withRepositoryPush(pullRequest: MonitorPullRequest): MonitorPullRequest {
     val head = pullRequest.head ?: return pullRequest
@@ -73,8 +105,13 @@ class GhMonitorPullRequestSource internal constructor(
 
   private fun repositoryPush(repository: MonitorRepositoryIdentity): Boolean? {
     val result = gh.run(Path.of("."), getArgs(repository.host, "repos/${repository.slug}"))
-    if (result.exitCode != 0) return null
-    return runCatching { mapper.readTree(result.stdout) }.getOrNull()
+    if (result.exitCode != 0) {
+      diagnostics.warning(
+        "monitor poll repository permissions failed for ${repository.slug}: ${result.describeFailure()}",
+      )
+      return null
+    }
+    return readTreeOrNull(result.stdout, "repository permissions")
       ?.path("permissions")
       ?.path("push")
       ?.takeIf(JsonNode::isBoolean)
@@ -96,10 +133,27 @@ class GhMonitorPullRequestSource internal constructor(
   ): MonitorPullRequestListing {
     val options = listOf("--paginate", "-f", "state=all", "-f", "per_page=$PAGE_SIZE") + filters
     val result = gh.run(Path.of("."), apiArgs(repository, "pulls", options))
-    if (result.exitCode != 0) return MonitorPullRequestListing.Failed(result.describeFailure())
-    val summaries = runCatching { readPages(result.stdout, repository) }.getOrNull()
-    return summaries?.let { MonitorPullRequestListing.Complete(it) }
-      ?: MonitorPullRequestListing.Failed("GitHub returned an unparsable, truncated, or incomplete pull request list.")
+    if (result.exitCode != 0) {
+      val reason = result.describeFailure()
+      diagnostics.warning("monitor poll pull request list failed for ${repository.slug}: $reason")
+      return MonitorPullRequestListing.Failed(reason)
+    }
+    val summaries =
+      try {
+        readPages(result.stdout, repository)
+      } catch (error: IOException) {
+        diagnostics.warning(
+          "monitor poll pull request list returned unparsable GitHub output for ${repository.slug}",
+          error,
+        )
+        return MonitorPullRequestListing.Failed(
+          "GitHub returned an unparsable, truncated, or incomplete pull request list.",
+        )
+      }
+    if (summaries != null) return MonitorPullRequestListing.Complete(summaries)
+    val reason = "GitHub returned an unparsable, truncated, or incomplete pull request list."
+    diagnostics.warning("monitor poll pull request list failed for ${repository.slug}: $reason")
+    return MonitorPullRequestListing.Failed(reason)
   }
 
   private fun readPages(

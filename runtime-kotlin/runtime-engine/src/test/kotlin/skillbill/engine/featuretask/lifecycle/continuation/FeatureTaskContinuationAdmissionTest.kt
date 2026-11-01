@@ -222,6 +222,8 @@ class FeatureTaskContinuationAdmissionTest {
           testWorkflowSnapshotValidator,
           fixture.execution.compatibility,
           object : RuntimeDiagnostics {
+            override fun info(message: String) = Unit
+
             override fun warning(
               message: String,
               error: Throwable?,
@@ -311,6 +313,8 @@ class FeatureTaskContinuationAdmissionTest {
         testWorkflowSnapshotValidator,
         execution.compatibility,
         object : RuntimeDiagnostics {
+          override fun info(message: String) = Unit
+
           override fun warning(
             message: String,
             error: Throwable?,

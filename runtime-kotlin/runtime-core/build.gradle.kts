@@ -38,6 +38,7 @@ dependencies {
   api(project(":runtime-application"))
   api(project(":runtime-ports"))
   api(project(":runtime-engine"))
+  api(project(":runtime-goalrunner"))
   implementation(project(":runtime-domain"))
   implementation(project(":runtime-contracts"))
   testImplementation(libs.kotlinx.serialization.json)
@@ -54,6 +55,7 @@ dependencies {
 
   testImplementation(testFixtures(project(":runtime-application")))
   testImplementation(testFixtures(project(":runtime-engine")))
+  testImplementation(testFixtures(project(":runtime-goalrunner")))
   testImplementation(testFixtures(project(":runtime-ports")))
   testImplementation(testFixtures(project(":runtime-infra:sqlite")))
   testImplementation(libs.junit.jupiter)

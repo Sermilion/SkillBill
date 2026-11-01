@@ -1,7 +1,6 @@
 package skillbill.application.review.parallel.planning
 
 import skillbill.application.review.model.ParallelCodeReviewPlanned
-import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
 import skillbill.application.review.snapshot.ReviewHarnessConfig
 import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForChanges
@@ -11,6 +10,7 @@ import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
 import skillbill.application.review.snapshot.reviewed
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.parseAttributable
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.review.model.ResolvedReviewRubric
 import skillbill.ports.review.preparation.ReviewRubricResolver

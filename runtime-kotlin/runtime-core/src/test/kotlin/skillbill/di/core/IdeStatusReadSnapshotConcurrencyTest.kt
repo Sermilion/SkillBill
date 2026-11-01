@@ -4,8 +4,9 @@ import skillbill.application.TestDecompositionManifestStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
+import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestProjectionReader
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
-import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.IdeStatusProjector
 import skillbill.engine.work.IdeStatusService
@@ -209,7 +210,7 @@ private class SnapshotFixture(
         workflowSnapshotValidator = NoopSnapshotValidator,
         goalRunnerStatusService = component.goalRunnerStatusService,
         featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
-        manifestStore = EmptyManifestStore,
+        manifestStore = GoalRunnerManifestProjectionReader(EmptyManifestStore),
         diagnostics = NoopRuntimeDiagnostics,
         qaCapabilities = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
         planReports =

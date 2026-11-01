@@ -2,13 +2,13 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.work.control.workControlEligible
-import skillbill.engine.work.control.workDisplayGroup
-import skillbill.engine.work.control.workDisplayPriority
-import skillbill.engine.work.control.workLiveSection
-import skillbill.engine.work.control.workPauseEligible
-import skillbill.engine.work.control.workPolicy
-import skillbill.engine.work.control.workRequiresAttention
+import skillbill.engine.work.eligibility.workControlEligible
+import skillbill.engine.work.eligibility.workDisplayGroup
+import skillbill.engine.work.eligibility.workDisplayPriority
+import skillbill.engine.work.eligibility.workLiveSection
+import skillbill.engine.work.eligibility.workPauseEligible
+import skillbill.engine.work.eligibility.workPolicy
+import skillbill.engine.work.eligibility.workRequiresAttention
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
@@ -33,9 +33,9 @@ import skillbill.idestatus.model.IdeStatusRepositoryIdentityFamily
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityPolicy
 import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
-import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
@@ -66,7 +66,7 @@ import java.time.Instant
 import java.util.Locale
 
 @Inject
-class WorkBoardItemProjection(
+public class WorkBoardItemProjection(
   private val projector: IdeStatusProjector,
   private val ideStatusValidator: IdeStatusValidator,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -607,7 +607,7 @@ internal sealed interface WorkDetailMatch {
 }
 
 @Inject
-class WorkBoardReadModelProjection(
+public class WorkBoardReadModelProjection(
   private val projection: WorkBoardItemProjection,
   private val diagnostics: RuntimeDiagnostics,
 ) : WorkBoardReadModelProjector {

@@ -3,11 +3,11 @@ package skillbill.engine.featuretask.lifecycle.subtask
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 import java.nio.file.Path
 
-internal data class SubtaskCommitPreservationRequest(
-  val repoRoot: Path,
-  val decision: FeatureTaskRuntimeSubtaskCommitDecision,
-  val identity: FeatureTaskRuntimeSubtaskCommitIdentity,
-  val message: String,
-  val allowUnchangedIndex: Boolean,
-  val record: (String) -> Unit,
+public data class SubtaskCommitPreservationRequest(
+  public val repoRoot: Path,
+  public val decision: FeatureTaskRuntimeSubtaskCommitDecision,
+  public val identity: FeatureTaskRuntimeSubtaskCommitIdentity,
+  public val message: String,
+  public val allowUnchangedIndex: Boolean,
+  public val record: (String) -> Unit,
 )

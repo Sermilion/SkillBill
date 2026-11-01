@@ -3,14 +3,14 @@ package skillbill.engine.work
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
-import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
-import skillbill.engine.work.control.workControlEligible
-import skillbill.engine.work.control.workDisplayGroup
-import skillbill.engine.work.control.workDisplayPriority
-import skillbill.engine.work.control.workLiveSection
-import skillbill.engine.work.control.workPauseEligible
-import skillbill.engine.work.control.workRequiresAttention
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.GoalRunnerStatusRequest
+import skillbill.engine.work.eligibility.workControlEligible
+import skillbill.engine.work.eligibility.workDisplayGroup
+import skillbill.engine.work.eligibility.workDisplayPriority
+import skillbill.engine.work.eligibility.workLiveSection
+import skillbill.engine.work.eligibility.workPauseEligible
+import skillbill.engine.work.eligibility.workRequiresAttention
 import skillbill.engine.work.incident.WorkIncidentProjectionBuilder
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
@@ -84,7 +84,7 @@ import java.time.format.DateTimeParseException
 import java.util.Locale
 
 @Inject
-class IdeStatusService(
+public class IdeStatusService(
   private val database: DatabaseSessionFactory,
   private val projector: IdeStatusProjector,
   private val workBoardItemProjection: WorkBoardItemProjection,
@@ -93,11 +93,11 @@ class IdeStatusService(
   private val clock: Clock,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
-  private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val goalRunnerStatusService: GoalRunnerStatusPort,
   private val diagnostics: RuntimeDiagnostics,
   private val incidentProjectionBuilder: WorkIncidentProjectionBuilder,
 ) {
-  fun status(request: IdeStatusRequest): IdeStatusResult {
+  public fun status(request: IdeStatusRequest): IdeStatusResult {
     val observedAt = request.observedAt ?: clock.instant()
     val identityResult = resolveRepositoryIdentity(request.repoRoot, repositoryEnclosingRootPort)
     if (identityResult is IdeStatusRepositoryResolution.Invalid) {
@@ -206,7 +206,7 @@ class IdeStatusService(
     return emit(projector.project(candidate = selected, context = selectedContext).snapshot, queryWork)
   }
 
-  fun board(request: WorkBoardRequest): WorkBoardResult {
+  public fun board(request: WorkBoardRequest): WorkBoardResult {
     val position = workBoardPagePosition(request, clock.instant())
     val observedAt = position.observedAt
     if (!database.databaseExists()) {
@@ -223,7 +223,7 @@ class IdeStatusService(
     }
   }
 
-  fun projectBoardSelection(
+  public fun projectBoardSelection(
     ids: List<String>,
     request: WorkBoardRequest,
   ): WorkBoardResult {
@@ -285,7 +285,7 @@ class IdeStatusService(
     }
   }
 
-  fun detail(request: WorkDetailRequest): WorkDetailResult {
+  public fun detail(request: WorkDetailRequest): WorkDetailResult {
     val position = workDetailPagePosition(request, clock.instant())
     val observedAt = position.observedAt
     if (!database.databaseExists()) {
@@ -607,7 +607,8 @@ class IdeStatusService(
       else -> listOf(step)
     }
 
-  fun toWireMap(snapshot: IdeStatusSnapshot): Map<String, Any?> = ideStatusValidator.toWirePayload(snapshot).toPayload()
+  public fun toWireMap(snapshot: IdeStatusSnapshot): Map<String, Any?> =
+    ideStatusValidator.toWirePayload(snapshot).toPayload()
 
   private fun scopeToBranch(
     candidates: List<IdeStatusCandidate>,

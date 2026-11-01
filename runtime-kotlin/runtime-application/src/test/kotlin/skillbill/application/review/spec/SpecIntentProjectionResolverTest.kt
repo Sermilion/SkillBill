@@ -5,6 +5,7 @@ import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.branchName
 import skillbill.application.review.model.ReviewRubricProjection
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
+import skillbill.application.review.packet.specIntentProjectionUtf8Bytes
 import skillbill.application.review.packet.toLaunchEnvelope
 import skillbill.application.review.parallel.planning.ParallelReviewPreparationCompiler
 import skillbill.application.review.parallel.planning.ParallelReviewPreparationInput
@@ -12,6 +13,7 @@ import skillbill.application.review.parallel.planning.PlannedReviewRubric
 import skillbill.application.review.parallel.planning.criteriaReferences
 import skillbill.application.reviewevidence.ResolvedCommitSequence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.parse
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ReviewContextFailureCode

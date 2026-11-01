@@ -173,6 +173,8 @@ private fun client(
 private class TelemetryRecordingDiagnostics : RuntimeDiagnostics {
   val warnings = mutableListOf<String>()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,
@@ -187,6 +189,8 @@ private class TelemetryRecordingDiagnostics : RuntimeDiagnostics {
 }
 
 private object SilentTelemetryDiagnostics : RuntimeDiagnostics {
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

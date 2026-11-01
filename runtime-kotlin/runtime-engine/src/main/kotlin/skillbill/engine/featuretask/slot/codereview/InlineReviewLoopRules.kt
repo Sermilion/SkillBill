@@ -2,11 +2,14 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeScopedReviewBaseline
+import skillbill.engine.featuretask.slot.PhaseEntryBlockRules
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.engine.featuretask.slot.PhaseEntrySettlementRules
+import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopContext
-import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseStepLoopRules
+import skillbill.engine.featuretask.slot.PhaseReentryStateRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -14,7 +17,11 @@ import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object InlineReviewLoopRules : PhaseLoopRules, PhaseStepLoopRules<PhaseReviewStepBinding> {
+internal object InlineReviewLoopRules :
+  PhaseInFlightReentryRules,
+  PhaseReentryStateRules<PhaseReviewStepBinding>,
+  PhaseEntryBlockRules<PhaseReviewStepBinding>,
+  PhaseEntrySettlementRules<PhaseReviewStepBinding> {
   private const val REVIEW = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
   private const val REVIEW_FIX_LOOP = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID
 
@@ -67,7 +74,7 @@ internal object InlineReviewLoopRules : PhaseLoopRules, PhaseStepLoopRules<Phase
     state: PhaseReviewStepBinding,
   ): PhaseEntrySettlement? {
     if (stepId != REVIEW || !isGoalContinuationRun(context.request)) return null
-    return runCatching { state.goalReviewState() }.fold(
+    return catchingNonCancellation { state.goalReviewState() }.fold(
       onSuccess = { reviewState ->
         reviewState
           ?.takeIf { it.reviewCapReached || it.reviewSkippedByUser }
@@ -92,7 +99,7 @@ internal object InlineReviewLoopRules : PhaseLoopRules, PhaseStepLoopRules<Phase
     stepId: String,
     state: PhaseReviewStepBinding,
   ): String? =
-    runCatching { state.goalReviewState() }.fold(
+    catchingNonCancellation { state.goalReviewState() }.fold(
       onSuccess = { reviewState ->
         when {
           reviewState == null ->
@@ -114,7 +121,7 @@ internal object InlineReviewLoopRules : PhaseLoopRules, PhaseStepLoopRules<Phase
     state: PhaseReviewStepBinding,
   ): String? =
     state.completedStepPayload(stepId)?.let { output ->
-      runCatching {
+      catchingNonCancellation {
         NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output, stepId)
       }.fold(
         onSuccess = { accepted ->
@@ -135,7 +142,7 @@ internal object InlineReviewLoopRules : PhaseLoopRules, PhaseStepLoopRules<Phase
     state: PhaseReviewStepBinding,
     reviewState: GoalSubtaskReviewState,
   ): PhaseEntrySettlement =
-    runCatching { state.carriedForwardReviewResult() }.fold(
+    catchingNonCancellation { state.carriedForwardReviewResult() }.fold(
       onSuccess = { rawResult ->
         rawResult?.let { recordCarriedForward(stepId, state, it, reviewState) }
           ?: carriedForwardBlock(null)
@@ -149,7 +156,7 @@ internal object InlineReviewLoopRules : PhaseLoopRules, PhaseStepLoopRules<Phase
     rawResult: String,
     reviewState: GoalSubtaskReviewState,
   ): PhaseEntrySettlement =
-    runCatching {
+    catchingNonCancellation {
       val accepted = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(rawResult, stepId)
       state.settleCarriedForwardReview(accepted)
     }.fold(

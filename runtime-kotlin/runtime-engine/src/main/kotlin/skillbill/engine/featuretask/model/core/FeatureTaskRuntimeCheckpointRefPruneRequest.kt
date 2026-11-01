@@ -1,9 +1,9 @@
 package skillbill.engine.featuretask.model.core
 
-data class FeatureTaskRuntimeCheckpointRefPruneRequest(
-  val issueKey: String,
-  val subtaskId: String,
-  val manifestCommitSha: String?,
-  val bypassEligibilityGate: Boolean = false,
-  val featureBranch: String? = null,
+public data class FeatureTaskRuntimeCheckpointRefPruneRequest(
+  public val issueKey: String,
+  public val subtaskId: String,
+  public val manifestCommitSha: String?,
+  public val bypassEligibilityGate: Boolean = false,
+  public val featureBranch: String? = null,
 )

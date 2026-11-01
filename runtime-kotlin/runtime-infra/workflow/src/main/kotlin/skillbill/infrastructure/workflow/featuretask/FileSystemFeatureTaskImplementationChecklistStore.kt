@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.featuretask
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
@@ -53,7 +54,7 @@ class FileSystemFeatureTaskImplementationChecklistStore(
       return LoadedChecklist.Finished(unwritable(address, IllegalStateException("checklist path is not a file")))
     }
     val text =
-      runCatching { Files.readString(path) }.getOrElse { error ->
+      catchingNonCancellation { Files.readString(path) }.getOrElse { error ->
         return LoadedChecklist.Finished(unwritable(address, error))
       }
     return loadedParsedChecklist(path, address, seed, text)
@@ -82,7 +83,7 @@ class FileSystemFeatureTaskImplementationChecklistStore(
     body: String,
     success: ImplementationChecklistPrepareResult,
   ): ImplementationChecklistPrepareResult =
-    runCatching {
+    catchingNonCancellation {
       Files.createDirectories(path.parent)
       Files.writeString(path, body, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
       success

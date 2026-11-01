@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.lifecycle.subtask
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
-internal fun FeatureTaskRuntimeSubtaskFinalisation.decide(
+public fun FeatureTaskRuntimeSubtaskFinalisation.decide(
   branch: String,
   identity: FeatureTaskRuntimeSubtaskCommitIdentity,
   durableCommitSha: String?,
@@ -28,10 +28,10 @@ internal fun FeatureTaskRuntimeSubtaskFinalisation.decide(
   )
 }
 
-fun FeatureTaskRuntimeSubtaskFinalisation.headMessage(): String? =
+public fun FeatureTaskRuntimeSubtaskFinalisation.headMessage(): String? =
   gitOperations.headCommitMessage(repoRoot).takeIf { it is WorkflowGitOperationResult.Ok }?.value
 
-fun FeatureTaskRuntimeSubtaskFinalisation.remoteDiverged(
+public fun FeatureTaskRuntimeSubtaskFinalisation.remoteDiverged(
   branch: String,
   commitSha: String,
 ): Boolean {

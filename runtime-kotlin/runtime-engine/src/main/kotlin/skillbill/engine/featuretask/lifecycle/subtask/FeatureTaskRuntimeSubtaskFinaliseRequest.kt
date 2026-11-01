@@ -4,11 +4,11 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoff
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 
-data class FeatureTaskRuntimeSubtaskFinaliseRequest(
-  val identity: FeatureTaskRuntimeSubtaskCommitIdentity,
-  val durableCommitSha: String?,
-  val sequenceNumber: Int,
-  val handoff: FeatureTaskRuntimeCommitPushHandoff,
-  val metadata: FeatureTaskRuntimeCheckpointMetadata,
-  val manifestCommitSha: String? = null,
+public data class FeatureTaskRuntimeSubtaskFinaliseRequest(
+  public val identity: FeatureTaskRuntimeSubtaskCommitIdentity,
+  public val durableCommitSha: String?,
+  public val sequenceNumber: Int,
+  public val handoff: FeatureTaskRuntimeCommitPushHandoff,
+  public val metadata: FeatureTaskRuntimeCheckpointMetadata,
+  public val manifestCommitSha: String? = null,
 )

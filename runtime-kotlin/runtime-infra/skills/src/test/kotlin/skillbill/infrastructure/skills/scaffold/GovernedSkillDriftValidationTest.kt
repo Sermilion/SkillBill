@@ -4,7 +4,7 @@ import skillbill.infrastructure.skills.scaffold.authoring.AuthoringRenderBlock
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringRenderResult
 import skillbill.infrastructure.skills.scaffold.authoring.renderWrapper
 import skillbill.infrastructure.skills.scaffold.authoring.resolveTarget
-import skillbill.infrastructure.skills.scaffold.validation.shape.validateGovernedSkillDrift
+import skillbill.infrastructure.skills.scaffold.runtime.validation.validateGovernedSkillDrift
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest

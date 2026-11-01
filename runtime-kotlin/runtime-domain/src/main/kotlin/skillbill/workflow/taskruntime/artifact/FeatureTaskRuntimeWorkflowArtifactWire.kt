@@ -21,7 +21,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjection
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointIdentitiesFromArtifact
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointIdentitiesToArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -37,7 +36,6 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.phaseartifacts.decomposeTerminalFrom
-import skillbill.workflow.taskruntime.phaseartifacts.goalContinuationFieldAdoptionFrom
 import skillbill.workflow.taskruntime.phaseartifacts.operatorBlockRetryFrom
 import skillbill.workflow.taskruntime.phaseartifacts.phaseLedgerFrom
 import skillbill.workflow.taskruntime.phaseartifacts.phaseRecordsFrom
@@ -93,10 +91,6 @@ fun FeatureTaskRuntimeOperatorBlockRetry.asWorkflowArtifactEntry(
         emptyMap()
       },
   )
-
-fun goalContinuationFieldAdoptionFromWorkflowArtifacts(
-  artifacts: Any?,
-): FeatureTaskRuntimeGoalContinuationFieldAdoption? = goalContinuationFieldAdoptionFrom(artifactsMap(artifacts))
 
 fun decomposeTerminalFromWorkflowArtifacts(artifacts: Any?): FeatureTaskRuntimeDecomposeTerminal? =
   decomposeTerminalFrom(artifactsMap(artifacts))

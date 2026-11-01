@@ -109,11 +109,13 @@ internal fun displayPackPath(
   pack: PlatformManifest,
   path: Path,
 ): String =
-  runCatching {
+  try {
     pack.packRoot.toPath().toAbsolutePath().normalize().relativize(path.toAbsolutePath().normalize())
       .toString()
       .replace('\\', '/')
-  }.getOrDefault(path.toString())
+  } catch (_: IllegalArgumentException) {
+    path.toString()
+  }
 
 internal fun childDirectories(root: Path): List<Path> {
   if (!Files.isDirectory(root)) {

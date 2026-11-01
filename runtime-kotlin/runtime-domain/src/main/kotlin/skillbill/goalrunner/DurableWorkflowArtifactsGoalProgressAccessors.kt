@@ -27,7 +27,7 @@ internal fun DurableWorkflowArtifacts.goalProgressHistory(): List<GoalProgressEv
 }
 
 fun DurableWorkflowArtifacts.goalProgressCurrentStepEnteredAt(): Instant? =
-  runCatching { goalProgressHistory() }.getOrNull()?.let(::currentStepEnteredAt)
+  goalProgressHistory().let(::currentStepEnteredAt)
 
 internal fun currentStepEnteredAt(history: List<GoalProgressEvent>): Instant? {
   val ordered = history.sortedBy(GoalProgressEvent::sequenceNumber)

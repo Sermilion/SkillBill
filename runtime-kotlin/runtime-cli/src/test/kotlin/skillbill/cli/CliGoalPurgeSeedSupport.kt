@@ -136,13 +136,17 @@ private fun seedGoalWorkflows(
   }
   connection.execute(
     """
-    INSERT INTO feature_task_workflows (workflow_id, session_id, mode, contract_version, artifacts_json, issue_key)
-    VALUES (?, ?, 'runtime', '0.1', ?, ?)
+    INSERT INTO feature_task_workflows (
+      workflow_id, session_id, mode, contract_version, artifacts_json, issue_key,
+      parent_workflow_id, goal_subtask_id, goal_issue_key
+    ) VALUES (?, ?, 'runtime', '0.1', ?, ?, ?, 1, ?)
     """.trimIndent(),
     seed.childId,
     seed.sessionId,
     "{\"goal_continuation\":{\"issue_key\":\"${seed.issueKey}\",\"subtask_id\":1," +
       "\"parent_workflow_id\":\"${seed.parentId}\"}}",
+    seed.issueKey,
+    seed.parentId,
     seed.issueKey,
   )
   connection.execute(

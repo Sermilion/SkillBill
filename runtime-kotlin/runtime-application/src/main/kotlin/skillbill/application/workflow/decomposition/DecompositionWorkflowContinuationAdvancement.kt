@@ -5,10 +5,8 @@ import skillbill.application.workflow.model.AdvanceCompletedSubtasksRequest
 import skillbill.application.workflow.model.CheckoutAndValidateBranchRequest
 import skillbill.application.workflow.model.GoalContinuationOutcome
 import skillbill.application.workflow.model.WorkflowContinueResult
-import skillbill.application.workflow.service.decompositionRuntimeArtifacts
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -29,6 +27,7 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Path
 
 internal data class AdvancementResult(
@@ -157,13 +156,12 @@ internal fun subtaskStartArtifacts(
           DecompositionPlanningPayloadKeys.BRANCH to selection.branchPlan.branch,
         ),
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
-        mapOf(
-          SharedPayloadKeys.ISSUE_KEY to manifest.issueKey,
-          SharedPayloadKeys.SUBTASK_ID to selection.subtask.id,
-          "suppress_pr" to true,
-          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.GOAL_BRANCH to selection.branchPlan.branch,
-          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE to
-            CodeReviewExecutionMode.INLINE.wireValue,
+        FeatureTaskRuntimeGoalContinuationArtifact(
+          issueKey = manifest.issueKey,
+          subtaskId = selection.subtask.id,
+          suppressPr = true,
+          goalBranch = selection.branchPlan.branch,
+          codeReviewMode = CodeReviewExecutionMode.INLINE,
         ),
       ),
       DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(

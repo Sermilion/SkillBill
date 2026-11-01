@@ -139,6 +139,11 @@ Revisit when: a QA-capable pack has no validation_gate.build_command, since the 
 
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-31] Retry failed GitHub observations during monitoring
+Context: The workflow GitHub adapters retained typed failures and diagnostics, but ordinary and standalone CI watchers turned failed identity, checks, or confirmation reads into terminal unavailable outcomes. Finalization then blocked on a recoverable poll failure, and the ordinary watcher could apply its no-start timeout without usable evidence.
+Decision: Both watcher families treat failed poll reads and failed confirmation reads as unknown for that round, record ordinary watcher failures through the existing onInconclusive diagnostics callback, and continue at the configured poll interval. The no-start timeout applies only after a usable no-check observation. Standalone adapter failures retain their existing diagnostics, including empty JSON responses.
+Reason: A failed read supplies no current identity or CI evidence. Retrying preserves published-head and standalone-ledger ownership while allowing a later complete observation to reacquire and confirm the same PR identity. Observed merge, absence, conflict, and safe superseded-head outcomes keep their existing consequences.
+
 ## [2026-10-20] Goal QA loops qa_fix straight back to qa and validates once after
 Context: In goal 0AC-68 the goal-qa skeleton ran qa -> qa_fix -> validate -> qa. The qa_fix briefing listed only finding ids, criteria and receipt paths, a qa_fix that changed nothing settled as completed with no trace, and the qa_fix attempt count lived in the goal process, so a relaunch started counting from zero (the parent row showed qa_fix_attempts 0 after two attempts).
 Decision: GOAL_QA keeps only qa and qa_fix; the qa_requalify edge now runs qa_fix -> qa, and the skeleton-scoped loopOnlyStepIds and the qa_fix_revalidate loop are deleted. DefaultGoalRunnerQaGate runs VALIDATION once through runForGoal when the QA loop left a different tree than it started on, and adds a warning when validation then changes the tree QA tested; nothing re-runs QA. The qa_fix briefing inlines each open finding's receipt steps, expected, observed and evidence paths. When qa_fix leaves the tree unchanged, its report must give each open finding a `<id>: not changed: <reason>` line or the step owes those findings; the next qa output records the unchanged attempt and its reasons in qa_warnings. Each completed goal qa_fix raises the parent's feature_task_qa_outcomes.qa_fix_attempts, and runForGoal seeds the in-memory repair state from that count with synthetic completed attempts.
@@ -3426,3 +3431,33 @@ Goal intake refuses new work without requirements, so pre-planning always has th
 ## [2026-10-30] Status reads treat an unreadable briefing map as no briefings
 
 `FeatureTaskRuntimeStatusService.phaseBriefingTexts` returns each phase's saved launch briefing text for the detail view. When the briefing map fails to parse, it returns an empty map so the rest of the status read stays usable.
+
+## 2026-10-30 — SKILL-448 goal-continuation validation repairs
+
+Whole-artifact wire encoding stays at the CLI and MCP projection boundaries. WorkflowService retains typed artifacts in its snapshot views, avoiding both a twelfth constructor collaborator and a map-form round trip inside the application service. The sqlite encoder port exchanges JSON text because runtime-ports forbids serialization-library types; consumers parse only the whole object and never encode the goal-continuation fields. Parse-boundary guards follow the codecs into sqlite rather than selecting deleted domain parsers.
+
+## [2026-10-31] Keep cancellation capture behind one helper and a source guard
+Context: Broad `runCatching` can turn coroutine cancellation or thread interruption into ordinary failure values, and the pinned detekt version cannot reliably type-resolve the repository's Kotlin sources.
+Decision: Use `catchingNonCancellation` for result capture and enforce the `runCatching` ban with a catalog main-source architecture guard.
+Reason: The helper preserves cancellation and interruption consistently; the source guard enforces the migration without depending on unsupported type resolution.
+
+## [2026-10-31] Use a catalog-driven exact-package cycle census
+Context: Per-module checks and first-segment cycle detection left gaps in architecture coverage and missed longer package cycles.
+Decision: Derive one parameterized exact-SCC check from the runtime module catalog, with empty censuses except for the still-cyclic engine and goal-runner modules.
+Reason: Catalog-derived cases cover declared modules uniformly, and exact SCCs expose cycles of any length. The retained censuses keep the remaining cycles visible while their removal stays out of this change's scope.
+
+## [2026-10-31] Store goal-continuation query fields as typed columns
+Context: Goal child, status, and parent reads filtered `feature_task_workflows` through JSON expressions over `artifacts_json`.
+Decision: Add nullable query columns in a named migration, backfill only correctly typed artifact values, and update them in the same statement as artifact writes.
+Reason: Existing databases need an explicit migration; typed columns avoid JSON extraction in query predicates, while same-statement writes keep the indexed fields aligned with the source artifact.
+
+## [2026-10-31] Process adapters own monotonic time and process handles
+
+`PrincipleEnforcementInventory.processAdapterModules` permits `System.nanoTime()`
+and `ProcessHandle` reads only in `runtime-infra:host`, `runtime-infra:launcher`,
+and `runtime-infra:workflow`. These adapters own process observation and bounded
+process waits. Other modules reach those effects through their injected clock or
+process ports. The exemption applies only to these two forms; existing wall-clock
+forms remain governed by each module's baseline. The ambient-process fixture
+checks both rejected engine reads and permitted launcher reads while retaining
+the launcher's wall-clock rejection. Import aliases retain the same scope.

@@ -14,12 +14,11 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
-class FeatureTaskRuntimeGoalContinuationArtifactPatcher(
+internal class FeatureTaskRuntimeGoalContinuationArtifactPatcher(
   private val engine: WorkflowEngine,
 ) {
   internal fun save(
@@ -49,9 +48,9 @@ internal fun continuationFromArtifacts(artifacts: Map<String, Any?>): FeatureTas
 internal fun reviewStateFromArtifacts(artifacts: Map<String, Any?>): GoalSubtaskReviewState? =
   GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts)
 
-fun GoalSubtaskReviewState.canRecoverReviewBase(): Boolean = disposition == GoalSubtaskReviewDisposition.PENDING
+public fun GoalSubtaskReviewState.canRecoverReviewBase(): Boolean = disposition == GoalSubtaskReviewDisposition.PENDING
 
-fun GoalSubtaskReviewState.matches(
+public fun GoalSubtaskReviewState.matches(
   baseline: GoalSubtaskReviewBaseline,
   continuation: FeatureTaskRuntimeGoalContinuationArtifact,
 ): Boolean =
@@ -78,7 +77,7 @@ internal fun rawReviewResultsFromArtifacts(
   return decoded.rawResults
 }
 
-fun rawReviewResultError(
+internal fun rawReviewResultError(
   fieldPath: String,
   reason: String,
 ): Nothing =
@@ -96,9 +95,7 @@ internal fun continuationPatch(
     continuation == null || continuation == existing -> emptyMap()
     existing == null ->
       mapOf(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
-          continuation.asWorkflowArtifactEntry(),
-        ),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(continuation),
         "install_sync_result" to
           mapOf(
             SharedPayloadKeys.STATUS to "deferred",
@@ -107,15 +104,10 @@ internal fun continuationPatch(
               "deferred install sync must not block subtask completion",
           ),
       )
-    else ->
-      mapOf(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
-          continuation.asWorkflowArtifactEntry(),
-        ),
-      )
+    else -> mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(continuation))
   }
 
-fun FeatureTaskRuntimeGoalContinuationArtifact?.compatibleWith(
+public fun FeatureTaskRuntimeGoalContinuationArtifact?.compatibleWith(
   supplied: FeatureTaskRuntimeGoalContinuationArtifact?,
 ): Boolean {
   if (this == null || supplied == null) return true

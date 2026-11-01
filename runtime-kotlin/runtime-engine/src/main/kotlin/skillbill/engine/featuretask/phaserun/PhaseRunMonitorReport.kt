@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunFailureCode
 import skillbill.engine.featuretask.phaserun.monitor.monitorOutcomeDetail
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.isCooperativeCancellation
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
@@ -22,7 +23,7 @@ internal fun earlySetupReport(
   settlement: MonitorSettlement?,
 ): List<String> = earlyReport(selector, pullRequest) + listOfNotNull(settlement?.let { "Cleanup: ${cleanupLine(it)}" })
 
-internal fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOutcome =
+public fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOutcome =
   outcome.fold(
     onSuccess = { result ->
       when (result) {
@@ -32,18 +33,18 @@ internal fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOu
     },
     onFailure = { failure ->
       MonitorPrimaryOutcome(
-        if (failure is InterruptedException) MonitorOutcomeKind.CANCELLED else MonitorOutcomeKind.RUN_FAILED,
+        if (failure.isCooperativeCancellation()) MonitorOutcomeKind.CANCELLED else MonitorOutcomeKind.RUN_FAILED,
         monitorOutcomeDetail(failure.message, failure::class.java.simpleName),
       )
     },
   )
 
-internal fun monitorRunFailure(
+public fun monitorRunFailure(
   failure: Throwable,
   context: MonitorExecutionContext,
   settlement: MonitorSettlement?,
 ): Throwable {
-  if (settlement == null || failure !is Exception || failure is InterruptedException) return failure
+  if (settlement == null || failure !is Exception || failure.isCooperativeCancellation()) return failure
   return SkillBillRuntimeException(
     code = (failure as? SkillBillRuntimeException)?.code ?: StandaloneMonitorRunFailureCode.RUN_FAILED,
     message =
@@ -55,7 +56,7 @@ internal fun monitorRunFailure(
   )
 }
 
-internal fun MonitorSettlement.toStatusCleanup(): StandaloneMonitorCleanup =
+public fun MonitorSettlement.toStatusCleanup(): StandaloneMonitorCleanup =
   when (this) {
     MonitorSettlement.Released -> StandaloneMonitorCleanup.Released
     is MonitorSettlement.Retained ->
@@ -72,7 +73,7 @@ internal fun MonitorSettlement.toStatusCleanup(): StandaloneMonitorCleanup =
       )
   }
 
-internal fun PhaseRunResult.withTargetReport(
+public fun PhaseRunResult.withTargetReport(
   context: MonitorExecutionContext,
   settlement: MonitorSettlement?,
 ): PhaseRunResult {

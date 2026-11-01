@@ -3,8 +3,8 @@ package skillbill.engine.featuretask.phase.prompt.compose
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 
-object FeatureTaskRuntimePhasePromptComposer {
-  fun compose(
+public object FeatureTaskRuntimePhasePromptComposer {
+  public fun compose(
     issueKey: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     source: PhaseStepPromptSource,
@@ -20,10 +20,10 @@ object FeatureTaskRuntimePhasePromptComposer {
       source,
     )
 
-  fun compose(
+  public fun compose(
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     source: PhaseStepPromptSource,
   ): String = composePhasePrompt(inputs, source)
 
-  fun budgetedAddonsFor(selection: HydratedAgentAddonSelection): HydratedAgentAddonSelection = selection
+  public fun budgetedAddonsFor(selection: HydratedAgentAddonSelection): HydratedAgentAddonSelection = selection
 }

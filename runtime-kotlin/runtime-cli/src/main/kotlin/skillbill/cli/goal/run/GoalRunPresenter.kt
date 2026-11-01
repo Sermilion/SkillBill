@@ -3,12 +3,12 @@ package skillbill.cli.goal.run
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.system.RuntimeProvenanceContract
-import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
+import skillbill.engine.goal.GoalRunnerAppliedRepair
+import skillbill.engine.goal.GoalRunnerPauseResult
+import skillbill.engine.goal.GoalRunnerResumeResult
+import skillbill.engine.goal.GoalRunnerStopVerbResult
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
-import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
-import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
-import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.goalrunner.model.GoalRunnerStopReport

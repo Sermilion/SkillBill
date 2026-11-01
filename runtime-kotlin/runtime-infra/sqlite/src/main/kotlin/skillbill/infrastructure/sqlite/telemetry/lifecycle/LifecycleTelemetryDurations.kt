@@ -1,7 +1,7 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle
 
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.time.LocalDateTime
 import java.time.format.DateTimeParseException
@@ -25,18 +25,16 @@ internal fun parseDurationSeconds(
   finishedAt: String,
   diagnostics: RuntimeDiagnostics,
 ): Int =
-  runCatching {
+  try {
     val start = LocalDateTime.parse(startedAt.replace(' ', 'T'))
     val end = LocalDateTime.parse(finishedAt.replace(' ', 'T'))
     maxOf(0, ChronoUnit.SECONDS.between(start, end).toInt())
-  }.getOrElse { error ->
-    if (error is DateTimeParseException) {
-      diagnostics.recordDegradedValue(
-        seam = "telemetry.duration_seconds",
-        expected = "parseable started_at and finished_at timestamps",
-        used = "started_at=$startedAt; finished_at=$finishedAt",
-        error = error,
-      )
-    }
+  } catch (error: DateTimeParseException) {
+    diagnostics.recordDegradedValue(
+      seam = "telemetry.duration_seconds",
+      expected = "parseable started_at and finished_at timestamps",
+      used = "started_at=$startedAt; finished_at=$finishedAt",
+      error = error,
+    )
     0
   }

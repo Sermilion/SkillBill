@@ -34,7 +34,7 @@ internal class TestAgentRunProcessRequestBuilder {
   var declaredProgressProbe: AgentRunDeclaredProgressProbe = AgentRunDeclaredProgressProbe.NONE
   var mcpStartupProbe: AgentRunMcpStartupProbe = AgentRunMcpStartupProbe.NONE
   var progressEmitter: AgentRunProgressEmitter = AgentRunProgressEmitter.NONE
-  var activityProbe: AgentRunActivityProbe = AgentRunActivityProbe.NONE
+  var activityProbe: AgentRunActivityProbe? = null
   var activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE
   var worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE
   var idlePolicy: AgentRunIdlePolicy = AgentRunIdlePolicy.DB_PROGRESS_ONLY

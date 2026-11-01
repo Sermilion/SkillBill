@@ -22,10 +22,10 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
+import skillbill.engine.goal.GoalPreflightGateBlock
+import skillbill.engine.goal.GoalPreflightRequest
+import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
-import skillbill.engine.goalrunner.model.GoalPreflightGateBlock
-import skillbill.engine.goalrunner.model.GoalPreflightRequest
-import skillbill.engine.goalrunner.model.GoalPreflightResult
 import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogAttempt

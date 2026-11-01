@@ -8,7 +8,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.engine.featuretask.slot.GoalPlanningImportSteps
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
@@ -32,6 +32,7 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
@@ -48,13 +49,13 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
 
 @Inject
-class FeatureTaskRuntimeExecutionAdmission(
+public class FeatureTaskRuntimeExecutionAdmission(
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
   private val phaseOutputMigration: FeatureTaskRuntimePhaseOutputMigration,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
 ) {
-  fun admit(
+  internal fun admit(
     states: WorkflowStateRepository,
     workflowId: String,
     inputs: EffectiveGatePolicyInputs,
@@ -63,7 +64,7 @@ class FeatureTaskRuntimeExecutionAdmission(
   ): AdmittedFeatureTaskRuntimeExecution =
     admitStored(states, AdmissionRequest(workflowId, inputs, expectedIdentity, requestedReviewSelection))
 
-  fun admit(
+  internal fun admit(
     session: GoalRunnerPersistenceSession,
     workflowId: String,
     inputs: EffectiveGatePolicyInputs,
@@ -114,7 +115,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         val patch =
           mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(phaseOutputs.records))
         val migratedArtifacts = initialSnapshot.artifacts + patch
-        states.migrateFeatureTaskArtifacts(row, JsonCodec.valueToJsonString(migratedArtifacts))
+        states.migrateFeatureTaskArtifacts(row, DurableWorkflowArtifacts.fromMap(migratedArtifacts))
       }
       AdmittedFeatureTaskRuntimeExecution(
         identity,
@@ -271,9 +272,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         is FeatureTaskRuntimePhaseOutputMigrationResult.Current -> hasCurrentOutput = true
         is FeatureTaskRuntimePhaseOutputMigrationResult.Migrated -> {
           val hydrated = record.executionOrigin == FeatureTaskRuntimePhaseExecutionOrigin.GOAL_PLANNING_HYDRATED
-          if (ownsGoalPlanningImport && hydrated &&
-            phaseId in setOf(GoalPlanningSweepConstants.PHASE_PREPLAN, GoalPlanningSweepConstants.PHASE_PLAN)
-          ) {
+          if (ownsGoalPlanningImport && hydrated && phaseId in GoalPlanningImportSteps.MIGRATION_REFUSED) {
             throw SkillBillRuntimeException(
               FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT,
               "Imported planning output is not coherent with its parent checkpoint. Resume the parent goal.",
@@ -389,7 +388,7 @@ class FeatureTaskRuntimeExecutionAdmission(
     val receipt: RuntimeMigrationReceipt?,
   )
 
-  fun requireCompatibleDescriptor(
+  public fun requireCompatibleDescriptor(
     states: WorkflowStateRepository,
     workflowId: String,
     expected: ValidatedFeatureTaskRuntimeExecutionPlan?,
@@ -409,7 +408,7 @@ class FeatureTaskRuntimeExecutionAdmission(
       throw error
     }
 
-  fun recordTransactionOutcome(
+  internal fun recordTransactionOutcome(
     receipt: RuntimeMigrationReceipt,
     committed: Boolean,
   ) {

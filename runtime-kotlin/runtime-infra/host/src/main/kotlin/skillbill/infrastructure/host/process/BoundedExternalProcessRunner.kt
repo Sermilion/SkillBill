@@ -1,5 +1,6 @@
 package skillbill.infrastructure.host.process
 
+import skillbill.error.core.catchingNonCancellation
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -67,14 +68,20 @@ private class BoundedExternalProcessSession(
       destroyForInterrupted(interrupted)
       throw interrupted
     } finally {
-      cleanup()
+      try {
+        cleanup()
+      } finally {
+        cleanupFailure?.let { failure ->
+          primaryFailure?.takeIf { it !== failure }?.addSuppressed(failure)
+        }
+      }
     }
     return buildResult()
   }
 
   private fun startProcess(): Boolean {
     val started =
-      runCatching {
+      catchingNonCancellation {
         ProcessBuilder(request.argv).apply {
           request.workingDirectory?.let { directory(it.toFile()) }
           if (request.clearEnvironment) {
@@ -145,7 +152,7 @@ private class BoundedExternalProcessSession(
   private fun startInput(process: Process) {
     val stdin = request.stdin
     if (stdin == null) {
-      runCatching { process.outputStream.close() }.onFailure(::recordCleanupFailure)
+      catchingNonCancellation { process.outputStream.close() }.onFailure(::recordCleanupFailure)
       return
     }
     inputThread =
@@ -214,24 +221,37 @@ private class BoundedExternalProcessSession(
   }
 
   private fun cleanup() {
-    val active = process ?: return
-    val cleanupDeadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(PROCESS_CLEANUP_BUDGET_SECONDS)
-    attemptCleanup { active.outputStream.close() }
-    inputThread?.let { writerThread ->
-      attemptCleanup { joinWithDeadline(writerThread, cleanupDeadlineNanos) }
-    }
-    outputThread?.let { drainThread ->
-      attemptCleanup { closeInputAndJoin(active, drainThread, cleanupDeadlineNanos) }
-    }
-    attemptCleanup { destroyProcessTree(active) }
-    attemptCleanup { active.inputStream.close() }
-    attemptCleanup { active.outputStream.close() }
-    runCatching {
-      if (active.isAlive) {
-        active.destroyForcibly()
-        active.waitFor(DESTROY_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+    val interrupted = Thread.interrupted()
+    try {
+      val active = process ?: return
+      val cleanupDeadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(PROCESS_CLEANUP_BUDGET_SECONDS)
+      try {
+        attemptCleanup { active.outputStream.close() }
+        inputThread?.let { writerThread ->
+          attemptCleanup { joinWithDeadline(writerThread, cleanupDeadlineNanos) }
+        }
+        outputThread?.let { drainThread ->
+          attemptCleanup { closeInputAndJoin(active, drainThread, cleanupDeadlineNanos) }
+        }
+      } finally {
+        attemptCleanup { destroyProcessTree(active) }
+        attemptCleanup { active.inputStream.close() }
+        attemptCleanup { active.outputStream.close() }
+        attemptCleanup {
+          if (active.isAlive) {
+            active.destroyForcibly()
+            active.waitFor(DESTROY_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+          }
+        }
       }
-    }.onFailure(::recordCleanupFailure)
+    } catch (interruptedDuringCleanup: InterruptedException) {
+      val failure = primaryFailure ?: interruptedDuringCleanup
+      if (failure !== interruptedDuringCleanup) failure.addSuppressed(interruptedDuringCleanup)
+      primaryFailure = failure
+      throw failure
+    } finally {
+      if (interrupted) Thread.currentThread().interrupt()
+    }
   }
 
   private fun buildResult(): BoundedExternalProcessResult {
@@ -267,7 +287,7 @@ private class BoundedExternalProcessSession(
   }
 
   private fun captureOwnedDescendants(process: Process) {
-    runCatching {
+    catchingNonCancellation {
       ownedDescendants += process.toHandle().descendants().toList()
     }.onFailure(::recordCleanupFailure)
   }
@@ -277,11 +297,13 @@ private class BoundedExternalProcessSession(
   }
 
   private fun destroyForInterrupted(interrupted: InterruptedException) {
-    process?.let { active -> runCatching { destroyProcessTree(active) }.onFailure(interrupted::addSuppressed) }
+    process?.let { active ->
+      catchingNonCancellation { destroyProcessTree(active) }.onFailure(interrupted::addSuppressed)
+    }
   }
 
   private fun attemptCleanup(action: () -> Unit) {
-    runCatching(action).exceptionOrNull()?.let(::recordCleanupFailure)
+    catchingNonCancellation(action).exceptionOrNull()?.let(::recordCleanupFailure)
   }
 
   private fun recordCleanupFailure(failure: Throwable) {

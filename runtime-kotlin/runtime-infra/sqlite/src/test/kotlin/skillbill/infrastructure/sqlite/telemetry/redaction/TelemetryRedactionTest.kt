@@ -1,6 +1,6 @@
 package skillbill.infrastructure.sqlite.telemetry.redaction
 
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.DatabaseRuntime
 import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.tableExists
 import java.nio.file.Files

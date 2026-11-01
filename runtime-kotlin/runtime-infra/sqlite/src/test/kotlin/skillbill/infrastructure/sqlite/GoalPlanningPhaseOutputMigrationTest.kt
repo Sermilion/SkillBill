@@ -2,9 +2,7 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.sql.Connection
 import java.sql.SQLException

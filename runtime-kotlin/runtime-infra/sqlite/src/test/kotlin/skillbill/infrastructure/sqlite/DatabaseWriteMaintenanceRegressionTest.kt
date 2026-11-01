@@ -2,7 +2,6 @@ package skillbill.infrastructure.sqlite
 
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus

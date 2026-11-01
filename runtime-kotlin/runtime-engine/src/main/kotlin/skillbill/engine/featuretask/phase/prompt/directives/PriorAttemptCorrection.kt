@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
-class PriorAttemptCorrection private constructor(
-  private val reason: String,
-  private val kind: Kind,
+internal class PriorAttemptCorrection private constructor(
+  public val reason: String,
+  public val kind: Kind,
 ) {
   internal enum class Kind { RETRYABLE_TERMINAL, FINDING_COVERAGE }
 
@@ -18,7 +18,7 @@ class PriorAttemptCorrection private constructor(
   }
 }
 
-fun findingCoverageDirective(priorFindingCoverage: String?): String {
+internal fun findingCoverageDirective(priorFindingCoverage: String?): String {
   if (priorFindingCoverage.isNullOrBlank()) return ""
   return """
     ## Findings still owed — continue this round
@@ -31,7 +31,7 @@ fun findingCoverageDirective(priorFindingCoverage: String?): String {
     """.trimIndent()
 }
 
-fun terminalRetryDirective(priorTerminalFailure: String?): String {
+internal fun terminalRetryDirective(priorTerminalFailure: String?): String {
   if (priorTerminalFailure.isNullOrBlank()) return ""
   return """
     ## Previous attempt reported a retryable block — try again

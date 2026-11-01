@@ -2,10 +2,10 @@ package skillbill.engine.featuretask.phase.prompt.directives
 
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 
-const val PHASE_COMPLETE_SETTLEMENT_TOOL: String = "mcp__skill-bill__feature_task_phase_complete"
-const val PHASE_BLOCK_SETTLEMENT_TOOL: String = "mcp__skill-bill__feature_task_phase_block"
+internal const val PHASE_COMPLETE_SETTLEMENT_TOOL: String = "mcp__skill-bill__feature_task_phase_complete"
+internal const val PHASE_BLOCK_SETTLEMENT_TOOL: String = "mcp__skill-bill__feature_task_phase_block"
 
-fun settlementDirective(
+internal fun settlementDirective(
   stepName: String,
   target: FeatureTaskRuntimePhaseSettlementTarget?,
 ): String {

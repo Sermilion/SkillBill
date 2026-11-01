@@ -1,5 +1,6 @@
 package skillbill.application.review.parallel.runner
 
+import skillbill.application.review.parallel.planning.UNSUPPORTED_PROVIDER_TERMINAL_STATUS
 import skillbill.application.review.snapshot.RecordedWorkerResponse
 import skillbill.application.review.snapshot.ReviewHarnessConfig
 import skillbill.application.review.snapshot.ReviewRecorder

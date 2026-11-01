@@ -3,11 +3,11 @@ package skillbill.engine.featuretask.qa.report
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.scaffold.model.QaTargetKind
 
-internal object QaReportParser {
+public object QaReportParser {
   private const val FINDING_HEADING_PREFIX = "### "
   private const val WEB_KIND = "web"
 
-  private val VERDICT_WORD =
+  public val VERDICT_WORD: Regex =
     Regex(
       "(?<![A-Za-z0-9_])(findings_open|findings|passed|incomplete|skipped)(?![A-Za-z0-9_])",
       RegexOption.IGNORE_CASE,
@@ -20,7 +20,7 @@ internal object QaReportParser {
   private val REASON_TOKEN = Regex("(?<![A-Za-z0-9_])reason:\\s*([a-z_]+)", RegexOption.IGNORE_CASE)
   private val BACKEND_TOKEN = Regex("backend:\\s*(real|mocked|none)")
 
-  fun parse(
+  public fun parse(
     text: String,
     evidencePrefix: String,
     reference: String? = null,
@@ -101,7 +101,7 @@ internal object QaReportParser {
     return QaSkipReason.fromWire(token?.lowercase())?.wireValue
   }
 
-  private fun sectionLines(
+  public fun sectionLines(
     text: String,
     heading: String,
   ): List<String> {

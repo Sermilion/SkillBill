@@ -14,11 +14,11 @@ import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 
 @Inject
-class FeatureTaskRuntimeRunInvariantsStore(
+public class FeatureTaskRuntimeRunInvariantsStore(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
 ) {
-  fun resolve(
+  public fun resolve(
     workflowId: String,
     proposed: FeatureTaskRuntimeRunInvariants? = null,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,

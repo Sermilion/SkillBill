@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.PhaseLoopContext
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -39,7 +40,7 @@ internal class QaFailureContainment(
       "QA failure contained [seam=qa_containment, phase=$stepId, kind=${kind.wireValue}, code=$code].",
       error,
     )
-    runCatching { outcomes.recordContainedFailure(context.request.workflowId, kind, reason) }
+    catchingNonCancellation { outcomes.recordContainedFailure(context.request.workflowId, kind, reason) }
       .onFailure { recordingFailure ->
         RuntimeDiagnosticsBestEffortWarning.record(
           context.diagnostics,

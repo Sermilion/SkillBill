@@ -1,7 +1,6 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAction
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt

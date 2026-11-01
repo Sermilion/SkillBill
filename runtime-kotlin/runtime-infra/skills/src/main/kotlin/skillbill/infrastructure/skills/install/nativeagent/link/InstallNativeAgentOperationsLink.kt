@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
 import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256Hex
@@ -7,11 +8,12 @@ import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
 import skillbill.infrastructure.skills.install.nativeagent.parseEmbeddedLogicalName
-import skillbill.infrastructure.skills.nativeagent.composition.nativeAgentCompositionRepoRoot
+import skillbill.infrastructure.skills.install.nativeagent.uninstallNativeAgentFiles
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderOverrides
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.nativeagent.rendering.nativeAgentCompositionRepoRoot
 import skillbill.infrastructure.skills.nativeagent.validation.validateNativeAgentArtifactsForInstall
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.SupportedAgent
@@ -22,7 +24,6 @@ import java.nio.file.Path
 import java.nio.file.attribute.DosFileAttributeView
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
-import kotlin.coroutines.cancellation.CancellationException
 
 internal fun linkProviderAgents(
   provider: NativeAgentProvider,
@@ -93,7 +94,7 @@ internal fun publishInstalledReviewCatalog(
   Files.createDirectories(staging)
 
   val failure =
-    runCatching {
+    catchingNonCancellation {
       stageReviewCatalogPacks(platformPacksRoot, selectedPlatforms, staging, effectivePackRoots)
     }.exceptionOrNull()
   if (failure != null) {
@@ -101,7 +102,7 @@ internal fun publishInstalledReviewCatalog(
     throwCatalogStageFailure(failure)
   }
   val publishFailure =
-    runCatching {
+    catchingNonCancellation {
       journalReviewCatalogSwap(catalogRoot, staging, journal)
       swapReviewCatalogIntoPlace(catalogRoot, staging, superseded)
     }.exceptionOrNull()
@@ -111,7 +112,6 @@ internal fun publishInstalledReviewCatalog(
 }
 
 private fun throwCatalogStageFailure(error: Throwable): Nothing {
-  if (error is CancellationException) throw error
   throw retainedCatalogFailure(error)
 }
 
@@ -142,7 +142,7 @@ internal fun verifyInstalledNativeAgent(entry: NativeAgentLinkInventoryEntry) {
     )
   if (!Files.isSymbolicLink(installed)) fail("managed link is missing")
   val resolved =
-    runCatching { installed.toRealPath() }
+    catchingNonCancellation { installed.toRealPath() }
       .getOrElse { fail("managed link is dangling or unreadable", it) }
   if (resolved != entry.cacheTargetPath.toRealPath()) fail("managed link resolves outside the current cache target")
   if (!Files.isReadable(resolved)) fail("rendered artifact is unreadable")
@@ -179,7 +179,7 @@ internal class ProviderMutationJournal {
   fun restore(): List<Throwable> {
     val failures = mutableListOf<Throwable>()
     entries.entries.toList().asReversed().forEach { (path, snapshot) ->
-      runCatching {
+      catchingNonCancellation {
         if (snapshot == null) {
           when {
             Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) && isEmptyDirectory(path) -> Files.deleteIfExists(path)

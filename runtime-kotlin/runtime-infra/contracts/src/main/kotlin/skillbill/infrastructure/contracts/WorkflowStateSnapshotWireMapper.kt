@@ -2,9 +2,13 @@ package skillbill.infrastructure.contracts
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 
 object WorkflowStateSnapshotWireMapper {
+  private val typedRecordKeys: Set<String> =
+    DurableWorkflowArtifactFamily.TYPED_RECORD_FAMILIES.mapTo(linkedSetOf()) { it.label() }
+
   fun wireMap(snapshot: WorkflowStateSnapshot): Map<String, Any?> =
     linkedMapOf<String, Any?>(
       SharedPayloadKeys.WORKFLOW_ID to snapshot.workflowId,
@@ -21,7 +25,7 @@ object WorkflowStateSnapshotWireMapper {
             WorkflowWirePayloadKeys.ATTEMPT_COUNT to step.attemptCount,
           )
         },
-      WorkflowWirePayloadKeys.ARTIFACTS to snapshot.artifacts,
+      WorkflowWirePayloadKeys.ARTIFACTS to snapshot.artifacts.filterKeys { it !in typedRecordKeys },
       WorkflowWirePayloadKeys.STARTED_AT to snapshot.startedAt?.toString().orEmpty(),
       WorkflowWirePayloadKeys.UPDATED_AT to snapshot.updatedAt?.toString().orEmpty(),
       WorkflowWirePayloadKeys.FINISHED_AT to snapshot.finishedAt?.toString().orEmpty(),

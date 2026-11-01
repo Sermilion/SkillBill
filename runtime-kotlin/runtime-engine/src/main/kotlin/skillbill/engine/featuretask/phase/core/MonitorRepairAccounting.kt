@@ -23,44 +23,44 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.nio.file.Path
 import java.time.Instant
 
-internal sealed interface RepairPublicationAssociation {
-  data object NotStarted : RepairPublicationAssociation
+public sealed interface RepairPublicationAssociation {
+  public data object NotStarted : RepairPublicationAssociation
 
-  data class Published(
-    val commitSha: String,
-    val pullRequestEdit: PullRequestEdit? = null,
+  public data class Published(
+    public val commitSha: String,
+    internal val pullRequestEdit: PullRequestEdit? = null,
   ) : RepairPublicationAssociation {
-    val repairKey: String
+    internal val repairKey: String
       get() = pullRequestEdit?.let { "$commitSha+pull-request-edit:${it.repairAttempt}" } ?: commitSha
   }
 
-  data object Unchanged : RepairPublicationAssociation
+  public data object Unchanged : RepairPublicationAssociation
 
-  data object Unavailable : RepairPublicationAssociation
+  public data object Unavailable : RepairPublicationAssociation
 }
 
-internal data class PullRequestEdit(val repairAttempt: Int, val repairStartedAt: Instant)
+public data class PullRequestEdit(val repairAttempt: Int, val repairStartedAt: Instant)
 
 internal object MonitorRepairPayloadKeys {
-  const val PULL_REQUEST_FIELDS_DIGEST: String = "pull_request_fields_digest"
+  internal const val PULL_REQUEST_FIELDS_DIGEST: String = "pull_request_fields_digest"
 }
 
-internal class MonitorRepairAccounting(
-  private val steps: MonitorRepairStepRoles,
-  private val gitOperations: WorkflowGitOperations,
+public class MonitorRepairAccounting(
+  public val steps: MonitorRepairStepRoles,
+  public val gitOperations: WorkflowGitOperations,
   producerOutput: (ProducerOutputQueryArgs) -> FeatureTaskRuntimeProducerOutputRead,
   findEnvelope: (String, String, Int) -> FeatureTaskPhaseSettlementEnvelope?,
-  private val diagnostics: RuntimeDiagnostics,
+  public val diagnostics: RuntimeDiagnostics,
 ) {
   private val evidenceReader = MonitorRepairProducerEvidence(steps, producerOutput, findEnvelope, diagnostics)
 
-  internal data class RestoredHistory(
+  public data class RestoredHistory(
     val outputs: List<FeatureTaskRuntimePhaseOutput>,
     val failedRepairs: Map<Int, String>,
     val evidenceUnavailable: Boolean,
   )
 
-  fun restore(
+  public fun restore(
     request: FeatureTaskRuntimeRunFacts,
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
@@ -108,7 +108,7 @@ internal class MonitorRepairAccounting(
     return RestoredHistory(retained, failedRepairs, evidenceUnavailable)
   }
 
-  fun publishedHeadBeforeMonitor(
+  internal fun publishedHeadBeforeMonitor(
     request: FeatureTaskRuntimeRunFacts,
     monitorAttempt: Int,
     ledgerEntries: List<FeatureTaskRuntimePhaseLedgerEntry>,
@@ -151,7 +151,7 @@ internal class MonitorRepairAccounting(
     val record: FeatureTaskRuntimePhaseRecord?,
   )
 
-  private data class Publication(val sha: String, val pullRequestFieldsDigest: String?)
+  public data class Publication(val sha: String, val pullRequestFieldsDigest: String?)
 
   private data class PublishedChange(val sameTree: Boolean, val addedMergeParent: Boolean)
 
@@ -161,7 +161,7 @@ internal class MonitorRepairAccounting(
     val pullRequestEdit: PullRequestEdit?,
   )
 
-  fun publishedRepairCommitSha(
+  public fun publishedRepairCommitSha(
     request: FeatureTaskRuntimeRunFacts,
     monitorAttempt: Int,
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
@@ -271,7 +271,7 @@ internal class MonitorRepairAccounting(
     return output?.let(::pullRequestFieldsDigest)
   }
 
-  private fun pullRequestFieldsDigest(output: FeatureTaskRuntimePhaseOutput): String? =
+  public fun pullRequestFieldsDigest(output: FeatureTaskRuntimePhaseOutput): String? =
     (output.normalizedOutput?.envelopeWireMap()?.get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? Map<*, *>)
       ?.get(MonitorRepairPayloadKeys.PULL_REQUEST_FIELDS_DIGEST)
       ?.toString()

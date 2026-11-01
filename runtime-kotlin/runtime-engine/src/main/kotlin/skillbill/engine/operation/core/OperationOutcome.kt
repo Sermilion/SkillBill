@@ -1,21 +1,21 @@
 package skillbill.engine.operation.core
 
-sealed interface OperationOutcome {
-  data class Completed(val text: String) : OperationOutcome
+public sealed interface OperationOutcome {
+  public data class Completed(val text: String) : OperationOutcome
 
-  data class Blocked(override val reason: String) : OperationRefusal
+  public data class Blocked(override val reason: String) : OperationRefusal
 
-  data class Usage(override val reason: String) : OperationRefusal
+  public data class Usage(override val reason: String) : OperationRefusal
 
-  data class Failed(val reason: String) : OperationOutcome
+  public data class Failed(val reason: String) : OperationOutcome
 
-  data class AwaitingConfirmation(
+  public data class AwaitingConfirmation(
     val token: String,
     val proposalSummary: String,
   ) : OperationOutcome
 }
 
 /** An operation outcome that refuses the invocation: blocked with nothing changed, or a usage problem. */
-sealed interface OperationRefusal : OperationOutcome {
-  val reason: String
+public sealed interface OperationRefusal : OperationOutcome {
+  public val reason: String
 }

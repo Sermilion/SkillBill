@@ -465,7 +465,7 @@ runtime-core
   adapter, which supplies only the session factory and the repositories it opens.
   It also owns the agent-output helpers
   (`skillbill.engine.agentoutput`) and the worktree edit journal writer
-  (`skillbill.engine.worktreeedit`). It depends on `runtime-application` through
+  (`skillbill.engine.featuretask.runloop.durable`). It depends on `runtime-application` through
   `implementation` for the shared services those loops call today and exposes a
   pinned inbound API through `RuntimeComponent`.
 - `runtime-infra/sqlite` (`:runtime-infra:sqlite`): SQLite schema, migrations, connection/session
@@ -531,8 +531,8 @@ runtime-core
   `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-cli has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
-  `RuntimeComponent` (kotlin-inject). The allow-list is enforced by
-  `RuntimeAdapterDependencyAllowlistTest`.
+  `RuntimeComponent` (kotlin-inject). Module `dependencies { }` blocks declare
+  these edges, and `RuntimeCoreCompositionOnlyTest` pins the runtime-core edges.
 - `runtime-mcp`: MCP adapter surface, MCP-specific payload shaping, stdio
   server, MCP telemetry schema validation, and MCP runtime context creation.
   SKILL-52.2 subtask 5 narrows the main-source project dependency allow-list to
@@ -540,8 +540,8 @@ runtime-core
   `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-mcp has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
-  `RuntimeComponent`. The allow-list is enforced by
-  `RuntimeAdapterDependencyAllowlistTest`.
+  `RuntimeComponent`. Module `dependencies { }` blocks declare these edges, and
+  `RuntimeCoreCompositionOnlyTest` pins the runtime-core edges.
 
 Inside `runtime-mcp` the advertised surface has a single shape. `McpToolRegistry`
 holds one ordered `List<McpTool>`; each entry names the tool once and carries its
@@ -2427,11 +2427,14 @@ not already baselined fails the build.
 
 `RuntimeApplicationAmbientClockArchitectureTest` bans `Instant.now()`,
 `LocalDateTime.now()`, `LocalDate.now()`, `OffsetDateTime.now()`,
-`ZonedDateTime.now()`, `Clock.systemUTC()`, and `JvmSystemClock.instant()` in
+`ZonedDateTime.now()`, `Clock.systemUTC()`, `JvmSystemClock.instant()`, and
+`System.currentTimeMillis()` in
 every module main source root declared by
 `PrincipleEnforcementInventory.moduleArchitectureScanCases`. One iterating test
 compares each module against its baseline; a rejection fixture seeds a synthetic
 violation into a temporary `runtime-engine` tree and asserts the rule reports it.
+`System.nanoTime()` and `ProcessHandle` are allowed only in the three process
+adapters named by the inventory scope, and the scan reports them in every other module.
 
 Ambient-clock and ambient-environment baseline rows are keyed `path:call:count`,
 grouped per file and call form. Inject-default rows are keyed

@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
-import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -19,6 +18,7 @@ import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStar
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeNonBlockingFailure
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.PhaseFailureContinuationRequest
+import skillbill.engine.featuretask.slot.serialAcceptanceRepairStep
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -31,9 +31,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 /** Runs the attempts of one step call and settles the step, so a run state decides how its steps launch. */
-internal fun interface PhaseStepAttempts {
+public fun interface PhaseStepAttempts {
   /** Runs the attempts [call] makes for [run] and returns the step's outcome. */
-  fun run(
+  public fun run(
     run: PhaseRun,
     call: PhaseStepCall,
     context: PhaseRunLoopAttemptScope,
@@ -96,7 +96,6 @@ internal object PhaseAttemptSteps {
         continuationSegmentCount,
         nonOutputAttempts.size,
       )
-    stepHooks(run).onLaunch(run, launchHookContext(run, stepHooks(run)))
     observability.started(
       run.phaseId,
       agentId,

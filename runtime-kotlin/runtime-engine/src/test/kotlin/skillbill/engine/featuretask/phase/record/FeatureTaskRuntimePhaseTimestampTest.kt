@@ -4,7 +4,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.durationMillis
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.artifact.decodePhaseRecordFromArtifact

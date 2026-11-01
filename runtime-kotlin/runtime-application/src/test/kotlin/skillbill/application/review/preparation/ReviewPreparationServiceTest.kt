@@ -12,6 +12,7 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceCodec
 import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.parse
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
 import skillbill.error.shellcontent.REVIEW_HUNK_EVIDENCE_INTEGRITY

@@ -1,8 +1,6 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import java.nio.file.Files
 import java.nio.file.Path

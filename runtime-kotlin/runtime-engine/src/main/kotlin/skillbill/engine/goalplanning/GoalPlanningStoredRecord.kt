@@ -8,7 +8,7 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
-internal fun readStoredPlanningRecord(
+public fun readStoredPlanningRecord(
   payload: String,
   phaseId: String,
   label: String,

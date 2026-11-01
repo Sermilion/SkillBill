@@ -2,10 +2,10 @@ package skillbill.infrastructure.workflow.review.broker
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ReviewContextFailureCode
-import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewEvidenceBrokerBinding
 import skillbill.ports.review.model.ReviewEvidenceRequest
+import skillbill.ports.review.model.ReviewStoredHunkBodyExtractor
 import skillbill.ports.review.model.ReviewToolCall
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy

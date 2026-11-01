@@ -3,7 +3,6 @@ package skillbill.infrastructure.sqlite.worklist
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkGoalParentCandidate
@@ -16,17 +15,13 @@ internal fun readWorkGoalChildRepositoryIdentity(
   connection: Connection,
   parentWorkflowId: String,
 ): IssueRepositoryIdentityLookup {
-  val continuation = "$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}"
-  val parentPath = "$continuation.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}"
   return connection.prepareStatement(
     """
     SELECT DISTINCT identities.repository_identity
     FROM feature_task_workflows AS workflows
     JOIN feature_task_execution_identities AS identities ON identities.workflow_id = workflows.workflow_id
     WHERE identities.route_scope = 'goal_child'
-      AND CASE WHEN json_valid(workflows.artifacts_json)
-        THEN json_extract(workflows.artifacts_json, '$parentPath')
-      END = ?
+      AND workflows.parent_workflow_id = ?
     ORDER BY identities.repository_identity LIMIT 2
     """.trimIndent(),
   ).use { statement ->
@@ -58,8 +53,9 @@ internal fun readWorkGoalParentCandidatePage(
       EXISTS(SELECT 1 FROM json_each(artifacts_json, '$manifest.${DecompositionPlanningPayloadKeys.SUBTASKS}')
         WHERE json_extract(value, '$.${SharedPayloadKeys.STATUS}') NOT IN (?, ?)) AS unsettled
     FROM feature_task_workflows
-    WHERE (UPPER(TRIM(issue_key)) = UPPER(TRIM(?)) OR issue_key IS NULL)
-      AND mode = ? AND json_type(artifacts_json, '$manifest') = 'object'
+    WHERE mode = ? AND json_type(artifacts_json, '$manifest') = 'object'
+      AND goal_issue_key IS NULL
+      AND (UPPER(TRIM(issue_key)) = UPPER(TRIM(?)) OR issue_key IS NULL)
       AND json_type(artifacts_json, '$continuation') IS NULL
       AND json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.ISSUE_KEY}') = ?
       AND (? IS NULL OR COALESCE(
@@ -73,8 +69,8 @@ internal fun readWorkGoalParentCandidatePage(
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
-      DecompositionStatus.COMPLETE.wireValue, DecompositionStatus.SKIPPED.wireValue, issueKey,
-      FeatureTaskWorkflowMode.RUNTIME.wireValue, issueKey, repositoryIdentity,
+      DecompositionStatus.COMPLETE.wireValue, DecompositionStatus.SKIPPED.wireValue,
+      FeatureTaskWorkflowMode.RUNTIME.wireValue, issueKey, issueKey, repositoryIdentity,
       repositoryIdentity, repositoryIdentity, limit, offset,
     )
     statement.executeQuery().use { rows ->

@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.lifecycle.core.emitFeatureTaskRuntimeFinishe
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFinishedTelemetryContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.review.EmptyReviewAttributionPort
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import java.time.Clock
 import kotlin.test.Test
@@ -48,7 +49,9 @@ class FeatureTaskRuntimeTerminalFailureReasonTest {
         Clock.systemUTC(),
         NoopRuntimeDiagnostics,
         workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+        reviewAttributionPort = EmptyReviewAttributionPort,
       ),
+      NoopRuntimeDiagnostics,
       FeatureTaskRuntimeFinishedTelemetryContext(
         telemetrySessionId = SESSION_ID,
         phaseOutcomes = { mapOf("implement" to "completed") },

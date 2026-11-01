@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.runloop.durable
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
@@ -44,6 +44,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.core.isCooperativeCancellation
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
@@ -121,7 +122,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   ): PhaseOutcome? {
     val outcome =
       result.getOrElse { error ->
-        error.rethrowIfCooperativeCancellationOrInterruption()
+        if (error.isCooperativeCancellation()) throw error
         return PhaseOutcome.blocked("Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
       }
     if (outcome !is PhaseOutcome.Completed) return outcome
@@ -294,6 +295,27 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override fun unselectedStepIds(): Set<String> = parent.unselectedStepIds()
 
   override fun stepLaunchAssignment(stepId: String) = parent.stepLaunchAssignment(stepId)
+
+  override fun recordReviewRun(
+    reviewRunId: String,
+    result: ParallelCodeReviewResult,
+    laneTelemetryRecorded: Boolean,
+  ) = Unit
+
+  override fun qualityGateAbsent(stepName: String) = Unit
+
+  override fun qualityCheckStarted(
+    stepName: String,
+    detectedStack: String,
+    initialFailureCount: Int,
+  ) = Unit
+
+  override fun qualityCheckFinished(
+    stepName: String,
+    finalFailureCount: Int,
+    failingCheckNames: List<String>,
+    iterations: Int,
+  ) = Unit
 
   override fun fanOut(stepId: String): PhaseRunFanOut = error("A plan subtask unit cannot start nested fan-out.")
 
