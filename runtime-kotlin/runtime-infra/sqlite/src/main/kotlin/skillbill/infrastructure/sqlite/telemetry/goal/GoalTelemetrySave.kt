@@ -207,6 +207,7 @@ private fun updateGoalFinished(
       subtasks_skipped = ?,
       mode = ?,
       stop_reason = ?,
+      blocked_reason = ?,
       no_change_reason = ?,
       parent_workflow_id = COALESCE(?, parent_workflow_id),
       ${GOAL_ASSESSMENT_COUNT_COLUMNS.joinToString(",\n      ") { "$it = ?" }},
@@ -226,6 +227,7 @@ private fun updateGoalFinished(
         record.subtasksSkipped,
         record.mode,
         record.stopReason,
+        record.blockedReason,
         record.noChangeReason,
         record.parentWorkflowId,
       ) + record.assessmentCounts.columnValues() + record.assessmentCounts.exitReason + record.workflowId,
@@ -242,9 +244,9 @@ private fun insertGoalFinished(
     INSERT INTO goal_run_sessions (
       workflow_id, issue_key, started_at, status, finished_at,
       finished_duration_ms, subtasks_complete, subtasks_blocked, subtasks_skipped, mode, stop_reason,
-      no_change_reason, parent_workflow_id, ${GOAL_ASSESSMENT_COUNT_COLUMNS.joinToString()},
+      blocked_reason, no_change_reason, parent_workflow_id, ${GOAL_ASSESSMENT_COUNT_COLUMNS.joinToString()},
       $GOAL_ASSESSMENT_EXIT_REASON_COLUMN
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${", ?".repeat(GOAL_ASSESSMENT_COUNT_COLUMNS.size + 1)})
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${", ?".repeat(GOAL_ASSESSMENT_COUNT_COLUMNS.size + 1)})
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
@@ -260,6 +262,7 @@ private fun insertGoalFinished(
         record.subtasksSkipped,
         record.mode,
         record.stopReason,
+        record.blockedReason,
         record.noChangeReason,
         record.parentWorkflowId,
       ) + record.assessmentCounts.columnValues() + record.assessmentCounts.exitReason,

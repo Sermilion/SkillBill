@@ -31,6 +31,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -45,7 +47,14 @@ import dev.skillbill.desktop.core.ui.changes.hairlineTop
 import kotlin.time.Instant
 
 @Composable
-internal fun ActivityCard(group: ActivityGroup, open: Boolean, now: Instant, modifier: Modifier = Modifier, onToggle: () -> Unit) {
+internal fun ActivityCard(
+  group: ActivityGroup,
+  open: Boolean,
+  now: Instant,
+  modifier: Modifier = Modifier,
+  onCopyReason: ((String) -> Unit)? = null,
+  onToggle: () -> Unit,
+) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(8.dp)
   val source = remember { MutableInteractionSource() }
@@ -78,7 +87,7 @@ internal fun ActivityCard(group: ActivityGroup, open: Boolean, now: Instant, mod
       val entries = remember(group) { activityEntries(group) }
       group.before.forEach { ActivityFactRow(it, now) }
       entries.forEach { entry -> when (entry) {
-        is ActivityEntry.Block -> ActivityBlockRow(entry.block, now)
+        is ActivityEntry.Block -> ActivityBlockRow(entry.block, now, onCopyReason = onCopyReason)
         is ActivityEntry.Wait -> ActivityWait(entry.milliseconds)
         is ActivityEntry.Phases -> ActivityPhaseFold(entry.phases, group.status == ActivityStatus.RUNNING, now)
       } }
@@ -146,7 +155,7 @@ private fun ActivityPhaseRow(
 }
 
 @Composable
-private fun ActivityBlockRow(block: ActivityBlock, now: Instant) {
+internal fun ActivityBlockRow(block: ActivityBlock, now: Instant, onCopyReason: ((String) -> Unit)? = null) {
   val colors = SkillBillTheme.colors
   var expanded by rememberSaveable(block.id) { mutableStateOf(false) }
   val source = remember { MutableInteractionSource() }
@@ -162,6 +171,9 @@ private fun ActivityBlockRow(block: ActivityBlock, now: Instant) {
         ActivityBlockKind.AWAITING_DECISION -> "Waiting for your decision"
       }, sans = true, size = 12f, weight = FontWeight.SemiBold, color = colors.stBlocked)
       ActivityText(listOfNotNull(block.phaseId, block.attempt?.let { "attempt $it" }, "needs your decision".takeIf { block.needsDecision }).joinToString(" · "))
+      block.reason?.takeIf { onCopyReason != null }?.let { reason ->
+        SbIconButton(LucideIcons.copy, "Copy block reason", { onCopyReason?.invoke(reason) }, size = SbControlSize.Small)
+      }
     }
     block.reason?.let { ActivityText(it, Modifier.padding(start = 63.dp, top = 3.dp), size = 12f, sans = true, color = colors.fg2, maxLines = if (expanded) Int.MAX_VALUE else 3) }
   }

@@ -51,9 +51,11 @@ class WorkActivityServiceTest {
           listOf(
             WorkActivityStop("early", at(0), at(5), "BLOCKED"),
             WorkActivityStop("pr", at(10), at(20), "PULL_REQUEST_FAILED"),
+            WorkActivityStop("decision", at(21), at(30), "AWAITING_OPERATOR_DECISION", "The goal needs your decision."),
           )
         val group = requireNotNull(ActivityGoalFinishReads().group(goal, listOf(child), stops, unit))
-        assertEquals(listOf("pr"), group.blocks.map { it.id })
+        assertEquals(listOf("pr", "decision"), group.blocks.map { it.id })
+        assertEquals("The goal needs your decision.", group.blocks.last().reason)
         assertEquals(emptyList(), group.phases)
         assertEquals(null, group.startedAt)
         assertEquals(null, group.finishedAt)

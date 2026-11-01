@@ -6,6 +6,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -15,6 +16,7 @@ import dev.skillbill.desktop.core.domain.model.ActivityBlockKind
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.time.Instant
 
@@ -61,5 +63,24 @@ class ActivityInteractionTest {
     onNodeWithText("Clean child").assertExists()
     onNodeWithText("Needs a decision").assertExists()
     runOnIdle { assertNotNull(jumped) }
+  }
+
+  @Test
+  fun `decision block falls back to current reason and can copy it`() = runComposeUiTest {
+    val at = Instant.parse("2026-11-01T08:00:00Z")
+    val block = ActivityBlock("decision", at, ActivityBlockKind.AWAITING_DECISION, null, null, null, true)
+    val group = ActivityGroup("goal", null, "Goal finish", ActivityStatus.INTERRUPTED, null, null, emptyList(), listOf(block))
+    var copied: String? = null
+    val reason = "The goal needs an operator decision before it can continue."
+
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ActivityTimeline(listOf(group), "goal", blockReasonFallback = reason, onCopyReason = { copied = it })
+      }
+    }
+
+    onNodeWithText(reason).assertExists()
+    onNodeWithContentDescription("Copy block reason").performClick()
+    runOnIdle { assertEquals(reason, copied) }
   }
 }

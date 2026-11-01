@@ -92,7 +92,7 @@ private fun stopBlock(stop: WorkActivityStop): WorkActivityBlock? {
     kind,
     null,
     null,
-    null,
+    stop.blockedReason,
     kind == WorkActivityBlockKind.AWAITING_DECISION,
   )
 }

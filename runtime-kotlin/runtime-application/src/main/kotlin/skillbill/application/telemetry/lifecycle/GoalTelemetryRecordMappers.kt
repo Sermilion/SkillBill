@@ -54,6 +54,7 @@ fun GoalFinishedRequest.toRecord(): GoalFinishedRecord =
     mode = mode,
     stopReason = stopReason,
     noChangeReason = noChangeReason,
+    blockedReason = blockedReason,
     parentWorkflowId = parentWorkflowId,
     assessmentCounts = assessmentCounts,
   )

@@ -51,16 +51,17 @@ class WorkActivityReadsTest {
       fixture.connection.createStatement().use { statement ->
         statement.executeUpdate(
           """
-          INSERT INTO goal_run_sessions (workflow_id, issue_key, parent_workflow_id, started_at, finished_at, stop_reason)
-          VALUES ('a', 'SKILL-455', 'goal', '2026-10-31T20:00:00Z', '2026-10-31T20:01:00Z', 'PULL_REQUEST_FAILED'),
-                 ('b', 'SKILL-455', 'goal', '2026-10-31T20:02:00Z', NULL, NULL),
-                 ('c', 'SKILL-455', 'other', '2026-10-31T20:03:00Z', NULL, NULL)
+          INSERT INTO goal_run_sessions (workflow_id, issue_key, parent_workflow_id, started_at, finished_at, stop_reason, blocked_reason)
+          VALUES ('a', 'SKILL-455', 'goal', '2026-10-31T20:00:00Z', '2026-10-31T20:01:00Z', 'PULL_REQUEST_FAILED', 'Decision is needed'),
+                 ('b', 'SKILL-455', 'goal', '2026-10-31T20:02:00Z', NULL, NULL, NULL),
+                 ('c', 'SKILL-455', 'other', '2026-10-31T20:03:00Z', NULL, NULL, NULL)
           """.trimIndent(),
         )
       }
       val runs = readGoalActivityStops(fixture.connection, "goal", 0, 10)
       assertEquals(listOf("a", "b"), runs.map { it.runId })
       assertEquals("PULL_REQUEST_FAILED", runs.first().reason)
+      assertEquals("Decision is needed", runs.first().blockedReason)
       assertEquals(null, runs.last().finishedAt)
     }
   }
