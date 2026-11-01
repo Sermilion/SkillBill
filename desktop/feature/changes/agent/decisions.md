@@ -1,8 +1,19 @@
+## [2026-11-01] Show the scope's diffs as one continuous stream
+Context: The operator wants to keep scrolling from the end of one file into the next instead of picking each file.
+Decision: The diff pane is one LazyColumn over every visible file. The view model keeps loaded diffs per path for the scope and reads what the stream asks for, the files on screen plus two ahead, one at a time. A user scroll selects the file at the top; a file click, j and k jump to it. Scrolling never bumps `scrollRequest`, so the two cannot fight. A refreshed list drops only diffs whose ChangedFile changed.
+Reason: Reading on demand keeps large scopes cheap, since All can list hundreds of files, and each read still goes through the shared git lock.
+Revisit when: Long sessions over large scopes hold too much diff text; loaded diffs are kept until the scope changes.
+
 ## [2026-11-01] Show Changes as a fixed in-app panel, not an OS window
 Context: The operator wants Changes to look like a window while staying inside the app, unmovable, with the main window visible around it.
-Decision: `ChangesOverlay` shows `ChangesWindowFrame` in a Compose `Dialog` at 94% of the main window's width and height, over the shell scrim. `ChangesWindows` holds one current entry; opening another execution replaces it. The main window's `onPreviewKeyEvent` routes every key to `ChangesWindowKeys` while the panel is open, so no shell shortcut fires under it. Esc closes the picker, then leaves the filter, then closes the panel; the close button and a click on the scrim also close it.
+Decision: `ChangesOverlay` shows `ChangesWindowFrame` in a Compose `Dialog` at 94% of the main window's width and height, over the shell scrim. `ChangesWindows` holds one current entry; opening another execution replaces it. The main window's `onPreviewKeyEvent` routes every key to `ChangesWindowKeys` while the panel is open, so no shell shortcut fires under it. Esc closes the picker, then leaves the filter, then closes the panel; the close button and a click on the scrim also close it. The title bar has no decorative window lights; the close button sits left on macOS and right elsewhere.
 Reason: A modal panel keeps the operator's place in the app, and a single entry matches a modal: two cannot be visible at once. `Dialog` already traps focus away from the shell.
 Supersedes: "Route Changes window keys through the window's onPreviewKeyEvent", "Open Changes windows through a core/ui interface and an app-wide registry" (the core/ui interface stays; the per-execution OS windows do not).
+
+## [2026-11-01] Cut diff lines at 5,000 characters
+Context: Unwrapped diff rows are sized to the longest line. A 327 KB line asked Compose for a row 3.6 million pixels wide, past what Constraints can represent, and the app showed an error dialog.
+Decision: DiffLines shows at most 5,000 characters of a line, then "… N more characters". The full file stays reachable through Open in editor.
+Reason: No one reads a line that long in a diff row, and the cap keeps the row inside the layout limit at any UI scale.
 
 ## [2026-11-01] Show labelled cards when subtasks have room
 Context: `design/App/Changes Window.html` is drawn for 33 subtasks. Bars for 1 to 5 subtasks are wide blocks that say little.

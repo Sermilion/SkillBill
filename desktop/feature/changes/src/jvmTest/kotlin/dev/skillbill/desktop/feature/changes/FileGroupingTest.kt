@@ -25,4 +25,12 @@ class FileGroupingTest {
 
     assertEquals("Changes · SKILL-455 · Changes window", changesWindowTitle(item))
   }
+
+  @Test
+  fun `a stream row maps to the file that holds it`() {
+    val starts = fileStartIndexes(listOf(null, null, null))
+
+    assertEquals(listOf(0, 2, 4), starts.toList())
+    assertEquals(listOf(0, 0, 1, 1, 2, 2, 2), (0..6).map { fileAt(starts, it) })
+  }
 }

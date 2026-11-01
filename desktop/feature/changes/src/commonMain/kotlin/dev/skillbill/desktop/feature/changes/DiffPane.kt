@@ -37,15 +37,12 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
-import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.ChangesButton
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.hairlineBottom
-import dev.skillbill.desktop.core.ui.diff.DiffLines
-import dev.skillbill.desktop.core.ui.diff.fileDiffNotice
 
 @Composable
 internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, modifier: Modifier = Modifier) {
@@ -70,15 +67,10 @@ internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowActio
       state.openProblem?.let { Hint(it, tone = FeedbackTone.Error) }
       (state.diff as? DiffPaneUi.Shown)?.chips?.takeIf { it.isNotEmpty() }?.let { chips -> SubtaskChips(chips, onAction) }
     }
-    when (val diff = state.diff) {
-      DiffPaneUi.NoSelection, is DiffPaneUi.Loading -> Unit
-      is DiffPaneUi.Shown -> when (val content = diff.state) {
-        is FileDiffState.Shown -> if (content.diff.hunks.isEmpty()) {
-          PaneMessage(fileDiffNotice(content))
-        } else {
-          key(diff.file.path) { DiffLines(content.diff, Modifier.weight(1f)) }
-        }
-        else -> PaneMessage(fileDiffNotice(content))
+    if (state.list is ScopeListUi.Listed && state.visibleFiles.isNotEmpty()) {
+      // A new scope or filter is a new stream, which starts on the selected file.
+      key(state.scope, state.filter) {
+        FileDiffStream(state.visibleFiles, state.fileDiffs, state.selectedPath, state.scrollRequest, onAction, Modifier.weight(1f))
       }
     }
   }
@@ -150,4 +142,4 @@ private fun SubtaskChip(chip: SubtaskChipUi, onClick: () -> Unit) {
 }
 
 /** The file's directory with its trailing slash; empty for a root-level file. */
-private fun ChangedFile.directory(): String = path.substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" }
+internal fun ChangedFile.directory(): String = path.substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" }

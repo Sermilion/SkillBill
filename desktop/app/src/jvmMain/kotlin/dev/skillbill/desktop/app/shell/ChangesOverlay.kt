@@ -52,8 +52,11 @@ fun ChangesOverlay(
         Modifier.size(maxWidth * PANEL_SHARE, maxHeight * PANEL_SHARE)
           .clickable(remember { MutableInteractionSource() }, indication = null) { },
       ) {
-        ChangesWindowFrame(changesWindowTitle(entry.item), onClose) { ChangesScreen(viewModel, keys, onClose) }
+        ChangesWindowFrame(changesWindowTitle(entry.item), closeAtStart = closeButtonAtStart(), onClose) { ChangesScreen(viewModel, keys, onClose) }
       }
     }
   }
 }
+
+/** macOS puts a window's close button on the left; Windows and Linux desktops default to the right. */
+private fun closeButtonAtStart(osName: String = System.getProperty("os.name").orEmpty()): Boolean = osName.startsWith("Mac", ignoreCase = true)

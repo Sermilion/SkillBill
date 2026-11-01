@@ -33,6 +33,10 @@ data class ChangesWindowUiState(
   val allRead: ScopeListUi? = null,
   val outsideRead: ScopeChangesState? = null,
   val uncommittedRead: ScopeChangesState? = null,
+  /** The diffs loaded for this scope by path; each is good for the [ChangedFile] it was read for. */
+  val fileDiffs: Map<String, LoadedDiff> = emptyMap(),
+  /** Grows when the selection should scroll the diff stream to the selected file; scrolling the stream itself does not grow it. */
+  val scrollRequest: Int = 0,
   /** Why the last open request failed; cleared when the selection changes. */
   val openProblem: String? = null,
 ) {
@@ -72,11 +76,20 @@ sealed interface DiffPaneUi {
   data class Shown(val file: ChangedFile, val state: FileDiffState, val chips: List<SubtaskChipUi>) : DiffPaneUi
 }
 
+/** A file's diff read, with the row figures the diff stream lays out from so it never walks every loaded line. */
+data class LoadedDiff(val file: ChangedFile, val state: FileDiffState, val rows: Int, val longestChars: Int)
+
 data class SubtaskChipUi(val id: Int, val name: String, val inScope: Boolean, val selectable: Boolean)
 
 sealed interface ChangesWindowAction {
   data class SetFilter(val text: String) : ChangesWindowAction
   data class SelectFile(val path: String) : ChangesWindowAction
+
+  /** The diff stream scrolled [path] to its top: select it without scrolling back. */
+  data class FollowScroll(val path: String) : ChangesWindowAction
+
+  /** The files on screen and just below it, nearest first; only the latest request is worked through. */
+  data class EnsureDiffs(val paths: List<String>) : ChangesWindowAction
   data class NarrowToSubtask(val id: Int) : ChangesWindowAction
 
   /** A strip column or picker row; [extend] (Shift) grows the range from the anchor, and only a plain picker pick closes it. */

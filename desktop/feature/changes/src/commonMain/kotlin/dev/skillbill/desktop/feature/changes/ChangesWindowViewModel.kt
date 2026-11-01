@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
+import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeKind
@@ -28,6 +29,8 @@ import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import dev.skillbill.desktop.core.ui.diff.diffLongestChars
+import dev.skillbill.desktop.core.ui.diff.diffRowCount
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,6 +71,9 @@ class ChangesWindowViewModel(
   private var diffRead: Job? = null
   private var diffReadVersion = 0
   private val quickReads = MutableStateFlow<QuickReads?>(null)
+  private var wantedDiffs: List<String> = emptyList()
+  private var streamRead: Job? = null
+  private var streamKey: ScopeReadKey? = null
 
   init {
     detail.observe(item).onEach { observed ->
@@ -244,6 +250,7 @@ class ChangesWindowViewModel(
 
   private fun clearReads(content: WindowContent) {
     invalidateDiffRead()
+    resetStream()
     mutableState.update {
       it.copy(
         content = content,
@@ -312,13 +319,66 @@ class ChangesWindowViewModel(
       val current = state.value
       if (current.content != WindowContent.Ready(key.target) || current.scope != key.scope || current.item.running != key.running) return@onEach
       val list = result.toUi()
+      if (streamKey?.target != key.target || streamKey?.scope != key.scope) resetStream()
+      streamKey = key
       mutableState.update { old ->
         val read = if (key.scope == ChangeScope.All && list != ScopeListUi.Loading) old.copy(allRead = list) else old
         if (list == ScopeListUi.Loading && old.list != ScopeListUi.Loading) read
         else project(read, list = list)
       }
-      if (list != ScopeListUi.Loading) loadDiff()
+      if (list != ScopeListUi.Loading) {
+        loadDiff()
+        (list as? ScopeListUi.Listed)?.let { dropStaleDiffs(it) }
+      }
     }.launchIn(viewModelScope)
+  }
+
+  /** A refreshed list keeps only diffs whose file is unchanged, then re-reads whichever of those the stream still wants. */
+  private fun dropStaleDiffs(list: ScopeListUi.Listed) {
+    val files = list.changes.files.associateBy { it.path }
+    mutableState.update { old -> old.copy(fileDiffs = old.fileDiffs.filter { (path, loaded) -> files[path] == loaded.file }) }
+    readWantedDiffs()
+  }
+
+  private fun resetStream() {
+    streamRead?.cancel()
+    streamRead = null
+    wantedDiffs = emptyList()
+    mutableState.update { it.copy(fileDiffs = emptyMap()) }
+  }
+
+  /** Reads the wanted diffs one at a time, re-checking the list after each so a newer request takes over. */
+  private fun readWantedDiffs() {
+    if (streamRead?.isActive == true) return
+    streamRead = viewModelScope.launch {
+      while (true) {
+        val current = state.value
+        val target = current.target ?: return@launch
+        val file = nextWantedFile(current) ?: return@launch
+        val scope = current.scope
+        val result = scopes.fileDiff(target, scope, file)
+        mutableState.update { old -> if (old.target == target && old.scope == scope) old.withLoadedDiff(file, result) else old }
+      }
+    }
+  }
+
+  private fun nextWantedFile(current: ChangesWindowUiState): ChangedFile? {
+    val files = current.visibleFiles.associateBy { it.path }
+    return wantedDiffs.firstNotNullOfOrNull { path -> files[path]?.takeIf { current.fileDiffs[path]?.file != it } }
+  }
+
+  /** Shows the selected file's diff from the stream when it is loaded, else reads it. */
+  private fun showSelected() {
+    val current = state.value
+    val file = current.selectedFile
+    val loaded = file?.let { current.fileDiffs[it.path] }?.takeIf { it.file == file }
+    if (file == null || loaded == null) {
+      loadDiff()
+      return
+    }
+    invalidateDiffRead()
+    val chips = projectChips(file, current.target, current.scope, current.stats)
+    mutableState.update { it.copy(diff = DiffPaneUi.Shown(file, loaded.state, chips)) }
   }
 
   private fun invalidateDiffRead() {
@@ -356,7 +416,7 @@ class ChangesWindowViewModel(
       val chips = projectChips(file, (latest.content as? WindowContent.Ready)?.target, latest.scope, latest.stats)
       mutableState.update { old ->
         if (diffReadVersion == version && old.content == WindowContent.Ready(target) && old.scope == scope && old.selectedPath == file.path) {
-          old.copy(diff = DiffPaneUi.Shown(file, result, chips))
+          old.copy(diff = DiffPaneUi.Shown(file, result, chips)).withLoadedDiff(file, result)
         } else old
       }
     }
@@ -370,8 +430,22 @@ class ChangesWindowViewModel(
         if (state.value.selectedPath != selectedBefore) loadDiff()
       }
       is ChangesWindowAction.SelectFile -> {
-        mutableState.update { it.copy(selectedPath = action.path, openProblem = if (it.selectedPath == action.path) it.openProblem else null) }
-        loadDiff()
+        mutableState.update {
+          it.copy(
+            selectedPath = action.path,
+            openProblem = if (it.selectedPath == action.path) it.openProblem else null,
+            scrollRequest = it.scrollRequest + 1,
+          )
+        }
+        showSelected()
+      }
+      is ChangesWindowAction.FollowScroll -> if (state.value.selectedPath != action.path) {
+        mutableState.update { it.copy(selectedPath = action.path, openProblem = null) }
+        showSelected()
+      }
+      is ChangesWindowAction.EnsureDiffs -> {
+        wantedDiffs = action.paths
+        readWantedDiffs()
       }
       is ChangesWindowAction.NarrowToSubtask -> selectSubtask(action.id)
       is ChangesWindowAction.PickSubtask -> pickSubtask(action)
@@ -466,6 +540,7 @@ class ChangesWindowViewModel(
     val effective = target?.let { effectiveScope(it, scope) } ?: scope
     if (requestedScope.value == effective && state.value.scope == effective) return
     invalidateDiffRead()
+    resetStream()
     requestedScope.value = effective
     mutableState.update { old ->
       // A range set from outside the strip (the detail screen, a chip) starts a new anchor.
@@ -474,6 +549,12 @@ class ChangesWindowViewModel(
     }
     if (target != null) setTarget(target)
   }
+}
+
+private fun ChangesWindowUiState.withLoadedDiff(file: ChangedFile, result: FileDiffState): ChangesWindowUiState {
+  val diff = (result as? FileDiffState.Shown)?.diff
+  val loaded = LoadedDiff(file, result, diff?.takeIf { it.hunks.isNotEmpty() }?.let(::diffRowCount) ?: 1, diff?.let(::diffLongestChars) ?: 0)
+  return copy(fileDiffs = fileDiffs + (file.path to loaded))
 }
 
 private data class GoalObservationKey(val id: String, val running: Boolean)

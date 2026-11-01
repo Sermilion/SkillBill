@@ -1,3 +1,8 @@
+## [2026-11-01] List every recorded block in Activity
+Context: Activity showed run starts and ends, so a run that blocked and resumed looked like it had gone smoothly. The detail read already carried every block in `incident` and `incidentHistory`, and only the live incident was shown.
+Decision: Activity adds a "Blocked" line per incident at its `observedAt`, with its summary, and the cause and resume state in the tooltip.
+Reason: These are recorded facts with their own times, so no new read is needed. The runtime keeps the latest 10 past incidents for a run's detail read, so an older block drops off the feed. Resume has no recorded time, so it has no line of its own.
+
 ## [2026-11-01] Show the step pipeline on each subtask row
 Context: A goal showed one "Phase pipeline" section apart from its subtasks, so the reader had to work out which subtask it described. Goal finish already shows its steps on its own row.
 Decision: Every subtask row carries the step pipeline. The current subtask uses its live position, a completed subtask shows every step done, and any other shows them pending. The separate section stays only for standalone phases and operations, which have no subtask rows.

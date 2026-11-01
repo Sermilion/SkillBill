@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.ui.diff
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -45,24 +44,39 @@ private const val LINE_HEIGHT_SP = 20f
 private const val TAB = "        "
 private const val HUNK_LABEL_GAP_CHARS = 2
 
-/** One unwrapped, horizontally scrolling row per line under two line-number gutters. */
+/** A longer line, such as a minified bundle, is cut: layout cannot measure a row millions of pixels wide. */
+private const val MAX_LINE_CHARS = 5_000
+private const val CUT_MARKER_CHARS = 32
+
+/**
+ * Gives [content] a width that fits [longestChars] characters of diff text, or the viewport when that is wider, and scrolls
+ * sideways when it does not fit: diff rows do not wrap.
+ */
 @Composable
-fun DiffLines(diff: FileDiff, modifier: Modifier = Modifier, state: LazyListState = rememberLazyListState()) {
+fun DiffHorizontalScroll(longestChars: Int, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
   val measurer = rememberTextMeasurer()
   val density = LocalDensity.current
   val mono = changesMono(FONT_SIZE, FontWeight.Normal, SkillBillTheme.colors.fg2, LINE_HEIGHT_SP)
   val charWidth = remember(measurer, mono, density) { with(density) { measurer.measure("0", mono).size.width.toDp() } }
-  val longest = remember(diff) { diff.hunks.maxOfOrNull(::hunkChars) ?: 0 }
   BoxWithConstraints(modifier.fillMaxSize()) {
-    val content = maxOf(maxWidth, GUTTER_WIDTH * 2 + TEXT_START * 2 + charWidth * longest)
-    LazyColumn(Modifier.horizontalScroll(rememberScrollState()).width(content).fillMaxHeight(), state = state) {
-      diff.hunks.forEachIndexed { h, hunk ->
-        item(key = "h$h") { HunkHeaderRow(hunk) }
-        items(hunk.lines.size, key = { "l$h:$it" }) { index -> DiffLineRow(hunk.lines[index]) }
-      }
-    }
+    val width = maxOf(maxWidth, GUTTER_WIDTH * 2 + TEXT_START * 2 + charWidth * longestChars)
+    Box(Modifier.horizontalScroll(rememberScrollState()).width(width).fillMaxHeight()) { content() }
   }
 }
+
+/** One row per hunk header and line of [diff], keyed under [key]. */
+fun LazyListScope.diffRows(diff: FileDiff, key: String) {
+  diff.hunks.forEachIndexed { h, hunk ->
+    item(key = "$key:h$h") { HunkHeaderRow(hunk) }
+    items(hunk.lines.size, key = { "$key:l$h:$it" }) { index -> DiffLineRow(hunk.lines[index]) }
+  }
+}
+
+/** How many rows [diffRows] adds for [diff]. */
+fun diffRowCount(diff: FileDiff): Int = diff.hunks.sumOf { it.lines.size + 1 }
+
+/** The widest row of [diff], in characters of diff text. */
+fun diffLongestChars(diff: FileDiff): Int = diff.hunks.maxOfOrNull(::hunkChars) ?: 0
 
 fun fileDiffNotice(state: FileDiffState): String = when (state) {
   is FileDiffState.Shown, FileDiffState.Binary -> "Binary file or no textual changes."
@@ -73,10 +87,19 @@ fun fileDiffNotice(state: FileDiffState): String = when (state) {
 
 private fun hunkChars(hunk: DiffHunk): Int {
   val header = hunk.header.length + (hunk.source?.let { it.length + HUNK_LABEL_GAP_CHARS } ?: 0)
-  return maxOf(header, hunk.lines.maxOfOrNull { displayText(it).length + 1 } ?: 0)
+  return maxOf(header, hunk.lines.maxOfOrNull { shownChars(it) + 1 } ?: 0)
 }
 
-private fun displayText(line: DiffLine): String = line.text.replace("\t", TAB)
+/** The length of [displayText] without building it. */
+private fun shownChars(line: DiffLine): Int {
+  val expanded = line.text.length + line.text.count { it == '\t' } * (TAB.length - 1)
+  return if (expanded <= MAX_LINE_CHARS) expanded else MAX_LINE_CHARS + CUT_MARKER_CHARS
+}
+
+internal fun displayText(line: DiffLine): String {
+  val text = line.text.replace("\t", TAB)
+  return if (text.length <= MAX_LINE_CHARS) text else "${text.take(MAX_LINE_CHARS)} … ${text.length - MAX_LINE_CHARS} more characters"
+}
 
 @Composable
 private fun Modifier.gutterRules(): Modifier {
@@ -123,7 +146,7 @@ private fun DiffLineRow(line: DiffLine) {
     GutterCell(line.oldNumber, GUTTER_WIDTH, gutter)
     GutterCell(line.newNumber, GUTTER_WIDTH, gutter)
     BasicText(
-      prefix + displayText(line),
+      prefix + remember(line) { displayText(line) },
       Modifier.padding(start = TEXT_START),
       style = changesMono(FONT_SIZE, FontWeight.Normal, textColor, LINE_HEIGHT_SP),
       maxLines = 1,

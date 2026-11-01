@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.designsystem.detail.ActivityFeedEntry
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
+import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
@@ -80,6 +81,7 @@ internal fun activityLines(item: WorkItem, detail: Detail): List<ActivityLine> {
         add(ActivityLine(itemLead, self, word, at = end, tooltip = "$self $word ${formatInstant(end, TIME)}"))
       }
     }
+    addAll(blockLines(detail))
     detail.latestActivity.edit?.let { edit ->
       val change = listOfNotNull(edit.insertions?.let { "+$it" }, edit.deletions?.let { "−$it" }).joinToString(" ")
       val target = listOf(edit.paths.joinToString(", "), change).filter { it.isNotBlank() }.joinToString(" ")
@@ -96,6 +98,18 @@ internal fun activityLines(item: WorkItem, detail: Detail): List<ActivityLine> {
   }
   return lines.sortedBy { it.at ?: Instant.DISTANT_FUTURE }
 }
+
+/** One line per recorded block, the live one included: when the run stopped, why, and whether it later resumed. */
+private fun blockLines(detail: Detail): List<ActivityLine> =
+  (listOfNotNull(detail.incident) + detail.incidentHistory).distinctBy { it.incidentToken }.map { incident ->
+    val resumed = incident.progress == IncidentProgress.Resumed
+    val tooltip = listOfNotNull(
+      "Blocked ${formatInstant(incident.observedAt, TIME)}",
+      incident.cause,
+      "resumed".takeIf { resumed },
+    ).joinToString(" · ")
+    ActivityLine(ActivityLead.Status(StatusKind.Blocked, null), "Blocked", incident.summary, at = incident.observedAt, tooltip = tooltip)
+  }
 
 private fun ActivityLine.toEntry() = ActivityFeedEntry(
   lead = {

@@ -13,9 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -174,11 +172,19 @@ private fun FooterHint(keys: List<String>, label: String) {
 private val FILE_LIST_WIDTH = 380.dp
 private const val FILE_LIST_MAX_SHARE = 0.45f
 
-/** The panel's window look: 12 dp corners, a hairline and a shadow around a title bar with decorative lights and a close button. */
+/**
+ * The panel's window look: 12 dp corners, a hairline and a shadow around a title bar with a centered title. The close button sits at
+ * the start of the bar when [closeAtStart], as macOS windows have it, else at the end.
+ */
 @Composable
-fun ChangesWindowFrame(title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
+fun ChangesWindowFrame(title: String, closeAtStart: Boolean, onClose: () -> Unit, content: @Composable () -> Unit) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(12.dp)
+  val closeSlot: @Composable (Boolean) -> Unit = { shown ->
+    Box(Modifier.width(TITLE_SIDE_WIDTH), contentAlignment = Alignment.Center) {
+      if (shown) SbIconButton(LucideIcons.x, "Close changes", onClose, size = SbControlSize.Small)
+    }
+  }
   Column(
     Modifier.fillMaxSize()
       .layeredShadow(SkillBillTheme.shadows.modal, shape)
@@ -189,13 +195,11 @@ fun ChangesWindowFrame(title: String, onClose: () -> Unit, content: @Composable 
       .semantics { paneTitle = title },
   ) {
     Row(
-      Modifier.fillMaxWidth().height(38.dp).background(colors.bgInset).hairlineBottom(colors.border).padding(start = 14.dp, end = 12.dp),
+      Modifier.fillMaxWidth().height(38.dp).background(colors.bgInset).hairlineBottom(colors.border).padding(horizontal = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Row(Modifier.width(TITLE_SIDE_WIDTH), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        repeat(3) { Box(Modifier.size(11.dp).background(colors.stripIdle, CircleShape)) }
-      }
+      closeSlot(closeAtStart)
       BasicText(
         title,
         Modifier.weight(1f),
@@ -203,12 +207,10 @@ fun ChangesWindowFrame(title: String, onClose: () -> Unit, content: @Composable 
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
-      Box(Modifier.width(TITLE_SIDE_WIDTH), contentAlignment = Alignment.CenterEnd) {
-        SbIconButton(LucideIcons.x, "Close changes", onClose, size = SbControlSize.Small)
-      }
+      closeSlot(!closeAtStart)
     }
     content()
   }
 }
 
-private val TITLE_SIDE_WIDTH = 110.dp
+private val TITLE_SIDE_WIDTH = 32.dp

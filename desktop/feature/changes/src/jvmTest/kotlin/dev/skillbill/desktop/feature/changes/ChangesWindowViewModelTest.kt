@@ -215,6 +215,68 @@ class ChangesWindowViewModelTest {
   }
 
   @Test
+  fun `the diff stream reads wanted files once and following a scroll reuses them`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
+    advanceUntilIdle()
+    val request = viewModel.state.value.scrollRequest
+
+    viewModel.onAction(ChangesWindowAction.EnsureDiffs(listOf("a/A.kt", "b/B.kt")))
+    advanceUntilIdle()
+    assertEquals(setOf("a/A.kt", "b/B.kt"), viewModel.state.value.fileDiffs.keys)
+    assertEquals(1, scopes.diffReads.count { it.second == "b/B.kt" })
+
+    viewModel.onAction(ChangesWindowAction.FollowScroll("b/B.kt"))
+    advanceUntilIdle()
+    assertEquals("b/B.kt", viewModel.state.value.selectedPath)
+    assertEquals("b/B.kt", (viewModel.state.value.diff as DiffPaneUi.Shown).file.path)
+    assertEquals(1, scopes.diffReads.count { it.second == "b/B.kt" })
+    assertEquals(request, viewModel.state.value.scrollRequest)
+
+    viewModel.onAction(ChangesWindowAction.SelectFile("a/A.kt"))
+    assertEquals(request + 1, viewModel.state.value.scrollRequest)
+  }
+
+  @Test
+  fun `a refresh drops only the diffs of files that changed and re-reads the wanted ones`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"), file("c/C.kt"))
+    advanceUntilIdle()
+    viewModel.onAction(ChangesWindowAction.EnsureDiffs(listOf("b/B.kt", "c/C.kt")))
+    advanceUntilIdle()
+
+    scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt", insertions = 9))
+    advanceUntilIdle()
+
+    assertEquals(9, viewModel.state.value.fileDiffs.getValue("b/B.kt").file.insertions)
+    assertEquals(2, scopes.diffReads.count { it.second == "b/B.kt" })
+    assertEquals(false, "c/C.kt" in viewModel.state.value.fileDiffs)
+  }
+
+  @Test
+  fun `a new scope forgets the loaded diffs`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val goal = workItem("G")
+    detailOf(goal)
+    scopes.subtasks.value = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap())
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
+    scopes.list(ChangeScope.All).value = listed(file("a/A.kt"))
+    advanceUntilIdle()
+    viewModel.onAction(ChangesWindowAction.EnsureDiffs(listOf("a/A.kt")))
+    advanceUntilIdle()
+
+    viewModel.onAction(ChangesWindowAction.NarrowToSubtask(1))
+
+    assertEquals(emptyMap(), viewModel.state.value.fileDiffs)
+  }
+
+  @Test
   fun `file moves stop at the end and open skips deleted files`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
