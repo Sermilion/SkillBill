@@ -623,6 +623,8 @@ public class GoalRunnerStatusProjectionAssembler(
           GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts)?.passResults.orEmpty().map { pass ->
             val stored =
               rawResults[pass.passNumber.toString()]
+                ?.let(JsonCodec::parseObjectOrNull)
+                ?.let(JsonCodec::jsonElementToValue)
                 ?.let(GoalSubtaskReviewSummaryReducer::reviewRunId)
                 ?.let { runId -> storedPassFindings(runId, durableRead) }
             GoalRunnerReviewPassResult(
@@ -663,7 +665,7 @@ public class GoalRunnerStatusProjectionAssembler(
     }
 
   private class StoredPassFindings(
-    val findings: List<GoalRunnerReviewFinding>,
+    val findings: List<GoalRunnerReviewFinding>?,
     val lanes: List<String>,
   )
 
@@ -676,7 +678,10 @@ public class GoalRunnerStatusProjectionAssembler(
         val reviews = unit.reviews
         val statuses = reviews.fetchFindingStatuses(runId)
         StoredPassFindings(
-          findings = storedReviewPassFindings(reviews.fetchNumberedFindings(runId), statuses),
+          findings =
+            statuses.takeIf { it.isNotEmpty() }?.let {
+              storedReviewPassFindings(reviews.fetchNumberedFindings(runId), it)
+            },
           lanes = reviews.fetchReviewRunLanes(runId).sortedBy { it.orderIndex }.map { it.laneSkillName },
         )
       }
