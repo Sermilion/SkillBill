@@ -6,7 +6,11 @@ import dev.skillbill.desktop.core.domain.model.ChatScope
 internal const val SKILL_BILL_REPOSITORY = "Sermilion/SkillBill"
 
 /** Every agent runs a chat turn with the same access it has in an execution; this prompt only names the execution. */
-internal fun scopeSystemPrompt(scope: ChatScope, mode: ChatPermissionMode): String = buildString {
+internal fun scopeSystemPrompt(scope: ChatScope, mode: ChatPermissionMode): String =
+  listOfNotNull(scopeSystemPrompt(scope), modeNote(mode)).joinToString("\n\n")
+
+/** The prompt without the turn's mode, for an agent process that outlives a mode change. */
+internal fun scopeSystemPrompt(scope: ChatScope): String = buildString {
   appendLine("You are chatting with the operator about one skill-bill execution.")
   appendLine("Execution id: ${scope.executionId}")
   appendLine("Kind: ${scope.kind?.name ?: "unknown"}")
@@ -18,14 +22,15 @@ internal fun scopeSystemPrompt(scope: ChatScope, mode: ChatPermissionMode): Stri
       "tools, git, gh and file edits. Issues about skill-bill itself go to $SKILL_BILL_REPOSITORY.",
   )
   appendLine()
-  appendLine(CHAT_ACTION_GUIDANCE)
-  if (mode == ChatPermissionMode.ReadOnly) {
-    appendLine()
-    append(
-      "The execution is running in this worktree right now, so edits or runtime changes can collide with it. " +
-        "The operator can use \"Pause and act\" to pause it for the length of one turn.",
-    )
-  }
+  append(CHAT_ACTION_GUIDANCE.trimEnd())
+}
+
+/** What the agent must know about the execution's state this turn; null when it may act. */
+internal fun modeNote(mode: ChatPermissionMode): String? = when (mode) {
+  ChatPermissionMode.ReadOnly ->
+    "The execution is running in this worktree right now, so edits or runtime changes can collide with it. " +
+      "The operator can use \"Pause and act\" to pause it for the length of one turn."
+  ChatPermissionMode.Act -> null
 }
 
 private const val CHAT_ACTION_GUIDANCE = """

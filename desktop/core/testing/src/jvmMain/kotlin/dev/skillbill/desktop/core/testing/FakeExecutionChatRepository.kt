@@ -11,7 +11,10 @@ import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import java.util.Collections
 
 /** Records every turn and answers it with [events]; [agent] is what every resolve returns. */
@@ -44,6 +47,19 @@ class FakeExecutionChatRepository(
   override fun send(request: ChatTurnRequest): Flow<ChatEvent> {
     requests += request
     return events(request)
+  }
+
+  /** Emit a session id and an event to stream a reply the agent starts on its own. */
+  val unpromptedEvents: MutableSharedFlow<Pair<String, ChatEvent>> = MutableSharedFlow(extraBufferCapacity = 64)
+
+  override fun unprompted(sessionId: String): Flow<ChatEvent> =
+    unpromptedEvents.filter { it.first == sessionId }.map { it.second }
+
+  /** Session ids whose agent process the workspace ended, in order. */
+  val ended: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+  override fun end(sessionId: String) {
+    ended += sessionId
   }
 
   /** Saved chats by session id, as the store keeps them. */

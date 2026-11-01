@@ -1,52 +1,132 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class ClaudeChatTransportRunTest {
-  // A bash profile running `eval "$(ssh-agent)"` prints "Agent pid" to stdout, which would otherwise fail every turn as malformed.
-  @Test
-  fun `login shell output before the stream is skipped and the result ends the turn`() = runTest {
-    var command: ChatCommand? = null
-    val launcher = ChatProcessLauncher {
-      command = it
-      flowOf(
-        ChatProcessOutput.Line("Agent pid 4242"),
-        ChatProcessOutput.Line("""{"type":"system","subtype":"init"}"""),
-        ChatProcessOutput.Line("""{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"Hi"}}}"""),
-        ChatProcessOutput.Line("""{"type":"result","is_error":false,"result":"Hi"}"""),
-        ChatProcessOutput.Exited(0, ""),
-      )
+  // One scripted claude process: the test reads what the app writes to stdin and decides what stdout prints.
+  private class FakeClaude : LiveChatProcessLauncher {
+    val opened: MutableList<ChatCommand> = Collections.synchronizedList(mutableListOf())
+    val stdin = Channel<String>(Channel.UNLIMITED)
+    val stdout = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val stopped = CompletableDeferred<Unit>()
+
+    override fun open(command: ChatCommand, input: ReceiveChannel<String>): Flow<ChatProcessOutput> = channelFlow {
+      opened += command
+      launch { for (line in input) stdin.send(line) }
+      try {
+        for (output in stdout) send(output)
+      } finally {
+        stopped.complete(Unit)
+      }
     }
+
+    suspend fun nextMessage(): Pair<String, String> {
+      val message = Json.parseToJsonElement(stdin.receive()).jsonObject
+      return message.getValue("uuid").jsonPrimitive.content to
+        message.getValue("message").jsonObject.getValue("content").jsonPrimitive.content
+    }
+
+    suspend fun print(vararg lines: String) = lines.forEach { stdout.send(ChatProcessOutput.Line(it)) }
+  }
+
+  private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()) = ClaudeChatTransport(
+    HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", ""),
+    FakeAppSettingsRepository(),
+    claude,
+    diagnostics,
+    ApplicationCoroutineScope(backgroundScope),
+  )
+
+  // A background build the agent started used to die when its turn's process exited, and nothing reported back.
+  @Test
+  fun `the process outlives the turn, a reply the agent starts on its own reaches unprompted, and the next turn reuses it`() = runTest {
+    val claude = FakeClaude()
     val diagnostics = RecordingDiagnostics()
-    val host = HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "")
-    val transport = ClaudeChatTransport(host, FakeAppSettingsRepository(), launcher, diagnostics)
+    val transport = transport(claude, diagnostics)
+    val unprompted = async(start = CoroutineStart.UNDISPATCHED) { transport.unprompted("session-1").take(2).toList() }
 
-    val events = transport.run(chatRequest()).toList()
+    val first = async { transport.run(chatRequest()).toList() }
+    val (uuid, text) = claude.nextMessage()
+    claude.print(
+      "Agent pid 4242",
+      """{"type":"system","subtype":"init"}""",
+      replay(uuid),
+      textDelta("Started the build"),
+      """{"type":"result","is_error":false,"result":"Started the build"}""",
+    )
+    assertEquals(listOf(ChatEvent.TextDelta("Started the build"), ChatEvent.Completed), first.await())
+    assertEquals("operator prompt", text)
 
-    assertEquals(listOf(ChatEvent.TextDelta("Hi"), ChatEvent.Completed), events)
+    claude.print(
+      """{"type":"system","subtype":"task_notification","task_id":"b1","status":"completed"}""",
+      textDelta("The build passed"),
+      """{"type":"result","is_error":false,"result":"The build passed"}""",
+    )
+    assertEquals(listOf(ChatEvent.TextDelta("The build passed"), ChatEvent.Completed), unprompted.await())
+
+    val second = async { transport.run(chatRequest(firstTurn = false)).toList() }
+    val (secondUuid, _) = claude.nextMessage()
+    claude.print(replay(secondUuid), """{"type":"result","is_error":false,"result":""}""")
+    assertEquals(listOf<ChatEvent>(ChatEvent.Completed), second.await())
+    assertEquals(1, claude.opened.size)
+    assertEquals("/work/skill-bill", claude.opened.single().workingDirectory)
     assertEquals(listOf("chat.login_output_skipped"), diagnostics.categories)
-    assertEquals("operator prompt", command?.stdin)
-    assertEquals("/work/skill-bill", command?.workingDirectory)
+    assertFalse(claude.stopped.isCompleted)
+
+    transport.end("session-1")
+    claude.stopped.await()
+  }
+
+  // Closing a tab or `/clear` cancels the turn; the agent and its commands must not keep running unseen.
+  @Test
+  fun `cancelling a turn before its reply stops the process`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+
+    val turn = async { transport.run(chatRequest()).toList() }
+    claude.nextMessage()
+    turn.cancel()
+
+    claude.stopped.await()
   }
 
   // Through a login shell a missing agent binary exits 127; a process that never started points at the worktree or the shell.
   @Test
   fun `a process that never started fails the turn as a process failure, not a missing binary`() = runTest {
-    val launcher = ChatProcessLauncher { flowOf(ChatProcessOutput.StartFailed("The working directory /gone does not exist.")) }
-    val host = HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "")
-    val transport = ClaudeChatTransport(host, FakeAppSettingsRepository(), launcher, RecordingDiagnostics())
+    val claude = FakeClaude()
+    claude.stdout.send(ChatProcessOutput.StartFailed("The working directory /gone does not exist."))
 
-    val events = transport.run(chatRequest()).toList()
+    val events = transport(claude).run(chatRequest()).toList()
 
     assertEquals(listOf(ChatEvent.Failed(ChatFailure.ProcessFailed, "The working directory /gone does not exist.")), events)
   }
+
+  private fun replay(uuid: String) =
+    """{"type":"user","uuid":"$uuid","isReplay":true,"message":{"role":"user","content":"operator prompt"}}"""
+
+  private fun textDelta(text: String) = """{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"$text"}}}"""
 }

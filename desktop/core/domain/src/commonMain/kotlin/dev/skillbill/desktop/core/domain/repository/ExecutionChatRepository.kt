@@ -27,6 +27,19 @@ interface ExecutionChatRepository {
   fun send(request: ChatTurnRequest): Flow<ChatEvent>
 
   /**
+   * Replies the agent of [sessionId] starts on its own between turns, such as when a background command it started finishes.
+   * Each reply streams like a turn and ends with [ChatEvent.Completed] or [ChatEvent.Failed]. Agents that run one process per
+   * turn never emit. The flow never completes; the collector cancels it.
+   */
+  fun unprompted(sessionId: String): Flow<ChatEvent>
+
+  /**
+   * Stops the agent process kept for [sessionId] between turns, with every background command it started. The next turn of
+   * that session resumes it in a new process. Hiding a chat must not call this; closing it does.
+   */
+  fun end(sessionId: String)
+
+  /**
    * What `/resume` offers, newest first: every agent CLI's own sessions in [repositoryRoot], and the app's saved chats of
    * [executionId] for agents without a session store. The chat now open as [currentSessionId] is left out. A store that cannot
    * be read gives no entries.

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
@@ -54,6 +55,10 @@ class AgentExecutionChatRepository(
       emitAll(transport.run(request))
     }
   }.flowOn(Dispatchers.IO)
+
+  override fun unprompted(sessionId: String): Flow<ChatEvent> = transports.map { it.unprompted(sessionId) }.merge().flowOn(Dispatchers.IO)
+
+  override fun end(sessionId: String) = transports.forEach { it.end(sessionId) }
 
   override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
     withContext(Dispatchers.IO) { catalog.list(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }

@@ -26,7 +26,7 @@ internal const val UNREADABLE_NOTICE = "Execution detail could not be read; the 
 internal const val NO_AGENT_NOTICE = "No agent is recorded for this execution and no default agent is configured."
 internal const val ACT_PREFIX =
   "The operator paused this execution so you can act on it. When this turn ends the app resumes it; " +
-    "do not resume, relaunch or continue it yourself."
+    "do not resume, relaunch or continue it yourself. Wait for every command you start to finish before you end this turn."
 
 internal const val ALREADY_RUNNING_NOTICE = "The execution is already running again; the app did not relaunch it."
 
@@ -114,31 +114,51 @@ internal class ChatTurns(
           session.delivered = sent
           session.started = true
         }
-        when (event) {
-          is ChatEvent.TextDelta -> session.appendDelta(event.text)
-          is ChatEvent.ToolUse -> session.appendTool(event.call)
-          is ChatEvent.ToolResult -> session.recordToolResult(event)
-          is ChatEvent.SuggestedActions -> session.suggestActions(event.actions)
-          ChatEvent.Completed -> session.endStreaming()
-          is ChatEvent.Failed -> {
-            session.endStreaming()
-            session.append(
-              if (event.failure == ChatFailure.AgentUnsupported) {
-                ChatMessage.Notice("Chat is not available for agent ${event.detail ?: agent.agentId} yet.")
-              } else {
-                ChatMessage.Error(event.failure, event.detail ?: event.failure.name)
-              },
-            )
-          }
-        }
+        show(session, agent, event)
       }
     } finally {
       session.endStreaming()
     }
-    if (session.started) {
-      val lines = session.historyLines()
-      val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
-      chat.saveChat(ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines))
+    if (session.started) save(session, agent)
+  }
+
+  /**
+   * Shows one event of a reply the agent started on its own, such as after a background command finished. The reply holds the
+   * composer while it streams unless an operator turn already does, and is saved once it ends.
+   */
+  suspend fun unprompted(session: ChatSession, event: ChatEvent) {
+    val ownTurn = session.turnJob == null
+    if (ownTurn) session.busyState.value = true
+    val agent = session.agentState.value
+    show(session, agent, event)
+    if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
+    if (ownTurn) session.busyState.value = false
+    if (agent != null && session.started) save(session, agent)
+  }
+
+  private fun show(session: ChatSession, agent: ChatAgent?, event: ChatEvent) {
+    when (event) {
+      is ChatEvent.TextDelta -> session.appendDelta(event.text)
+      is ChatEvent.ToolUse -> session.appendTool(event.call)
+      is ChatEvent.ToolResult -> session.recordToolResult(event)
+      is ChatEvent.SuggestedActions -> session.suggestActions(event.actions)
+      ChatEvent.Completed -> session.endStreaming()
+      is ChatEvent.Failed -> {
+        session.endStreaming()
+        session.append(
+          if (event.failure == ChatFailure.AgentUnsupported) {
+            ChatMessage.Notice("Chat is not available for agent ${event.detail ?: agent?.agentId} yet.")
+          } else {
+            ChatMessage.Error(event.failure, event.detail ?: event.failure.name)
+          },
+        )
+      }
     }
+  }
+
+  private suspend fun save(session: ChatSession, agent: ChatAgent) {
+    val lines = session.historyLines()
+    val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
+    chat.saveChat(ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), title, lines))
   }
 }

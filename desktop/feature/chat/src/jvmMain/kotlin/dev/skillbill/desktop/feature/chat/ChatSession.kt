@@ -40,8 +40,12 @@ class ChatSession internal constructor(
       headerState.value = value
     }
 
-  var sessionId: String = sessionId
-    private set
+  private val sessionIdState = MutableStateFlow(sessionId)
+
+  /** The agent session the chat continues; it changes on `/clear`, `/resume` and an agent switch. */
+  internal val sessionIds: StateFlow<String> = sessionIdState.asStateFlow()
+
+  val sessionId: String get() = sessionIdState.value
 
   internal var delivered: ExecutionSnapshot? = null
   internal var started: Boolean = false
@@ -49,14 +53,14 @@ class ChatSession internal constructor(
 
   /** The next turn opens [newSessionId] and sends the full snapshot, as a first turn does. */
   internal fun restart(newSessionId: String) {
-    sessionId = newSessionId
+    sessionIdState.value = newSessionId
     delivered = null
     started = false
   }
 
   /** The next turn continues the saved agent session [savedSessionId] and sends the full snapshot, since what it last saw is unknown. */
   internal fun resumeFrom(savedSessionId: String) {
-    sessionId = savedSessionId
+    sessionIdState.value = savedSessionId
     delivered = null
     started = true
   }

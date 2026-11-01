@@ -1,3 +1,9 @@
+## [2026-11-01] Desktop Claude chat keeps one process per session
+Context: Each Claude chat turn ran as its own `claude -p` process. When the reply ended, the process exited and Claude Code killed the background commands it had started, so a promise like "I'll push once the checks pass" could never be kept, and the operator blamed hiding the chat pane.
+Decision: ClaudeChatTransport keeps one `claude -p --input-format stream-json --replay-user-messages` process per chat session and writes each turn to its stdin. Output after the replay of a turn's uuid, up to its `result`, belongs to that turn; output with no turn pending is a reply the agent started on its own and reaches the chat through `ExecutionChatRepository.unprompted`. Hiding the pane leaves the process alone. Closing the tab, `/clear`, `/resume`, an agent switch, closing the window, or cancelling a turn before its reply stops it with its descendants. The read-only mode note moved from the system prompt into each message because the process outlives a mode change.
+Reason: Background commands only survive while the process that started them lives, and Claude reports their completion by starting a turn on its own, which needs a reader that outlives the turn.
+Alternatives considered: Telling the agent to run every command in the foreground was rejected as the only fix because it holds the composer for a whole build. Codex, Cursor and Junie still run one process per turn until their CLIs offer an equivalent input stream.
+
 ## [2026-10-30] Bind config edits to locked document identities
 Context: A config file can move between legacy and current paths with identical bytes, or change while a desktop draft is open.
 Decision: Locked reads return the selected path, eligible candidates and fingerprint. Cooperating writers hold shared persistent locks through authoritative reads and publication; conflict recovery rebases only the selected row.

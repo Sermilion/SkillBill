@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
@@ -57,7 +58,7 @@ internal const val CLEARED_NOTICE =
  * The window's chats, one per execution id. Each finished turn saves the chat's latest lines through [ExecutionChatRepository],
  * `/resume` swaps a chat for a saved one of the same execution, and `/clear` starts it over. It is window-scoped: every coroutine is a child of the window
  * scope, and the window ends every chat through [closeAll]. Calls come from the UI thread. It mirrors [paneOpen] into
- * [ShellPanes.chatOpen], and hides itself when opening Specs clears that flag; hiding ends no chat.
+ * [ShellPanes.chatOpen], and hides itself when opening Specs clears that flag; hiding ends no chat, turn or agent process.
  */
 @Inject
 @SingleIn(WindowScope::class)
@@ -118,6 +119,7 @@ class ChatWorkspace(
     if (item.id !in sessions) {
       val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]), clock)
       sessions[item.id] = session
+      followUnprompted(session)
       session.append(stateCard(item))
       session.busyState.value = true
       launchTurn(session) {
@@ -144,11 +146,15 @@ class ChatWorkspace(
     panes.chatOpen = value
   }
 
-  /** Ends [id]'s chat: cancelling its job ends any running turn and its process. A pending resume still runs. */
+  /**
+   * Ends [id]'s chat: cancelling its job ends any running turn, and the agent process it keeps between turns stops with its
+   * background commands. A pending resume still runs.
+   */
   fun close(id: String) {
     val session = sessions.remove(id) ?: return
     drafts.remove(id)
     session.job.cancel()
+    chat.end(session.sessionId)
     tabState.update { it.without(id) }
     observeActive()
   }
@@ -159,7 +165,10 @@ class ChatWorkspace(
     resumeJobs.clear()
     observer?.cancel()
     observer = null
-    sessions.values.forEach { it.job.cancel() }
+    sessions.values.forEach {
+      it.job.cancel()
+      chat.end(it.sessionId)
+    }
     sessions.clear()
     drafts.clear()
     tabState.value = ChatTabsState()
@@ -242,6 +251,7 @@ class ChatWorkspace(
       val agent = chat.agentFor(agentId)
       session.agentState.value = agent
       session.agentSupportedState.value = chat.supports(agentId)
+      endAgent(session)
       session.restart(UUID.randomUUID().toString())
       session.append(ChatMessage.Notice("Switched to ${chipText(agent)}. Its next turn starts a new conversation with the current execution state."))
     }
@@ -260,6 +270,7 @@ class ChatWorkspace(
     session.busyState.value = true
     launchTurn(session) {
       running?.cancelAndJoin()
+      endAgent(session)
       session.restart(UUID.randomUUID().toString())
       session.replaceTranscript(listOf(stateCard(session.item), ChatMessage.Notice(CLEARED_NOTICE)))
     }
@@ -291,6 +302,7 @@ class ChatWorkspace(
     launchTurn(session) {
       running?.cancelAndJoin()
       val lines = chat.openSavedChat(entry)
+      endAgent(session)
       session.resumeFrom(entry.sessionId)
       session.agentState.value = entry.agent
       session.agentSupportedState.value = chat.supports(entry.agent.agentId)
@@ -365,6 +377,19 @@ class ChatWorkspace(
     }
     sessions[id]?.append(ChatMessage.Notice(notice))
     return true
+  }
+
+  // Stops the agent process the chat kept between turns; a reply it was streaming on its own stops where it is.
+  private fun endAgent(session: ChatSession) {
+    chat.end(session.sessionId)
+    session.endStreaming()
+  }
+
+  // Shows the replies the agent starts on its own, for whichever agent session the chat continues now.
+  private fun followUnprompted(session: ChatSession) {
+    scope.launch(session.job) {
+      session.sessionIds.collectLatest { id -> chat.unprompted(id).collect { turns.unprompted(session, it) } }
+    }
   }
 
   // Keeps the active session's header, mode and gone state current while its tab is shown.

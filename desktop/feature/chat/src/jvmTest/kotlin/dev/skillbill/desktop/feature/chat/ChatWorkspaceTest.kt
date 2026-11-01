@@ -526,4 +526,39 @@ class ChatWorkspaceTest {
     assertTrue(next.sessionId != opening.sessionId && next.sessionId == session.sessionId)
     assertTrue("execution.title" in next.prompt)
   }
+
+  // Hiding the pane used to look like it killed a background build; it must keep the agent process, and the reply the agent
+  // sends when the build ends must reach the chat. Closing the tab must stop the process, or its commands run on unseen.
+  @Test
+  fun `hiding keeps the agent process, its own reply streams into the chat and is saved, and closing the tab ends the process`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.events = { flowOf(ChatEvent.TextDelta("Build started."), ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+
+    workspace.hide()
+    chat.unpromptedEvents.emit(session.sessionId to ChatEvent.TextDelta("Build passed."))
+    runCurrent()
+
+    assertTrue(session.busy.value)
+    assertTrue(chat.ended.isEmpty())
+    chat.unpromptedEvents.emit(session.sessionId to ChatEvent.Completed)
+    runCurrent()
+
+    assertFalse(session.busy.value)
+    val replies = session.transcript.value.filterIsInstance<ChatMessage.Agent>()
+    assertEquals(listOf("Build started.", "Build passed."), replies.map { it.text })
+    assertTrue(replies.none { it.streaming })
+    assertEquals(
+      listOf(ChatHistoryLine(ChatHistoryRole.Agent, "Build started."), ChatHistoryLine(ChatHistoryRole.Agent, "Build passed.")),
+      chat.saved.getValue(session.sessionId).lines,
+    )
+
+    workspace.close(item.id)
+
+    assertEquals(listOf(session.sessionId), chat.ended)
+  }
 }
