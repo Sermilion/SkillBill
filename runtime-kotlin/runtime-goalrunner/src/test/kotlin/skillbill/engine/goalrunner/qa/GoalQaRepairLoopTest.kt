@@ -36,6 +36,9 @@ import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -62,9 +65,12 @@ import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 
 class GoalQaRepairLoopTest {
   @TempDir lateinit var home: Path
@@ -127,6 +133,52 @@ class GoalQaRepairLoopTest {
     assertEquals(FeatureTaskQaFailureKind.ENVIRONMENT, outcome.failureKind)
     assertContains(assertNotNull(outcome.reason), "QA did not re-test the fix")
     assertEquals(listOf("F-1"), outcome.findings.map { it.id })
+  }
+
+  @Test
+  fun `a build gate command that cannot start settles QA with its real error and validation still runs`() {
+    val fixture =
+      Fixture(
+        verdicts = listOf(QaVerdict.FINDINGS_OPEN),
+        onQaFix = { git -> git.repositoryFingerprintValue = REPAIRED_TREE },
+        qaFixOutput = { "F-1: fixed: HomeScreen.kt now renders the signed-in user name." },
+        buildGateRunner =
+          ThrowingBuildGateRunner(
+            SkillBillRuntimeException(
+              FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
+              "Failed to launch process: No such file or directory",
+            ),
+          ),
+      )
+
+    val result = fixture.gate.run(fixture.state, fixture.request)
+
+    assertEquals("validate", fixture.startedPhases().last())
+    assertEquals(0, fixture.launchedPhases().count { it == "build" })
+    val warning = assertIs<GoalQaGateResult.Warned>(result).reason
+    assertContains(warning, "The build gate did not run after qa_fix")
+    assertContains(warning, "Failed to launch process: No such file or directory")
+    assertContains(warning, "validation_gate.gradle_wrapper")
+    assertFalse(warning.contains("without a passing build"), warning)
+  }
+
+  @Test
+  fun `an unexpected gate failure keeps its real error when the command outcome is unknown`() {
+    val failure = IllegalStateException("gate runner exploded")
+    val fixture =
+      Fixture(
+        verdicts = listOf(QaVerdict.FINDINGS_OPEN),
+        onQaFix = { git -> git.repositoryFingerprintValue = REPAIRED_TREE },
+        qaFixOutput = { "F-1: fixed: HomeScreen.kt now renders the signed-in user name." },
+        buildGateRunner = ThrowingBuildGateRunner(failure),
+      )
+
+    val thrown = assertFailsWith<SkillBillRuntimeException> { fixture.gate.run(fixture.state, fixture.request) }
+
+    assertEquals(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, thrown.code)
+    assertContains(assertNotNull(thrown.message), "gate runner exploded")
+    assertFalse(assertNotNull(thrown.message).contains("after interruption"), thrown.message)
+    assertSame(failure, thrown.cause)
   }
 
   @Test
@@ -422,6 +474,10 @@ class GoalQaRepairLoopTest {
       if (request.draft.eventKind == GoalProgressEventKind.PHASE_STARTED) startedPhases += request.draft.workflowPhase
       return true
     }
+  }
+
+  private class ThrowingBuildGateRunner(private val failure: Exception) : ValidationGateRunner {
+    override fun run(request: ValidationGateRunRequest): ValidationGateRunResult = throw failure
   }
 
   private object FailingBuildGateRunner : ValidationGateRunner {
