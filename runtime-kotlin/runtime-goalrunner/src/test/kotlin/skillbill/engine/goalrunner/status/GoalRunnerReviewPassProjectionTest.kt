@@ -43,7 +43,6 @@ class GoalRunnerReviewPassProjectionTest {
         unresolvedFindingCount = 0,
         findings = emptyList(),
       )
-    // The runtime stores each pass's raw review result as JSON text, not as a decoded object.
     val rawReviewResult =
       JsonCodec.mapToJsonString(
         mapOf("status" to "completed", "produced_outputs" to mapOf("review_run_id" to "rvw-subtask-1")),
@@ -85,7 +84,6 @@ class GoalRunnerReviewPassProjectionTest {
     assertFalse(result.degradedDurableRead)
   }
 
-  /** A run imported without raw review text: no finding rows, fetchNumberedFindings rejects it, lanes are stored. */
   private fun lanesOnlyReviews(lanes: List<String>): ReviewRepository =
     Proxy.newProxyInstance(
       ReviewRepository::class.java.classLoader,
