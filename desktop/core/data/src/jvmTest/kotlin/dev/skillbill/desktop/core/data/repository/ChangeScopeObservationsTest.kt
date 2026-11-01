@@ -119,24 +119,79 @@ class ChangeScopeObservationsTest {
   }
 
   @Test
-  fun `outside scope refreshes when head changes without a range change`() = runTest {
+  fun `running outside scope reads once per distinct ranges`() = runTest {
     val port = CountingPort()
     val observations = observations(port)
-    val target = ChangeScopeTarget(
-      "goal", root.toString(), ChangeBaseline.TargetMergeBase(root.toString(), "main"),
-      listOf(ScopeSubtask(1, "one", ScopeSubtaskState.DONE, "start", "end", emptyList())), true,
-    )
-    val states = mutableListOf<ScopeChangesState>()
-    val job = launch { observations.observeScope(target, ChangeScope.Outside, true, Mutex(), CommittedChangeCache()).collect { states += it } }
+    val lock = Mutex()
+    val cache = CommittedChangeCache()
+    val target = outsideTarget("end")
+    val job = launch { observations.observeScope(target, ChangeScope.Outside, true, lock, cache).collect { } }
     runCurrent()
+    advanceTimeBy(12_000)
+    runCurrent()
+    job.cancel()
+    assertEquals(1, port.outsideCalls)
+    val again = launch { observations.observeScope(target, ChangeScope.Outside, true, lock, cache).collect { } }
+    runCurrent()
+    again.cancel()
+    assertEquals(1, port.outsideCalls)
+    val moved = launch { observations.observeScope(outsideTarget("later"), ChangeScope.Outside, true, lock, cache).collect { } }
+    runCurrent()
+    moved.cancel()
+    assertEquals(2, port.outsideCalls)
+  }
+
+  @Test
+  fun `outside file diff reuses the listed outside read`() = runTest {
+    val port = CountingPort()
+    val observations = observations(port)
+    val lock = Mutex()
+    val cache = CommittedChangeCache()
+    val target = outsideTarget("end")
+    val job = launch { observations.observeScope(target, ChangeScope.Outside, true, lock, cache).collect { } }
+    runCurrent()
+    job.cancel()
+    observations.fileDiff(target, ChangeScope.Outside, ChangedFile("Foo.kt", null, ChangeStatus.Modified, 1, 0), lock, cache)
+    assertEquals(1, port.outsideCalls)
+  }
+
+  @Test
+  fun `failed and too many outside reads are not memoized`() = runTest {
+    val port = CountingPort().apply { outsideResult = WorkOutsideCommitsResult.Failed("boom") }
+    val observations = observations(port)
+    val lock = Mutex()
+    val cache = CommittedChangeCache()
+    val target = outsideTarget("end")
+    val file = ChangedFile("Foo.kt", null, ChangeStatus.Modified, 1, 0)
+    observations.fileDiff(target, ChangeScope.Outside, file, lock, cache)
+    observations.fileDiff(target, ChangeScope.Outside, file, lock, cache)
+    assertEquals(2, port.outsideCalls)
+    port.outsideResult = WorkOutsideCommitsResult.TooMany(200)
+    observations.fileDiff(target, ChangeScope.Outside, file, lock, cache)
+    observations.fileDiff(target, ChangeScope.Outside, file, lock, cache)
+    assertEquals(4, port.outsideCalls)
+  }
+
+  @Test
+  fun `non running outside collection reads fresh despite a matching memo`() = runTest {
+    val port = CountingPort()
+    val observations = observations(port)
+    val lock = Mutex()
+    val cache = CommittedChangeCache()
+    val target = outsideTarget("end")
+    observations.observeScope(target, ChangeScope.Outside, false, lock, cache).toList()
     port.outsideResult = WorkOutsideCommitsResult.Listed(
       "base", listOf(WorkOutsideCommit("new", "parent", "new commit", emptyList(), 0, 0)),
     )
-    advanceTimeBy(CHANGE_REFRESH_INTERVAL)
-    runCurrent()
+    val states = observations.observeScope(target, ChangeScope.Outside, false, lock, cache).toList()
+    assertEquals(2, port.outsideCalls)
     assertEquals(listOf("new"), (states.last() as ScopeChangesState.Listed).outsideCommits.map { it.sha })
-    job.cancel()
   }
+
+  private fun outsideTarget(endSha: String) = ChangeScopeTarget(
+    "goal", root.toString(), ChangeBaseline.TargetMergeBase(root.toString(), "main"),
+    listOf(ScopeSubtask(1, "one", ScopeSubtaskState.DONE, "start", endSha, emptyList())), true,
+  )
 
   @Test
   fun `outside file diff parses each matching commit and labels hunks in commit order`() = runTest {
@@ -263,6 +318,7 @@ class ChangeScopeObservationsTest {
     var outsideResult: WorkOutsideCommitsResult = WorkOutsideCommitsResult.Listed("base", emptyList())
     val patches = mutableMapOf<String, String>()
     val patchReads = mutableListOf<String>()
+    var outsideCalls = 0
 
     override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
       changeCalls++
@@ -294,7 +350,10 @@ class ChangeScopeObservationsTest {
       worktreeRoot: String,
       targetBranch: String?,
       subtaskRanges: List<WorkCommitRange>,
-    ): WorkOutsideCommitsResult = outsideResult
+    ): WorkOutsideCommitsResult {
+      outsideCalls++
+      return outsideResult
+    }
   }
 
   private object NoopDiagnostics : Diagnostics {

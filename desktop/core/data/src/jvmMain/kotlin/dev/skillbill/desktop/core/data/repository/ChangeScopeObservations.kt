@@ -38,6 +38,7 @@ import skillbill.ports.workchanges.model.WorkChangeListResult
 import skillbill.ports.workchanges.model.WorkGoalScopesResult
 import skillbill.ports.workchanges.model.WorkOutsideCommitsResult
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 internal const val SCOPES_READ_FAILED = "desktop_work_change_scopes_read_failed"
 
@@ -67,11 +68,17 @@ class ChangeScopeObservations internal constructor(
     data class Committed(val scope: ScopeRead.Committed) : IndividualStatsRead
     data object Unavailable : IndividualStatsRead
   }
+  private data class OutsideKey(val worktreeRoot: String, val targetBranch: String?, val ranges: List<CommitRange>)
+  private class OutsideMemo(val key: OutsideKey, val state: ScopeChangesState.Listed)
 
   private val baseShas = ConcurrentHashMap<ListedBaseKey, String>()
   private val latestSubtaskStates = ConcurrentHashMap<String, SubtaskScopesState.Listed>()
   private val interruptedReadLock = Mutex()
-  private val diffs = ChangeScopeDiffs(runtime, diagnostics, port, io, baseShas, ::readAttributionStats, ::readOutside)
+  // Single-slot memo: Outside depends on HEAD, so it stays out of the app cache and is re-read only on a range change.
+  private val outsideMemo = AtomicReference<OutsideMemo?>(null)
+  private val diffs = ChangeScopeDiffs(runtime, diagnostics, port, io, baseShas, ::readAttributionStats) { target, ranges, lock ->
+    readOutside(target, ranges, lock, useMemo = true)
+  }
 
   fun observeScope(
     target: ChangeScopeTarget,
@@ -83,8 +90,9 @@ class ChangeScopeObservations internal constructor(
     emit(ScopeChangesState.Loading)
     val resolved = resolveScope(target, scope)
     while (true) {
-      emit(readScope(target, resolved, lock, cache))
-      val followsHead = resolved is ScopeRead.Baseline || resolved == ScopeRead.Uncommitted || resolved is ScopeRead.Outside
+      // A non-running collection reads Outside fresh so commits landing after the last subtask show up.
+      emit(readScope(target, resolved, lock, cache, useOutsideMemo = running))
+      val followsHead = resolved is ScopeRead.Baseline || resolved == ScopeRead.Uncommitted
       if (!running || !followsHead) break
       delay(CHANGE_REFRESH_INTERVAL)
     }
@@ -267,6 +275,7 @@ class ChangeScopeObservations internal constructor(
     scopeRead: ScopeRead,
     lock: Mutex,
     cache: CommittedChangeCache,
+    useOutsideMemo: Boolean,
   ): ScopeChangesState = when (scopeRead) {
     is ScopeRead.Baseline -> when (val result = readChanges(scopeRead.baseline, lock)) {
       is Outcome.Failure -> unavailable(result.error)
@@ -283,7 +292,7 @@ class ChangeScopeObservations internal constructor(
     is ScopeRead.Committed -> {
       readCommittedState(target.worktreeRoot, scopeRead, lock, cache)
     }
-    is ScopeRead.Outside -> readOutside(target, scopeRead.ranges, lock)
+    is ScopeRead.Outside -> readOutside(target, scopeRead.ranges, lock, useOutsideMemo)
     is ScopeRead.Unavailable -> ScopeChangesState.Unavailable(ReadProblem.Runtime(scopeRead.reason))
   }
 
@@ -344,14 +353,17 @@ class ChangeScopeObservations internal constructor(
     target: ChangeScopeTarget,
     ranges: List<CommitRange>,
     lock: Mutex,
+    useMemo: Boolean,
   ): ScopeChangesState {
+    val key = OutsideKey(target.worktreeRoot, target.targetBranch(), ranges)
+    if (useMemo) outsideMemo.get()?.takeIf { it.key == key }?.let { return it.state }
     val result = git(lock) { port.outsideCommits(target.worktreeRoot, target.targetBranch(), ranges.map { it.toPort() }) }
     return when (result) {
       is Outcome.Failure -> unavailable(result.error)
       is Outcome.Success -> when (val value = result.value) {
         is WorkOutsideCommitsResult.Listed -> ScopeChangesState.Listed(
           value.commits.aggregate(value.mergeBaseSha), value.commits.map { it.toDomain() },
-        )
+        ).also { outsideMemo.set(OutsideMemo(key, it)) }
         is WorkOutsideCommitsResult.BaseUnavailable -> ScopeChangesState.BaseUnavailable(value.reason)
         is WorkOutsideCommitsResult.NotARepository -> ScopeChangesState.NotARepository(value.worktreeRoot)
         is WorkOutsideCommitsResult.TooMany -> ScopeChangesState.TooManyCommits(value.limit)
