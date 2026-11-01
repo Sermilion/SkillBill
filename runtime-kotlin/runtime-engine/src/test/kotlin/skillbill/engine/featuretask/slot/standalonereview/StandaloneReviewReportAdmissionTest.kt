@@ -9,6 +9,7 @@ import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewCoverageReport
+import skillbill.review.model.ReviewLaneAggregationInput
 import skillbill.review.model.ReviewLaneReviewDisposition
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -72,6 +73,95 @@ class StandaloneReviewReportAdmissionTest {
       )
     assertTrue(complete.admitted, complete.rejectionReasons.joinToString())
     assertFalse(complete.hasIncompleteReviewWarning)
+  }
+
+  @Test
+  fun `coverage without an explicit gap waits for verifier classification`() {
+    val output = "NO_FINDINGS\ncoverage: all changed files reviewed\nverdict: approved"
+
+    val report = StandaloneReviewReportAdmission.admit(output, emptyResult(), false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("approved", report.verdict)
+    assertFalse(report.hasIncompleteReviewWarning)
+    assertTrue(report.warnings.isEmpty())
+    assertEquals("coverage: all changed files reviewed", report.reviewWarnings.single().text)
+    assertFalse(report.reviewWarnings.single().alreadyIncomplete)
+    assertTrue("coverage: all changed files reviewed" in report.registerOutput)
+  }
+
+  @Test
+  fun `delegated integration coverage without an explicit gap waits for verifier classification`() {
+    val result =
+      emptyResult().copy(
+        lane1 = ParallelReviewLaneStatus("codex", true, reviewDisposition = ReviewLaneReviewDisposition.COMPLETE),
+        coverage = ReviewCoverageReport(listOf("security"), emptyList(), true),
+        integration =
+          ReviewIntegrationPassOutcome(
+            commitSequenceDigest = "sequence",
+            terminalOutcome = ReviewIntegrationTerminalOutcome.COMPLETED,
+            summarizedLaneCount = 1,
+            rawOutput = "coverage: all changed files reviewed\nNO_FINDINGS",
+          ),
+      )
+
+    val report = StandaloneReviewReportAdmission.admit("NO_FINDINGS\nverdict: approved", result, false, true)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("approved", report.verdict)
+    assertFalse(report.hasIncompleteReviewWarning)
+    assertTrue(report.warnings.isEmpty())
+    val integrationWarning = report.reviewWarnings.single { it.source == "delegated integration report" }
+    assertFalse(integrationWarning.alreadyIncomplete)
+    assertTrue("coverage: all changed files reviewed" in report.registerOutput)
+  }
+
+  @Test
+  fun `coverage continuations that state a gap remain incomplete`() {
+    val coverage = "coverage: partial\nSome files were not reviewed."
+    val report =
+      StandaloneReviewReportAdmission.admit(
+        "NO_FINDINGS\n$coverage\nverdict: approved",
+        emptyResult(),
+        false,
+      )
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
+    assertTrue(report.hasIncompleteReviewWarning)
+    assertEquals(coverage, report.reviewWarnings.single().text)
+    assertTrue(report.reviewWarnings.single().alreadyIncomplete)
+    assertTrue(coverage in report.warnings)
+  }
+
+  @Test
+  fun `typed delegated coverage remains authoritative when lanes are incomplete`() {
+    val result =
+      emptyResult().copy(
+        coverage =
+          ReviewCoverageReport(
+            cleanLanes = emptyList(),
+            incompleteLanes =
+              listOf(
+                ReviewLaneAggregationInput(
+                  lane = "security",
+                  commitSequenceDigest = "sequence",
+                  disposition = ReviewLaneReviewDisposition.INCOMPLETE,
+                  unreviewedUnits = listOf("src/Auth.kt"),
+                ),
+              ),
+            integrationCompleted = false,
+          ),
+      )
+
+    val report = StandaloneReviewReportAdmission.admit("NO_FINDINGS\nverdict: approved", result, false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
+    assertTrue(report.hasIncompleteReviewWarning)
+    assertTrue(report.reviewWarnings.single().alreadyIncomplete)
+    assertTrue(report.coverage?.contains("Coverage: NOT clean") == true)
+    assertTrue(report.registerOutput.contains("Coverage: NOT clean"), report.registerOutput)
   }
 
   @Test

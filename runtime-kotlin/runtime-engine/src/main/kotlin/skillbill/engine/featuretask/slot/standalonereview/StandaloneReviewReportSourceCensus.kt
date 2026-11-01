@@ -107,10 +107,10 @@ internal object StandaloneReviewReportSourceCensusBuilder {
       val end = blockEnd(position, rejectAmbiguousContinuation = true, keepCoverageContinuations = true)
       val text = lines.subList(position, end).joinToString("\n").trimEnd()
       coverage += text
-      val cleanCoverage = isCleanCoverageBlock(text)
-      if (!cleanCoverage) warnings += text
-      reviewEvidence += StandaloneReviewReviewEvidence(text, source, !cleanCoverage || isIncompleteReviewWarning(text))
-      hasIncompleteReviewWarning = hasIncompleteReviewWarning || !cleanCoverage
+      val incomplete = isIncompleteReviewWarning(text)
+      if (incomplete) warnings += text
+      reviewEvidence += StandaloneReviewReviewEvidence(text, source, incomplete)
+      hasIncompleteReviewWarning = hasIncompleteReviewWarning || incomplete
       val line = lines[position].trim()
       if (isFindingProse(line)) {
         rejections += "line ${position + 1}: coverage also contains a finding candidate"
@@ -281,10 +281,6 @@ internal fun isIncompleteReviewWarning(text: String): Boolean =
       INCOMPLETE_SCOPE_PATTERN.containsMatchIn(positiveText)
   }
 
-private fun isCleanCoverageBlock(text: String): Boolean =
-  CLEAN_COVERAGE_PATTERN.containsMatchIn(text.lineSequence().firstOrNull().orEmpty()) &&
-    !isIncompleteReviewWarning(text)
-
 private val INCOMPLETE_REVIEW_PATTERN =
   Regex(
     "\\breview (?:was |is )?incomplete\\b|\\bincomplete review\\b|\\bnot (?:fully )?reviewed\\b|" +
@@ -352,7 +348,6 @@ private val PARTIAL_CLEAN_PROSE_PATTERN =
       "(?:findings|issues|bugs)\\.?",
     RegexOption.IGNORE_CASE,
   )
-private val CLEAN_COVERAGE_PATTERN = Regex("^coverage:\\s*clean\\b", RegexOption.IGNORE_CASE)
 private val REVIEW_CONTEXT_PATTERN =
   Regex(
     "^(?:I reviewed|I inspected|I checked|Reviewed|Review completed)(?: the (?:change|patch|code|repository))?\\.?$|" +
