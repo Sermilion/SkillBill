@@ -19,6 +19,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.review.model.NumberedFinding
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.model.ReviewLaneResolutionState
 import skillbill.review.model.ReviewLaneReviewDisposition
@@ -36,6 +37,56 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class GoalRunnerReviewPassProjectionTest {
+  @Test
+  fun `a running review projects ordered lane dispositions without adding a completed pass`() {
+    val state = completedState()
+    val lanes =
+      listOf(
+        reviewLane("lane-b", order = 2, disposition = ReviewLaneReviewDisposition.INCOMPLETE),
+        reviewLane("lane-a", order = 1, disposition = ReviewLaneReviewDisposition.COMPLETE),
+      )
+
+    val results = runningReviewProjection(state, passNumber = 2, runId = "rvw-running", lanes = lanes)
+
+    assertEquals(1, results.reviewPasses.single().passNumber)
+    assertEquals(2, results.runningReviewPass?.passNumber)
+    assertEquals(
+      listOf("lane-a" to true, "lane-b" to false),
+      results.runningReviewPass?.lanes?.map { it.name to it.finished },
+    )
+  }
+
+  @Test
+  fun `a stale running review record does not reproject a completed pass`() {
+    val results = runningReviewProjection(completedState(), passNumber = 1, runId = "rvw-running", lanes = emptyList())
+
+    assertNull(results.runningReviewPass)
+  }
+
+  @Test
+  fun `a failed running lane read is degraded and a missing run id stays empty`() {
+    val initial =
+      GoalSubtaskReviewState.initial(
+        reviewBaseSha = "a".repeat(40),
+        baselineUntrackedPaths = emptyList(),
+        codeReviewMode = CodeReviewExecutionMode.AUTO,
+      )
+    val failed =
+      runningReviewProjection(
+        initial,
+        passNumber = 1,
+        runId = "rvw-running",
+        reviews = runningLanesReviews(emptyList(), failLanes = true),
+      )
+    val missingRun = runningReviewProjection(initial, passNumber = 1, runId = null, lanes = emptyList())
+
+    assertEquals("subtask_review_lanes", failed.degradedReadSource)
+    assertEquals(1, failed.runningReviewPass?.passNumber)
+    assertEquals(emptyList(), failed.runningReviewPass?.lanes)
+    assertNull(missingRun.degradedReadSource)
+    assertEquals(emptyList(), missingRun.runningReviewPass?.lanes)
+  }
+
   @Test
   fun `a completed subtask projects its stored review pass with the lanes its review run recorded`() {
     val workflowId = "wftr-reviewed-subtask"
@@ -195,6 +246,17 @@ class GoalRunnerReviewPassProjectionTest {
       findings = listOf(finding),
     )
 
+  private fun completedState(): GoalSubtaskReviewState =
+    GoalSubtaskReviewState.initial(
+      reviewBaseSha = "a".repeat(40),
+      baselineUntrackedPaths = emptyList(),
+      codeReviewMode = CodeReviewExecutionMode.AUTO,
+    ).reserveNextPass().completeReservedPass(
+      verdict = FeatureTaskRuntimeVerdict.APPROVED,
+      unresolvedFindingCount = 0,
+      findings = emptyList(),
+    )
+
   private fun projectedReview(
     state: GoalSubtaskReviewState,
     reviews: ReviewRepository,
@@ -212,6 +274,49 @@ class GoalRunnerReviewPassProjectionTest {
         manifestStore = InMemoryGoalManifestStore(manifest),
         outcomeStore = RecordingOutcomeStore(),
         phaseRecorder = testPhaseRecorder(FakeDatabaseSessionFactory(states), testWorkflowSnapshotValidator),
+        database = ReviewStoreDatabase(FakeDatabaseSessionFactory(InMemoryWorkflowStates()), reviews),
+      ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
+    ).completedSubtaskPhaseResults.single()
+  }
+
+  private fun runningReviewProjection(
+    state: GoalSubtaskReviewState,
+    passNumber: Int,
+    runId: String?,
+    lanes: List<ReviewRunLane> = emptyList(),
+    reviews: ReviewRepository = runningLanesReviews(lanes),
+  ): GoalRunnerSubtaskPhaseResults {
+    val workflowId = "wftr-running-subtask"
+    val states = InMemoryWorkflowStates()
+    states.saveFeatureTaskWorkflow(
+      goalReviewWorkflowRecord(
+        workflowId,
+        state,
+        JsonCodec.mapToJsonString(mapOf("status" to "completed")),
+        includeRawResult = state.completedPassCount > 0,
+      ),
+      RUNTIME,
+    )
+    val db = FakeDatabaseSessionFactory(states)
+    val recorder = testPhaseRecorder(db, testWorkflowSnapshotValidator)
+    recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = workflowId,
+        phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
+        status = "running",
+        attemptCount = 1,
+        resolvedAgentId = "claude",
+        finished = false,
+        reviewPassNumber = passNumber,
+        reviewRunId = runId,
+      ),
+    )
+    val manifest = singleSubtaskManifest(workflowId, status = "in_progress")
+    return requireNotNull(
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest),
+        outcomeStore = RecordingOutcomeStore(),
+        phaseRecorder = recorder,
         database = ReviewStoreDatabase(FakeDatabaseSessionFactory(InMemoryWorkflowStates()), reviews),
       ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
     ).completedSubtaskPhaseResults.single()
@@ -265,6 +370,34 @@ class GoalRunnerReviewPassProjectionTest {
         else -> error("${method.name} is not exercised by GoalRunnerReviewPassProjectionTest.")
       }
     } as ReviewRepository
+
+  private fun runningLanesReviews(
+    lanes: List<ReviewRunLane>,
+    failLanes: Boolean = false,
+  ): ReviewRepository =
+    Proxy.newProxyInstance(
+      ReviewRepository::class.java.classLoader,
+      arrayOf(ReviewRepository::class.java),
+    ) { _, method, args ->
+      when (method.name) {
+        "fetchFindingStatuses" -> emptyMap<String, ReviewFindingStatus>()
+        "fetchReviewRunLanes" -> {
+          check(!failLanes) { "Lane read unavailable." }
+          if (args?.firstOrNull() == "rvw-running") lanes else emptyList<ReviewRunLane>()
+        }
+        "fetchNumberedFindings" -> emptyList<NumberedFinding>()
+        else -> error("${method.name} is not exercised by GoalRunnerReviewPassProjectionTest.")
+      }
+    } as ReviewRepository
+
+  private fun reviewLane(
+    name: String,
+    order: Int,
+    disposition: ReviewLaneReviewDisposition,
+  ) = ReviewRunLane(
+    name, "kotlin", name, 0, false, order, listOf("kotlin"),
+    ReviewLaneResolutionState.RESOLVED, disposition,
+  )
 
   private class ReviewStoreDatabase(
     private val inner: DatabaseSessionFactory,

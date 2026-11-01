@@ -151,7 +151,12 @@ data class SubtaskPhaseResults(
   val audit: PhaseConclusion?,
   val review: PhaseConclusion?,
   val degradedReadSource: String? = null,
+  val runningReviewPass: RunningReviewPass? = null,
 )
+
+data class RunningReviewPass(val passNumber: Int, val lanes: List<RunningReviewLane>)
+
+data class RunningReviewLane(val name: String, val finished: Boolean)
 
 /** One goal subtask review pass, its findings as the review phase shows them; [lanes] is empty when the pass's review run is not stored. */
 data class ReviewPass(

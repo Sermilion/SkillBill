@@ -7,6 +7,7 @@ internal object GoalRunnerSubtaskReadSource {
   const val PHASE_RESULTS = "subtask_phase_results"
   const val REVIEW_RAW_RESULTS = "subtask_review_raw_results"
   const val REVIEW_FINDINGS = "subtask_review_findings"
+  const val REVIEW_LANES = "subtask_review_lanes"
 }
 
 internal class SubtaskReadDegradation(

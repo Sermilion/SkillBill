@@ -58,6 +58,9 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
+import skillbill.review.model.NumberedFinding
+import skillbill.review.model.ReviewFindingStatus
+import skillbill.review.parsing.ReviewFindingActionability
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -666,6 +669,7 @@ public class GoalRunnerStatusProjectionAssembler(
         )
         null
       }
+    val reviewRecord = readPhaseRecord(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, degradation)
     return GoalRunnerSubtaskPhaseResults(
       subtaskId = subtask.id,
       reviewPasses =
@@ -692,20 +696,20 @@ public class GoalRunnerStatusProjectionAssembler(
             lanes = stored?.lanes.orEmpty(),
           )
         },
-      review =
-        readPhaseConclusion(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, degradation),
+      review = reviewRecord?.toConclusion(degradation),
       audit =
         readPhaseConclusion(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, degradation),
+      runningReviewPass = runningReviewPass(reviewRecord, reviewState, database, degradation),
     )
   }
 
-  private fun readPhaseConclusion(
+  private fun readPhaseRecord(
     artifacts: DurableWorkflowArtifacts,
     phaseId: String,
     degradation: SubtaskReadDegradation,
-  ): GoalRunnerPhaseConclusion? =
+  ): FeatureTaskRuntimePhaseRecord? =
     catchingNonCancellation {
-      artifacts.phaseRecord(phaseId)?.toConclusion(degradation)
+      artifacts.phaseRecord(phaseId)
     }.getOrElse { error ->
       degradation.record(
         source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
@@ -715,6 +719,12 @@ public class GoalRunnerStatusProjectionAssembler(
       )
       null
     }
+
+  private fun readPhaseConclusion(
+    artifacts: DurableWorkflowArtifacts,
+    phaseId: String,
+    degradation: SubtaskReadDegradation,
+  ): GoalRunnerPhaseConclusion? = readPhaseRecord(artifacts, phaseId, degradation)?.toConclusion(degradation)
 
   private fun reviewRawResults(
     artifacts: Any,
@@ -997,3 +1007,21 @@ public class GoalRunnerStatusProjectionAssembler(
       null
     }
 }
+
+internal fun storedReviewPassFindings(
+  findings: List<NumberedFinding>,
+  statuses: Map<String, ReviewFindingStatus>,
+): List<GoalRunnerReviewFinding> =
+  findings
+    .filter { ReviewFindingActionability.isActionable(it.claimVerdict, it.scopeDisposition) }
+    .map { finding ->
+      GoalRunnerReviewFinding(
+        ref = finding.findingId,
+        severity = finding.severity,
+        confidence = finding.confidence.takeIf(String::isNotBlank),
+        specialist = finding.laneSkillName,
+        location = finding.location.takeIf(String::isNotBlank),
+        description = finding.description,
+        status = statuses[finding.findingId] ?: ReviewFindingStatus.OPEN,
+      )
+    }

@@ -175,6 +175,17 @@ data class GoalRunnerSubtaskPhaseResults(
   val review: GoalRunnerPhaseConclusion? = null,
   val audit: GoalRunnerPhaseConclusion? = null,
   val degradedReadSource: String? = null,
+  val runningReviewPass: GoalRunnerRunningReviewPass? = null,
+)
+
+data class GoalRunnerRunningReviewPass(
+  val passNumber: Int,
+  val lanes: List<GoalRunnerRunningReviewLane>,
+)
+
+data class GoalRunnerRunningReviewLane(
+  val name: String,
+  val finished: Boolean,
 )
 
 data class GoalRunnerReviewPassResult(

@@ -32,6 +32,8 @@ import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.ReviewReport
 import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
+import dev.skillbill.desktop.core.domain.model.RunningReviewLane
+import dev.skillbill.desktop.core.domain.model.RunningReviewPass
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SubtaskDependency
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
@@ -216,6 +218,9 @@ internal fun GoalRunnerSubtaskPhaseResults.toDomain(): SubtaskPhaseResults = Sub
   audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
   review?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
   degradedReadSource,
+  runningReviewPass?.let { pass ->
+    RunningReviewPass(pass.passNumber, pass.lanes.map { lane -> RunningReviewLane(lane.name, lane.finished) })
+  },
 )
 
 private fun ExecutionReasonRestoration.toDomain(): ReasonRestoration = when (this) {

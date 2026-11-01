@@ -3,6 +3,8 @@ package dev.skillbill.desktop.feature.detail
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.ReviewPass
+import dev.skillbill.desktop.core.domain.model.RunningReviewLane
+import dev.skillbill.desktop.core.domain.model.RunningReviewPass
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,6 +35,23 @@ class SubtaskResultsStateTest {
     assertEquals(
       SubtaskResultsState.Shown(SubtaskReviewState.Passes(listOf(pass)), SubtaskAuditState.Conclusion(null)),
       subtaskResultsState(StatusKind.Completed, empty.copy(reviewPasses = listOf(pass)), "goal_status"),
+    )
+  }
+
+  @Test
+  fun `a running pass is review content and unreadable still takes priority`() {
+    val running = RunningReviewPass(2, listOf(RunningReviewLane("lane-a", false)))
+    assertEquals(
+      SubtaskResultsState.Shown(SubtaskReviewState.Passes(emptyList(), running), SubtaskAuditState.RunsAfterReview),
+      subtaskResultsState(StatusKind.Active, empty.copy(runningReviewPass = running), null),
+    )
+    assertEquals(
+      SubtaskResultsState.Unreadable("subtask_review_lanes"),
+      subtaskResultsState(
+        StatusKind.Active,
+        empty.copy(runningReviewPass = running, degradedReadSource = "subtask_review_lanes"),
+        null,
+      ),
     )
   }
 

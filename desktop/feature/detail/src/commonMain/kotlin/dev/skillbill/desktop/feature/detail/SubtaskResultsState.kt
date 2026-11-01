@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.detail
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.ReviewPass
+import dev.skillbill.desktop.core.domain.model.RunningReviewPass
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 
 /** What a subtask's Review and Audit area shows. */
@@ -17,7 +18,10 @@ internal sealed interface SubtaskResultsState {
 }
 
 internal sealed interface SubtaskReviewState {
-  data class Passes(val passes: List<ReviewPass>) : SubtaskReviewState
+  data class Passes(
+    val passes: List<ReviewPass>,
+    val runningReviewPass: RunningReviewPass? = null,
+  ) : SubtaskReviewState
   data object RunsAfterImplementation : SubtaskReviewState
   data object Omitted : SubtaskReviewState
 }
@@ -37,10 +41,11 @@ internal fun subtaskResultsState(kind: StatusKind, results: SubtaskPhaseResults?
   if (results == null && kind != StatusKind.Pending && kind != StatusKind.Skipped) return SubtaskResultsState.Loading
   val upcoming = kind == StatusKind.Pending || kind == StatusKind.Active || kind == StatusKind.Blocked
   val passes = results?.reviewPasses.orEmpty()
+  val runningReviewPass = results?.runningReviewPass
   val audit = results?.audit
   return SubtaskResultsState.Shown(
     review = when {
-      passes.isNotEmpty() -> SubtaskReviewState.Passes(passes)
+      passes.isNotEmpty() || runningReviewPass != null -> SubtaskReviewState.Passes(passes, runningReviewPass)
       upcoming -> SubtaskReviewState.RunsAfterImplementation
       else -> SubtaskReviewState.Omitted
     },
