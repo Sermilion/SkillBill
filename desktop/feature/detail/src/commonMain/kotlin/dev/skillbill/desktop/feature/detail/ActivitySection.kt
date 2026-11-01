@@ -77,7 +77,7 @@ internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modif
   Column(modifier.fillMaxWidth()) {
     Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
       ActivityText("Activity", size = 13f, sans = true, color = SkillBillTheme.colors.fg)
-      ActivityText(groups.sumOf { it.phases.size }.toString(), size = 13f, sans = true, faint = true)
+      ActivityText(groups.sumOf { it.phases.size + it.before.size + it.after.size }.toString(), size = 13f, sans = true, faint = true)
       Spacer(Modifier.weight(1f))
       val anyClosed = shown.any { !isOpen(it) }
       ActivityAction(if (anyClosed) "Expand all" else "Collapse all") { expanded = expanded + shown.associate { it.id to anyClosed } }

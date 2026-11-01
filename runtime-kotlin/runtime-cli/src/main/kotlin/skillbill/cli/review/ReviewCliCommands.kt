@@ -39,6 +39,9 @@ class FeatureStatsCommands(
 @Inject
 class ReviewTopLevelCommands(
   importReviewCommand: ImportReviewCommand,
+  prepareReviewCommand: PrepareReviewCommand,
+  startReviewAction: StartReviewFindingActionCommand,
+  finishReviewAction: FinishReviewFindingActionCommand,
   recordFeedbackCommand: RecordFeedbackCommand,
   triageCommand: TriageCommand,
   statsCommand: ReviewStatsCommand,
@@ -48,6 +51,9 @@ class ReviewTopLevelCommands(
   val commands =
     listOf(
       importReviewCommand,
+      prepareReviewCommand,
+      startReviewAction,
+      finishReviewAction,
       recordFeedbackCommand,
       triageCommand,
       statsCommand,

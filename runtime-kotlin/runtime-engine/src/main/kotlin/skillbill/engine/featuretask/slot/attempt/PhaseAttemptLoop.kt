@@ -212,6 +212,8 @@ internal object PhaseAttemptSteps {
       attempt.criterionTurnContinuationReason != null -> phaseAttempts.settleCriterionTurn(context)
       attempt.findingsOwed != null ->
         phaseAttempts.settleFindingsOwed(recorder, context, requireNotNull(attempt.findingsOwed))
+      attempt.planBundleRejected != null ->
+        phaseAttempts.settlePlanBundleRejected(recorder, context, requireNotNull(attempt.planBundleRejected))
       attempt.retryableTerminal != null ->
         phaseAttempts.settleRetryableTerminal(recorder, context, requireNotNull(attempt.retryableTerminal))
       else ->

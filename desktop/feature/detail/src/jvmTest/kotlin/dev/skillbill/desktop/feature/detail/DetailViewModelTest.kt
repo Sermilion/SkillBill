@@ -115,7 +115,9 @@ class DetailViewModelTest {
     assertEquals(emptyList(), changes.observed)
     assertEquals(emptyList(), effects)
     assertTrue(!viewModel.state.value.header.showsChanges)
-    assertTrue(review.copy(control = review.control.copy(phaseId = "implement")).showsChanges)
+    assertTrue(!review.copy(control = review.control.copy(phaseId = "plan")).showsChanges)
+    assertTrue(!review.copy(control = review.control.copy(phaseId = "implement")).showsChanges)
+    assertTrue(review.copy(kind = WorkKind.Goal, standaloneExecution = false).showsChanges)
   }
 
   @Test
@@ -251,7 +253,7 @@ class DetailViewModelTest {
   }
 
   @Test
-  fun `a phase item that goes idle is observed again without polling and never reads subtask scopes`() = runTest {
+  fun `a phase item that goes idle keeps changes hidden and never reads subtask scopes`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = item.copy(kind = WorkKind.Phase)
     val board = FakeWorkBoardRepository()
@@ -264,12 +266,8 @@ class DetailViewModelTest {
 
     board.state.value = loadedBoard(items = listOf(phase.copy(running = false)))
     advanceUntilIdle()
-    val listed = ChangesState.Listed(ChangeSet("base", emptyList(), 0, 0))
-    changes.flow.emit(listed)
-    advanceUntilIdle()
-
-    assertEquals(listOf<Pair<ChangeBaseline?, Boolean>>(baseline to true, baseline to false), changes.observed)
-    assertEquals(listed, viewModel.state.value.changes.state)
+    assertEquals(emptyList(), changes.observed)
+    assertTrue(!viewModel.state.value.header.showsChanges)
     assertEquals(0, scopes.subtaskReads)
   }
 

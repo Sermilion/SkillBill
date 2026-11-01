@@ -220,6 +220,7 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       pipelineSection(item, detail)
       if (item.showsChanges) changesSection(state.changes, onAction)
       briefingSection(item, detail, onAction)
+      reviewActionsSection(item, detail, onAction)
       standaloneResultSection(item, detail)
       qaReportSection(item, detail, onAction)
       if (item.kind != WorkKind.Goal) {

@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.review.service.StandaloneReviewReportReader
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.work.pagination.WorkDetailAnchor
@@ -155,6 +156,7 @@ public fun reviewReport(
   val statuses = unitOfWork.reviews.fetchFindingStatuses(runId)
   return report.copy(
     lanes = recorded.ifEmpty { report.lanes },
+    findingActions = unitOfWork.reviews.findingActions(runId),
     findings = report.findings.map { finding -> statuses[finding.ref]?.let { finding.copy(status = it) } ?: finding },
   )
 }

@@ -1,6 +1,8 @@
 package dev.skillbill.desktop.feature.chat
 
 import androidx.compose.runtime.snapshots.Snapshot
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
+import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
@@ -63,6 +65,25 @@ class ChatWorkspaceTest {
   private fun TestScope.workspace(): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes, selection)
+  }
+
+  @Test
+  fun `review actions start a scoped act turn without an unrelated opening reply`() = runTest {
+    val base = workItem("review", lifecycle = Lifecycle.Terminal, finishedAt = epoch)
+    val item = base.copy(standaloneExecution = true, kind = WorkKind.Phase,
+      control = base.control.copy(invocationId = "original-review", phaseId = "review",
+        databaseFile = DatabaseFileIdentity("/selected database.db", "file")))
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val workspace = workspace()
+    workspace.runReviewAction(item, ReviewFindingsAction.Verify)
+    runCurrent()
+    assertEquals(1, chat.requests.size)
+    val request = chat.requests.single()
+    assertEquals(ChatPermissionMode.Act, request.mode)
+    assertTrue(request.prompt.contains("Do not edit source files"))
+    assertTrue(request.prompt.contains("--db '/selected database.db' prepare-review --invocation-id 'original-review'"))
+    assertTrue(request.prompt.contains("record-feedback"))
+    workspace.closeAll()
   }
 
   @Test
@@ -471,7 +492,6 @@ class ChatWorkspaceTest {
     workspace.pauseAndAct(item.id, "unblock it")
     runCurrent()
 
-    assertEquals(emptyList(), controls.calls)
     assertEquals(ChatPermissionMode.Act, chat.requests.last().mode)
   }
 

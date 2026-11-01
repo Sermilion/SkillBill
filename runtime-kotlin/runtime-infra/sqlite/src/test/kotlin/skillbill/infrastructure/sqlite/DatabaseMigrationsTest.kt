@@ -2488,4 +2488,5 @@ private val expectedMigrationDefinitions =
     94 to "add-goal-continuation-columns",
     95 to "rebuild-work-board-readable-phase-titles",
     96 to "record-standalone-review-run-id",
+    97 to "record-review-finding-actions",
   )

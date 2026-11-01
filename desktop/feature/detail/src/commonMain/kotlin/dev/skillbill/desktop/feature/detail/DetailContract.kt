@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -87,6 +88,7 @@ sealed interface ListLoad {
 data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?, val next: WorkItem?)
 
 sealed interface DetailAction {
+  data class ReviewFindings(val action: ReviewFindingsAction) : DetailAction
   data class LoadMore(val list: DetailList) : DetailAction
   data object Next : DetailAction
   data object Previous : DetailAction
@@ -114,6 +116,7 @@ sealed interface DetailAction {
 }
 
 sealed interface DetailEffect {
+  data class ReviewFindings(val item: WorkItem, val action: ReviewFindingsAction) : DetailEffect
   data class OpenItem(val item: WorkItem) : DetailEffect
   data class OpenRoute(val route: AppRoute) : DetailEffect
   data class CopyToClipboard(val text: String) : DetailEffect

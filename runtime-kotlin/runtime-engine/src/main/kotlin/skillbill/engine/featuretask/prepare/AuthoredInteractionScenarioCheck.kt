@@ -13,34 +13,32 @@ internal object AuthoredInteractionScenarioCheck {
   private const val SUBTASK_SCENARIO_CRITERION_THRESHOLD = 2
   private const val TRANSITIONAL_BUNDLE_SUBTASK_THRESHOLD = 2
 
-  fun requireSubtaskSections(
+  fun subtaskProblem(
     index: Int,
     specText: String,
-  ) {
+  ): InvalidFeatureSpecPreparationRequestError? {
     val fieldPath = "subtasks[$index].interaction_scenarios"
-    when (val result = parse(specText, InteractionScenarioSpecContext.Subtask)) {
-      is InteractionScenarioParseResult.Rejected -> reject(fieldPath, result.issues.first())
+    return when (val result = parse(specText, InteractionScenarioSpecContext.Subtask)) {
+      is InteractionScenarioParseResult.Rejected -> rejection(fieldPath, result.issues.first())
       is InteractionScenarioParseResult.Parsed ->
-        if (!result.scenariosPresent && criterionCount(specText) >= SUBTASK_SCENARIO_CRITERION_THRESHOLD) {
-          throw InvalidFeatureSpecPreparationRequestError(
-            fieldPath = fieldPath,
-            reason = "a subtask spec with two or more criteria needs an `## Interaction Scenarios` section.",
-          )
-        }
+        InvalidFeatureSpecPreparationRequestError(
+          fieldPath = fieldPath,
+          reason = "a subtask spec with two or more criteria needs an `## Interaction Scenarios` section.",
+        ).takeIf { !result.scenariosPresent && criterionCount(specText) >= SUBTASK_SCENARIO_CRITERION_THRESHOLD }
     }
   }
 
-  fun checkParentSections(
+  fun parentProblem(
     request: ParentSectionCheck,
     onWarning: (String) -> Unit,
-  ) {
+  ): InvalidFeatureSpecPreparationRequestError? {
     val context = InteractionScenarioSpecContext.Parent(request.subtaskIds)
     val result = parse(request.specText, context)
     if (!request.rewritable) {
       protectedParentProblem(result)?.let { onWarning("${request.parentLabel} interaction sections ignored: $it") }
-      return
+      return null
     }
-    when (result) {
+    return when (result) {
       is InteractionScenarioParseResult.Rejected -> {
         val issue = result.issues.first()
         val fieldPath =
@@ -49,16 +47,24 @@ internal object AuthoredInteractionScenarioCheck {
           } else {
             "parent.interaction_scenarios"
           }
-        reject(fieldPath, issue)
+        rejection(fieldPath, issue)
       }
       is InteractionScenarioParseResult.Parsed ->
-        if (request.subtaskIds.size >= TRANSITIONAL_BUNDLE_SUBTASK_THRESHOLD && !result.regressionsPresent) {
-          throw InvalidFeatureSpecPreparationRequestError(
-            fieldPath = "parent.transitional_regressions",
-            reason = "a parent of a bundle with two or more subtasks needs `## Transitional Regressions`.",
-          )
-        }
+        InvalidFeatureSpecPreparationRequestError(
+          fieldPath = "parent.transitional_regressions",
+          reason = "a parent of a bundle with two or more subtasks needs `## Transitional Regressions`.",
+        ).takeIf { request.subtaskIds.size >= TRANSITIONAL_BUNDLE_SUBTASK_THRESHOLD && !result.regressionsPresent }
     }
+  }
+
+  fun requireNoProblems(problems: List<AuthoredScenarioProblem>) {
+    val first = problems.firstOrNull() ?: return
+    val others = problems.drop(1).map(AuthoredScenarioProblem::specFile)
+    val alsoFailed = if (others.isEmpty()) "" else " The same check also failed for: ${others.joinToString()}."
+    throw InvalidFeatureSpecPreparationRequestError(
+      fieldPath = first.error.fieldPath,
+      reason = "${first.specFile}: ${first.error.reason}$alsoFailed",
+    )
   }
 
   private fun protectedParentProblem(result: InteractionScenarioParseResult): String? =
@@ -79,15 +85,20 @@ internal object AuthoredInteractionScenarioCheck {
       it.startsWith(GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX)
     }.size
 
-  private fun reject(
+  private fun rejection(
     fieldPath: String,
     issue: InteractionScenarioIssue,
-  ): Nothing =
-    throw InvalidFeatureSpecPreparationRequestError(
+  ): InvalidFeatureSpecPreparationRequestError =
+    InvalidFeatureSpecPreparationRequestError(
       fieldPath = fieldPath,
       reason = "${issue.fieldPath}: ${issue.reason}",
     )
 }
+
+internal data class AuthoredScenarioProblem(
+  public val specFile: String,
+  public val error: InvalidFeatureSpecPreparationRequestError,
+)
 
 internal data class ParentSectionCheck(
   public val specText: String,

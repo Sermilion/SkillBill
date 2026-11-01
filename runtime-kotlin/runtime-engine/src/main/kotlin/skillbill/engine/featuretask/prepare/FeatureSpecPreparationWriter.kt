@@ -115,6 +115,7 @@ public class FeatureSpecPreparationWriter(
     }
     val subtasks = loaded.manifest.subtasks
     validateAuthoredOrder(subtasks)
+    val scenarioProblems = mutableListOf<AuthoredScenarioProblem>()
     subtasks.forEachIndexed { index, subtask ->
       val subtaskPath = store.resolveSpecPath(subtask.specPath, repoRoot).normalize()
       if (!subtaskPath.startsWith(parentSpecPath.parent)) {
@@ -122,11 +123,18 @@ public class FeatureSpecPreparationWriter(
       }
       val subtaskText = authoredText("subtasks[$index]", subtaskPath)
       requireAcceptanceList("subtasks[$index].acceptance_criteria", subtaskText.lines())
-      AuthoredInteractionScenarioCheck.requireSubtaskSections(index, subtaskText)
+      AuthoredInteractionScenarioCheck.subtaskProblem(index, subtaskText)?.let { error ->
+        scenarioProblems += AuthoredScenarioProblem(subtaskPath.fileName.toString(), error)
+      }
     }
     val parentCheck =
       ParentSectionCheck(parentText, parentRelativePath, subtasks.map { it.id }.toSet(), parentRewritable)
-    AuthoredInteractionScenarioCheck.checkParentSections(parentCheck, onParentWarning)
+    val parentWarnings = mutableListOf<String>()
+    AuthoredInteractionScenarioCheck.parentProblem(parentCheck, parentWarnings::add)?.let { error ->
+      scenarioProblems += AuthoredScenarioProblem(parentSpecPath.fileName.toString(), error)
+    }
+    AuthoredInteractionScenarioCheck.requireNoProblems(scenarioProblems)
+    parentWarnings.forEach(onParentWarning)
     return FeatureSpecWriteResult(
       mode = FeatureSpecPreparationMode.DECOMPOSED,
       parentSpecPath = parentRelativePath,

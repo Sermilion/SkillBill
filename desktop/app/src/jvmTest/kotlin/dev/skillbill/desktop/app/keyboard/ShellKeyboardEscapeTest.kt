@@ -4,6 +4,7 @@ import dev.skillbill.desktop.app.command.CommandMenuState
 import dev.skillbill.desktop.app.navigation.WindowNavigator
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkControlIdentity
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
@@ -63,6 +64,8 @@ class ShellKeyboardEscapeTest {
     override val shownChatId = MutableStateFlow<String?>(null)
 
     override fun toggleChat(item: WorkItem?) = Unit
+
+    override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) = Unit
 
     override fun openChat(item: WorkItem) = Unit
 

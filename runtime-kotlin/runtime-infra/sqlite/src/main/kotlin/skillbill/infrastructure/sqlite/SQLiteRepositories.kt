@@ -16,6 +16,7 @@ import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
 import skillbill.infrastructure.sqlite.review.accounting.upsertReviewAccounting
 import skillbill.infrastructure.sqlite.review.core.rejectedFindingOutcomeTypes
 import skillbill.infrastructure.sqlite.review.stage.ReviewRuntime
+import skillbill.infrastructure.sqlite.review.stage.SQLiteReviewFindingActions
 import skillbill.infrastructure.sqlite.review.stats.ReviewFinishedTelemetryUpdateRequest
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
 import skillbill.infrastructure.sqlite.review.stats.TriageRuntime
@@ -59,6 +60,7 @@ import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewRepositoryStatsSnapshot
+import skillbill.ports.review.repository.ReviewFindingActionRepository
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.review.repository.ReviewRunCompletenessRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
@@ -368,6 +370,7 @@ internal class SQLiteReviewRepository(
   private val runtimeVersion: String,
   private val diagnostics: RuntimeDiagnostics,
 ) : ReviewRepository,
+  ReviewFindingActionRepository by SQLiteReviewFindingActions(connection),
   WorkflowStatsRepository by SQLiteWorkflowStatsRepository(connection, diagnostics),
   ReviewRunCompletenessRepository by SQLiteReviewRunCompletenessRepository(connection, clock) {
   override fun saveAccounting(record: ReviewAccountingRecord) = upsertReviewAccounting(connection, record)

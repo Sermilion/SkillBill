@@ -16,7 +16,7 @@ import dev.skillbill.desktop.core.domain.model.WorkKind
 import kotlin.time.Instant
 
 internal val WorkItem.showsChanges: Boolean
-  get() = !(standaloneExecution && control.phaseId == "review")
+  get() = kind == WorkKind.Goal
 
 /** "d MMM HH:mm"-style formatting in the system time zone. */
 internal expect fun formatInstant(instant: Instant, pattern: String): String

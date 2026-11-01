@@ -112,7 +112,8 @@ internal fun standaloneActivity(item: WorkItem, detail: Detail): List<ActivityGr
   }
   return listOf(ActivityGroup(item.id, null, rowKey(item),
     if (item.running) ActivityStatus.RUNNING else if (detail.incident != null) ActivityStatus.BLOCKED else ActivityStatus.COMPLETE,
-    item.startedAt, finishedAt(item), phases, blocks))
+    item.startedAt, finishedAt(item), phases, blocks,
+    after = detail.executionHistory.flatMap { it.reviewReport?.findingActivity.orEmpty() }.sortedBy { it.at }))
 }
 
 internal fun activityIdleMilliseconds(groups: List<ActivityGroup>, now: Instant): Long {

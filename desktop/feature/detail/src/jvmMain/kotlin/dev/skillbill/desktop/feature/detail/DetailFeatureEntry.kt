@@ -64,6 +64,7 @@ class DetailFeatureEntry(
           is DetailEffect.ShowToast -> toasts.show(effect.message)
           is DetailEffect.CopyToClipboard -> copy(effect.text)
           is DetailEffect.OpenChangesWindow -> changesWindows.open(effect.item, effect.scope)
+          is DetailEffect.ReviewFindings -> chat.runReviewAction(effect.item, effect.action)
         }
       }
     }

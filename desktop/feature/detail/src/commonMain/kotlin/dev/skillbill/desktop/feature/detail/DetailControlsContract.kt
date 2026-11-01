@@ -42,6 +42,7 @@ data class ControlsUiState(
 )
 
 sealed interface ControlsAction : DetailAction {
+  data object ImplementPlan : ControlsAction
   data object PauseAfterSubtask : ControlsAction
   data object PauseNow : ControlsAction
   data object Launch : ControlsAction

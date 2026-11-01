@@ -186,6 +186,11 @@ class DetailViewModel(
       DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
       DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
       is DetailAction.OpenChangesWindow -> openChangesWindow(action.scope)
+      is DetailAction.ReviewFindings -> {
+        val header = state.value.header
+        val detail = loadedDetail() ?: return
+        if (reviewActionsEnabled(header, detail)) effectChannel.trySend(DetailEffect.ReviewFindings(header, action.action))
+      }
     }
   }
 

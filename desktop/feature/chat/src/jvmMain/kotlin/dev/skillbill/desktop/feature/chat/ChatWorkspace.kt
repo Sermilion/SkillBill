@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
@@ -114,6 +115,15 @@ class ChatWorkspace(
   }
 
   override fun openChat(item: WorkItem) = open(item)
+
+  override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) {
+    val instruction = reviewActionInstruction(item, action) ?: return
+    setPaneOpen(true)
+    val existing = tabState.value.tabs.firstOrNull { it.executionId == item.id }
+    val id = existing?.id ?: item.id
+    if (existing == null) start(item, id, opening = false) else activate(id)
+    pauseAndAct(id, instruction)
+  }
 
   override fun closeChats() = closeAll()
 

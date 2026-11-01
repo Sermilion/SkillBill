@@ -64,6 +64,7 @@ internal class DetailControls(
       }
       ControlsAction.PauseNow -> runControl(ui, view, view.pauseNow, InFlightControl.PauseNow, ControlAction.PauseNow) { controls.pauseNow(item) }
       ControlsAction.Cancel -> runControl(ui, view, view.cancel, InFlightControl.Cancel, ControlAction.Cancel) { controls.cancel(item) }
+      ControlsAction.ImplementPlan -> implementPlan(ui)
       ControlsAction.Launch -> {
         val agentId = view.agentId
         if (agentId == null && view.launch?.enabled == true) {
@@ -89,6 +90,17 @@ internal class DetailControls(
       is ControlsAction.EditInstructions ->
         editDecision(ui, view) { it.copy(instructions = action.text, fieldError = null, inlineProblem = null) }
       ControlsAction.RecordDecision -> recordDecision(ui, view)
+    }
+  }
+
+  private fun implementPlan(ui: DetailUiState): Boolean {
+    val detail = (ui.sections as? SectionsUi.Loaded)?.detail ?: return false
+    val key = ui.header.issueKey ?: return false
+    if (ui.stale || ui.controls.inFlight != null || !planImplementationEnabled(ui.header, detail) || key in ui.controls.reservations) return false
+    return call(InFlightControl.Launch) {
+      val agent = runActionsView(ui).agentId ?: ui.header.agentId
+      val outcome = controls.startGoal(ui.header.repositoryRoot, key, agent)
+      toasts.show(controlFeedback(ControlAction.Launch, outcome, FeedbackSubject(key, "Implement", agent)))
     }
   }
 
