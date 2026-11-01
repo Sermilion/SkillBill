@@ -193,6 +193,7 @@ internal fun goalReviewWorkflowRecord(
   workflowId: String,
   state: GoalSubtaskReviewState,
   rawReviewResult: String,
+  includeRawResult: Boolean = true,
 ): WorkflowStateRecord {
   val definition = WorkflowFamily.TASK_RUNTIME.definition
   val engine = WorkflowEngine()
@@ -218,7 +219,8 @@ internal fun goalReviewWorkflowRecord(
                 codeReviewMode = CodeReviewExecutionMode.AUTO,
               ),
             GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to state.toPersistenceWire(),
-            GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY to mapOf("1" to rawReviewResult),
+            GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY to
+              if (includeRawResult) mapOf("1" to rawReviewResult) else emptyMap<String, String>(),
           ),
         ),
       sessionId = "ftr-001",

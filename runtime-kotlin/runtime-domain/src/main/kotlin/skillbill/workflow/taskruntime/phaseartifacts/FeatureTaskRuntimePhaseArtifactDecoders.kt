@@ -54,6 +54,29 @@ internal fun phaseRecordsFrom(artifacts: Map<String, Any?>): Map<String, Feature
     FeatureTaskRuntimePhaseRecord.fromArtifactMap(recordMap)
   }
 
+internal fun phaseRecordFrom(
+  artifacts: Map<String, Any?>,
+  phaseId: String,
+): FeatureTaskRuntimePhaseRecord? {
+  if (FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY !in artifacts) return null
+  val raw = artifacts[FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY]
+  val records =
+    raw as? Map<*, *>
+      ?: schemaError(
+        "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY' must decode to a map.",
+      )
+  if (phaseId !in records) return null
+  val record = records[phaseId]
+  val recordMap = FeatureTaskRuntimeWorkflowArtifactMap.from(record)
+  if (!recordMap.isObject) {
+    schemaError(
+      "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY' " +
+        "entry for '$phaseId' must decode to a map.",
+    )
+  }
+  return FeatureTaskRuntimePhaseRecord.fromArtifactMap(recordMap)
+}
+
 fun featureTaskRuntimePhaseRecordAttemptCount(
   artifacts: FeatureTaskRuntimeWorkflowArtifactMap,
   phaseId: String,

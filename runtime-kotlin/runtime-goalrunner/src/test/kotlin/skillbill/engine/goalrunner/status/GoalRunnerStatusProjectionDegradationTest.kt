@@ -3,6 +3,8 @@ package skillbill.engine.goalrunner.status
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
@@ -16,6 +18,8 @@ import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
+import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
+import skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.ports.db.DatabaseSessionFactory
@@ -39,10 +43,14 @@ import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.decomposition.withWorkflowId
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Instant
@@ -53,6 +61,72 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalRunnerStatusProjectionDegradationTest {
+  @Test
+  fun `malformed audit state degrades its own source while legacy versions remain readable`() {
+    val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+    val record = auditRecord()
+    val conclusion = GoalRunnerPhaseConclusion("satisfied", null, null, 1)
+    val diagnostics = RecordingStatusDiagnostics()
+    val tracker = GoalRunnerStatusDurableReadTracker(diagnostics)
+    val degradation = SubtaskReadDegradation(tracker)
+    val malformed =
+      projectSubtaskAudit(
+        DurableWorkflowArtifacts.fromMap(mapOf(family.entry("malformed"))),
+        record,
+        conclusion,
+        degradation,
+      )
+
+    assertEquals(GoalRunnerSubtaskAuditOutcome.PASSED, malformed?.outcome)
+    assertEquals("subtask_audit_criteria", degradation.source)
+    assertTrue(tracker.degraded)
+    assertTrue(diagnostics.warnings.single().contains("goal-status.subtask_audit_criteria"))
+
+    listOf(
+      mapOf("legacy" to true),
+      mapOf(
+        AcceptanceCriterionRepairPayloadKeys.CONTRACT_VERSION to
+          ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION,
+      ),
+    ).forEach { payload ->
+      val legacyTracker = GoalRunnerStatusDurableReadTracker(RecordingStatusDiagnostics())
+      val legacyDegradation = SubtaskReadDegradation(legacyTracker)
+      val projected =
+        projectSubtaskAudit(
+          DurableWorkflowArtifacts.fromMap(mapOf(family.entry(payload))),
+          record,
+          conclusion,
+          legacyDegradation,
+        )
+      assertEquals(GoalRunnerSubtaskAuditOutcome.PASSED, projected?.outcome)
+      assertNull(projected?.metCount)
+      assertEquals(emptyList(), projected?.criteria)
+      assertEquals(1, projected?.attemptTotal)
+      assertNull(legacyDegradation.source)
+      assertFalse(legacyTracker.degraded)
+    }
+  }
+
+  @Test
+  fun `audit outcome never treats an unknown verdict as passing`() {
+    val record = auditRecord()
+    assertEquals(GoalRunnerSubtaskAuditOutcome.PASSED, subtaskAuditOutcome(record, null, emptyList(), "satisfied"))
+    assertEquals(GoalRunnerSubtaskAuditOutcome.FAILED, subtaskAuditOutcome(record, null, emptyList(), "advance"))
+    assertEquals(
+      GoalRunnerSubtaskAuditOutcome.UNKNOWN,
+      subtaskAuditOutcome(record, null, emptyList(), "future_verdict"),
+    )
+    assertEquals(GoalRunnerSubtaskAuditOutcome.UNKNOWN, subtaskAuditOutcome(record, null, emptyList(), null))
+    assertEquals(
+      GoalRunnerSubtaskAuditOutcome.RUNNING,
+      subtaskAuditOutcome(auditRecord(WorkflowStepStatus.RUNNING), null, emptyList(), "satisfied"),
+    )
+    assertEquals(
+      GoalRunnerSubtaskAuditOutcome.FAILED,
+      subtaskAuditOutcome(auditRecord(WorkflowStepStatus.BLOCKED), null, emptyList(), "satisfied"),
+    )
+  }
+
   @Test
   fun `attempt ledger failure records the seam and marks the projection degraded`() {
     val diagnostics = RecordingStatusDiagnostics()
@@ -84,6 +158,25 @@ class GoalRunnerStatusProjectionDegradationTest {
       "seam=goal-status.attempt_ledger value_expected=ledger_summary value_used=degraded",
       diagnostics.warnings.single(),
     )
+  }
+
+  @Test
+  fun `a subtask phase result failure records its seam`() {
+    val diagnostics = RecordingStatusDiagnostics()
+    val manifest =
+      manifest(subtaskCount = 1).let { original ->
+        original.copy(subtasks = original.subtasks.map { it.copy(status = "complete", workflowId = "wfl-unknown") })
+      }
+
+    requireNotNull(
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest),
+        outcomeStore = RecordingOutcomeStore(),
+        ports = GoalRunnerStatusTestPorts(diagnostics = diagnostics),
+      ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
+    )
+
+    assertTrue(diagnostics.warnings.any { it.startsWith("seam=goal-status.subtask_phase_results ") })
   }
 
   @Test
@@ -264,6 +357,15 @@ class GoalRunnerStatusProjectionDegradationTest {
     assertFalse(unmeasured.degradedDurableRead)
   }
 }
+
+private fun auditRecord(status: WorkflowStepStatus = WorkflowStepStatus.COMPLETED) =
+  FeatureTaskRuntimePhaseRecord(
+    phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+    status = status,
+    attemptCount = 1,
+    startedAt = Instant.EPOCH,
+    resolvedAgentId = "codex",
+  )
 
 private class RecordingStatusDiagnostics : RuntimeDiagnostics {
   val warnings = mutableListOf<String>()

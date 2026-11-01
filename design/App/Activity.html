@@ -180,7 +180,7 @@ function factRow(f){
 function groupBody(g){
   const items=(g.before||[]).map(factRow); let prevEnd=null;
   const blocks=(g.blocks||[]).slice().sort((a,b)=>ms(a.at)-ms(b.at));
-  let bi=0; const seq=[]; 
+  let bi=0; const seq=[];
   for(const p of g.ph){
     while(bi<blocks.length&&ms(blocks[bi].at)<=ms(p.s)) seq.push({block:blocks[bi++]});
     seq.push(p);
@@ -292,7 +292,7 @@ function realRun(live){
   g2a.blocks=[{at:inc[0].at,why:inc[0].why,phase:inc[0].phase,title:'Blocked',disp:inc[0].disp}];
   g3.blocks=[{at:inc[1].at,why:inc[1].why,phase:inc[1].phase,n:inc[1].n,title:'Blocked',disp:inc[1].disp}];
   g2a.e=D.stops[1].at; g2a.status='blocked';
-  groups[0].blocks=[]; 
+  groups[0].blocks=[];
   const pr=D.stops.filter(s=>s.why==='PULL_REQUEST_FAILED');
   const F=D.finish, L=F.latest;
   const fs=[F.major?plural(F.major,'major finding'):null,F.minor?plural(F.minor,'minor finding'):null].filter(Boolean).join(', ');

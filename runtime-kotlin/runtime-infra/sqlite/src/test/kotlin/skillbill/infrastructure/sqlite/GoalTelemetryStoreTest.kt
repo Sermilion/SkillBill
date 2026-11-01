@@ -17,9 +17,9 @@ import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts
 import java.nio.file.Files
 import java.sql.Connection
 import kotlin.test.Test
-import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -51,14 +51,19 @@ class GoalTelemetryStoreTest {
       )
 
       val storedReason =
-        connection.prepareStatement("SELECT blocked_reason FROM goal_run_sessions WHERE workflow_id = ?").use { statement ->
+        connection.prepareStatement(
+          "SELECT blocked_reason FROM goal_run_sessions WHERE workflow_id = ?",
+        ).use { statement ->
           statement.setString(1, "wf-blocked")
           statement.executeQuery().use { rows ->
             assertTrue(rows.next())
             rows.getString("blocked_reason")
           }
         }
-      val payload = parsePayload(pendingOutbox(connection).single { it.eventName == "skillbill_goal_finished" }.payloadJson)
+      val payload =
+        parsePayload(
+          pendingOutbox(connection).single { it.eventName == "skillbill_goal_finished" }.payloadJson,
+        )
 
       assertEquals(reason, storedReason)
       assertFalse("blocked_reason" in payload)

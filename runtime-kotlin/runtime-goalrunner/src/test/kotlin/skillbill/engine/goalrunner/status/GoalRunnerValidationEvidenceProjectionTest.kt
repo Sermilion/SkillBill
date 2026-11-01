@@ -15,6 +15,7 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
 import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
+import skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.FIXED
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.NOT_FIXED
@@ -163,6 +164,10 @@ class GoalRunnerValidationEvidenceProjectionTest {
     assertEquals(emptyList(), phaseResults.reviewPasses)
     assertEquals(review, phaseResults.review)
     assertEquals(audit, phaseResults.audit)
+    assertEquals(GoalRunnerSubtaskAuditOutcome.PASSED, phaseResults.auditResult?.outcome)
+    assertNull(phaseResults.auditResult?.metCount)
+    assertNull(phaseResults.auditResult?.totalCount)
+    assertEquals(2, phaseResults.auditResult?.attemptTotal)
     assertEquals(
       GoalRunnerQaResult(
         "findings",
@@ -210,6 +215,11 @@ class GoalRunnerValidationEvidenceProjectionTest {
       listOf(service.status(request), service.statusForWorkflow("wfl-parent", request)).forEach { projected ->
         val result = requireNotNull(projected)
         assertEquals(audit, result.completedSubtaskPhaseResults.single().audit, status)
+        assertEquals(
+          GoalRunnerSubtaskAuditOutcome.FAILED,
+          result.completedSubtaskPhaseResults.single().auditResult?.outcome,
+          status,
+        )
         assertEquals(emptyList(), result.completedSubtaskValidation, status)
         assertEquals(0, result.completeCount, status)
         assertFalse(result.degradedDurableRead, status)
@@ -217,6 +227,55 @@ class GoalRunnerValidationEvidenceProjectionTest {
       val board =
         requireNotNull(service.statusForWorkflow("wfl-parent", request.copy(includeCompletedSubtaskValidation = false)))
       assertEquals(emptyList(), board.completedSubtaskPhaseResults, status)
+    }
+  }
+
+  @Test
+  fun `selected started subtasks get phase results without widening validation evidence`() {
+    val workflowId = "wfl-blocked-reviewed"
+    val recorder = goalRunnerDefaultPhaseRecorder()
+    recorder.openTestWorkflow(workflowId, "goal-blocked-reviewed")
+    val audit = GoalRunnerPhaseConclusion("advance", "Audited.", "AC-001 passes.", 1)
+    recorder.recordPhaseState(
+      phaseConclusionRequest(workflowId, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, audit),
+    )
+    val manifest =
+      manifest(5).let { original ->
+        val shapes =
+          mapOf(
+            1 to ("blocked" to "wfl-current"),
+            2 to ("blocked" to workflowId),
+            3 to ("pending" to "wfl-pending"),
+            4 to ("skipped" to "wfl-skipped"),
+            5 to ("blocked" to ""),
+          )
+        original.copy(
+          status = "in_progress",
+          subtasks =
+            original.subtasks.map { subtask ->
+              val (status, workflow) = shapes.getValue(subtask.id)
+              subtask.copy(status = status, workflowId = workflow, commitSha = null, dependencies = emptyList())
+            },
+        )
+      }
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest),
+        outcomeStore = RecordingOutcomeStore(),
+        phaseRecorder = recorder,
+      )
+    val request = GoalRunnerStatusRequest(issueKey = manifest.issueKey, completedSubtaskValidationIds = emptySet())
+    val selected = request.copy(phaseResultSubtaskIds = setOf(1, 2, 3, 4, 5))
+
+    listOf(service.status(selected), service.statusForWorkflow("wfl-parent", selected)).forEach { projected ->
+      val result = requireNotNull(projected)
+      assertEquals(listOf(1, 2, 5), result.completedSubtaskPhaseResults.map { it.subtaskId }.sorted())
+      assertEquals(audit, result.completedSubtaskPhaseResults.single { it.subtaskId == 2 }.audit)
+      assertEquals(null, result.completedSubtaskPhaseResults.single { it.subtaskId == 5 }.degradedReadSource)
+      assertEquals(emptyList(), result.completedSubtaskValidation)
+    }
+    listOf(service.status(request), service.statusForWorkflow("wfl-parent", request)).forEach { projected ->
+      assertEquals(listOf(1), requireNotNull(projected).completedSubtaskPhaseResults.map { it.subtaskId })
     }
   }
 
