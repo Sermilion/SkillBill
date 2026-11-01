@@ -5,6 +5,7 @@ import skillbill.engine.work.timeline.model.WorkActivityBlock
 import skillbill.engine.work.timeline.model.WorkActivityBlockKind
 import skillbill.engine.work.timeline.model.WorkActivityFact
 import skillbill.engine.work.timeline.model.WorkActivityGroup
+import skillbill.engine.work.timeline.model.WorkActivityGroupKind
 import skillbill.engine.work.timeline.model.WorkActivityStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
@@ -19,12 +20,12 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 
 @Inject
 public class ActivityGoalFinishReads {
-  public fun group(
+  internal fun groups(
     goal: WorkItem,
     children: List<WorkActivityGroup>,
     stops: List<WorkActivityStop>,
     unit: UnitOfWork,
-  ): WorkActivityGroup? {
+  ): List<WorkActivityGroup> {
     val artifacts =
       unit.workflowStates.readFeatureTaskArtifacts(
         goal.workflowId,
@@ -39,25 +40,55 @@ public class ActivityGoalFinishReads {
         FeatureTaskRuntimeWorkflowArtifactMap.from(it).toGoalAssessmentRecord(family.label())
       }
     val progress = artifacts?.let(::declaredProgressEventFrom)
-    val blocks = finishBlocks(goal.workflowId, children, stops, unit)
+    val blocks = parentBlocks(goal.workflowId, children, stops, unit)
+    val childrenFinished = childrenFinished(children)
     val before = assessment?.let { listOf(assessmentFact(it)) }.orEmpty()
     val after =
       progress?.takeIf {
         activityStatus(goal.currentState) == WorkActivityStatus.RUNNING &&
-          children.none {
-              child ->
-            child.status.isUnfinished
-          }
+          childrenFinished
       }
         ?.let(::latestFact)?.let(::listOf).orEmpty()
-    if (before.isEmpty() && after.isEmpty() && blocks.isEmpty()) return null
-    return WorkActivityGroup(
-      "goal-finish", null, "Goal finish", activityStatus(goal.currentState),
-      null, null, emptyList(), blocks, before, after,
-    )
+    return buildList {
+      if (blocks.isNotEmpty()) {
+        add(
+          WorkActivityGroup(
+            "goal-interruptions",
+            null,
+            "General blocks",
+            WorkActivityStatus.INTERRUPTED,
+            null,
+            null,
+            emptyList(),
+            blocks,
+            kind = WorkActivityGroupKind.GENERAL_BLOCKS,
+          ),
+        )
+      }
+      if (before.isNotEmpty() || after.isNotEmpty()) {
+        add(
+          WorkActivityGroup(
+            "goal-finish", null, "Goal finish",
+            if (childrenFinished) activityStatus(goal.currentState) else WorkActivityStatus.COMPLETE,
+            null, null, emptyList(), emptyList(), before, after, WorkActivityGroupKind.GOAL_FINISH,
+          ),
+        )
+      }
+    }
   }
 
-  private fun finishBlocks(
+  private fun childrenFinished(children: List<WorkActivityGroup>): Boolean {
+    val latest =
+      children.groupBy { it.subtaskId }.values.map { attempts ->
+        attempts.maxWith(compareBy { it.startedAt })
+      }
+    return latest.isNotEmpty() &&
+      latest.all {
+        it.status == WorkActivityStatus.COMPLETE
+      }
+  }
+
+  private fun parentBlocks(
     id: String,
     children: List<WorkActivityGroup>,
     stops: List<WorkActivityStop>,
@@ -66,10 +97,8 @@ public class ActivityGoalFinishReads {
     val childBlocks = children.flatMap { it.blocks }
     val known = childBlocks.map { it.id }.toSet()
     val blocks = activityBlocks(id, unit).filter { it.id !in known }.toMutableList()
-    val lastChildFinish = children.mapNotNull { it.finishedAt }.maxOrNull()
     stops.forEach { stop ->
       val block = stopBlock(stop) ?: return@forEach
-      if (lastChildFinish != null && block.at < lastChildFinish) return@forEach
       if ((blocks + childBlocks).none { it.at >= stop.startedAt && it.at <= block.at }) blocks += block
     }
     return blocks.sortedBy { it.at }
@@ -93,7 +122,7 @@ private fun stopBlock(stop: WorkActivityStop): WorkActivityBlock? {
     null,
     null,
     null,
-    kind == WorkActivityBlockKind.AWAITING_DECISION,
+    false,
   )
 }
 

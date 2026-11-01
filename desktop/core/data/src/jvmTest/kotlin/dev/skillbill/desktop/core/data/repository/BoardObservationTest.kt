@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.data.runtime.BoardPage
 import dev.skillbill.desktop.core.data.runtime.BoardReads
 import dev.skillbill.desktop.core.data.signal.ChangedIds
 import dev.skillbill.desktop.core.data.signal.SignalSnapshot
+import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardCounts
 import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.BoardState
@@ -49,6 +50,28 @@ class BoardObservationTest {
     assertEquals(allItems, observedItems)
     assertEquals(1, reads.completeReads)
     assertEquals(0, reads.pageReads)
+  }
+
+  @Test
+  fun `goal runs keep newest start first when phase updates reorder the board`() = runTest {
+    val oldest = workItem("oldest").copy(startedAt = Instant.fromEpochMilliseconds(1000))
+    val newest = workItem("newest").copy(startedAt = Instant.fromEpochMilliseconds(3000))
+    val middle = workItem("middle").copy(startedAt = Instant.fromEpochMilliseconds(2000))
+    val (signals, reads, board) = fixture(listOf(oldest, middle, newest))
+    var goals = emptyList<WorkItem>()
+    backgroundScope.launch {
+      board.observe(QUERY).collect { state ->
+        if (state is BoardState.Loaded) goals = state.sections.single { it.kind == BoardSectionKind.Goals }.items
+      }
+    }
+    runCurrent()
+    assertEquals(listOf("newest", "middle", "oldest"), goals.map { it.id })
+
+    reads.items = listOf(middle, newest, oldest.copy(stepLabel = "validate"))
+    signals.value = signal(goals = 2)
+    runCurrent()
+    assertEquals(listOf("newest", "middle", "oldest"), goals.map { it.id })
+    assertEquals("validate", goals.last().stepLabel)
   }
 
   @Test
@@ -135,7 +158,7 @@ class BoardObservationTest {
     return Triple(signals, reads, BoardObservations(backgroundScope, signals, reads, clock))
   }
 
-  private class FakeBoardReads(private val items: List<WorkItem>, private val clock: Clock) : BoardReads {
+  private class FakeBoardReads(var items: List<WorkItem>, private val clock: Clock) : BoardReads {
     var pageReads = 0
     var completeReads = 0
     var nextCursor: String? = null

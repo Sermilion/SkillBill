@@ -186,7 +186,7 @@ class BoardObservations internal constructor(
 private fun nextDeadline(page: BoardPage): Instant? =
   page.items.flatMap { listOfNotNull(it.membershipDeadline, it.freshnessDeadline) }.filter { it > page.observedAt }.minOrNull()
 
-/** Partitions [items] by the runtime's live section verdict, keeping runtime order; finished work goes under Finished. */
+/** Keeps runtime section membership and orders goal runs by start time, newest first. */
 private fun sectionsOf(items: List<WorkItem>): List<BoardSection> {
   val byKind = items.groupBy { item ->
     when (item.liveSection) {
@@ -197,5 +197,10 @@ private fun sectionsOf(items: List<WorkItem>): List<BoardSection> {
       null -> if (item.finishedAt != null) BoardSectionKind.Finished else null
     }
   }
-  return BoardSectionKind.entries.map { BoardSection(it, byKind[it].orEmpty()) }
+  return BoardSectionKind.entries.map { kind ->
+    val rows = byKind[kind].orEmpty()
+    BoardSection(kind, if (kind == BoardSectionKind.Goals) rows.sortedWith(
+      compareByDescending<WorkItem> { it.startedAt }.thenBy { it.id },
+    ) else rows)
+  }
 }

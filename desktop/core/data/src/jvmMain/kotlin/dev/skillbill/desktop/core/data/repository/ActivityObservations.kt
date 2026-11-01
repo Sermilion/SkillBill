@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ActivityBlockKind
 import dev.skillbill.desktop.core.domain.model.ActivityFact
 import skillbill.engine.work.timeline.model.WorkActivityFact
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
+import dev.skillbill.desktop.core.domain.model.ActivityGroupKind
 import dev.skillbill.desktop.core.domain.model.ActivityPhase
 import dev.skillbill.desktop.core.domain.model.ActivityResult
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
@@ -48,7 +49,7 @@ internal fun WorkActivityResult.toDomain(): ActivityResult = when (this) {
       g.finishedAt?.toKotlinInstant(),
       g.phases.map { p -> ActivityPhase(p.phaseId, p.attempt, p.startedAt?.toKotlinInstant(), p.finishedAt?.toKotlinInstant(), p.agent, p.model, p.effort, p.summary, p.verdict) },
       g.blocks.map { block -> ActivityBlock(block.id, block.at.toKotlinInstant(), ActivityBlockKind.valueOf(block.kind.name), block.phaseId, block.attempt, block.reason, block.needsDecision) },
-      g.before.map { it.toDomain() }, g.after.map { it.toDomain() },
+      g.before.map { it.toDomain() }, g.after.map { it.toDomain() }, ActivityGroupKind.valueOf(g.kind.name),
     )
   })
 }

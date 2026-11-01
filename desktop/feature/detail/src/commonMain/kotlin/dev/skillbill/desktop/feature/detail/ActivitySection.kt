@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +29,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
+import dev.skillbill.desktop.core.domain.model.ActivityGroupKind
 import dev.skillbill.desktop.core.domain.model.ActivityResult
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
 import dev.skillbill.desktop.core.domain.model.Detail
@@ -71,7 +74,8 @@ internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modif
   val ticker = LocalUiTicker.current
   DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
   val now = ticker.now.value
-  val ordered = groups
+  val general = groups.filter { it.kind == ActivityGroupKind.GENERAL_BLOCKS }
+  val ordered = groups.filterNot { it.kind == ActivityGroupKind.GENERAL_BLOCKS }
   val shown = ordered.filter { !blocksOnly || it.blocks.isNotEmpty() || it.status == ActivityStatus.BLOCKED }
   fun isOpen(group: ActivityGroup) = expanded[group.id] ?: (groups.size == 1 || group.status == ActivityStatus.RUNNING || group.status == ActivityStatus.BLOCKED)
   Column(modifier.fillMaxWidth()) {
@@ -86,8 +90,8 @@ internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modif
         if (selected) expanded = expanded + groups.filter { it.blocks.isNotEmpty() || it.status == ActivityStatus.BLOCKED }.associate { it.id to true }
       }
     }
-    ActivityStats(ordered, now)
-    ActivityBar(ordered, now) { id ->
+    ActivityStats(groups, now)
+    ActivityBar(groups, now) { id ->
       blocksOnly = false
       expanded = expanded + (id to true)
       scope.launch {
@@ -113,6 +117,21 @@ internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modif
         }
       }
     }
-    if (shown.isEmpty()) ActivityText(if (blocksOnly) "No blocks in this run." else "No recorded activity.", Modifier.padding(24.dp), sans = true, faint = true)
+    if (general.isNotEmpty()) Column(Modifier.fillMaxWidth().onGloballyPositioned { coordinates ->
+      general.forEach { positions[it.id] = coordinates.positionInParent().y }
+    }.padding(top = DocBlockGap)) {
+      Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ActivityText("General blocks", size = 13f, sans = true, color = SkillBillTheme.colors.fg)
+        ActivityText(general.sumOf { it.blocks.size }.toString(), size = 13f, sans = true, faint = true)
+      }
+      general.forEach { group ->
+        key(group.id) {
+          Column(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(8.dp)).padding(vertical = 4.dp)) {
+            group.blocks.forEach { ActivityBlockRow(it, now) }
+          }
+        }
+      }
+    }
+    if (shown.isEmpty() && general.isEmpty()) ActivityText(if (blocksOnly) "No blocks in this run." else "No recorded activity.", Modifier.padding(24.dp), sans = true, faint = true)
   }
 }

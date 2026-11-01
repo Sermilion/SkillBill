@@ -44,8 +44,8 @@ data class WorkControlIdentity(
 )
 
 /**
- * One board row or detail header. Every field is a runtime verdict or a fact copied from the runtime's read; the app sorts,
- * groups and judges nothing on it. [agentId] is the runtime's executing agent on board rows (a goal's active agent, a
+ * One board row or detail header. Every field is a runtime verdict or a fact copied from the runtime's read. The runtime
+ * owns section membership; the board data layer orders goal runs by their recorded start time. [agentId] is the runtime's executing agent on board rows (a goal's active agent, a
  * standalone run's launch agent, or a runtime's running or finalizing agent), null when none was recorded. It is display
  * only; launches use [RunOptions.agentId].
  */

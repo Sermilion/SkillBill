@@ -12,6 +12,8 @@ sealed interface ActivityResult {
 enum class ActivityStatus { PENDING, RUNNING, COMPLETE, BLOCKED, INTERRUPTED }
 enum class ActivityBlockKind { BLOCKED, PULL_REQUEST_FAILED, AWAITING_DECISION }
 
+enum class ActivityGroupKind { SUBTASK, GOAL_FINISH, GENERAL_BLOCKS }
+
 data class ActivityGroup(
   val id: String,
   val subtaskId: Int?,
@@ -23,6 +25,7 @@ data class ActivityGroup(
   val blocks: List<ActivityBlock>,
   val before: List<ActivityFact> = emptyList(),
   val after: List<ActivityFact> = emptyList(),
+  val kind: ActivityGroupKind = ActivityGroupKind.SUBTASK,
 )
 
 data class ActivityPhase(

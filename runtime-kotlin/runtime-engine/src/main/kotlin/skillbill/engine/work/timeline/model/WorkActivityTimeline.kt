@@ -16,12 +16,11 @@ public enum class WorkActivityStatus {
   COMPLETE,
   BLOCKED,
   INTERRUPTED,
-  ;
-
-  public val isUnfinished: Boolean get() = this == PENDING || this == RUNNING
 }
 
 public enum class WorkActivityBlockKind { BLOCKED, PULL_REQUEST_FAILED, AWAITING_DECISION }
+
+public enum class WorkActivityGroupKind { SUBTASK, GOAL_FINISH, GENERAL_BLOCKS }
 
 public data class WorkActivityGroup(
   val id: String,
@@ -34,6 +33,7 @@ public data class WorkActivityGroup(
   val blocks: List<WorkActivityBlock>,
   val before: List<WorkActivityFact> = emptyList(),
   val after: List<WorkActivityFact> = emptyList(),
+  val kind: WorkActivityGroupKind = WorkActivityGroupKind.SUBTASK,
 )
 
 public data class WorkActivityPhase(

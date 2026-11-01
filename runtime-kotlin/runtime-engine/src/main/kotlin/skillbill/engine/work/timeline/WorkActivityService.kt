@@ -90,7 +90,7 @@ public class WorkActivityService(
         )
     }
     val stops = pages { offset -> unit.workList.goalActivityStops(goalWorkflowId, offset, PAGE_SIZE) }
-    finishReads.group(goal, groups, stops, unit)?.let(groups::add)
+    groups += finishReads.groups(goal, groups, stops, unit)
     val ordered = groups.sortedWith(compareBy<WorkActivityGroup> { it.startedAt == null }.thenBy { it.startedAt })
     return WorkActivityResult.Listed(ordered)
   }

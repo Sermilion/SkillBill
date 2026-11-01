@@ -52,6 +52,7 @@ import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -143,8 +144,15 @@ public abstract class StandaloneReviewStrategy(
       resolveTarget(run, binding, context.gitOperations)
         ?: return block(binding, iteration, "Standalone review could not resolve its requested target.")
     val head = context.gitOperations.headCommitSha(run.request.repoRoot)
-    if (head !is WorkflowGitOperationResult.Ok) {
-      return block(binding, iteration, "Standalone review could not read HEAD: ${head.error}")
+    val source = context.gitOperations.standaloneReviewSourceFingerprint(run.request.repoRoot)
+    if (head !is WorkflowGitOperationResult.Ok || source !is WorkflowGitOperationResult.Ok) {
+      val reason =
+        if (head !is WorkflowGitOperationResult.Ok) {
+          "could not read HEAD: ${head.error}"
+        } else {
+          "could not observe repository source: ${source.error}"
+        }
+      return block(binding, iteration, "Standalone review $reason")
     }
     val headSha = head.value.trim()
     val reviewInput = GoalSubtaskReviewInput(headSha, headSha, "", "")
@@ -182,7 +190,7 @@ public abstract class StandaloneReviewStrategy(
       run,
       binding,
       iteration,
-      StandaloneReviewLaunchInput(target, reviewInput, reviewRunId, directive, lanePlan),
+      StandaloneReviewLaunchInput(target, reviewInput, reviewRunId, directive, lanePlan, source.value.orEmpty()),
     )
   }
 
@@ -196,21 +204,7 @@ public abstract class StandaloneReviewStrategy(
     prepareReport(binding, iteration, facts.reviewRunId, prompt, facts.input)?.let { return it }
     binding.reviewLaunched(iteration)
     val output = launch(run, binding, facts)
-    val result =
-      output.result
-        ?: failedResult(run.resolvedAgent.resolvedAgentId, output.failureReason ?: "review did not produce a result")
-    val raw = output.rawOutput
-    val retainedResult =
-      result.copy(
-        mergeResult =
-          result.mergeResult.copy(
-            formattedOutput = ParallelReviewMerger.formattedOutput(result.mergeResult.findings),
-          ),
-        rawOutput = raw,
-        reportTruncated = output.truncated || result.reportTruncated,
-      )
-    binding.retainReviewOutput(iteration, raw)
-    return finishReport(binding, iteration, facts, retainedResult, output)
+    return finishReport(run, binding, iteration, facts, output)
   }
 
   private fun prepareReport(
@@ -227,12 +221,13 @@ public abstract class StandaloneReviewStrategy(
   }
 
   private fun finishReport(
+    run: PhaseRun,
     binding: PhaseReviewStepBinding,
     iteration: Int,
     facts: StandaloneReviewLaunchInput,
-    retainedResult: ParallelCodeReviewResult,
     output: StandaloneLaunch,
   ): PhaseOutcome {
+    val retainedResult = retainRawReview(run, binding, iteration, output)
     val reviewRunId = facts.reviewRunId
     val report =
       StandaloneReviewReportAdmission.admit(
@@ -241,20 +236,34 @@ public abstract class StandaloneReviewStrategy(
         output.truncated || retainedResult.reportTruncated,
         reviewRunner != null,
       )
+    val observation =
+      binding.reviewExecutionContext().gitOperations.standaloneReviewSourceFingerprint(run.request.repoRoot)
+    val observationFailure =
+      when {
+        observation !is WorkflowGitOperationResult.Ok ->
+          "Standalone review source observation failed after review: ${observation.error}"
+        observation.value != facts.sourceFingerprint -> "Repository source changed during standalone review."
+        else -> null
+      }
+    val verification =
+      if (observationFailure == null && report.admitted && output.failureReason == null) {
+        verifyFindings(run = run, binding = binding, facts = facts, report = report)
+      } else {
+        VerificationResult.Blocked(
+          observationFailure ?: report.rejectionReasons.joinToString("; ").ifBlank { output.failureReason.orEmpty() },
+        )
+      }
     val failure = output.failureReason
     val blockers =
-      listOfNotNull(failure, report.rejectionReasons.takeIf { it.isNotEmpty() }?.joinToString("; "))
+      listOfNotNull(
+        failure,
+        report.rejectionReasons.takeIf { it.isNotEmpty() }?.joinToString("; "),
+        (verification as? VerificationResult.Blocked)?.reason,
+      )
     val diagnostics =
       report.diagnostics.take(MAX_FAILURE_DIAGNOSTICS).map { it.take(MAX_FAILURE_DIAGNOSTIC_CHARS) }
     val rejection = if (blockers.isEmpty()) "" else (blockers + diagnostics).joinToString("; ")
-    val recordedResult =
-      if (rejection.isBlank()) {
-        retainedResult.copy(
-          mergeResult = retainedResult.mergeResult.copy(formattedOutput = report.registerOutput),
-        )
-      } else {
-        retainedResult
-      }
+    val recordedResult = recordableResult(binding, iteration, retainedResult, output, verification)
     binding.recordReviewRun(reviewRunId, recordedResult, reviewRunner != null)
     rubricResolver.recordInlineLanes(
       reviewRunId,
@@ -270,7 +279,291 @@ public abstract class StandaloneReviewStrategy(
       )
       return PhaseOutcome.blocked(rejection)
     }
-    return completeReport(binding, iteration, report)
+    return completeReport(
+      binding,
+      iteration,
+      report.copy(
+        registerOutput = (verification as VerificationResult.Accepted).register,
+        verdict = verification.verdict,
+      ),
+    )
+  }
+
+  private fun retainRawReview(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+    iteration: Int,
+    output: StandaloneLaunch,
+  ): ParallelCodeReviewResult {
+    val result =
+      output.result
+        ?: failedResult(run.resolvedAgent.resolvedAgentId, output.failureReason ?: "review did not produce a result")
+    val raw = output.rawOutput
+    val retainedResult =
+      result.copy(
+        mergeResult =
+          result.mergeResult.copy(
+            formattedOutput = ParallelReviewMerger.formattedOutput(result.mergeResult.findings),
+          ),
+        rawOutput = raw,
+        reportTruncated = output.truncated || result.reportTruncated,
+      )
+    binding.retainReviewOutput(iteration, raw)
+    return retainedResult
+  }
+
+  private fun recordableResult(
+    binding: PhaseReviewStepBinding,
+    iteration: Int,
+    retainedResult: ParallelCodeReviewResult,
+    output: StandaloneLaunch,
+    verification: VerificationResult,
+  ): ParallelCodeReviewResult {
+    return if (verification is VerificationResult.Accepted) {
+      retainedResult.copy(
+        mergeResult = retainedResult.mergeResult.copy(formattedOutput = verification.register),
+      )
+    } else {
+      val verifierEvidence = (verification as? VerificationResult.Blocked)?.evidence.orEmpty()
+      val retainedEvidence = unacceptedReviewEvidence(output, retainedResult, verifierEvidence)
+      binding.retainReviewOutput(iteration, retainedEvidence)
+      retainedResult.copy(
+        mergeResult = retainedResult.mergeResult.copy(findings = emptyList(), formattedOutput = retainedEvidence),
+        rawOutput = retainedEvidence,
+      )
+    }
+  }
+
+  private fun unacceptedReviewEvidence(
+    output: StandaloneLaunch,
+    retainedResult: ParallelCodeReviewResult,
+    verifierEvidence: String,
+  ): String {
+    return buildList {
+      if (output.rawOutput.isBlank()) {
+        val completeness = if (output.truncated || retainedResult.reportTruncated) " and truncated" else ""
+        add("Unaccepted parent report output was blank$completeness.")
+      } else {
+        val text = output.rawOutput
+        val completeness = if (output.truncated || retainedResult.reportTruncated) " (truncated)" else ""
+        add("Unaccepted parent report output$completeness:\n$text")
+      }
+      retainedResult.integration?.let { integration ->
+        integration.rawOutput.takeIf(String::isNotBlank)?.let { text ->
+          val completeness = if (integration.outputTruncated) " (truncated)" else ""
+          add("Unaccepted delegated integration output$completeness:\n$text")
+        }
+        if (integration.completed && integration.rawOutput.isBlank()) {
+          val completeness = if (integration.outputTruncated) " (truncated)" else ""
+          add("Unaccepted delegated integration output was blank$completeness; no source text was captured.")
+        }
+      }
+      retainedResult.mergeResult.formattedOutput
+        .takeIf { distinctMergedEvidence(it, output, retainedResult) }
+        ?.let { add("Unaccepted merged review output:\n$it") }
+      verifierEvidence.takeIf(String::isNotBlank)?.let { add("Unaccepted verifier output:\n$it") }
+    }.joinToString("\n\n")
+  }
+
+  private fun distinctMergedEvidence(
+    text: String,
+    output: StandaloneLaunch,
+    retainedResult: ParallelCodeReviewResult,
+  ): Boolean = text.isNotBlank() && text != output.rawOutput && text != retainedResult.integration?.rawOutput
+
+  private fun verifyFindings(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+    facts: StandaloneReviewLaunchInput,
+    report: StandaloneReviewReport,
+  ): VerificationResult {
+    if (report.census.isEmpty() && report.reviewWarnings.isEmpty()) {
+      return verifyEmptyReport(run, binding, facts, report)
+    }
+    val input = verificationInput(run, facts, report)
+    val launched = runner.run(input, binding.launchState)
+    val after = binding.reviewExecutionContext().gitOperations.standaloneReviewSourceFingerprint(run.request.repoRoot)
+    val failure =
+      if (after !is WorkflowGitOperationResult.Ok || after.value != facts.sourceFingerprint) {
+        "Repository source changed or could not be observed after verification."
+      } else {
+        launchFailureReason(launched)?.let { "Standalone verifier failed: $it" }
+      }
+    if (failure != null) return VerificationResult.Blocked(failure, unacceptedVerifierEvidence(launched))
+    val verification =
+      parseVerificationRegister(
+        launched.stdout.text,
+        report.census.map { it.identity }.toSet(),
+        report.reviewWarnings.map { it.identity }.toSet(),
+      ) ?: return VerificationResult.Blocked(
+        "Standalone verifier returned an incomplete or invalid finding or warning register.",
+        unacceptedVerifierEvidence(launched),
+      )
+    return acceptedVerification(report, verification)
+  }
+
+  private fun verifyEmptyReport(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+    facts: StandaloneReviewLaunchInput,
+    report: StandaloneReviewReport,
+  ): VerificationResult {
+    val after = binding.reviewExecutionContext().gitOperations.standaloneReviewSourceFingerprint(run.request.repoRoot)
+    if (after !is WorkflowGitOperationResult.Ok || after.value != facts.sourceFingerprint) {
+      return VerificationResult.Blocked("Repository source changed or could not be observed after review.")
+    }
+    val verdict =
+      if (!report.hasIncompleteReviewWarning) {
+        FeatureTaskRuntimeVerdict.APPROVED.wireValue
+      } else {
+        FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue
+      }
+    val register =
+      buildString {
+        appendLine("NO_FINDINGS")
+        report.coverage?.let { appendLine(it) }
+        report.warnings.forEach { appendLine("warning: $it") }
+        append("verdict: $verdict")
+      }
+    return VerificationResult.Accepted(register, verdict)
+  }
+
+  private fun acceptedVerification(
+    report: StandaloneReviewReport,
+    verification: ParsedVerificationRegister,
+  ): VerificationResult {
+    val warningClassifications =
+      report.reviewWarnings.associate { warning ->
+        warning.identity to
+          if (warning.alreadyIncomplete) {
+            "incomplete"
+          } else {
+            verification.warningClassifications.getValue(warning.identity)
+          }
+      }
+    val incompleteWarning = warningClassifications.values.any { it == "incomplete" }
+    val changes =
+      incompleteWarning ||
+        report.census.any { finding ->
+          when (verification.findingDispositions.getValue(finding.identity)) {
+            "unresolved" -> true
+            "rejected" -> false
+            "confirmed" -> finding.requiresChangesWhenConfirmed
+            else -> true
+          }
+        }
+    val verdict =
+      if (changes) {
+        FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue
+      } else {
+        FeatureTaskRuntimeVerdict.APPROVED.wireValue
+      }
+    val register =
+      buildString {
+        report.census.forEach { finding ->
+          appendLine(
+            "[${finding.identity}] ${verification.findingDispositions.getValue(finding.identity)} " +
+              "| source=${finding.source} | ${finding.text}",
+          )
+        }
+        report.reviewWarnings.forEach { warning ->
+          appendLine(
+            "[${warning.identity}] ${warningClassifications.getValue(warning.identity)} " +
+              "| source=${warning.source} | ${warning.text}",
+          )
+        }
+        report.coverage?.let { appendLine(it) }
+        report.warnings.forEach { appendLine("warning: $it") }
+        append("verdict: $verdict")
+      }
+    return VerificationResult.Accepted(register, verdict)
+  }
+
+  private fun verificationInput(
+    run: PhaseRun,
+    facts: StandaloneReviewLaunchInput,
+    report: StandaloneReviewReport,
+  ): PhaseStepInput {
+    val directive =
+      buildString {
+        appendLine(
+          "Independently verify each finding against current repository source and classify each retained review " +
+            "warning or coverage block by whether it shows incomplete review. Do not edit, stage, commit, or repair.",
+        )
+        appendLine(
+          "Classify warnings from their supplied text and coverage facts. Do not infer or reconstruct " +
+            "what the original reviewer inspected.",
+        )
+        appendLine("Resolved target: ${facts.target}")
+        appendLine("Repository: ${run.request.repoRoot}")
+        appendLine("Source observation: ${facts.sourceFingerprint}")
+        appendLine(
+          "For each finding return exactly one line using its exact ID: " +
+            "F-001: confirmed|rejected|unresolved.",
+        )
+        report.census.forEach { appendLine("${it.identity}: source=${it.source} | ${it.text}") }
+        appendLine(
+          "For each warning or coverage block return exactly one line using its exact ID: " +
+            "W-001: incomplete|complete.",
+        )
+        report.reviewWarnings.forEach { appendLine("${it.identity}: source=${it.source} | ${it.text}") }
+      }
+    return PhaseStepInput(
+      entryStep,
+      directive,
+      emptyMap(),
+      "Read-only independent verification and warning classification. No edits, staging, commits, or repair.",
+      run.stepFacts(run.request.workflowId.ifBlank { "standalone-review-verify" }, null),
+      PhaseStepPolicy(
+        mutating = false,
+        singleAgentSession = true,
+        readOnlyIdle = true,
+        fileMutating = false,
+        generationScoped = false,
+        extendsOwnedInventory = false,
+      ),
+    )
+  }
+
+  private fun unacceptedVerifierEvidence(output: PhaseStepOutput): String =
+    buildString {
+      if (output.processStarted || output.stdout.text.isNotBlank() || output.stdout.truncated) {
+        append("Unaccepted verifier stdout")
+        if (output.stdout.truncated) append(" (truncated)")
+        appendLine(":")
+        appendLine(output.stdout.text.ifBlank { "<blank>" })
+      }
+      if (output.stderr.isNotBlank()) {
+        appendLine("Unaccepted verifier stderr:")
+        appendLine(output.stderr)
+      }
+    }.trimEnd()
+
+  private fun parseVerificationRegister(
+    output: String,
+    findingIdentities: Set<String>,
+    warningIdentities: Set<String>,
+  ): ParsedVerificationRegister? {
+    val findings = mutableMapOf<String, String>()
+    val warnings = mutableMapOf<String, String>()
+    var valid = true
+    output.lineSequence().map(String::trim).filter(String::isNotEmpty).forEach { line ->
+      val finding = Regex("^(F-\\d{3}): (confirmed|rejected|unresolved)$").matchEntire(line)
+      val warning = Regex("^(W-\\d{3}): (incomplete|complete)$").matchEntire(line)
+      when {
+        finding != null -> {
+          val identity = finding.groupValues[1]
+          if (identity !in findingIdentities || findings.put(identity, finding.groupValues[2]) != null) valid = false
+        }
+        warning != null -> {
+          val identity = warning.groupValues[1]
+          if (identity !in warningIdentities || warnings.put(identity, warning.groupValues[2]) != null) valid = false
+        }
+        else -> valid = false
+      }
+    }
+    if (!valid || findings.keys != findingIdentities || warnings.keys != warningIdentities) return null
+    return ParsedVerificationRegister(findings, warnings)
   }
 
   private fun completeReport(
@@ -499,7 +792,7 @@ public abstract class StandaloneReviewStrategy(
         }
       }
     val launched = runner.run(phaseInput, binding.launchState, session)
-    val text = result?.rawOutput?.ifBlank { launched.stdout.text } ?: launched.stdout.text
+    val text = result?.rawOutput ?: launched.stdout.text
     return StandaloneLaunch(
       text,
       result,
@@ -553,6 +846,18 @@ private data class StandaloneReviewLaunchInput(
   val reviewRunId: String,
   val directive: String,
   val lanePlan: InlineReviewRubricPlan? = null,
+  val sourceFingerprint: String,
+)
+
+private sealed interface VerificationResult {
+  data class Accepted(val register: String, val verdict: String) : VerificationResult
+
+  data class Blocked(val reason: String, val evidence: String = "") : VerificationResult
+}
+
+private data class ParsedVerificationRegister(
+  val findingDispositions: Map<String, String>,
+  val warningClassifications: Map<String, String>,
 )
 
 private const val DELEGATED_QUALITY_RUBRIC_HEADING = "## Selected local code-quality rubric"

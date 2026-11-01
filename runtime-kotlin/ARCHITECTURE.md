@@ -57,7 +57,7 @@ prepared-launch operation. `PhaseStrategyRegistration` pairs each strategy with 
 registry. The accepted attempt host resolves that runner only after required persistence. Ordinary
 and gate strategies receive no raw runner. Goal planning resolves a runner for its accepted
 planning call after required start persistence; its phase-bound launch state rejects another step.
-The in-memory `standalone_review` definition selects one report-only `present_findings` step. Its accepted review binding pins the target and records the report. A valid register exits successfully for either verdict; invalid or failed output blocks with retained findings. The durable `code_review` slot keeps review, verification, remediation, and checkpoint ownership on `PhaseRunState`. Review strategies retain their review launch dependency inside the review slot. Strategies cannot
+The in-memory `standalone_review` definition selects one `present_findings` step. Its accepted review binding pins the target and records the report. Admission builds a finding census and retains warning and coverage blocks separately. When findings or warning and coverage blocks need classification, a fresh read-only phase session returns one `confirmed`, `rejected`, or `unresolved` disposition per finding and classifies each block as complete or incomplete before the runtime presents the register. A clean census without retained blocks may complete after source-stability checks without a verifier session. The runtime compares source observations before review, after review, and after verification. Changed or unreadable source, inadmissible reports, and failed or incomplete verification block with available review and verifier output retained as unaccepted evidence. An admitted incomplete-review warning remains in the verified register and makes the verdict `changes_requested`; unresolved findings and confirmed findings that standalone severity and code-quality policy says need changes do the same, while rejected findings alone do not. Standalone review never edits, stages, commits, or repairs. The durable `code_review` slot keeps its separate verification and remediation flow on `PhaseRunState`. Review strategies retain their review launch dependency inside the review slot. Strategies cannot
 recover the host, records, gate context or finalization context from a binding. Runtime gate cycles and commit cycles live under `runloop.qualitygate`
 and `runloop.finalization`; bindings invoke the selected operation rather than return its context.
 
@@ -1475,11 +1475,17 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   cannot be read blocks the review step. `skill-bill code-review` routes through
   `PhaseRunEntry` too. Both entry points pin the requested target through the
   accepted review binding and run only `present_findings`. Inline, auto, and
-  omitted mode use one agent session; delegated mode uses
-  `ParallelCodeReviewRunner`. The runtime admits one canonical findings register
-  and verdict. Either valid verdict exits 0. Invalid, incomplete, or failed output
-  exits 1 with available findings and a block reason. Standalone review does not
-  edit or commit. Full runs keep `CODE_REVIEW` with review, verification, and
+  omitted mode use one reviewer session, then a separate fresh read-only verifier
+  session when the census or retained warning and coverage blocks need
+  classification. An empty census without retained blocks completes after source
+  stability checks without that verifier. Delegated mode uses
+  `ParallelCodeReviewRunner` for review and the same independent verifier gate.
+  The runtime admits one canonical findings register and derived verdict. Either
+  valid verdict exits 0. Changed or unreadable source, inadmissible reports, and
+  invalid, incomplete, or failed verification exit 1 with available output marked
+  unaccepted. An admitted incomplete-review warning remains in the register and
+  produces `changes_requested`. Standalone review does not edit, stage, commit, or
+  repair. Full runs keep `CODE_REVIEW` with review, verification, and
   repair; durable checkpoint commits remain owned by the full-run `PhaseRunState`.
   `PhaseInstructions` carries the operator
   instructions a phase run adds to its step prompts.
@@ -1652,8 +1658,8 @@ Composition:
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
   | `inline` | `slot.codereview` | Full-run review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps full-run modes here |
-  | `inline` | `slot.standalonereview` | The report-only present_findings step, strict register and verdict admission, accepted target pinning and pass recording, one agent session, no repair or checkpoint path |
-  | `delegated` | `slot.standalonereview` | The same report-only step through ParallelCodeReviewRunner, requiring complete lane coverage and integration disposition; no repair or checkpoint path |
+  | `inline` | `slot.standalonereview` | The report-only present_findings step, strict register and verdict admission, accepted target pinning and pass recording, one reviewer session plus a separate read-only verifier when findings or retained warning and coverage blocks need classification, no repair or checkpoint path |
+  | `delegated` | `slot.standalonereview` | The same report-only step through ParallelCodeReviewRunner, requiring complete lane coverage and integration disposition, with the same separate read-only verifier gate; no repair or checkpoint path |
   | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
   | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (the `boundary-history-directive.md` and `boundary-decisions-directive.md` resources, with runtime inputs in `BoundaryMemoryPromptRules`; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |

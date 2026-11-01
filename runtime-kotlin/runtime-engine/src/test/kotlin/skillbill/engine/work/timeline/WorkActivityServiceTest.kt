@@ -1,6 +1,7 @@
 package skillbill.engine.work.timeline
 
 import skillbill.engine.work.timeline.model.WorkActivityGroup
+import skillbill.engine.work.timeline.model.WorkActivityGroupKind
 import skillbill.engine.work.timeline.model.WorkActivityResult
 import skillbill.engine.work.timeline.model.WorkActivityStatus
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
@@ -27,11 +28,12 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
 class WorkActivityServiceTest {
   @Test
-  fun `goal finish excludes stops from earlier child attempts and preserves later PR failures`() {
+  fun `unmatched goal stops stay in general blocks including later PR failures`() {
     establishTemporarySchemaReadiness("activity-finish").use { fixture ->
       val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
       database.read { unit ->
@@ -50,13 +52,26 @@ class WorkActivityServiceTest {
         val stops =
           listOf(
             WorkActivityStop("early", at(0), at(5), "BLOCKED"),
+            WorkActivityStop("decision", at(6), at(7), "AWAITING_OPERATOR_DECISION"),
             WorkActivityStop("pr", at(10), at(20), "PULL_REQUEST_FAILED"),
           )
-        val group = requireNotNull(ActivityGoalFinishReads().group(goal, listOf(child), stops, unit))
-        assertEquals(listOf("pr"), group.blocks.map { it.id })
-        assertEquals(emptyList(), group.phases)
-        assertEquals(null, group.startedAt)
-        assertEquals(null, group.finishedAt)
+        val priorAttempt = child.copy(id = "prior", status = WorkActivityStatus.BLOCKED, finishedAt = at(3))
+        val groups =
+          ActivityGoalFinishReads().groups(
+            goal,
+            listOf(priorAttempt, child.copy(startedAt = at(4))),
+            stops,
+            unit,
+          )
+        val interruptions = groups.single { it.id == "goal-interruptions" }
+        assertEquals(listOf("early", "decision", "pr"), interruptions.blocks.map { it.id })
+        assertEquals(WorkActivityGroupKind.GENERAL_BLOCKS, interruptions.kind)
+        assertFalse(interruptions.blocks.single { it.id == "decision" }.needsDecision)
+        assertEquals(WorkActivityStatus.INTERRUPTED, interruptions.status)
+        assertEquals(1, groups.size)
+        assertEquals(emptyList(), interruptions.phases)
+        assertEquals(null, interruptions.startedAt)
+        assertEquals(null, interruptions.finishedAt)
       }
     }
   }

@@ -45,7 +45,11 @@ internal class ReviewIntegrationPassRunner(
       integration.toIntegrationLaunchEnvelope().asWireMap(),
       "review integration launch for ${request.packet.reviewId}",
     )
-    val prompt = appendPromptSuffix(integrationPrompt(integration), request.launch.promptSuffix)
+    val prompt =
+      appendPromptSuffix(
+        integrationPrompt(integration, request.reportContract),
+        request.launch.promptSuffix,
+      )
     val outcome =
       launcher.launch(
         GoalRunnerSubtaskLaunchRequest(
@@ -170,7 +174,10 @@ internal class ReviewIntegrationPassRunner(
       else -> null
     }
 
-  private fun integrationPrompt(integration: GovernedReviewIntegrationLaunch): String =
+  private fun integrationPrompt(
+    integration: GovernedReviewIntegrationLaunch,
+    reportContract: ParallelCodeReviewReportContract,
+  ): String =
     buildString {
       appendLine(integration.integrationContract)
       appendLine()
@@ -201,6 +208,9 @@ internal class ReviewIntegrationPassRunner(
           "line=<positive integer> | description' lines. Every finding must name at least two commits " +
           "from the sequence above; a single-commit observation belongs to its specialist lane, not here.",
       )
+      if (reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
+        appendLine("If there are no cross-commit findings, return the exact line NO_FINDINGS.")
+      }
     }
 
   private fun terminalOutcomeOf(facts: AgentRunLaunchFacts): ReviewIntegrationTerminalOutcome =

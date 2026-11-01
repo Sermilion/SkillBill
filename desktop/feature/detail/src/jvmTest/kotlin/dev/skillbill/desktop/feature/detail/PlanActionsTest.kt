@@ -85,6 +85,41 @@ class PlanActionsTest {
     assertEquals(listOf(plan.repositoryRoot to "OAC-86"), requests)
     finish.complete(Unit)
     runCurrent()
+    assertFalse(runActionsView(current.copy(controls = controls.state.value)).implement!!.enabled)
+    assertFalse(controls.onAction(ControlsAction.ImplementPlan))
+    assertEquals(1, requests.size)
     assertFalse(planImplementationEnabled(current.header, detail.copy(executionHistory = emptyList())))
   }
+
+  @Test
+  fun `Implement can retry when another launch reservation clears`() = runTest {
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val plan = base.copy(issueKey = "OAC-86", standaloneExecution = true, running = false,
+      lifecycle = Lifecycle.Terminal, finishedAt = epoch,
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    val report = PlanRunReport("OAC-86", "/specs/OAC-86/spec.md", emptyList(), emptyList())
+    val run = ExecutionInstance("plan-invocation", "execution", "terminal", epoch, epoch, epoch,
+      null, null, null, null, report)
+    val current = DetailUiState(plan, SectionsUi.Loaded(emptyDetail.copy(executionHistory = listOf(run)), null, emptyMap(), emptySet()), false, epoch)
+    val fake = FakeWorkControlRepository()
+    var requests = 0
+    val repository = object : WorkControlRepository by fake {
+      override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome {
+        requests++
+        fake.reservations.value = setOf(issueKey)
+        return ControlOutcome.AlreadyLaunching
+      }
+    }
+    val controls = DetailControls(backgroundScope, repository, ToastQueue(), {}, {}) { current }
+    runCurrent()
+    assertTrue(controls.onAction(ControlsAction.ImplementPlan))
+    runCurrent()
+    assertFalse(runActionsView(current.copy(controls = controls.state.value)).implement!!.enabled)
+    fake.reservations.value = emptySet()
+    runCurrent()
+    assertTrue(controls.onAction(ControlsAction.ImplementPlan))
+    runCurrent()
+    assertEquals(2, requests)
+  }
+
 }

@@ -108,7 +108,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     recordEnabled = decision != null && decision.recorded == null && ready && !retryBlank,
     implement = ControlButton(
       label(InFlightControl.Launch, "Implement"),
-      ready && loaded != null && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
+      ready && !controls.implementationStarted && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
     ).takeIf { item.isStandalonePlan() },
   )
 }

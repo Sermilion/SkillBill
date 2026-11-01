@@ -192,7 +192,7 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
             }
             if (status == StatusKind.CompletedNoChange) SbLabel("no change")
           },
-          body = if (detail.stepPipeline.isEmpty()) null else {
+          body = if (!isCurrent || detail.stepPipeline.isEmpty()) null else {
             { PhasePipeline(subtaskSteps(item, detail, status, isCurrent)) }
           },
         )
@@ -207,8 +207,8 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
         selected = selected == SubtaskKey.GoalFinish,
         onClick = { selectVisibleRow(SubtaskKey.GoalFinish) },
         divider = false,
-        body = {
-          PhasePipeline(goalFinishSteps(item, detail))
+        body = if (finishedAt(item) != null || detail.currentPhase !in detail.goalFinishPipeline) null else {
+          { PhasePipeline(goalFinishSteps(item, detail)) }
         },
       )
     }
@@ -232,7 +232,7 @@ private fun BackgroundPages(state: DetailUiState, onAction: (DetailAction) -> Un
   }
 }
 
-/** A standalone run with more than one step; a goal shows its pipeline on each subtask and on Goal finish. */
+/** A standalone run with more than one step; a goal shows its pipeline on the current subtask or active Goal finish row. */
 internal fun DetailSections.pipelineSection(item: WorkItem, detail: Detail) {
   if (item.kind == WorkKind.Goal || detail.stepPipeline.size <= 1) return
   section("pipeline", "Phase pipeline") {

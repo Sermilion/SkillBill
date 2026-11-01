@@ -137,9 +137,9 @@
             "failure_reason": null,
             "success": true
         },
-        "output": "Actionable\n- [F-001] [claude] Blocker | High | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path | specialists=bill-kotlin-code-review-architecture; origins=kotlin | claim_verdict=confirmed\nverdict: changes_requested",
+        "output": "[F-001] confirmed | source=parent raw report | - [F-001] Blocker | High | specialist=bill-kotlin-code-review-architecture | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path\n[W-001] complete | source=delegated coverage | Commit-focused sequencing: not applicable — the review scope resolved to a synthetic unit, so there is no commit sequence to integrate over. No integration pass was run.\nCoverage: clean — every selected lane reviewed its full assigned bundle.\nCommit-focused sequencing: not applicable — the review scope resolved to a synthetic unit, so there is no commit sequence to integrate over. No integration pass was run.\nCoverage: clean — every selected lane reviewed its full assigned bundle.\nverdict: changes_requested",
         "review_session_id": "__NORMALIZED_REVIEW_SESSION_ID__"
     },
     "status": "completed",
-    "value": "Actionable\n- [F-001] [claude] Blocker | High | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path | specialists=bill-kotlin-code-review-architecture; origins=kotlin | claim_verdict=confirmed\nverdict: changes_requested"
+    "value": "[F-001] confirmed | source=parent raw report | - [F-001] Blocker | High | specialist=bill-kotlin-code-review-architecture | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path\n[W-001] complete | source=delegated coverage | Commit-focused sequencing: not applicable — the review scope resolved to a synthetic unit, so there is no commit sequence to integrate over. No integration pass was run.\nCoverage: clean — every selected lane reviewed its full assigned bundle.\nCommit-focused sequencing: not applicable — the review scope resolved to a synthetic unit, so there is no commit sequence to integrate over. No integration pass was run.\nCoverage: clean — every selected lane reviewed its full assigned bundle.\nverdict: changes_requested"
 }

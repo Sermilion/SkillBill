@@ -39,6 +39,7 @@ data class ControlsUiState(
   val recoveryDialog: RecoveryPreview? = null,
   val decision: DecisionDraft? = null,
   val reservations: Set<String> = emptySet(),
+  val implementationStarted: Boolean = false,
 )
 
 sealed interface ControlsAction : DetailAction {
