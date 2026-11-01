@@ -117,5 +117,9 @@ internal fun recordGoalAssessmentCounts(connection: Connection) {
     DatabaseColumnMigrations.ensureColumn(connection, "goal_run_sessions", column, COUNT_COLUMN_DEFINITION)
   }
   DatabaseColumnMigrations.ensureColumn(connection, "goal_run_sessions", GOAL_RUN_SESSION_EXIT_REASON_COLUMN, "TEXT")
+}
+
+internal fun recordGoalBlockedReason(connection: Connection) {
+  if (!DatabaseColumnMigrations.tableExists(connection, "goal_run_sessions")) return
   DatabaseColumnMigrations.ensureColumn(connection, "goal_run_sessions", "blocked_reason", "TEXT")
 }

@@ -192,7 +192,7 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
             }
             if (status == StatusKind.CompletedNoChange) SbLabel("no change")
           },
-          body = if (detail.stepPipeline.isEmpty()) null else {
+          body = if (detail.stepPipeline.isEmpty() || !isCurrent) null else {
             { PhasePipeline(subtaskSteps(item, detail, status, isCurrent)) }
           },
         )

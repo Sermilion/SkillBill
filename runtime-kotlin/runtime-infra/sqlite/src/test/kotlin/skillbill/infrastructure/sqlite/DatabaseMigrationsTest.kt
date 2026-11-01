@@ -487,6 +487,33 @@ class DatabaseMigrationsTest {
   }
 
   @Test
+  fun `goal blocked reason migration upgrades version 97 and preserves goal sessions`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-goal-blocked-reason").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO goal_run_sessions (workflow_id, issue_key, started_at, status) " +
+            "VALUES ('wfl-legacy', 'SKILL-457', '2026-11-01T14:00:00Z', 'blocked')",
+        )
+        statement.execute("ALTER TABLE goal_run_sessions DROP COLUMN blocked_reason")
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-goal-blocked-reason'")
+        statement.execute("PRAGMA user_version = 97")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(98, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM goal_run_sessions WHERE workflow_id = 'wfl-legacy'"))
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT blocked_reason FROM goal_run_sessions WHERE workflow_id = 'wfl-legacy'").use {
+          assertTrue(it.next())
+          assertEquals(null, it.getString(1))
+        }
+      }
+    }
+  }
+
+  @Test
   fun `migration definitions are append-only and deterministic`() {
     val migrationDefinitions = DatabaseMigrations.migrations.map { migration -> migration.version to migration.name }
 
@@ -2489,4 +2516,5 @@ private val expectedMigrationDefinitions =
     95 to "rebuild-work-board-readable-phase-titles",
     96 to "record-standalone-review-run-id",
     97 to "record-review-finding-actions",
+    98 to "record-goal-blocked-reason",
   )
