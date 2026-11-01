@@ -34,7 +34,6 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.ShortId
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.PaneStatus
-import dev.skillbill.desktop.core.designsystem.detail.PipelineStepState
 import dev.skillbill.desktop.core.designsystem.detail.PropertyList
 import dev.skillbill.desktop.core.designsystem.detail.PropertyRow
 import dev.skillbill.desktop.core.designsystem.detail.PropertyText
@@ -79,12 +78,11 @@ internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): P
   }
 }
 
-/** HANDOFF 9.2 "Subtask inspector": the selected subtask; [inline] drops the title, which the row already shows. */
 @Composable
-internal fun SubtaskInspector(detail: Detail, subtask: WorkSubtask, inline: Boolean, onAction: (DetailAction) -> Unit) {
+internal fun SubtaskInspector(detail: Detail, subtask: WorkSubtask, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    if (!inline) BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.4.em))
+    BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.4.em))
     subtask.blockedReason?.takeIf { it.isNotBlank() }?.let { Hint(it, FeedbackTone.Warn, fold = true) }
     SubtaskProperties(detail, subtask, onAction)
     SubtaskResults(detail, subtask)
@@ -113,10 +111,10 @@ private fun SubtaskProperties(detail: Detail, subtask: WorkSubtask, onAction: (D
     validation?.let { record ->
       val passed = record.passed
       val checks = record.result?.checks?.size ?: 0
-      val word = when (passed) { true -> "passed"; false -> "failed"; null -> record.integrityProblem ?: "unknown" }
-      PropertyRow("Validation") {
+      val word = when (passed) { true -> "passed"; false -> "failed"; null -> record.integrityProblem }
+      if (word != null) PropertyRow("Validation") {
         Box(Modifier.size(6.dp).background(if (passed == false) colors.stFailed else if (passed == true) colors.stDone else colors.fgFaint, CircleShape))
-        PropertyText(if (checks > 0) "$word · $checks checks" else word)
+        PropertyText(if (checks > 0) "$word · $checks ${if (checks == 1) "check" else "checks"}" else word)
       }
     }
   }
@@ -229,12 +227,4 @@ internal fun InspectorLine(lead: String, parts: List<String>) {
       )
     }
   }
-}
-
-private fun PipelineStepState.status(): Pair<StatusKind, String> = when (this) {
-  PipelineStepState.Done -> StatusKind.Completed to "Done"
-  PipelineStepState.Current -> StatusKind.Active to "Running"
-  PipelineStepState.Waiting -> StatusKind.Blocked to "Waiting"
-  PipelineStepState.Failed -> StatusKind.Failed to "Failed"
-  PipelineStepState.Pending -> StatusKind.Pending to "Pending"
 }

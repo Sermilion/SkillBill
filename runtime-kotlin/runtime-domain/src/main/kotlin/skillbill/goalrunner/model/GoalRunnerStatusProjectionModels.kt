@@ -177,6 +177,17 @@ data class GoalRunnerSubtaskPhaseResults(
   val degradedReadSource: String? = null,
   val runningReviewPass: GoalRunnerRunningReviewPass? = null,
   val auditResult: GoalRunnerSubtaskAuditResult? = null,
+  val execution: GoalRunnerSubtaskExecution? = null,
+)
+
+data class GoalRunnerSubtaskExecution(
+  val workflowId: String,
+  val agentId: String?,
+  val model: String?,
+  val effort: String?,
+  val startedAt: Instant,
+  val updatedAt: Instant,
+  val phaseAttemptCounts: Map<String, Int>,
 )
 
 data class GoalRunnerSubtaskAuditResult(

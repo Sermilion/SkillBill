@@ -6,6 +6,7 @@ import skillbill.goalrunner.model.GoalRunnerSubtaskAuditAttempt
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditCriterion
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome
 import skillbill.goalrunner.model.GoalRunnerSubtaskAuditResult
+import skillbill.goalrunner.model.GoalRunnerSubtaskExecution
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
@@ -159,4 +160,22 @@ private fun criterionText(
       collapsed
     }
   return withoutPrefix.ifBlank { collapsed }
+}
+
+internal fun subtaskExecution(
+  workflowId: String,
+  records: Collection<FeatureTaskRuntimePhaseRecord>,
+): GoalRunnerSubtaskExecution? {
+  if (records.isEmpty()) return null
+  val latestFirst = records.sortedByDescending { it.startedAt }
+  val launched = latestFirst.firstOrNull { !it.launchedModel.isNullOrBlank() }
+  return GoalRunnerSubtaskExecution(
+    workflowId = workflowId,
+    agentId = latestFirst.firstOrNull { it.resolvedAgentId.isNotBlank() }?.resolvedAgentId,
+    model = launched?.launchedModel,
+    effort = launched?.launchedEffort?.takeIf(String::isNotBlank),
+    startedAt = records.minOf { it.firstStartedAt },
+    updatedAt = records.maxOf { it.finishedAt ?: it.startedAt },
+    phaseAttemptCounts = records.filter { it.attemptCount > 0 }.associate { it.phaseId to it.attemptCount },
+  )
 }

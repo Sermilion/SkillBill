@@ -34,7 +34,7 @@ class SubtaskInspectorResultsTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          SubtaskInspector(detail.copy(subtasks = listOf(subtask(status))), subtask(status), inline = true) {}
+          SubtaskInspector(detail.copy(subtasks = listOf(subtask(status))), subtask(status)) {}
         }
       }
     }

@@ -41,6 +41,7 @@ import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SubtaskDependency
 import dev.skillbill.desktop.core.domain.model.SubtaskAuditResult
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
+import dev.skillbill.desktop.core.domain.model.SubtaskExecution
 import dev.skillbill.desktop.core.domain.model.SubtaskValidation
 import dev.skillbill.desktop.core.domain.model.ValidationCommand
 import dev.skillbill.desktop.core.domain.model.ValidationGateRun
@@ -207,6 +208,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     observedAt = observedAt.toKotlinInstant(),
     changeBaseline = changeBaseline?.toDomain(),
     degradedGoalStatusSource = GOAL_STATUS_READ_SOURCE.takeIf { goal == null && !goalManifest?.subtasks.isNullOrEmpty() },
+    currentSubtaskId = goal?.currentSubtaskId,
   )
 }
 
@@ -238,6 +240,17 @@ internal fun GoalRunnerSubtaskPhaseResults.toDomain(): SubtaskPhaseResults = Sub
       criteria = audit.criteria.map { AuditCriterion(it.ref, it.text, it.met, it.fixedInAttempt) },
       attempts = audit.attempts.map { AuditAttempt(it.number, it.passed, it.uncoveredCount, it.nextPhaseId) },
       attemptTotal = audit.attemptTotal,
+    )
+  },
+  execution = execution?.let {
+    SubtaskExecution(
+      workflowId = it.workflowId,
+      agentId = it.agentId,
+      model = it.model,
+      effort = it.effort,
+      startedAt = it.startedAt.toKotlinInstant(),
+      updatedAt = it.updatedAt.toKotlinInstant(),
+      phaseAttemptCounts = it.phaseAttemptCounts,
     )
   },
 )

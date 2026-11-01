@@ -12,6 +12,8 @@ import skillbill.goalrunner.model.GoalRunnerReviewPassResult
 import skillbill.goalrunner.model.GoalRunnerRunningReviewLane
 import skillbill.goalrunner.model.GoalRunnerRunningReviewPass
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
+import skillbill.goalrunner.model.GoalRunnerSubtaskExecution
+import java.time.Instant
 import skillbill.review.model.ReviewFindingStatus as RuntimeReviewFindingStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -74,5 +76,29 @@ class RuntimeDetailMapperTest {
     assertEquals(2, result?.criteria?.single()?.fixedInAttempt)
     assertEquals("audit_plan_fix", result?.attempts?.single()?.nextPhaseId)
     assertEquals(2, result?.attemptTotal)
+  }
+
+  @Test
+  fun `phase results map subtask execution timestamps and counts`() {
+    val result = GoalRunnerSubtaskPhaseResults(
+      subtaskId = 3,
+      execution = GoalRunnerSubtaskExecution(
+        workflowId = "wf-sub-3",
+        agentId = "claude",
+        model = "claude-opus-5-5",
+        effort = "high",
+        startedAt = Instant.parse("2026-10-01T09:00:00Z"),
+        updatedAt = Instant.parse("2026-10-01T11:00:00Z"),
+        phaseAttemptCounts = mapOf("implement" to 2),
+      ),
+    ).toDomain().execution
+
+    assertEquals("wf-sub-3", result?.workflowId)
+    assertEquals("claude", result?.agentId)
+    assertEquals("claude-opus-5-5", result?.model)
+    assertEquals("high", result?.effort)
+    assertEquals(kotlin.time.Instant.parse("2026-10-01T09:00:00Z"), result?.startedAt)
+    assertEquals(kotlin.time.Instant.parse("2026-10-01T11:00:00Z"), result?.updatedAt)
+    assertEquals(mapOf("implement" to 2), result?.phaseAttemptCounts)
   }
 }

@@ -74,6 +74,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.phaseRecord
+import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -671,6 +672,7 @@ public class GoalRunnerStatusProjectionAssembler(
       }
     val reviewRecord = readPhaseRecord(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, degradation)
     val auditRecord = readPhaseRecord(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, degradation)
+    val records = readExecutionPhaseRecords(artifacts, degradation)
     val auditConclusion = auditRecord?.toConclusion(degradation)
     return GoalRunnerSubtaskPhaseResults(
       subtaskId = subtask.id,
@@ -702,7 +704,21 @@ public class GoalRunnerStatusProjectionAssembler(
       audit = auditConclusion,
       auditResult = projectSubtaskAudit(artifacts, auditRecord, auditConclusion, degradation),
       runningReviewPass = runningReviewPass(reviewRecord, reviewState, database, degradation),
+      execution = subtaskExecution(workflowId, records.values),
     )
+  }
+
+  private fun readExecutionPhaseRecords(
+    artifacts: DurableWorkflowArtifacts,
+    degradation: SubtaskReadDegradation,
+  ) = catchingNonCancellation { artifacts.phaseRecords() }.getOrElse { error ->
+    degradation.record(
+      source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
+      expected = "execution_phase_records",
+      used = "omitted",
+      error = error,
+    )
+    emptyMap()
   }
 
   private fun readPhaseRecord(

@@ -95,6 +95,7 @@ data class Detail(
   val observedAt: Instant,
   val changeBaseline: ChangeBaseline? = null,
   val degradedGoalStatusSource: String? = null,
+  val currentSubtaskId: Int? = null,
 )
 
 data class WorkSubtask(
@@ -153,6 +154,17 @@ data class SubtaskPhaseResults(
   val degradedReadSource: String? = null,
   val runningReviewPass: RunningReviewPass? = null,
   val auditResult: SubtaskAuditResult? = null,
+  val execution: SubtaskExecution? = null,
+)
+
+data class SubtaskExecution(
+  val workflowId: String,
+  val agentId: String?,
+  val model: String?,
+  val effort: String?,
+  val startedAt: Instant,
+  val updatedAt: Instant,
+  val phaseAttemptCounts: Map<String, Int>,
 )
 
 data class SubtaskAuditResult(
