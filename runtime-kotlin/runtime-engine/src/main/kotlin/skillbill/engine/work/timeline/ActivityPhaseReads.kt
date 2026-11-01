@@ -12,6 +12,7 @@ import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
+import java.time.Instant
 
 @Inject
 public class ActivityPhaseReads {
@@ -30,16 +31,7 @@ public class ActivityPhaseReads {
       ledger.map { it.phaseId }.distinct().associateWith { phase ->
         unit.featureTaskPhaseSettlements.history(workflowId, phase).associateBy { it.attempt }
       }
-    return ledger.filter {
-      it.action == FeatureTaskRuntimePhaseLedgerAction.START &&
-        it.executionOrigin == FeatureTaskRuntimePhaseExecutionOrigin.AGENT_EXECUTED
-    }.map { start ->
-      val finish =
-        ledger.firstOrNull {
-          it.sequenceNumber > start.sequenceNumber && it.phaseId == start.phaseId &&
-            it.attemptCount == start.attemptCount &&
-            it.action in endActions
-        }
+    return attemptOpenings(ledger).map { start ->
       val record = records[start.phaseId]?.takeIf { it.attemptCount == start.attemptCount }
       val envelope =
         settlements[start.phaseId]?.get(start.attemptCount)?.let { settlement ->
@@ -49,7 +41,7 @@ public class ActivityPhaseReads {
         }
       val model = record?.launchedModel?.takeIf { modelMatchesAgent(start.resolvedAgentId, it) }
       WorkActivityPhase(
-        start.phaseId, start.attemptCount, start.timestamp, finish?.timestamp,
+        start.phaseId, start.attemptCount, start.timestamp, attemptFinishedAt(start, ledger),
         start.resolvedAgentId, model, record?.launchedEffort?.takeIf { model != null },
         envelope?.get(SharedPayloadKeys.SUMMARY) as? String,
         envelope?.get(SharedPayloadKeys.VERDICT) as? String,
@@ -85,6 +77,34 @@ internal fun modelMatchesAgent(
     "codex" -> model.startsWith("gpt")
     else -> false
   }
+
+private fun attemptOpenings(
+  ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+): List<FeatureTaskRuntimePhaseLedgerEntry> {
+  val opened = mutableSetOf<Pair<String, Int>>()
+  return ledger.filter { it.executionOrigin == FeatureTaskRuntimePhaseExecutionOrigin.AGENT_EXECUTED }
+    .sortedBy { it.sequenceNumber }
+    .filter { entry ->
+      val firstForAttempt = entry.action in openingActions && opened.add(entry.phaseId to entry.attemptCount)
+      entry.action == FeatureTaskRuntimePhaseLedgerAction.START || firstForAttempt
+    }
+}
+
+private fun attemptFinishedAt(
+  start: FeatureTaskRuntimePhaseLedgerEntry,
+  ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+): Instant? {
+  val later = ledger.filter { it.sequenceNumber > start.sequenceNumber && it.phaseId == start.phaseId }
+  val terminal = later.firstOrNull { it.attemptCount == start.attemptCount && it.action in endActions }
+  val superseded = later.any { it.attemptCount > start.attemptCount && it.action in openingActions }
+  return terminal?.timestamp ?: start.timestamp.takeIf { superseded }
+}
+
+private val openingActions =
+  setOf(
+    FeatureTaskRuntimePhaseLedgerAction.START,
+    FeatureTaskRuntimePhaseLedgerAction.RESUME,
+  )
 
 private val endActions =
   setOf(

@@ -19,6 +19,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import java.time.Instant
 
 @Inject
 public class WorkActivityService(
@@ -90,7 +91,7 @@ public class WorkActivityService(
         )
     }
     val stops = pages { offset -> unit.workList.goalActivityStops(goalWorkflowId, offset, PAGE_SIZE) }
-    finishReads.group(goal, groups, stops, unit)?.let(groups::add)
+    finishReads.group(goal, groups, stops, unit)?.let { placeGoalFinish(it, groups) }
     val ordered = groups.sortedWith(compareBy<WorkActivityGroup> { it.startedAt == null }.thenBy { it.startedAt })
     return WorkActivityResult.Listed(ordered)
   }
@@ -133,6 +134,21 @@ public class WorkActivityService(
       phases,
       blocks.sortedBy { it.at },
     )
+  }
+
+  private fun placeGoalFinish(
+    finish: WorkActivityGroup,
+    groups: MutableList<WorkActivityGroup>,
+  ) {
+    val latest =
+      groups.withIndex().filter { it.value.startedAt != null }
+        .maxByOrNull { it.value.startedAt ?: Instant.MIN }
+    if (finish.status != WorkActivityStatus.PENDING || latest == null) {
+      groups += finish
+      return
+    }
+    groups[latest.index] = latest.value.copy(blocks = (latest.value.blocks + finish.blocks).sortedBy { it.at })
+    if (finish.before.isNotEmpty() || finish.after.isNotEmpty()) groups += finish.copy(blocks = emptyList())
   }
 
   private fun planned(

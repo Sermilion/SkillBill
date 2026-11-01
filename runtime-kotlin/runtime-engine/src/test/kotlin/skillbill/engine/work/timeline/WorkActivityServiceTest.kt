@@ -124,12 +124,69 @@ class WorkActivityServiceTest {
             WorkActivityStop("decision", at(21), at(30), "AWAITING_OPERATOR_DECISION", "The goal needs your decision."),
           )
         val group = requireNotNull(ActivityGoalFinishReads().group(goal, listOf(child), stops, unit))
+        assertEquals(WorkActivityStatus.RUNNING, group.status)
         assertEquals(listOf("pr", "decision"), group.blocks.map { it.id })
         assertEquals("The goal needs your decision.", group.blocks.last().reason)
         assertEquals(emptyList(), group.phases)
         assertEquals(null, group.startedAt)
         assertEquals(null, group.finishedAt)
       }
+    }
+  }
+
+  @Test
+  fun `running subtask keeps goal finish pending and owns stops recorded during its run`() {
+    establishTemporarySchemaReadiness("activity-finish-pending").use { fixture ->
+      val delegate = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      val goal = WorkItem("SKILL-458", WorkItemKind.FEATURE_GOAL, "goal", at(0), "running", at(0), false)
+      val work =
+        object : WorkListRepository by EmptyWorkListRepository {
+          override fun findByWorkflowId(workflowId: String) = listOf(goal)
+
+          override fun goalActivityAttempts(
+            parentWorkflowId: String,
+            offset: Int,
+            limit: Int,
+          ) = listOf(WorkActivityAttempt("child", 1, "Child", "running", "blocked", at(0), null, null))
+
+          override fun goalActivityStops(
+            parentWorkflowId: String,
+            offset: Int,
+            limit: Int,
+          ) = listOf(WorkActivityStop("paused", at(5), at(10), "AWAITING_OPERATOR_DECISION", "Usage limit reached."))
+        }
+      val database =
+        object : DatabaseSessionFactory by delegate {
+          override fun <T> read(block: (UnitOfWork) -> T): T =
+            delegate.read { unit ->
+              val workflows =
+                object : WorkflowStateRepository by unit.workflowStates {
+                  override fun readFeatureTaskPhaseLedgerPage(
+                    workflowId: String,
+                    offset: Int,
+                    limit: Int,
+                  ) = FeatureTaskRuntimePhaseLedgerPage(emptyList(), null)
+
+                  override fun readFeatureTaskArtifacts(
+                    workflowId: String,
+                    families: Set<DurableWorkflowArtifactFamily>,
+                  ) = DurableWorkflowArtifacts.EMPTY
+                }
+              block(
+                object : UnitOfWork by unit {
+                  override val workList = work
+                  override val workflowStates = workflows
+                },
+              )
+            }
+        }
+      val service =
+        WorkActivityService(database, ActivityPhaseReads(), ActivityGoalFinishReads(), NoopRuntimeDiagnostics)
+
+      val group = assertIs<WorkActivityResult.Listed>(service.timeline("goal")).groups.single()
+
+      assertEquals(WorkActivityStatus.RUNNING, group.status)
+      assertEquals("Usage limit reached.", group.blocks.single().reason)
     }
   }
 
@@ -249,6 +306,44 @@ class WorkActivityServiceTest {
         assertEquals(listOf(at(2), at(4)), phases.map { it.finishedAt })
         assertEquals(listOf(null, null), phases.map { it.model })
         assertEquals(listOf("codex", "codex"), phases.map { it.agent })
+      }
+    }
+  }
+
+  @Test
+  fun `resume opening a new attempt is live and the attempt it replaces adds no phase time`() {
+    establishTemporarySchemaReadiness("activity-resumed-attempt").use { fixture ->
+      val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      database.read { unit ->
+        val entries =
+          listOf(
+            entry(0, 1, FeatureTaskRuntimePhaseLedgerAction.START),
+            entry(1, 1, FeatureTaskRuntimePhaseLedgerAction.PAUSED),
+            entry(2, 2, FeatureTaskRuntimePhaseLedgerAction.RESUME),
+            entry(3, 3, FeatureTaskRuntimePhaseLedgerAction.RESUME),
+          )
+        val workflows =
+          object : WorkflowStateRepository by unit.workflowStates {
+            override fun readFeatureTaskPhaseLedgerPage(
+              workflowId: String,
+              offset: Int,
+              limit: Int,
+            ) = FeatureTaskRuntimePhaseLedgerPage(entries, null)
+
+            override fun readFeatureTaskArtifacts(
+              workflowId: String,
+              families: Set<DurableWorkflowArtifactFamily>,
+            ) = DurableWorkflowArtifacts.EMPTY
+          }
+        val reads =
+          object : UnitOfWork by unit {
+            override val workflowStates = workflows
+          }
+
+        val phases = ActivityPhaseReads().phases("child", reads)
+
+        assertEquals(listOf(1, 2, 3), phases.map { it.attempt })
+        assertEquals(listOf(at(1), at(2), null), phases.map { it.finishedAt })
       }
     }
   }
