@@ -1,0 +1,99 @@
+package skillbill.engine.featuretask.phaserun
+
+import org.junit.jupiter.api.io.TempDir
+import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
+import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
+import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertFailsWith
+
+class GoalQualityGateRecoveryTest {
+  @TempDir lateinit var home: Path
+
+  private val started = Instant.parse("2026-11-01T15:51:58.488Z")
+  private val record =
+    FeatureTaskRuntimePhaseRecord("build", WorkflowStepStatus.RUNNING, 1, started, resolvedAgentId = "codex")
+  private val first =
+    FeatureTaskRuntimePhaseLedgerEntry(
+      FeatureTaskRuntimePhaseLedgerAction.START,
+      9,
+      started,
+      "build",
+      1,
+      "codex",
+    )
+  private val second = first.copy(sequenceNumber = 10, timestamp = started.plusMillis(507))
+  private val gate =
+    FeatureTaskRuntimeValidationGateProgress(
+      gateRunCount = 1,
+      gateRuns =
+        listOf(
+          FeatureTaskRuntimeValidationGateRunRecord(
+            1,
+            ValidationGateRunOutcome.PASSED,
+            ValidationGateCacheMode.CACHE_ELIGIBLE,
+            1,
+            command = "./gradlew compileKotlin",
+            exitCode = 0,
+            repositoryCheckpoint = "checkpoint",
+          ),
+        ),
+    )
+
+  @Test
+  fun `repeated matching starts retain a recoverable gate`() {
+    validate(progress(listOf(first, second)))
+  }
+
+  @Test
+  fun `conflicting missing and terminal start histories refuse recovery`() {
+    val terminal = first.copy(action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE, sequenceNumber = 10)
+    listOf(
+      emptyList(),
+      listOf(first, second.copy(resolvedAgentId = "other")),
+      listOf(first, second.copy(loopId = "other")),
+      listOf(first, terminal, second.copy(sequenceNumber = 11)),
+    ).forEach { ledger ->
+      assertFailsWith<SkillBillRuntimeException> { validate(progress(ledger)) }
+    }
+  }
+
+  @Test
+  fun `repeated starts do not make an interrupted external build safe to replay`() {
+    val pending =
+      gate.copy(
+        pendingExternalOperation = "build:initial_discovery:./gradlew compileKotlin",
+        pendingExternalCheckpoint = "checkpoint",
+      )
+    val failure = assertFailsWith<SkillBillRuntimeException> { validate(progress(listOf(first, second), pending)) }
+    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
+  }
+
+  private fun progress(
+    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    nested: FeatureTaskRuntimeValidationGateProgress = gate,
+  ) = GoalQualityPhaseProgress(phaseLedger = ledger, buildGateProgress = nested, buildGateProgressKey = "key")
+
+  private fun validate(progress: GoalQualityPhaseProgress) {
+    val clock = Clock.systemUTC()
+    val git = RecordingWorkflowGitOperations()
+    val strategies = testPhaseStrategies(GoalRunnerSubtaskLauncher { error("Unexpected launch") }, git)
+    val resolver = PhaseRunEntryFixture(strategies, git, phaseRunDatabase(home, clock), clock).plans()
+    resolver.validateRunningGate(progress, record, ValidationGateCommandFamily.BUILD, "key")
+  }
+}
