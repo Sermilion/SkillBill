@@ -7,18 +7,62 @@
     "workflow_status": "running",
     "current_step_id": "code_review",
     "steps": [
-      {"step_id": "collect_inputs", "status": "completed", "attempt_count": 1},
-      {"step_id": "extract_criteria", "status": "completed", "attempt_count": 1},
-      {"step_id": "gather_diff", "status": "completed", "attempt_count": 1},
-      {"step_id": "feature_flag_audit", "status": "completed", "attempt_count": 1},
-      {"step_id": "code_review", "status": "running", "attempt_count": 1},
-      {"step_id": "unit_test_value_check", "status": "pending", "attempt_count": 0},
-      {"step_id": "completeness_audit", "status": "pending", "attempt_count": 0},
-      {"step_id": "qa", "status": "pending", "attempt_count": 0},
-      {"step_id": "verdict", "status": "pending", "attempt_count": 0},
-      {"step_id": "finish", "status": "pending", "attempt_count": 0}
+      {
+        "step_id": "collect_inputs",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "extract_criteria",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "gather_diff",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "feature_flag_audit",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "code_review",
+        "status": "running",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "unit_test_value_check",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "completeness_audit",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "qa",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "verdict",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "finish",
+        "status": "pending",
+        "attempt_count": 0
+      }
     ],
-    "artifacts": {"input_context": {"qa_selection": "off"}},
+    "artifacts": {
+      "input_context": {
+        "qa_selection": "off"
+      }
+    },
     "started_at": "<STARTED_AT>",
     "updated_at": "<STARTED_AT>",
     "finished_at": "",
@@ -31,25 +75,53 @@
     "workflow_name": "bill-feature-verify",
     "workflow_status": "running",
     "current_step_id": "verdict",
-    "updated_step_ids": ["verdict"],
+    "updated_step_ids": [
+      "verdict"
+    ],
     "updated_artifact_keys": [
       "code_review_receipt",
       "completeness_audit_receipt",
+      "criteria_summary",
       "diff_projection",
       "feature_flag_audit_receipt",
+      "review_rubric",
       "unit_test_value_receipt"
     ],
     "read_only_full_state_guidance": "Update returns a compact acknowledgement. Use explicit read-only workflow get/show for full state, including steps and the complete durable artifacts map.",
     "launch_projection": {
       "step_id": "verdict",
       "producer_iteration": 1,
-      "repository_checkpoint": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []},
+      "repository_checkpoint": {
+        "checkpoint": "<CHECKPOINT>",
+        "comparison_scope": "base..head",
+        "changed_files": []
+      },
       "artifacts": {
-        "feature_flag_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-        "code_review_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-        "unit_test_value_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-        "completeness_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-        "diff_projection": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []}
+        "feature_flag_audit_receipt": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "code_review_receipt": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "unit_test_value_receipt": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "completeness_audit_receipt": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "diff_projection": {
+          "checkpoint": "<CHECKPOINT>",
+          "comparison_scope": "base..head",
+          "changed_files": []
+        }
       },
       "utf8_bytes": 506
     },
@@ -95,24 +167,96 @@
     "workflow_status": "running",
     "current_step_id": "verdict",
     "steps": [
-      {"step_id": "collect_inputs", "status": "completed", "attempt_count": 1},
-      {"step_id": "extract_criteria", "status": "completed", "attempt_count": 1},
-      {"step_id": "gather_diff", "status": "completed", "attempt_count": 1},
-      {"step_id": "feature_flag_audit", "status": "completed", "attempt_count": 1},
-      {"step_id": "code_review", "status": "running", "attempt_count": 1},
-      {"step_id": "unit_test_value_check", "status": "pending", "attempt_count": 0},
-      {"step_id": "completeness_audit", "status": "pending", "attempt_count": 0},
-      {"step_id": "qa", "status": "pending", "attempt_count": 0},
-      {"step_id": "verdict", "status": "blocked", "attempt_count": 1},
-      {"step_id": "finish", "status": "pending", "attempt_count": 0}
+      {
+        "step_id": "collect_inputs",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "extract_criteria",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "gather_diff",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "feature_flag_audit",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "code_review",
+        "status": "running",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "unit_test_value_check",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "completeness_audit",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "qa",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "verdict",
+        "status": "blocked",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "finish",
+        "status": "pending",
+        "attempt_count": 0
+      }
     ],
     "artifacts": {
-      "input_context": {"qa_selection": "off"},
-      "diff_projection": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []},
-      "feature_flag_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-      "code_review_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-      "unit_test_value_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-      "completeness_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []}
+      "input_context": {
+        "qa_selection": "off"
+      },
+      "diff_projection": {
+        "checkpoint": "<CHECKPOINT>",
+        "comparison_scope": "base..head",
+        "changed_files": []
+      },
+      "feature_flag_audit_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "code_review_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "unit_test_value_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "completeness_audit_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "criteria_summary": {
+        "acceptance_criteria": "The workflow resumes from durable evaluator inputs.",
+        "non_goals": "",
+        "rollout_expectation": "Not required.",
+        "technical_constraints": "Use the saved repository checkpoint."
+      },
+      "review_rubric": {
+        "contract_version": "0.1",
+        "rules": "Check the saved diff."
+      }
     },
     "started_at": "<STARTED_AT>",
     "updated_at": "<UPDATED_AT>",
@@ -128,24 +272,96 @@
     "workflow_status": "running",
     "current_step_id": "verdict",
     "steps": [
-      {"step_id": "collect_inputs", "status": "completed", "attempt_count": 1},
-      {"step_id": "extract_criteria", "status": "completed", "attempt_count": 1},
-      {"step_id": "gather_diff", "status": "completed", "attempt_count": 1},
-      {"step_id": "feature_flag_audit", "status": "completed", "attempt_count": 1},
-      {"step_id": "code_review", "status": "running", "attempt_count": 1},
-      {"step_id": "unit_test_value_check", "status": "pending", "attempt_count": 0},
-      {"step_id": "completeness_audit", "status": "pending", "attempt_count": 0},
-      {"step_id": "qa", "status": "pending", "attempt_count": 0},
-      {"step_id": "verdict", "status": "blocked", "attempt_count": 1},
-      {"step_id": "finish", "status": "pending", "attempt_count": 0}
+      {
+        "step_id": "collect_inputs",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "extract_criteria",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "gather_diff",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "feature_flag_audit",
+        "status": "completed",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "code_review",
+        "status": "running",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "unit_test_value_check",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "completeness_audit",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "qa",
+        "status": "pending",
+        "attempt_count": 0
+      },
+      {
+        "step_id": "verdict",
+        "status": "blocked",
+        "attempt_count": 1
+      },
+      {
+        "step_id": "finish",
+        "status": "pending",
+        "attempt_count": 0
+      }
     ],
     "artifacts": {
-      "input_context": {"qa_selection": "off"},
-      "diff_projection": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []},
-      "feature_flag_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-      "code_review_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-      "unit_test_value_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
-      "completeness_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []}
+      "input_context": {
+        "qa_selection": "off"
+      },
+      "diff_projection": {
+        "checkpoint": "<CHECKPOINT>",
+        "comparison_scope": "base..head",
+        "changed_files": []
+      },
+      "feature_flag_audit_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "code_review_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "unit_test_value_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "completeness_audit_receipt": {
+        "contract_version": "0.1",
+        "verdict": "approved",
+        "findings": []
+      },
+      "criteria_summary": {
+        "acceptance_criteria": "The workflow resumes from durable evaluator inputs.",
+        "non_goals": "",
+        "rollout_expectation": "Not required.",
+        "technical_constraints": "Use the saved repository checkpoint."
+      },
+      "review_rubric": {
+        "contract_version": "0.1",
+        "rules": "Check the saved diff."
+      }
     },
     "started_at": "<STARTED_AT>",
     "updated_at": "<UPDATED_AT>",
@@ -156,9 +372,11 @@
     "available_artifacts": [
       "code_review_receipt",
       "completeness_audit_receipt",
+      "criteria_summary",
       "diff_projection",
       "feature_flag_audit_receipt",
       "input_context",
+      "review_rubric",
       "unit_test_value_receipt"
     ],
     "required_artifacts": [
@@ -200,9 +418,11 @@
     "available_artifact_keys": [
       "code_review_receipt",
       "completeness_audit_receipt",
+      "criteria_summary",
       "diff_projection",
       "feature_flag_audit_receipt",
       "input_context",
+      "review_rubric",
       "unit_test_value_receipt"
     ],
     "missing_artifact_keys": [],
@@ -216,24 +436,104 @@
     "available_artifacts": [
       "code_review_receipt",
       "completeness_audit_receipt",
+      "criteria_summary",
       "diff_projection",
       "feature_flag_audit_receipt",
       "input_context",
+      "review_rubric",
       "unit_test_value_receipt"
     ],
     "missing_artifacts": [],
     "current_step_artifacts": [
-      {"key": "feature_flag_audit_receipt", "present": true, "inline": true, "size_bytes": 61, "value": {"contract_version": "0.1", "verdict": "approved", "findings": []}, "preview": null, "truncated": false, "omitted": false, "omission_reason": null},
-      {"key": "code_review_receipt", "present": true, "inline": true, "size_bytes": 61, "value": {"contract_version": "0.1", "verdict": "approved", "findings": []}, "preview": null, "truncated": false, "omitted": false, "omission_reason": null},
-      {"key": "unit_test_value_receipt", "present": true, "inline": true, "size_bytes": 61, "value": {"contract_version": "0.1", "verdict": "approved", "findings": []}, "preview": null, "truncated": false, "omitted": false, "omission_reason": null},
-      {"key": "completeness_audit_receipt", "present": true, "inline": true, "size_bytes": 61, "value": {"contract_version": "0.1", "verdict": "approved", "findings": []}, "preview": null, "truncated": false, "omitted": false, "omission_reason": null},
-      {"key": "diff_projection", "present": true, "inline": true, "size_bytes": 132, "value": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []}, "preview": null, "truncated": false, "omitted": false, "omission_reason": null}
+      {
+        "key": "feature_flag_audit_receipt",
+        "present": true,
+        "inline": true,
+        "size_bytes": 61,
+        "value": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "preview": null,
+        "truncated": false,
+        "omitted": false,
+        "omission_reason": null
+      },
+      {
+        "key": "code_review_receipt",
+        "present": true,
+        "inline": true,
+        "size_bytes": 61,
+        "value": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "preview": null,
+        "truncated": false,
+        "omitted": false,
+        "omission_reason": null
+      },
+      {
+        "key": "unit_test_value_receipt",
+        "present": true,
+        "inline": true,
+        "size_bytes": 61,
+        "value": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "preview": null,
+        "truncated": false,
+        "omitted": false,
+        "omission_reason": null
+      },
+      {
+        "key": "completeness_audit_receipt",
+        "present": true,
+        "inline": true,
+        "size_bytes": 61,
+        "value": {
+          "contract_version": "0.1",
+          "verdict": "approved",
+          "findings": []
+        },
+        "preview": null,
+        "truncated": false,
+        "omitted": false,
+        "omission_reason": null
+      },
+      {
+        "key": "diff_projection",
+        "present": true,
+        "inline": true,
+        "size_bytes": 132,
+        "value": {
+          "checkpoint": "<CHECKPOINT>",
+          "comparison_scope": "base..head",
+          "changed_files": []
+        },
+        "preview": null,
+        "truncated": false,
+        "omitted": false,
+        "omission_reason": null
+      }
     ],
-    "omitted_artifact_keys": ["input_context"],
-    "continuation_brief": "Resume `bill-feature-verify` workflow `<WORKFLOW_ID>` from `Step 9: Consolidated Verdict` (`verdict`). Follow the normal step instructions that `skill-bill operation verify confirm:<WORKFLOW_ID>` supplies. Use `current_step_artifacts` in this compact payload (feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection) as authoritative current-step context instead of reconstructing prior context from chat history. Omitted artifact keys (input_context) remain private phase context. Explicit operator diagnostics may inspect them with `workflow show`; phase agents must not. Workflow activation status: `reopened`. Next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
-    "continuation_entry_prompt": "Use `skill-bill operation verify confirm:<WORKFLOW_ID>` in continuation mode.\nWorkflow id: <WORKFLOW_ID>\nSession id: (none)\nContinue status: reopened\nResume step: verdict (Step 9: Consolidated Verdict)\nCurrent-step artifacts: feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection\nOmitted artifact keys: input_context\nAcceptance criteria count: 0\nRollout relevant: false\nSpec summary: (none saved)\nReference sections: runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Step 9: Consolidated Verdict; runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Consolidated Verdict\nRules: do not rerun completed steps unless the workflow sends work backwards; treat `current_step_artifacts` as the complete authoritative phase input. Omitted keys remain private; `workflow show` is an explicit operator diagnostic and must not widen phase context.\nWorkflow update rule: every step_updates item must include step_id, status, and integer attempt_count; use attempt_count 3 for `verdict` unless a later retry increments it.\nKeep the same workflow_id and session_id, then continue `skill-bill operation verify confirm:<WORKFLOW_ID>`.\nStep directive: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.\nImmediate next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
+    "omitted_artifact_keys": [
+      "criteria_summary",
+      "input_context",
+      "review_rubric"
+    ],
+    "continuation_brief": "Resume `bill-feature-verify` workflow `<WORKFLOW_ID>` from `Step 9: Consolidated Verdict` (`verdict`). Follow the normal step instructions that `skill-bill operation verify confirm:<WORKFLOW_ID>` supplies. Use `current_step_artifacts` in this compact payload (feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection) as authoritative current-step context instead of reconstructing prior context from chat history. Omitted artifact keys (criteria_summary, input_context, review_rubric) remain private phase context. Explicit operator diagnostics may inspect them with `workflow show`; phase agents must not. Workflow activation status: `reopened`. Next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
+    "continuation_entry_prompt": "Use `skill-bill operation verify confirm:<WORKFLOW_ID>` in continuation mode.\nWorkflow id: <WORKFLOW_ID>\nSession id: (none)\nContinue status: reopened\nResume step: verdict (Step 9: Consolidated Verdict)\nCurrent-step artifacts: feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection\nOmitted artifact keys: criteria_summary, input_context, review_rubric\nAcceptance criteria count: 0\nRollout relevant: false\nSpec summary: (none saved)\nReference sections: runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Step 9: Consolidated Verdict; runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Consolidated Verdict\nRules: do not rerun completed steps unless the workflow sends work backwards; treat `current_step_artifacts` as the complete authoritative phase input. Omitted keys remain private; `workflow show` is an explicit operator diagnostic and must not widen phase context.\nWorkflow update rule: every step_updates item must include step_id, status, and integer attempt_count; use attempt_count 3 for `verdict` unless a later retry increments it.\nKeep the same workflow_id and session_id, then continue `skill-bill operation verify confirm:<WORKFLOW_ID>`.\nStep directive: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.\nImmediate next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
     "read_only_full_state_guidance": "Use workflow show for read-only full-state inspection, including the complete durable artifacts map.",
-    "session_summary": {"acceptance_criteria_count": 0, "rollout_relevant": false, "spec_summary": ""},
+    "session_summary": {
+      "acceptance_criteria_count": 0,
+      "rollout_relevant": false,
+      "spec_summary": ""
+    },
     "read_only_full_state_command": "skill-bill --db '<DB_PATH>' verify-workflow show '<WORKFLOW_ID>' --format json",
     "db_path": "<DB_PATH>",
     "status": "ok"
