@@ -6,12 +6,14 @@ import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.LatestActivity
+import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
@@ -20,13 +22,16 @@ import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
+import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -40,6 +45,7 @@ import kotlin.time.Instant
 class ChangesWindowViewModelTest {
   private val details = FakeWorkDetailRepository()
   private val scopes = FakeChangeScopes()
+  private val opener = RecordingOpener()
   private val baseline = ChangeBaseline.RunStart("/repo", "base", emptyList())
 
   @AfterTest
@@ -51,11 +57,11 @@ class ChangesWindowViewModelTest {
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
 
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.Subtasks(2, 2), details, scopes)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.Subtasks(2, 2), details, scopes, opener)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.All, viewModel.state.value.scope)
-    assertEquals(listOf<ChangeScope>(ChangeScope.All), scopes.observed)
+    assertEquals(listOf<ChangeScope>(ChangeScope.All), scopes.shown)
   }
 
   @Test
@@ -63,7 +69,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
     advanceUntilIdle()
 
@@ -90,7 +96,7 @@ class ChangesWindowViewModelTest {
       subtasks = listOf(subtask(3), subtask(5)),
       stats = mapOf(3 to SubtaskStats(listOf(foo), 1, 0), 5 to SubtaskStats(listOf(foo), 1, 0)),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
     scopes.list(ChangeScope.All).value = listed(file("a/Bar.kt"), foo)
     advanceUntilIdle()
     viewModel.onAction(ChangesWindowAction.SelectFile(foo.path))
@@ -104,7 +110,7 @@ class ChangesWindowViewModelTest {
 
     scopes.list(ChangeScope.Subtasks(5, 5)).value = listed(foo)
     advanceUntilIdle()
-    assertEquals(ChangeScope.Subtasks(5, 5), scopes.observed.last())
+    assertEquals(ChangeScope.Subtasks(5, 5), scopes.shown.last())
     assertEquals(foo.path, viewModel.state.value.selectedPath)
     assertEquals(ChangeScope.Subtasks(5, 5) to foo.path, scopes.diffReads.last())
   }
@@ -123,7 +129,7 @@ class ChangesWindowViewModelTest {
       stats = mapOf(3 to SubtaskStats(listOf(foo), 1, 0), 5 to SubtaskStats(listOf(foo), 1, 0)),
     )
     scopes.list(ChangeScope.Subtasks(3, 3)).value = ScopeChangesState.BaseUnavailable("start3 is not in the repository")
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(3, 3), details, scopes)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(3, 3), details, scopes, opener)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.Subtasks(3, 3), viewModel.state.value.scope)
@@ -133,7 +139,7 @@ class ChangesWindowViewModelTest {
     scopes.list(ChangeScope.Subtasks(5, 5)).value = listed(foo)
     advanceUntilIdle()
 
-    assertEquals(listOf<ChangeScope>(ChangeScope.Subtasks(3, 3), ChangeScope.Subtasks(5, 5)), scopes.observed)
+    assertEquals(listOf<ChangeScope>(ChangeScope.Subtasks(3, 3), ChangeScope.Subtasks(5, 5)), scopes.shown)
     assertEquals(ScopeListUi.Listed(ChangeSet("base", listOf(foo), 1, 0)), viewModel.state.value.list)
     assertEquals(foo.path, viewModel.state.value.selectedPath)
   }
@@ -143,7 +149,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     val detail = detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
     advanceUntilIdle()
 
     detail.value = DetailState(phase, DetailSections.Gone)
@@ -152,7 +158,99 @@ class ChangesWindowViewModelTest {
 
     assertEquals(WindowContent.Missing, viewModel.state.value.content)
     assertEquals(ScopeListUi.Loading, viewModel.state.value.list)
-    assertEquals(listOf<ChangeScope>(ChangeScope.All), scopes.observed)
+    assertEquals(listOf<ChangeScope>(ChangeScope.All), scopes.shown)
+  }
+
+  @Test
+  fun `shift-pick extends from the anchor and a drag stops at the last selectable subtask`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val viewModel = goalWindow((1..33).map { id -> if (id > 21) notStarted(id) else subtask(id) })
+
+    viewModel.onAction(ChangesWindowAction.PickSubtask(4, extend = false, fromPicker = false))
+    viewModel.onAction(ChangesWindowAction.PickSubtask(9, extend = true, fromPicker = true))
+    assertEquals(ChangeScope.Subtasks(4, 9), viewModel.state.value.scope)
+
+    viewModel.onAction(ChangesWindowAction.DragSubtasks(18, 30))
+    assertEquals(ChangeScope.Subtasks(18, 21), viewModel.state.value.scope)
+
+    viewModel.onAction(ChangesWindowAction.PickSubtask(25, extend = false, fromPicker = false))
+    assertEquals(ChangeScope.Subtasks(18, 21), viewModel.state.value.scope)
+  }
+
+  @Test
+  fun `steps skip subtasks that cannot be selected, stop at both ends and restart from all changes`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val viewModel = goalWindow(listOf(subtask(1), subtask(2).copy(startSha = null), subtask(3), notStarted(4)))
+
+    viewModel.onAction(ChangesWindowAction.Step(forward = true))
+    assertEquals(ChangeScope.Subtasks(1, 1), viewModel.state.value.scope)
+    viewModel.onAction(ChangesWindowAction.Step(forward = true))
+    assertEquals(ChangeScope.Subtasks(3, 3), viewModel.state.value.scope)
+    viewModel.onAction(ChangesWindowAction.Step(forward = true))
+    assertEquals(ChangeScope.Subtasks(3, 3), viewModel.state.value.scope)
+
+    viewModel.onAction(ChangesWindowAction.Step(forward = false))
+    assertEquals(ChangeScope.Subtasks(1, 1), viewModel.state.value.scope)
+    viewModel.onAction(ChangesWindowAction.Step(forward = false))
+    assertEquals(ChangeScope.Subtasks(1, 1), viewModel.state.value.scope)
+
+    viewModel.onAction(ChangesWindowAction.PickAll)
+    assertEquals(ChangeScope.All, viewModel.state.value.scope)
+    viewModel.onAction(ChangesWindowAction.Step(forward = false))
+    assertEquals(ChangeScope.Subtasks(3, 3), viewModel.state.value.scope)
+  }
+
+  @Test
+  fun `file moves stop at the end and open skips deleted files`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    val deleted = ChangedFile("a/Gone.kt", null, ChangeStatus.Deleted, 0, 3)
+    scopes.list(ChangeScope.All).value = listed(deleted, file("a/Kept.kt"))
+    advanceUntilIdle()
+
+    viewModel.onAction(ChangesWindowAction.OpenSelectedFile)
+    advanceUntilIdle()
+    assertEquals(emptyList(), opener.opened)
+
+    viewModel.onAction(ChangesWindowAction.MoveFile(1))
+    viewModel.onAction(ChangesWindowAction.MoveFile(1))
+    assertEquals("a/Kept.kt", viewModel.state.value.selectedPath)
+
+    opener.outcome = OpenOutcome.NotOpened
+    viewModel.onAction(ChangesWindowAction.OpenSelectedFile)
+    advanceUntilIdle()
+    assertEquals(listOf("/repo" to "a/Kept.kt"), opener.opened)
+    assertEquals(FILE_NOT_OPENED, viewModel.state.value.openProblem)
+
+    viewModel.onAction(ChangesWindowAction.MoveFile(-1))
+    assertEquals(null, viewModel.state.value.openProblem)
+  }
+
+  private fun TestScope.goalWindow(subtasks: List<ScopeSubtask>): ChangesWindowViewModel {
+    val goal = workItem("G")
+    detailOf(goal)
+    scopes.subtasks.value = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = subtasks, stats = emptyMap())
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
+    advanceUntilIdle()
+    return viewModel
+  }
+
+  private fun notStarted(id: Int) = ScopeSubtask(id, "Subtask $id", ScopeSubtaskState.NOT_STARTED, null, null, emptyList())
+
+  private class RecordingOpener : WorkChangesRepository {
+    var outcome = OpenOutcome.Opened
+    val opened = mutableListOf<Pair<String, String>>()
+
+    override fun observe(baseline: ChangeBaseline?, running: Boolean): Flow<ChangesState> = emptyFlow()
+
+    override suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState = FileDiffState.Binary
+
+    override suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome {
+      opened += worktreeRoot to file.path
+      return outcome
+    }
   }
 
   private fun detailOf(item: WorkItem): MutableStateFlow<DetailState> {
@@ -172,6 +270,9 @@ class ChangesWindowViewModelTest {
     val observed = mutableListOf<ChangeScope>()
     val diffReads = mutableListOf<Pair<ChangeScope, String>>()
     private val lists = mutableMapOf<ChangeScope, MutableStateFlow<ScopeChangesState>>()
+
+    /** Scopes read for the shown list; the window always observes Uncommitted and Outside for the quick buttons. */
+    val shown: List<ChangeScope> get() = observed.filterNot { it == ChangeScope.Uncommitted || it == ChangeScope.Outside }
 
     fun list(scope: ChangeScope): MutableStateFlow<ScopeChangesState> = lists.getOrPut(scope) { MutableStateFlow(ScopeChangesState.Loading) }
 

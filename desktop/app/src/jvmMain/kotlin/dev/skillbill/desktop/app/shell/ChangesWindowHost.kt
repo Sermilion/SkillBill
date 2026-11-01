@@ -22,6 +22,7 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.changes.ChangesWindowEntry
 import dev.skillbill.desktop.feature.changes.ChangesScreen
+import dev.skillbill.desktop.feature.changes.ChangesWindowKeys
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import dev.skillbill.desktop.feature.changes.changesWindowTitle
 
@@ -37,8 +38,10 @@ fun ApplicationScope.ChangesWindowHost(
   DisposableEffect(store) { onDispose { store.clear() } }
   val viewModel = remember { createViewModel(entry.item, entry.scope).also { store.put("changes", it) } }
   LaunchedEffect(entry.focusRequest) { if (entry.focusRequest > 0) viewModel.requestScope(entry.scope) }
+  val keys = remember { ChangesWindowKeys() }
   Window(
     onCloseRequest = onCloseRequest,
+    onPreviewKeyEvent = keys::handle,
     title = changesWindowTitle(entry.item),
     icon = skillBillIcon(),
     state = rememberWindowState(
@@ -53,6 +56,6 @@ fun ApplicationScope.ChangesWindowHost(
       awtWindow.toFront()
       awtWindow.requestFocus()
     }
-    DesktopUiScaleProvider(uiScale) { SkillBillTheme(reducedMotion) { ChangesScreen(viewModel) } }
+    DesktopUiScaleProvider(uiScale) { SkillBillTheme(reducedMotion) { ChangesScreen(viewModel, keys) } }
   }
 }

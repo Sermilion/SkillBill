@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,9 +29,27 @@ import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 
 @Composable
-internal fun FileListPane(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, modifier: Modifier = Modifier) {
+internal fun FileListPane(
+  state: ChangesWindowUiState,
+  onAction: (ChangesWindowAction) -> Unit,
+  filterFocus: FocusRequester,
+  onFilterFocused: (Boolean) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val listState = rememberLazyListState()
+  // j and k move the selection; keep the selected row in view.
+  LaunchedEffect(state.selectedPath) {
+    val index = lazyIndexOf(state.groups, state.selectedPath ?: return@LaunchedEffect) ?: return@LaunchedEffect
+    val shown = listState.layoutInfo.visibleItemsInfo
+    if (shown.none { it.index == index && it.offset >= 0 && it.offset + it.size <= listState.layoutInfo.viewportEndOffset }) listState.scrollToItem(index)
+  }
   Column(modifier.padding(10.dp)) {
-    SbInput(state.filter, { onAction(ChangesWindowAction.SetFilter(it)) }, Modifier.fillMaxWidth(), placeholder = "Filter files")
+    SbInput(
+      state.filter,
+      { onAction(ChangesWindowAction.SetFilter(it)) },
+      Modifier.fillMaxWidth().focusRequester(filterFocus).onFocusChanged { onFilterFocused(it.hasFocus) },
+      placeholder = "Filter files",
+    )
     when (val list = state.list) {
       ScopeListUi.Loading -> Hint("Loading changes")
       is ScopeListUi.BaseUnavailable -> Hint("Base commit unavailable: ${list.reason}")
@@ -36,7 +59,7 @@ internal fun FileListPane(state: ChangesWindowUiState, onAction: (ChangesWindowA
       is ScopeListUi.Listed -> when {
         list.changes.files.isEmpty() -> Hint("No changes in this scope.")
         state.groups.isEmpty() -> Hint("No files match the filter.")
-        else -> LazyColumn {
+        else -> LazyColumn(state = listState) {
           state.groups.forEach { group ->
             item(key = "g:${group.module}") {
               Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -69,3 +92,16 @@ internal fun FileListPane(state: ChangesWindowUiState, onAction: (ChangesWindowA
 }
 
 internal fun ChangeStatus.letter() = when (this) { ChangeStatus.Added -> "A"; ChangeStatus.Modified -> "M"; ChangeStatus.Deleted -> "D"; ChangeStatus.Renamed -> "R"; ChangeStatus.Untracked -> "U" }
+
+/** The lazy list index of [path]'s row; every group contributes its header item before its rows. */
+private fun lazyIndexOf(groups: List<FileGroupUi>, path: String): Int? {
+  var index = 0
+  groups.forEach { group ->
+    index++
+    group.rows.forEach { row ->
+      if (row.file.path == path) return index
+      index++
+    }
+  }
+  return null
+}

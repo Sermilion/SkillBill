@@ -129,9 +129,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
     Box(Modifier.weight(1f).fillMaxWidth()) {
       // `.sb-doc`: a 780 column (padding included) centred in the scroll area, 32/40/64 padding, 20/16/48 in a narrow window.
       // The list adds no spacing of its own: each block brings its 28 gap, so a section's rows can sit flush in one box.
-      // The diff replaces only the document; listState lives outside the branch, so closing it returns to the same scroll.
-      val diff = state.diff
-      if (diff != null) DiffView(diff, onAction, Modifier.fillMaxSize()) else BoxWithConstraints(Modifier.fillMaxSize()) {
+      BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = LocalShellLayout.current.drawerMode
         val inset = if (narrow) 16.dp else 40.dp
         val side = maxOf(inset, (maxWidth - (DOC_MAX_WIDTH - inset * 2)) / 2)

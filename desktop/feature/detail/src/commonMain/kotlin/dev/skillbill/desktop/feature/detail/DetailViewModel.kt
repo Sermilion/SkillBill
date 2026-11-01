@@ -6,8 +6,7 @@ import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
-import dev.skillbill.desktop.core.domain.model.ChangeStatus
-import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.liveRows
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
@@ -16,8 +15,11 @@ import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
+import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
@@ -64,6 +66,7 @@ class DetailViewModel(
   private val session: DatabaseSessionController,
   private val detail: WorkDetailRepository,
   private val changes: WorkChangesRepository,
+  private val scopes: WorkChangeScopesRepository,
   private val board: WorkBoardRepository,
   private val specs: SpecRepository,
   private val webPages: RepositoryWebPages,
@@ -96,7 +99,6 @@ class DetailViewModel(
   private var launchAccepted = false
 
   private val controls = DetailControls(viewModelScope, workControls, toasts, ::launchStarted, ::launchFinished) { mutableState.value }
-  private val diff = DetailDiff(viewModelScope, changes, { mutableState.value }) { change -> mutableState.update { it.copy(diff = change(it.diff)) } }
 
   init {
     selection.select(null)
@@ -179,10 +181,7 @@ class DetailViewModel(
       is DetailAction.MoveSubtaskSelection -> moveSubtaskSelection(action.delta)
       DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
       DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
-      is DetailAction.SelectChangedFile -> diff.select(action.file)
-      is DetailAction.OpenChangedFile -> openChangedFile(action.file)
-      DetailAction.CloseDiff -> diff.close()
-      DetailAction.OpenChangesWindow -> effectChannel.trySend(DetailEffect.OpenChangesWindow(state.value.header))
+      is DetailAction.OpenChangesWindow -> openChangesWindow(action.scope)
     }
   }
 
@@ -242,35 +241,48 @@ class DetailViewModel(
   }
 
   /**
-   * Only this item's loaded detail feeds the key, so only its worktree is read. A new baseline or running flag cancels the
-   * previous observation; an idle item is read once and no longer polled.
+   * Only this item's loaded detail feeds the key, so only its worktree is read. A goal reads its subtask scopes keyed on running
+   * alone, so a subtask's new baseline does not restart the read; any other item reads its change summary from its baseline. A new
+   * key cancels the previous observation; an idle item is read once and no longer polled.
    */
   @OptIn(ExperimentalCoroutinesApi::class)
   private fun observeChanges() {
     mutableState
-      .map { state -> (state.sections as? SectionsUi.Loaded)?.let { ChangesKey(it.detail.changeBaseline, state.header.running) } }
+      .map { state ->
+        (state.sections as? SectionsUi.Loaded)?.let {
+          val goal = state.header.kind == WorkKind.Goal
+          ChangesKey(if (goal) null else it.detail.changeBaseline, state.header.running, goal)
+        }
+      }
       .distinctUntilChanged()
-      .flatMapLatest { key -> key?.let { changes.observe(it.baseline, it.running).map { state -> key to state } } ?: emptyFlow() }
-      .onEach { (key, state) -> showChanges(key, state) }
+      .flatMapLatest { key ->
+        when {
+          key == null -> emptyFlow()
+          key.goal -> scopes.observeSubtasks(item.id, key.running).map { read -> showSubtasks(read) }
+          else -> changes.observe(key.baseline, key.running).map { read -> showChanges(key, read) }
+        }
+      }
+      .onEach { change -> mutableState.update { it.copy(changes = change(it.changes)) } }
       .launchIn(viewModelScope)
   }
 
-  private fun showChanges(key: ChangesKey, read: ChangesState) {
-    mutableState.update { current ->
-      // Re-observing the same baseline (only running changed) keeps the shown list until the next real result.
-      val keep = read == ChangesState.Loading && current.changes.baseline == key.baseline && current.changes.state is ChangesState.Listed
-      if (keep) current else current.copy(changes = ChangesUi(key.baseline, read))
-    }
-    if (read is ChangesState.Listed && key.baseline != null) diff.onListed(key.baseline, read.changes)
+  // Re-observing after only running changed keeps the shown result until the next real one.
+  private fun showSubtasks(read: SubtaskScopesState): (ChangesUi) -> ChangesUi = { current ->
+    if (read == SubtaskScopesState.Loading && current.subtasks is SubtaskScopesState.Listed) current else ChangesUi(subtasks = read)
   }
 
-  private fun openChangedFile(row: ChangedFile) {
-    val shown = state.value.changes
-    val listed = shown.state as? ChangesState.Listed ?: return
-    val baseline = shown.baseline ?: return
-    val file = listed.changes.rowFor(row) ?: return
-    if (file.status == ChangeStatus.Deleted) return
-    open(FILE_NOT_OPENED) { changes.open(baseline.worktreeRoot, file) }
+  private fun showChanges(key: ChangesKey, read: ChangesState): (ChangesUi) -> ChangesUi = { current ->
+    val keep = read == ChangesState.Loading && current.baseline == key.baseline && current.state is ChangesState.Listed
+    if (keep) current else ChangesUi(key.baseline, read)
+  }
+
+  /** A subtask scope opens only for a subtask the latest list can select; All always opens. */
+  private fun openChangesWindow(scope: ChangeScope) {
+    if (scope is ChangeScope.Subtasks) {
+      val listed = state.value.changes.subtasks as? SubtaskScopesState.Listed ?: return
+      if (listed.subtasks.none { it.id == scope.from && it.selectable }) return
+    }
+    effectChannel.trySend(DetailEffect.OpenChangesWindow(state.value.header, scope))
   }
 
   private fun loadMore(list: DetailList) {
@@ -297,7 +309,7 @@ class DetailViewModel(
   }
 }
 
-private data class ChangesKey(val baseline: ChangeBaseline?, val running: Boolean)
+private data class ChangesKey(val baseline: ChangeBaseline?, val running: Boolean, val goal: Boolean)
 
 private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
   running = row.running,

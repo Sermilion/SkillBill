@@ -7,7 +7,6 @@ import androidx.compose.runtime.getValue
 import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.designsystem.component.ToastLead
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.changes.ChangesWindows
 import dev.skillbill.desktop.core.ui.di.WindowScope
@@ -64,7 +63,7 @@ class DetailFeatureEntry(
           is DetailEffect.OpenRoute -> navigator.navigate(effect.route)
           is DetailEffect.ShowToast -> toasts.show(effect.message)
           is DetailEffect.CopyToClipboard -> copy(effect.text)
-          is DetailEffect.OpenChangesWindow -> changesWindows.open(effect.item, ChangeScope.All)
+          is DetailEffect.OpenChangesWindow -> changesWindows.open(effect.item, effect.scope)
         }
       }
     }

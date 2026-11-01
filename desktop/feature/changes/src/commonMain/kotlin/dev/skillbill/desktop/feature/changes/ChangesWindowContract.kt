@@ -5,10 +5,14 @@ import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
+import dev.skillbill.desktop.core.domain.model.OutsideCommit
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.ScopeChangesState
+import dev.skillbill.desktop.core.domain.model.ScopeKind
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.availableScopes
 
 data class ChangesWindowUiState(
   val item: WorkItem,
@@ -21,7 +25,29 @@ data class ChangesWindowUiState(
   val groups: List<FileGroupUi> = emptyList(),
   val selectedPath: String? = null,
   val diff: DiffPaneUi = DiffPaneUi.NoSelection,
-)
+  /** The subtask a Shift-click extends from. */
+  val anchor: Int? = null,
+  val pickerOpen: Boolean = false,
+  val pickerQuery: String = "",
+  /** The latest settled All list, for the All button's count; null until All has been read. */
+  val allRead: ScopeListUi? = null,
+  val outsideRead: ScopeChangesState? = null,
+  val uncommittedRead: ScopeChangesState? = null,
+  /** Why the last open request failed; cleared when the selection changes. */
+  val openProblem: String? = null,
+) {
+  val target: ChangeScopeTarget? get() = (content as? WindowContent.Ready)?.target
+  val subtasksAvailable: Boolean get() = target?.let { ScopeKind.Subtasks in availableScopes(it) } == true
+  val outsideCommits: List<OutsideCommit> get() = (outsideRead as? ScopeChangesState.Listed)?.outsideCommits.orEmpty()
+  val visibleFiles: List<ChangedFile> get() = groups.flatMap { group -> group.rows.map { it.file } }
+  val selectedFile: ChangedFile? get() = visibleFiles.firstOrNull { it.path == selectedPath }
+  val quick: List<QuickButtonUi> get() = quickButtons(this)
+}
+
+enum class QuickScope { All, Running, Outside, Uncommitted }
+
+/** A quick scope button; [count] is null before its read lands. */
+data class QuickButtonUi(val kind: QuickScope, val label: String, val count: Int?, val enabled: Boolean, val pressed: Boolean)
 
 sealed interface WindowContent {
   data object Loading : WindowContent
@@ -52,4 +78,17 @@ sealed interface ChangesWindowAction {
   data class SetFilter(val text: String) : ChangesWindowAction
   data class SelectFile(val path: String) : ChangesWindowAction
   data class NarrowToSubtask(val id: Int) : ChangesWindowAction
+
+  /** A strip column or picker row; [extend] (Shift) grows the range from the anchor, and only a plain picker pick closes it. */
+  data class PickSubtask(val id: Int, val extend: Boolean, val fromPicker: Boolean) : ChangesWindowAction
+  data class DragSubtasks(val fromId: Int, val toId: Int) : ChangesWindowAction
+  data class SelectQuickScope(val kind: QuickScope) : ChangesWindowAction
+  data class Step(val forward: Boolean) : ChangesWindowAction
+  data object TogglePicker : ChangesWindowAction
+  data object OpenPicker : ChangesWindowAction
+  data object ClosePicker : ChangesWindowAction
+  data class PickerQuery(val text: String) : ChangesWindowAction
+  data object PickAll : ChangesWindowAction
+  data class MoveFile(val delta: Int) : ChangesWindowAction
+  data object OpenSelectedFile : ChangesWindowAction
 }

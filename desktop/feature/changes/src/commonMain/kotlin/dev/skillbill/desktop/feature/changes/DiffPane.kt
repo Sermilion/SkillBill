@@ -13,11 +13,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.ui.diff.DiffLines
@@ -40,7 +42,16 @@ internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowActio
             BasicText("+${diff.file.insertions ?: 0}", style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.stDone))
             BasicText("-${diff.file.deletions ?: 0}", style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.stFailed))
           }
+          // A deleted file has nothing on disk to open.
+          SbButton(
+            "Open",
+            { onAction(ChangesWindowAction.OpenSelectedFile) },
+            enabled = state.selectedFile?.let { it.status != ChangeStatus.Deleted } == true,
+            size = SbControlSize.Small,
+            shortcut = "O",
+          )
         }
+        state.openProblem?.let { Hint(it, tone = FeedbackTone.Error) }
         if (diff.chips.isNotEmpty()) Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
           BasicText(if (diff.chips.size == 1) "Changed by subtask" else "Changed by subtasks")
           diff.chips.forEach { chip -> SbTooltip(chip.name) {
