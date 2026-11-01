@@ -19,6 +19,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +51,7 @@ class ChatWorkspaceTest {
   private val details = FakeWorkDetailRepository()
   private val controls = FakeWorkControlRepository()
   private val panes = ShellPanes()
+  private val selection = SelectionHolder()
   private val clock = object : Clock {
     override fun now() = epoch
   }
@@ -59,7 +61,7 @@ class ChatWorkspaceTest {
 
   private fun TestScope.workspace(): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes)
+    return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes, selection)
   }
 
   @Test
@@ -93,7 +95,7 @@ class ChatWorkspaceTest {
   }
 
   @Test
-  fun `a new chat on the same execution gets its own tab and agent session, and closing it leaves the first chat running`() = runTest {
+  fun `a further chat on the same execution skips the opening turn, answers on its own session, and closes alone`() = runTest {
     val goal = workItem("SKILL-1")
     details.details = mapOf(goal.id to flowOf(loaded(goal)))
     val cancelled = mutableListOf<String>()
@@ -102,7 +104,7 @@ class ChatWorkspaceTest {
 
     workspace.open(goal)
     runCurrent()
-    workspace.newChat(goal.id)
+    workspace.newChat()
     runCurrent()
 
     val tabs = workspace.tabs.value
@@ -114,7 +116,15 @@ class ChatWorkspaceTest {
     val first = workspace.session(goal.id)!!
     val other = workspace.session(second)!!
     assertTrue(first.sessionId != other.sessionId)
+    assertEquals(listOf(first.sessionId), chat.requests.map { it.sessionId })
+    assertIs<ChatMessage.StateLine>(other.transcript.value.single())
+    assertTrue(other.agent.value != null)
+    assertFalse(other.busy.value)
+
+    workspace.send(second, "what next?")
+    runCurrent()
     assertEquals(listOf(first.sessionId, other.sessionId), chat.requests.map { it.sessionId })
+    assertTrue(chat.requests.last().firstTurn)
 
     workspace.open(goal)
     assertEquals(goal.id, workspace.tabs.value.activeId)
@@ -123,6 +133,25 @@ class ChatWorkspaceTest {
     runCurrent()
     assertEquals(listOf(other.sessionId), cancelled)
     assertTrue(first.job.isActive)
+  }
+
+  @Test
+  fun `the new chat button with no tab open starts the selected execution's first chat with its opening turn`() = runTest {
+    val goal = workItem("SKILL-1")
+    details.details = mapOf(goal.id to flowOf(loaded(goal)))
+    chat.events = { flow<ChatEvent> { awaitCancellation() } }
+    val workspace = workspace()
+
+    workspace.newChat()
+    assertTrue(workspace.tabs.value.tabs.isEmpty())
+
+    selection.select(goal)
+    workspace.newChat()
+    runCurrent()
+
+    assertEquals(listOf(goal.id), workspace.tabs.value.tabs.map { it.id })
+    assertEquals(1, chat.requests.size)
+    assertTrue(workspace.paneOpen.value)
   }
 
   @Test

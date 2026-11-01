@@ -88,6 +88,11 @@ internal class ChatTurns(
     stream(session, agent, read.header, mode, listOfNotNull(prefix, context, text).joinToString("\n\n"), current)
   }
 
+  /** Resolves the session's agent without a turn, so a chat that skips the opening turn can still be sent to. */
+  suspend fun prepare(session: ChatSession, read: ExecutionRead) {
+    if (session.agentState.value == null && resolve(session, read) == null) session.append(ChatMessage.Notice(NO_AGENT_NOTICE))
+  }
+
   private suspend fun resolve(session: ChatSession, read: ExecutionRead): ChatAgent? =
     chat.resolveAgent(read.header, read.detail, read.runOptions)?.also {
       session.agentState.value = it
