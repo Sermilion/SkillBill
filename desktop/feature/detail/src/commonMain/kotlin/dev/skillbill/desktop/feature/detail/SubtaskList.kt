@@ -207,8 +207,8 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
         selected = selected == SubtaskKey.GoalFinish,
         onClick = { selectVisibleRow(SubtaskKey.GoalFinish) },
         divider = false,
-        body = {
-          PhasePipeline(goalFinishSteps(item, detail))
+        body = if (finishedAt(item) != null || detail.currentPhase !in detail.goalFinishPipeline) null else {
+          { PhasePipeline(goalFinishSteps(item, detail)) }
         },
       )
     }

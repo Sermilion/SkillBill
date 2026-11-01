@@ -3,6 +3,8 @@ package skillbill.cli
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
+import skillbill.idestatus.model.IdeStatusLaunchScope
+import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -77,6 +79,69 @@ class CliWorkBoardTest {
         "Invalid board continuation cursor",
       ) || invalid.stdout.contains("Invalid board continuation cursor"),
     )
+  }
+
+  @Test
+  fun `a goal plan phase leaves the board when its goal row appears`() {
+    val home = Files.createTempDirectory("cli-work-board-goal-plan")
+    val repo = Files.createTempDirectory("cli-work-board-goal-plan-repo")
+    val dbPath = home.resolve("metrics.db")
+    val database = sqliteSessionFactoryForTests(home, dbPath.toString(), emptyMap())
+    val identity = "repo-root-realpath-v1:${repo.toRealPath()}"
+    val now = Instant.now()
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = identity,
+          branchCorrelation = "feature/goal",
+          issueKey = "SKILL-9",
+          workflowId = null,
+          invocationId = "goal-plan",
+          phaseId = "plan",
+          executionId = "goal-plan-execution",
+          lifecycleState = "active",
+          currentStep = "preplan",
+          startedAt = now,
+          leaseOwner = "goal-plan-owner",
+          leaseGeneration = 1,
+          leaseExpiresAt = now.plusSeconds(600),
+          launchScope = IdeStatusLaunchScope.GOAL,
+        ),
+      )
+    }
+    val boardIds = {
+      val result =
+        CliRuntime.run(
+          listOf("--db", dbPath.toString(), "work", "board", "--format", "json"),
+          CliRuntimeContext(environment = emptyMap(), userHome = home),
+        )
+      assertEquals(0, result.exitCode, result.stderr)
+      (decodeJsonObject(result.stdout)["items"] as List<*>)
+        .map { ((it as Map<*, *>)["snapshot"] as Map<*, *>)["invocation_id"] }
+    }
+    assertTrue("goal-plan" in boardIds(), "Before the goal has a row, its plan stands in for it.")
+
+    ensureTestDatabase(dbPath).use { connection ->
+      connection.prepareStatement("INSERT INTO feature_task_runtime_sessions (session_id) VALUES ('goal-session')")
+        .use { it.executeUpdate() }
+      connection.prepareStatement(
+        """
+        INSERT INTO feature_task_workflows (workflow_id, session_id, mode, contract_version, artifacts_json, issue_key)
+        VALUES ('goal-parent', 'goal-session', 'runtime', '0.1', ?, 'SKILL-9')
+        """.trimIndent(),
+      ).use {
+        it.setString(1, """{"decomposition_runtime":{"issue_key":"SKILL-9","status":"in_progress"}}""")
+        it.executeUpdate()
+      }
+      connection.prepareStatement(
+        "INSERT INTO goal_runner_controls (parent_workflow_id, control_state_json) VALUES ('goal-parent', ?)",
+      ).use {
+        it.setString(1, """{"repository_identity":"$identity"}""")
+        it.executeUpdate()
+      }
+    }
+
+    assertTrue("goal-plan" !in boardIds(), "The goal row already shows its planning progress.")
   }
 
   @Test

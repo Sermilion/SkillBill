@@ -37,6 +37,7 @@ class DetailPeekTest {
   fun `phase pipeline appears only on the current subtask`() = runComposeUiTest {
     val detail = emptyDetail.copy(
       stepPipeline = listOf("implement", "review"),
+      goalFinishPipeline = listOf("qa", "qa_fix"),
       currentPhase = "review",
       subtasks = listOf(
         WorkSubtask(1, "First subtask", "completed", null, null, emptyList()),
@@ -62,6 +63,7 @@ class DetailPeekTest {
 
     onAllNodesWithContentDescription("implement, done").assertCountEquals(1)
     onAllNodesWithContentDescription("review, current").assertCountEquals(1)
+    onAllNodesWithContentDescription("qa, pending").assertCountEquals(0)
   }
 
   @Test
