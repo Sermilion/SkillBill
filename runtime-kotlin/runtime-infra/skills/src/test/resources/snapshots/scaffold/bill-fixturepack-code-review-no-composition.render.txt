@@ -16,20 +16,6 @@ Description: Use when reviewing Fixturepack changes across code-review specialis
 
 ## Ceremony
 
-Follow the shell ceremony in [shell-ceremony.md](shell-ceremony.md).
-
-Determine the review scope using [review-scope.md](review-scope.md).
-
-When stack routing applies, follow [stack-routing.md](stack-routing.md).
-
-When delegated specialist review applies, use [specialist-contract.md](specialist-contract.md).
-
-When delegated review execution applies, follow [review-delegation.md](review-delegation.md).
-
-When review reporting applies, follow [review-orchestrator.md](review-orchestrator.md).
-
-When telemetry applies, follow [telemetry-contract.md](telemetry-contract.md).
-
 ===== pointer: platform-packs/fixturepack/code-review/bill-fixturepack-code-review/z.md =====
 ../../../../shared/z.md
 
