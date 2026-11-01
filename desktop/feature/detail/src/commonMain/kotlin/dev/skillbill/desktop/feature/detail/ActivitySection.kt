@@ -1,141 +1,120 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import dev.skillbill.desktop.core.designsystem.component.Avatar
-import dev.skillbill.desktop.core.designsystem.detail.ActivityFeed
-import dev.skillbill.desktop.core.designsystem.detail.ActivityFeedEntry
-import dev.skillbill.desktop.core.designsystem.status.StatusIcon
-import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
+import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.domain.model.ActivityGroup
+import dev.skillbill.desktop.core.domain.model.ActivityResult
+import dev.skillbill.desktop.core.domain.model.ActivityStatus
 import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
-import dev.skillbill.desktop.core.ui.status.statusKind
+import kotlinx.coroutines.launch
 import kotlin.time.Instant
+import kotlin.math.roundToInt
 
-private const val TIME = "d MMM HH:mm"
-
-/** The 16 px icon an activity line leads with: the agent's small Avatar, or a StatusIcon. */
-internal sealed interface ActivityLead {
-  data class Agent(val id: String) : ActivityLead
-
-  data class Status(val kind: StatusKind, val progress: Float?) : ActivityLead
-}
-
-/** One recorded fact as the feed words it. */
-internal data class ActivityLine(
-  val lead: ActivityLead,
-  val actor: String,
-  val action: String?,
-  val target: String? = null,
-  val mono: Boolean = false,
-  val at: Instant?,
-  val tooltip: String? = null,
-)
-
-/** screens.js `EXEC_STATE`: the StatusIcon an execution's lifecycle state ends with. */
-private fun executionStatus(lifecycleState: String): StatusKind = when (lifecycleState.lowercase()) {
-  "completed", "complete", "terminal" -> StatusKind.Completed
-  "failed" -> StatusKind.Failed
-  "interrupted", "paused" -> StatusKind.Paused
-  "blocked" -> StatusKind.Blocked
-  "canceled", "cancelled" -> StatusKind.Canceled
-  "active", "running" -> StatusKind.Active
-  else -> StatusKind.Pending
-}
-
-/**
- * HANDOFF 9.2 item 11: the Activity feed from recorded facts only, oldest first; a fact with no time sorts last. Runs are
- * numbered by start time; one execution reads "Goal run" for a goal, else the phase or operation id.
- */
-internal fun activityLines(item: WorkItem, detail: Detail): List<ActivityLine> {
-  val self = if (item.kind == WorkKind.Goal) "Goal" else rowKey(item)
-  val agent = detail.activeAgent ?: item.agentId
-  val agentLead = agent?.let { ActivityLead.Agent(it) } ?: ActivityLead.Status(item.statusKind(), null)
-  val itemLead = ActivityLead.Status(item.statusKind(), null)
-  val lines = buildList {
-    val runs = detail.executionHistory.sortedBy { it.startedAt }
-    runs.forEachIndexed { index, run ->
-      val who = when {
-        runs.size > 1 -> "Run ${index + 1}"
-        item.kind == WorkKind.Goal -> "Goal run"
-        else -> self
-      }
-      add(ActivityLine(ActivityLead.Status(StatusKind.Active, 0.12f), who, "started", at = run.startedAt, tooltip = "$who started ${formatInstant(run.startedAt, TIME)} · ${run.invocationId}"))
-      run.finishedAt?.let { end ->
-        val state = run.lifecycleState.lowercase()
-        val tooltip = listOfNotNull("$who $state ${formatInstant(end, TIME)}", run.result, run.invocationId).joinToString(" · ")
-        add(ActivityLine(ActivityLead.Status(executionStatus(state), 1f), who, state, run.result, mono = true, at = end, tooltip = tooltip))
-      }
-    }
-    if (runs.isEmpty()) {
-      item.startedAt?.let { start ->
-        add(ActivityLine(ActivityLead.Status(StatusKind.Active, 0.12f), self, "started", at = start, tooltip = "$self started ${formatInstant(start, TIME)}"))
-      }
-      finishedAt(item)?.let { end ->
-        val word = lifecycleLabel(item.lifecycle).lowercase()
-        add(ActivityLine(itemLead, self, word, at = end, tooltip = "$self $word ${formatInstant(end, TIME)}"))
-      }
-    }
-    addAll(blockLines(detail))
-    detail.latestActivity.edit?.let { edit ->
-      val change = listOfNotNull(edit.insertions?.let { "+$it" }, edit.deletions?.let { "−$it" }).joinToString(" ")
-      val target = listOf(edit.paths.joinToString(", "), change).filter { it.isNotBlank() }.joinToString(" ")
-      add(ActivityLine(agentLead, agent ?: "Agent", "edited", target.ifBlank { null }, mono = true, at = edit.recordedAt))
-    }
-    detail.latestActivity.event?.let { event ->
-      val actor = listOfNotNull(event.workflowPhase, event.workerRole).filter { it.isNotBlank() }.joinToString(" · ")
-      if (actor.isNotBlank() || !event.summary.isNullOrBlank()) add(ActivityLine(itemLead, actor, event.summary, at = event.at))
-    }
-    detail.lastAgentActivityLabel?.let { label ->
-      add(ActivityLine(agentLead, agent ?: "Agent", label, at = detail.lastAgentActivityAt))
-    }
-    if (isEmpty() && finishedAt(item) == null && item.summary.isNotBlank()) add(ActivityLine(itemLead, self, item.summary, at = null))
-  }
-  return lines.sortedBy { it.at ?: Instant.DISTANT_FUTURE }
-}
-
-/** One line per recorded block, the live one included: when the run stopped, why, and whether it later resumed. */
-private fun blockLines(detail: Detail): List<ActivityLine> =
-  (listOfNotNull(detail.incident) + detail.incidentHistory).distinctBy { it.incidentToken }.map { incident ->
-    val resumed = incident.progress == IncidentProgress.Resumed
-    val tooltip = listOfNotNull(
-      "Blocked ${formatInstant(incident.observedAt, TIME)}",
-      incident.cause,
-      "resumed".takeIf { resumed },
-    ).joinToString(" · ")
-    ActivityLine(ActivityLead.Status(StatusKind.Blocked, null), "Blocked", incident.summary, at = incident.observedAt, tooltip = tooltip)
-  }
-
-private fun ActivityLine.toEntry() = ActivityFeedEntry(
-  lead = {
-    when (val icon = lead) {
-      is ActivityLead.Agent -> Avatar(icon.id, small = true, tooltip = null)
-      is ActivityLead.Status -> StatusIcon(icon.kind, icon.progress)
-    }
-  },
-  actor = actor,
-  action = action,
-  target = target,
-  monoTarget = mono,
-  at = at,
-  tooltip = tooltip,
-)
-
-/** The Activity section; executions past the first page load as the feed's end comes into view. */
 internal fun DetailSections.activitySection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
-  val lines = activityLines(item, detail)
-  if (lines.isEmpty()) return
-  section("activity", "Activity", count = lines.size.toString()) {
-    item(key = "activity-feed") {
-      // Saveable, so "Show N earlier" stays open when the feed scrolls out of the lazy document and back.
-      var showAll by rememberSaveable(item.id) { mutableStateOf(false) }
-      ActivityFeed(lines.map { it.toEntry() }, showAll, onShowEarlier = { showAll = true })
+  val listState = scrollState
+  item(key = "activity-timeline") {
+    val reducedMotion = LocalReducedMotion.current
+    val jump: suspend (Float) -> Unit = { offset ->
+      val index = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "activity-timeline" }?.index
+      if (index != null) {
+        if (reducedMotion) listState.scrollToItem(index, offset.roundToInt())
+        else listState.animateScrollToItem(index, offset.roundToInt())
+      }
     }
-    pageFooter(DetailList.Executions, state, onAction)
+    Column(Modifier.padding(top = DocBlockGap)) {
+      if (item.kind != WorkKind.Goal) {
+        ActivityTimeline(standaloneActivity(item, detail), item.id, onJump = jump)
+      } else when (val activity = state.activity) {
+        is ActivityResult.Listed -> ActivityTimeline(activity.groups, item.id, onJump = jump)
+        ActivityResult.Loading -> ActivityText("Loading activity...", faint = true)
+        ActivityResult.NotFound -> ActivityText("No recorded activity.", faint = true)
+        is ActivityResult.Unavailable -> ActivityText("Activity is unavailable. ${activity.problem}", faint = true)
+      }
+    }
+  }
+  if (item.kind != WorkKind.Goal) pageFooter(DetailList.Executions, state, onAction)
+}
+
+@Composable
+internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modifier: Modifier = Modifier, onJump: suspend (Float) -> Unit = {}) {
+  var blocksOnly by rememberSaveable(workId) { mutableStateOf(false) }
+  var expanded by rememberSaveable(workId) { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+  val positions = remember(workId) { mutableMapOf<String, Float>() }
+  val scope = rememberCoroutineScope()
+  val ticker = LocalUiTicker.current
+  DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
+  val now = ticker.now.value
+  val ordered = groups
+  val shown = ordered.filter { !blocksOnly || it.blocks.isNotEmpty() || it.status == ActivityStatus.BLOCKED }
+  fun isOpen(group: ActivityGroup) = expanded[group.id] ?: (groups.size == 1 || group.status == ActivityStatus.RUNNING || group.status == ActivityStatus.BLOCKED)
+  Column(modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      ActivityText("Activity", size = 13f, sans = true, color = SkillBillTheme.colors.fg)
+      ActivityText(groups.sumOf { it.phases.size }.toString(), size = 13f, sans = true, faint = true)
+      Spacer(Modifier.weight(1f))
+      val anyClosed = shown.any { !isOpen(it) }
+      ActivityAction(if (anyClosed) "Expand all" else "Collapse all") { expanded = expanded + shown.associate { it.id to anyClosed } }
+      ActivityFilter(blocksOnly, groups.sumOf { it.blocks.size }) { selected ->
+        blocksOnly = selected
+        if (selected) expanded = expanded + groups.filter { it.blocks.isNotEmpty() || it.status == ActivityStatus.BLOCKED }.associate { it.id to true }
+      }
+    }
+    ActivityStats(ordered, now)
+    ActivityBar(ordered, now) { id ->
+      blocksOnly = false
+      expanded = expanded + (id to true)
+      scope.launch {
+        withFrameNanos { }
+        positions[id]?.let { onJump(it) }
+      }
+    }
+    var day: String? = null
+    shown.forEachIndexed { index, group ->
+      val currentDay = group.startedAt?.let { formatInstant(it, "MMM d") }
+      if (currentDay != null && day != currentDay) {
+        ActivityText(currentDay.uppercase(), Modifier.padding(top = 14.dp, bottom = 8.dp), size = 10f, faint = true, weight = FontWeight.SemiBold)
+        day = currentDay
+      }
+      val previous = shown.getOrNull(index - 1)?.finishedAt
+      val started = group.startedAt
+      if (!blocksOnly && previous != null && started != null && started - previous > activityLongGap) {
+        ActivityWait((started - previous).inWholeMilliseconds)
+      }
+      key(group.id) {
+        ActivityCard(group, isOpen(group), now, Modifier.onGloballyPositioned { positions[group.id] = it.positionInParent().y }.padding(bottom = 6.dp)) {
+          expanded = expanded + (group.id to !isOpen(group))
+        }
+      }
+    }
+    if (shown.isEmpty()) ActivityText(if (blocksOnly) "No blocks in this run." else "No recorded activity.", Modifier.padding(24.dp), sans = true, faint = true)
   }
 }

@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
@@ -15,6 +16,7 @@ import dev.skillbill.desktop.core.designsystem.detail.section as lazySection
 internal class DetailSections(
   private val scope: LazyListScope,
   val collapse: SectionCollapse,
+  val scrollState: LazyListState,
   val assessmentOrder: MutableState<AssessmentOrder> = mutableStateOf(AssessmentOrder.Default),
 ) : LazyListScope by scope {
   fun section(

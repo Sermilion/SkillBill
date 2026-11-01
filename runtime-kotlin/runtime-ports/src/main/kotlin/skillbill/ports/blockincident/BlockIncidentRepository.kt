@@ -108,6 +108,12 @@ interface BlockIncidentRecoveryWrites {
 }
 
 interface BlockIncidentHistoryReads {
+  fun listForWorkPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<BlockIncident>
+
   /**
    * Lists incidents associated with the workflow, its parent workflow, or the invocation. Invocation association
    * includes original occurrence coordinates and durable standalone phase aliases identified by

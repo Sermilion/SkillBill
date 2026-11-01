@@ -138,7 +138,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           state = listState,
           contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
         ) {
-          val sections = DetailSections(this, collapse, assessmentOrder)
+          val sections = DetailSections(this, collapse, listState, assessmentOrder)
           sections.item(key = "header") {
             DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }) {
               if (state.sections != SectionsUi.Gone) {

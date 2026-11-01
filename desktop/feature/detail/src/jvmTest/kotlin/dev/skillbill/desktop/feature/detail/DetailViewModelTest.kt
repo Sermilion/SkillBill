@@ -62,6 +62,10 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModelTest {
+  private val activity = object : dev.skillbill.desktop.core.domain.repository.WorkActivityRepository {
+    override fun observe(goalWorkflowId: String, running: Boolean) = kotlinx.coroutines.flow.flowOf<dev.skillbill.desktop.core.domain.model.ActivityResult>(dev.skillbill.desktop.core.domain.model.ActivityResult.NotFound)
+  }
+
   private val item = workItem("SKILL-1")
   private val details = RecordingDetailRepository()
   private val changes = RecordingChangesRepository()
@@ -81,7 +85,7 @@ class DetailViewModelTest {
     board: FakeWorkBoardRepository = FakeWorkBoardRepository(),
     source: WorkItem = item,
     workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
-  ) = DetailViewModel(source, session, details, changes, scopes, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {

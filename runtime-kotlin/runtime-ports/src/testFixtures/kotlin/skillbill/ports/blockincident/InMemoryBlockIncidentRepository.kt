@@ -105,13 +105,29 @@ class InMemoryBlockIncidentRepository(private val clock: Clock = Clock.systemUTC
 
   override fun find(occurrenceToken: String): BlockIncident? = synchronized(this) { incidents[occurrenceToken] }
 
+  override fun listForWorkPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<BlockIncident> = workPage(workflowId, null, limit, offset)
+
   override fun listForWork(
     workflowId: String?,
     invocationId: String?,
     limit: Int,
+  ): List<BlockIncident> {
+    require(limit in 1..11)
+    return workPage(workflowId, invocationId, limit, 0)
+  }
+
+  private fun workPage(
+    workflowId: String?,
+    invocationId: String?,
+    limit: Int,
+    offset: Int,
   ): List<BlockIncident> =
     synchronized(this) {
-      require(limit in 1..11)
+      require(offset >= 0 && limit > 0)
       incidents.values
         .filter { incident ->
           (
@@ -130,7 +146,7 @@ class InMemoryBlockIncidentRepository(private val clock: Clock = Clock.systemUTC
           compareByDescending<BlockIncident> { it.occurrence.observedAt }
             .thenByDescending { it.occurrence.occurrenceToken },
         )
-        .take(limit)
+        .drop(offset).take(limit)
     }
 
   override fun pending(limit: Int): List<BlockIncident> =

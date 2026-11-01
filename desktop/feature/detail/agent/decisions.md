@@ -1,7 +1,14 @@
+## [2026-11-01] Render the recorded workflow timeline in Activity
+Context: The approved Activity mockup groups attempts by subtask and keeps Goal finish separate. The old detail feed could not show child phase attempts or blocks outside its retained incident page.
+Decision: Observe the runtime timeline for goals. Render one card per recorded child attempt, pending subtask cards, and untimed Goal finish facts. Standalone executions remain one row per run. Keep phase time separate from idle gaps. Show the agent when an attempt has no recorded compatible model, and omit token figures.
+Reason: Phase ledger starts and ends establish durations. Goal finish records establish assessment results and the latest running-step update, without supplying step durations. Blocks and long idle gaps split folded loops. The Blocks filter opens its matching cards; users can still collapse them.
+
 ## [2026-11-01] List every recorded block in Activity
 Context: Activity showed run starts and ends, so a run that blocked and resumed looked like it had gone smoothly. The detail read already carried every block in `incident` and `incidentHistory`, and only the live incident was shown.
 Decision: Activity adds a "Blocked" line per incident at its `observedAt`, with its summary, and the cause and resume state in the tooltip.
 Reason: These are recorded facts with their own times, so no new read is needed. The runtime keeps the latest 10 past incidents for a run's detail read, so an older block drops off the feed. Resume has no recorded time, so it has no line of its own.
+
+Superseded by: Render the recorded workflow timeline in Activity, 2026-11-01.
 
 ## [2026-11-01] Show the step pipeline on each subtask row
 Context: A goal showed one "Phase pipeline" section apart from its subtasks, so the reader had to work out which subtask it described. Goal finish already shows its steps on its own row.

@@ -1,3 +1,8 @@
+## [2026-11-01] SKILL-455 Activity attempt and incident pages
+- Added parent-scoped Activity reads over child workflows and runtime sessions, including blocked attempts with no workflow row.
+- Retains the workflow and event lifecycle statuses separately so the engine chooses the authoritative status.
+- Added goal run stop pages and paged incident history. Existing detail incident limits stay unchanged.
+
 ## [2026-10-30] SKILL-447 desktop signals and read sessions
 Areas: runtime-infra/sqlite, runtime-contracts, runtime-ports, desktop-tray
 - Migration 87 adds activity and specs signals, bounded changed-work history and a stored generation. Heartbeats and journal inserts avoid board revisions; the tray observes revision changes.

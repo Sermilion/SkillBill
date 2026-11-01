@@ -1,3 +1,10 @@
+## [2026-11-01] SKILL-455 Activity timeline reads
+- Added WorkActivityService on RuntimeComponent, with Listed, NotFound and Unavailable results.
+- Reconstructs agent-executed phase attempts from starts and terminal ledger entries, with retained settlement summaries and verdicts.
+- Preserves orphaned blocked attempts and planned subtasks. Completed workflow status overrides stale blocked telemetry.
+- Keeps assessment results and running-step updates untimed, outside phase totals. Retains child incidents and goal PR failure stops.
+- Uses family-scoped artifact reads and a bounded cache for completed children.
+
 ## [2026-10-30] Inline review merges the selected lanes into one prompt
 Areas: runtime-application review/parallel planning and runner; runtime-engine slot/codereview, slot/standalonereview, operation/verify; runtime-core di/featuretask
 - `ParallelCodeReviewRunner.resolveInlineReviewRubrics` returns every lane the delegated planner selects for the diff, rendered as "Selected specialist: <id>", the changed paths and the rubric body. `resolveInlineCodeQualityRubric` remains for the delegated standalone quality section. reusable

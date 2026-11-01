@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Composable
 import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
@@ -61,8 +62,9 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
       ) { resultTab = it }
     }
     scrollStates.SaveableStateProvider(if (selected == SubtaskKey.GoalFinish) resultTab else "subtask") {
-      LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp)) {
-        val sections = DetailSections(this, collapse, assessmentOrder)
+      val listState = rememberLazyListState()
+      LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(24.dp)) {
+        val sections = DetailSections(this, collapse, listState, assessmentOrder)
         if (detail != null) {
           sections.item(key = "inspector") { InspectorSection(item, detail, selected, onAction) }
           if (selected == SubtaskKey.GoalFinish) {

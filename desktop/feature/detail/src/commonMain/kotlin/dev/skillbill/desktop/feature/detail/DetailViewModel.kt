@@ -18,6 +18,8 @@ import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.repository.WorkActivityRepository
+import dev.skillbill.desktop.core.domain.model.ActivityResult
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
@@ -67,6 +69,7 @@ class DetailViewModel(
   private val detail: WorkDetailRepository,
   private val changes: WorkChangesRepository,
   private val scopes: WorkChangeScopesRepository,
+  private val activity: WorkActivityRepository,
   private val board: WorkBoardRepository,
   private val specs: SpecRepository,
   private val webPages: RepositoryWebPages,
@@ -105,6 +108,7 @@ class DetailViewModel(
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
     observe()
     observeChanges()
+    observeActivity()
     board.observe(ShellBoard.query).onEach { boardState ->
       if (boardState is BoardState.Loaded) latestBoardItems = boardState.items
       followRelaunchedPhase()
@@ -264,6 +268,19 @@ class DetailViewModel(
       }
       .onEach { change -> mutableState.update { it.copy(changes = change(it.changes)) } }
       .launchIn(viewModelScope)
+  }
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  private fun observeActivity() {
+    mutableState.map { state ->
+      state.header.running.takeIf { state.header.kind == WorkKind.Goal && state.sections is SectionsUi.Loaded }
+    }.distinctUntilChanged().flatMapLatest { running ->
+      if (running == null) emptyFlow() else activity.observe(item.id, running)
+    }.onEach { result ->
+      mutableState.update { current ->
+        if (result == ActivityResult.Loading && current.activity is ActivityResult.Listed) current else current.copy(activity = result)
+      }
+    }.launchIn(viewModelScope)
   }
 
   // Re-observing after only running changed keeps the shown result until the next real one.

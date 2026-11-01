@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
+import dev.skillbill.desktop.core.domain.model.ActivityResult
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
@@ -30,6 +31,7 @@ data class DetailUiState(
   /** The previous detail was left by J or K while its Subtasks list had focus, so this one's list takes focus once it shows. */
   val focusSubtaskList: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
+  val activity: ActivityResult = ActivityResult.Loading,
 )
 
 /**

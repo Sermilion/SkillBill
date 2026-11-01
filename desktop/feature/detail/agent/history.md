@@ -1,3 +1,11 @@
+## [2026-11-01] SKILL-455 recorded Activity timeline
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data
+- Replaced ActivityFeed with subtask attempt cards, day labels, a phase-time summary, and a timeline that compresses idle gaps.
+- Cards preserve expansion choices. Blocks opens matching cards. Loop rows and long text expand independently, and timeline segments scroll to their card.
+- Goals observe a session-owned runtime timeline while running and read once when stopped. Standalone execution rows use recorded run times and results.
+- Goal finish shows untimed assessment facts and the latest update separately from phase totals. Card metadata lists agents. Model labels appear only where recorded for the attempt.
+- Removed the unused ActivityFeed component and replaced its block-line regression test with timeline coverage.
+
 ## [2026-10-31] SKILL-454 desktop changes panel and diff view
 Areas: desktop/feature/detail, desktop/core/designsystem
 - Detail shows a Changes section after the pipeline section, fed by WorkChangesRepository. DetailViewModel keys observation on the loaded detail's change baseline and the header's running flag, so a baseline or running change re-observes and an idle item stops polling. Only the open item's worktree is read.

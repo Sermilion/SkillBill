@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.di.DatabaseSessionScope
+import dev.skillbill.desktop.core.data.repository.ActivityObservations
 import dev.skillbill.desktop.core.data.repository.BoardObservations
 import dev.skillbill.desktop.core.data.repository.ChangeObservations
 import dev.skillbill.desktop.core.data.repository.ChangeScopeObservations
@@ -52,6 +53,7 @@ interface DatabaseSessionComponent {
   val specs: SpecObservations
   val changes: ChangeObservations
   val changeScopes: ChangeScopeObservations
+  val activity: ActivityObservations
 
   @ContributesSubcomponent.Factory(AppScope::class)
   interface Factory {
@@ -132,6 +134,11 @@ interface RuntimeSessionProviders {
   ): SpecObservations = SpecObservations(
     holder.selection.scope, holder.selection.id, signals.snapshots, reads, runtime, diagnostics, SpecDirectoryChanges(diagnostics), host,
   )
+
+  @Provides
+  @SingleIn(DatabaseSessionScope::class)
+  fun activityObservations(reads: RuntimeReads, runtime: RuntimeComponent, diagnostics: Diagnostics): ActivityObservations =
+    ActivityObservations(runtime, diagnostics) { id -> reads.read("work_activity") { it.workActivityService.timeline(id) } }
 
   @Provides
   @SingleIn(DatabaseSessionScope::class)

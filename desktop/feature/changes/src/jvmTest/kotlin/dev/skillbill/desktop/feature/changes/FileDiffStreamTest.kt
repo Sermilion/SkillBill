@@ -44,7 +44,6 @@ class FileDiffStreamTest {
     fun settle() = repeat(60) {
       now += 16_000_000L
       scene.render(now)
-      Thread.sleep(2)
     }
     try {
       settle()
