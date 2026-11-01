@@ -16,7 +16,6 @@ import dev.skillbill.desktop.app.tray.TrayHost
 import dev.skillbill.desktop.app.motion.OsReducedMotionReader
 import dev.skillbill.desktop.app.motion.ReducedMotionRead
 import dev.skillbill.desktop.app.shell.MainWindow
-import dev.skillbill.desktop.app.shell.ChangesWindowHost
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -53,24 +52,18 @@ fun main() {
       component.hostIntents.intents.collect { intent ->
         when (intent) {
           HostIntent.ShowMain -> { mainVisible = true; focusRequest++ }
-          is HostIntent.OpenDetail -> { mainVisible = true; focusRequest++; window.navigator.navigate(DetailRoute(intent.item)) }
-          HostIntent.OpenSettings -> { mainVisible = true; focusRequest++; window.navigator.navigate(SettingsRoute(SettingsPageId.App)) }
+          is HostIntent.OpenDetail -> { mainVisible = true; focusRequest++; component.changesWindows.close(); window.navigator.navigate(DetailRoute(intent.item)) }
+          HostIntent.OpenSettings -> { mainVisible = true; focusRequest++; component.changesWindows.close(); window.navigator.navigate(SettingsRoute(SettingsPageId.App)) }
           HostIntent.Refresh -> component.workBoardRepository.refresh()
           HostIntent.Quit -> exitApplication()
         }
       }
     }
     TrayHost(trayModel, component.trayAvailability, component.hostIntents, uiScale, mainVisible, reducedMotion) { exitApplication() }
-    val changesEntries by component.changesWindows.windows.collectAsState()
-    MainWindow(window, uiScale, reducedMotion, mainVisible, focusRequest) {
+    MainWindow(window, uiScale, reducedMotion, mainVisible, focusRequest, component.changesWindows, component.changesWindowViewModel) {
       if (component.trayAvailability.state.value.canHideToTray) mainVisible = false else {
         component.trayAvailability.unavailable()
         exitApplication()
-      }
-    }
-    changesEntries.forEach { entry ->
-      key(entry.item.id) {
-        ChangesWindowHost(entry, uiScale, reducedMotion, component.changesWindowViewModel) { component.changesWindows.close(entry.item.id) }
       }
     }
   }

@@ -139,7 +139,7 @@ class ChangesWindowViewModelTest {
     scopes.list(ChangeScope.Subtasks(5, 5)).value = listed(foo)
     advanceUntilIdle()
 
-    assertEquals(listOf<ChangeScope>(ChangeScope.Subtasks(3, 3), ChangeScope.Subtasks(5, 5)), scopes.shown)
+    assertEquals(listOf<ChangeScope>(ChangeScope.Subtasks(3, 3), ChangeScope.Subtasks(5, 5)), scopes.shown.filterNot { it == ChangeScope.All })
     assertEquals(ScopeListUi.Listed(ChangeSet("base", listOf(foo), 1, 0)), viewModel.state.value.list)
     assertEquals(foo.path, viewModel.state.value.selectedPath)
   }
@@ -198,6 +198,20 @@ class ChangesWindowViewModelTest {
     assertEquals(ChangeScope.All, viewModel.state.value.scope)
     viewModel.onAction(ChangesWindowAction.Step(forward = false))
     assertEquals(ChangeScope.Subtasks(3, 3), viewModel.state.value.scope)
+  }
+
+  @Test
+  fun `a window opened on a subtask still counts all changes`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val goal = workItem("G")
+    detailOf(goal)
+    scopes.subtasks.value = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap())
+    scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(1, 1), details, scopes, opener)
+    advanceUntilIdle()
+
+    assertEquals(ChangeScope.Subtasks(1, 1), viewModel.state.value.scope)
+    assertEquals(2, viewModel.state.value.quick.first { it.kind == QuickScope.All }.count)
   }
 
   @Test

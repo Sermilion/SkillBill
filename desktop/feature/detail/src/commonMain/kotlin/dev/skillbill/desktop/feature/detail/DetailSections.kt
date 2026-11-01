@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
@@ -24,6 +25,7 @@ internal class DetailSections(
     actions: (@Composable RowScope.() -> Unit)? = null,
     spaceBefore: Dp = DocBlockGap,
     collapsedByDefault: Boolean = false,
+    countStyle: (@Composable () -> TextStyle)? = null,
     content: LazyListScope.() -> Unit,
-  ) = lazySection(key, title, count, lead, actions, spaceBefore, collapse, collapsedByDefault, content)
+  ) = lazySection(key, title, count, lead, actions, spaceBefore, collapse, collapsedByDefault, countStyle, content)
 }

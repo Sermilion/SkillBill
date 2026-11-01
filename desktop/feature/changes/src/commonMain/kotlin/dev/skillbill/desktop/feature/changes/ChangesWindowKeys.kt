@@ -29,8 +29,8 @@ internal fun windowKeyFor(event: KeyEvent): WindowKey? {
 }
 
 /**
- * One per Changes window. The window's `onPreviewKeyEvent` calls [handle], so keys work with no focused node; the window content
- * installs the handler while it is shown.
+ * One per Changes panel. The main window's `onPreviewKeyEvent` calls [handle] while the panel is open, so keys work with no focused
+ * node and no shell shortcut fires under it; the panel content installs the handler while it is shown.
  */
 class ChangesWindowKeys {
   internal var handler: (KeyEvent) -> Boolean = { false }

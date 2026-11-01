@@ -8,7 +8,6 @@ import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeRead
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
-import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.normalizeRange
 import dev.skillbill.desktop.core.domain.model.resolveScope
 import kotlin.math.abs
@@ -42,15 +41,15 @@ internal fun stepTarget(subtasks: List<ScopeSubtask>, scope: ChangeScope, forwar
 internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope, outsideCommits: List<OutsideCommit>): String = when (scope) {
   ChangeScope.All -> when (val baseline = target.allBaseline) {
     is ChangeBaseline.TargetMergeBase -> "${baseline.targetBranch ?: "default branch"}...HEAD"
-    is ChangeBaseline.RunStart -> "${baseline.baseSha.take(7)}..working tree"
-    is ChangeBaseline.SubtaskStart -> "${baseline.baseSha.take(7)}..working tree"
+    is ChangeBaseline.RunStart -> "${baseline.baseSha.take(7)}..HEAD"
+    is ChangeBaseline.SubtaskStart -> "${baseline.baseSha.take(7)}..HEAD"
   }
-  ChangeScope.Uncommitted -> "HEAD..working tree"
+  ChangeScope.Uncommitted -> ""
   ChangeScope.Outside -> outsideCommits.joinToString(", ") { it.sha.take(7) }.ifEmpty { "none" }
   is ChangeScope.Subtasks -> {
     val range = when (val read = resolveScope(target, scope)) {
       is ScopeRead.Committed -> "${read.fromSha.take(7)}..${read.toSha.take(7)}"
-      is ScopeRead.Baseline -> "${(read.baseline as? ChangeBaseline.SubtaskStart)?.baseSha?.take(7).orEmpty()}..working tree"
+      is ScopeRead.Baseline -> "${(read.baseline as? ChangeBaseline.SubtaskStart)?.baseSha?.take(7).orEmpty()}..HEAD"
       is ScopeRead.Unavailable -> read.reason
       else -> ""
     }
@@ -84,6 +83,7 @@ internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
       runningCount,
       enabled = running != null && running.selectable && (runningCount ?: 0) > 0,
       pressed = running != null && scope == ChangeScope.Subtasks(running.id, running.id),
+      running = running != null,
     )
     buttons += readButton(QuickScope.Outside, "Outside subtasks", state.outsideRead, scope == ChangeScope.Outside)
   }
@@ -95,10 +95,3 @@ private fun readButton(kind: QuickScope, label: String, read: ScopeChangesState?
   val count = (read as? ScopeChangesState.Listed)?.changes?.files?.size
   return QuickButtonUi(kind, label, count, enabled = (count ?: 0) > 0, pressed = pressed)
 }
-
-internal fun pickerRowDetail(subtask: ScopeSubtask, stats: SubtaskStats?): String =
-  if (!subtask.selectable) {
-    "not started"
-  } else {
-    "${stats?.files?.size ?: 0} files +${stats?.insertions ?: 0} −${stats?.deletions ?: 0}"
-  }

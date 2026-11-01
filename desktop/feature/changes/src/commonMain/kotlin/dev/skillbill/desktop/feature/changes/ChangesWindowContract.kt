@@ -47,7 +47,7 @@ data class ChangesWindowUiState(
 enum class QuickScope { All, Running, Outside, Uncommitted }
 
 /** A quick scope button; [count] is null before its read lands. */
-data class QuickButtonUi(val kind: QuickScope, val label: String, val count: Int?, val enabled: Boolean, val pressed: Boolean)
+data class QuickButtonUi(val kind: QuickScope, val label: String, val count: Int?, val enabled: Boolean, val pressed: Boolean, val running: Boolean = false)
 
 sealed interface WindowContent {
   data object Loading : WindowContent

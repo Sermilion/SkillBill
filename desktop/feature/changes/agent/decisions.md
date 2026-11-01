@@ -1,3 +1,15 @@
+## [2026-11-01] Show Changes as a fixed in-app panel, not an OS window
+Context: The operator wants Changes to look like a window while staying inside the app, unmovable, with the main window visible around it.
+Decision: `ChangesOverlay` shows `ChangesWindowFrame` in a Compose `Dialog` at 94% of the main window's width and height, over the shell scrim. `ChangesWindows` holds one current entry; opening another execution replaces it. The main window's `onPreviewKeyEvent` routes every key to `ChangesWindowKeys` while the panel is open, so no shell shortcut fires under it. Esc closes the picker, then leaves the filter, then closes the panel; the close button and a click on the scrim also close it.
+Reason: A modal panel keeps the operator's place in the app, and a single entry matches a modal: two cannot be visible at once. `Dialog` already traps focus away from the shell.
+Supersedes: "Route Changes window keys through the window's onPreviewKeyEvent", "Open Changes windows through a core/ui interface and an app-wide registry" (the core/ui interface stays; the per-execution OS windows do not).
+
+## [2026-11-01] Show labelled cards when subtasks have room
+Context: `design/App/Changes Window.html` is drawn for 33 subtasks. Bars for 1 to 5 subtasks are wide blocks that say little.
+Decision: `SubtaskStrip` draws a card per subtask (state, number, name, files, +N/-N) when the width gives each at least 140 dp, capped at 320 dp wide, and bars otherwise. Cards keep the strip's height and its click, Shift-click and drag gestures. The detail screen's running row shows under bars only, since a card already names its subtask.
+Reason: The switch follows available width, so the same run reads well in both the narrow detail column and the wide panel.
+Revisit when: A designed few-subtask state replaces this one.
+
 ## [2026-11-01] Keep Uncommitted and Outside observed for quick-button counts
 Context: The quick buttons show file counts for Uncommitted and Outside subtasks whatever the current scope is, and a button with zero files is disabled.
 Decision: ChangesWindowViewModel observes Uncommitted, and Outside when availableScopes offers it, for the window's lifetime, keyed on target and running. When the shown scope is one of those two, the shown list reuses that read instead of starting a second observation.

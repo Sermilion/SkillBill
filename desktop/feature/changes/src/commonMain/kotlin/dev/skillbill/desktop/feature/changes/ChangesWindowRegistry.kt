@@ -17,21 +17,17 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class, boundType = ChangesWindows::class)
 class ChangesWindowRegistry : ChangesWindows {
-  private val mutableWindows = MutableStateFlow<List<ChangesWindowEntry>>(emptyList())
-  override val windows: StateFlow<List<ChangesWindowEntry>> = mutableWindows.asStateFlow()
+  private val mutableCurrent = MutableStateFlow<ChangesWindowEntry?>(null)
+  override val current: StateFlow<ChangesWindowEntry?> = mutableCurrent.asStateFlow()
 
   override fun open(item: WorkItem, scope: ChangeScope) {
-    mutableWindows.update { entries ->
-      val index = entries.indexOfFirst { it.item.id == item.id }
-      if (index < 0) entries + ChangesWindowEntry(item, scope, 0)
-      else entries.toMutableList().also { values ->
-        val current = values[index]
-        values[index] = current.copy(item = item, scope = scope, focusRequest = current.focusRequest + 1)
-      }
+    mutableCurrent.update { entry ->
+      if (entry?.item?.id == item.id) entry.copy(item = item, scope = scope, focusRequest = entry.focusRequest + 1)
+      else ChangesWindowEntry(item, scope, 0)
     }
   }
 
-  override fun close(workId: String) {
-    mutableWindows.update { entries -> entries.filterNot { it.item.id == workId } }
+  override fun close() {
+    mutableCurrent.value = null
   }
 }

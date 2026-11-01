@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -83,6 +84,7 @@ private fun SectionHeaderRow(
   modifier: Modifier = Modifier,
   collapsed: Boolean = false,
   onToggle: (() -> Unit)? = null,
+  countStyle: (@Composable () -> TextStyle)? = null,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
@@ -90,7 +92,7 @@ private fun SectionHeaderRow(
     lead?.invoke()
     val titleRow: @Composable RowScope.() -> Unit = {
       BasicText(title, Modifier.semantics { heading() }, style = type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.em), maxLines = 1)
-      count?.let { BasicText(it, style = type.tBase.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.em), maxLines = 1) }
+      count?.let { BasicText(it, style = countStyle?.invoke() ?: type.tBase.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.em), maxLines = 1) }
     }
     if (onToggle == null) {
       titleRow()
@@ -155,6 +157,7 @@ fun LazyListScope.section(
   spaceBefore: Dp = DocBlockGap,
   collapse: SectionCollapse? = null,
   collapsedByDefault: Boolean = false,
+  countStyle: (@Composable () -> TextStyle)? = null,
   content: LazyListScope.() -> Unit,
 ) {
   blockGap(key, spaceBefore)
@@ -165,6 +168,7 @@ fun LazyListScope.section(
       Modifier.padding(bottom = if (collapsed) 0.dp else sectionBodyGap),
       collapsed = collapsed,
       onToggle = collapse?.let { state -> { state.toggle(key, collapsedByDefault) } },
+      countStyle = countStyle,
     )
   }
   if (!collapsed) content()

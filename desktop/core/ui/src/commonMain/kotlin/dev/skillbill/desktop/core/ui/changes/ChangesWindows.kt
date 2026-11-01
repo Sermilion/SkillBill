@@ -6,8 +6,9 @@ import kotlinx.coroutines.flow.StateFlow
 
 data class ChangesWindowEntry(val item: WorkItem, val scope: ChangeScope, val focusRequest: Int)
 
+/** The one Changes panel shown over the shell, if any. It is modal, so opening another execution replaces the current one. */
 interface ChangesWindows {
-  val windows: StateFlow<List<ChangesWindowEntry>>
+  val current: StateFlow<ChangesWindowEntry?>
   fun open(item: WorkItem, scope: ChangeScope)
-  fun close(workId: String)
+  fun close()
 }

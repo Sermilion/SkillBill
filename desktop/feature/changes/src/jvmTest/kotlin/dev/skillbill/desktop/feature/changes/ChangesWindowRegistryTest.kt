@@ -7,19 +7,21 @@ import kotlin.test.assertEquals
 
 class ChangesWindowRegistryTest {
   @Test
-  fun `reopening an execution updates its scope and focus request`() {
+  fun `reopening an execution updates its scope and another execution replaces it`() {
     val registry = ChangesWindowRegistry()
     val first = workItem("A")
     val second = workItem("B")
 
     registry.open(first, ChangeScope.All)
     registry.open(first, ChangeScope.Subtasks(3, 3))
-    registry.open(second, ChangeScope.All)
+    assertEquals(ChangeScope.Subtasks(3, 3), registry.current.value?.scope)
+    assertEquals(1, registry.current.value?.focusRequest)
 
-    assertEquals(2, registry.windows.value.size)
-    assertEquals(ChangeScope.Subtasks(3, 3), registry.windows.value.first().scope)
-    assertEquals(1, registry.windows.value.first().focusRequest)
-    registry.close(first.id)
-    assertEquals(listOf(second.id), registry.windows.value.map { it.item.id })
+    registry.open(second, ChangeScope.All)
+    assertEquals(second.id, registry.current.value?.item?.id)
+    assertEquals(0, registry.current.value?.focusRequest)
+
+    registry.close()
+    assertEquals(null, registry.current.value)
   }
 }

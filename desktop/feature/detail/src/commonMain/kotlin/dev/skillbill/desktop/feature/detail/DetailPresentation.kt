@@ -107,6 +107,16 @@ internal fun pipelineSteps(item: WorkItem, detail: Detail, pipeline: List<String
   }
 }
 
+/**
+ * One subtask's own step pipeline. A finished subtask completes every step, the current one has its live place on it, and any
+ * other shows them pending, since the runtime records no per-step history for it.
+ */
+internal fun subtaskSteps(item: WorkItem, detail: Detail, status: StatusKind, current: Boolean): List<PipelineStep> = when {
+  status == StatusKind.Completed || status == StatusKind.CompletedNoChange -> detail.stepPipeline.map { PipelineStep(it, PipelineStepState.Done) }
+  current -> pipelineSteps(item, detail, detail.stepPipeline)
+  else -> detail.stepPipeline.map { PipelineStep(it, PipelineStepState.Pending) }
+}
+
 private val ASSESSMENT_STEPS = setOf("goal_assessment", "goal_assessment_fix")
 
 /** The goal finish steps; a settled assessment completes its steps, and a skipped one shows them pending with a "skipped" tooltip. */

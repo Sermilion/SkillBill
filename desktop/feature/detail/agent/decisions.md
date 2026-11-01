@@ -1,3 +1,9 @@
+## [2026-11-01] Show the step pipeline on each subtask row
+Context: A goal showed one "Phase pipeline" section apart from its subtasks, so the reader had to work out which subtask it described. Goal finish already shows its steps on its own row.
+Decision: Every subtask row carries the step pipeline. The current subtask uses its live position, a completed subtask shows every step done, and any other shows them pending. The separate section stays only for standalone phases and operations, which have no subtask rows.
+Reason: The runtime records the current step for the run, not a step history per subtask, so a blocked or interrupted subtask that is not current cannot show where it stopped.
+Revisit when: The runtime exposes per-subtask step state.
+
 ## [2026-11-01] The detail screen no longer hosts a diff
 Context: SKILL-454 showed changed files and a unified diff inside the detail screen. SKILL-455 moves file lists and diffs into the Changes window.
 Decision: The detail Changes section shows only the subtask strip or a change summary plus Open changes. DetailDiff, DiffView and their actions are deleted.

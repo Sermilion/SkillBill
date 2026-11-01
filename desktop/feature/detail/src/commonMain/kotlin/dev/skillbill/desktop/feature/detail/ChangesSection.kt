@@ -1,30 +1,46 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Hint
-import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
+import dev.skillbill.desktop.core.ui.changes.AddCount
+import dev.skillbill.desktop.core.ui.changes.ChangesButton
+import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
 import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
+import dev.skillbill.desktop.core.ui.changes.changesMono
+import dev.skillbill.desktop.core.ui.changes.changesSans
+import dev.skillbill.desktop.core.ui.changes.filesLabel
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 
 /**
@@ -33,13 +49,29 @@ import dev.skillbill.desktop.core.ui.feedback.readProblemText
  */
 internal fun DetailSections.changesSection(changes: ChangesUi, onAction: (DetailAction) -> Unit) {
   val subtasks = changes.subtasks
-  val count = if (subtasks == null) (changes.state as? ChangesState.Listed)?.changes?.files?.size?.toString() else null
-  section("changes", "Changes", count = count) {
-    item(key = "changes-open") {
-      SbButton("Open changes", { onAction(DetailAction.OpenChangesWindow()) })
-    }
+  val count = when {
+    subtasks is SubtaskScopesState.Listed -> goalCount(subtasks)
+    subtasks == null -> (changes.state as? ChangesState.Listed)?.changes?.files?.size?.toString()
+    else -> null
+  }
+  section(
+    "changes",
+    "Changes",
+    count = count,
+    countStyle = if (subtasks is SubtaskScopesState.Listed) goalCountStyle else null,
+    actions = { ChangesButton("Open changes", { onAction(DetailAction.OpenChangesWindow()) }, primary = true, leadingIcon = LucideIcons.openWindow) },
+  ) {
     if (subtasks != null) goalChanges(subtasks, onAction) else executionChanges(changes.state)
   }
+}
+
+private val goalCountStyle: @Composable () -> TextStyle = { changesMono(11f, FontWeight.Normal, SkillBillTheme.colors.fgMuted) }
+
+/** `N files · +A −D · M subtasks`: files by path across the subtasks' lists, counts summed over them. */
+private fun goalCount(state: SubtaskScopesState.Listed): String {
+  val stats = state.stats.values
+  val files = stats.flatMap { it.files }.map { it.path }.distinct().size
+  return "${filesLabel(files)} · +${stats.sumOf { it.insertions }} −${stats.sumOf { it.deletions }} · ${state.subtasks.size} subtasks"
 }
 
 private fun LazyListScope.goalChanges(state: SubtaskScopesState, onAction: (DetailAction) -> Unit) {
@@ -49,18 +81,17 @@ private fun LazyListScope.goalChanges(state: SubtaskScopesState, onAction: (Deta
     is SubtaskScopesState.Unavailable -> notice("changes-problem") { Hint(readProblemText(state.problem)) }
     is SubtaskScopesState.Listed -> {
       val open = { id: Int -> onAction(DetailAction.OpenChangesWindow(ChangeScope.Subtasks(id, id))) }
-      item(key = "changes-summary") {
-        val done = state.subtasks.count { it.state == ScopeSubtaskState.DONE }
-        BasicText(
-          "${state.subtasks.size} subtasks · $done done",
-          Modifier.padding(vertical = 4.dp),
-          style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted),
-        )
-      }
       // Shift-clicks and drags do nothing in the detail strip; only a plain click opens the pressed subtask.
-      item(key = "changes-strip") { SubtaskStrip(state.subtasks, state.stats, selected = null, onPick = { id, extend -> if (!extend) open(id) }) }
-      state.subtasks.firstOrNull { it.state == ScopeSubtaskState.RUNNING }?.let { running ->
-        item(key = "changes-running") { RunningRow(running, state.stats[running.id], open) }
+      item(key = "changes-strip") {
+        val running = state.subtasks.firstOrNull { it.state == ScopeSubtaskState.RUNNING }
+        SubtaskStrip(
+          state.subtasks,
+          state.stats,
+          selected = null,
+          onPick = { id, extend -> if (!extend) open(id) },
+          modifier = Modifier.padding(top = 4.dp),
+          barsFooter = running?.let { { RunningRow(it, state.stats[it.id], open) } },
+        )
       }
     }
   }
@@ -97,18 +128,27 @@ private fun LazyListScope.notice(key: String, content: @Composable () -> Unit) {
 @Composable
 private fun RunningRow(subtask: ScopeSubtask, stats: SubtaskStats?, onOpen: (Int) -> Unit) {
   val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  val clickable = if (subtask.selectable) Modifier.pointerHoverIcon(PointerIcon.Hand).clickable { onOpen(subtask.id) } else Modifier
+  val interaction = remember { MutableInteractionSource() }
+  val hovered by interaction.collectIsHoveredAsState()
+  val shape = RoundedCornerShape(7.dp)
+  val clickable = if (subtask.selectable) {
+    Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null) { onOpen(subtask.id) }
+  } else {
+    Modifier
+  }
   Row(
-    Modifier.fillMaxWidth().then(clickable).padding(vertical = 4.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Modifier.padding(top = 14.dp).fillMaxWidth()
+      .background(if (hovered) colors.bgOverlay else colors.bgRaised, shape)
+      .then(clickable)
+      .padding(horizontal = 10.dp, vertical = 9.dp),
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     ScopeStateDot(subtask.state)
-    BasicText("${subtask.id}", style = type.monoSm.copy(color = colors.fgMuted))
-    BasicText(subtask.name, Modifier.weight(1f), style = type.tSm.copy(color = colors.fg2), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    BasicText("${stats?.files?.size ?: 0} files", style = type.tSm.copy(color = colors.fgMuted))
-    BasicText("+${stats?.insertions ?: 0}", style = type.monoSm.copy(color = colors.stDone))
-    BasicText("−${stats?.deletions ?: 0}", style = type.monoSm.copy(color = colors.stFailed))
+    BasicText("${subtask.id}", style = changesMono(11f, FontWeight.SemiBold, colors.accentText), maxLines = 1, softWrap = false)
+    BasicText(subtask.name, Modifier.weight(1f), style = changesSans(12.5f, FontWeight.Normal, colors.fg2, lineHeight = 16.25f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    BasicText(filesLabel(stats?.files?.size ?: 0), style = changesMono(11f, FontWeight.Normal, colors.fgMuted), maxLines = 1, softWrap = false)
+    AddCount(stats?.insertions ?: 0)
+    DelCount(stats?.deletions ?: 0)
   }
 }

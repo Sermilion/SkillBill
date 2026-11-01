@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.changes
 
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.testing.workItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -16,5 +17,12 @@ class FileGroupingTest {
     )
 
     assertEquals(listOf("(root)", "desktop/agent", "desktop/feature/x", "runtime-kotlin/runtime-infra/workflow"), groupFiles(files, "") { 0 }.map { it.module })
+  }
+
+  @Test
+  fun `the title names the issue key once`() {
+    val item = workItem("G").copy(issueKey = "SKILL-455", title = "[SKILL-455] Changes window")
+
+    assertEquals("Changes · SKILL-455 · Changes window", changesWindowTitle(item))
   }
 }

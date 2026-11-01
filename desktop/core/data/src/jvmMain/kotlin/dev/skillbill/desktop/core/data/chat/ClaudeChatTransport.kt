@@ -80,8 +80,10 @@ class ClaudeChatTransport(
     while (true) {
       var created: ClaudeLiveSession? = null
       val session = sessions.computeIfAbsent(sessionId) { open(sessionId, command).also { created = it } }
-      created?.job?.start()
-      if (session.register(uuid, sink)) return session
+      if (session.register(uuid, sink)) {
+        created?.job?.start()
+        return session
+      }
       sessions.remove(sessionId, session)
     }
   }

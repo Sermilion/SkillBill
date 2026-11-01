@@ -1,6 +1,9 @@
 package dev.skillbill.desktop.feature.detail
 
+import dev.skillbill.desktop.core.designsystem.detail.PipelineStepState
 import dev.skillbill.desktop.core.designsystem.detail.breakdownRows
+import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.testing.workItem
@@ -23,6 +26,18 @@ class SubtaskIndexTest {
     assertEquals(SubtaskKey.Subtask(1), selectedSubtask(idle, current, chosen = null))
     assertEquals(SubtaskKey.GoalFinish, selectedSubtask(running, blocked, chosen = SubtaskKey.GoalFinish))
     assertEquals(SubtaskKey.Subtask(3), selectedSubtask(running, blocked, chosen = SubtaskKey.Subtask(9)))
+  }
+
+  @Test
+  fun `each subtask places itself on the step pipeline`() {
+    val item = workItem("SKILL-1").copy(lifecycle = Lifecycle.Active, currentSubtaskId = "2")
+    val detail = emptyDetail.copy(stepPipeline = listOf("implement", "review", "fix"), currentPhase = "review")
+    fun states(status: StatusKind, current: Boolean) = subtaskSteps(item, detail, status, current).map { it.state }
+
+    assertEquals(List(3) { PipelineStepState.Done }, states(StatusKind.Completed, current = false))
+    assertEquals(List(3) { PipelineStepState.Done }, states(StatusKind.CompletedNoChange, current = true))
+    assertEquals(List(3) { PipelineStepState.Pending }, states(StatusKind.Pending, current = false))
+    assertEquals(listOf(PipelineStepState.Done, PipelineStepState.Current, PipelineStepState.Pending), states(StatusKind.Active, current = true))
   }
 
   @Test

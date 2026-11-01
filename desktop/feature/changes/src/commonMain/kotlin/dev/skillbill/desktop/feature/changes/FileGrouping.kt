@@ -36,4 +36,8 @@ internal fun scopeLabel(scope: ChangeScope, subtasks: List<ScopeSubtask>): Strin
 }
 
 fun changesWindowTitle(item: WorkItem): String =
-  "Changes · ${item.issueKey?.let { "$it " }.orEmpty()}${item.title}"
+  "Changes · ${listOfNotNull(item.issueKey, item.title.withoutIssueKey(item.issueKey)).joinToString(" · ")}"
+
+/** Goal titles often start with their own `[KEY]`; the window title already names the key. */
+private fun String.withoutIssueKey(key: String?): String =
+  if (key != null && startsWith("[$key]")) removePrefix("[$key]").trim() else this

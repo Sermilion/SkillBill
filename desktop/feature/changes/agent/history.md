@@ -1,3 +1,8 @@
+## [2026-11-01] SKILL-455 Changes panel matched to the design
+- Rebuilt the toolbar, strip, scope bar, file list, diff, picker and footer to the values in design/App/Changes Window.html, and painted the surface that was missing, which had left dark-theme text on a light default background.
+- Changes is now a fixed 94% in-app panel (ChangesOverlay, ChangesWindowFrame) instead of an OS window. See decisions.
+- DiffLines no longer wraps lines; it scrolls horizontally under 52 dp gutters. Few subtasks render as labelled cards in SubtaskStrip.
+
 ## [2026-11-01] SKILL-455 changes window scope selection, keys and detail strip
 Areas: desktop/core/ui, desktop/feature/changes, desktop/feature/detail, desktop/app
 - core/ui gains SubtaskStrip and ScopeStateDot. reusable One column per subtask (2 dp minimum, scrolls only on overflow); NOT_STARTED gets a dashed outline, other bars are max(6%, sqrt(lines / maxLines)) tall. One awaitEachGesture handles press, Shift and drag and ignores non-selectable columns. subtaskBarFraction and subtaskTooltip are pure.

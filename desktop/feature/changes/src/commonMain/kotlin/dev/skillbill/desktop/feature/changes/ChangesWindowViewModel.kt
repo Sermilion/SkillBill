@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
@@ -106,6 +107,7 @@ class ChangesWindowViewModel(
       }
     }.launchIn(viewModelScope)
     observeQuickReads()
+    observeAllCount()
     observeScopeReads()
   }
 
@@ -227,9 +229,8 @@ class ChangesWindowViewModel(
     return subtasksTouching(file.path, stats).mapNotNull { id ->
       val subtask = target.subtasks.firstOrNull { it.id == id } ?: return@mapNotNull null
       val inScope = when (scope) {
-        ChangeScope.All -> true
         is ChangeScope.Subtasks -> id in scope.from..scope.to
-        ChangeScope.Outside, ChangeScope.Uncommitted -> false
+        ChangeScope.All, ChangeScope.Outside, ChangeScope.Uncommitted -> false
       }
       SubtaskChipUi(id, subtask.name, inScope, normalizeRange(target, id, id) != null)
     }
@@ -282,6 +283,15 @@ class ChangesWindowViewModel(
       )
       quickReads.value = settled
       mutableState.update { it.copy(uncommittedRead = settled?.uncommitted, outsideRead = settled?.outside) }
+    }.launchIn(viewModelScope)
+  }
+
+  /** A panel opened on another scope still shows All's count: one read, not polled, until All is viewed. */
+  private fun observeAllCount() {
+    state.map { ui -> ui.target?.takeIf { ui.allRead == null && ui.scope != ChangeScope.All } }.filterNotNull().distinctUntilChanged().flatMapLatest { target ->
+      scopes.observeScope(target, ChangeScope.All, running = false)
+    }.onEach { read ->
+      if (read != ScopeChangesState.Loading) mutableState.update { if (it.allRead == null) it.copy(allRead = read.toUi()) else it }
     }.launchIn(viewModelScope)
   }
 
