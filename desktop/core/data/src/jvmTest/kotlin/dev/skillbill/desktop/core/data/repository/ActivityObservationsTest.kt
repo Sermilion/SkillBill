@@ -20,6 +20,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ActivityObservationsTest {
   private val root = Files.createTempDirectory("activity-observation")
   private val runtime = RuntimeComponent::class.create(RuntimeContext(

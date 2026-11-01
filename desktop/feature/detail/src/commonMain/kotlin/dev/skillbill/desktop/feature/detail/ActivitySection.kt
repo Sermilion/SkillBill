@@ -6,22 +6,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
@@ -35,9 +33,9 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
-import kotlinx.coroutines.launch
-import kotlin.time.Instant
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 internal fun DetailSections.activitySection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
   val listState = scrollState
@@ -57,7 +55,7 @@ internal fun DetailSections.activitySection(item: WorkItem, detail: Detail, stat
         is ActivityResult.Listed -> ActivityTimeline(activity.groups, item.id, onJump = jump)
         ActivityResult.Loading -> ActivityText("Loading activity...", faint = true)
         ActivityResult.NotFound -> ActivityText("No recorded activity.", faint = true)
-        is ActivityResult.Unavailable -> ActivityText("Activity is unavailable. ${activity.problem}", faint = true)
+        is ActivityResult.Unavailable -> ActivityText("Activity is unavailable. ${readProblemText(activity.problem)}", faint = true)
       }
     }
   }

@@ -4,6 +4,7 @@
 - Preserves orphaned blocked attempts and planned subtasks. Completed workflow status overrides stale blocked telemetry.
 - Keeps assessment results and running-step updates untimed, outside phase totals. Retains child incidents and goal PR failure stops.
 - Uses family-scoped artifact reads and a bounded cache for completed children.
+- Goal finish excludes stops that occurred before the last child finished. A stopped goal cannot retain a running-step fact from an old progress event.
 
 ## [2026-10-30] Inline review merges the selected lanes into one prompt
 Areas: runtime-application review/parallel planning and runner; runtime-engine slot/codereview, slot/standalonereview, operation/verify; runtime-core di/featuretask

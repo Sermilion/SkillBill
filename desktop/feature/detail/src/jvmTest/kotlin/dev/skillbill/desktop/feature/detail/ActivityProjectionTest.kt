@@ -45,6 +45,15 @@ class ActivityProjectionTest {
   }
 
   @Test
+  fun `block notices do not imply an idle interval and cannot shorten phase idle totals`() {
+    val blocks = listOf(5L, 30L).map { ActivityBlock("block-$it", at(it), ActivityBlockKind.PULL_REQUEST_FAILED, null, null, null, false) }
+    assertEquals(2, activityEntries(group(emptyList(), blocks)).size)
+    val first = group(listOf(phase("implement", 0, 2)), blocks.take(1))
+    val second = group(listOf(phase("implement", 30, 32))).copy(id = "second", subtaskId = 2)
+    assertEquals(28 * 60_000L, activityIdleMilliseconds(listOf(first, second), at(40)))
+  }
+
+  @Test
   fun `running phase stays outside folded completed attempts`() {
     val entries = activityEntries(group(listOf(phase("review", 0, 1), phase("review_fix", 2, null))))
     assertEquals(2, entries.size)

@@ -12,16 +12,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -53,18 +56,20 @@ internal fun ActivityCard(group: ActivityGroup, open: Boolean, now: Instant, mod
       SbIcon(if (open) LucideIcons.chevronDown else LucideIcons.chevronRight, 12.dp)
       ActivityDot(group.status)
       ActivityText(group.subtaskId?.toString() ?: "··", Modifier.width(22.dp), weight = FontWeight.SemiBold, faint = true)
-      ActivityText(group.name, Modifier.weight(1f), size = 12.5f, sans = true, weight = FontWeight.Medium, color = if (open) colors.fg else colors.fg2)
       val label = when (group.status) {
         ActivityStatus.RUNNING -> "running"
         ActivityStatus.BLOCKED -> "blocked"
         else -> group.blocks.size.takeIf { it > 0 }?.let { "$it block${if (it == 1) "" else "s"}" }
       }
-      label?.let { ActivityTag(it, group.status == ActivityStatus.RUNNING) }
+      Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ActivityText(group.name, Modifier.weight(1f, fill = false), size = 12.5f, sans = true, weight = FontWeight.Medium, color = if (open) colors.fg else colors.fg2)
+        label?.let { ActivityTag(it, group.status == ActivityStatus.RUNNING) }
+      }
       ActivityTime(group.startedAt, now)
       val active = group.activeMilliseconds(now)
       val wall = group.startedAt?.let { (group.finishedAt ?: now) - it }
       SbTooltip(wall?.let { "Phase time; ${activityDuration(it.inWholeMilliseconds)} start to finish" } ?: "Phase time") {
-        ActivityText(if (active > 0) activityDuration(active) else "", Modifier.width(52.dp))
+        ActivityText(if (active > 0) activityDuration(active) else wall?.let { activityDuration(it.inWholeMilliseconds) }.orEmpty(), Modifier.width(52.dp))
       }
       val agents = (group.phases.mapNotNull { it.agent } + (group.before + group.after).mapNotNull { it.agent }).distinct()
       ActivityText(agents.joinToString(" + "), Modifier.width(104.dp), faint = true)
@@ -130,7 +135,10 @@ private fun ActivityPhaseRow(
       ActivityText(duration?.let(::activityDuration).orEmpty(), Modifier.width(44.dp))
       val model = listOfNotNull(phase.model?.removePrefix("claude-"), phase.effort).joinToString(" · ")
       SbTooltip(listOfNotNull(phase.agent, phase.model, phase.effort).joinToString(" · ")) {
-        ActivityText(listOfNotNull(phase.agent?.let { when (it) { "claude" -> "Cl"; "codex" -> "Cx"; else -> it } }, model.ifBlank { null }).joinToString(" "), Modifier.width(164.dp))
+        val label = phase.agent?.let { agent ->
+          if (loopLabel != null) agent else listOf(when (agent) { "claude" -> "Cl"; "codex" -> "Cx"; else -> agent }, model.ifBlank { agent }).joinToString(" ")
+        }.orEmpty()
+        ActivityText(label, Modifier.width(164.dp))
       }
     }
     phase.summary?.takeIf { it.isNotBlank() }?.let { summary -> ActivityExpandable(summary, 2, Modifier.padding(start = 63.dp, top = 3.dp)) }
@@ -140,7 +148,11 @@ private fun ActivityPhaseRow(
 @Composable
 private fun ActivityBlockRow(block: ActivityBlock, now: Instant) {
   val colors = SkillBillTheme.colors
-  Column(Modifier.fillMaxWidth().background(colors.stBlocked.copy(alpha = .07f)).hairlineTop(colors.borderSubtle).padding(horizontal = 12.dp, vertical = 9.dp)) {
+  var expanded by rememberSaveable(block.id) { mutableStateOf(false) }
+  val source = remember { MutableInteractionSource() }
+  val expand = if (block.reason != null) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
+    .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse block" else "Read full block") { expanded = !expanded } else Modifier
+  Column(Modifier.fillMaxWidth().then(expand).background(colors.stBlocked.copy(alpha = .07f)).drawBehind { drawLine(colors.stBlocked, Offset.Zero, Offset(0f, size.height), 3.dp.toPx()) }.hairlineTop(colors.borderSubtle).padding(horizontal = 12.dp, vertical = 9.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(block.at, now)
       ActivityDot(ActivityStatus.BLOCKED)
@@ -151,15 +163,15 @@ private fun ActivityBlockRow(block: ActivityBlock, now: Instant) {
       }, sans = true, size = 12f, weight = FontWeight.SemiBold, color = colors.stBlocked)
       ActivityText(listOfNotNull(block.phaseId, block.attempt?.let { "attempt $it" }, "needs your decision".takeIf { block.needsDecision }).joinToString(" · "))
     }
-    block.reason?.let { ActivityExpandable(it, 3, Modifier.padding(start = 63.dp, top = 3.dp), block = true) }
+    block.reason?.let { ActivityText(it, Modifier.padding(start = 63.dp, top = 3.dp), size = 12f, sans = true, color = colors.fg2, maxLines = if (expanded) Int.MAX_VALUE else 3) }
   }
 }
 
 @Composable
-private fun ActivityExpandable(text: String, lines: Int, modifier: Modifier, block: Boolean = false) {
+private fun ActivityExpandable(text: String, lines: Int, modifier: Modifier) {
   var expanded by rememberSaveable(text) { mutableStateOf(false) }
   ActivityText(text, modifier.clickable(role = Role.Button, onClickLabel = if (expanded) "Collapse text" else "Read full text") { expanded = !expanded },
-    size = 12f, sans = true, color = if (block) SkillBillTheme.colors.fg2 else SkillBillTheme.colors.fgMuted, maxLines = if (expanded) Int.MAX_VALUE else lines)
+    size = 12f, sans = true, color = SkillBillTheme.colors.fgMuted, maxLines = if (expanded) Int.MAX_VALUE else lines)
 }
 
 @Composable
@@ -169,9 +181,11 @@ private fun ActivityFactRow(fact: ActivityFact, now: Instant) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(fact.at, now)
       ActivityDot(if (fact.running) ActivityStatus.RUNNING else ActivityStatus.COMPLETE)
-      ActivityText(fact.name, Modifier.weight(1f), size = 12f, weight = FontWeight.Medium, color = colors.fg2)
-      fact.detail?.let { ActivityText(it, faint = true) }
-      ActivityText(listOfNotNull(fact.model?.removePrefix("claude-") ?: fact.agent, fact.effort).joinToString(" · "), Modifier.width(164.dp))
+      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        ActivityText(fact.name, Modifier.weight(1f, fill = false), size = 12f, weight = FontWeight.Medium, color = colors.fg2)
+        fact.detail?.let { ActivityText(it, faint = true) }
+      }
+      if (fact.agent != null) ActivityText(listOfNotNull(fact.model?.removePrefix("claude-") ?: fact.agent, fact.effort).joinToString(" · "), Modifier.widthIn(max = 164.dp))
     }
     fact.summary?.let { ActivityExpandable(it, 2, Modifier.padding(start = 63.dp, top = 3.dp)) }
   }

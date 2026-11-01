@@ -34,8 +34,7 @@ import kotlin.time.Instant
 @Composable
 internal fun ActivityStats(groups: List<ActivityGroup>, now: Instant) {
   val colors = SkillBillTheme.colors
-  val spans = remember(groups, now) { activitySpans(groups, now) }
-  val waiting = spans.filter { it.groupId == null }.sumOf { it.milliseconds }
+  val waiting = remember(groups, now) { activityIdleMilliseconds(groups, now) }
   val phases = groups.flatMap { it.phases }
   val models = phases.filter { it.model != null }.groupBy { it.model.orEmpty().removePrefix("claude-") }.entries.sortedByDescending { (_, phases) ->
     phases.sumOf { phase -> phase.startedAt?.let { start -> ((phase.finishedAt ?: now) - start).inWholeMilliseconds } ?: 0 }
@@ -43,11 +42,17 @@ internal fun ActivityStats(groups: List<ActivityGroup>, now: Instant) {
   val subtasks = groups.filter { it.subtaskId != null }.groupBy { it.subtaskId }
   val completed = subtasks.values.count { attempts -> attempts.last().status == ActivityStatus.COMPLETE }
   val blocks = groups.sumOf { it.blocks.size }
+  val blockedSubtasks = groups.count { it.subtaskId != null && it.blocks.isNotEmpty() }
+  val failedPrs = groups.flatMap { it.blocks }.count { it.kind == dev.skillbill.desktop.core.domain.model.ActivityBlockKind.PULL_REQUEST_FAILED }
+  val blockDetail = listOfNotNull(
+    blockedSubtasks.takeIf { it > 0 }?.let { "$it subtask${if (it == 1) "" else "s"}" },
+    failedPrs.takeIf { it > 0 }?.let { "$it PR${if (it == 1) "" else "s"}" },
+  ).joinToString(", ")
   Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(colors.border).border(1.dp, colors.border, RoundedCornerShape(8.dp)), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
     ActivityStat("Phase time", activityDuration(groups.sumOf { it.activeMilliseconds(now) }), if (waiting > 0) "${activityDuration(waiting)} idle" else "no long gaps", Modifier.weight(1f))
-    ActivityStat("Blocks", blocks.toString(), if (blocks > 0) "stopped for help" else "none", Modifier.weight(1f), warning = blocks > 0)
+    ActivityStat("Blocks", blocks.toString(), if (blocks > 0) blockDetail.ifBlank { "stopped for help" } else "none", Modifier.weight(1f), warning = blocks > 0)
     ActivityStat(if (subtasks.isEmpty()) "Runs" else "Subtasks", if (subtasks.isEmpty()) phases.size.toString() else "$completed of ${subtasks.size}",
-      "${phases.size} phases · ${phases.count { it.phaseId.contains("fix") }} fixes", Modifier.weight(1f))
+      "${phases.size} phase${if (phases.size == 1) "" else "s"} · ${phases.count { it.phaseId.contains("fix") }} fixes", Modifier.weight(1f))
     ActivityStat("Models", models.firstOrNull() ?: "none", if (models.size > 1) "+ ${models.drop(1).joinToString(", ")}" else if (models.size == 1) "only model" else "", Modifier.weight(1f))
   }
 }

@@ -1,5 +1,6 @@
 package skillbill.engine.work.timeline
 
+import skillbill.engine.work.timeline.model.WorkActivityGroup
 import skillbill.engine.work.timeline.model.WorkActivityResult
 import skillbill.engine.work.timeline.model.WorkActivityStatus
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
@@ -10,6 +11,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.WorkActivityAttempt
+import skillbill.ports.work.model.WorkActivityStop
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowStateRepository
@@ -28,6 +30,37 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class WorkActivityServiceTest {
+  @Test
+  fun `goal finish excludes stops from earlier child attempts and preserves later PR failures`() {
+    establishTemporarySchemaReadiness("activity-finish").use { fixture ->
+      val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      database.read { unit ->
+        val goal = WorkItem("SKILL-455", WorkItemKind.FEATURE_GOAL, "goal", at(0), "running", at(0), false)
+        val child =
+          WorkActivityGroup(
+            "child",
+            1,
+            "Child",
+            WorkActivityStatus.COMPLETE,
+            at(0),
+            at(10),
+            emptyList(),
+            emptyList(),
+          )
+        val stops =
+          listOf(
+            WorkActivityStop("early", at(0), at(5), "BLOCKED"),
+            WorkActivityStop("pr", at(10), at(20), "PULL_REQUEST_FAILED"),
+          )
+        val group = requireNotNull(ActivityGoalFinishReads().group(goal, listOf(child), stops, unit))
+        assertEquals(listOf("pr"), group.blocks.map { it.id })
+        assertEquals(emptyList(), group.phases)
+        assertEquals(null, group.startedAt)
+        assertEquals(null, group.finishedAt)
+      }
+    }
+  }
+
   @Test
   fun `completed workflow overrides stale blocked event and completed phase artifacts are reused`() {
     establishTemporarySchemaReadiness("activity-service").use { fixture ->

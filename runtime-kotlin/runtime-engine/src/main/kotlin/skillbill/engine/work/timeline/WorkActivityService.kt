@@ -9,6 +9,7 @@ import skillbill.engine.work.timeline.model.WorkActivityGroup
 import skillbill.engine.work.timeline.model.WorkActivityResult
 import skillbill.engine.work.timeline.model.WorkActivityStatus
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.UnitOfWork
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -17,7 +18,6 @@ import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 @Inject
@@ -168,16 +168,19 @@ internal fun activityBlocks(
     )
   }.distinctBy { it.id }
 
-internal fun activityStatus(status: String?): WorkActivityStatus = when (status) {
-  DecompositionStatus.COMPLETE.wireValue, WorkflowStatus.COMPLETED.wireValue,
-  DecompositionStatus.COMPLETED_NO_CHANGE.wireValue -> WorkActivityStatus.COMPLETE
-  WorkflowStatus.RUNNING.wireValue, DecompositionStatus.IN_PROGRESS.wireValue -> WorkActivityStatus.RUNNING
-  WorkflowStatus.BLOCKED.wireValue, WorkflowStatus.FAILED.wireValue -> WorkActivityStatus.BLOCKED
-  WorkflowStatus.PENDING.wireValue -> WorkActivityStatus.PENDING
-  WorkflowStatus.ABANDONED.wireValue, WorkflowStatus.PAUSED.wireValue,
-  WorkflowStatus.TIMED_OUT.wireValue, DecompositionStatus.SKIPPED.wireValue -> WorkActivityStatus.INTERRUPTED
-  else -> throw invalidWorkflowStateSchemaError("Unsupported activity status '$status'.")
-}
+internal fun activityStatus(status: String?): WorkActivityStatus =
+  when (status) {
+    DecompositionStatus.COMPLETE.wireValue, WorkflowStatus.COMPLETED.wireValue,
+    DecompositionStatus.COMPLETED_NO_CHANGE.wireValue,
+    -> WorkActivityStatus.COMPLETE
+    WorkflowStatus.RUNNING.wireValue, DecompositionStatus.IN_PROGRESS.wireValue -> WorkActivityStatus.RUNNING
+    WorkflowStatus.BLOCKED.wireValue, WorkflowStatus.FAILED.wireValue -> WorkActivityStatus.BLOCKED
+    WorkflowStatus.PENDING.wireValue -> WorkActivityStatus.PENDING
+    WorkflowStatus.ABANDONED.wireValue, WorkflowStatus.PAUSED.wireValue,
+    WorkflowStatus.TIMED_OUT.wireValue, DecompositionStatus.SKIPPED.wireValue,
+    -> WorkActivityStatus.INTERRUPTED
+    else -> throw invalidWorkflowStateSchemaError("Unsupported activity status '$status'.")
+  }
 
 internal fun <T> pages(read: (Int) -> List<T>): List<T> =
   buildList {

@@ -31,7 +31,7 @@ internal fun activityEntries(group: ActivityGroup): List<ActivityEntry> {
     val phase = (event as? ActivityEntry.Phases)?.phases?.single()
     val start = phase?.startedAt ?: (event as? ActivityEntry.Block)?.block?.at
     val gap = start?.let { at -> previousEnd?.let { at - it } }
-    if (gap != null && gap > activityLongGap) result += ActivityEntry.Wait(gap.inWholeMilliseconds)
+    if (phase != null && gap != null && gap > activityLongGap) result += ActivityEntry.Wait(gap.inWholeMilliseconds)
     val previous = result.lastOrNull() as? ActivityEntry.Phases
     val family = phase?.phaseId?.let(::activityLoopFamily)
     if (phase != null && phase.finishedAt != null && previous != null && family != null &&
@@ -59,8 +59,8 @@ internal fun ActivityGroup.activeMilliseconds(now: Instant): Long = phases.sumOf
 }
 
 internal fun activityDuration(milliseconds: Long): String {
-  val seconds = (milliseconds.coerceAtLeast(0) + 500) / 1_000
-  if (seconds < 1) return "<1s"
+  if (milliseconds < 1_000) return "<1s"
+  val seconds = (milliseconds + 500) / 1_000
   if (seconds < 60) return "${seconds}s"
   val minutes = (seconds + 30) / 60
   if (minutes < 60) return "${minutes}m"
@@ -113,4 +113,15 @@ internal fun standaloneActivity(item: WorkItem, detail: Detail): List<ActivityGr
   return listOf(ActivityGroup(item.id, null, rowKey(item),
     if (item.running) ActivityStatus.RUNNING else if (detail.incident != null) ActivityStatus.BLOCKED else ActivityStatus.COMPLETE,
     item.startedAt, finishedAt(item), phases, blocks))
+}
+
+internal fun activityIdleMilliseconds(groups: List<ActivityGroup>, now: Instant): Long {
+  val spans = activitySpans(groups, now).filter { it.groupId != null && !it.block && !it.running }
+  var end: Instant? = null
+  var idle = 0L
+  spans.forEach { span ->
+    end?.let { previous -> if (span.start - previous > activityLongGap) idle += (span.start - previous).inWholeMilliseconds }
+    end = maxOf(end ?: span.end, span.end)
+  }
+  return idle
 }

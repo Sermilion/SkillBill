@@ -5,6 +5,7 @@ import skillbill.engine.work.timeline.model.WorkActivityBlock
 import skillbill.engine.work.timeline.model.WorkActivityBlockKind
 import skillbill.engine.work.timeline.model.WorkActivityFact
 import skillbill.engine.work.timeline.model.WorkActivityGroup
+import skillbill.engine.work.timeline.model.WorkActivityStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.model.GoalRunnerStopReason
@@ -41,7 +42,13 @@ public class ActivityGoalFinishReads {
     val blocks = finishBlocks(goal.workflowId, children, stops, unit)
     val before = assessment?.let { listOf(assessmentFact(it)) }.orEmpty()
     val after =
-      progress?.takeIf { children.none { child -> child.status.isUnfinished } }
+      progress?.takeIf {
+        activityStatus(goal.currentState) == WorkActivityStatus.RUNNING &&
+          children.none {
+              child ->
+            child.status.isUnfinished
+          }
+      }
         ?.let(::latestFact)?.let(::listOf).orEmpty()
     if (before.isEmpty() && after.isEmpty() && blocks.isEmpty()) return null
     return WorkActivityGroup(
@@ -59,8 +66,10 @@ public class ActivityGoalFinishReads {
     val childBlocks = children.flatMap { it.blocks }
     val known = childBlocks.map { it.id }.toSet()
     val blocks = activityBlocks(id, unit).filter { it.id !in known }.toMutableList()
+    val lastChildFinish = children.mapNotNull { it.finishedAt }.maxOrNull()
     stops.forEach { stop ->
       val block = stopBlock(stop) ?: return@forEach
+      if (lastChildFinish != null && block.at < lastChildFinish) return@forEach
       if ((blocks + childBlocks).none { it.at >= stop.startedAt && it.at <= block.at }) blocks += block
     }
     return blocks.sortedBy { it.at }

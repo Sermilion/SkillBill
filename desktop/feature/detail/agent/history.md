@@ -5,6 +5,7 @@ Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data
 - Goals observe a session-owned runtime timeline while running and read once when stopped. Standalone execution rows use recorded run times and results.
 - Goal finish shows untimed assessment facts and the latest update separately from phase totals. Card metadata lists agents. Model labels appear only where recorded for the attempt.
 - Removed the unused ActivityFeed component and replaced its block-line regression test with timeline coverage.
+- Idle totals use phase spans. Block notices alone never imply idle time. Interaction coverage checks Blocks filtering, card collapse, and timeline navigation.
 
 ## [2026-10-31] SKILL-454 desktop changes panel and diff view
 Areas: desktop/feature/detail, desktop/core/designsystem
