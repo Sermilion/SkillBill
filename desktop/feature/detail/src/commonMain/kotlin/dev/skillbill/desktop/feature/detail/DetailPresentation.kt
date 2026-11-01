@@ -84,14 +84,9 @@ internal fun elapsedLabel(kind: WorkKind?): String = when (kind) {
   WorkKind.Phase, null -> "Phase elapsed"
 }
 
-/**
- * Places a run on a step pipeline: steps before the current one are done, and a finished run completes them all. The goal
- * finish pipeline ([goal]) only has a current step once no subtask is running. screens.js `pipelineSteps()` puts the execution
- * count on a goal's current phase whatever its state; a standalone run's steps carry it only on the running step.
- */
+/** Places a run on a step pipeline: steps before the current one are done, and a finished run completes them all. */
 internal fun pipelineSteps(item: WorkItem, detail: Detail, pipeline: List<String>, goal: Boolean = false): List<PipelineStep> {
   val current = if (!goal || item.currentSubtaskId == null) pipeline.indexOf(detail.currentPhase) else -1
-  val countOnAnyState = item.kind == WorkKind.Goal && !goal
   return pipeline.mapIndexed { index, id ->
     val state = when {
       item.lifecycle == Lifecycle.Terminal -> PipelineStepState.Done
@@ -105,8 +100,7 @@ internal fun pipelineSteps(item: WorkItem, detail: Detail, pipeline: List<String
       }
       else -> PipelineStepState.Pending
     }
-    val counted = if (countOnAnyState) index == current && state != PipelineStepState.Done else state == PipelineStepState.Current
-    PipelineStep(id, state, count = item.phaseExecutionLabel.takeIf { counted }, goal = goal)
+    PipelineStep(id, state, goal = goal)
   }
 }
 
