@@ -1,5 +1,14 @@
 # featuretask runtime boundary history
 
+## [2026-11-01] SKILL-458 standalone review verifies findings before presentation
+Areas: runtime-engine featuretask standalone review and runloop; runtime-application review verification; runtime-ports and runtime-infra Git observations; runtime-cli review output; runtime guidance
+- Standalone inline and delegated review build a complete finding census, retain coverage and warnings separately, and block ambiguous or incomplete reports.
+- A fresh read-only verifier classifies each finding as confirmed, rejected or unresolved. The runtime derives the verdict from dispositions and warnings and retains failed output as unaccepted evidence. A clean census skips verification after source checks.
+- Strict source observations compare HEAD, index, tracked and untracked contents, modes, symlink targets and deletions. Changed, unreadable or unsupported source blocks settlement.
+- Standalone review remains report-only; full-run review and repair keep separate ownership.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented for subtask 1.
+
 ## [2026-10-25] SKILL-442 subtask 4 - Validate test probes
 Areas: runtime-engine featuretask slot/qualitygate (ValidateProbePrompt, ValidateProbeActivation) and slot/qualitygate/agentvalidate (strategy, step hooks, ValidateProbeSettlement), slot/attempt launch preparation, prompt compose inputs, runloop record rejection and progress observations, opus-5-5-agent-validate.md; runtime-domain model/validation (ValidationTestProbe, parser) and artifact wire; runtime-contracts payload keys and failure code; runtime-infra contracts validator and schema paths; orchestration/contracts; docs/block-incident-classification
 - MEDIUM feature. Goal-child agent validate (not gate triage) asks for up to 6 test probes per run, one `survived`, `repaired` or `not_run` line each; `not_run` needs a reason, and survived or not_run imply repaired false. The ordered list is stored as `produced_outputs.test_probes` and never changes the verdict.

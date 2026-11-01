@@ -1,3 +1,8 @@
+## [2026-11-01] Bind standalone review findings to independently verified source
+Context: Standalone review presented findings without independent verification, and HEAD or status text alone could miss changes to dirty file contents.
+Decision: Admit a complete finding census, verify it in a fresh read-only session, and compare content-sensitive source observations around review and verification. Block and retain unaccepted evidence when admission, verification or source identity fails.
+Reason: A reviewer summary can omit or misclassify findings, and unchanged status text can hide changed file contents. Independent dispositions and source checks prevent a stale or partial report from appearing settled while preserving report-only behavior.
+
 ## [2026-10-31] Verified findings control repair regardless of severity
 
 Context: A verification summary could say no_findings_verified while individual findings remained verified, skipping repair. Inline review also suggested leaving Minor and Nit findings unfixed.
