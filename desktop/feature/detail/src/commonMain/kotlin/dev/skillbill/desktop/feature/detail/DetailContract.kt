@@ -32,6 +32,8 @@ data class DetailUiState(
   val changes: ChangesUi = ChangesUi(),
   /** The read-only diff shown in place of the document; null shows the document. */
   val diff: DiffUi? = null,
+  val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
+  val selectedQaRun: String? = null,
 )
 
 /** The open item's changed files against [baseline]; the section only shows once the detail has loaded. */
@@ -91,7 +93,14 @@ sealed interface ListLoad {
 /** Where the open item sits in the board's order, for J, K and the pager. */
 data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?, val next: WorkItem?)
 
+data class QaCaseKey(val invocationId: String, val caseId: String)
+
 sealed interface DetailAction {
+  data class ToggleQaCase(val key: QaCaseKey) : DetailAction
+  data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction
+  data class SelectQaRun(val invocationId: String?) : DetailAction
+  data class OpenQaReport(val path: String) : DetailAction
+  data class OpenQaEvidence(val path: String, val invocationDirectory: String) : DetailAction
   data class LoadMore(val list: DetailList) : DetailAction
   data object Next : DetailAction
   data object Previous : DetailAction

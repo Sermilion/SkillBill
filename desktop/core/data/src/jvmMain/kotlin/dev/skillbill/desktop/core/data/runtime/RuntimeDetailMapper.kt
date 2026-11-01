@@ -26,6 +26,13 @@ import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
 import dev.skillbill.desktop.core.domain.model.PlannedSubtask
+import dev.skillbill.desktop.core.domain.model.QaChecklist
+import dev.skillbill.desktop.core.domain.model.QaChecklistCase
+import dev.skillbill.desktop.core.domain.model.QaChecklistFinding
+import dev.skillbill.desktop.core.domain.model.QaChecklistStep
+import dev.skillbill.desktop.core.domain.model.QaChecklistTarget
+import dev.skillbill.desktop.core.domain.model.QaStepState
+import dev.skillbill.desktop.core.domain.model.QaTargetState
 import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.ReasonRestoration
 import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
@@ -53,8 +60,11 @@ import skillbill.goalrunner.model.GoalRunnerAssessmentState
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaStepStatus
+import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailList
@@ -203,6 +213,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         it.invocationId, it.executionId, it.lifecycleState, it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(),
         it.finishedAt?.toKotlinInstant(), it.result, it.restoration?.toDomain(), it.qaOutcome?.toDomain(), it.qaReportText,
         it.planReport?.toDomain(), it.reviewReport?.toDomain(),
+        it.qaChecklist?.toDomain(), it.qaFindings.map { finding -> QaChecklistFinding(finding.id, finding.title, null) },
       )
     },
     incident = incident?.toDomain(),
@@ -211,6 +222,31 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     observedAt = observedAt.toKotlinInstant(),
     changeBaseline = changeBaseline?.toDomain(),
   )
+}
+
+private fun StandaloneQaChecklist.toDomain(): QaChecklist = QaChecklist(
+  invocationDirectory, reportPath, testedCommit, criteriaSource,
+  targets.map { target -> QaChecklistTarget(target.name, target.state.toDomain(), target.detail, target.updatedAt?.toKotlinInstant()) },
+  planRegisteredAt?.toKotlinInstant(),
+  cases.map { case -> QaChecklistCase(case.id, case.title, case.steps.map { step ->
+    QaChecklistStep(step.text, step.status.toDomain(), step.note, step.findingId, step.evidence, step.updatedAt?.toKotlinInstant())
+  }) },
+  findings.map { finding -> QaChecklistFinding(finding.id, finding.title, finding.recordedAt.toKotlinInstant()) },
+  lastStepUpdateAt?.toKotlinInstant(),
+)
+
+private fun StandaloneQaStepStatus.toDomain(): QaStepState = when (this) {
+  StandaloneQaStepStatus.PENDING -> QaStepState.Pending
+  StandaloneQaStepStatus.RUNNING -> QaStepState.Running
+  StandaloneQaStepStatus.PASSED -> QaStepState.Passed
+  StandaloneQaStepStatus.FAILED -> QaStepState.Failed
+}
+
+private fun StandaloneQaTargetState.toDomain(): QaTargetState = when (this) {
+  StandaloneQaTargetState.PENDING -> QaTargetState.Pending
+  StandaloneQaTargetState.RUNNING -> QaTargetState.Running
+  StandaloneQaTargetState.READY -> QaTargetState.Ready
+  StandaloneQaTargetState.SKIPPED -> QaTargetState.Skipped
 }
 
 private fun ExecutionReasonRestoration.toDomain(): ReasonRestoration = when (this) {

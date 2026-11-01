@@ -164,6 +164,11 @@ class DetailViewModel(
     if (!state.value.itemResolved && action != DetailAction.Retry && action !is DetailAction.Navigate) return
     when (action) {
       is ControlsAction -> controls.onAction(action)
+      is DetailAction.ToggleQaCase -> toggleQaCase(action.key)
+      is DetailAction.SetAllQaCases -> mutableState.update { current -> current.copy(qaCaseOverrides = current.qaCaseOverrides + action.keys.associateWith { action.open }) }
+      is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
+      is DetailAction.OpenQaReport -> open(FILE_NOT_OPENED) { specs.openFileInDefaultApp(action.path) }
+      is DetailAction.OpenQaEvidence -> open(FILE_NOT_OPENED) { specs.openFileUnder(action.path, action.invocationDirectory) }
       is DetailAction.LoadMore -> loadMore(action.list)
       DetailAction.Next -> step(next = true)
       DetailAction.Previous -> step(next = false)
@@ -186,6 +191,11 @@ class DetailViewModel(
   }
 
   private fun loadedDetail() = (state.value.sections as? SectionsUi.Loaded)?.detail
+
+  private fun toggleQaCase(key: QaCaseKey) {
+    val open = qaCaseIsOpen(state.value.header, loadedDetail() ?: return, key, state.value.qaCaseOverrides) ?: return
+    mutableState.update { it.copy(qaCaseOverrides = it.qaCaseOverrides + (key to !open)) }
+  }
 
   private fun effectiveSubtask(): SubtaskKey? = loadedDetail()?.let { selectedSubtask(state.value.header, it, state.value.subtaskChoice.key) }
 

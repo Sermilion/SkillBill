@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.QaTimedActivity
 import dev.skillbill.desktop.core.ui.status.statusKind
 import kotlin.time.Instant
 
@@ -32,12 +33,12 @@ internal data class ActivityLine(
   val action: String?,
   val target: String? = null,
   val mono: Boolean = false,
-  val at: Instant?,
+  override val at: Instant?,
   val tooltip: String? = null,
-)
+) : QaTimedActivity
 
 /** screens.js `EXEC_STATE`: the StatusIcon an execution's lifecycle state ends with. */
-private fun executionStatus(lifecycleState: String): StatusKind = when (lifecycleState.lowercase()) {
+internal fun executionStatus(lifecycleState: String): StatusKind = when (lifecycleState.lowercase()) {
   "completed", "complete", "terminal" -> StatusKind.Completed
   "failed" -> StatusKind.Failed
   "interrupted", "paused" -> StatusKind.Paused

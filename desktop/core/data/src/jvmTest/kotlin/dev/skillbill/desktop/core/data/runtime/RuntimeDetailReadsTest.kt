@@ -17,10 +17,14 @@ import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.create
 import skillbill.model.EnvironmentContext
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
+import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
+import skillbill.ports.idestatus.model.StandaloneQaChecklist
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 
@@ -46,11 +50,23 @@ class RuntimeDetailReadsTest {
       )
       try {
         val now = Instant.now()
-        runtime.databaseSession.transaction { unit ->
+        val registered = runtime.databaseSession.transaction { unit ->
           unit.standalonePhaseStatuses.register(
             StandalonePhaseStatusRegistration(
               "repo-root-realpath-v1:${root.toRealPath()}", "smoke", "SKILL-447", null, "detail-read", "review",
               "detail-read-execution", "active", "review", now, "detail-read-owner", 1, now.plusSeconds(300),
+            ),
+          )
+        }
+        val checklist = StandaloneQaChecklist(invocationDirectory = root.toString(), reportPath = root.resolve("report.md").toString())
+        runtime.databaseSession.transaction { unit ->
+          unit.standalonePhaseStatuses.writeQaChecklist(registered.invocationId, checklist)
+          unit.standalonePhaseStatuses.update(
+            StandalonePhaseStatusUpdate(
+              executionId = registered.executionId, expectedRevision = registered.statusRevision, leaseOwner = registered.leaseOwner,
+              leaseGeneration = registered.leaseGeneration, lifecycleState = "completed", currentStep = "review",
+              currentActivity = null, updatedAt = now.plusSeconds(1), finishedAt = now.plusSeconds(1), terminalResult = "completed",
+              qaOutcome = StandaloneQaOutcome.FINDINGS, qaReportText = "Verdict: findings_open\n\n### QA-1 Card field stays empty\nField shows 4444.\n",
             ),
           )
         }
@@ -63,6 +79,11 @@ class RuntimeDetailReadsTest {
         val loaded = assertIs<DetailRead.Loaded>(detailReads.first("detail-read"))
 
         assertNotNull(loaded.sections.runOptions)
+        val execution = assertNotNull(loaded.sections.detail.executionHistory.singleOrNull())
+        val mappedChecklist = assertNotNull(execution.qaChecklist)
+        assertEquals(checklist.invocationDirectory, mappedChecklist.invocationDirectory)
+        assertEquals(checklist.reportPath, mappedChecklist.reportPath)
+        assertEquals(listOf("QA-1"), execution.qaFindings.map { it.id })
       } finally {
         sessionJob.cancel()
         runtime.databaseReadConnections.release()

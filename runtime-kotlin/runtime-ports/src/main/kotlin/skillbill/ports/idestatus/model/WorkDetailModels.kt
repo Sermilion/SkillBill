@@ -108,6 +108,8 @@ data class WorkDetailPhase(
   val briefingText: String? = null,
 )
 
+data class WorkQaFinding(val id: String, val title: String)
+
 data class WorkExecutionInstance(
   val invocationId: String,
   val executionId: String,
@@ -122,6 +124,8 @@ data class WorkExecutionInstance(
   val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
   val reviewReport: StandaloneReviewReport? = null,
+  val qaChecklist: StandaloneQaChecklist? = null,
+  val qaFindings: List<WorkQaFinding> = emptyList(),
 )
 
 data class StandaloneReviewReport(

@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.isFileUnderDirectory
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
@@ -53,10 +54,18 @@ class RuntimeSpecRepository(private val sessions: DatabaseSessionManager, privat
   override suspend fun openFileInDefaultApp(path: String): OpenOutcome {
     val observations = sessions.sessions.value?.specs
     if (observations == null) {
-      diagnostics.record("desktop_phase_instruction_default_open_unavailable")
+      diagnostics.record("desktop_default_open_unavailable")
       return OpenOutcome.NotOpened
     }
     return observations.openFileInDefaultApp(path)
+  }
+
+  override suspend fun openFileUnder(path: String, directory: String): OpenOutcome {
+    if (!isFileUnderDirectory(path, directory)) {
+      diagnostics.record("desktop_qa_file_open_refused")
+      return OpenOutcome.NotOpened
+    }
+    return openFileInDefaultApp(path)
   }
 
   override suspend fun revealFolder(path: String): OpenOutcome =
