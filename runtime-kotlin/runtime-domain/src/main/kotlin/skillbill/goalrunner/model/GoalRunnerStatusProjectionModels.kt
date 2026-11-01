@@ -174,6 +174,7 @@ data class GoalRunnerSubtaskPhaseResults(
   val reviewPasses: List<GoalRunnerReviewPassResult> = emptyList(),
   val review: GoalRunnerPhaseConclusion? = null,
   val audit: GoalRunnerPhaseConclusion? = null,
+  val degradedReadSource: String? = null,
 )
 
 data class GoalRunnerReviewPassResult(

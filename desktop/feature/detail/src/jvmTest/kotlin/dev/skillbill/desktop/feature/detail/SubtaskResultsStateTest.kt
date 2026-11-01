@@ -1,0 +1,64 @@
+package dev.skillbill.desktop.feature.detail
+
+import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.domain.model.PhaseConclusion
+import dev.skillbill.desktop.core.domain.model.ReviewPass
+import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class SubtaskResultsStateTest {
+  private val empty = SubtaskPhaseResults(1, emptyList(), null, null)
+  private val pass = ReviewPass(1, "approved", 0, emptyList(), emptyList())
+
+  @Test
+  fun `a degraded subtask read is unreadable whatever the kind`() {
+    assertEquals(
+      SubtaskResultsState.Unreadable("subtask_phase_results"),
+      subtaskResultsState(StatusKind.Pending, empty.copy(degradedReadSource = "subtask_phase_results"), null),
+    )
+  }
+
+  @Test
+  fun `a missing goal status is unreadable except while pending`() {
+    assertEquals(SubtaskResultsState.Unreadable("goal_status"), subtaskResultsState(StatusKind.Skipped, null, "goal_status"))
+    assertEquals(
+      SubtaskResultsState.Shown(SubtaskReviewState.RunsAfterImplementation, SubtaskAuditState.RunsAfterReview),
+      subtaskResultsState(StatusKind.Pending, null, "goal_status"),
+    )
+  }
+
+  @Test
+  fun `a readable page shows results after an earlier goal status failure`() {
+    assertEquals(
+      SubtaskResultsState.Shown(SubtaskReviewState.Passes(listOf(pass)), SubtaskAuditState.Conclusion(null)),
+      subtaskResultsState(StatusKind.Completed, empty.copy(reviewPasses = listOf(pass)), "goal_status"),
+    )
+  }
+
+  @Test
+  fun `a started subtask with no entry is loading, never pending`() {
+    listOf(StatusKind.Completed, StatusKind.Active, StatusKind.Blocked, StatusKind.CompletedNoChange).forEach { kind ->
+      assertEquals(SubtaskResultsState.Loading, subtaskResultsState(kind, null, null), kind.name)
+    }
+  }
+
+  @Test
+  fun `a skipped subtask with no entry omits review`() {
+    assertEquals(
+      SubtaskResultsState.Shown(SubtaskReviewState.Omitted, SubtaskAuditState.Conclusion(null)),
+      subtaskResultsState(StatusKind.Skipped, null, null),
+    )
+  }
+
+  @Test
+  fun `a blocked subtask with a pass shows it and a completed one with none omits review`() {
+    val blocked = subtaskResultsState(StatusKind.Blocked, empty.copy(reviewPasses = listOf(pass)), null)
+    assertEquals(SubtaskResultsState.Shown(SubtaskReviewState.Passes(listOf(pass)), SubtaskAuditState.RunsAfterReview), blocked)
+    val audit = PhaseConclusion("pass", null, null, 1)
+    assertEquals(
+      SubtaskResultsState.Shown(SubtaskReviewState.Omitted, SubtaskAuditState.Conclusion(audit)),
+      subtaskResultsState(StatusKind.Completed, empty.copy(audit = audit), null),
+    )
+  }
+}

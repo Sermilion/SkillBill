@@ -4,13 +4,17 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.goal.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
+import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.persist.goalReviewWorkflowRecord
+import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.repository.ReviewRepository
@@ -21,12 +25,15 @@ import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.model.ReviewRunLane
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
+import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 class GoalRunnerReviewPassProjectionTest {
   @Test
@@ -83,6 +90,157 @@ class GoalRunnerReviewPassProjectionTest {
     assertEquals(lanes, pass.lanes)
     assertFalse(result.degradedDurableRead)
   }
+
+  @Test
+  fun `a throwing findings read names its source and keeps compact findings`() {
+    val reviews = failingFindingsReviews()
+    val results = projectedReview(reviewedState(compactFinding), reviews)
+
+    assertEquals("subtask_review_findings", results.degradedReadSource)
+    assertEquals("F-001", results.reviewPasses.single().findings.single().ref)
+  }
+
+  @Test
+  fun `compact findings with no stored findings name the findings source`() {
+    val results = projectedReview(reviewedState(compactFinding), lanesOnlyReviews(emptyList()))
+
+    assertEquals("subtask_review_findings", results.degradedReadSource)
+    assertEquals("F-001", results.reviewPasses.single().findings.single().ref)
+  }
+
+  @Test
+  fun `an undecodable review artifact names the raw results source because the first failure wins`() {
+    val noCompletedPass =
+      GoalSubtaskReviewState.initial(
+        reviewBaseSha = "a".repeat(40),
+        baselineUntrackedPaths = emptyList(),
+        codeReviewMode = CodeReviewExecutionMode.AUTO,
+      )
+
+    val results = projectedReview(noCompletedPass, lanesOnlyReviews(emptyList()))
+
+    assertEquals("subtask_review_raw_results", results.degradedReadSource)
+  }
+
+  @Test
+  fun `a malformed audit artifact names the phase results source`() {
+    val workflowId = "wfl-malformed-audit"
+    val recorder = goalRunnerDefaultPhaseRecorder()
+    recorder.openTestWorkflow(workflowId, "goal-malformed-audit")
+    recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = workflowId,
+        phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+        status = "completed",
+        attemptCount = 1,
+        resolvedAgentId = "claude",
+        finished = true,
+        outputArtifact = "{not json",
+      ),
+    )
+    val manifest = singleSubtaskManifest(workflowId)
+
+    val result =
+      requireNotNull(
+        testGoalRunnerStatusService(
+          manifestStore = InMemoryGoalManifestStore(manifest),
+          outcomeStore = RecordingOutcomeStore(),
+          phaseRecorder = recorder,
+        ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey)),
+      )
+
+    assertEquals("subtask_phase_results", result.completedSubtaskPhaseResults.single().degradedReadSource)
+  }
+
+  @Test
+  fun `a complete subtask whose workflow is unknown names the phase results source`() {
+    val manifest = singleSubtaskManifest("wfl-unknown")
+
+    val result =
+      requireNotNull(
+        testGoalRunnerStatusService(
+          manifestStore = InMemoryGoalManifestStore(manifest),
+          outcomeStore = RecordingOutcomeStore(),
+        ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey)),
+      )
+
+    assertEquals("subtask_phase_results", result.completedSubtaskPhaseResults.single().degradedReadSource)
+  }
+
+  @Test
+  fun `a blank workflow id stays empty and not degraded`() {
+    val manifest = singleSubtaskManifest("", status = "in_progress")
+
+    val result =
+      requireNotNull(
+        testGoalRunnerStatusService(
+          manifestStore = InMemoryGoalManifestStore(manifest),
+          outcomeStore = RecordingOutcomeStore(),
+        ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey)),
+      )
+
+    assertNull(result.completedSubtaskPhaseResults.single().degradedReadSource)
+  }
+
+  private val compactFinding = GoalSubtaskReviewCompactFinding("minor", "Minor", "A compact finding", "F-001")
+
+  private fun reviewedState(finding: GoalSubtaskReviewCompactFinding): GoalSubtaskReviewState =
+    GoalSubtaskReviewState.initial(
+      reviewBaseSha = "a".repeat(40),
+      baselineUntrackedPaths = emptyList(),
+      codeReviewMode = CodeReviewExecutionMode.AUTO,
+    ).reserveNextPass().completeReservedPass(
+      verdict = FeatureTaskRuntimeVerdict.APPROVED,
+      unresolvedFindingCount = 0,
+      findings = listOf(finding),
+    )
+
+  private fun projectedReview(
+    state: GoalSubtaskReviewState,
+    reviews: ReviewRepository,
+  ): GoalRunnerSubtaskPhaseResults {
+    val workflowId = "wftr-degraded-subtask"
+    val states = InMemoryWorkflowStates()
+    val rawReviewResult =
+      JsonCodec.mapToJsonString(
+        mapOf("status" to "completed", "produced_outputs" to mapOf("review_run_id" to "rvw-subtask-1")),
+      )
+    states.saveFeatureTaskWorkflow(goalReviewWorkflowRecord(workflowId, state, rawReviewResult), RUNTIME)
+    val manifest = singleSubtaskManifest(workflowId)
+    return requireNotNull(
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest),
+        outcomeStore = RecordingOutcomeStore(),
+        phaseRecorder = testPhaseRecorder(FakeDatabaseSessionFactory(states), testWorkflowSnapshotValidator),
+        database = ReviewStoreDatabase(FakeDatabaseSessionFactory(InMemoryWorkflowStates()), reviews),
+      ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
+    ).completedSubtaskPhaseResults.single()
+  }
+
+  private fun singleSubtaskManifest(
+    workflowId: String,
+    status: String = "complete",
+  ) = manifest(1).copy(
+    status = status,
+    subtasks =
+      listOf(
+        DecompositionSubtask(
+          id = 1,
+          name = "Subtask 1",
+          specPath = ".feature-specs/SKILL-56-goal/spec_subtask_1.md",
+          dependencies = emptyList(),
+          status = status,
+          workflowId = workflowId,
+          commitSha = "sha-1",
+        ),
+      ),
+  )
+
+  private fun failingFindingsReviews(): ReviewRepository =
+    Proxy.newProxyInstance(
+      ReviewRepository::class.java.classLoader,
+      arrayOf(ReviewRepository::class.java),
+    ) { _, method, _ -> error("${method.name} is unavailable.") } as ReviewRepository
 
   private fun lanesOnlyReviews(lanes: List<String>): ReviewRepository =
     Proxy.newProxyInstance(

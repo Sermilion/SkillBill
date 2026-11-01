@@ -87,6 +87,25 @@ class GoalRunnerStatusProjectionDegradationTest {
   }
 
   @Test
+  fun `a subtask phase result failure records its seam`() {
+    val diagnostics = RecordingStatusDiagnostics()
+    val manifest =
+      manifest(subtaskCount = 1).let { original ->
+        original.copy(subtasks = original.subtasks.map { it.copy(status = "complete", workflowId = "wfl-unknown") })
+      }
+
+    requireNotNull(
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest),
+        outcomeStore = RecordingOutcomeStore(),
+        ports = GoalRunnerStatusTestPorts(diagnostics = diagnostics),
+      ).status(GoalRunnerStatusRequest(issueKey = manifest.issueKey, invokedAgentId = "codex")),
+    )
+
+    assertTrue(diagnostics.warnings.any { it.startsWith("seam=goal-status.subtask_phase_results ") })
+  }
+
+  @Test
   fun `journal and audit retry read failures omit values and name both seams`() {
     val diagnostics = RecordingStatusDiagnostics()
     val throwingJournalDatabase =

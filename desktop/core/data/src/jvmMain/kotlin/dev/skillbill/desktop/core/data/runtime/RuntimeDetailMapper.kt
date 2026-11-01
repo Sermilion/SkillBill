@@ -50,6 +50,7 @@ import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState as RuntimeAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as RuntimeAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerAssessmentState
+import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
@@ -74,6 +75,8 @@ import kotlin.time.toKotlinInstant
  * The detail header: the row's fields plus, for a goal, the manifest's feature title, the executing agent (the goal's active agent, or the run
  * options' agent for a standalone phase) and, for anything but a standalone phase, the checked-out branch.
  */
+private const val GOAL_STATUS_READ_SOURCE = "goal_status"
+
 internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: CheckedOutBranchSource, sessionId: Long): WorkItem {
   val item = toWorkItem(sessionId)
   val standalone = snapshot.execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE
@@ -159,20 +162,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         },
       )
     },
-    phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { result ->
-      SubtaskPhaseResults(
-        result.subtaskId,
-        result.reviewPasses.map { pass ->
-          ReviewPass(
-            pass.passNumber, pass.verdict, pass.unresolvedFindingCount,
-            pass.findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description, it.status.toDomain()) },
-            pass.lanes,
-          )
-        },
-        result.audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
-        result.review?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
-      )
-    },
+    phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { it.toDomain() },
     goalQa = goal?.goalQaResult?.let { qa ->
       GoalQaResult(
         qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
@@ -210,8 +200,23 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     goalSpecBundle = goalSpecBundle?.toDomain(),
     observedAt = observedAt.toKotlinInstant(),
     changeBaseline = changeBaseline?.toDomain(),
+    degradedGoalStatusSource = GOAL_STATUS_READ_SOURCE.takeIf { goal == null && !goalManifest?.subtasks.isNullOrEmpty() },
   )
 }
+
+internal fun GoalRunnerSubtaskPhaseResults.toDomain(): SubtaskPhaseResults = SubtaskPhaseResults(
+  subtaskId,
+  reviewPasses.map { pass ->
+    ReviewPass(
+      pass.passNumber, pass.verdict, pass.unresolvedFindingCount,
+      pass.findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description, it.status.toDomain()) },
+      pass.lanes,
+    )
+  },
+  audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
+  review?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
+  degradedReadSource,
+)
 
 private fun ExecutionReasonRestoration.toDomain(): ReasonRestoration = when (this) {
   ExecutionReasonRestoration.EXACT -> ReasonRestoration.Exact

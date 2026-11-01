@@ -61,6 +61,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -69,7 +70,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
-import skillbill.workflow.taskruntime.artifact.phaseRecords
+import skillbill.workflow.taskruntime.artifact.phaseRecord
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -137,6 +138,7 @@ public class GoalRunnerStatusProjectionAssembler(
     try {
       database.read { unit ->
         require(request.completedSubtaskValidationIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
+        require(request.phaseResultSubtaskIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
         val subject =
           GoalRunnerStatusSubtaskReader(manifestStore, outcomeStore, unit).read(parentWorkflowId, request)
             ?: return@read null
@@ -159,7 +161,7 @@ public class GoalRunnerStatusProjectionAssembler(
               validation = subject.validationSubtasks.map(::completedSubtaskValidationFor),
               phaseResults =
                 if (request.includeCompletedSubtaskValidation) {
-                  (subject.validationSubtasks + listOfNotNull(subject.current))
+                  (subject.validationSubtasks + listOfNotNull(subject.current) + subject.phaseResults)
                     .distinctBy { it.id }
                     .map { subtaskPhaseResultsFor(it, durableRead) }
                 } else {
@@ -325,7 +327,13 @@ public class GoalRunnerStatusProjectionAssembler(
           },
         phaseResults =
           if (request.includeCompletedSubtaskValidation) {
-            subtaskPhaseResults(manifest, currentSubtask, request.completedSubtaskValidationIds, durableRead)
+            subtaskPhaseResults(
+              manifest,
+              currentSubtask,
+              request.completedSubtaskValidationIds,
+              request.phaseResultSubtaskIds,
+              durableRead,
+            )
           } else {
             emptyList()
           },
@@ -595,12 +603,15 @@ public class GoalRunnerStatusProjectionAssembler(
     manifest: DecompositionManifest,
     currentSubtask: DecompositionSubtask?,
     selectedIds: Set<Int>?,
+    phaseResultIds: Set<Int>?,
     durableRead: GoalRunnerStatusDurableReadTracker,
   ): List<GoalRunnerSubtaskPhaseResults> =
     (
       manifest.subtasks
         .filter { selectedIds == null || it.id in selectedIds }
-        .filter { it.status.decompositionStatus() == DecompositionStatus.COMPLETE } + listOfNotNull(currentSubtask)
+        .filter { it.status.decompositionStatus() == DecompositionStatus.COMPLETE } +
+        listOfNotNull(currentSubtask) +
+        manifest.subtasks.filter { it.joinsPhaseResults(phaseResultIds) }
     )
       .distinctBy { it.id }
       .map { subtask -> subtaskPhaseResultsFor(subtask, durableRead) }
@@ -612,51 +623,107 @@ public class GoalRunnerStatusProjectionAssembler(
     val workflowId =
       subtask.workflowId?.takeIf(String::isNotBlank)
         ?: return GoalRunnerSubtaskPhaseResults(subtask.id)
+    val degradation = SubtaskReadDegradation(durableRead)
     return catchingNonCancellation {
-      val artifacts =
-        phaseQuery.loadPhaseResultArtifacts(workflowId) ?: return GoalRunnerSubtaskPhaseResults(subtask.id)
-      val records = artifacts.phaseRecords()
-      val rawResults = reviewRawResults(artifacts, durableRead)
-      GoalRunnerSubtaskPhaseResults(
-        subtaskId = subtask.id,
-        reviewPasses =
-          GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts)?.passResults.orEmpty().map { pass ->
-            val stored =
-              rawResults[pass.passNumber.toString()]
-                ?.let(JsonCodec::parseObjectOrNull)
-                ?.let(JsonCodec::jsonElementToValue)
-                ?.let(GoalSubtaskReviewSummaryReducer::reviewRunId)
-                ?.let { runId -> storedPassFindings(runId, durableRead) }
-            GoalRunnerReviewPassResult(
-              passNumber = pass.passNumber,
-              verdict = pass.verdict.wireValue,
-              unresolvedFindingCount = pass.unresolvedFindingCount,
-              findings = stored?.findings ?: pass.findings.map(::compactPassFinding),
-              lanes = stored?.lanes.orEmpty(),
-            )
-          },
-        review = records[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW]?.toConclusion(),
-        audit = records[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT]?.toConclusion(),
-      )
+      readSubtaskPhaseResults(subtask, workflowId, degradation)
     }.getOrElse { error ->
-      durableRead.recordDegradedRead(
-        seam = "goal-status.subtask_phase_results",
+      degradation.record(
+        source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
         expected = "review_and_audit_results",
         used = "omitted",
         error = error,
       )
       GoalRunnerSubtaskPhaseResults(subtask.id)
-    }
+    }.copy(degradedReadSource = degradation.source)
   }
+
+  private fun readSubtaskPhaseResults(
+    subtask: DecompositionSubtask,
+    workflowId: String,
+    degradation: SubtaskReadDegradation,
+  ): GoalRunnerSubtaskPhaseResults {
+    val artifacts = phaseQuery.loadPhaseResultArtifacts(workflowId)
+    if (artifacts == null) {
+      if (subtask.status.decompositionStatus() == DecompositionStatus.COMPLETE) {
+        degradation.record(
+          source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
+          expected = "review_and_audit_results",
+          used = "omitted",
+        )
+      }
+      return GoalRunnerSubtaskPhaseResults(subtask.id)
+    }
+    val rawResults = reviewRawResults(artifacts, degradation)
+    val reviewState =
+      catchingNonCancellation {
+        GoalSubtaskReviewArtifactDecoder.decodeReviewStateForStatus(artifacts)
+      }.getOrElse { error ->
+        degradation.record(
+          source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
+          expected = "compact_review_state",
+          used = "omitted",
+          error = error,
+        )
+        null
+      }
+    return GoalRunnerSubtaskPhaseResults(
+      subtaskId = subtask.id,
+      reviewPasses =
+        reviewState?.passResults.orEmpty().map { pass ->
+          val stored =
+            rawResults[pass.passNumber.toString()]
+              ?.let(JsonCodec::parseObjectOrNull)
+              ?.let(JsonCodec::jsonElementToValue)
+              ?.let(GoalSubtaskReviewSummaryReducer::reviewRunId)
+              ?.let { runId -> storedPassFindings(runId, degradation) }
+          val storedFindings = stored?.findings?.takeIf { it.isNotEmpty() }
+          if (storedFindings == null && pass.findings.isNotEmpty() && stored?.readFailed != true) {
+            degradation.record(
+              source = GoalRunnerSubtaskReadSource.REVIEW_FINDINGS,
+              expected = "stored_review_findings",
+              used = "compact_findings",
+            )
+          }
+          GoalRunnerReviewPassResult(
+            passNumber = pass.passNumber,
+            verdict = pass.verdict.wireValue,
+            unresolvedFindingCount = pass.unresolvedFindingCount,
+            findings = storedFindings ?: pass.findings.map(::compactPassFinding),
+            lanes = stored?.lanes.orEmpty(),
+          )
+        },
+      review =
+        readPhaseConclusion(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, degradation),
+      audit =
+        readPhaseConclusion(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, degradation),
+    )
+  }
+
+  private fun readPhaseConclusion(
+    artifacts: DurableWorkflowArtifacts,
+    phaseId: String,
+    degradation: SubtaskReadDegradation,
+  ): GoalRunnerPhaseConclusion? =
+    catchingNonCancellation {
+      artifacts.phaseRecord(phaseId)?.toConclusion(degradation)
+    }.getOrElse { error ->
+      degradation.record(
+        source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
+        expected = "${phaseId}_phase_record",
+        used = "omitted",
+        error = error,
+      )
+      null
+    }
 
   private fun reviewRawResults(
     artifacts: Any,
-    durableRead: GoalRunnerStatusDurableReadTracker,
+    degradation: SubtaskReadDegradation,
   ): Map<String, String> =
     catchingNonCancellation { GoalSubtaskReviewArtifactDecoder.decode(artifacts)?.rawResults.orEmpty() }.getOrElse {
         error ->
-      durableRead.recordDegradedRead(
-        seam = "goal-status.subtask_review_raw_results",
+      degradation.record(
+        source = GoalRunnerSubtaskReadSource.REVIEW_RAW_RESULTS,
         expected = "raw_review_results",
         used = "compact_findings",
         error = error,
@@ -667,11 +734,12 @@ public class GoalRunnerStatusProjectionAssembler(
   private class StoredPassFindings(
     val findings: List<GoalRunnerReviewFinding>?,
     val lanes: List<String>,
+    val readFailed: Boolean = false,
   )
 
   private fun storedPassFindings(
     runId: String,
-    durableRead: GoalRunnerStatusDurableReadTracker,
+    degradation: SubtaskReadDegradation,
   ): StoredPassFindings? =
     catchingNonCancellation {
       database.read { unit ->
@@ -686,13 +754,13 @@ public class GoalRunnerStatusProjectionAssembler(
         )
       }
     }.getOrElse { error ->
-      durableRead.recordDegradedRead(
-        seam = "goal-status.subtask_review_findings",
+      degradation.record(
+        source = GoalRunnerSubtaskReadSource.REVIEW_FINDINGS,
         expected = "stored_review_findings",
         used = "compact_findings",
         error = error,
       )
-      null
+      StoredPassFindings(findings = null, lanes = emptyList(), readFailed = true)
     }
 
   private fun compactPassFinding(finding: GoalSubtaskReviewCompactFinding): GoalRunnerReviewFinding =
@@ -705,10 +773,19 @@ public class GoalRunnerStatusProjectionAssembler(
       description = finding.text,
     )
 
-  private fun FeatureTaskRuntimePhaseRecord.toConclusion(): GoalRunnerPhaseConclusion {
+  private fun FeatureTaskRuntimePhaseRecord.toConclusion(
+    degradation: SubtaskReadDegradation,
+  ): GoalRunnerPhaseConclusion {
+    val parsed = outputArtifact?.let(JsonCodec::parseObjectOrNull)
+    if (outputArtifact != null && parsed == null) {
+      degradation.record(
+        source = GoalRunnerSubtaskReadSource.PHASE_RESULTS,
+        expected = "phase_output_artifact",
+        used = "omitted",
+      )
+    }
     val envelope =
-      outputArtifact
-        ?.let(JsonCodec::parseObjectOrNull)
+      parsed
         ?.let(JsonCodec::jsonElementToValue)
         ?.let(JsonCodec::anyToStringAnyMap)
     val produced = envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)?.let(JsonCodec::anyToStringAnyMap)

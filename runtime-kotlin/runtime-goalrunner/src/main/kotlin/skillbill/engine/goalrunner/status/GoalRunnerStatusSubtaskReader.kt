@@ -20,6 +20,14 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 
+internal fun DecompositionSubtask.joinsPhaseResults(ids: Set<Int>?): Boolean {
+  val decomposition = status.decompositionStatus()
+  return ids != null &&
+    id in ids &&
+    decomposition != DecompositionStatus.PENDING &&
+    decomposition != DecompositionStatus.SKIPPED
+}
+
 internal data class GoalRunnerStatusSubtasks(
   val state: GoalRunnerManifestState,
   val counts: GoalRunnerStatusCounts,
@@ -28,6 +36,7 @@ internal data class GoalRunnerStatusSubtasks(
   val validationSubtasks: List<DecompositionSubtask>,
   val acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
   val completedNoChange: DecompositionSubtask?,
+  val phaseResults: List<DecompositionSubtask>,
 )
 
 internal class GoalRunnerStatusSubtaskReader(
@@ -144,6 +153,7 @@ internal class GoalRunnerStatusSubtaskReader(
     private var legacyPreparedCount = 0
     private val missingPlans = mutableListOf<Int>()
     private val validation = mutableListOf<DecompositionSubtask>()
+    private val phaseResults = mutableListOf<DecompositionSubtask>()
 
     fun add(
       subtask: DecompositionSubtask,
@@ -172,6 +182,9 @@ internal class GoalRunnerStatusSubtaskReader(
           (completedValidationIds == null || subtask.id in completedValidationIds)
       if (selectedValidation && status == DecompositionStatus.COMPLETE) {
         validation += subtask
+      }
+      if (subtask.joinsPhaseResults(request.phaseResultSubtaskIds)) {
+        phaseResults += subtask
       }
     }
 
@@ -229,6 +242,7 @@ internal class GoalRunnerStatusSubtaskReader(
         validation,
         acceptances,
         firstNoChange.takeIf { counts.pending == 0 && counts.blocked == 0 && !anyCommit },
+        phaseResults,
       )
     }
   }

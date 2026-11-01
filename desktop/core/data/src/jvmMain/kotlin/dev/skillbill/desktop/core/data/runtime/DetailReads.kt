@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.di.core.RuntimeComponent
@@ -117,12 +118,23 @@ private fun WorkDetailResult.toRead(component: RuntimeComponent, options: WorkRu
 /** Replaces or appends one list's rows from [page], with that list's next cursor. */
 internal fun DetailSections.Loaded.withList(list: DetailList, page: Detail, cursor: String?, append: Boolean): DetailSections.Loaded {
   fun <T> merge(current: List<T>, next: List<T>) = if (append) current + next else next
+  // Runs on both lists whatever `append` is: the page read last holds the newest entry for its subtasks, and the rest stay.
+  val unreadable = page.degradedGoalStatusSource?.let { source ->
+    page.subtasks.filterNot { it.status == "pending" }.map { subtask ->
+      SubtaskPhaseResults(subtask.id, emptyList(), null, null, source)
+    }
+  }.orEmpty()
+  val results = (detail.phaseResults + page.phaseResults + unreadable).associateBy { it.subtaskId }.values.toList()
   val merged = when (list) {
-    DetailList.Subtasks -> detail.copy(subtasks = merge(detail.subtasks, page.subtasks))
+    DetailList.Subtasks -> detail.copy(
+      subtasks = merge(detail.subtasks, page.subtasks),
+      phaseResults = results,
+      degradedGoalStatusSource = page.degradedGoalStatusSource ?: detail.degradedGoalStatusSource,
+    )
     DetailList.Phases -> detail.copy(phases = merge(detail.phases, page.phases))
     DetailList.Validation -> detail.copy(
       validation = merge(detail.validation, page.validation),
-      phaseResults = merge(detail.phaseResults, page.phaseResults).distinctBy { it.subtaskId },
+      phaseResults = results,
     )
     DetailList.Executions -> detail.copy(executionHistory = merge(detail.executionHistory, page.executionHistory))
     DetailList.Dependencies -> detail.copy(dependencies = merge(detail.dependencies, page.dependencies))

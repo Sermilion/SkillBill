@@ -94,6 +94,7 @@ data class Detail(
   val goalSpecBundle: PlanRunReport?,
   val observedAt: Instant,
   val changeBaseline: ChangeBaseline? = null,
+  val degradedGoalStatusSource: String? = null,
 )
 
 data class WorkSubtask(
@@ -149,6 +150,7 @@ data class SubtaskPhaseResults(
   val reviewPasses: List<ReviewPass>,
   val audit: PhaseConclusion?,
   val review: PhaseConclusion?,
+  val degradedReadSource: String? = null,
 )
 
 /** One goal subtask review pass, its findings as the review phase shows them; [lanes] is empty when the pass's review run is not stored. */
