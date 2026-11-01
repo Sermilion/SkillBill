@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -10,12 +11,48 @@ import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.section as lazySection
 
+internal class LazyKeyIndex {
+  private val indexes = HashMap<Any, Int>()
+  private var next = 0
+
+  fun reset() { indexes.clear(); next = 0 }
+
+  fun record(key: Any?) {
+    if (key != null) indexes[key] = next
+    next++
+  }
+
+  fun recordAll(count: Int, key: ((Int) -> Any)?) {
+    repeat(count) { index -> if (key != null) indexes[key(index)] = next + index }
+    next += count
+  }
+
+  fun indexOf(key: Any): Int? = indexes[key]
+}
+
 /** Shared lazy result sections, with independent collapse state and assessment ordering. */
 internal class DetailSections(
   private val scope: LazyListScope,
   val collapse: SectionCollapse,
   val assessmentOrder: MutableState<AssessmentOrder> = mutableStateOf(AssessmentOrder.Default),
+  private val keys: LazyKeyIndex = LazyKeyIndex(),
 ) : LazyListScope by scope {
+  init { keys.reset() }
+
+  override fun item(key: Any?, contentType: Any?, content: @Composable LazyItemScope.() -> Unit) {
+    keys.record(key)
+    scope.item(key, contentType, content)
+  }
+
+  override fun items(count: Int, key: ((index: Int) -> Any)?, contentType: (index: Int) -> Any?, itemContent: @Composable LazyItemScope.(index: Int) -> Unit) {
+    keys.recordAll(count, key)
+    scope.items(count, key, contentType, itemContent)
+  }
+
+  override fun stickyHeader(key: Any?, contentType: Any?, content: @Composable LazyItemScope.(index: Int) -> Unit) {
+    keys.record(key)
+    scope.stickyHeader(key, contentType, content)
+  }
   fun section(
     key: Any,
     title: String,

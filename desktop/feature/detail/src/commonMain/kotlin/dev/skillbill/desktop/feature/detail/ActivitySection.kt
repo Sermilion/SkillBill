@@ -115,13 +115,20 @@ private fun ActivityLine.toEntry() = ActivityFeedEntry(
 
 /** The Activity section; executions past the first page load as the feed's end comes into view. */
 internal fun DetailSections.activitySection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
-  val lines = activityLines(item, detail)
+  activityFeedSection(activityLines(item, detail), item, state, onAction, newestFirst = false)
+}
+
+internal fun DetailSections.qaActivitySection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
+  activityFeedSection(qaActivityLines(item, detail), item, state, onAction, newestFirst = true)
+}
+
+private fun DetailSections.activityFeedSection(lines: List<ActivityLine>, item: WorkItem, state: DetailUiState, onAction: (DetailAction) -> Unit, newestFirst: Boolean) {
   if (lines.isEmpty()) return
   section("activity", "Activity", count = lines.size.toString()) {
     item(key = "activity-feed") {
       // Saveable, so "Show N earlier" stays open when the feed scrolls out of the lazy document and back.
       var showAll by rememberSaveable(item.id) { mutableStateOf(false) }
-      ActivityFeed(lines.map { it.toEntry() }, showAll, onShowEarlier = { showAll = true })
+      ActivityFeed(lines.map { it.toEntry() }, showAll, onShowEarlier = { showAll = true }, newestFirst = newestFirst)
     }
     pageFooter(DetailList.Executions, state, onAction)
   }

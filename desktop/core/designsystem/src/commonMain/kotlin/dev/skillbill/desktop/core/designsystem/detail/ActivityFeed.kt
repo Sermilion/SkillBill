@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -81,13 +81,19 @@ fun relativeAge(elapsed: Duration): String {
 
 /**
  * `.sb-feed`: one 28 px line per entry in the given order, the icons joined by a 1 px `border-subtle` connector from the first
- * icon's center to the last's. Past [ACTIVITY_FEED_MAX] entries the earlier ones fold behind "Show N earlier" at the top until
- * [showAll]. Ages tick with the window's UI ticker.
+ * icon's center to the last's. Past [ACTIVITY_FEED_MAX] entries fold behind "Show N earlier" until [showAll]. Ages tick with
+ * the window's UI ticker.
  */
-@Composable
-fun ActivityFeed(entries: List<ActivityFeedEntry>, showAll: Boolean, onShowEarlier: () -> Unit, modifier: Modifier = Modifier) {
+internal data class ActivityFeedFold<T>(val shown: List<T>, val hidden: Int)
+
+internal fun <T> activityFeedFold(entries: List<T>, showAll: Boolean, newestFirst: Boolean): ActivityFeedFold<T> {
   val hidden = if (showAll) 0 else (entries.size - ACTIVITY_FEED_MAX).coerceAtLeast(0)
-  val shown = entries.drop(hidden)
+  return ActivityFeedFold(if (newestFirst) entries.take(entries.size - hidden) else entries.drop(hidden), hidden)
+}
+
+@Composable
+fun ActivityFeed(entries: List<ActivityFeedEntry>, showAll: Boolean, onShowEarlier: () -> Unit, modifier: Modifier = Modifier, newestFirst: Boolean = false) {
+  val (shown, hidden) = activityFeedFold(entries, showAll, newestFirst)
   val ticker = LocalUiTicker.current
   DisposableEffect(ticker) {
     ticker.retain()
@@ -96,7 +102,7 @@ fun ActivityFeed(entries: List<ActivityFeedEntry>, showAll: Boolean, onShowEarli
   val now = ticker.now.value
   val connector = SkillBillTheme.colors.borderSubtle
   Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-    if (hidden > 0) ShowEarlier(hidden, onShowEarlier)
+    if (hidden > 0 && !newestFirst) ShowEarlier(hidden, onShowEarlier)
     Column(
       Modifier.fillMaxWidth().drawBehind {
         if (shown.size > 1) {
@@ -108,6 +114,7 @@ fun ActivityFeed(entries: List<ActivityFeedEntry>, showAll: Boolean, onShowEarli
     ) {
       shown.forEach { entry -> FeedRow(entry, entry.at?.let { relativeAge(now - it) }) }
     }
+    if (hidden > 0 && newestFirst) ShowEarlier(hidden, onShowEarlier, newestFirst = true)
   }
 }
 
@@ -147,9 +154,9 @@ private fun FeedRow(entry: ActivityFeedEntry, ago: String?) {
   }
 }
 
-/** `.sb-feed-more`: a 24 px ghost toggle, chevronUp and "Show N earlier" in 12 px `fg-faint`, pulled 6 px left. */
+/** `.sb-feed-more`: a 24 px ghost toggle with its chevron pointing toward the hidden entries, pulled 6 px left. */
 @Composable
-private fun ShowEarlier(count: Int, onClick: () -> Unit) {
+private fun ShowEarlier(count: Int, onClick: () -> Unit, newestFirst: Boolean = false) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
   val hovered = interaction.collectIsHoveredAsState().value
@@ -163,7 +170,7 @@ private fun ShowEarlier(count: Int, onClick: () -> Unit) {
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    CompositionLocalProvider(LocalContentColor provides color) { SbIcon(LucideIcons.chevronUp, SbIconSize.Sm) }
+    CompositionLocalProvider(LocalContentColor provides color) { SbIcon(if (newestFirst) LucideIcons.chevronDown else LucideIcons.chevronUp, SbIconSize.Sm) }
     BasicText("Show $count earlier", style = SkillBillTheme.type.tSm.copy(color = color), maxLines = 1)
   }
 }
