@@ -1,11 +1,10 @@
-package skillbill.engine.work.changes
+package skillbill.engine.work.changes.scope
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
-import skillbill.engine.goalrunner.persist.taskRuntimeRecordOrNull
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.GoalRunnerStatusRequest
 import skillbill.engine.work.WorkBoardItemProjection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.commitPushResultArtifact
@@ -17,21 +16,25 @@ import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workchanges.model.WorkGoalScopesResult
 import skillbill.ports.workchanges.model.WorkScopeSubtask
+import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.decompositionStatus
 
 @Inject
-class WorkChangeScopesService(
+public class WorkChangeScopesService(
   private val database: DatabaseSessionFactory,
   private val workBoardItemProjection: WorkBoardItemProjection,
-  private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val goalRunnerStatusService: GoalRunnerStatusPort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun goalSubtaskScopes(goalWorkflowId: String): WorkGoalScopesResult {
+  public fun goalSubtaskScopes(goalWorkflowId: String): WorkGoalScopesResult {
     if (!database.databaseExists()) return WorkGoalScopesResult.Unavailable("Skill Bill database is not present.")
     return try {
       database.read { unit -> readScopes(goalWorkflowId, unit) }
@@ -155,6 +158,16 @@ class WorkChangeScopesService(
       reviewRead(artifacts, artifacts?.commitPushResultArtifact()?.commitSha)
     } catch (error: SkillBillRuntimeException) {
       ChildRead(null, null, null, error.message ?: "child record read failed", error)
+    }
+
+  private fun taskRuntimeRecordOrNull(
+    workflowStates: WorkflowStateRepository,
+    workflowId: String,
+  ): WorkflowStateSnapshot? =
+    if (workflowStates.getFeatureTaskWorkflow(workflowId)?.mode == FeatureTaskWorkflowMode.RUNTIME) {
+      workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+    } else {
+      null
     }
 
   private fun reviewRead(

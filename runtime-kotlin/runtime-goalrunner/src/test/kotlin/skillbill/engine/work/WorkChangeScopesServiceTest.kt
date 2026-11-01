@@ -3,7 +3,7 @@ package skillbill.engine.work
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
-import skillbill.engine.work.changes.WorkChangeScopesService
+import skillbill.engine.work.changes.scope.WorkChangeScopesService
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -17,11 +17,10 @@ import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,6 +41,8 @@ class WorkChangeScopesServiceTest {
         message: String,
         error: Throwable?,
       ) = Unit
+
+      override fun info(message: String) = Unit
     }
 
   @Test
@@ -185,18 +186,21 @@ class WorkChangeScopesServiceTest {
     commitPushSha: String?,
     untracked: List<String> = emptyList(),
   ) {
+    val continuation =
+      DurableWorkflowArtifacts.fromMap(
+        mapOf(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label() to
+            FeatureTaskRuntimeGoalContinuationArtifact(
+              issueKey = "SKILL-148",
+              subtaskId = 1,
+              suppressPr = true,
+              goalBranch = "feat/SKILL-148",
+              codeReviewMode = CodeReviewExecutionMode.INLINE,
+            ),
+        ),
+      )
     val artifacts =
       buildMap<String, Any?> {
-        put(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label(),
-          FeatureTaskRuntimeGoalContinuationArtifact(
-            issueKey = "SKILL-148",
-            subtaskId = 1,
-            suppressPr = true,
-            goalBranch = "feat/SKILL-148",
-            codeReviewMode = CodeReviewExecutionMode.INLINE,
-          ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
-        )
         reviewBase?.let {
           put(
             DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label(),
@@ -211,7 +215,8 @@ class WorkChangeScopesServiceTest {
         }
       }
     workflows.saveFeatureTaskWorkflow(
-      runtimeRecord(workflowId, "2026-08-06T10:00:00Z").copy(artifactsJson = JsonCodec.mapToJsonString(artifacts)),
+      runtimeRecord(workflowId, "2026-08-06T10:00:00Z")
+        .copy(artifactsJson = JsonCodec.mapToJsonString(artifacts), typedArtifacts = continuation),
       FeatureTaskWorkflowMode.RUNTIME,
     )
   }
