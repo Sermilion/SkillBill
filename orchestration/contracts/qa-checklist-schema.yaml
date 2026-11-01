@@ -1,0 +1,166 @@
+# QA checklist schema (canonical source of truth).
+#
+# The top level is the stored value of standalone_phase_status.qa_checklist: live, display-only progress of one
+# standalone QA invocation. $defs/plan is the plan file the QA agent passes to `skill-bill qa plan --file`.
+#
+# Versioning rule:
+#
+# - contract_version is pinned by QA_CHECKLIST_CONTRACT_VERSION in
+#   runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/qa/QaPayloadContract.kt.
+# - The runtime clock stamps every time. A step's number is its 1-based position in its case.
+# - The checklist never decides a QA verdict; report.md does.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/qa-checklist-schema.yaml"
+title: "QA checklist"
+description: >-
+  Plan, step results, targets, findings and evidence reported by a running standalone QA agent.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - targets
+  - cases
+  - findings
+properties:
+  contract_version:
+    type: string
+    const: "0.1"
+  invocation_directory:
+    $ref: "#/$defs/path"
+  report_path:
+    $ref: "#/$defs/path"
+  tested_commit:
+    type: string
+    minLength: 1
+  criteria_source:
+    $ref: "#/$defs/identifier"
+  targets:
+    type: array
+    maxItems: 32
+    items:
+      $ref: "#/$defs/target"
+  plan_registered_at:
+    $ref: "#/$defs/time"
+  cases:
+    type: array
+    maxItems: 100
+    items:
+      $ref: "#/$defs/case"
+  findings:
+    type: array
+    maxItems: 200
+    items:
+      $ref: "#/$defs/finding"
+  last_step_update_at:
+    $ref: "#/$defs/time"
+$defs:
+  identifier:
+    type: string
+    minLength: 1
+    maxLength: 64
+  label:
+    type: string
+    minLength: 1
+    maxLength: 500
+  detail:
+    type: string
+    maxLength: 1000
+  path:
+    type: string
+    minLength: 1
+    maxLength: 1024
+  time:
+    type: string
+    format: date-time
+  target:
+    type: object
+    additionalProperties: false
+    required: [name, state]
+    properties:
+      name:
+        $ref: "#/$defs/identifier"
+      state:
+        type: string
+        enum: [pending, running, ready, skipped]
+      detail:
+        $ref: "#/$defs/detail"
+      updated_at:
+        $ref: "#/$defs/time"
+  case:
+    type: object
+    additionalProperties: false
+    required: [id, title, steps]
+    properties:
+      id:
+        $ref: "#/$defs/identifier"
+      title:
+        $ref: "#/$defs/label"
+      steps:
+        type: array
+        maxItems: 100
+        items:
+          $ref: "#/$defs/step"
+  step:
+    type: object
+    additionalProperties: false
+    required: [text, status, evidence]
+    properties:
+      text:
+        $ref: "#/$defs/label"
+      status:
+        type: string
+        enum: [pending, running, passed, failed]
+      note:
+        $ref: "#/$defs/detail"
+      finding_id:
+        $ref: "#/$defs/identifier"
+      evidence:
+        type: array
+        maxItems: 20
+        items:
+          $ref: "#/$defs/path"
+      updated_at:
+        $ref: "#/$defs/time"
+  finding:
+    type: object
+    additionalProperties: false
+    required: [id, title, recorded_at]
+    properties:
+      id:
+        $ref: "#/$defs/identifier"
+      title:
+        $ref: "#/$defs/label"
+      recorded_at:
+        $ref: "#/$defs/time"
+  plan:
+    type: object
+    additionalProperties: false
+    required: [contract_version, cases]
+    properties:
+      contract_version:
+        type: string
+        const: "0.1"
+      cases:
+        type: array
+        minItems: 1
+        maxItems: 100
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, title, steps]
+          properties:
+            id:
+              $ref: "#/$defs/identifier"
+            title:
+              $ref: "#/$defs/label"
+            steps:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items:
+                type: object
+                additionalProperties: false
+                required: [text]
+                properties:
+                  text:
+                    $ref: "#/$defs/label"

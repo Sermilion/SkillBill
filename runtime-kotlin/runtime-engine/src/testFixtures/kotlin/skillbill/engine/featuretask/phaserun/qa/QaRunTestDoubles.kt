@@ -1,9 +1,12 @@
 package skillbill.engine.featuretask.phaserun.qa
 
+import skillbill.engine.featuretask.qa.UnusedQaOutcomeDatabase
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
+import skillbill.engine.featuretask.qa.checklist.QaChecklistRecorder
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.QA_TEST_QA_ROOT
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.qa.QaWorkspacePort
@@ -15,6 +18,7 @@ import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path
+import java.time.Clock
 
 class InMemoryQaWorkspaces(
   private val root: Path = Path.of(QA_TEST_QA_ROOT),
@@ -82,6 +86,7 @@ fun qaStandalonePhaseRun(
   manifests: List<PlatformManifest> = emptyList(),
   workspaces: QaWorkspacePort = InMemoryQaWorkspaces(),
   leases: QaDeviceLeasePort = RecordingQaLeases(),
+  checklistDatabase: DatabaseSessionFactory = UnusedQaOutcomeDatabase,
 ): QaStandalonePhaseRun =
   QaStandalonePhaseRun(
     execution =
@@ -94,4 +99,5 @@ fun qaStandalonePhaseRun(
         },
       ),
     settlement = QaReportSettlement(workspaces, NoopRuntimeDiagnostics),
+    checklist = QaChecklistRecorder(checklistDatabase, Clock.systemUTC(), NoopRuntimeDiagnostics),
   )

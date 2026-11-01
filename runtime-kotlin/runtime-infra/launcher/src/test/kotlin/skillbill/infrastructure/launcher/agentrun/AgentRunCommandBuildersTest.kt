@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.config.model.PhaseCompactionDirective
+import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.GovernedReviewFailureCode
@@ -27,6 +28,30 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AgentRunCommandBuildersTest {
+  @Test
+  fun `a non-review launch carries the database path and a governed review launch does not`() {
+    val database = Path.of("/tmp/runtime.db")
+    val builders =
+      listOf(
+        ClaudeAgentRunCommandBuilder(databasePath = database),
+        CodexAgentRunCommandBuilder(databasePath = database),
+        JunieAgentRunCommandBuilder(databasePath = database),
+        CursorAgentRunCommandBuilder(databasePath = database),
+      )
+
+    builders.forEach { builder ->
+      assertEquals(
+        database.toString(),
+        builder.build(request()).environment[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH],
+      )
+    }
+    listOf(builders[0], builders[1]).forEach { builder ->
+      assertFalse(
+        RuntimeDatabaseEnvironmentKeys.DATABASE_PATH in builder.build(governedReviewRequest()).environment,
+      )
+    }
+  }
+
   @Test
   fun `a compaction directive reaches the claude launch environment`() {
     val command =

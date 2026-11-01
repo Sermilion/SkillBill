@@ -2,11 +2,13 @@ package skillbill.infrastructure.contracts.qa
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.contracts.qa.QA_CHECKLIST_CONTRACT_VERSION
 import skillbill.contracts.qa.QA_DEVICE_LEASE_CONTRACT_VERSION
 import skillbill.contracts.qa.QA_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.contracts.qa.QA_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.qa.QaRepairStatePayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.contracts.locator.QaChecklistSchemaPaths
 import skillbill.infrastructure.contracts.locator.QaDeviceLeaseSchemaPaths
 import skillbill.infrastructure.contracts.locator.QaRepairStateSchemaPaths
 import skillbill.infrastructure.contracts.workflow.featuretask.QaRepairStateSchemaValidator
@@ -79,6 +81,21 @@ class QaSchemaContractVersionTest {
       schema.path("properties").path("contract_version").path("const").asText(),
     )
     assertEquals(QaDeviceLeaseSchemaPaths.EXPECTED_SCHEMA_ID, schema.path("\$id").asText())
+  }
+
+  @Test
+  fun `the checklist schema pins QA_CHECKLIST_CONTRACT_VERSION under its expected id`() {
+    val schema = classpathSchema(QaChecklistSchemaPaths.CLASSPATH_RESOURCE)
+
+    assertEquals(
+      QA_CHECKLIST_CONTRACT_VERSION,
+      schema.path("properties").path("contract_version").path("const").asText(),
+    )
+    assertEquals(
+      QA_CHECKLIST_CONTRACT_VERSION,
+      schema.path("\$defs").path("plan").path("properties").path("contract_version").path("const").asText(),
+    )
+    assertEquals(QaChecklistSchemaPaths.EXPECTED_SCHEMA_ID, schema.path("\$id").asText())
   }
 
   private fun classpathSchema(resource: String): JsonNode {

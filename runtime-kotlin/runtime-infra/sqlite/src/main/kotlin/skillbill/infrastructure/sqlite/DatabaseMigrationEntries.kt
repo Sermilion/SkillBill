@@ -33,6 +33,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaFai
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandalonePlanReport
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaChecklist
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
@@ -942,4 +943,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 96,
       name = "record-standalone-review-run-id",
       operation = ::recordStandaloneReviewRunId,
+    ) +
+    DatabaseMigration(
+      version = 97,
+      name = "record-standalone-qa-checklist",
+      operation = ::recordStandaloneQaChecklist,
     )

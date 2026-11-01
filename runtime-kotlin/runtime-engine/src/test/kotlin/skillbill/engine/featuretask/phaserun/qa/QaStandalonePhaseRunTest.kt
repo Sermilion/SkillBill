@@ -11,13 +11,19 @@ import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.qa.report.qaTestExpected
 import skillbill.engine.featuretask.qa.report.qaTestReport
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
+import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
+import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -165,6 +171,46 @@ class QaStandalonePhaseRunTest {
     )
     assertEquals(emptyList(), launched)
     assertNull(workspaces.report)
+  }
+
+  @Test
+  fun `a supported run seeds the checklist before launching the agent`() {
+    val database = sqliteDatabaseSessionFactory(createTempDirectory("qa-seed"), environment = mapOf("TEST" to "1"))
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo", branchCorrelation = "main", issueKey = null, workflowId = null,
+          invocationId = INVOCATION, phaseId = SkeletonDefinition.QA.id, executionId = "execution",
+          lifecycleState = "active", currentStep = "qa", startedAt = Instant.EPOCH, leaseOwner = "owner",
+          leaseGeneration = 1, leaseExpiresAt = Instant.EPOCH.plusSeconds(3600),
+        ),
+      )
+    }
+    var seenAtLaunch: StandaloneQaChecklist? = null
+
+    qaStandalonePhaseRun(git, listOf(androidPack), workspaces, leases, database).run(
+      PhaseRunRequest(SkeletonDefinition.QA.id, Path.of("/tmp/qa-repo"), "claude", intake = "skill-457 extra words"),
+      INVOCATION,
+    ) {
+      seenAtLaunch = database.read { unit -> unit.standalonePhaseStatuses.readByInvocation(INVOCATION) }?.qaChecklist
+      PhaseRunResult.Completed(INVOCATION, listOf(SkeletonDefinition.QA.id), null, value = "done")
+    }
+
+    val seeded = requireNotNull(seenAtLaunch)
+    assertEquals(QA_TEST_HEAD, seeded.testedCommit)
+    assertEquals("SKILL-457", seeded.criteriaSource)
+    assertEquals(listOf("android"), seeded.targets.map { it.name })
+    assertEquals(listOf(StandaloneQaTargetState.PENDING), seeded.targets.map { it.state })
+  }
+
+  @Test
+  fun `a failing seed leaves the settled verdict and report unchanged`() {
+    val text = androidReport(QaVerdict.FINDINGS_OPEN)
+
+    val result = assertIs<PhaseRunResult.Completed>(runQa { text })
+
+    assertEquals(StandaloneQaOutcome.FINDINGS, result.qaOutcome)
+    assertEquals(text, result.qaReportText)
   }
 
   private fun androidReport(verdict: QaVerdict): String =

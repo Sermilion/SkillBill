@@ -12,6 +12,7 @@ import skillbill.infrastructure.sqlite.review.stats.loadGoalRows
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
@@ -2488,4 +2489,19 @@ private val expectedMigrationDefinitions =
     94 to "add-goal-continuation-columns",
     95 to "rebuild-work-board-readable-phase-titles",
     96 to "record-standalone-review-run-id",
+    97 to "record-standalone-qa-checklist",
   )
+
+private object NoopMigrationDiagnostics : RuntimeDiagnostics {
+  override fun warning(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+
+  override fun error(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+
+  override fun info(message: String) = Unit
+}

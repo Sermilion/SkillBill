@@ -218,7 +218,8 @@ internal class ClaudeAgentRunCommandBuilder(
       timeout = request.timeout,
       stdinText = launchPrompt(request),
       environment =
-        CLAUDE_FOREGROUND_ONLY_ENVIRONMENT + goalContinuationEnvironment(request) + compactionEnvironment(request),
+        CLAUDE_FOREGROUND_ONLY_ENVIRONMENT + goalContinuationEnvironment(request) + compactionEnvironment(request) +
+          runtimeDatabaseEnvironment(request.reviewEvidenceBroker == null, databasePath),
       inheritEnvironment = request.reviewEvidenceBroker == null,
       conversationIsolation = governedReviewConversationIsolation(request),
       idlePolicy =
@@ -316,7 +317,9 @@ internal class CodexAgentRunCommandBuilder(
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
       stdinText = launchPrompt(request),
-      environment = goalContinuationEnvironment(request),
+      environment =
+        goalContinuationEnvironment(request) +
+          runtimeDatabaseEnvironment(request.reviewEvidenceBroker == null, databasePath),
       inheritEnvironment = request.reviewEvidenceBroker == null,
       conversationIsolation = governedReviewConversationIsolation(request),
       idlePolicy = codexLivenessPolicy(request),

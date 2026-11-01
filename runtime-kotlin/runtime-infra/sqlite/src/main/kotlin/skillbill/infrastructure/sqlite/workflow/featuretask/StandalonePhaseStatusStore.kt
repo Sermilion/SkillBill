@@ -18,9 +18,11 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.columnValue
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorCleanup
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readPlanReport
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaChecklist
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readReviewRunId
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.writeStandaloneQaChecklist
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
@@ -41,6 +43,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandaloneQaChecklist
+import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.workflow.time.parsePersistedInstantOrNull
 import java.sql.Connection
@@ -248,13 +252,6 @@ internal class StandalonePhaseStatusStore(
     }
   }
 
-  private fun StandalonePhaseExecutionAnchor?.anchorBindings(): List<Any> =
-    if (this == null) {
-      emptyList()
-    } else {
-      listOf(runSequence.length, runSequence.length, runSequence, runSequence.length, runSequence, invocationId)
-    }
-
   override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
     readOne("invocation_id", invocationId)
 
@@ -299,6 +296,14 @@ internal class StandalonePhaseStatusStore(
   override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       updateInTransaction(request)
+    }
+
+  override fun writeQaChecklist(
+    invocationId: String,
+    checklist: StandaloneQaChecklist,
+  ): StandaloneQaChecklistWriteResult =
+    connection.inNestedWriteTransaction(diagnostics, transactionActive) {
+      connection.writeStandaloneQaChecklist(invocationId, checklist)
     }
 
   override fun releaseExpiredLease(
@@ -741,6 +746,7 @@ internal class StandalonePhaseStatusStore(
       qaReportText = readQaReportText(),
       planReport = readPlanReport("standalone-status"),
       reviewRunId = readReviewRunId(),
+      qaChecklist = readQaChecklist(getString("invocation_id"), diagnostics),
     )
   }
 
@@ -862,3 +868,10 @@ private fun validLaunchArgument(
   value: Any?,
   maxLength: Int,
 ): Boolean = value is String && value.length <= maxLength
+
+private fun StandalonePhaseExecutionAnchor?.anchorBindings(): List<Any> =
+  if (this == null) {
+    emptyList()
+  } else {
+    listOf(runSequence.length, runSequence.length, runSequence, runSequence.length, runSequence, invocationId)
+  }

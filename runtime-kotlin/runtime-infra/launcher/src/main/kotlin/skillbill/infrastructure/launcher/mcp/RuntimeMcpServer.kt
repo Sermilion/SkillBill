@@ -90,7 +90,7 @@ private fun codexRuntimeMcpOverrides(
   }
 }
 
-private fun runtimeMcpServerEnvironment(databasePath: Path?): Map<String, String> =
+internal fun runtimeMcpServerEnvironment(databasePath: Path?): Map<String, String> =
   databasePath
     ?.let { mapOf(RuntimeDatabaseEnvironmentKeys.DATABASE_PATH to it.toAbsolutePath().normalize().toString()) }
     .orEmpty()

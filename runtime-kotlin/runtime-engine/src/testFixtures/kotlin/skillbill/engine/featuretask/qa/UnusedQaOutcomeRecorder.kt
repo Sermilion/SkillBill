@@ -8,7 +8,7 @@ import skillbill.ports.persistence.UnitOfWork
 import java.nio.file.Path
 import java.time.Clock
 
-private object UnusedQaOutcomeDatabase : DatabaseSessionFactory {
+internal object UnusedQaOutcomeDatabase : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection() =
     DatabasePathProtectionResult.Unavailable(
       "Database path protection is not available.",

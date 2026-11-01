@@ -231,6 +231,15 @@ object QaRepairStateSchemaPaths {
   const val PREVIOUS_CLASSPATH_RESOURCE: String = "skillbill/infrastructure/contracts/qa-repair-state-schema-0.1.yaml"
 }
 
+object QaChecklistSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/qa-checklist-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/qa-checklist-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/qa-checklist-schema.yaml"
+}
+
 object QaDeviceLeaseSchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/qa-device-lease-schema.yaml"

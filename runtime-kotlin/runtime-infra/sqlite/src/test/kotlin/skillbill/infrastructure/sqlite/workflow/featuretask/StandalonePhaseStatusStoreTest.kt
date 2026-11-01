@@ -14,6 +14,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandalonePlanSubtask
+import skillbill.ports.idestatus.model.StandaloneQaChecklist
+import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import java.nio.file.Files
@@ -26,6 +28,111 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class StandalonePhaseStatusStoreTest {
+  @Test
+  fun `a checklist write stores on a live row and changes no status or lease column, and a finished row refuses`() {
+    val database = checklistDatabase()
+    val before = database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
+    val checklist = StandaloneQaChecklist(invocationDirectory = "/qa/run", testedCommit = "abc")
+
+    val written = database.transaction { it.standalonePhaseStatuses.writeQaChecklist("qa-run", checklist) }
+    val stored = checkNotNull(database.read { it.standalonePhaseStatuses.readByInvocation("qa-run") })
+
+    assertEquals(StandaloneQaChecklistWriteResult.WRITTEN, written)
+    assertEquals(before.copy(qaChecklist = checklist), stored)
+    assertEquals(
+      StandaloneQaChecklistWriteResult.MISSING,
+      database.transaction { it.standalonePhaseStatuses.writeQaChecklist("other", checklist) },
+    )
+    database.transaction {
+      it.standalonePhaseStatuses.update(
+        StandalonePhaseStatusUpdate(
+          executionId = stored.executionId, expectedRevision = stored.statusRevision, leaseOwner = stored.leaseOwner,
+          leaseGeneration = stored.leaseGeneration, lifecycleState = "canceled", currentStep = "qa",
+          currentActivity = null, updatedAt = Instant.EPOCH.plusSeconds(1), finishedAt = Instant.EPOCH.plusSeconds(1),
+          terminalResult = "canceled",
+        ),
+      )
+    }
+    assertEquals(
+      StandaloneQaChecklistWriteResult.FINISHED,
+      database.transaction {
+        it.standalonePhaseStatuses.writeQaChecklist("qa-run", checklist.copy(testedCommit = "changed"))
+      },
+    )
+    assertEquals(
+      checklist,
+      database.read { it.standalonePhaseStatuses.readByInvocation("qa-run") }?.qaChecklist,
+    )
+  }
+
+  @Test
+  fun `a malformed or unknown version checklist reads as null with a diagnostic and the row still returns`() {
+    val warnings = mutableListOf<String>()
+    val diagnostics =
+      object : RuntimeDiagnostics {
+        override fun warning(
+          message: String,
+          error: Throwable?,
+        ) {
+          warnings += message
+        }
+
+        override fun error(
+          message: String,
+          error: Throwable?,
+        ) = Unit
+
+        override fun info(message: String) = Unit
+      }
+    val database = checklistDatabase(diagnostics)
+    database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
+
+    listOf("{\"contract_version\":\"9.9\"}", "{\"contract_version\":\"0.1\"}").forEach { stored ->
+      warnings.clear()
+      DriverManager.getConnection("jdbc:sqlite:${database.resolveDbPath()}").use { connection ->
+        connection.prepareStatement("UPDATE standalone_phase_status SET qa_checklist = ?").use { statement ->
+          statement.setString(1, stored)
+          statement.executeUpdate()
+        }
+      }
+
+      val record = database.read { it.standalonePhaseStatuses.readByInvocation("qa-run") }
+
+      assertEquals("qa-run", record?.invocationId)
+      assertEquals(null, record?.qaChecklist)
+      assertEquals(1, warnings.count { "seam=qa_progress kind=unreadable" in it })
+    }
+  }
+
+  private fun checklistDatabase(diagnostics: RuntimeDiagnostics = NoopChecklistDiagnostics) =
+    sqliteDatabaseSessionFactory(
+      userHome = Files.createTempDirectory("standalone-checklist"),
+      environment = mapOf("TEST" to "1"),
+      diagnostics = diagnostics,
+    )
+
+  private fun checklistRegistration() =
+    StandalonePhaseStatusRegistration(
+      repositoryIdentity = "repo", branchCorrelation = "main", issueKey = null, workflowId = null,
+      invocationId = "qa-run", phaseId = "qa", executionId = "execution-qa", lifecycleState = "active",
+      currentStep = "qa", startedAt = Instant.EPOCH, leaseOwner = "owner", leaseGeneration = 1,
+      leaseExpiresAt = Instant.EPOCH.plusSeconds(3600),
+    )
+
+  private object NoopChecklistDiagnostics : RuntimeDiagnostics {
+    override fun warning(
+      message: String,
+      error: Throwable?,
+    ) = Unit
+
+    override fun error(
+      message: String,
+      error: Throwable?,
+    ) = Unit
+
+    override fun info(message: String) = Unit
+  }
+
   @Test
   fun `workflow execution backfilled with SQLite timestamps remains readable without masking corruption`() {
     DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->

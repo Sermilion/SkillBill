@@ -1,11 +1,15 @@
 package skillbill.engine.featuretask.phaserun.qa
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.model.execution.QaSkipReason
+import skillbill.engine.featuretask.phaserun.IntakeIssueKeys
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.qa.checklist.QaChecklistRecorder
+import skillbill.engine.featuretask.qa.checklist.QaChecklistSeed
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.QaReport
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
@@ -19,6 +23,7 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 public class QaStandalonePhaseRun(
   private val execution: QaExecutionLifecycle,
   private val settlement: QaReportSettlement,
+  private val checklist: QaChecklistRecorder,
 ) {
   internal fun run(
     request: PhaseRunRequest,
@@ -41,11 +46,13 @@ public class QaStandalonePhaseRun(
       execution.withExecution(request.repoRoot, QaPolicy.STANDALONE, invocationId) { qa ->
         when (val target = qa.target) {
           is QaExecutionTarget.Skipped -> QaAttempt(QaReports.skipped(target.reason, target.detail), emptyList())
-          is QaExecutionTarget.Supported ->
+          is QaExecutionTarget.Supported -> {
+            seedChecklist(request, qa, target)
             when (val result = launch(request.copy(qaExecution = qa))) {
               is PhaseRunResult.Blocked -> QaAttempt(stopped(result.reason), result.completedStepIds)
               is PhaseRunResult.Completed -> QaAttempt(settlement.settle(qa), result.completedStepIds)
             }
+          }
         }
       }
     val outcome = settled.value
@@ -61,6 +68,23 @@ public class QaStandalonePhaseRun(
       targetReport = report.targetReport(),
       qaOutcome = report.qaOutcome(),
       qaReportText = report.text,
+    )
+  }
+
+  private fun seedChecklist(
+    request: PhaseRunRequest,
+    qa: QaExecutionContext,
+    target: QaExecutionTarget.Supported,
+  ) {
+    checklist.seed(
+      QaChecklistSeed(
+        invocationId = qa.workspace.invocationId,
+        invocationDirectory = qa.workspace.directory.toAbsolutePath().normalize().toString(),
+        reportPath = qa.workspace.reportPath.toAbsolutePath().normalize().toString(),
+        testedCommit = qa.expected.headRevision,
+        targets = target.targets.flatMap { it.kinds }.map { it.wireValue }.distinct(),
+        criteriaSource = IntakeIssueKeys.ofLeadingToken(request.intake),
+      ),
     )
   }
 

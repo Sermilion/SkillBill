@@ -83,6 +83,12 @@ these seams:
   unreadable (`qa owned resource record unreadable`). They carry `kind`, `identity_digest` (a
   sha256 prefix) and a bounded `reason` only; the identity itself appears only in the report's
   retained-resource list, never in diagnostics or telemetry
+- QA progress: `skill-bill qa plan`, `skill-bill qa step`, `skill-bill qa target`, and the runtime's seed
+  record `seam=qa_progress` once for each `rejected` or `failed` write, with `kind=rejected`, `kind=failed`,
+  `kind=plan_unreadable`, or `kind=plan_oversized`, and `kind=evidence_rejected` with a count when a step's
+  evidence paths were dropped. A status read records `kind=unreadable` when the stored checklist is malformed or
+  has an unknown `contract_version`, and returns no checklist. Records carry kind and a bounded reason only,
+  never note, detail, or path content. The commands exit 0 for these outcomes and never change the verdict
 
 Each record names the seam, the value actually used, the value that was expected,
 and why the substitution happened. A fallback that cannot be attributed to a
