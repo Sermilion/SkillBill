@@ -43,7 +43,7 @@ class FileDiffStreamTest {
     }
     fun settle() = repeat(60) {
       now += 16_000_000L
-      scene.render(now)
+      scene.render(now).close()
     }
     try {
       settle()
