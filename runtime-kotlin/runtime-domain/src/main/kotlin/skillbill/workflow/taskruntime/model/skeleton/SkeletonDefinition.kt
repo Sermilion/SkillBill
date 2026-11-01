@@ -25,6 +25,7 @@ data class SkeletonDefinition(
   val slots: List<PhaseSlot>,
   val runStateKind: SkeletonRunStateKind = SkeletonRunStateKind.DURABLE,
   val intake: PhaseIntakeRequirement = PhaseIntakeRequirement.OPTIONAL,
+  val intakeIsRequirements: Boolean = false,
   val semanticRevision: Int = 1,
   val stepIds: List<String> = slots.flatMap(PhaseSlot::steps),
   val standaloneInvocable: Boolean = false,
@@ -109,6 +110,7 @@ data class SkeletonDefinition(
         standaloneInvocable = true,
         stepIds = listOf(FeatureTaskRuntimePhaseIds.QA),
         runHarness = PhaseRunHarness.DEVICE_QA,
+        intakeIsRequirements = true,
       )
     val GOAL_QA: SkeletonDefinition =
       SkeletonDefinition(

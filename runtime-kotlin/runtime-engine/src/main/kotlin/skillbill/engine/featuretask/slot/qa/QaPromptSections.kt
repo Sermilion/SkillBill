@@ -96,7 +96,7 @@ internal object QaPromptSections {
     |Rules:
     |
     |- QA may build and install the app artifact the pack guidance names, and may run device or instrumentation
-    |  tests for the changed flows.
+    |  tests for the flows the acceptance criteria cover.
     |- QA may edit any file in the QA checkout to reach a state the criteria need but the environment cannot
     |  produce: inject a fault, force an error response, add a debug hook, or shorten a timeout. Rebuild after such
     |  an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit, push, or open
@@ -110,6 +110,12 @@ internal object QaPromptSections {
     |  Backend isolation requirements below apply only to backend and web targets, including in mixed runs.
     |- Derive flows from this run's acceptance criteria. Do not add flows the criteria do not ask for; report anything
     |  else you notice as a finding.
+    |- Test the acceptance criteria against the tree in the QA checkout, whatever branch it is. Whether that tree
+    |  differs from the base branch, `main`, or the remote does not matter: a missing diff is never a reason to skip.
+    |  Use `empty_scope` only when no acceptance criterion names behavior to exercise.
+    |- When an acceptance criterion is only an issue key or a tracker URL, read that issue through a connected tracker
+    |  and test its requirements and acceptance criteria. If no tracker can read it, settle `skipped` with reason
+    |  `empty_scope` and name the reference you could not read.
     |- QA never blocks the run. A missing report is recorded with a warning and the run continues, so report
     |  honestly: a listed flow left untested means `incomplete`.
     |- Launching or loading the app alone is never a pass. `passed` needs at least one exercised flow with an
@@ -171,15 +177,15 @@ internal object QaPromptSections {
     |Backend and web flows:
     |
     |- Backend: authenticate as synthetic QA users and call the acceptance endpoints. Assert the status, the
-    |  response content, and the relevant persisted or asynchronous side effect. Cover changed authorization and
-    |  validation boundaries, such as an unauthorized request and an invalid payload. A `200` or a health check
-    |  alone is never a pass. Seeding the database may prepare initial state but never bypasses the operation under
-    |  test. An asynchronous outcome not observed within its bounded wait leaves the assertion incomplete, not
+    |  response content, and the relevant persisted or asynchronous side effect. Cover the authorization and
+    |  validation boundaries the criteria touch, such as an unauthorized request and an invalid payload. A `200`
+    |  or a health check alone is never a pass. Seeding the database may prepare initial state but never bypasses
+    |  the operation under test. An asynchronous outcome not observed within its bounded wait leaves the assertion incomplete, not
     |  passed.
     |- Web: discover browser capabilities inside this worker. Never assume or substitute the parent session's
     |  browser tools or connectors. Use an available CLI browser driver, such as Playwright, when suitable. When no
     |  driver is usable, skip the web target with reason `browser_unavailable` and name the missing capability.
-    |- Exercise the changed web journeys with assertions on visible outcomes, navigation, form validation, and
+    |- Exercise the web journeys the criteria describe with assertions on visible outcomes, navigation, form validation, and
     |  access control. A page load is never a completed journey. A screenshot is evidence for an assertion, never a
     |  substitute for one.
     |- Bind cookies, storage state, and traffic to the QA environment. Never reuse an operator or production

@@ -1,6 +1,6 @@
 # Android QA
 
-Drive the app on one Android device or emulator, check the changed behavior, and write one prose report. QA reports what it finds and repairs nothing.
+Drive the app on one Android device or emulator, check the behavior the acceptance criteria describe, and write one prose report. QA reports what it finds and repairs nothing.
 
 ## Rules
 
@@ -86,10 +86,10 @@ skill-bill qa lease acquire --invocation <invocation id> --device <serial>
 - Install with `adb -s <serial> install -r <apk>`.
 - Launch with `adb -s <serial> shell monkey -p <applicationId> -c android.intent.category.LAUNCHER 1` or the launcher activity through `am start`.
 
-## Exercise the change
+## Exercise the criteria
 
 - Derive flows from the run's acceptance criteria only. Do not add flows the criteria do not ask for; report anything else you notice as a finding.
-- Prefer existing automation. Reuse instrumentation tests (`./gradlew connectedDebugAndroidTest` filtered to the changed screens) or Maestro flows already in the repository before writing new steps.
+- Prefer existing automation. Reuse instrumentation tests (`./gradlew connectedDebugAndroidTest` filtered to the screens the criteria cover) or Maestro flows already in the repository before writing new steps.
 - Otherwise drive the app with `adb shell input tap|text|swipe|keyevent`, reading positions from `adb shell uiautomator dump`.
 - After each step that matters, capture `adb exec-out screencap -p` and a `uiautomator dump` into the invocation directory.
 - Read `adb logcat -d --pid=$(adb shell pidof -s <applicationId>)` and keep only the excerpt that explains a failure, saved as a file under the invocation directory.

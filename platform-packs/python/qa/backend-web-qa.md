@@ -1,6 +1,6 @@
 # Python backend and web QA
 
-Exercise the changed backend and server-rendered web behavior against a disposable local environment built from the project's own test setup, and report what the acceptance criteria show. Follow the isolation, evidence and report rules in the QA briefing.
+Exercise the backend and server-rendered web behavior the acceptance criteria describe against a disposable local environment built from the project's own test setup, and report what you find. Follow the isolation, evidence and report rules in the QA briefing.
 
 ## Backend
 
@@ -28,7 +28,7 @@ Exercise the changed backend and server-rendered web behavior against a disposab
 
 ### Exercise acceptance endpoints
 
-- Call the changed endpoints with `httpx` or `requests`, the framework test client, or a small temporary script written in the invocation directory.
+- Call the endpoints the criteria name with `httpx` or `requests`, the framework test client, or a small temporary script written in the invocation directory.
 - Assert the status code, the response content and the persisted or asynchronous side effect for each acceptance criterion.
 - Read the side effect back through the database or a follow-up API read. A 2xx response alone is not a pass.
 
@@ -47,7 +47,7 @@ Exercise the changed backend and server-rendered web behavior against a disposab
 
 ### Server-rendered journeys
 
-- Exercise the changed Django or Jinja template journeys: navigate, fill forms, submit, and assert visible content, redirects and the persisted result.
+- Exercise the Django or Jinja template journeys the criteria describe: navigate, fill forms, submit, and assert visible content, redirects and the persisted result.
 - Save screenshots in the invocation directory. A page load alone is not a check.
 
 ### Backend reach versus mocks

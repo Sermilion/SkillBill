@@ -5,6 +5,7 @@ import skillbill.application.InMemoryWorkflowStates
 import skillbill.error.featuretask.PhaseIntakeRequiredError
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -74,6 +75,52 @@ class PhaseRunIntakeResolverTest {
 
     assertEquals("SKILL-42", intake.issueKey)
     assertEquals(listOf(".feature-specs/SKILL-42-example/spec.md"), intake.runInvariants.acceptanceCriteria)
+  }
+
+  @Test
+  fun `a qa intake naming a tracker issue becomes the acceptance criterion`() {
+    val url = "https://linear.app/0account/issue/0AC-74/fix-qa-failures-from-oct-22-e2e-run"
+    val intake =
+      resolver.resolve(
+        SkeletonDefinition.QA,
+        PhaseRunRequest(
+          definitionId = SkeletonDefinition.QA.id,
+          repoRoot = repoRoot,
+          invokedAgentId = "claude",
+          intake = url,
+        ),
+        currentBranch = "main",
+      )
+
+    assertEquals("0AC-74", intake.issueKey)
+    assertEquals(listOf(url), intake.runInvariants.acceptanceCriteria)
+  }
+
+  @Test
+  fun `a qa intake naming a local spec tests that spec's acceptance criteria`() {
+    val spec =
+      FeatureTaskRuntimeRunInvariants(
+        specReference = ".feature-specs/SKILL-42-example/spec.md",
+        acceptanceCriteria = listOf("Recovery resumes MFA enrollment."),
+        mandatesAndOverrides = emptyList(),
+      )
+    val source =
+      object : FeatureTaskRuntimeRunInvariantsSource {
+        override fun read(specPath: Path) = FeatureTaskRuntimeRunInvariantsRead.Read(spec)
+      }
+    val intake =
+      testPhaseRunIntakeResolver(database, source).resolve(
+        SkeletonDefinition.QA,
+        PhaseRunRequest(
+          definitionId = SkeletonDefinition.QA.id,
+          repoRoot = repoRoot,
+          invokedAgentId = "claude",
+          intake = ".feature-specs/SKILL-42-example/spec.md",
+        ),
+        currentBranch = "main",
+      )
+
+    assertEquals(listOf("Recovery resumes MFA enrollment."), intake.runInvariants.acceptanceCriteria)
   }
 
   private fun resolvePlan(intake: String): PhaseRunIntake =

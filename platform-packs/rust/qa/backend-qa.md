@@ -1,6 +1,6 @@
 # Rust backend QA
 
-Exercise the changed backend behavior against a disposable local environment built from the project's own test setup, and report what the acceptance criteria show. Follow the isolation, evidence and report rules in the QA briefing.
+Exercise the backend behavior the acceptance criteria describe against a disposable local environment built from the project's own test setup, and report what you find. Follow the isolation, evidence and report rules in the QA briefing.
 
 ## Environment discovery
 
@@ -27,6 +27,6 @@ Exercise the changed backend behavior against a disposable local environment bui
 
 ## Exercise acceptance endpoints
 
-- Call the changed endpoints with the project's HTTP client (`reqwest`) or a small temporary script written in the invocation directory.
+- Call the endpoints the criteria name with the project's HTTP client (`reqwest`) or a small temporary script written in the invocation directory.
 - Assert the status code, the response content and the persisted or asynchronous side effect for each acceptance criterion.
 - Read the side effect back through the database or a follow-up API read. A 2xx response alone is not a pass.

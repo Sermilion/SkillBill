@@ -368,7 +368,12 @@ manifests declare QA support through `qa_capability`, and one `phase:qa` serves
 every declared target. The runtime resolves the targets from the installed packs,
 not the dispatcher: each routed pack's `qa_capability` names its guidance, and a
 repository with no declaring pack completes as a skipped `unsupported_target`
-run without launching an agent. The QA agent drives the app, service, browser,
+run without launching an agent. The intake is the QA requirements: a key that
+resolves to a local spec supplies its acceptance criteria, and a tracker URL or
+free text becomes the criterion the QA agent reads and tests. With no intake, QA
+tests what the current branch changes against its base. QA tests the checked-out
+tree as it is and never skips because that tree matches `main`. Forward the
+intake verbatim; the dispatcher does not fetch the issue for this phase. The QA agent drives the app, service, browser,
 device, or simulator the guidance names and writes a prose `report.md` and its evidence under
 `qa/<repo-key>/<invocation>/` in the skill-bill state directory
 (`SKILL_BILL_STATE_DIR` when set), never in the working tree or `.git/`. It runs on a

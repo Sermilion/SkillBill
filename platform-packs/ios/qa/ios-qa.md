@@ -1,6 +1,6 @@
 # iOS QA
 
-Drive the app on one iPhone or simulator, check the changed behavior, and write one prose report. QA reports what it finds and repairs nothing.
+Drive the app on one iPhone or simulator, check the behavior the acceptance criteria describe, and write one prose report. QA reports what it finds and repairs nothing.
 
 ## Rules
 
@@ -60,10 +60,10 @@ skill-bill qa lease acquire --invocation <invocation id> --device <udid>
 - Build the app for the tested revision with the project's scheme (`xcodebuild -scheme <scheme> -destination id=<udid> build`). Name the `.app` path in the report.
 - Install, launch, and terminate with `xcrun devicectl device install app`, `xcrun devicectl device process launch`, and `xcrun devicectl device process terminate`.
 
-## Exercise the change
+## Exercise the criteria
 
 - Derive flows from the run's acceptance criteria only. Do not add flows the criteria do not ask for; report anything else you notice as a finding.
-- Prefer existing automation. Reuse the project's XCUITest schemes for the changed screens before writing new steps.
+- Prefer existing automation. Reuse the project's XCUITest schemes for the screens the criteria cover before writing new steps.
 - Otherwise drive the device through the Appium XCUITest driver with WebDriverAgent. Save screenshots and page source after each step that matters.
 - Keep only the log excerpt that explains a failure, saved as a file under the invocation directory.
 

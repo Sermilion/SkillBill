@@ -54,12 +54,20 @@ public class PhaseRunIntakeResolver(
         PhaseRunIntake(
           issueKey = issueKey ?: currentBranch?.let(IntakeIssueKeys::ofBranch) ?: request.definitionId,
           runInvariants =
-            FeatureTaskRuntimeRunInvariants(
-              specReference = request.intake?.takeIf(String::isNotBlank) ?: "$PHASE_SPEC_PREFIX${request.definitionId}",
-              acceptanceCriteria = listOf(PHASE_ACCEPTANCE_CRITERION),
-              mandatesAndOverrides = emptyList(),
-              codeReviewMode = reviewMode,
-            ),
+            if (definition.intakeIsRequirements) {
+              requirementInvariants(
+                definition,
+                intake,
+                specPathOf(issueKey, specPath, bareKey = tokens.size == 1, repoRoot = request.repoRoot),
+              )
+            } else {
+              FeatureTaskRuntimeRunInvariants(
+                specReference =
+                  request.intake?.takeIf(String::isNotBlank) ?: "$PHASE_SPEC_PREFIX${request.definitionId}",
+                acceptanceCriteria = listOf(PHASE_ACCEPTANCE_CRITERION),
+                mandatesAndOverrides = emptyList(),
+              )
+            }.copy(codeReviewMode = reviewMode),
         )
       PhaseIntakeRequirement.ISSUE_KEY -> {
         val key =
@@ -81,21 +89,48 @@ public class PhaseRunIntakeResolver(
     }
   }
 
+  private fun requirementInvariants(
+    definition: SkeletonDefinition,
+    intake: String,
+    specPath: Path?,
+  ): FeatureTaskRuntimeRunInvariants {
+    if (intake.isBlank()) {
+      return FeatureTaskRuntimeRunInvariants(
+        specReference = "$PHASE_SPEC_PREFIX${definition.id}",
+        acceptanceCriteria = listOf(UNSCOPED_REQUIREMENTS_CRITERION),
+        mandatesAndOverrides = emptyList(),
+      )
+    }
+    val specRead = specPath?.let(invariantsSource::read)
+    return (specRead as? FeatureTaskRuntimeRunInvariantsRead.Read)?.invariants
+      ?: FeatureTaskRuntimeRunInvariants(
+        specReference = intake,
+        acceptanceCriteria = listOf(intake),
+        mandatesAndOverrides = emptyList(),
+      )
+  }
+
+  private fun specPathOf(
+    issueKey: String?,
+    explicitSpecPath: Path?,
+    bareKey: Boolean,
+    repoRoot: Path,
+  ): Path? =
+    explicitSpecPath
+      ?: issueKey?.takeIf { bareKey }?.let { key ->
+        specPathResolver
+          .resolve(FeatureSpecPathResolveInput(issueKey = key, explicitSpecPath = null, repoRoot = repoRoot))
+          .specPath
+          ?.let(Path::of)
+      }
+
   private fun specInvariants(
     issueKey: String?,
     explicitSpecPath: Path?,
     bareKey: Boolean,
     repoRoot: Path,
   ): FeatureTaskRuntimeRunInvariants? {
-    val specPath =
-      explicitSpecPath
-        ?: issueKey?.takeIf { bareKey }?.let { key ->
-          specPathResolver
-            .resolve(FeatureSpecPathResolveInput(issueKey = key, explicitSpecPath = null, repoRoot = repoRoot))
-            .specPath
-            ?.let(Path::of)
-        }
-        ?: return null
+    val specPath = specPathOf(issueKey, explicitSpecPath, bareKey, repoRoot) ?: return null
     val replanIntake =
       when {
         issueKey == null -> null
@@ -118,6 +153,9 @@ public class PhaseRunIntakeResolver(
   private companion object {
     const val PHASE_SPEC_PREFIX = "phase:"
     const val PHASE_ACCEPTANCE_CRITERION = "The phase leaves no unresolved Blocker or Major finding."
+    const val UNSCOPED_REQUIREMENTS_CRITERION =
+      "No requirements were supplied. Exercise the user-facing behavior the current branch changes against its " +
+        "base branch."
   }
 }
 
