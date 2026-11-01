@@ -246,13 +246,14 @@ class DetailViewModel(
 
   /**
    * Only this item's loaded detail feeds the key, so only its worktree is read. A goal reads its subtask scopes keyed on running
-   * alone, so a subtask's new baseline does not restart the read; any other item reads its change summary from its baseline. A new
+   * alone, so a subtask's new baseline does not restart the read; other items except standalone reviews read their change summary from their baseline. A new
    * key cancels the previous observation; an idle item is read once and no longer polled.
    */
   @OptIn(ExperimentalCoroutinesApi::class)
   private fun observeChanges() {
     mutableState
       .map { state ->
+        if (!state.header.showsChanges) return@map null
         (state.sections as? SectionsUi.Loaded)?.let {
           val goal = state.header.kind == WorkKind.Goal
           ChangesKey(if (goal) null else it.detail.changeBaseline, state.header.running, goal)
@@ -293,8 +294,9 @@ class DetailViewModel(
     if (keep) current else ChangesUi(key.baseline, read)
   }
 
-  /** A subtask scope opens only for a subtask the latest list can select; All always opens. */
+  /** Standalone reviews have no Changes window. Subtask scopes open only for a subtask the latest list can select. */
   private fun openChangesWindow(scope: ChangeScope) {
+    if (!state.value.header.showsChanges) return
     if (scope is ChangeScope.Subtasks) {
       val listed = state.value.changes.subtasks as? SubtaskScopesState.Listed ?: return
       if (listed.subtasks.none { it.id == scope.from && it.selectable }) return

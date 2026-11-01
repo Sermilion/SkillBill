@@ -98,6 +98,27 @@ class DetailViewModelTest {
   }
 
   @Test
+  fun `a report-only standalone review never reads or opens a branch-wide changes summary`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val review = item.copy(
+      kind = WorkKind.Phase, standaloneExecution = true,
+      control = item.control.copy(invocationId = "review-1", phaseId = "review"),
+    )
+    val viewModel = viewModel(source = review)
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    details.flow.emit(DetailState(review, DetailSections.Loaded(emptyDetail.copy(changeBaseline = baseline), null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    viewModel.onAction(DetailAction.OpenChangesWindow())
+    runCurrent()
+    assertEquals(emptyList(), changes.observed)
+    assertEquals(emptyList(), effects)
+    assertTrue(!viewModel.state.value.header.showsChanges)
+    assertTrue(review.copy(control = review.control.copy(phaseId = "implement")).showsChanges)
+  }
+
+  @Test
   fun `a goal with no running subtask shows its strip and opens the window on all changes or a selectable subtask`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val viewModel = viewModel()
