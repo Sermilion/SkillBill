@@ -1,3 +1,16 @@
+## [2026-10-31] SKILL-454 desktop changes domain and data layer
+Areas: desktop/core/domain, desktop/core/data
+- ChangeModels.kt adds ChangeBaseline (SubtaskStart, RunStart, TargetMergeBase), ChangedFile with a derived binary flag, ChangeSet, ChangesState, FileDiffState and the diff hunk and line models. Detail gains changeBaseline as its last, defaulted parameter, and RuntimeDetailMapper maps it. reusable
+- WorkChangesRepository (observe, fileDiff, open) is bound app-wide by RuntimeWorkChangesRepository, which delegates to a session-scoped ChangeObservations on DatabaseSessionComponent. reusable
+- observe emits NoSubtask with no read for a null baseline. Otherwise it emits Loading and reads through workChangesPort; while running it repeats CHANGE_REFRESH_INTERVAL (3 seconds) after each read ends, and idle reads once. Callers flip running by re-calling observe, which emits Loading again.
+- Git reads run on the IO dispatcher outside RuntimeReads. One Mutex owned by the app-scoped repository serializes every changes and fileDiff read, across session switches too.
+- parseUnifiedDiff is pure Kotlin with no diff library. It tracks the remaining old and new counts from each hunk header, so body lines starting with --- or +++ stay body lines, and its insertions and deletions match git numstat. reusable
+- open skips Deleted files and launches the worktree-resolved path with EDITOR_VARIABLES stripped, so the OS opener runs. EDITOR_VARIABLES is now internal in SpecObservations and shared with spec file opening.
+- Failures record desktop_work_changes_read_failed, desktop_work_changes_diff_failed or desktop_work_changes_open_failed. A thrown read also records desktop_read_failed through readOrProblem.
+- Limits: with no session, observe shows sessionFlow's Loading or Unavailable(Storage), not Unavailable(Runtime). The detail feature supplies running from WorkItem.running (see desktop/feature/detail history).
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-31] SKILL-453 execution agent chat panel
 Areas: desktop/core/domain, desktop/core/data, desktop/core/ui, desktop/core/designsystem, desktop/core/testing, desktop/feature/chat, desktop/feature/detail, desktop/app, desktop/gradle
 - ExecutionChatRepository and the per-agent ChatTransport seam stream chat events; Claude, Codex, Cursor and Junie have transports. Agent and reasoning model resolve from the execution and configuration, with recorded fallbacks. reusable

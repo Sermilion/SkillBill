@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.di.DatabaseSessionScope
 import dev.skillbill.desktop.core.data.repository.BoardObservations
+import dev.skillbill.desktop.core.data.repository.ChangeObservations
 import dev.skillbill.desktop.core.data.repository.DetailObservations
 import dev.skillbill.desktop.core.data.repository.SpecObservations
 import dev.skillbill.desktop.core.data.runtime.RuntimeBoardReads
@@ -47,6 +48,7 @@ interface DatabaseSessionComponent {
   val board: BoardObservations
   val details: DetailObservations
   val specs: SpecObservations
+  val changes: ChangeObservations
 
   @ContributesSubcomponent.Factory(AppScope::class)
   interface Factory {
@@ -127,6 +129,11 @@ interface RuntimeSessionProviders {
   ): SpecObservations = SpecObservations(
     holder.selection.scope, holder.selection.id, signals.snapshots, reads, runtime, diagnostics, SpecDirectoryChanges(diagnostics), host,
   )
+
+  @Provides
+  @SingleIn(DatabaseSessionScope::class)
+  fun changeObservations(runtime: RuntimeComponent, diagnostics: Diagnostics, host: HostEnvironment): ChangeObservations =
+    ChangeObservations(runtime, diagnostics, host.variables)
 }
 
 /** A session graph over a [DatabaseSessionComponent]. */

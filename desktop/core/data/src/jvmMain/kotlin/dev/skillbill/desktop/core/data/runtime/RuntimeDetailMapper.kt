@@ -209,6 +209,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     incidentHistory = incidentHistory.map { it.toDomain() },
     goalSpecBundle = goalSpecBundle?.toDomain(),
     observedAt = observedAt.toKotlinInstant(),
+    changeBaseline = changeBaseline?.toDomain(),
   )
 }
 

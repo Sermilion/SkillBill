@@ -5,6 +5,8 @@ import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.GoalRunnerStatusRequest
+import skillbill.engine.work.changes.WorkChangeBaselineEnvironment
+import skillbill.engine.work.changes.workChangeBaseline
 import skillbill.engine.work.eligibility.workControlEligible
 import skillbill.engine.work.eligibility.workDisplayGroup
 import skillbill.engine.work.eligibility.workDisplayPriority
@@ -73,6 +75,7 @@ import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -417,12 +420,25 @@ public class IdeStatusService(
         controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
         incident = incidentSet.incident,
         incidentHistory = incidentSet.incidentHistory,
+        changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, context),
       )
     return ProjectedDetailItem(
       detailItem,
       detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead),
     )
   }
+
+  private fun detailChangeBaseline(
+    standalone: StandalonePhaseStatusRecord?,
+    manifest: DecompositionManifest?,
+    item: WorkItem?,
+    context: IdeStatusProjectionContext,
+  ) = workChangeBaseline(
+    standalone,
+    manifest,
+    item,
+    WorkChangeBaselineEnvironment(context.repoRoot, context.unitOfWork.workflowStates, diagnostics),
+  )
 
   private fun detailCompletion(
     snapshot: IdeStatusSnapshot,

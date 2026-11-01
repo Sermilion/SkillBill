@@ -310,9 +310,18 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
         .replace("<slug>", "feature")
         .replace("<subtask slug>", "part")
         .replace("<subtask name>", "Part")
-        .replace("<repository default branch>", "main")
+        .replace("<base branch>", "main")
 
     DecompositionManifestSchemaValidator().validateYamlText(manifest, "decomposition-manifest.yaml")
+  }
+
+  @Test
+  fun `plan tells the planner to record a stacked base branch instead of the default branch`() {
+    val prompt = composePromptForPhase("plan")
+
+    assertContains(prompt, "base_branch is the branch this work builds on")
+    assertContains(prompt, "write that branch's exact name")
+    assertContains(prompt, "Stacked work never uses the default branch")
   }
 
   @Test

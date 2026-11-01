@@ -12,6 +12,7 @@ import skillbill.config.model.SpecType
 import skillbill.contracts.JsonCodec
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.infrastructure.host.system.FileConfigDocumentFiles
+import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.model.EnvironmentContext
 import skillbill.ports.config.ConfigDocumentFiles
 import skillbill.ports.config.MachineConfigMigrationPort
@@ -111,7 +112,10 @@ class RuntimeConfigEditServiceTest {
       )
 
     val written = assertIs<ConfigWriteResult.Written>(result)
-    assertEquals(canonicalTempDir.resolve("project-store/config.yaml"), written.path)
+    assertEquals(
+      FileConfigDocumentLocks.canonicalPath(canonicalTempDir.resolve("project-store/config.yaml")),
+      written.path,
+    )
     val updated = assertIs<ConfigDocumentRead.Present<ProjectConfigValues>>(service.readProjectConfig(repoRoot))
     assertEquals(SpecType.LINEAR, updated.values.specType)
     assertEquals("runtime-kotlin/gradlew", updated.values.gradleWrapper)
@@ -164,7 +168,7 @@ class RuntimeConfigEditServiceTest {
     val pinned = canonicalTempDir.resolve("custom/config.json")
     val snapshot = service(canonicalTempDir, pinned).readMachineConfigSnapshot()
 
-    assertEquals(listOf(pinned.toAbsolutePath().normalize()), snapshot.candidatePaths)
+    assertEquals(listOf(FileConfigDocumentLocks.canonicalPath(pinned)), snapshot.candidatePaths)
   }
 
   @Test
@@ -195,7 +199,7 @@ class RuntimeConfigEditServiceTest {
       )
     val first = assertIs<ConfigDocumentRead.Present<*>>(service.readProjectConfigSnapshot(repoRoot).document)
 
-    assertEquals(legacy.toAbsolutePath().normalize(), first.path)
+    assertEquals(FileConfigDocumentLocks.canonicalPath(legacy), first.path)
     Files.createDirectories(store.parent)
     Files.write(store, original)
     documents.readable = store
@@ -210,7 +214,7 @@ class RuntimeConfigEditServiceTest {
     )
     assertTrue(original.contentEquals(Files.readAllBytes(legacy)))
     val refreshed = assertIs<ConfigDocumentRead.Present<*>>(service.readProjectConfigSnapshot(repoRoot).document)
-    assertEquals(store.toAbsolutePath().normalize(), refreshed.path)
+    assertEquals(FileConfigDocumentLocks.canonicalPath(store), refreshed.path)
     assertIs<ConfigWriteResult.Written>(
       service.writeProjectConfigFromSnapshot(
         repoRoot,

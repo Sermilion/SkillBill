@@ -88,6 +88,7 @@ import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
 import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
+import skillbill.infrastructure.workflow.git.changes.GitWorkChangesAdapter
 import skillbill.infrastructure.workflow.git.lineage.GitRepositoryLineage
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
@@ -127,6 +128,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.ports.validation.RepoValidationGateway
+import skillbill.ports.workchanges.WorkChangesPort
 import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import java.time.Clock
@@ -245,6 +247,9 @@ abstract class RuntimeComponent(
   @Provides
   fun fileEditorLauncherPort(adapter: ProcessFileEditorLauncher): FileEditorLauncherPort = adapter
 
+  @Provides
+  fun workChangesPort(adapter: GitWorkChangesAdapter): WorkChangesPort = adapter
+
   @Provides @RuntimeSingleton
   internal fun sqliteDatabaseSessionFactory(
     context: EnvironmentContext,
@@ -299,6 +304,7 @@ abstract class RuntimeComponent(
   abstract val projectStorePort: ProjectStorePort
   abstract val projectConfigFilePort: ProjectConfigFilePort
   abstract val fileEditorLauncherPort: FileEditorLauncherPort
+  abstract val workChangesPort: WorkChangesPort
   abstract val checkedOutBranchSource: CheckedOutBranchSource
 
   abstract val featureTaskContinuationLookupService: FeatureTaskContinuationLookupService

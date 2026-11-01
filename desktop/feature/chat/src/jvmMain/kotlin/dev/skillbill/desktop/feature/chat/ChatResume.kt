@@ -31,17 +31,27 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 
 internal const val RESUME_COMMAND = "/resume"
+internal const val CLEAR_COMMAND = "/clear"
+
+/** The chat's commands with the hint the composer shows while the draft spells one or the start of one. */
+internal val CHAT_COMMANDS = linkedMapOf(
+  RESUME_COMMAND to "Resume an agent session in this worktree",
+  CLEAR_COMMAND to "Start a new conversation with the current execution state",
+)
 
 private const val LABEL_LENGTH = 60
 
-/** The length of the draft's leading token while it spells `/resume` or the start of it, else null. */
+/** The length of the draft's leading token while it spells a chat command or the start of one, else null. */
 internal fun commandTokenLength(draft: String): Int? {
   if (!draft.startsWith("/")) return null
   val token = draft.takeWhile { !it.isWhitespace() }
-  return token.length.takeIf { RESUME_COMMAND.startsWith(token) }
+  return token.length.takeIf { matchingCommands(token).isNotEmpty() }
 }
 
-/** Shows the leading `/resume` token in the accent color, so the operator sees the draft is a command and not a message. */
+/** The chat commands that start with [token], in [CHAT_COMMANDS] order. */
+internal fun matchingCommands(token: String): List<String> = CHAT_COMMANDS.keys.filter { it.startsWith(token) }
+
+/** Shows the leading command token in the accent color, so the operator sees the draft is a command and not a message. */
 internal data class CommandHighlight(private val colors: SkillBillColors) : VisualTransformation {
   override fun filter(text: AnnotatedString): TransformedText {
     val length = commandTokenLength(text.text) ?: return TransformedText(text, OffsetMapping.Identity)
@@ -91,17 +101,17 @@ internal fun ResumePicker(choices: List<ChatHistoryEntry>, now: Instant, onResum
   }
 }
 
-/** Shown while the draft is a prefix of `/resume`; clicking it opens the picker. */
+/** Shown while the draft is a prefix of [command]; clicking it runs the command. */
 @Composable
-internal fun ResumeHint(onClick: () -> Unit) {
+internal fun CommandHint(command: String, onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   Row(
-    Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(onClickLabel = "Resume a saved chat", onClick = onClick),
+    Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(onClickLabel = CHAT_COMMANDS.getValue(command), onClick = onClick),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    ChatPill(RESUME_COMMAND, mono = true)
-    BasicText("Resume an agent session in this worktree", style = type.tSm.copy(color = colors.fgMuted))
+    ChatPill(command, mono = true)
+    BasicText(CHAT_COMMANDS.getValue(command), style = type.tSm.copy(color = colors.fgMuted))
   }
 }

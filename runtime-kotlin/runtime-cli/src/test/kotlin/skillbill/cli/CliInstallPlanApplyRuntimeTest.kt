@@ -12,6 +12,7 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.infrastructure.sqlite.SqliteTestDatabasePaths
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.install.model.InstallAgentSelection
@@ -257,7 +258,7 @@ class CliInstallPlanApplyRuntimeTest {
     val telemetry = payload.mapValue("telemetry")
     assertEquals("off", telemetry["level"])
     assertEquals("success", telemetry["status"])
-    assertEquals(overrideConfig.toRealPath().toString(), telemetry["config_path"])
+    assertEquals(FileConfigDocumentLocks.canonicalPath(overrideConfig).toString(), telemetry["config_path"])
     assertEquals(1, telemetry["cleared_events"])
     assertTrue(Files.exists(overrideConfig), "off must rewrite the config in place, not delete it")
     val disabledConfig = Files.readString(overrideConfig)
@@ -1298,7 +1299,8 @@ private data class SingleCodexGoldenPaths(
   val codexTargetDir: String = fixture.home.resolve("manual-targets/codex").toString()
   val stagingRoot: String = fixture.home.resolve(".skill-bill/installed-skills").toString()
   val runtimeInstallRoot: String = fixture.home.resolve(".skill-bill/runtime").toString()
-  val telemetryConfigPath: String = fixture.home.resolve(".config/skill-bill/config.json").toString()
+  val telemetryConfigPath: String =
+    FileConfigDocumentLocks.canonicalPath(fixture.home.resolve(".config/skill-bill/config.json")).toString()
   val codeReviewSourceDir: String = fixture.repoRoot.resolve("skills/bill-code-review").toString()
   val qualityCheckSourceDir: String = fixture.repoRoot.resolve("skills/bill-code-check").toString()
   val codeReviewStagingDir: String = stagingDir("bill-code-review", codeReviewHash)

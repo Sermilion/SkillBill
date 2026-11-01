@@ -93,6 +93,7 @@ data class Detail(
   val incidentHistory: List<Incident>,
   val goalSpecBundle: PlanRunReport?,
   val observedAt: Instant,
+  val changeBaseline: ChangeBaseline? = null,
 )
 
 data class WorkSubtask(

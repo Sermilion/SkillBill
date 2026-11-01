@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.BoardState
+import dev.skillbill.desktop.core.domain.model.ChangeBaseline
+import dev.skillbill.desktop.core.domain.model.ChangeStatus
+import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.liveRows
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.DetailList
@@ -14,6 +18,7 @@ import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
@@ -25,13 +30,18 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.input.ScreenKey
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -53,6 +63,7 @@ class DetailViewModel(
   @Assisted private val item: WorkItem,
   private val session: DatabaseSessionController,
   private val detail: WorkDetailRepository,
+  private val changes: WorkChangesRepository,
   private val board: WorkBoardRepository,
   private val specs: SpecRepository,
   private val webPages: RepositoryWebPages,
@@ -85,11 +96,13 @@ class DetailViewModel(
   private var launchAccepted = false
 
   private val controls = DetailControls(viewModelScope, workControls, toasts, ::launchStarted, ::launchFinished) { mutableState.value }
+  private val diff = DetailDiff(viewModelScope, changes, { mutableState.value }) { change -> mutableState.update { it.copy(diff = change(it.diff)) } }
 
   init {
     selection.select(null)
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
     observe()
+    observeChanges()
     board.observe(ShellBoard.query).onEach { boardState ->
       if (boardState is BoardState.Loaded) latestBoardItems = boardState.items
       followRelaunchedPhase()
@@ -166,6 +179,9 @@ class DetailViewModel(
       is DetailAction.MoveSubtaskSelection -> moveSubtaskSelection(action.delta)
       DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
       DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
+      is DetailAction.SelectChangedFile -> diff.select(action.file)
+      is DetailAction.OpenChangedFile -> openChangedFile(action.file)
+      DetailAction.CloseDiff -> diff.close()
     }
   }
 
@@ -224,6 +240,38 @@ class DetailViewModel(
     }
   }
 
+  /**
+   * Only this item's loaded detail feeds the key, so only its worktree is read. A new baseline or running flag cancels the
+   * previous observation; an idle item is read once and no longer polled.
+   */
+  @OptIn(ExperimentalCoroutinesApi::class)
+  private fun observeChanges() {
+    mutableState
+      .map { state -> (state.sections as? SectionsUi.Loaded)?.let { ChangesKey(it.detail.changeBaseline, state.header.running) } }
+      .distinctUntilChanged()
+      .flatMapLatest { key -> key?.let { changes.observe(it.baseline, it.running).map { state -> key to state } } ?: emptyFlow() }
+      .onEach { (key, state) -> showChanges(key, state) }
+      .launchIn(viewModelScope)
+  }
+
+  private fun showChanges(key: ChangesKey, read: ChangesState) {
+    mutableState.update { current ->
+      // Re-observing the same baseline (only running changed) keeps the shown list until the next real result.
+      val keep = read == ChangesState.Loading && current.changes.baseline == key.baseline && current.changes.state is ChangesState.Listed
+      if (keep) current else current.copy(changes = ChangesUi(key.baseline, read))
+    }
+    if (read is ChangesState.Listed && key.baseline != null) diff.onListed(key.baseline, read.changes)
+  }
+
+  private fun openChangedFile(row: ChangedFile) {
+    val shown = state.value.changes
+    val listed = shown.state as? ChangesState.Listed ?: return
+    val baseline = shown.baseline ?: return
+    val file = listed.changes.rowFor(row) ?: return
+    if (file.status == ChangeStatus.Deleted) return
+    open(FILE_NOT_OPENED) { changes.open(baseline.worktreeRoot, file) }
+  }
+
   private fun loadMore(list: DetailList) {
     val loaded = state.value.sections as? SectionsUi.Loaded ?: return
     if (list !in loaded.moreLists) return
@@ -247,6 +295,8 @@ class DetailViewModel(
     }
   }
 }
+
+private data class ChangesKey(val baseline: ChangeBaseline?, val running: Boolean)
 
 private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
   running = row.running,

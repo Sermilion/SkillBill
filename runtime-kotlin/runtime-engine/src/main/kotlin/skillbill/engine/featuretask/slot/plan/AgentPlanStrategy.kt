@@ -240,7 +240,12 @@ internal class AgentPlanStrategy :
         }
       return """
         Write decomposition-manifest.yaml in exactly this shape, one subtasks entry per subtask spec. Every
-        field shown is required; dependencies lists only earlier subtask ids:
+        field shown is required; dependencies lists only earlier subtask ids.
+
+        base_branch is the branch this work builds on, and the runtime diffs the work and targets its PR
+        against it. When the intake names a branch to build or stack on, or says the work builds on another
+        issue's unmerged branch or PR, write that branch's exact name (look it up with git or gh). Otherwise
+        write the repository default branch. Stacked work never uses the default branch:
 
         ```yaml
         ---
@@ -250,7 +255,7 @@ internal class AgentPlanStrategy :
         parent_spec_path: "$bundle/spec.md"
         status: "pending"
         execution_model: "same_branch_commit_per_subtask"
-        base_branch: "<repository default branch>"
+        base_branch: "<base branch>"
         feature_branch: "feat/<issue key>-<slug>"
         stack_branches: []
         current_subtask_intent:

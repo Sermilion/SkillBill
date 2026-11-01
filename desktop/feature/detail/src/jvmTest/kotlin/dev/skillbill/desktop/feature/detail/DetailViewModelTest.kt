@@ -1,7 +1,14 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.common.Outcome
+import dev.skillbill.desktop.core.domain.model.ChangeBaseline
+import dev.skillbill.desktop.core.domain.model.ChangeSet
+import dev.skillbill.desktop.core.domain.model.ChangeStatus
+import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.FileDiff
+import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
@@ -18,6 +25,7 @@ import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
@@ -26,6 +34,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.loadedBoard
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
+import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -51,6 +60,8 @@ import kotlin.time.Instant
 class DetailViewModelTest {
   private val item = workItem("SKILL-1")
   private val details = RecordingDetailRepository()
+  private val changes = RecordingChangesRepository()
+  private val baseline = ChangeBaseline.SubtaskStart("/repo", "base", emptyList())
   private val clock = object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) }
 
   @AfterTest
@@ -65,7 +76,7 @@ class DetailViewModelTest {
     board: FakeWorkBoardRepository = FakeWorkBoardRepository(),
     source: WorkItem = item,
     workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
-  ) = DetailViewModel(source, session, details, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
+  ) = DetailViewModel(source, session, details, changes, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {
@@ -180,6 +191,64 @@ class DetailViewModelTest {
     assertEquals(1, effects.size)
   }
 
+  @Test
+  fun `an open diff follows the refreshed list and only a listed file still on disk is opened`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val viewModel = viewModel()
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    details.flow.emit(DetailState(item, DetailSections.Loaded(emptyDetail.copy(changeBaseline = baseline), null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    val modified = ChangedFile("src/A.kt", null, ChangeStatus.Modified, 4, 2)
+    val deleted = ChangedFile("src/B.kt", null, ChangeStatus.Deleted, 0, 9)
+    changes.flow.emit(ChangesState.Listed(ChangeSet("base", listOf(modified, deleted), 4, 11)))
+    advanceUntilIdle()
+
+    changes.diffs += FileDiffState.Shown(FileDiff(emptyList(), 4, 2))
+    viewModel.onAction(DetailAction.SelectChangedFile(modified))
+    advanceUntilIdle()
+    assertEquals(DiffContent.Read(FileDiffState.Shown(FileDiff(emptyList(), 4, 2))), viewModel.state.value.diff?.content)
+
+    val grown = modified.copy(insertions = 6)
+    val recreated = ChangedFile(deleted.path, null, ChangeStatus.Untracked, 3, 0)
+    changes.diffs += FileDiffState.Shown(FileDiff(emptyList(), 6, 2))
+    changes.flow.emit(ChangesState.Listed(ChangeSet("base", listOf(grown, deleted, recreated), 9, 11)))
+    advanceUntilIdle()
+    assertEquals(listOf(modified, grown), changes.diffReads)
+    assertEquals(DiffContent.Read(FileDiffState.Shown(FileDiff(emptyList(), 6, 2))), viewModel.state.value.diff?.content)
+
+    viewModel.onAction(DetailAction.OpenChangedFile(deleted))
+    viewModel.onAction(DetailAction.OpenChangedFile(recreated))
+    viewModel.onAction(DetailAction.OpenChangedFile(grown))
+    advanceUntilIdle()
+    runCurrent()
+    assertEquals(listOf(recreated, grown), changes.opens)
+    val toasts = effects.filterIsInstance<DetailEffect.ShowToast>()
+    assertEquals(listOf(ToastTone.Problem, ToastTone.Problem), toasts.map { it.message.tone })
+  }
+
+  @Test
+  fun `an item that goes idle is observed again without polling`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val board = FakeWorkBoardRepository()
+    val viewModel = viewModel(board)
+    advanceUntilIdle()
+    val loaded = DetailSections.Loaded(emptyDetail.copy(changeBaseline = baseline), null, emptyMap(), emptySet(), stale = false)
+    board.state.value = loadedBoard(items = listOf(item.copy(running = true)))
+    details.flow.emit(DetailState(item, loaded))
+    advanceUntilIdle()
+
+    board.state.value = loadedBoard(items = listOf(item.copy(running = false)))
+    advanceUntilIdle()
+    val listed = ChangesState.Listed(ChangeSet("base", emptyList(), 0, 0))
+    changes.flow.emit(listed)
+    advanceUntilIdle()
+
+    assertEquals(listOf<Pair<ChangeBaseline?, Boolean>>(baseline to true, baseline to false), changes.observed)
+    assertEquals(listed, viewModel.state.value.changes.state)
+  }
+
   private fun loaded(anchor: String) = DetailState(
     item,
     DetailSections.Loaded(emptyDetail, null, mapOf(DetailList.Subtasks to anchor), setOf(DetailList.Subtasks), stale = false),
@@ -200,6 +269,29 @@ class DetailViewModelTest {
     }
 
     override suspend fun prefetch(id: String): RunOptions? = null
+  }
+
+  private class RecordingChangesRepository : WorkChangesRepository {
+    val flow = MutableSharedFlow<ChangesState>()
+    val observed = mutableListOf<Pair<ChangeBaseline?, Boolean>>()
+    val diffs = ArrayDeque<FileDiffState>()
+    val diffReads = mutableListOf<ChangedFile>()
+    val opens = mutableListOf<ChangedFile>()
+
+    override fun observe(baseline: ChangeBaseline?, running: Boolean): Flow<ChangesState> {
+      observed += baseline to running
+      return flow
+    }
+
+    override suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState {
+      diffReads += file
+      return diffs.removeFirst()
+    }
+
+    override suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome {
+      opens += file
+      return OpenOutcome.NotOpened
+    }
   }
 
   private object NoSpecs : SpecRepository {
