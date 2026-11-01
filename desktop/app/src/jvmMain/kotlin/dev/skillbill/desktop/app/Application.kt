@@ -1,7 +1,9 @@
 package dev.skillbill.desktop.app
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,15 +52,15 @@ fun main() {
       component.hostIntents.intents.collect { intent ->
         when (intent) {
           HostIntent.ShowMain -> { mainVisible = true; focusRequest++ }
-          is HostIntent.OpenDetail -> { mainVisible = true; focusRequest++; window.navigator.navigate(DetailRoute(intent.item)) }
-          HostIntent.OpenSettings -> { mainVisible = true; focusRequest++; window.navigator.navigate(SettingsRoute(SettingsPageId.App)) }
+          is HostIntent.OpenDetail -> { mainVisible = true; focusRequest++; component.changesWindows.close(); window.navigator.navigate(DetailRoute(intent.item)) }
+          HostIntent.OpenSettings -> { mainVisible = true; focusRequest++; component.changesWindows.close(); window.navigator.navigate(SettingsRoute(SettingsPageId.App)) }
           HostIntent.Refresh -> component.workBoardRepository.refresh()
           HostIntent.Quit -> exitApplication()
         }
       }
     }
     TrayHost(trayModel, component.trayAvailability, component.hostIntents, uiScale, mainVisible, reducedMotion) { exitApplication() }
-    MainWindow(window, uiScale, reducedMotion, mainVisible, focusRequest) {
+    MainWindow(window, uiScale, reducedMotion, mainVisible, focusRequest, component.changesWindows, component.changesWindowViewModel) {
       if (component.trayAvailability.state.value.canHideToTray) mainVisible = false else {
         component.trayAvailability.unavailable()
         exitApplication()

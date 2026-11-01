@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
@@ -37,7 +38,20 @@ fun snapshot(item: WorkItem, detail: Detail?): ExecutionSnapshot {
   entries.put("execution.model", item.model)
   entries.put("execution.effort", item.effort)
   entries.put("execution.currentSubtaskId", item.currentSubtaskId)
-  if (detail != null) entries.putDetail(detail)
+  if (detail != null) {
+    entries.putDetail(detail)
+    val review = detail.executionHistory.firstOrNull { it.invocationId == item.control.invocationId }?.reviewReport
+    if (review != null) {
+      review.findings.forEach { finding ->
+        entries.put("detail.review.finding.${finding.ref}",
+          "[${finding.severity}] ${finding.location.orEmpty()} ${finding.description} (${finding.status.name})")
+      }
+      ReviewFindingsAction.entries.forEach { action ->
+        reviewActionInstruction(item, action)?.takeIf { it.length <= VALUE_CAP }
+          ?.let { entries.put("detail.review.action.${action.name.lowercase()}", it) }
+      }
+    }
+  }
   return ExecutionSnapshot(entries)
 }
 

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.blockincident
 
 import skillbill.contracts.workflow.identity.blockincident.BLOCK_INCIDENT_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.error.blockincident.BlockIncidentFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.ops.bindAll
@@ -157,6 +158,15 @@ internal class SqliteBlockIncidentRepository(
       BlockIncidentLookup.Absent -> null
       is BlockIncidentLookup.Quarantined -> throw quarantined(lookup)
     }
+
+  override fun listForWorkPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<BlockIncident> {
+    require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
+    return workQueries.listForWork(workflowId, null, limit, offset).mapNotNull(::find)
+  }
 
   override fun listForWork(
     workflowId: String?,
@@ -610,8 +620,6 @@ internal class SqliteBlockIncidentRepository(
     }
   }
 
-  private fun validOccurrenceToken(value: String): Boolean = OCCURRENCE_TOKEN_PATTERN.matches(value)
-
   private fun validIdentity(value: String): Boolean = value.isNotBlank() && value.length <= MAX_IDENTITY_CHARS
 
   private fun BlockIncidentOccurrence.hasSamePersistedOriginalFailure(
@@ -736,8 +744,11 @@ internal class SqliteBlockIncidentRepository(
     private const val MAX_IDENTITY_CHARS = 512
     private const val MAX_QUARANTINE_MESSAGE_CHARS = 1024
     private const val MAX_ALIAS_CHARS = 512
-    private val OCCURRENCE_TOKEN_PATTERN = Regex("bi_[0-9a-f]{64}")
   }
 }
 
 private const val MAX_WORK_INCIDENTS = 11
+
+private fun validOccurrenceToken(value: String): Boolean = OCCURRENCE_TOKEN_PATTERN.matches(value)
+
+private val OCCURRENCE_TOKEN_PATTERN = Regex("bi_[0-9a-f]{64}")

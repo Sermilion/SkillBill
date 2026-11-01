@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,13 +16,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbInput
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
@@ -34,7 +41,7 @@ import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
- * The input stays editable while a turn runs so it keeps focus; both buttons are off while a turn runs, without a supported agent, or once the execution left the database.
+ * The input stays editable while a turn runs. Submitting queues a message until the current turn ends.
  * A draft of `/resume` or `/clear` is a command: it shows highlighted and runs even while a turn runs. `/resume` opens the
  * saved-chat picker; `/clear` ends the running turn and starts a new conversation.
  */
@@ -46,10 +53,15 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
   val gone by session.gone.collectAsState()
   val mode by session.mode.collectAsState()
   val choices by session.resumeChoices.collectAsState()
+  val queued by session.queued.collectAsState()
+  val transcript by session.transcript.collectAsState()
+  val status = chatActivityStatus(busy, agent, gone, transcript)
+  val focus = remember(session) { FocusRequester() }
+  LaunchedEffect(session) { focus.requestFocus() }
   val id = session.id
   val text = workspace.drafts[id].orEmpty()
   val command = text.trim().takeIf { it in CHAT_COMMANDS }
-  val ready = command != null || (!busy && agent != null && supported && !gone && text.isNotBlank())
+  val ready = command != null || (supported && !gone && text.isNotBlank())
   fun run(command: String) {
     workspace.drafts.remove(id)
     when (command) {
@@ -62,15 +74,17 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
     if (command != null) return run(command)
     action(id, text)
     workspace.drafts.remove(id)
+    focus.requestFocus()
   }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { ChatPill(status, dot = busy) }
     if (command == null && commandTokenLength(text) == text.length) {
       matchingCommands(text).forEach { CommandHint(it) { run(it) } }
     }
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         text, { workspace.drafts[id] = it },
-        modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).gatesShortcutsWhileFocused(),
         placeholder = "Ask about this execution, or type $RESUME_COMMAND or $CLEAR_COMMAND",
         enabled = !gone,
         onSubmit = { submit(workspace::send) },
@@ -81,14 +95,19 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
         ResumePicker(saved, workspace.now(), { workspace.resume(id, it) }, { workspace.dismissResume(id) })
       }
     }
+    if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       ModeBadge(mode)
       AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
         if (mode == ChatPermissionMode.ReadOnly) {
-          SbButton("Pause and act", { submit(workspace::pauseAndAct) }, size = SbControlSize.Small, enabled = ready && command == null, tooltip = "Pauses the execution, runs this in act mode, then resumes it")
+          SbButton(
+            if (busy) "Queue pause and act" else "Pause and act", { submit(workspace::pauseAndAct) },
+            size = SbControlSize.Small, enabled = ready && command == null,
+            tooltip = "Pauses the execution when this message runs, acts, then resumes it",
+          )
         }
-        SbButton("Send", { submit(workspace::send) }, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
+        SbButton(if (busy && command == null) "Queue" else "Send", { submit(workspace::send) }, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
       }
     }
   }

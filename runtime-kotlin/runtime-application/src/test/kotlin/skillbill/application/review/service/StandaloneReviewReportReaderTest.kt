@@ -1,4 +1,4 @@
-package skillbill.engine.work
+package skillbill.application.review.service
 
 import skillbill.ports.idestatus.model.StandaloneReviewReportFinding
 import kotlin.test.Test

@@ -18,6 +18,8 @@ import kotlin.time.Clock
 
 internal const val SAVED_LINES = 10
 
+internal data class QueuedChatMessage(val text: String, val action: ChatSuggestedAction?, val pauseAndAct: Boolean)
+
 /**
  * One chat about an execution; an execution can have several. [id] names the chat tab. [sessionId] names the agent CLI session and changes when the operator switches agents; [job] parents
  * every turn, so cancelling it ends the turn's process; [turnJob] is the turn that owns [busy] now. [delivered] is the snapshot
@@ -51,6 +53,7 @@ class ChatSession internal constructor(
   internal var delivered: ExecutionSnapshot? = null
   internal var started: Boolean = false
   internal var turnJob: Job? = null
+  internal var resumeJob: Job? = null
 
   /** The next turn opens [newSessionId] and sends the full snapshot, as a first turn does. */
   internal fun restart(newSessionId: String) {
@@ -77,6 +80,9 @@ class ChatSession internal constructor(
 
   internal val busyState = MutableStateFlow(false)
   val busy: StateFlow<Boolean> = busyState.asStateFlow()
+
+  internal val queuedState = MutableStateFlow<List<QueuedChatMessage>>(emptyList())
+  internal val queued: StateFlow<List<QueuedChatMessage>> = queuedState.asStateFlow()
 
   internal val modeState = MutableStateFlow(modeFor(item))
   val mode: StateFlow<ChatPermissionMode> = modeState.asStateFlow()

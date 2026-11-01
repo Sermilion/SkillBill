@@ -15,6 +15,9 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import kotlin.time.Instant
 
+internal val WorkItem.showsChanges: Boolean
+  get() = kind == WorkKind.Goal
+
 /** "d MMM HH:mm"-style formatting in the system time zone. */
 internal expect fun formatInstant(instant: Instant, pattern: String): String
 
@@ -105,6 +108,16 @@ internal fun pipelineSteps(item: WorkItem, detail: Detail, pipeline: List<String
     val counted = if (countOnAnyState) index == current && state != PipelineStepState.Done else state == PipelineStepState.Current
     PipelineStep(id, state, count = item.phaseExecutionLabel.takeIf { counted }, goal = goal)
   }
+}
+
+/**
+ * One subtask's own step pipeline. A finished subtask completes every step, the current one has its live place on it, and any
+ * other shows them pending, since the runtime records no per-step history for it.
+ */
+internal fun subtaskSteps(item: WorkItem, detail: Detail, status: StatusKind, current: Boolean): List<PipelineStep> = when {
+  status == StatusKind.Completed || status == StatusKind.CompletedNoChange -> detail.stepPipeline.map { PipelineStep(it, PipelineStepState.Done) }
+  current -> pipelineSteps(item, detail, detail.stepPipeline)
+  else -> detail.stepPipeline.map { PipelineStep(it, PipelineStepState.Pending) }
 }
 
 private val ASSESSMENT_STEPS = setOf("goal_assessment", "goal_assessment_fix")

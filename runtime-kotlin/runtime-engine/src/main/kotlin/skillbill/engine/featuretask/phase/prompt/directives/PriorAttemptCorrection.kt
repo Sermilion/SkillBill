@@ -4,10 +4,11 @@ internal class PriorAttemptCorrection private constructor(
   public val reason: String,
   public val kind: Kind,
 ) {
-  internal enum class Kind { RETRYABLE_TERMINAL, FINDING_COVERAGE }
+  internal enum class Kind { RETRYABLE_TERMINAL, FINDING_COVERAGE, PLAN_BUNDLE_REJECTION }
 
   val retryableTerminalReason: String? get() = reason.takeIf { kind == Kind.RETRYABLE_TERMINAL }
   val findingCoverageReason: String? get() = reason.takeIf { kind == Kind.FINDING_COVERAGE }
+  val planBundleRejectionReason: String? get() = reason.takeIf { kind == Kind.PLAN_BUNDLE_REJECTION }
 
   companion object {
     fun retryableTerminal(reason: String): PriorAttemptCorrection =
@@ -15,6 +16,9 @@ internal class PriorAttemptCorrection private constructor(
 
     fun unaccountedFindings(reason: String): PriorAttemptCorrection =
       PriorAttemptCorrection(reason, Kind.FINDING_COVERAGE)
+
+    fun planBundleRejected(reason: String): PriorAttemptCorrection =
+      PriorAttemptCorrection(reason, Kind.PLAN_BUNDLE_REJECTION)
   }
 }
 
@@ -28,6 +32,18 @@ internal fun findingCoverageDirective(priorFindingCoverage: String?): String {
     Keep the entries you already wrote and add the missing ones. Do the repair work first, then write
     the entry that describes it. Repeating the same receipt without accounting for the named findings
     blocks the run.
+    """.trimIndent()
+}
+
+internal fun planBundleRepairDirective(priorPlanBundleRejection: String?): String {
+  if (priorPlanBundleRejection.isNullOrBlank()) return ""
+  return """
+    ## Spec bundle rejected: repair it in place
+    The runtime rejected the spec bundle your previous attempt authored. That bundle is still on disk.
+    Rejection:
+    $priorPlanBundleRejection
+    Edit the existing bundle files until they meet this rule, and check every spec for the same mistake.
+    Do not re-plan the work or rewrite content the rejection does not concern. Then settle the phase again.
     """.trimIndent()
 }
 

@@ -1,0 +1,97 @@
+package dev.skillbill.desktop.feature.changes
+
+import dev.skillbill.desktop.core.domain.model.ChangeBaseline
+import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
+import dev.skillbill.desktop.core.domain.model.OutsideCommit
+import dev.skillbill.desktop.core.domain.model.ScopeChangesState
+import dev.skillbill.desktop.core.domain.model.ScopeRead
+import dev.skillbill.desktop.core.domain.model.ScopeSubtask
+import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
+import dev.skillbill.desktop.core.domain.model.normalizeRange
+import dev.skillbill.desktop.core.domain.model.resolveScope
+import kotlin.math.abs
+
+/**
+ * The range a drag from [fromId] to [toId] selects: the end is the selectable subtask nearest [toId] between the two, so a drag into
+ * not-started subtasks stops at the last one with a start commit. Null when [fromId] is not selectable.
+ */
+internal fun dragRange(target: ChangeScopeTarget, fromId: Int, toId: Int): ChangeScope.Subtasks? {
+  if (target.subtasks.none { it.id == fromId && it.selectable }) return null
+  val span = minOf(fromId, toId)..maxOf(fromId, toId)
+  val end = target.subtasks.filter { it.selectable && it.id in span }.minByOrNull { abs(it.id - toId) }?.id ?: fromId
+  return normalizeRange(target, fromId, end)
+}
+
+/**
+ * The single subtask a step selects: after or before the selected range, or the first or last selectable one from any other
+ * scope. Null when nothing selectable lies that way.
+ */
+internal fun stepTarget(subtasks: List<ScopeSubtask>, scope: ChangeScope, forward: Boolean): Int? {
+  val selectable = subtasks.filter { it.selectable }.map { it.id }
+  return when {
+    scope is ChangeScope.Subtasks && forward -> selectable.firstOrNull { it > scope.to }
+    scope is ChangeScope.Subtasks -> selectable.lastOrNull { it < scope.from }
+    forward -> selectable.firstOrNull()
+    else -> selectable.lastOrNull()
+  }
+}
+
+/** The scope bar's commit range for [scope]. */
+internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope, outsideCommits: List<OutsideCommit>): String = when (scope) {
+  ChangeScope.All -> when (val baseline = target.allBaseline) {
+    is ChangeBaseline.TargetMergeBase -> "${baseline.targetBranch ?: "default branch"}...HEAD"
+    is ChangeBaseline.RunStart -> "${baseline.baseSha.take(7)}..HEAD"
+    is ChangeBaseline.SubtaskStart -> "${baseline.baseSha.take(7)}..HEAD"
+  }
+  ChangeScope.Uncommitted -> ""
+  ChangeScope.Outside -> outsideCommits.joinToString(", ") { it.sha.take(7) }.ifEmpty { "none" }
+  is ChangeScope.Subtasks -> {
+    val range = when (val read = resolveScope(target, scope)) {
+      is ScopeRead.Committed -> "${read.fromSha.take(7)}..${read.toSha.take(7)}"
+      is ScopeRead.Baseline -> "${(read.baseline as? ChangeBaseline.SubtaskStart)?.baseSha?.take(7).orEmpty()}..HEAD"
+      is ScopeRead.Unavailable -> read.reason
+      else -> ""
+    }
+    if (scope.to > scope.from) "$range · ${scope.to - scope.from + 1} of ${target.subtasks.size} subtasks" else range
+  }
+}
+
+/** Picker search: a blank query keeps every row; else rows whose number equals the query or whose name contains it, any case. */
+internal fun filterSubtasks(subtasks: List<ScopeSubtask>, query: String): List<ScopeSubtask> {
+  val needle = query.trim()
+  if (needle.isEmpty()) return subtasks
+  return subtasks.filter { it.id.toString() == needle || it.name.contains(needle, ignoreCase = true) }
+}
+
+/**
+ * The toolbar's quick buttons. All, Outside and Uncommitted count their latest list; Running counts its subtask's stats and shows
+ * disabled when no subtask runs. A button with a zero count or a failed read is disabled. Without Subtasks only All and Uncommitted.
+ */
+internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
+  val scope = state.scope
+  val allCount = (state.allRead as? ScopeListUi.Listed)?.changes?.files?.size
+  val buttons = mutableListOf(
+    QuickButtonUi(QuickScope.All, "All", allCount, enabled = state.allRead == null || (allCount ?: 0) > 0, pressed = scope == ChangeScope.All),
+  )
+  if (state.subtasksAvailable) {
+    val running = state.subtasks.firstOrNull { it.state == ScopeSubtaskState.RUNNING }
+    val runningCount = running?.let { state.stats[it.id]?.files?.size }
+    buttons += QuickButtonUi(
+      QuickScope.Running,
+      running?.let { "Running · ${it.id}" } ?: "Running",
+      runningCount,
+      enabled = running != null && running.selectable && (runningCount ?: 0) > 0,
+      pressed = running != null && scope == ChangeScope.Subtasks(running.id, running.id),
+      running = running != null,
+    )
+    buttons += readButton(QuickScope.Outside, "Outside subtasks", state.outsideRead, scope == ChangeScope.Outside)
+  }
+  buttons += readButton(QuickScope.Uncommitted, "Uncommitted", state.uncommittedRead, scope == ChangeScope.Uncommitted)
+  return buttons
+}
+
+private fun readButton(kind: QuickScope, label: String, read: ScopeChangesState?, pressed: Boolean): QuickButtonUi {
+  val count = (read as? ScopeChangesState.Listed)?.changes?.files?.size
+  return QuickButtonUi(kind, label, count, enabled = (count ?: 0) > 0, pressed = pressed)
+}

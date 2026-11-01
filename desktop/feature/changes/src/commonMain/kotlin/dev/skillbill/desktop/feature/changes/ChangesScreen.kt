@@ -1,0 +1,216 @@
+package dev.skillbill.desktop.feature.changes
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.Hint
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbIconButton
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
+import dev.skillbill.desktop.core.ui.changes.changesSans
+import dev.skillbill.desktop.core.ui.changes.hairlineBottom
+import dev.skillbill.desktop.core.ui.changes.hairlineTop
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
+
+@Composable
+fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, onClose: () -> Unit) {
+  val state by viewModel.state.collectAsState()
+  val onAction = viewModel::onAction
+  val filterFocus = remember { FocusRequester() }
+  val pickerSearch = remember { FocusRequester() }
+  var filterFocused by remember { mutableStateOf(false) }
+  var filterFocusRequests by remember { mutableIntStateOf(0) }
+  // The request waits a frame so the `/` typed after its key-down does not land in the filter.
+  LaunchedEffect(filterFocusRequests) {
+    if (filterFocusRequests == 0) return@LaunchedEffect
+    withFrameNanos { }
+    filterFocus.requestFocus()
+  }
+  val focusManager = LocalFocusManager.current
+  val textFocused by rememberUpdatedState(filterFocused)
+  val currentOnClose by rememberUpdatedState(onClose)
+  DisposableEffect(keys, viewModel) {
+    keys.handler = handler@{ event ->
+      val key = windowKeyFor(event) ?: return@handler false
+      val open = viewModel.state.value.pickerOpen
+      // The picker popup shares the window scene, so this handler sees its keys first.
+      // While it is open its search owns typing. Esc unwinds one level: picker, then filter, then the panel.
+      if (key == WindowKey.Escape) {
+        when {
+          open -> viewModel.onAction(ChangesWindowAction.ClosePicker)
+          textFocused -> focusManager.clearFocus()
+          else -> currentOnClose()
+        }
+        return@handler true
+      }
+      if (textFocused || open) return@handler false
+      when (key) {
+        WindowKey.OpenPicker -> viewModel.onAction(ChangesWindowAction.OpenPicker)
+        WindowKey.Previous -> viewModel.onAction(ChangesWindowAction.Step(forward = false))
+        WindowKey.Next -> viewModel.onAction(ChangesWindowAction.Step(forward = true))
+        WindowKey.All -> viewModel.onAction(ChangesWindowAction.PickAll)
+        WindowKey.NextFile -> viewModel.onAction(ChangesWindowAction.MoveFile(1))
+        WindowKey.PreviousFile -> viewModel.onAction(ChangesWindowAction.MoveFile(-1))
+        WindowKey.FocusFilter -> filterFocusRequests++
+        WindowKey.Open -> viewModel.onAction(ChangesWindowAction.OpenSelectedFile)
+        WindowKey.Escape -> Unit
+      }
+      true
+    }
+    onDispose { keys.handler = { false } }
+  }
+  val colors = SkillBillTheme.colors
+  Column(Modifier.fillMaxSize().background(colors.bgWindow)) {
+    when (val content = state.content) {
+      WindowContent.Loading -> CenterHint("Loading changes")
+      WindowContent.Missing -> CenterHint("This execution is not in the open database.")
+      WindowContent.NoBaseline -> CenterHint("No change baseline for this execution.")
+      is WindowContent.Problem -> CenterHint(readProblemText(content.problem))
+      is WindowContent.Ready -> {
+        ScopeToolbar(state, onAction, pickerSearch, filterFocus) { filterFocused = it }
+        if (state.subtasksAvailable) {
+          val range = (state.scope as? ChangeScope.Subtasks)?.let { it.from..it.to }
+          Box(
+            Modifier.fillMaxWidth().background(colors.bgPanel).hairlineBottom(colors.border)
+              .padding(start = 14.dp, top = 4.dp, end = 14.dp, bottom = 10.dp),
+          ) {
+            SubtaskStrip(
+              state.subtasks,
+              state.stats,
+              selected = range,
+              onPick = { id, extend -> onAction(ChangesWindowAction.PickSubtask(id, extend, fromPicker = false)) },
+              onDrag = { from, to -> onAction(ChangesWindowAction.DragSubtasks(from, to)) },
+            )
+          }
+        }
+        ScopeBar(state, onAction)
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+          val listWidth = minOf(FILE_LIST_WIDTH, maxWidth * FILE_LIST_MAX_SHARE)
+          Row(Modifier.fillMaxSize()) {
+            FileListPane(state, onAction, Modifier.width(listWidth).fillMaxHeight())
+            DiffPane(state, onAction, Modifier.weight(1f).fillMaxHeight())
+          }
+        }
+        ChangesFooter(state.subtasksAvailable)
+      }
+    }
+  }
+}
+
+@Composable
+private fun CenterHint(text: String) = Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Hint(text) }
+
+@Composable
+private fun ChangesFooter(subtasksAvailable: Boolean) {
+  val colors = SkillBillTheme.colors
+  val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
+  Row(
+    Modifier.fillMaxWidth().height(26.dp).background(colors.bgPanel).hairlineTop(colors.border).padding(horizontal = 14.dp),
+    horizontalArrangement = Arrangement.spacedBy(14.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    if (subtasksAvailable) {
+      FooterHint(listOf("s"), "pick subtask")
+      FooterHint(listOf("[", "]"), "previous / next subtask")
+    }
+    FooterHint(listOf("a"), "all")
+    FooterHint(listOf("j", "k"), "file")
+    FooterHint(listOf("/"), "filter")
+    FooterHint(listOf("o"), "open in editor")
+    Spacer(Modifier.weight(1f))
+    BasicText("Read-only · refreshes every 3 s while the ${if (subtasksAvailable) "goal" else "run"} runs", style = text, maxLines = 1, softWrap = false)
+  }
+}
+
+@Composable
+private fun FooterHint(keys: List<String>, label: String) {
+  Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    keys.forEach { KeyCap(it) }
+    BasicText(label, style = changesSans(11f, FontWeight.Normal, SkillBillTheme.colors.fgFaint), maxLines = 1, softWrap = false)
+  }
+}
+
+private val FILE_LIST_WIDTH = 380.dp
+private const val FILE_LIST_MAX_SHARE = 0.45f
+
+/**
+ * The panel's window look: 12 dp corners, a hairline and a shadow around a title bar with a centered title. The close button sits at
+ * the start of the bar when [closeAtStart], as macOS windows have it, else at the end.
+ */
+@Composable
+fun ChangesWindowFrame(title: String, closeAtStart: Boolean, onClose: () -> Unit, content: @Composable () -> Unit) {
+  val colors = SkillBillTheme.colors
+  val shape = RoundedCornerShape(12.dp)
+  val closeSlot: @Composable (Boolean) -> Unit = { shown ->
+    Box(Modifier.width(TITLE_SIDE_WIDTH), contentAlignment = Alignment.Center) {
+      if (shown) SbIconButton(LucideIcons.x, "Close changes", onClose, size = SbControlSize.Small)
+    }
+  }
+  Column(
+    Modifier.fillMaxSize()
+      .layeredShadow(SkillBillTheme.shadows.modal, shape)
+      .clip(shape)
+      .background(colors.bgWindow, shape)
+      .border(1.dp, colors.border, shape)
+      .padding(1.dp)
+      .semantics { paneTitle = title },
+  ) {
+    Row(
+      Modifier.fillMaxWidth().height(38.dp).background(colors.bgInset).hairlineBottom(colors.border).padding(horizontal = 8.dp),
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      closeSlot(closeAtStart)
+      BasicText(
+        title,
+        Modifier.weight(1f),
+        style = changesSans(12f, FontWeight.SemiBold, colors.fgMuted).copy(textAlign = TextAlign.Center),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      closeSlot(!closeAtStart)
+    }
+    content()
+  }
+}
+
+private val TITLE_SIDE_WIDTH = 32.dp

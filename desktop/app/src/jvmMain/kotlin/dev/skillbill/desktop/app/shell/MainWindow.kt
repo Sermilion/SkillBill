@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -33,12 +34,17 @@ import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
+import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.changes.ChangesWindows
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.PaneSlot
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellLayout
+import dev.skillbill.desktop.feature.changes.ChangesWindowKeys
+import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.cancel
 import java.awt.GraphicsEnvironment
 
@@ -76,6 +82,8 @@ fun ApplicationScope.MainWindow(
   reducedMotion: Boolean,
   visible: Boolean,
   focusRequest: Int,
+  changes: ChangesWindows,
+  createChangesViewModel: (WorkItem, ChangeScope) -> ChangesWindowViewModel,
   onCloseRequest: () -> Unit,
 ) {
   DisposableEffect(window) {
@@ -88,13 +96,17 @@ fun ApplicationScope.MainWindow(
   }
   LaunchedEffect(window) { window.navigator.followSession() }
   val keyboard = window.keyboard
+  val changesEntry by changes.current.collectAsState()
+  val changesKeys = remember { ChangesWindowKeys() }
   Window(
     onCloseRequest = onCloseRequest,
     visible = visible,
     title = "Skill Bill",
     icon = skillBillIcon(),
     state = rememberWindowState(size = remember(uiScale) { comfortableWindowSize(uiScale) }, position = WindowPosition(Alignment.Center)),
-    onPreviewKeyEvent = { event ->
+    onPreviewKeyEvent = onPreviewKeyEvent@{ event ->
+      // The Changes panel is modal: its keys win, and no shell shortcut fires under it.
+      if (changesEntry != null) return@onPreviewKeyEvent changesKeys.handle(event)
       val press = event.toKeyPress()
       val listNavigation = specsPaneOwnsNavigationKey(
         press,
@@ -135,6 +147,9 @@ fun ApplicationScope.MainWindow(
               ShellContent(window, drawerMode)
               CommandMenu(window)
               if (panes.shortcutsOpen) ShortcutSheet { panes.shortcutsOpen = false }
+              changesEntry?.let { entry ->
+                key(entry.item.id) { ChangesOverlay(entry, changesKeys, createChangesViewModel, changes::close) }
+              }
               ToastStack(window.toasts.host)
             }
           }

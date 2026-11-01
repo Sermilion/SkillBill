@@ -9,6 +9,8 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
+import skillbill.ports.work.model.WorkActivityAttempt
+import skillbill.ports.work.model.WorkActivityStop
 import skillbill.ports.work.model.WorkBoardAffectedCandidates
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
@@ -36,6 +38,18 @@ internal class SQLiteWorkListRepository(
   private val connection: Connection,
   private val diagnostics: RuntimeDiagnostics,
 ) : WorkListRepository {
+  override fun goalActivityAttempts(
+    parentWorkflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<WorkActivityAttempt> = readGoalActivityAttempts(connection, parentWorkflowId, offset, limit)
+
+  override fun goalActivityStops(
+    parentWorkflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<WorkActivityStop> = readGoalActivityStops(connection, parentWorkflowId, offset, limit)
+
   override fun boardCandidates(query: WorkBoardCandidateQuery): List<WorkBoardCandidateRow> =
     readWorkBoardCandidates(connection, query)
 

@@ -24,7 +24,11 @@ internal object PolicyRules {
     "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/DetailPresentation.kt" to
       ("sortedWith" to "Orders a spec bundle's file names for display (manifest, spec.md, then by name); no work items."),
     "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/ActivitySection.kt" to
-      ("sortedBy" to "Orders one item's recorded activity facts and its executions oldest first for the feed; no work items."),
+      ("sortedBy" to "Orders one item's recorded activity facts oldest first for the feed; no work items."),
+    "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/ActivityProjection.kt" to
+      ("sortedBy" to "Merges one workflow's phase and block events by time and lays its activity bar out by time; no work items."),
+    "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/ActivitySummary.kt" to
+      ("sortedByDescending" to "Ranks model labels by recorded phase duration for one activity summary; no work items."),
   )
 
   fun isScanned(project: String): Boolean = project == ":app" || project == ":core:ui" || project.startsWith(":feature:")

@@ -191,6 +191,42 @@ internal object PhaseAttemptContinuations {
     return null
   }
 
+  internal fun settlePlanBundleRejected(
+    recorder: PhaseRunRecords,
+    context: FixLoopBranchContext,
+    rejected: AttemptResult.PlanBundleRejected,
+  ): PhaseOutcome? {
+    val run = context.run
+    val loop = context.loop
+    if (loop.planBundleRepairTurns >= FeatureTaskRuntimeAttemptBudgets.MAX_PLAN_BUNDLE_REPAIR_TURNS) {
+      return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        context.progress,
+        context.loopTransitions,
+        recorder,
+        PhaseBlockRequest(
+          run = run,
+          attemptCount = loop.iteration,
+          reason = rejected.reason,
+          observability = context.observability,
+          payload = BlockAndPersistPayload(fileManifest = rejected.fileManifest),
+        ),
+      )
+    }
+    val failedIteration = loop.semanticIteration
+    loop.planBundleRepairTurns += 1
+    loop.iteration += 1
+    loop.semanticIteration += 1
+    loop.priorCorrection = PriorAttemptCorrection.planBundleRejected(rejected.reason)
+    context.observability.continuation(
+      run.phaseId,
+      context.agentId,
+      loop.iteration,
+      failedIteration,
+      FeatureTaskRuntimeContinuationKind.PROCESS_RETRY,
+    )
+    return null
+  }
+
   internal fun settleRetryableTerminal(
     recorder: PhaseRunRecords,
     context: FixLoopBranchContext,

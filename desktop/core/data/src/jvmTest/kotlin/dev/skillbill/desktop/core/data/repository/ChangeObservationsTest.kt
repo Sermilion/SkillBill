@@ -27,7 +27,9 @@ import skillbill.ports.workchanges.WorkChangesPort
 import skillbill.ports.workchanges.model.WorkChangeListResult
 import skillbill.ports.workchanges.model.WorkChangeStatus
 import skillbill.ports.workchanges.model.WorkChangedFile
+import skillbill.ports.workchanges.model.WorkCommitRange
 import skillbill.ports.workchanges.model.WorkFileDiffResult
+import skillbill.ports.workchanges.model.WorkOutsideCommitsResult
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -63,6 +65,8 @@ class ChangeObservationsTest {
     assertEquals(3, (running.last() as ChangesState.Listed).changes.files.size)
     job.cancel()
 
+    // Let the shared working-tree read age out so the idle collection reads fresh.
+    advanceTimeBy(CHANGE_REFRESH_INTERVAL)
     port.calls = 0
     val idle = launch { changes.observe(baseline, running = false, Mutex()).collect { } }
     advanceTimeBy(30.seconds)
@@ -96,6 +100,7 @@ class ChangeObservationsTest {
     port,
     launcher,
     StandardTestDispatcher(testScheduler),
+    WorkingTreeReads(testScheduler.timeSource),
   )
 
   private class FakePort(var files: Int) : WorkChangesPort {
@@ -108,6 +113,24 @@ class ChangeObservationsTest {
     }
 
     override fun fileDiff(worktreeRoot: String, baseSha: String, file: WorkChangedFile): WorkFileDiffResult = WorkFileDiffResult.Binary
+
+    override fun committedChanges(worktreeRoot: String, fromSha: String, toSha: String): WorkChangeListResult =
+      WorkChangeListResult.Failed("unused")
+
+    override fun committedFileDiff(
+      worktreeRoot: String,
+      fromSha: String,
+      toSha: String,
+      file: WorkChangedFile,
+    ): WorkFileDiffResult = WorkFileDiffResult.Binary
+
+    override fun uncommittedChanges(worktreeRoot: String): WorkChangeListResult = WorkChangeListResult.Failed("unused")
+
+    override fun outsideCommits(
+      worktreeRoot: String,
+      targetBranch: String?,
+      subtaskRanges: List<WorkCommitRange>,
+    ): WorkOutsideCommitsResult = WorkOutsideCommitsResult.Failed("unused")
   }
 
   private class RecordingLauncher(private val result: Boolean) : FileEditorLauncherPort {

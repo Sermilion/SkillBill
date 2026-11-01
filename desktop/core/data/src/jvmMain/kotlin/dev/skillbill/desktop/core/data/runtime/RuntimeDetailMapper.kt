@@ -239,6 +239,7 @@ private fun StandaloneReviewReport.toDomain(): ReviewReport =
     verdict, summary,
     findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description, it.status.toDomain()) },
     lanes,
+    findingActions.flatMap { it.toActivityFacts() },
   )
 
 private fun StandalonePlanReport.toDomain(): PlanRunReport =

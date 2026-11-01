@@ -1,9 +1,9 @@
-package skillbill.engine.work
+package skillbill.application.review.service
 
 import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.StandaloneReviewReportFinding
 
-internal object StandaloneReviewReportReader {
+object StandaloneReviewReportReader {
   private val findingLine =
     Regex("""^(?:\[(F-\d+)]\s+)?(blocker|critical|major|minor|nit)\s*\|\s*(.+)$""", RegexOption.IGNORE_CASE)
   private val bulletPrefix = Regex("""^(?:[-*•]\s+)+""")

@@ -93,9 +93,10 @@ more than five criteria. Preserve it and distribute all of its requirements acro
 Behavior that spans several criteria goes in a `## Interaction Scenarios` section, not inside one
 criterion. Write it in every subtask spec with two or more criteria and in every authored parent spec
 whose subtasks share state, files, or user-facing entry points. A spec with fewer than two criteria and
-no parent-level sharing needs no scenario section. Write each scenario as one top-level list item that
-starts with `IS-001.` (three digits) and carries labeled fields, each starting a sentence on the item's
-first line or an indented continuation line: `Criteria:` (comma-separated `AC-NNN` refs, two or more
+no parent-level sharing needs no scenario section. Write each scenario as one top-level list item, a
+`- ` bullet then `IS-001.` (three digits), as in `- IS-001. Criteria: AC-001, AC-002.` A line without the
+bullet is rejected. The item carries labeled fields, each starting a sentence on the item's first line
+or an indented continuation line: `Criteria:` (comma-separated `AC-NNN` refs, two or more
 distinct refs that exist in the same spec), `Subtasks:` (comma-separated subtask ids, parent spec only,
 two or more), `Entry point:`, `Preconditions:`, `Steps:`, `Outcome:`. Write at most six scenarios per
 subtask spec and at most six per parent spec. Every criterion that describes a failure, rejection,

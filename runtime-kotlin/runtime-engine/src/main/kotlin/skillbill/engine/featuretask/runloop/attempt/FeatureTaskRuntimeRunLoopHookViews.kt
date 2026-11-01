@@ -120,7 +120,8 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   ) : OutputView(context),
     PhasePlanningOutputContext {
     override fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult? {
-      val reason = PlanDecompositionStop.recordAuthoredBundleOrRejection(context, capture) ?: return null
+      val rejection = PlanDecompositionStop.recordAuthoredBundleOrRejection(context, capture) ?: return null
+      if (rejection.repairable) return AttemptResult.PlanBundleRejected(rejection.reason, capture.fileManifest)
       val coupling = context.settlementCoupling()
       return AttemptResult.settled(
         FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -130,7 +131,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
           PhaseBlockRequest(
             run = capture.run,
             attemptCount = capture.iteration,
-            reason = reason,
+            reason = rejection.reason,
             observability = context.observability,
             payload = BlockAndPersistPayload(fileManifest = capture.fileManifest),
           ),

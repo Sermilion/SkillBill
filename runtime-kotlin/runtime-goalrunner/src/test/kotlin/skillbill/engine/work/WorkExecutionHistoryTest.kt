@@ -11,6 +11,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.repository.ReviewRepository
+import skillbill.review.model.ReviewFindingAction
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.model.ReviewLaneResolutionState
 import skillbill.review.model.ReviewLaneReviewDisposition
@@ -126,6 +127,8 @@ class WorkExecutionHistoryTest {
       object : UnitOfWork by database.unitOfWork() {
         override val reviews: ReviewRepository =
           object : ReviewRepository by unexercised() {
+            override fun findingActions(runId: String) = emptyList<ReviewFindingAction>()
+
             override fun fetchReviewRunLanes(runId: String) = if (runId == "rvw-1") recorded else emptyList()
 
             override fun fetchFindingStatuses(runId: String) = emptyMap<String, ReviewFindingStatus>()
@@ -154,6 +157,8 @@ class WorkExecutionHistoryTest {
       object : UnitOfWork by database.unitOfWork() {
         override val reviews: ReviewRepository =
           object : ReviewRepository by unexercised() {
+            override fun findingActions(runId: String) = emptyList<ReviewFindingAction>()
+
             override fun fetchReviewRunLanes(runId: String) = emptyList<ReviewRunLane>()
 
             override fun fetchFindingStatuses(runId: String) = mapOf("F-001" to ReviewFindingStatus.FIXED)

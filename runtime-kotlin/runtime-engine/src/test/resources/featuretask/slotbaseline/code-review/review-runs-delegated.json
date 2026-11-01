@@ -129,6 +129,7 @@
             "updated_at": "__NORMALIZED_TIMESTAMP__"
         }
     ],
+    "review_finding_actions": [],
     "review_finding_outcomes": [],
     "review_run_finding_lanes": [
         {

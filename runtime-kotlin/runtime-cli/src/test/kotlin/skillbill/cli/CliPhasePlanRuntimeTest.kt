@@ -48,6 +48,27 @@ class CliPhasePlanRuntimeTest {
   }
 
   @Test
+  fun `a rejected bundle gets a repair turn that names every failing spec`() {
+    installGoalBuildPack(tempDir)
+    val launcher = PhasePlanLauncher(tempDir, bareScenariosFirst = true)
+
+    val plan =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "split the work", "--agent", "codex"),
+        fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
+      )
+
+    assertEquals(0, plan.exitCode, plan.stdout + plan.stderr)
+    assertEquals(REPAIRED_PLAN_LAUNCHES, launcher.phaseIds)
+    assertEquals(PLANNED_UNITS, completedPlanUnitIds())
+    val repairPrompt = launcher.planPrompts.last()
+    assertContains(repairPrompt, "repair it in place")
+    assertContains(repairPrompt, "section content must be list items")
+    SUBTASK_FILES.values.forEach { assertContains(repairPrompt, it) }
+    assertTrue("repair it in place" !in launcher.planPrompts.first())
+  }
+
+  @Test
   fun `blocked planning resumes its own authored manifest without rerunning preplan`() {
     installGoalBuildPack(tempDir)
     val launcher = PhasePlanLauncher(tempDir, incompleteFirstBundle = true)
@@ -248,7 +269,7 @@ class CliPhasePlanRuntimeTest {
     val result = runFull(launcher, "$ISSUE_KEY Unrelated work in two parts.")
 
     assertEquals(3, result.exitCode, result.stdout + result.stderr)
-    assertEquals(listOf("preplan", "plan") + PLAN_LAUNCHES, planner.phaseIds)
+    assertEquals(listOf("preplan", "plan", "plan", "plan") + PLAN_LAUNCHES, planner.phaseIds)
     val plans = planWorkflowIds()
     assertEquals(2, plans.size, plans.toString())
     assertTrue(earlierPlan in plans, plans.toString())
@@ -586,8 +607,10 @@ class CliPhasePlanRuntimeTest {
     private val incompleteFirstBundle: Boolean = false,
     private val authorNothingFirst: Boolean = false,
     private val failPlanSubtasks: Boolean = false,
+    private val bareScenariosFirst: Boolean = false,
   ) : AgentRunLauncher {
     val phaseIds = CopyOnWriteArrayList<String>()
+    val planPrompts = CopyOnWriteArrayList<String>()
     val timeouts = CopyOnWriteArrayList<Duration?>()
 
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
@@ -603,6 +626,7 @@ class CliPhasePlanRuntimeTest {
           "phase plan launched a prompt with no phase header"
         }
       phaseIds += phaseId
+      if (phaseId == "plan") planPrompts += request.skillRunRequest.promptOverride.orEmpty()
       if (failPlanSubtasks && phaseId == "plan_subtasks") {
         return agentRunLaunchFacts(SupportedAgent.CODEX, termination = AgentRunTermination.SpawnFailed)
       }
@@ -614,7 +638,9 @@ class CliPhasePlanRuntimeTest {
     }
 
     fun authorBundle(): String {
-      if (authorNothingFirst && phaseIds.count { it == "plan" } == 1) return "Authored nothing yet."
+      if (authorNothingFirst && phaseIds.count { it == "plan" } <= PLAN_ATTEMPTS_BEFORE_BLOCK) {
+        return "Authored nothing yet."
+      }
       val bundle = seededBundle()
       Files.writeString(
         bundle.resolve("spec.md"),
@@ -623,8 +649,16 @@ class CliPhasePlanRuntimeTest {
           "\n## Transitional Regressions\n\nNone.\n",
       )
       SUBTASK_FILES.forEach { (id, fileName) ->
-        if (incompleteFirstBundle && phaseIds.count { it == "plan" } == 1 && id == 2) return@forEach
-        Files.writeString(bundle.resolve(fileName), specText("Subtask $id", "Subtask $id works."))
+        if (incompleteFirstBundle && phaseIds.count { it == "plan" } <= PLAN_ATTEMPTS_BEFORE_BLOCK && id == 2) {
+          return@forEach
+        }
+        val scenarios =
+          if (bareScenariosFirst && phaseIds.count { it == "plan" } == 1) {
+            "\n## Interaction Scenarios\n\nIS-001. Criteria: AC-001, AC-002.\n"
+          } else {
+            ""
+          }
+        Files.writeString(bundle.resolve(fileName), specText("Subtask $id", "Subtask $id works.") + scenarios)
       }
       Files.writeString(
         bundle.resolve("decomposition-manifest.yaml"),
@@ -654,7 +688,9 @@ class CliPhasePlanRuntimeTest {
     val PHASE_LINE = Regex("""Phase: (\w+) \(""")
     val SUBTASK_FILES = mapOf(1 to "spec_subtask_1_first-part.md", 2 to "spec_subtask_2_second-part.md")
     val PLAN_LAUNCHES = listOf("preplan", "plan", "plan_subtasks", "plan_subtasks")
-    val RESUMED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan_subtasks", "plan_subtasks")
+    const val PLAN_ATTEMPTS_BEFORE_BLOCK = 3
+    val REPAIRED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan_subtasks", "plan_subtasks")
+    val RESUMED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan", "plan", "plan_subtasks", "plan_subtasks")
     val PLANNED_UNITS = listOf("plan_subtasks:1", "plan_subtasks:2")
 
     fun storeSpecsRoot(checkoutHome: Path): Path =

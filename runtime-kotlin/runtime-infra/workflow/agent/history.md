@@ -1,3 +1,15 @@
+## [2026-10-31] SKILL-455 subtask 1: runtime change scope reads
+Areas: runtime-infra/workflow (git/changes), runtime-ports (workchanges, workchanges/model), runtime-engine (work/changes), runtime-core (di/core, repoTest inventory), desktop core/data jvmTest
+- WorkChangesPort gains committedChanges, committedFileDiff, uncommittedChanges and outsideCommits. Each blocks on git, never throws and returns a typed result. The SKILL-454 changes and fileDiff methods and WorkChangeBaseline are unchanged.
+- committedChanges diffs two commits with the SKILL-454 tracked-diff options and never lists untracked files; from == to gives an empty Listed. uncommittedChanges resolves HEAD and returns what changes(SubtaskStart(root, head, [])) returns; a repository with no commit gives BaseUnavailable.
+- GitChangeReads.kt in git/changes holds the shared probe, merge-base, cat-file, capture and patch helpers plus the trackedListArgs and trackedPatchArgs builders, so list and patch reads share diff options by construction. reusable
+- GitOutsideCommitReader lists branch commits (merge base..HEAD, oldest first) that no subtask range contains; a null range end means HEAD. More than 200 returns TooMany before any per-commit diff. Each outside commit is diffed against its first parent; a parentless commit gives Failed. Per-file patches reuse committedFileDiff(parent, sha).
+- WorkChangeScopesService (engine work/changes/scope, RuntimeComponent.workChangeScopesService) reads every goal subtask in manifest order, 100 per page. startSha comes from the child review state, else the previous endSha with one best-effort warning. endSha prefers the manifest commitSha, then the commit-push artifact, then startSha for COMPLETED_NO_CHANGE. rangesSupported is true only for SAME_BRANCH_COMMIT_PER_SUBTASK. reusable
+- The service reads the commit-push artifact separately from review state, so a missing review state does not discard the commit SHA.
+- Limits: no test covers the manifest commitSha winning over the artifact when both exist. No CLI, MCP or contract YAML exposes these reads; the desktop consumes them (see desktop history).
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-31] SKILL-454 subtask 1: runtime change baseline and git change reads
 Areas: runtime-infra/workflow (git/changes, process), runtime-ports (idestatus/model, workchanges), runtime-engine (work/changes, work/IdeStatusService), runtime-core (di/core, repoTest inventory)
 - WorkDetailItem gains changeBaseline, a sealed WorkChangeBaseline (SubtaskStart, RunStart, TargetMergeBase) where every member carries worktreeRoot. runtime-engine work/changes/WorkChangeBaselines.kt resolves it inside the existing detail read and runs no git. The current goal child's GOAL_SUBTASK_REVIEW_STATE gives SubtaskStart, a feature-task run's resolved branch gives RunStart, and anything else gives TargetMergeBase against the resolved base branch or the default branch. A goal between subtasks gets null. A monitor with a worktree path diffs that worktree.

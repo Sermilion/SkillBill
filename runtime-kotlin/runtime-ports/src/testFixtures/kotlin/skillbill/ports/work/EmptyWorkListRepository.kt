@@ -1,6 +1,8 @@
 package skillbill.ports.work
 
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
+import skillbill.ports.work.model.WorkActivityAttempt
+import skillbill.ports.work.model.WorkActivityStop
 import skillbill.ports.work.model.WorkBoardAffectedCandidates
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
@@ -17,6 +19,18 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import java.time.Instant
 
 object EmptyWorkListRepository : WorkListRepository {
+  override fun goalActivityAttempts(
+    parentWorkflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<WorkActivityAttempt> = emptyList()
+
+  override fun goalActivityStops(
+    parentWorkflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<WorkActivityStop> = emptyList()
+
   override fun observation() = WorkStoreObservation("test-store", 0)
 
   override fun repositoryIdentityForGoalChildren(parentWorkflowId: String) = IssueRepositoryIdentityLookup.Missing

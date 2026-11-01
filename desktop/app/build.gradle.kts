@@ -33,6 +33,7 @@ kotlin {
     implementation(projects.feature.work)
     implementation(projects.feature.history)
     implementation(projects.feature.detail)
+    implementation(projects.feature.changes)
     implementation(projects.feature.specs)
     implementation(projects.feature.settings)
     implementation(projects.feature.config)

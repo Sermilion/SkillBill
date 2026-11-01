@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.ui.pane
 
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.flow.StateFlow
 
@@ -18,6 +19,8 @@ interface ChatCommands {
   fun toggleChat(item: WorkItem?)
 
   fun openChat(item: WorkItem)
+
+  fun runReviewAction(item: WorkItem, action: ReviewFindingsAction)
 
   /** Ends every chat of the window; the window calls it when it is disposed. */
   fun closeChats()

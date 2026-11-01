@@ -7,6 +7,7 @@ import skillbill.idestatus.model.IdeStatusDisplayGroup
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.work.model.WorkGoalDependency
 import skillbill.ports.work.model.WorkStoreObservation
+import skillbill.review.model.ReviewFindingAction
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.time.Instant
@@ -129,6 +130,7 @@ data class StandaloneReviewReport(
   val summary: String?,
   val findings: List<StandaloneReviewReportFinding>,
   val lanes: List<String> = emptyList(),
+  val findingActions: List<ReviewFindingAction> = emptyList(),
 )
 
 data class StandaloneReviewReportFinding(

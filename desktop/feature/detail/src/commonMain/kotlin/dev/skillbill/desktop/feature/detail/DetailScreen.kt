@@ -129,9 +129,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
     Box(Modifier.weight(1f).fillMaxWidth()) {
       // `.sb-doc`: a 780 column (padding included) centred in the scroll area, 32/40/64 padding, 20/16/48 in a narrow window.
       // The list adds no spacing of its own: each block brings its 28 gap, so a section's rows can sit flush in one box.
-      // The diff replaces only the document; listState lives outside the branch, so closing it returns to the same scroll.
-      val diff = state.diff
-      if (diff != null) DiffView(diff, onAction, Modifier.fillMaxSize()) else BoxWithConstraints(Modifier.fillMaxSize()) {
+      BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = LocalShellLayout.current.drawerMode
         val inset = if (narrow) 16.dp else 40.dp
         val side = maxOf(inset, (maxWidth - (DOC_MAX_WIDTH - inset * 2)) / 2)
@@ -140,7 +138,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           state = listState,
           contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
         ) {
-          val sections = DetailSections(this, collapse, assessmentOrder)
+          val sections = DetailSections(this, collapse, listState, assessmentOrder)
           sections.item(key = "header") {
             DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }) {
               if (state.sections != SectionsUi.Gone) {
@@ -202,7 +200,7 @@ private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, 
   }
 }
 
-/** The sections in HANDOFF 9.2 order; placeholders hold their place until the first read lands. */
+/** Detail sections with Activity last; placeholders hold their place until the first read lands. */
 private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
@@ -220,10 +218,9 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       }
       subtaskSection(item, detail, state, onAction)
       pipelineSection(item, detail)
-      changesSection(state.changes, onAction)
+      if (item.showsChanges) changesSection(state.changes, onAction)
       briefingSection(item, detail, onAction)
-      activitySection(item, detail, state, onAction)
-      // A standalone run's own result comes right after its activity.
+      reviewActionsSection(item, detail, onAction)
       standaloneResultSection(item, detail)
       qaReportSection(item, detail, onAction)
       if (item.kind != WorkKind.Goal) {
@@ -236,6 +233,7 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       phaseResultsSection(item, detail)
       if (item.kind != WorkKind.Goal) pageFooter(DetailList.Validation, state, onAction)
       specBundleSection(item, detail, onAction)
+      activitySection(item, detail, state, onAction)
     }
     SectionsUi.Gone -> item(key = "problem") {
       EmptyState("This work item is no longer in the database") {
