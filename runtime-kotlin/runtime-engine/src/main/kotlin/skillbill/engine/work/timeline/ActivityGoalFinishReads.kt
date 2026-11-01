@@ -67,10 +67,15 @@ public class ActivityGoalFinishReads {
     val known = childBlocks.map { it.id }.toSet()
     val blocks = activityBlocks(id, unit).filter { it.id !in known }.toMutableList()
     val lastChildFinish = children.mapNotNull { it.finishedAt }.maxOrNull()
-    stops.forEach { stop ->
-      val block = stopBlock(stop) ?: return@forEach
-      if (lastChildFinish != null && block.at < lastChildFinish) return@forEach
-      if ((blocks + childBlocks).none { it.at >= stop.startedAt && it.at <= block.at }) blocks += block
+    stops.forEachIndexed { index, stop ->
+      val block = stopBlock(stop) ?: return@forEachIndexed
+      if (lastChildFinish != null && block.at < lastChildFinish) return@forEachIndexed
+      val nextStopStartedAt = stops.getOrNull(index + 1)?.startedAt
+      val hasDetailedBlock =
+        (blocks + childBlocks).any {
+          it.at >= stop.startedAt && (nextStopStartedAt == null || it.at < nextStopStartedAt)
+        }
+      if (!hasDetailedBlock) blocks += block
     }
     return blocks.sortedBy { it.at }
   }

@@ -20,6 +20,18 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFailure
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReasonRetention
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -30,6 +42,64 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class WorkActivityServiceTest {
+  @Test
+  fun `goal finish uses detailed block recorded after stop completion`() {
+    establishTemporarySchemaReadiness("activity-finish-late-block").use { fixture ->
+      val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      database.transaction { unit ->
+        val reason = "The current acceptance criterion exhausted its repair attempts."
+        unit.blockIncidents.createOrLink(
+          BlockIncidentOccurrence(
+            occurrenceToken = "bi_${"a".repeat(64)}",
+            scope = BlockIncidentScope(workflowId = "goal", phaseId = "plan_subtasks", attempt = 1, generation = 1),
+            failure =
+              BlockIncidentFailure(
+                origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+                reason = reason,
+                reasonRetention = BlockIncidentReasonRetention.COMPLETE,
+                failureDisposition = "blocked",
+                exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
+              ),
+            observedAt = at(11),
+            evidenceAvailability = BlockIncidentEvidenceAvailability.DATABASE,
+            identityAvailability = BlockIncidentIdentityAvailability.PARTIAL,
+            fieldAvailability =
+              BlockIncidentCorrelatedField.entries.associateWith { field ->
+                if (
+                  field in
+                  setOf(
+                    BlockIncidentCorrelatedField.WORKFLOW_ID,
+                    BlockIncidentCorrelatedField.PHASE_ID,
+                    BlockIncidentCorrelatedField.ATTEMPT,
+                    BlockIncidentCorrelatedField.GENERATION,
+                    BlockIncidentCorrelatedField.REASON,
+                  )
+                ) {
+                  BlockIncidentFieldAvailability.AVAILABLE
+                } else {
+                  BlockIncidentFieldAvailability.NOT_CAPTURED
+                }
+              },
+          ),
+          BlockIncidentAlias(BlockIncidentAliasKind.SETTLEMENT, "goal:blocked"),
+          at(100),
+        )
+
+        val goal = WorkItem("SKILL-455", WorkItemKind.FEATURE_GOAL, "goal", at(0), "running", at(0), false)
+        val stops =
+          listOf(
+            WorkActivityStop("goal", at(0), at(10), "BLOCKED", "The goal is blocked."),
+            WorkActivityStop("goal:resumed", at(20), null, null),
+          )
+        val group = requireNotNull(ActivityGoalFinishReads().group(goal, emptyList(), stops, unit))
+
+        assertEquals(1, group.blocks.size)
+        assertEquals("plan_subtasks", group.blocks.single().phaseId)
+        assertEquals(reason, group.blocks.single().reason)
+      }
+    }
+  }
+
   @Test
   fun `goal finish excludes stops from earlier child attempts and preserves later PR failures`() {
     establishTemporarySchemaReadiness("activity-finish").use { fixture ->
