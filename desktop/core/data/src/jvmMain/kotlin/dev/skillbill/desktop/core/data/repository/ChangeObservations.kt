@@ -49,6 +49,7 @@ class ChangeObservations internal constructor(
   private val port: WorkChangesPort = runtime.workChangesPort,
   private val launcher: FileEditorLauncherPort = runtime.fileEditorLauncherPort,
   private val io: CoroutineDispatcher = Dispatchers.IO,
+  private val workingTree: WorkingTreeReads = WorkingTreeReads(),
 ) {
   /** Reads once when idle; while [running], reads again [CHANGE_REFRESH_INTERVAL] after each read ends. */
   fun observe(baseline: ChangeBaseline?, running: Boolean, gitReads: Mutex): Flow<ChangesState> {
@@ -64,7 +65,10 @@ class ChangeObservations internal constructor(
   }
 
   private suspend fun read(baseline: ChangeBaseline, gitReads: Mutex): ChangesState {
-    val read = readOrProblem(runtime, diagnostics) { gitReads.withLock { withContext(io) { port.changes(baseline.toPort()) } } }
+    val read = readOrProblem(runtime, diagnostics) {
+      val portBaseline = baseline.toPort()
+      workingTree.changes(portBaseline) { gitReads.withLock { withContext(io) { port.changes(portBaseline) } } }
+    }
     val state = when (read) {
       is Outcome.Failure -> ChangesState.Unavailable(read.error)
       is Outcome.Success -> when (val result = read.value) {

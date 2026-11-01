@@ -48,6 +48,7 @@ class ChangeScopeObservations internal constructor(
   private val readSubtasks: suspend (String) -> WorkGoalScopesResult,
   private val port: WorkChangesPort = runtime.workChangesPort,
   private val io: CoroutineDispatcher = Dispatchers.IO,
+  private val workingTree: WorkingTreeReads = WorkingTreeReads(),
 ) {
   private data class InterruptedStatsKey(
     val worktreeRoot: String,
@@ -399,8 +400,12 @@ class ChangeScopeObservations internal constructor(
     }
   }
 
-  private suspend fun readChanges(baseline: ChangeBaseline, lock: Mutex): Outcome<WorkChangeListResult, ReadProblem> =
-    git(lock) { port.changes(baseline.toPort()) }
+  private suspend fun readChanges(baseline: ChangeBaseline, lock: Mutex): Outcome<WorkChangeListResult, ReadProblem> {
+    val portBaseline = baseline.toPort()
+    return readOrProblem(runtime, diagnostics) {
+      workingTree.changes(portBaseline) { lock.withLock { withContext(io) { port.changes(portBaseline) } } }
+    }
+  }
 
   suspend fun fileDiff(
     target: ChangeScopeTarget,

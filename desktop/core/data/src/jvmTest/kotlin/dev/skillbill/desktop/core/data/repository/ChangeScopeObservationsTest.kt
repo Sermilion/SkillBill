@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
+import dev.skillbill.desktop.core.domain.model.executionScopeTarget
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -298,20 +299,102 @@ class ChangeScopeObservationsTest {
     assertEquals(1, diagnostics.records.count { it == SCOPES_READ_FAILED })
   }
 
+  @Test
+  fun `detail and window observing one running goal read the running subtask once per tick`() = runTest {
+    val port = CountingPort()
+    val cache = CommittedChangeCache()
+    val lock = Mutex()
+    val observations = observations(port, { runningGoal() })
+    val detail = launch { observations.observeSubtasks("goal", true, lock, cache).collect { } }
+    val window = launch { observations.observeSubtasks("goal", true, lock, cache).collect { } }
+    runCurrent()
+    advanceTimeBy(9_000)
+    runCurrent()
+    detail.cancel()
+    window.cancel()
+    assertEquals(4, port.changeCalls)
+    assertEquals(20, port.committedListCalls)
+  }
+
+  @Test
+  fun `a selected running subtask shares the stats read for that subtask`() = runTest {
+    val port = CountingPort()
+    val cache = CommittedChangeCache()
+    val lock = Mutex()
+    val observations = observations(port, { runningGoal() })
+    val target = ChangeScopeTarget(
+      "goal", root.toString(), ChangeBaseline.TargetMergeBase(root.toString(), "main"),
+      listOf(ScopeSubtask(21, "subtask 21", ScopeSubtaskState.RUNNING, "s21", null, emptyList())), true,
+    )
+    val stats = launch { observations.observeSubtasks("goal", true, lock, cache).collect { } }
+    val scope = launch { observations.observeScope(target, ChangeScope.Subtasks(21, 21), true, lock, cache).collect { } }
+    runCurrent()
+    advanceTimeBy(9_000)
+    runCurrent()
+    stats.cancel()
+    scope.cancel()
+    assertEquals(4, port.changeCalls)
+  }
+
+  @Test
+  fun `an execution's detail list and window all scope share one read per tick`() = runTest {
+    val port = CountingPort()
+    val lock = Mutex()
+    val workingTree = WorkingTreeReads(testScheduler.timeSource)
+    val scopes = observations(port, workingTree = workingTree)
+    val changes = ChangeObservations(
+      runtime, NoopDiagnostics, emptyMap(), port, io = StandardTestDispatcher(testScheduler), workingTree = workingTree,
+    )
+    val baseline = ChangeBaseline.TargetMergeBase(root.toString(), "main")
+    val detail = launch { changes.observe(baseline, true, lock).collect { } }
+    val window = launch {
+      scopes.observeScope(executionScopeTarget("run", baseline), ChangeScope.All, true, lock, CommittedChangeCache()).collect { }
+    }
+    runCurrent()
+    advanceTimeBy(9_000)
+    runCurrent()
+    detail.cancel()
+    window.cancel()
+    assertEquals(4, port.changeCalls)
+  }
+
+  @Test
+  fun `a failed working tree read is not shared`() = runTest {
+    val port = CountingPort().apply { changeResult = WorkChangeListResult.Failed("boom") }
+    val observations = observations(port)
+    val target = ChangeScopeTarget(
+      "run", root.toString(), ChangeBaseline.SubtaskStart(root.toString(), "base", emptyList()), emptyList(), false,
+    )
+    observations.observeScope(target, ChangeScope.All, false, Mutex(), CommittedChangeCache()).toList()
+    observations.observeScope(target, ChangeScope.All, false, Mutex(), CommittedChangeCache()).toList()
+    assertEquals(2, port.changeCalls)
+  }
+
+  private fun runningGoal() = WorkGoalScopesResult.Listed(
+    root.toString(),
+    "main",
+    true,
+    (1..20).map { subtask(it, DecompositionStatus.COMPLETE, start = "s$it", end = "e$it") } +
+      subtask(21, DecompositionStatus.IN_PROGRESS, running = true, start = "s21"),
+  )
+
   private fun TestScope.observations(
     port: WorkChangesPort,
     readSubtasks: suspend (String) -> WorkGoalScopesResult = { WorkGoalScopesResult.NotAGoal("not-a-goal") },
     diagnostics: Diagnostics = NoopDiagnostics,
+    workingTree: WorkingTreeReads = WorkingTreeReads(testScheduler.timeSource),
   ) = ChangeScopeObservations(
     runtime,
     diagnostics,
     readSubtasks,
     port,
     StandardTestDispatcher(testScheduler),
+    workingTree,
   )
 
   private class CountingPort : WorkChangesPort {
     var changeCalls = 0
+    var changeResult: WorkChangeListResult = WorkChangeListResult.Listed("head", emptyList(), 0, 0)
     var committedListCalls = 0
     val readOrder = mutableListOf<String>()
     val committedResults = mutableMapOf<String, WorkChangeListResult>()
@@ -323,7 +406,7 @@ class ChangeScopeObservationsTest {
     override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
       changeCalls++
       readOrder += "working"
-      return WorkChangeListResult.Listed("head", emptyList(), 0, 0)
+      return changeResult
     }
 
     override fun fileDiff(worktreeRoot: String, baseSha: String, file: WorkChangedFile): WorkFileDiffResult = WorkFileDiffResult.Binary

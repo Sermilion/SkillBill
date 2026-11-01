@@ -65,6 +65,8 @@ class ChangeObservationsTest {
     assertEquals(3, (running.last() as ChangesState.Listed).changes.files.size)
     job.cancel()
 
+    // Let the shared working-tree read age out so the idle collection reads fresh.
+    advanceTimeBy(CHANGE_REFRESH_INTERVAL)
     port.calls = 0
     val idle = launch { changes.observe(baseline, running = false, Mutex()).collect { } }
     advanceTimeBy(30.seconds)
@@ -98,6 +100,7 @@ class ChangeObservationsTest {
     port,
     launcher,
     StandardTestDispatcher(testScheduler),
+    WorkingTreeReads(testScheduler.timeSource),
   )
 
   private class FakePort(var files: Int) : WorkChangesPort {
