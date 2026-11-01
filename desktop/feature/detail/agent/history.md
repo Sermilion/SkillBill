@@ -7,7 +7,7 @@ Areas: desktop/feature/detail, desktop/core/designsystem
 - Change actions carry the ChangedFile, and rows match by path and status because git can list one path as both deleted and untracked. Row keys include the status.
 - DiffView renders hunk separators and lines with old and new number gutters in a keyed LazyColumn, uses only theme tokens, and closes on Esc through ShellEdit or the back button. J/K keep paging items, and the next item opens with no diff.
 - SkillBillColors gains diffAddedBg, diffRemovedBg and diffHunkBg for later diff surfaces and palettes. reusable
-- Limits: no syntax highlighting, editing, staging or external editor setting; long paths end-ellipsize; no screenshot test covers the section or the diff view.
+- Limits: no syntax highlighting, editing, staging or external editor setting; long paths end-ellipsize.
 Feature flag: N/A
 Acceptance criteria: 3/3 implemented
 
