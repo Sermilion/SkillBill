@@ -54,6 +54,15 @@ class ActivityProjectionTest {
   }
 
   @Test
+  fun `block within a long phase gap does not shorten the displayed wait`() {
+    val block = ActivityBlock("stop", at(16), ActivityBlockKind.BLOCKED, null, null, null, false)
+    val entries = activityEntries(group(listOf(phase("implement", 0, 1), phase("review", 21, 22)), listOf(block)))
+
+    assertEquals(20 * 60_000L, entries.filterIsInstance<ActivityEntry.Wait>().single().milliseconds)
+    assertEquals(20 * 60_000L, activityIdleMilliseconds(listOf(group(listOf(phase("implement", 0, 1), phase("review", 21, 22)), listOf(block))), at(40)))
+  }
+
+  @Test
   fun `running phase stays outside folded completed attempts`() {
     val entries = activityEntries(group(listOf(phase("review", 0, 1), phase("review_fix", 2, null))))
     assertEquals(2, entries.size)

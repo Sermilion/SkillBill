@@ -38,8 +38,6 @@ import dev.skillbill.desktop.core.ui.diff.diffRows
 import dev.skillbill.desktop.core.ui.diff.fileDiffNotice
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 
 /** Files below the viewport to read ahead, so scrolling into the next file rarely meets a placeholder. */
@@ -70,19 +68,28 @@ internal fun FileDiffStream(
   val currentAction by rememberUpdatedState(onAction)
   val currentSelected by rememberUpdatedState(selectedPath)
   var jumping by remember { mutableStateOf(false) }
+  var followedPath by remember { mutableStateOf(selectedPath) }
   LaunchedEffect(scrollRequest) {
     val index = currentFiles.indexOfFirst { it.path == currentSelected }
     if (index < 0) return@LaunchedEffect
+    followedPath = currentSelected
     jumping = true
     listState.scrollToItem(currentStarts[index])
     jumping = false
   }
   LaunchedEffect(listState) {
-    snapshotFlow { Triple(listState.firstVisibleItemIndex, listState.isScrollInProgress, jumping) }
-      .filter { (_, scrolling, jump) -> scrolling && !jump }
-      .map { (first) -> currentFiles.getOrNull(fileAt(currentStarts, first))?.path }
+    snapshotFlow { listState.firstVisibleItemIndex to jumping }
       .distinctUntilChanged()
-      .onEach { path -> if (path != null) currentAction(ChangesWindowAction.FollowScroll(path)) }
+      .onEach { (first, jump) ->
+        currentFiles.getOrNull(fileAt(currentStarts, first))?.path?.let { path ->
+          if (jump) {
+            followedPath = path
+          } else if (path != followedPath) {
+            followedPath = path
+            currentAction(ChangesWindowAction.FollowScroll(path))
+          }
+        }
+      }
       .collect()
   }
   LaunchedEffect(listState) {

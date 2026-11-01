@@ -42,7 +42,7 @@ internal fun ActivityStats(groups: List<ActivityGroup>, now: Instant) {
   val subtasks = groups.filter { it.subtaskId != null }.groupBy { it.subtaskId }
   val completed = subtasks.values.count { attempts -> attempts.last().status == ActivityStatus.COMPLETE }
   val blocks = groups.sumOf { it.blocks.size }
-  val blockedSubtasks = groups.count { it.subtaskId != null && it.blocks.isNotEmpty() }
+  val blockedSubtasks = subtasks.values.count { attempts -> attempts.any { it.blocks.isNotEmpty() } }
   val failedPrs = groups.flatMap { it.blocks }.count { it.kind == dev.skillbill.desktop.core.domain.model.ActivityBlockKind.PULL_REQUEST_FAILED }
   val blockDetail = listOfNotNull(
     blockedSubtasks.takeIf { it > 0 }?.let { "$it subtask${if (it == 1) "" else "s"}" },

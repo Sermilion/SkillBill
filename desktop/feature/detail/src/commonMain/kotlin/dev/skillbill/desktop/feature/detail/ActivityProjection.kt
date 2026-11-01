@@ -38,7 +38,7 @@ internal fun activityEntries(group: ActivityGroup): List<ActivityEntry> {
       previous.phases.all { activityLoopFamily(it.phaseId) == family && it.finishedAt != null }) {
       result[result.lastIndex] = ActivityEntry.Phases(previous.phases + phase)
     } else result += event
-    previousEnd = phase?.finishedAt ?: (event as? ActivityEntry.Block)?.block?.at ?: previousEnd
+    previousEnd = phase?.finishedAt ?: previousEnd
   }
   return result
 }

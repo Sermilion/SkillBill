@@ -69,7 +69,7 @@ internal fun ActivityCard(group: ActivityGroup, open: Boolean, now: Instant, mod
       val active = group.activeMilliseconds(now)
       val wall = group.startedAt?.let { (group.finishedAt ?: now) - it }
       SbTooltip(wall?.let { "Phase time; ${activityDuration(it.inWholeMilliseconds)} start to finish" } ?: "Phase time") {
-        ActivityText(if (active > 0) activityDuration(active) else wall?.let { activityDuration(it.inWholeMilliseconds) }.orEmpty(), Modifier.width(52.dp))
+        ActivityText(if (active > 0) activityDuration(active) else "", Modifier.width(52.dp))
       }
       val agents = (group.phases.mapNotNull { it.agent } + (group.before + group.after).mapNotNull { it.agent }).distinct()
       ActivityText(agents.joinToString(" + "), Modifier.width(104.dp), faint = true)

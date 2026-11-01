@@ -21,6 +21,24 @@ import kotlin.time.Instant
 @OptIn(ExperimentalTestApi::class)
 class ActivityInteractionTest {
   @Test
+  fun `untimed blocked attempts show no phase duration and count one subtask`() = runComposeUiTest {
+    val start = Instant.parse("2026-11-01T08:00:00Z")
+    val end = Instant.parse("2026-11-01T10:00:00Z")
+    val block = ActivityBlock("incident", end, ActivityBlockKind.BLOCKED, null, null, null, false)
+    val attempt = ActivityGroup("first", 1, "Child", ActivityStatus.BLOCKED, start, end, emptyList(), listOf(block))
+    val attempts = listOf(attempt, attempt.copy(id = "second"))
+    setContent { SkillBillTheme(reducedMotion = true) {
+      androidx.compose.foundation.layout.Column {
+        ActivityCard(attempt, false, end, onToggle = {})
+        ActivityStats(attempts, end)
+      }
+    } }
+
+    onNodeWithText("2h 00m").assertDoesNotExist()
+    onNodeWithText("1 subtask").assertExists()
+  }
+
+  @Test
   fun `blocks filter expands matching finished cards and permits collapsing them`() = runComposeUiTest {
     val at = Instant.parse("2026-11-01T08:00:00Z")
     val blocked = ActivityGroup("blocked", 1, "Recovered child", ActivityStatus.COMPLETE, at, at,

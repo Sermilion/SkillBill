@@ -200,7 +200,7 @@ private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, 
   }
 }
 
-/** The sections in HANDOFF 9.2 order; placeholders hold their place until the first read lands. */
+/** Detail sections with Activity last; placeholders hold their place until the first read lands. */
 private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
@@ -220,8 +220,6 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       pipelineSection(item, detail)
       changesSection(state.changes, onAction)
       briefingSection(item, detail, onAction)
-      activitySection(item, detail, state, onAction)
-      // A standalone run's own result comes right after its activity.
       standaloneResultSection(item, detail)
       qaReportSection(item, detail, onAction)
       if (item.kind != WorkKind.Goal) {
@@ -234,6 +232,7 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       phaseResultsSection(item, detail)
       if (item.kind != WorkKind.Goal) pageFooter(DetailList.Validation, state, onAction)
       specBundleSection(item, detail, onAction)
+      activitySection(item, detail, state, onAction)
     }
     SectionsUi.Gone -> item(key = "problem") {
       EmptyState("This work item is no longer in the database") {

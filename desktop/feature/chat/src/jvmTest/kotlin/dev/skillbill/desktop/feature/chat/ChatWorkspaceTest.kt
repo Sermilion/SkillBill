@@ -25,6 +25,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -62,6 +63,95 @@ class ChatWorkspaceTest {
   private fun TestScope.workspace(): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes, selection)
+  }
+
+  @Test
+  fun `messages queued during a reply run in order without splitting the streaming answer`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val replies = mutableListOf<Channel<ChatEvent>>()
+    chat.events = {
+      val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+      replies += reply
+      flow { for (event in reply) emit(event) }
+    }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    replies[0].send(ChatEvent.TextDelta("Before "))
+    runCurrent()
+
+    workspace.send(item.id, "first question")
+    workspace.send(item.id, "second question")
+    runCurrent()
+    assertEquals(1, chat.requests.size)
+    assertEquals(2, session.queued.value.size)
+    replies[0].send(ChatEvent.TextDelta("after"))
+    replies[0].send(ChatEvent.Completed)
+    replies[0].close()
+    runCurrent()
+
+    assertEquals(2, chat.requests.size)
+    assertTrue(chat.requests[1].prompt.endsWith("first question"))
+    assertEquals("Before after", session.transcript.value.filterIsInstance<ChatMessage.Agent>().first().text)
+    assertEquals(listOf("first question"), session.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.text })
+    assertEquals(1, session.queued.value.size)
+    replies[1].send(ChatEvent.Failed(ChatFailure.BinaryMissing, null))
+    replies[1].close()
+    runCurrent()
+
+    assertEquals(3, chat.requests.size)
+    assertTrue(chat.requests[2].prompt.endsWith("second question"))
+    assertTrue(session.queued.value.isEmpty())
+  }
+
+  @Test
+  fun `clear discards queued messages and closing never sends queued work`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.events = { flow<ChatEvent> { awaitCancellation() } }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    workspace.pauseAndAct(item.id, "must not run after clear")
+    workspace.clear(item.id)
+    runCurrent()
+    assertTrue(session.queued.value.isEmpty())
+    assertEquals(1, chat.requests.size)
+    assertTrue(controls.calls.isEmpty())
+
+    workspace.send(item.id, "running")
+    runCurrent()
+    workspace.send(item.id, "must not run after close")
+    workspace.close(item.id)
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+  }
+
+  @Test
+  fun `a background reply holds queued messages until it ends`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.events = { flowOf(ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    chat.unpromptedEvents.emit(session.sessionId to ChatEvent.TextDelta("Background reply"))
+    runCurrent()
+    workspace.send(item.id, "next question")
+    runCurrent()
+    assertEquals(1, chat.requests.size)
+    assertEquals(1, session.queued.value.size)
+
+    chat.unpromptedEvents.emit(session.sessionId to ChatEvent.Completed)
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+    assertTrue(chat.requests.last().prompt.endsWith("next question"))
+    assertTrue(session.queued.value.isEmpty())
+    assertFalse(session.busy.value)
   }
 
   @Test

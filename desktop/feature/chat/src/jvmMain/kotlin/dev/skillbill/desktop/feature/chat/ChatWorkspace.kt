@@ -210,7 +210,10 @@ class ChatWorkspace(
   fun send(id: String, text: String) = send(id, text, null)
 
   private fun send(id: String, text: String, action: ChatSuggestedAction?) {
-    val session = accept(id, text, action) ?: return
+    enqueue(id, QueuedChatMessage(text, action, pauseAndAct = false))
+  }
+
+  private fun send(session: ChatSession, text: String) {
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       turns.turn(session, read, modeFor(read.header), text)
@@ -225,7 +228,10 @@ class ChatWorkspace(
   fun pauseAndAct(id: String, text: String) = pauseAndAct(id, text, null)
 
   private fun pauseAndAct(id: String, text: String, action: ChatSuggestedAction?) {
-    val session = accept(id, text, action) ?: return
+    enqueue(id, QueuedChatMessage(text, action, pauseAndAct = true))
+  }
+
+  private fun pauseAndAct(session: ChatSession, text: String) {
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       if (modeFor(read.header) == ChatPermissionMode.Act) {
@@ -256,7 +262,7 @@ class ChatWorkspace(
         return@launchTurn
       }
       val stoppedRead = turns.accept(session, stopped) ?: return@launchTurn
-      resumeAfter(currentCoroutineContext().job, id, stoppedRead.header)
+      resumeAfter(currentCoroutineContext().job, session.id, stoppedRead.header)
       turns.turn(session, stoppedRead, ChatPermissionMode.Act, text, prefix = ACT_PREFIX)
     }
   }
@@ -288,6 +294,7 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     session.resumeChoicesState.value = null
     if (session.goneState.value) return
+    session.queuedState.value = emptyList()
     val running = session.turnJob
     session.busyState.value = true
     launchTurn(session) {
@@ -319,6 +326,7 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     session.resumeChoicesState.value = null
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
+    session.queuedState.value = emptyList()
     val running = session.turnJob
     session.busyState.value = true
     launchTurn(session) {
@@ -337,13 +345,20 @@ class ChatWorkspace(
     }
   }
 
-  // Ignores a call while a turn runs or after the execution left the database; otherwise marks the session busy at once.
-  private fun accept(id: String, text: String, action: ChatSuggestedAction?): ChatSession? {
-    val session = sessions[id] ?: return null
-    if (session.busyState.value || session.goneState.value) return null
+  private fun enqueue(id: String, message: QueuedChatMessage) {
+    val session = sessions[id] ?: return
+    if (session.goneState.value || message.text.isBlank()) return
+    session.queuedState.value += message
+    drainQueue(session)
+  }
+
+  private fun drainQueue(session: ChatSession) {
+    if (!session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return
+    val next = session.queuedState.value.firstOrNull() ?: return
+    session.queuedState.value = session.queuedState.value.drop(1)
     session.busyState.value = true
-    session.append(ChatMessage.Operator(text, action))
-    return session
+    session.append(ChatMessage.Operator(next.text, next.action))
+    if (next.pauseAndAct) pauseAndAct(session, next.text) else send(session, next.text)
   }
 
   // Only the session's current turn clears busy, so a turn that a resume cancelled cannot unlock the composer mid-swap.
@@ -354,11 +369,14 @@ class ChatWorkspace(
       } finally {
         if (session.turnJob === coroutineContext.job) {
           session.turnJob = null
-          session.busyState.value = false
+          session.busyState.value = session.resumeJob?.isActive == true
         }
       }
     }
     session.turnJob = turn
+    turn.invokeOnCompletion {
+      scope.launch(session.job) { drainQueue(session) }
+    }
     turn.start()
   }
 
@@ -386,8 +404,19 @@ class ChatWorkspace(
         }
       }
     }
+    val session = sessions[id]
+    session?.resumeJob = resume
     resumeJobs += resume
-    resume.invokeOnCompletion { resumeJobs -= resume }
+    resume.invokeOnCompletion {
+      resumeJobs -= resume
+      scope.launch {
+        if (session?.resumeJob === resume) {
+          session.resumeJob = null
+          if (session.turnJob == null) session.busyState.value = false
+          drainQueue(session)
+        }
+      }
+    }
   }
 
   // True, after noting why, when the execution is already running or finished, so the app must not relaunch it.
@@ -410,7 +439,12 @@ class ChatWorkspace(
   // Shows the replies the agent starts on its own, for whichever agent session the chat continues now.
   private fun followUnprompted(session: ChatSession) {
     scope.launch(session.job) {
-      session.sessionIds.collectLatest { id -> chat.unprompted(id).collect { turns.unprompted(session, it) } }
+      session.sessionIds.collectLatest { id ->
+        chat.unprompted(id).collect {
+          turns.unprompted(session, it)
+          drainQueue(session)
+        }
+      }
     }
   }
 

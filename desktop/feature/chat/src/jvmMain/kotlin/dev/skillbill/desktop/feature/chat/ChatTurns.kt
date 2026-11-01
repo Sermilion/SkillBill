@@ -73,6 +73,10 @@ internal class ChatTurns(
   fun markGone(session: ChatSession) {
     if (session.goneState.value) return
     session.goneState.value = true
+    if (session.queuedState.value.isNotEmpty()) {
+      session.queuedState.value = emptyList()
+      session.append(ChatMessage.Notice("Queued messages were not sent because this execution is no longer in the open database."))
+    }
     session.append(ChatMessage.Notice(GONE_NOTICE))
   }
 
