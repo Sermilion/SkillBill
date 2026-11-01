@@ -55,7 +55,8 @@ internal const val CLEARED_NOTICE =
   "Cleared the chat. The next turn starts a new conversation with the current execution state."
 
 /**
- * The window's chats, one per execution id. Each finished turn saves the chat's latest lines through [ExecutionChatRepository],
+ * The window's chats, keyed by chat id. Opening an execution shows its first chat; [newChat] starts another one on the same
+ * execution. Each finished turn saves the chat's latest lines through [ExecutionChatRepository],
  * `/resume` swaps a chat for a saved one of the same execution, and `/clear` starts it over. It is window-scoped: every coroutine is a child of the window
  * scope, and the window ends every chat through [closeAll]. Calls come from the UI thread. It mirrors [paneOpen] into
  * [ShellPanes.chatOpen], and hides itself when opening Specs clears that flag; hiding ends no chat, turn or agent process.
@@ -86,6 +87,7 @@ class ChatWorkspace(
   private val paneState = MutableStateFlow(false)
   val paneOpen: StateFlow<Boolean> = paneState.asStateFlow()
 
+  /** The execution whose chat the pane shows, so the detail view can mark its chat button. */
   override val shownChatId: StateFlow<String?> =
     combine(paneState, tabState, ::shownId).stateIn(scope, SharingStarted.Eagerly, null)
 
@@ -113,21 +115,31 @@ class ChatWorkspace(
 
   override fun closeChats() = closeAll()
 
-  /** Opens [item]'s chat, or only activates it when it is already open; a new chat shows its state line, then streams the opening turn. */
+  /** Opens [item]'s chat, or only activates its first open chat; a new chat shows its state line, then streams the opening turn. */
   fun open(item: WorkItem) {
     setPaneOpen(true)
-    if (item.id !in sessions) {
-      val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]), clock)
-      sessions[item.id] = session
-      followUnprompted(session)
-      session.append(stateCard(item))
-      session.busyState.value = true
-      launchTurn(session) {
-        val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
-        turns.turn(session, read, modeFor(read.header), openingInstruction(classify(read.header)))
-      }
+    val existing = tabState.value.tabs.firstOrNull { it.executionId == item.id }
+    if (existing != null) activate(existing.id) else start(item, item.id)
+  }
+
+  /** Starts another chat on the execution that chat [fromId] is about, with its own agent session and opening turn. */
+  fun newChat(fromId: String) {
+    val from = sessions[fromId] ?: return
+    setPaneOpen(true)
+    start(from.item, UUID.randomUUID().toString())
+  }
+
+  private fun start(item: WorkItem, id: String) {
+    val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]), clock, id)
+    sessions[id] = session
+    followUnprompted(session)
+    session.append(stateCard(item))
+    session.busyState.value = true
+    launchTurn(session) {
+      val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
+      turns.turn(session, read, modeFor(read.header), openingInstruction(classify(read.header)))
     }
-    tabState.update { it.withTab(ChatTab(item.id, item.issueKey ?: item.title, item.kind)) }
+    tabState.update { it.withTab(ChatTab(id, item.id, item.issueKey ?: item.title, item.kind, it.nextOrdinal(item.id))) }
     observeActive()
   }
 
@@ -139,7 +151,7 @@ class ChatWorkspace(
   fun hide() = setPaneOpen(false)
 
   // The one test of "which chat the pane shows", read by [toggleChat] and [shownChatId] alike.
-  private fun shownId(open: Boolean, tabs: ChatTabsState): String? = tabs.activeId.takeIf { open }
+  private fun shownId(open: Boolean, tabs: ChatTabsState): String? = tabs.activeExecutionId.takeIf { open }
 
   private fun setPaneOpen(value: Boolean) {
     paneState.value = value
@@ -280,7 +292,7 @@ class ChatWorkspace(
   fun showResumable(id: String) {
     val session = sessions[id] ?: return
     scope.launch(session.job) {
-      session.resumeChoicesState.value = chat.savedChats(id, session.item.repositoryRoot, session.sessionId)
+      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.repositoryRoot, session.sessionId)
     }
   }
 
@@ -296,7 +308,7 @@ class ChatWorkspace(
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
     session.resumeChoicesState.value = null
-    if (session.goneState.value || (entry.executionId != null && entry.executionId != id)) return
+    if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
     val running = session.turnJob
     session.busyState.value = true
     launchTurn(session) {

@@ -93,6 +93,39 @@ class ChatWorkspaceTest {
   }
 
   @Test
+  fun `a new chat on the same execution gets its own tab and agent session, and closing it leaves the first chat running`() = runTest {
+    val goal = workItem("SKILL-1")
+    details.details = mapOf(goal.id to flowOf(loaded(goal)))
+    val cancelled = mutableListOf<String>()
+    chat.events = { request -> flow<ChatEvent> { try { awaitCancellation() } finally { cancelled += request.sessionId } } }
+    val workspace = workspace()
+
+    workspace.open(goal)
+    runCurrent()
+    workspace.newChat(goal.id)
+    runCurrent()
+
+    val tabs = workspace.tabs.value
+    assertEquals(listOf("SKILL-1", "SKILL-1 (2)"), tabs.tabs.map { it.label })
+    assertEquals(listOf(goal.id, goal.id), tabs.tabs.map { it.executionId })
+    val second = tabs.tabs[1].id
+    assertEquals(second, tabs.activeId)
+    assertEquals(goal.id, workspace.shownChatId.value)
+    val first = workspace.session(goal.id)!!
+    val other = workspace.session(second)!!
+    assertTrue(first.sessionId != other.sessionId)
+    assertEquals(listOf(first.sessionId, other.sessionId), chat.requests.map { it.sessionId })
+
+    workspace.open(goal)
+    assertEquals(goal.id, workspace.tabs.value.activeId)
+
+    workspace.close(second)
+    runCurrent()
+    assertEquals(listOf(other.sessionId), cancelled)
+    assertTrue(first.job.isActive)
+  }
+
+  @Test
   fun `toggling the chat opens another execution's tab beside the active one and hides the pane for the active one without ending it`() = runTest {
     val phase = workItem("phase-1", kind = WorkKind.Phase)
     val operation = workItem("op-1", kind = WorkKind.Operation)

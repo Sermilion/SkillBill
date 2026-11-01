@@ -46,7 +46,7 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
   val gone by session.gone.collectAsState()
   val mode by session.mode.collectAsState()
   val choices by session.resumeChoices.collectAsState()
-  val id = session.item.id
+  val id = session.id
   val text = workspace.drafts[id].orEmpty()
   val command = text.trim().takeIf { it in CHAT_COMMANDS }
   val ready = command != null || (!busy && agent != null && supported && !gone && text.isNotBlank())

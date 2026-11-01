@@ -38,24 +38,36 @@ sealed interface ChatMessage {
   data class Error(val failure: ChatFailure?, val text: String) : ChatMessage
 }
 
-/** One chat tab, keyed by the execution's `WorkItem.id`. */
-data class ChatTab(val executionId: String, val title: String, val kind: WorkKind?)
+/**
+ * One chat tab. [id] names the chat; an execution's first chat uses the execution's `WorkItem.id`, and every further chat
+ * on it gets its own id. [ordinal] counts the execution's chats, so the second one shows as "SKILL-1 (2)".
+ */
+data class ChatTab(val id: String, val executionId: String, val title: String, val kind: WorkKind?, val ordinal: Int = 1) {
+  val label: String get() = if (ordinal > 1) "$title ($ordinal)" else title
+}
 
 /** The window's chat tabs in opening order. Tabs live in memory; a chat outlives the window only as a save `/resume` can restore. */
-data class ChatTabsState(val tabs: List<ChatTab> = emptyList(), val activeId: String? = null)
+data class ChatTabsState(val tabs: List<ChatTab> = emptyList(), val activeId: String? = null) {
+  /** The execution the active chat is about. */
+  val activeExecutionId: String? get() = tabs.firstOrNull { it.id == activeId }?.executionId
+}
 
 /** Appends and activates [tab]; an id that already has a tab is only activated. */
 internal fun ChatTabsState.withTab(tab: ChatTab): ChatTabsState =
-  if (tabs.any { it.executionId == tab.executionId }) activated(tab.executionId) else copy(tabs = tabs + tab, activeId = tab.executionId)
+  if (tabs.any { it.id == tab.id }) activated(tab.id) else copy(tabs = tabs + tab, activeId = tab.id)
 
-internal fun ChatTabsState.activated(id: String): ChatTabsState = if (tabs.any { it.executionId == id }) copy(activeId = id) else this
+internal fun ChatTabsState.activated(id: String): ChatTabsState = if (tabs.any { it.id == id }) copy(activeId = id) else this
+
+/** The next [ChatTab.ordinal] for a new chat on [executionId]. */
+internal fun ChatTabsState.nextOrdinal(executionId: String): Int =
+  (tabs.filter { it.executionId == executionId }.maxOfOrNull { it.ordinal } ?: 0) + 1
 
 /** Closing the active tab activates the tab before it, else the new first one; closing the last tab gives the empty state. */
 internal fun ChatTabsState.without(id: String): ChatTabsState {
-  val index = tabs.indexOfFirst { it.executionId == id }
+  val index = tabs.indexOfFirst { it.id == id }
   if (index < 0) return this
-  val remaining = tabs.filterNot { it.executionId == id }
+  val remaining = tabs.filterNot { it.id == id }
   if (remaining.isEmpty()) return ChatTabsState()
-  val active = activeId?.takeIf { it != id } ?: tabs.getOrNull(index - 1)?.executionId ?: remaining.first().executionId
+  val active = activeId?.takeIf { it != id } ?: tabs.getOrNull(index - 1)?.id ?: remaining.first().id
   return copy(tabs = remaining, activeId = active)
 }

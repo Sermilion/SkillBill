@@ -19,7 +19,7 @@ import kotlin.time.Clock
 internal const val SAVED_LINES = 10
 
 /**
- * One execution's chat. [sessionId] names the agent CLI session and changes when the operator switches agents; [job] parents
+ * One chat about an execution; an execution can have several. [id] names the chat tab. [sessionId] names the agent CLI session and changes when the operator switches agents; [job] parents
  * every turn, so cancelling it ends the turn's process; [turnJob] is the turn that owns [busy] now. [delivered] is the snapshot
  * the agent last received and the base of the next diff.
  */
@@ -28,6 +28,7 @@ class ChatSession internal constructor(
   sessionId: String,
   internal val job: Job,
   private val clock: Clock = Clock.System,
+  val id: String = initial.id,
 ) {
   private val headerState = MutableStateFlow(initial)
 

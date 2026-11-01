@@ -14,14 +14,14 @@ import dev.skillbill.desktop.core.designsystem.detail.TerminalTabChrome
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
 
-/** One tab per execution chat, above the active chat's transcript and composer. */
+/** One tab per chat, several per execution when the operator starts more, above the active chat's transcript and composer. */
 @Composable
 fun ChatPane(workspace: ChatWorkspace) {
   val state by workspace.tabs.collectAsState()
   BoxWithConstraints(Modifier.fillMaxSize()) {
     TerminalPaneChrome(
       height = maxHeight,
-      tabs = state.tabs.map { TerminalTabChrome(it.executionId, it.title) },
+      tabs = state.tabs.map { TerminalTabChrome(it.id, it.label) },
       activeId = state.activeId,
       renamingId = null,
       onSelectTab = workspace::activate,
@@ -30,7 +30,7 @@ fun ChatPane(workspace: ChatWorkspace) {
       onCancelRename = {},
       renameFieldGate = { _, _ -> Modifier },
       onCloseTab = workspace::close,
-      onNewTab = null,
+      onNewTab = state.activeId?.let { active -> { workspace.newChat(active) } },
       onResizeBy = null,
       onClose = workspace::hide,
       icon = LucideIcons.bot,
@@ -45,7 +45,7 @@ fun ChatPane(workspace: ChatWorkspace) {
         key(session) {
           Column(Modifier.fillMaxSize()) {
             ChatHeader(session)
-            ChatTranscript(session, Modifier.weight(1f)) { reply, action -> workspace.executeAction(session.item.id, reply, action) }
+            ChatTranscript(session, Modifier.weight(1f)) { reply, action -> workspace.executeAction(session.id, reply, action) }
             ChatComposer(session, workspace)
           }
         }
