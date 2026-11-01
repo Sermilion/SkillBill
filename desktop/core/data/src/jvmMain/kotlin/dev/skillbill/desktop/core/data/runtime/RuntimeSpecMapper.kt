@@ -20,7 +20,7 @@ import skillbill.engine.specbrowser.model.SpecBrowserStatusGroup
 import skillbill.engine.specbrowser.model.SpecBundleControl
 import skillbill.engine.specbrowser.model.SpecBundleRunState
 
-/** The runtime's spec browser mapped one to one, as desktop-tray's `RuntimeSpecAdapter` does; ordering is the runtime's. */
+/** The runtime's spec browser mapped one to one; ordering is the runtime's. */
 internal fun SpecBrowserProject.toDomain() =
   SpecProject(projectId, displayName, specsRoot?.toString().orEmpty(), repoRoot?.toString())
 

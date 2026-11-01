@@ -3,7 +3,7 @@
 This document and the prototype next to it are everything needed to plan and build a new Skill Bill desktop app. Nothing here depends on private links or on the machine where it was written. Paths are relative to the repository root.
 
 - Prototype: `design/linear-study/index.html` (open it in a browser; see [README](README.md)).
-- Current desktop app, the behavior reference: `desktop-tray/` (read `desktop-tray/ARCHITECTURE.md`).
+- The old desktop app, `desktop-tray/`, was the behavior reference while this was written. It has since been removed; the app built from this handoff is `desktop/`.
 - Runtime the app embeds: `runtime-kotlin/` (read `docs/architecture-guidelines.md` and `runtime-kotlin/ARCHITECTURE.md` before changing it).
 
 Written 2026-10-27 against `main` at `1ef0c125b`.
@@ -623,10 +623,6 @@ Two bundles fit the work: one for the runtime (R1–R5) and one for the app. Sug
 
 | Topic | Path |
 | --- | --- |
-| Desktop architecture, platform integration | `desktop-tray/ARCHITECTURE.md`, `desktop-tray/docs/` |
-| Screen contracts | `desktop-tray/feature/*/src/commonMain/kotlin/.../*Contract.kt` |
-| Desktop domain model | `desktop-tray/core/domain/src/commonMain/kotlin/dev/skillbill/tray/core/domain/model/WorkModels.kt`, `SpecModels.kt` |
-| Runtime bridge, signal watcher | `desktop-tray/core/data/src/jvmMain/kotlin/dev/skillbill/tray/core/data/runtime/`, `.../signal/` |
 | Runtime graph | `runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeComponent.kt` |
 | Board and detail models | `runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/idestatus/model/` |
 | Controls | `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/control/` |
@@ -638,4 +634,3 @@ Two bundles fit the work: one for the runtime (R1–R5) and one for the app. Sug
 | Config reads | `runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/config/ConfigResolutionService.kt` |
 | Telemetry config | `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/telemetry/TelemetryConfigRules.kt`, `runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/telemetry/transport/TelemetryConfigStore.kt` |
 | Phase instruction files | `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/phase/prompt/compose/PhaseProjectInstructions.kt` |
-| Earlier designs | `design/App/` (tray v2, spec browser, config pane; some ideas there were never built) |

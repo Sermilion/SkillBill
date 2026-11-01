@@ -3,7 +3,7 @@ package dev.skillbill.desktop.core.ui.feedback
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.session.StorageFailure
 
-/** The copy for each storage failure, as `desktop-tray`'s session problem mapping shows it. */
+/** The copy for each storage failure. */
 fun storageFailureText(failure: StorageFailure): String = when (failure) {
   StorageFailure.Missing -> "The selected database does not exist. Choose an existing runtime store."
   StorageFailure.Access -> "The selected database could not be read. Check its path and access permissions."

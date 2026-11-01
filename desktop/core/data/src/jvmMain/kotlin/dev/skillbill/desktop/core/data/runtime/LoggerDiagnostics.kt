@@ -9,7 +9,7 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 private const val MAX_FIELDS = 12
 private const val MAX_FIELD_NAME = 32
 
-/** Writes diagnostics to the platform logger with bounded fields, as `desktop-tray` does. */
+/** Writes diagnostics to the platform logger with bounded fields. */
 @Inject
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)

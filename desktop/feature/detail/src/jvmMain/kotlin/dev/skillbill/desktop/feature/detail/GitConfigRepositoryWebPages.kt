@@ -79,7 +79,7 @@ private fun gitCommonDir(root: Path): Path? {
   return gitDir.resolve(Files.readString(commonDir).trim()).normalize()
 }
 
-/** `desktop-tray`'s `RepositoryWebLinks`, kept to the branch page this module opens. */
+/** Builds the web URL of a branch page from a git remote. */
 internal object RepositoryWebLinks {
   fun url(remote: String, branch: String): URI {
     val normalized = remote.trim().let { value ->

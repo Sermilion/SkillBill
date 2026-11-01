@@ -46,8 +46,7 @@ available. Only the newest
 published runtime release keeps downloads. Pushes to `main` build and check the
 desktop app on Linux, macOS, and Windows. Pull requests that touch `desktop/`
 or `runtime-kotlin` run the cross-platform build and publish a downloadable
-snapshot. The older `desktop-tray/` app remains in the repository as a behavior
-reference and keeps its own CI checks.
+snapshot.
 
 The installer installs the desktop app automatically. Local checkouts build it
 from source. Standalone installers download the matching host archive from the

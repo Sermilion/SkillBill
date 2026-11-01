@@ -101,7 +101,7 @@ internal fun DetailSections.phaseResultsSection(item: WorkItem, detail: Detail) 
   }
 }
 
-/** HANDOFF 9.2 item 15: goal QA findings, the ones left for the operator first, with `desktop-tray`'s summary wording. */
+/** HANDOFF 9.2 item 15: goal QA findings, the ones left for the operator first. */
 internal fun DetailSections.goalQaSection(detail: Detail) {
   val qa = detail.goalQa ?: return
   // The design lists the findings in the runtime's order, each as ref, title and state with no meta line.

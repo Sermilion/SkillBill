@@ -2,7 +2,7 @@
 set -euo pipefail
 
 icons_dir="$(cd "$(dirname "$0")" && pwd)"
-source_svg="$icons_dir/../../../../design/App/docs/assets/skill-bill-app-icon.svg"
+source_svg="$icons_dir/skill-bill-app-icon.svg"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 

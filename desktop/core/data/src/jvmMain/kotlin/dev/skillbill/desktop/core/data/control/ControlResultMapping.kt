@@ -10,7 +10,7 @@ import skillbill.engine.work.control.model.WorkControlResult
 internal enum class ControlKind { PAUSE_AFTER_SUBTASK, PAUSE_NOW, CANCEL, LAUNCH, START_GOAL }
 
 /**
- * desktop-tray's `ControlConfirmation` mapping. A stop the runtime only accepted means no live runner needed stopping (its stop
+ * Maps a control result to the outcome the user sees. A stop the runtime only accepted means no live runner needed stopping (its stop
  * path returns `Accepted` only for already stopped and no live lease), so it never reads as a confirmed exit.
  */
 internal fun WorkControlResult.toControlOutcome(kind: ControlKind, diagnostics: Diagnostics): ControlOutcome = when (this) {

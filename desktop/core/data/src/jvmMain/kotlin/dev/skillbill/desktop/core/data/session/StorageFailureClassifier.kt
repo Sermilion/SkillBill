@@ -14,8 +14,8 @@ private const val MAX_FAILURE_CAUSES = 8
 internal class DatabaseFileMissingException(path: String) : IOException("The database $path does not exist.")
 
 /**
- * Maps a runtime or JVM failure to the storage failure the user sees, as `desktop-tray` does: every runtime code without a
- * database meaning is an incompatible record, and an IO failure is a missing store when the file is gone. Returns null for
+ * Maps a runtime or JVM failure to the storage failure the user sees. Every runtime code without a database
+ * meaning is an incompatible record, and an IO failure is a missing store when the file is gone. Returns null for
  * anything else, which the caller rethrows.
  */
 internal object StorageFailureClassifier {

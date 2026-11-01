@@ -27,8 +27,7 @@ import java.nio.file.attribute.BasicFileAttributes
 
 /**
  * Watches a project's spec directory and every non-hidden folder under it with the platform watch service. Directories
- * created later are registered as the watch service reports them. There is no polling. Copied from desktop-tray's
- * `NioSpecDirectoryChanges`.
+ * created later are registered as the watch service reports them. There is no polling.
  */
 internal class SpecDirectoryChanges(private val diagnostics: Diagnostics) {
   /** Emits after any change under [specsRoot]; completes at once when it is not an existing directory. */

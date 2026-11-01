@@ -71,7 +71,7 @@ internal fun WorkDetailItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toW
   ),
 )
 
-/** Field-by-field copy; the id rule is desktop-tray's: a standalone phase is its invocation, anything else its workflow. */
+/** Field-by-field copy; the id rule: a standalone phase is its invocation, anything else its workflow. */
 internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
   val id = if (execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE) execution?.invocationId else workflowId ?: execution?.invocationId
   val phase = currentPhaseExecution?.let {
@@ -160,7 +160,7 @@ private fun skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome.toDomain(
   null
 }
 
-/** HANDOFF 9.2's wording ("pass 2", "gate run 2"), and desktop-tray's for the other kinds. */
+/** HANDOFF 9.2's wording ("pass 2", "gate run 2"), extended to the other kinds. */
 private fun PhaseExecution.label(): String = when (kind) {
   PhaseExecutionKind.Pass -> "pass $count"
   PhaseExecutionKind.SemanticLoop -> "loop $count"

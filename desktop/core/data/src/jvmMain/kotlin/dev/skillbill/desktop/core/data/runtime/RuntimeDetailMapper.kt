@@ -105,7 +105,7 @@ internal fun DetailList.toRuntime(): WorkDetailList = when (this) {
   DetailList.Dependencies -> WorkDetailList.DEPENDENCIES
 }
 
-/** Ported from desktop-tray's `WorkDetailItem.toDomain`, without the header fields, which [toHeader] maps. */
+/** Maps a work detail item, without the header fields, which [toHeader] maps. */
 internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
   val goal = goalStatus
   return Detail(

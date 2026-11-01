@@ -53,7 +53,7 @@ internal fun sectionLabel(kind: BoardSectionKind): String = when (kind) {
   BoardSectionKind.Finished -> "Finished today"
 }
 
-/** An empty section's note, worded as the prototype and `desktop-tray`'s work contract word it. */
+/** An empty section's note, worded as the prototype words it. */
 internal fun emptySectionText(kind: BoardSectionKind, filtering: Boolean): String = when {
   filtering -> "No matching work"
   kind == BoardSectionKind.Finished -> "Nothing finished today"
