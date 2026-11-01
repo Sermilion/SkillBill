@@ -2489,4 +2489,5 @@ private val expectedMigrationDefinitions =
     95 to "rebuild-work-board-readable-phase-titles",
     96 to "record-standalone-review-run-id",
     97 to "record-review-finding-actions",
+    98 to "record-goal-blocked-reason",
   )

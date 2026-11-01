@@ -1,6 +1,8 @@
 package skillbill.infrastructure.workflow.validation
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
@@ -60,7 +62,10 @@ class FileSystemValidationGateRunner(
         )
       }
       if (processResult.launchFailure) {
-        throw ValidationGateProcessException(processResult.output)
+        throw SkillBillRuntimeException(
+          FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
+          processResult.output,
+        )
       }
       val stdout = processResult.output
       val durationMs = ((System.nanoTime() - started) / NANOS_PER_MILLIS).coerceAtLeast(0L)

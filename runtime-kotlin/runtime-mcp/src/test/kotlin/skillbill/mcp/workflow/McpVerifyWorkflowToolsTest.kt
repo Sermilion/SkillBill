@@ -168,12 +168,20 @@ private fun markVerifyWorkflowVerdictBlocked(
         listOf(mapOf("step_id" to "verdict", "status" to "blocked", "attempt_count" to 1)),
       "artifacts_patch" to
         mapOf(
+          "criteria_summary" to
+            mapOf(
+              "acceptance_criteria" to "The workflow resumes from durable evaluator inputs.",
+              "non_goals" to "",
+              "rollout_expectation" to "Not required.",
+              "technical_constraints" to "Use the saved repository checkpoint.",
+            ),
           "diff_projection" to
             mapOf(
               "checkpoint" to checkpoint,
               "comparison_scope" to "base..head",
               "changed_files" to emptyList<String>(),
             ),
+          "review_rubric" to mapOf("contract_version" to "0.1", "rules" to "Check the saved diff."),
           "feature_flag_audit_receipt" to evaluatorReceipt(),
           "code_review_receipt" to evaluatorReceipt(),
           "unit_test_value_receipt" to evaluatorReceipt(),

@@ -53,9 +53,9 @@ internal fun DetailSections.activitySection(item: WorkItem, detail: Detail, stat
     }
     Column(Modifier.padding(top = DocBlockGap)) {
       if (item.kind != WorkKind.Goal) {
-        ActivityTimeline(standaloneActivity(item, detail), item.id, onJump = jump)
+        ActivityTimeline(standaloneActivity(item, detail), item.id, blockReasonFallback = item.reason, onCopyReason = { onAction(DetailAction.Copy(it)) }, onJump = jump)
       } else when (val activity = state.activity) {
-        is ActivityResult.Listed -> ActivityTimeline(activity.groups, item.id, onJump = jump)
+        is ActivityResult.Listed -> ActivityTimeline(activity.groups, item.id, blockReasonFallback = item.reason, onCopyReason = { onAction(DetailAction.Copy(it)) }, onJump = jump)
         ActivityResult.Loading -> ActivityText("Loading activity...", faint = true)
         ActivityResult.NotFound -> ActivityText("No recorded activity.", faint = true)
         is ActivityResult.Unavailable -> ActivityText("Activity is unavailable. ${readProblemText(activity.problem)}", faint = true)
@@ -66,7 +66,14 @@ internal fun DetailSections.activitySection(item: WorkItem, detail: Detail, stat
 }
 
 @Composable
-internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modifier: Modifier = Modifier, onJump: suspend (Float) -> Unit = {}) {
+internal fun ActivityTimeline(
+  groups: List<ActivityGroup>,
+  workId: String,
+  modifier: Modifier = Modifier,
+  blockReasonFallback: String? = null,
+  onCopyReason: ((String) -> Unit)? = null,
+  onJump: suspend (Float) -> Unit = {},
+) {
   var blocksOnly by rememberSaveable(workId) { mutableStateOf(false) }
   var expanded by rememberSaveable(workId) { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
   val positions = remember(workId) { mutableMapOf<String, Float>() }
@@ -75,7 +82,15 @@ internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modif
   DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
   val now = ticker.now.value
   val general = groups.filter { it.kind == ActivityGroupKind.GENERAL_BLOCKS }
-  val ordered = groups.filterNot { it.kind == ActivityGroupKind.GENERAL_BLOCKS }
+  val ordered = groups.filterNot { it.kind == ActivityGroupKind.GENERAL_BLOCKS }.map { group ->
+    group.copy(blocks = group.blocks.map { block ->
+      if (block.reason == null && block.needsDecision && !blockReasonFallback.isNullOrBlank()) {
+        block.copy(reason = blockReasonFallback)
+      } else {
+        block
+      }
+    })
+  }
   val shown = ordered.filter { !blocksOnly || it.blocks.isNotEmpty() || it.status == ActivityStatus.BLOCKED }
   fun isOpen(group: ActivityGroup) = expanded[group.id] ?: (groups.size == 1 || group.status == ActivityStatus.RUNNING || group.status == ActivityStatus.BLOCKED)
   Column(modifier.fillMaxWidth()) {
@@ -112,7 +127,7 @@ internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modif
         ActivityWait((started - previous).inWholeMilliseconds)
       }
       key(group.id) {
-        ActivityCard(group, isOpen(group), now, Modifier.onGloballyPositioned { positions[group.id] = it.positionInParent().y }.padding(bottom = 6.dp)) {
+        ActivityCard(group, isOpen(group), now, Modifier.onGloballyPositioned { positions[group.id] = it.positionInParent().y }.padding(bottom = 6.dp), onCopyReason) {
           expanded = expanded + (group.id to !isOpen(group))
         }
       }
@@ -127,7 +142,7 @@ internal fun ActivityTimeline(groups: List<ActivityGroup>, workId: String, modif
       general.forEach { group ->
         key(group.id) {
           Column(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(8.dp)).padding(vertical = 4.dp)) {
-            group.blocks.forEach { ActivityBlockRow(it, now) }
+            group.blocks.forEach { ActivityBlockRow(it, now, onCopyReason = onCopyReason) }
           }
         }
       }

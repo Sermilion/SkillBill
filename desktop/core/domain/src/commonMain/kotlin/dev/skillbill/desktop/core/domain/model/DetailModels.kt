@@ -94,6 +94,8 @@ data class Detail(
   val goalSpecBundle: PlanRunReport?,
   val observedAt: Instant,
   val changeBaseline: ChangeBaseline? = null,
+  val degradedGoalStatusSource: String? = null,
+  val currentSubtaskId: Int? = null,
 )
 
 data class WorkSubtask(
@@ -149,7 +151,40 @@ data class SubtaskPhaseResults(
   val reviewPasses: List<ReviewPass>,
   val audit: PhaseConclusion?,
   val review: PhaseConclusion?,
+  val degradedReadSource: String? = null,
+  val runningReviewPass: RunningReviewPass? = null,
+  val auditResult: SubtaskAuditResult? = null,
+  val execution: SubtaskExecution? = null,
 )
+
+data class SubtaskExecution(
+  val workflowId: String,
+  val agentId: String?,
+  val model: String?,
+  val effort: String?,
+  val startedAt: Instant,
+  val updatedAt: Instant,
+  val phaseAttemptCounts: Map<String, Int>,
+)
+
+data class SubtaskAuditResult(
+  val outcome: AuditOutcome,
+  val metCount: Int?,
+  val totalCount: Int?,
+  val criteria: List<AuditCriterion>,
+  val attempts: List<AuditAttempt>,
+  val attemptTotal: Int?,
+)
+
+enum class AuditOutcome { Passed, Failed, Running, Unknown }
+
+data class AuditCriterion(val ref: String, val text: String, val met: Boolean, val fixedInAttempt: Int?)
+
+data class AuditAttempt(val number: Int, val passed: Boolean, val uncoveredCount: Int, val nextPhaseId: String?)
+
+data class RunningReviewPass(val passNumber: Int, val lanes: List<RunningReviewLane>)
+
+data class RunningReviewLane(val name: String, val finished: Boolean)
 
 /** One goal subtask review pass, its findings as the review phase shows them; [lanes] is empty when the pass's review run is not stored. */
 data class ReviewPass(

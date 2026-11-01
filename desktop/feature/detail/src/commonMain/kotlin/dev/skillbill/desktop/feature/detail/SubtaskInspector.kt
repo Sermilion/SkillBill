@@ -19,19 +19,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.tabular
-import dev.skillbill.desktop.core.designsystem.component.ExpandableText
+import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.ShortId
+import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.PaneStatus
-import dev.skillbill.desktop.core.designsystem.detail.PipelineStepState
 import dev.skillbill.desktop.core.designsystem.detail.PropertyList
 import dev.skillbill.desktop.core.designsystem.detail.PropertyRow
 import dev.skillbill.desktop.core.designsystem.detail.PropertyText
@@ -42,7 +44,6 @@ import dev.skillbill.desktop.core.designsystem.list.SubtaskChip
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
@@ -77,15 +78,14 @@ internal fun inspectorStatus(item: WorkItem, detail: Detail, key: SubtaskKey): P
   }
 }
 
-/** HANDOFF 9.2 "Subtask inspector": the selected subtask; [inline] drops the title, which the row already shows. */
 @Composable
-internal fun SubtaskInspector(detail: Detail, subtask: WorkSubtask, inline: Boolean, onAction: (DetailAction) -> Unit) {
+internal fun SubtaskInspector(detail: Detail, subtask: WorkSubtask, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    if (!inline) BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.4.em))
+    BasicText(subtask.name, style = SkillBillTheme.type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.4.em))
     subtask.blockedReason?.takeIf { it.isNotBlank() }?.let { Hint(it, FeedbackTone.Warn, fold = true) }
     SubtaskProperties(detail, subtask, onAction)
-    SubtaskReview(detail, subtask.id)
+    SubtaskResults(detail, subtask)
   }
 }
 
@@ -111,10 +111,10 @@ private fun SubtaskProperties(detail: Detail, subtask: WorkSubtask, onAction: (D
     validation?.let { record ->
       val passed = record.passed
       val checks = record.result?.checks?.size ?: 0
-      val word = when (passed) { true -> "passed"; false -> "failed"; null -> record.integrityProblem ?: "unknown" }
-      PropertyRow("Validation") {
+      val word = when (passed) { true -> "passed"; false -> "failed"; null -> record.integrityProblem }
+      if (word != null) PropertyRow("Validation") {
         Box(Modifier.size(6.dp).background(if (passed == false) colors.stFailed else if (passed == true) colors.stDone else colors.fgFaint, CircleShape))
-        PropertyText(if (checks > 0) "$word · $checks checks" else word)
+        PropertyText(if (checks > 0) "$word · $checks ${if (checks == 1) "check" else "checks"}" else word)
       }
     }
   }
@@ -156,40 +156,52 @@ private fun ChipItems(detail: Detail, edges: List<WorkDependency>, onAction: (De
   }
 }
 
-/** `.sb-insp-sec`: the Review caption, one block per pass with the review phase's findings table, then the audit. */
+/** `.sb-insp-sec`: what [subtaskResultsState] decided for the Review and Audit area. */
 @Composable
-private fun SubtaskReview(detail: Detail, subtaskId: Int) {
-  val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  val results = detail.phaseResults.firstOrNull { it.subtaskId == subtaskId }
-  val passes = results?.reviewPasses.orEmpty()
-  val audit = results?.audit
+private fun SubtaskResults(detail: Detail, subtask: WorkSubtask) {
+  val results = detail.phaseResults.firstOrNull { it.subtaskId == subtask.id }
+  val state = subtaskResultsState(subtaskStatusKind(subtask.status), results, detail.degradedGoalStatusSource)
   Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
-      BasicText("Review", style = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Medium, lineHeight = 1.em))
-    }
-    if (passes.isEmpty()) {
-      Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically) {
-        BasicText("No review yet", style = type.tSm.copy(color = colors.fgFaint))
+    when (state) {
+      is SubtaskResultsState.Unreadable -> UnreadableResults(state.source)
+      SubtaskResultsState.Loading -> {
+        PaneSection(title = "Review") {}
+        PaneSection(title = "Audit") {}
       }
-    }
-    passes.forEachIndexed { index, pass -> PassBlock(pass, Modifier.padding(top = if (index > 0) 6.dp else 0.dp)) }
-    audit?.verdict?.let { verdict ->
-      Column(Modifier.padding(top = if (passes.isNotEmpty()) 6.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        InspectorLine("Audit", listOf(verdict))
-        audit.summary?.takeIf { it.isNotBlank() }?.let { ExpandableText(it, type.tSm.copy(color = colors.fgMuted, lineHeight = 1.45.em)) }
+      is SubtaskResultsState.Shown -> {
+        when (val review = state.review) {
+          is SubtaskReviewState.Passes -> SubtaskReviewSection(review.passes, review.runningReviewPass)
+          SubtaskReviewState.RunsAfterImplementation -> ResultsPlaceholder("Review", "Runs after implementation")
+          SubtaskReviewState.Omitted -> Unit
+        }
+        SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id)
       }
     }
   }
 }
 
-/** A pass: its verdict and status tally, the lanes its review run applied, then its findings as the review phase shows them. */
 @Composable
-private fun PassBlock(pass: ReviewPass, modifier: Modifier) {
-  Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    InspectorLine("Pass ${pass.passNumber}", listOf(reviewVerdictLabel(pass.verdict), reviewFindingsTally(pass.findings)))
-    if (pass.lanes.isNotEmpty()) ReviewLanes(pass.lanes, pass.findings)
-    if (pass.findings.isNotEmpty()) ReviewFindingsBox(pass.findings)
+private fun UnreadableResults(source: String) {
+  val mono = SkillBillTheme.type.monoSm.fontFamily
+  PaneSection(title = "Review") {
+    Callout(
+      FeedbackTone.Warn,
+      body = buildAnnotatedString {
+        append("Review and audit ran, but their results could not be read. The status read was degraded at ")
+        withStyle(SpanStyle(fontFamily = mono)) { append(source) }
+        append(".")
+      },
+      modifier = Modifier.fillMaxWidth(),
+    )
+  }
+}
+
+@Composable
+private fun ResultsPlaceholder(caption: String, line: String) {
+  PaneSection(title = caption) {
+    Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+      BasicText(line, style = SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted))
+    }
   }
 }
 
@@ -199,7 +211,7 @@ private fun PassBlock(pass: ReviewPass, modifier: Modifier) {
  * at half the free width, cutting a long verdict next to empty space.
  */
 @Composable
-private fun InspectorLine(lead: String, parts: List<String>) {
+internal fun InspectorLine(lead: String, parts: List<String>) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val shown = parts.filter { it.isNotBlank() }
@@ -215,12 +227,4 @@ private fun InspectorLine(lead: String, parts: List<String>) {
       )
     }
   }
-}
-
-private fun PipelineStepState.status(): Pair<StatusKind, String> = when (this) {
-  PipelineStepState.Done -> StatusKind.Completed to "Done"
-  PipelineStepState.Current -> StatusKind.Active to "Running"
-  PipelineStepState.Waiting -> StatusKind.Blocked to "Waiting"
-  PipelineStepState.Failed -> StatusKind.Failed to "Failed"
-  PipelineStepState.Pending -> StatusKind.Pending to "Pending"
 }

@@ -8,7 +8,7 @@ data class BoardQuery(val window: HistoryWindow, val filter: String, val pageSiz
 /** The fixed board headers, in display order; each item lands in one by the runtime's live section verdict. */
 enum class BoardSectionKind { NeedsYou, Goals, Phases, Operations, Finished }
 
-/** One board section and its display rows. */
+/** One header's items in display order. Goal runs sort by start time; other sections keep runtime order. */
 data class BoardSection(val kind: BoardSectionKind, val items: List<WorkItem>)
 
 /**

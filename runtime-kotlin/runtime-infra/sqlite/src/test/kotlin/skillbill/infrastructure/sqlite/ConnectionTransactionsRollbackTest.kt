@@ -2,6 +2,8 @@ package skillbill.infrastructure.sqlite
 
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
@@ -27,6 +29,64 @@ import kotlin.test.assertTrue
 
 @Execution(ExecutionMode.SAME_THREAD)
 class ConnectionTransactionsRollbackTest {
+  @Test
+  fun `a busy write begin retries without repeating the transaction body`() {
+    var begins = 0
+    var bodies = 0
+    val statements = mutableListOf<String>()
+    val connection =
+      Proxy.newProxyInstance(Connection::class.java.classLoader, arrayOf(Connection::class.java)) { _, method, _ ->
+        if (method.name == "createStatement") {
+          Proxy.newProxyInstance(Statement::class.java.classLoader, arrayOf(Statement::class.java)) { _, call, args ->
+            if (call.name == "execute") {
+              val sql = args!![0] as String
+              statements += sql
+              if (sql == "BEGIN IMMEDIATE" && ++begins < 3) {
+                throw SQLiteException("busy", SQLiteErrorCode.SQLITE_BUSY)
+              }
+              true
+            } else {
+              null
+            }
+          }
+        } else {
+          null
+        }
+      } as Connection
+
+    connection.inDatabaseTransaction(
+      DatabaseTransactionSpec(
+        Path.of("/tmp/transaction-retry.db"),
+        DatabaseTransactionBeginMode.IMMEDIATE,
+        DatabaseAccessOperation.WRITE,
+        SqliteTestDiagnostics,
+      ),
+    ) { bodies++ }
+
+    assertEquals(1, bodies)
+    assertEquals(listOf("BEGIN IMMEDIATE", "BEGIN IMMEDIATE", "BEGIN IMMEDIATE", "COMMIT"), statements)
+  }
+
+  @Test
+  fun `persistent busy write begin reports the original failure without running the body`() {
+    val failure = SQLiteException("busy", SQLiteErrorCode.SQLITE_BUSY)
+    val connection = failingConnection(mapOf("BEGIN IMMEDIATE" to failure))
+    var bodyRan = false
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        connection.inDatabaseTransaction(
+          DatabaseTransactionSpec(
+            Path.of("/tmp/transaction-retry.db"),
+            DatabaseTransactionBeginMode.IMMEDIATE,
+            DatabaseAccessOperation.WRITE,
+            SqliteTestDiagnostics,
+          ),
+        ) { bodyRan = true }
+      }
+    assertSame(failure, error.cause)
+    assertEquals(false, bodyRan)
+  }
+
   @Test
   fun `session transaction start and commit failures cross the port as typed database failures`() {
     val path = createTempDirectory("typed-transaction-failure").resolve("runtime.db")

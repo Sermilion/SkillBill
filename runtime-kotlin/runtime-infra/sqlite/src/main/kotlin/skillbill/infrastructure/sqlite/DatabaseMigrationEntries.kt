@@ -44,6 +44,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalAssessmentCounts
+import skillbill.infrastructure.sqlite.core.migration.area.recordGoalBlockedReason
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalSubtaskTraceProbeCounts
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.diagnosticevidence.rekeyDiagnosticEvidenceByRepairTurn
@@ -948,4 +949,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 97,
       name = "record-review-finding-actions",
       operation = ::addReviewFindingActions,
+    ) +
+    DatabaseMigration(
+      version = 98,
+      name = "record-goal-blocked-reason",
+      operation = ::recordGoalBlockedReason,
     )

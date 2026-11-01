@@ -80,4 +80,3 @@ internal fun List<WorkOutsideCommit>.aggregate(mergeBaseSha: String): ChangeSet 
   }.sortedBy { it.path }
   return ChangeSet(mergeBaseSha, files, sumOf { it.insertions }, sumOf { it.deletions })
 }
-

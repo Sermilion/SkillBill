@@ -46,7 +46,7 @@ internal fun readGoalActivityStops(
   require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
   return connection.prepareStatement(
     """
-    SELECT workflow_id, started_at, finished_at, stop_reason FROM goal_run_sessions
+    SELECT workflow_id, started_at, finished_at, stop_reason, blocked_reason FROM goal_run_sessions
     WHERE parent_workflow_id = ? OR workflow_id = ?
     ORDER BY started_at, workflow_id LIMIT ? OFFSET ?
     """.trimIndent(),
@@ -62,6 +62,7 @@ internal fun readGoalActivityStops(
               parseInstant(rows.required("started_at"), id, "started_at"),
               rows.getString("finished_at")?.let { parseInstant(it, id, "finished_at") },
               rows.getString("stop_reason"),
+              rows.getString("blocked_reason"),
             ),
           )
         }

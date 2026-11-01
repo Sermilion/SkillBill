@@ -66,9 +66,26 @@ internal fun finalQaWarning(
     .takeIf(String::isNotBlank)
 }
 
+internal fun unresolvedGateOutcomeReason(
+  operation: String?,
+  checkpoint: String?,
+  failure: Exception?,
+): String {
+  val cause =
+    failure?.let {
+      "The '$operation' outcome is unknown at checkpoint '$checkpoint' because QA failed first: " +
+        "${it.message ?: it.javaClass.simpleName}. "
+    } ?: "The '$operation' outcome is unknown after interruption at checkpoint '$checkpoint'. "
+  return cause + "Inspect authoritative command or agent evidence, or explicitly retire " +
+    "this quality execution and accept new cycles."
+}
+
 internal fun buildAfterQaFixWarning(result: PhaseRunResult): String? {
   val blocked = result as? PhaseRunResult.Blocked ?: return null
   if (blocked.stepId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) return null
+  if (blocked.reason.startsWith(FeatureTaskRuntimeBuildGateCoordinator.GATE_COMMAND_NOT_STARTED_PREFIX)) {
+    return "The build gate did not run after qa_fix, so QA did not re-test the fix. ${blocked.reason}"
+  }
   return "qa_fix left the app without a passing build, so QA did not re-test the fix. The build gate allows " +
     "${FeatureTaskRuntimeBuildGateCoordinator.MAX_REPAIR_TURNS} build repairs and stopped: ${blocked.reason}"
 }

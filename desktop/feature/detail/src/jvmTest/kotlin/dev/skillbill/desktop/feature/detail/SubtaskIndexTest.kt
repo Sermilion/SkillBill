@@ -41,6 +41,18 @@ class SubtaskIndexTest {
   }
 
   @Test
+  fun `phase pipeline steps do not include execution attempt labels`() {
+    val item = workItem("SKILL-1").copy(
+      lifecycle = Lifecycle.Active,
+      phaseExecutionLabel = "repair attempt 2",
+    )
+    val detail = emptyDetail.copy(stepPipeline = listOf("audit_implement_fix", "review"), currentPhase = "audit_implement_fix")
+
+    assertEquals(listOf("audit_implement_fix", "review"), pipelineSteps(item, detail, detail.stepPipeline).map { it.label })
+    assertEquals(listOf(null, null), pipelineSteps(item, detail, detail.stepPipeline).map { it.count })
+  }
+
+  @Test
   fun `needed by lists every subtask that depends on this one, keeping the optional mark`() {
     val detail = emptyDetail.copy(
       subtasks = listOf(subtask(1, "complete"), subtask(2, "pending", 1 to false), subtask(3, "pending", 1 to true, 2 to false)),

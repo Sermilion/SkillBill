@@ -19,7 +19,7 @@ class ReviewFindingsTest {
       finding(ReviewFindingStatus.FalsePositive),
     )
 
-    assertEquals("5 findings · 1 open · 2 fixed · 1 declined · 1 false positive", reviewFindingsTally(findings))
+    assertEquals("5 findings · 2 fixed · 1 open · 1 declined · 1 false positive", reviewFindingsTally(findings))
     assertEquals("no findings", reviewFindingsTally(emptyList()))
   }
 

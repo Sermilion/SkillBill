@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.validation
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.config.model.RepoLocalConfigFileKeys
 import skillbill.config.model.applyValidationGateGradleWrapper
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
@@ -24,6 +25,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.model.requiresUnparseableGateTriage
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
@@ -166,7 +168,35 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
       return retainedTerminalResult(loaded, measurements)
     }
 
-    return resumeFindingsOrCompletion(state, declaration, loaded) ?: discoverFindings(state, declaration)
+    return try {
+      resumeFindingsOrCompletion(state, declaration, loaded) ?: discoverFindings(state, declaration)
+    } catch (failure: SkillBillRuntimeException) {
+      failure.rethrowUnless(failure.code == FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION)
+      gateLaunchBlockedResult(state, failure)
+    }
+  }
+
+  private fun gateLaunchBlockedResult(
+    state: BuildGateCycleState,
+    failure: SkillBillRuntimeException,
+  ): ValidationGateCycleResult {
+    val operation = state.cycle.progressStore.load(state.cycle.progressKey)?.pendingExternalOperation
+    val findings = openFindingsFromState(state)
+    val outcome =
+      ValidationGateCycleTerminalOutcome.Blocked(
+        reason =
+          "$GATE_COMMAND_NOT_STARTED_PREFIX '$operation' did not start: " +
+            "${failure.message.orEmpty().take(GATE_FAILURE_DETAIL_LIMIT)}. " +
+            "Fix the command, or set ${RepoLocalConfigFileKeys.VALIDATION_GATE}." +
+            "${RepoLocalConfigFileKeys.GRADLE_WRAPPER} in the project config when the Gradle wrapper is not at " +
+            "the repository root.",
+        remainingFindings = findings.takeIf { it.isNotEmpty() }?.let(::ValidationFindingSetProjection),
+        measurements = state.measurements,
+        failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+        failureCode = failureLabel(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION),
+      )
+    retainTerminalOutcome(state, outcome, repairWindowPhaseFor(findings))
+    return ValidationGateCycleResult.Terminal(outcome)
   }
 
   private fun retainedTerminalResult(
@@ -719,6 +749,8 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
   private fun retainTerminalOutcome(
     state: BuildGateCycleState,
     outcome: ValidationGateCycleTerminalOutcome,
+    repairWindowPhase: FeatureTaskRuntimeValidationGateRepairWindowPhase =
+      FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
   ) {
     when (outcome) {
       is ValidationGateCycleTerminalOutcome.Paused -> {
@@ -745,7 +777,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         repairsUsed = state.cycle.progressStore.load(state.cycle.progressKey)?.repairsUsed ?: 0,
         capturedTriagePlan = state.cycle.progressStore.load(state.cycle.progressKey)?.capturedTriagePlan,
         remainingFindings = findings.takeIf { it.isNotEmpty() }?.let(::ValidationFindingSetProjection),
-      ),
+      ).copy(repairWindowPhase = repairWindowPhase),
     )
   }
 
@@ -767,6 +799,8 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     )
 
   public companion object {
+    public const val GATE_COMMAND_NOT_STARTED_PREFIX: String = "The gate command"
+
     public const val MAX_REPAIR_TURNS: Int = 3
 
     private fun operatorResumeRepairTurns(repairsUsed: Int): Int =

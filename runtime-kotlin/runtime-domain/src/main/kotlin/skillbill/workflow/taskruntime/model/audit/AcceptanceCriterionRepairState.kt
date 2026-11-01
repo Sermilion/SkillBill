@@ -474,3 +474,10 @@ private fun AcceptanceCriterionRepairOutcome.matchesVerification(state: Acceptan
         checkpointId == state.admittedCheckpointId
     )
   )
+
+data class AcceptanceCriterionAuditAttempt(
+  val id: String,
+  val number: Int,
+  val passed: Boolean,
+  val uncoveredCount: Int,
+)

@@ -370,7 +370,7 @@ public class IdeStatusService(
     val goalRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = false)
     val validationRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = true)
     val validationPage = validationRead?.page
-    val goalStatus = goal?.let { work -> detailGoalStatus(work, validationPage, context) }
+    val goalStatus = goal?.let { work -> detailGoalStatus(work, validationPage, goalRead?.page, context) }
     val dependencies = detailDependencies(goal, context.unitOfWork.workList, request, position)
     val runtimeWorkflowId =
       goalStatus?.currentChildWorkflowId
@@ -536,6 +536,7 @@ public class IdeStatusService(
   private fun detailGoalStatus(
     work: WorkItem,
     validationPage: WorkGoalSubtaskPage?,
+    subtaskPage: WorkGoalSubtaskPage?,
     context: IdeStatusProjectionContext,
   ) = goalRunnerStatusService.statusForWorkflow(
     work.workflowId,
@@ -545,6 +546,7 @@ public class IdeStatusService(
       pruneCheckpointRefs = false,
       completedSubtaskValidationIds =
         validationPage?.manifest?.subtasks.orEmpty().mapTo(mutableSetOf()) { it.id },
+      phaseResultSubtaskIds = subtaskPage?.manifest?.subtasks?.mapTo(mutableSetOf()) { it.id },
     ),
   )
     ?.takeIf { it.issueKey == work.issueKey }

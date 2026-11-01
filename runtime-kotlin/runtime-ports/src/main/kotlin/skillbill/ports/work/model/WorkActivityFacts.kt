@@ -18,4 +18,5 @@ data class WorkActivityStop(
   val startedAt: Instant,
   val finishedAt: Instant?,
   val reason: String?,
+  val blockedReason: String? = null,
 )

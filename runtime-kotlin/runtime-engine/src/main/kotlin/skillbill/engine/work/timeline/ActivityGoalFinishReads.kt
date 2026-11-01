@@ -17,6 +17,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.taskruntime.artifact.toGoalAssessmentRecord
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import java.time.Instant
 
 @Inject
 public class ActivityGoalFinishReads {
@@ -69,7 +70,7 @@ public class ActivityGoalFinishReads {
         add(
           WorkActivityGroup(
             "goal-finish", null, "Goal finish",
-            if (childrenFinished) activityStatus(goal.currentState) else WorkActivityStatus.COMPLETE,
+            finishStatus(activityStatus(goal.currentState), children),
             null, null, emptyList(), emptyList(), before, after, WorkActivityGroupKind.GOAL_FINISH,
           ),
         )
@@ -97,13 +98,34 @@ public class ActivityGoalFinishReads {
     val childBlocks = children.flatMap { it.blocks }
     val known = childBlocks.map { it.id }.toSet()
     val blocks = activityBlocks(id, unit).filter { it.id !in known }.toMutableList()
-    stops.forEach { stop ->
-      val block = stopBlock(stop) ?: return@forEach
-      if ((blocks + childBlocks).none { it.at >= stop.startedAt && it.at <= block.at }) blocks += block
+    val lastChildFinish = children.mapNotNull { it.finishedAt }.maxOrNull()
+    stops.forEachIndexed { index, stop ->
+      val block = stopBlock(stop) ?: return@forEachIndexed
+      if (lastChildFinish != null && block.at < lastChildFinish) return@forEachIndexed
+      val nextStopStartedAt = stops.getOrNull(index + 1)?.startedAt
+      val hasDetailedBlock =
+        (blocks + childBlocks).any {
+          it.at >= stop.startedAt && (nextStopStartedAt == null || it.at < nextStopStartedAt)
+        }
+      if (!hasDetailedBlock) blocks += block
     }
     return blocks.sortedBy { it.at }
   }
 }
+
+private fun finishStatus(
+  goalStatus: WorkActivityStatus,
+  children: List<WorkActivityGroup>,
+): WorkActivityStatus =
+  if (goalStatus in activeGoalStatuses && !allSubtasksSettled(children)) WorkActivityStatus.PENDING else goalStatus
+
+private fun allSubtasksSettled(children: List<WorkActivityGroup>): Boolean =
+  children.groupBy { it.subtaskId }.values.all { attempts ->
+    attempts.maxBy { it.startedAt ?: Instant.MIN }.status in settledSubtaskStatuses
+  }
+
+private val activeGoalStatuses = setOf(WorkActivityStatus.RUNNING, WorkActivityStatus.BLOCKED)
+private val settledSubtaskStatuses = setOf(WorkActivityStatus.COMPLETE, WorkActivityStatus.INTERRUPTED)
 
 private fun stopBlock(stop: WorkActivityStop): WorkActivityBlock? {
   val at = stop.finishedAt ?: return null
@@ -121,8 +143,8 @@ private fun stopBlock(stop: WorkActivityStop): WorkActivityBlock? {
     kind,
     null,
     null,
-    null,
-    false,
+    stop.blockedReason,
+    kind == WorkActivityBlockKind.AWAITING_DECISION,
   )
 }
 

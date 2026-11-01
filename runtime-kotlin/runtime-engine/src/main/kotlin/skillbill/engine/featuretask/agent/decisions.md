@@ -3,6 +3,12 @@ Context: Standalone review presented findings without independent verification, 
 Decision: Admit a complete finding census, verify it in a fresh read-only session, and compare content-sensitive source observations around review and verification. Block and retain unaccepted evidence when admission, verification or source identity fails.
 Reason: A reviewer summary can omit or misclassify findings, and unchanged status text can hide changed file contents. Independent dispositions and source checks prevent a stale or partial report from appearing settled while preserving report-only behavior.
 
+## [2026-11-01] A gate command that cannot start has a known outcome
+
+Context: The build gate records a pending operation before it runs the command, so an interruption stays detectable. A launch failure left that record in place, and goal QA reported "unknown after interruption" and hard-blocked the goal when the command had simply never started. SKILL-457 hit this when the pack's `./gradlew` was not at the repository root.
+Decision: The gate runner raises `INVALID_QUALITY_GATE_CONFIGURATION` for a launch failure. The coordinator clears the pending record and retains a terminal block that names the real error. Any other failure with a pending record stays unknown, but goal QA now reports that failure and keeps it as the cause.
+Reason: A pending record means the outcome is unknown, and a failed launch is known: nothing ran. Goal QA then settles with a warning and post-QA validation still runs.
+
 ## [2026-10-31] Verified findings control repair regardless of severity
 
 Context: A verification summary could say no_findings_verified while individual findings remained verified, skipping repair. Inline review also suggested leaving Minor and Nit findings unfixed.

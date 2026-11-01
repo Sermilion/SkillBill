@@ -19,12 +19,58 @@ import java.sql.Connection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalTelemetryStoreTest {
+  @Test
+  fun `goal block reason stays local while the finished event keeps its closed payload`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      val reason = "The operator must choose whether to continue the audit repair."
+
+      store.goalFinished(
+        GoalFinishedRecord(
+          issueKey = "SKILL-457",
+          workflowId = "wf-blocked",
+          status = "blocked",
+          startedAt = "2026-06-04T10:00:00Z",
+          finishedAt = "2026-06-04T10:01:00Z",
+          durationMs = 60_000,
+          subtasksComplete = 0,
+          subtasksBlocked = 0,
+          subtasksSkipped = 0,
+          mode = "runtime",
+          stopReason = "AWAITING_OPERATOR_DECISION",
+          blockedReason = reason,
+        ),
+        level = "anonymous",
+      )
+
+      val storedReason =
+        connection.prepareStatement(
+          "SELECT blocked_reason FROM goal_run_sessions WHERE workflow_id = ?",
+        ).use { statement ->
+          statement.setString(1, "wf-blocked")
+          statement.executeQuery().use { rows ->
+            assertTrue(rows.next())
+            rows.getString("blocked_reason")
+          }
+        }
+      val payload =
+        parsePayload(
+          pendingOutbox(connection).single { it.eventName == "skillbill_goal_finished" }.payloadJson,
+        )
+
+      assertEquals(reason, storedReason)
+      assertFalse("blocked_reason" in payload)
+      assertFalse(reason in payload.values.mapNotNull { it?.toString() })
+    }
+  }
+
   @Test
   fun `empty store reports zero runs and no most-recent run`() {
     withConnection { connection ->

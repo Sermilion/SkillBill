@@ -174,6 +174,56 @@ data class GoalRunnerSubtaskPhaseResults(
   val reviewPasses: List<GoalRunnerReviewPassResult> = emptyList(),
   val review: GoalRunnerPhaseConclusion? = null,
   val audit: GoalRunnerPhaseConclusion? = null,
+  val degradedReadSource: String? = null,
+  val runningReviewPass: GoalRunnerRunningReviewPass? = null,
+  val auditResult: GoalRunnerSubtaskAuditResult? = null,
+  val execution: GoalRunnerSubtaskExecution? = null,
+)
+
+data class GoalRunnerSubtaskExecution(
+  val workflowId: String,
+  val agentId: String?,
+  val model: String?,
+  val effort: String?,
+  val startedAt: Instant,
+  val updatedAt: Instant,
+  val phaseAttemptCounts: Map<String, Int>,
+)
+
+data class GoalRunnerSubtaskAuditResult(
+  val outcome: GoalRunnerSubtaskAuditOutcome,
+  val metCount: Int?,
+  val totalCount: Int?,
+  val criteria: List<GoalRunnerSubtaskAuditCriterion>,
+  val attempts: List<GoalRunnerSubtaskAuditAttempt>,
+  val attemptTotal: Int?,
+)
+
+enum class GoalRunnerSubtaskAuditOutcome { PASSED, FAILED, RUNNING, UNKNOWN }
+
+data class GoalRunnerSubtaskAuditCriterion(
+  val ref: String,
+  val text: String,
+  val met: Boolean,
+  val fixedInAttempt: Int?,
+)
+
+data class GoalRunnerSubtaskAuditAttempt(
+  val id: String,
+  val number: Int,
+  val passed: Boolean,
+  val uncoveredCount: Int,
+  val nextPhaseId: String?,
+)
+
+data class GoalRunnerRunningReviewPass(
+  val passNumber: Int,
+  val lanes: List<GoalRunnerRunningReviewLane>,
+)
+
+data class GoalRunnerRunningReviewLane(
+  val name: String,
+  val finished: Boolean,
 )
 
 data class GoalRunnerReviewPassResult(

@@ -1,3 +1,28 @@
+## [2026-11-01] Exempt skipped subtasks from results loading
+Context: Skipped subtasks have no phase-results entry, while a missing entry for a started subtask can mean its page is loading.
+Decision: Omit the empty Review section for skipped subtasks and show loading for started subtasks with no result. Degraded goal status takes precedence for non-pending subtasks.
+Reason: Treating every non-pending subtask with no entry as loading would leave skipped subtasks loading indefinitely.
+
+## [2026-11-01] Read running review progress from stored dispositions
+Context: The inspector needs review progress, but the review path writes lane dispositions in a batch after lanes return.
+Decision: Project progress from stored dispositions and show a lane read failure as degraded status.
+Reason: This preserves stored progress on relaunch without adding live writes to review execution. A first attempt can show zero completed lanes until the batch is stored.
+
+## [2026-11-01] Hide audit results during a running review
+Context: Audit runs before review and may have a settled result when a review pass starts. The supplied design calls for "Runs after review" during review.
+Decision: Show the supplied placeholder during a running review, even when a settled audit exists.
+Reason: The plan keeps the supplied design copy. The trade-off is that it hides the stored result and describes the runtime order inaccurately.
+
+## [2026-11-01] Omit settled audit summary while an audit is running
+Context: A running audit can retain an output artifact from an earlier settled run.
+Decision: The subtask audit section omits that summary while the audit is running.
+Reason: Showing the stored text under the active audit could present a stale pass as the current result.
+
+## [2026-11-01] Scope selected subtask runs to phase records
+Context: The goal-level ledger summary does not consistently scope counts to the selected subtask.
+Decision: Show selected-subtask runs from phase attempt counts and omit fixes, relaunches, findings, and kills. Retain goal-level totals for Goal finish and standalone runs.
+Reason: Reusing goal-level counts could attribute another subtask's activity to the selected subtask, and this feature adds no ledger read.
+
 ## [2026-11-01] Render the recorded workflow timeline in Activity
 Context: The approved Activity mockup groups attempts by subtask and keeps Goal finish separate. The old detail feed could not show child phase attempts or blocks outside its retained incident page.
 Decision: Observe the runtime timeline for goals. Render one card per recorded child attempt, pending subtask cards, and untimed Goal finish facts. Standalone executions remain one row per run. Keep phase time separate from idle gaps. Show the agent when an attempt has no recorded compatible model, and omit token figures.

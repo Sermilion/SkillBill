@@ -53,6 +53,26 @@ class BoardObservationTest {
   }
 
   @Test
+  fun `three owners of one query share one read per goals change`() = runTest {
+    val (signals, reads, board) = fixture()
+    repeat(3) { backgroundScope.launch { board.observe(QUERY).collect {} } }
+    runCurrent()
+    signals.value = signal(goals = 2)
+    runCurrent()
+    assertEquals(2, reads.pageReads)
+  }
+
+  @Test
+  fun `an activity-only change does not re-read the board`() = runTest {
+    val (signals, reads, board) = fixture()
+    backgroundScope.launch { board.observe(QUERY).collect {} }
+    runCurrent()
+    signals.value = signal(activity = 2)
+    runCurrent()
+    assertEquals(1, reads.pageReads)
+  }
+
+  @Test
   fun `goal runs keep newest start first when phase updates reorder the board`() = runTest {
     val oldest = workItem("oldest").copy(startedAt = Instant.fromEpochMilliseconds(1000))
     val newest = workItem("newest").copy(startedAt = Instant.fromEpochMilliseconds(3000))
@@ -72,26 +92,6 @@ class BoardObservationTest {
     runCurrent()
     assertEquals(listOf("newest", "middle", "oldest"), goals.map { it.id })
     assertEquals("validate", goals.last().stepLabel)
-  }
-
-  @Test
-  fun `three owners of one query share one read per goals change`() = runTest {
-    val (signals, reads, board) = fixture()
-    repeat(3) { backgroundScope.launch { board.observe(QUERY).collect {} } }
-    runCurrent()
-    signals.value = signal(goals = 2)
-    runCurrent()
-    assertEquals(2, reads.pageReads)
-  }
-
-  @Test
-  fun `an activity-only change does not re-read the board`() = runTest {
-    val (signals, reads, board) = fixture()
-    backgroundScope.launch { board.observe(QUERY).collect {} }
-    runCurrent()
-    signals.value = signal(activity = 2)
-    runCurrent()
-    assertEquals(1, reads.pageReads)
   }
 
   @Test

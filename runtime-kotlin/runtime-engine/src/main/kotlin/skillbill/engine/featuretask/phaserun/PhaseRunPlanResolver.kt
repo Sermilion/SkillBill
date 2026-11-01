@@ -117,35 +117,37 @@ public class PhaseRunPlanResolver(
         }
       when (val operation = strategies.qualityGateOperation(plan, record.phaseId)) {
         is PhaseQualityGateOperation.PackGate -> {
-          validateRunningGate(progress, plan, outcomeNamespace, record, operation.commandFamily)
+          validateRunningGate(
+            progress,
+            record,
+            operation.commandFamily,
+            packBuildGateProgressKey(
+              outcomeNamespace,
+              plan.definitionId,
+              record.phaseId,
+              record.attemptCount,
+              operation.commandFamily,
+            ),
+          )
         }
         else -> if (!envelopeAccepted) unknownQualityStep(record)
       }
     }
   }
 
-  private fun validateRunningGate(
+  internal fun validateRunningGate(
     progress: GoalQualityPhaseProgress,
-    plan: ResolvedPhaseExecutionPlan,
-    outcomeNamespace: String,
     record: FeatureTaskRuntimePhaseRecord,
     commandFamily: ValidationGateCommandFamily,
+    expectedKey: String,
   ) {
     val envelopeAccepted =
       progress.acceptedEnvelopes.any {
         it.phaseId == record.phaseId && it.attempt == record.attemptCount
       }
-    val starts = matchingAttemptStarts(progress.phaseLedger, record.phaseId, record.attemptCount)
-    val terminalActions = hasTerminalAction(progress.phaseLedger, record, starts)
+    validateAttemptStarts(progress.phaseLedger, record)
+    val terminalActions = hasTerminalAction(progress.phaseLedger, record)
     if (terminalActions) unknownQualityStep(record)
-    val expectedKey =
-      packBuildGateProgressKey(
-        outcomeNamespace,
-        plan.definitionId,
-        record.phaseId,
-        record.attemptCount,
-        commandFamily,
-      )
     val (storedKey, nested) =
       when (commandFamily) {
         ValidationGateCommandFamily.BUILD -> progress.buildGateProgressKey to progress.buildGateProgress
@@ -166,11 +168,9 @@ public class PhaseRunPlanResolver(
   private fun hasTerminalAction(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     record: FeatureTaskRuntimePhaseRecord,
-    start: FeatureTaskRuntimePhaseLedgerEntry,
   ): Boolean {
     return ledger.any {
       it.phaseId == record.phaseId && it.attemptCount == record.attemptCount &&
-        it.sequenceNumber > start.sequenceNumber &&
         it.action in
         setOf(
           FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
@@ -195,19 +195,30 @@ public class PhaseRunPlanResolver(
     }
   }
 
-  private fun matchingAttemptStarts(
+  private fun validateAttemptStarts(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-    phaseId: String,
-    attempt: Int,
-  ): FeatureTaskRuntimePhaseLedgerEntry {
+    record: FeatureTaskRuntimePhaseRecord,
+  ) {
     val starts =
       ledger.filter {
-        it.phaseId == phaseId && it.attemptCount == attempt && it.action == FeatureTaskRuntimePhaseLedgerAction.START
+        it.phaseId == record.phaseId && it.attemptCount == record.attemptCount &&
+          it.action == FeatureTaskRuntimePhaseLedgerAction.START
       }
-    return starts.singleOrNull() ?: throw SkillBillRuntimeException(
-      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-      "Goal-quality step '$phaseId#$attempt' has no unique accepted start for nested gate recovery.",
-    )
+    val first = starts.minByOrNull { it.sequenceNumber }
+    val duplicateSequence = starts.map { it.sequenceNumber }.distinct().size != starts.size
+    val conflicting =
+      first != null &&
+        starts.any {
+          it.resolvedAgentId != record.resolvedAgentId || it.executionOrigin != record.executionOrigin ||
+            it.copy(sequenceNumber = first.sequenceNumber, timestamp = first.timestamp) != first
+        }
+    if (first == null || duplicateSequence || conflicting) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+        "Goal-quality step '${record.phaseId}#${record.attemptCount}' has no consistent accepted start " +
+          "for nested gate recovery.",
+      )
+    }
   }
 
   private fun unknownQualityStep(record: FeatureTaskRuntimePhaseRecord): Nothing =

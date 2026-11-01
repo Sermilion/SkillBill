@@ -1,6 +1,8 @@
 package skillbill.infrastructure.workflow.validation
 
 import skillbill.contracts.time.JvmSystemClock
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmEnvironmentKeys
 import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
@@ -633,6 +635,27 @@ class FileSystemValidationGateRunnerTest {
 
       assertEquals(ValidationGateRunOutcome.PASSED, result.outcome)
       assertEquals("<unset>", Files.readString(repo.resolve("java-home.txt")))
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `a gate command missing from the repository reports a quality gate configuration failure`() {
+    val repo = Files.createTempDirectory("gate-missing-command")
+    try {
+      val failure =
+        assertFailsWith<SkillBillRuntimeException> {
+          FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+            request(
+              repo,
+              argv = listOf("./gradlew", "compileKotlin"),
+              parseMode = ValidationGateFindingParseMode.COLLECT_ALL,
+            ),
+          )
+        }
+      assertEquals(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION, failure.code)
+      assertTrue(failure.message.orEmpty().contains("Failed to launch process"), failure.message)
     } finally {
       repo.toFile().deleteRecursively()
     }

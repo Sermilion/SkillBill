@@ -27,6 +27,7 @@ import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.idestatus.model.IdeStatusExecutionScope
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityFamily
@@ -82,6 +83,7 @@ public class WorkBoardItemProjection(
     val (observedAt, finishedFrom) = window
     return try {
       val found = detailMatch(id, unitOfWork) as? WorkDetailMatch.Found ?: return null
+      if (isPlanPhaseOfListedGoal(found, unitOfWork)) return null
       val identity = found.standalone?.repositoryIdentity ?: found.work?.repositoryIdentity
       val root = identity?.let(::decodeRepositoryRoot)
       if (identity == null || root == null) {
@@ -547,6 +549,17 @@ public class WorkBoardItemProjection(
       WorkItemKind.FEATURE_GOAL,
       -> null
     }
+
+  private fun isPlanPhaseOfListedGoal(
+    found: WorkDetailMatch.Found,
+    unitOfWork: UnitOfWork,
+  ): Boolean {
+    val standalone =
+      found.standalone?.takeIf { it.launchScope == IdeStatusLaunchScope.GOAL }
+        ?.takeIf { found.work?.item?.workflowKind != WorkItemKind.FEATURE_GOAL }
+    val issueKey = standalone?.issueKey?.takeIf(String::isNotBlank) ?: return false
+    return unitOfWork.workList.goalParentCandidatePage(issueKey, standalone.repositoryIdentity, 0, 1).isNotEmpty()
+  }
 
   internal fun isExcludedGoalChild(
     routeScope: FeatureTaskRouteScope?,
