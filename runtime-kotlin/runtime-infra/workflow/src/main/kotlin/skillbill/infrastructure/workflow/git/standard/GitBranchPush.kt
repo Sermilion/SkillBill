@@ -19,6 +19,7 @@ internal fun gitPushBranch(
   repoRoot: Path,
   branch: String,
   withLease: Boolean,
+  owned: Boolean = false,
   execute: (List<String>, Long) -> GitProcessResult = { args, deadline ->
     invokeGitProcess(
       repoRoot,
@@ -36,12 +37,13 @@ internal fun gitPushBranch(
       return WorkflowGitOperationResult.Failed("Refusing to force-push protected branch '$protected'.")
     }
   }
-  return pushResolvedBranch(normalized, withLease, execute)
+  return pushResolvedBranch(normalized, withLease, owned, execute)
 }
 
 private fun pushResolvedBranch(
   branch: String,
   withLease: Boolean,
+  owned: Boolean,
   execute: (List<String>, Long) -> GitProcessResult,
 ): WorkflowGitOperationResult {
   val head = execute(listOf("rev-parse", "--verify", "refs/heads/$branch^{commit}"), GIT_TIMEOUT_SECONDS)
@@ -63,7 +65,7 @@ private fun pushResolvedBranch(
     }
   return if (!initial.timedOut && initial.readFailure == null && initial.exitCode != GIT_FATAL_EXIT_CODE) {
     if (initial.output.contains(REJECTED_MARKER)) {
-      pushRejected(branch, head.output.trim(), destination.output, initialError, execute)
+      pushRejected(RejectedPush(branch, head.output.trim(), destination.output, initialError), owned, execute)
     } else {
       WorkflowGitOperationResult.Failed(initialError)
     }
@@ -72,18 +74,52 @@ private fun pushResolvedBranch(
   }
 }
 
+private class RejectedPush(
+  val branch: String,
+  val sha: String,
+  val destinations: String,
+  val initialError: String,
+)
+
 private fun pushRejected(
+  push: RejectedPush,
+  owned: Boolean,
+  execute: (List<String>, Long) -> GitProcessResult,
+): WorkflowGitOperationResult {
+  val (branch, sha, initialError) = Triple(push.branch, push.sha, push.initialError)
+  return when (val plan = rejectedPushPlan(branch, push.destinations, execute)) {
+    is RejectedPushPlan.Refused -> WorkflowGitOperationResult.Failed("$initialError ${plan.reason}".trimEnd())
+    is RejectedPushPlan.Lease -> pushRewrittenHistory(branch, sha, plan.remoteSha, initialError, execute)
+    RejectedPushPlan.Integrate -> {
+      val integrated = integrateRemoteAndPush(branch, sha, initialError, execute)
+      if (owned && integrated is WorkflowGitOperationResult.Failed) {
+        replaceOwnedBranch(branch, sha, push.destinations, integrated.error, execute)
+      } else {
+        integrated
+      }
+    }
+  }
+}
+
+private fun replaceOwnedBranch(
   branch: String,
   sha: String,
   destinations: String,
-  initialError: String,
+  integrationError: String,
   execute: (List<String>, Long) -> GitProcessResult,
-): WorkflowGitOperationResult =
-  when (val plan = rejectedPushPlan(branch, destinations, execute)) {
-    is RejectedPushPlan.Refused -> WorkflowGitOperationResult.Failed("$initialError ${plan.reason}".trimEnd())
-    is RejectedPushPlan.Lease -> pushRewrittenHistory(branch, sha, plan.remoteSha, initialError, execute)
-    RejectedPushPlan.Integrate -> integrateRemoteAndPush(branch, sha, initialError, execute)
+): WorkflowGitOperationResult {
+  if (!branchUnchanged(branch, sha, execute)) return WorkflowGitOperationResult.Failed(integrationError)
+  val destination =
+    destinations.lineSequence().filter(String::isNotBlank).toList().singleOrNull()
+      ?: return WorkflowGitOperationResult.Failed(integrationError)
+  val remote = remoteHead(destination, branch, execute)
+  val remoteSha = (remote as? WorkflowGitOperationResult.Ok)?.value.orEmpty()
+  if (remoteSha.isBlank()) {
+    return WorkflowGitOperationResult.Failed("$integrationError Remote verification: ${remote.description}.")
   }
+  recordRecovery("owned_lease_push", "remote_integration_failed")
+  return pushRewrittenHistory(branch, sha, remoteSha, integrationError, execute)
+}
 
 private fun pushRewrittenHistory(
   branch: String,

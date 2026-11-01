@@ -100,6 +100,45 @@ class GitBranchPushRewrittenHistoryTest {
   }
 
   @Test
+  fun `owned branch replaces conflicting remote commits with a lease after the rebase aborts`() {
+    pushFromOtherClone(branch, "feature.txt", "theirs\n", "monitor repair")
+    commit(repo, "feature.txt", "ours\n", "local work")
+    val localHead = git(repo, "rev-parse", "HEAD").trim()
+
+    val result = gitPushBranch(repo, branch, withLease = false, owned = true)
+
+    assertTrue(result is WorkflowGitOperationResult.Ok, result.error)
+    assertEquals(localHead, git(repo, "rev-parse", "HEAD").trim())
+    assertEquals(localHead, git(remote, "rev-parse", "refs/heads/$branch").trim())
+  }
+
+  @Test
+  fun `owned branch with uncommitted changes replaces the remote without touching the worktree`() {
+    pushFromOtherClone(branch, "repair.txt", "repair\n", "monitor repair")
+    commit(repo, "local.txt", "local\n", "local work")
+    Files.writeString(repo.resolve("feature.txt"), "edited\n")
+    val localHead = git(repo, "rev-parse", "HEAD").trim()
+
+    val result = gitPushBranch(repo, branch, withLease = false, owned = true)
+
+    assertTrue(result is WorkflowGitOperationResult.Ok, result.error)
+    assertEquals(localHead, git(remote, "rev-parse", "refs/heads/$branch").trim())
+    assertEquals("edited\n", Files.readString(repo.resolve("feature.txt")))
+  }
+
+  @Test
+  fun `owned branch still integrates remote commits that rebase cleanly`() {
+    val repairHead = pushFromOtherClone(branch, "repair.txt", "repair\n", "monitor repair")
+    commit(repo, "local.txt", "local\n", "local work")
+
+    val result = gitPushBranch(repo, branch, withLease = false, owned = true)
+
+    assertTrue(result is WorkflowGitOperationResult.Ok, result.error)
+    assertEquals(repairHead, git(repo, "rev-parse", "HEAD~1"))
+    assertEquals(git(repo, "rev-parse", "HEAD"), git(remote, "rev-parse", "refs/heads/$branch"))
+  }
+
+  @Test
   fun `protected branch behind its remote is not rebased`() {
     git(repo, "checkout", "main")
     val remoteMain = pushFromOtherClone("main", "upstream.txt", "upstream\n", "upstream")
