@@ -1,6 +1,16 @@
-# Android QA
+# Kotlin Multiplatform QA
 
-Drive the app on one Android device or emulator, check the behavior the acceptance criteria describe, and write one prose report. QA reports what it finds and repairs nothing.
+This pack declares two target kinds: `android` and `desktop`. Drive each app the acceptance criteria describe, check that behavior, and write one prose report. QA reports what it finds and repairs nothing.
+
+## Choose targets
+
+Map the acceptance criteria to the apps that show the behavior before building anything:
+
+- `android`: behavior of an Android app, built from an Android application module. Follow [Android target](#android-target).
+- `desktop`: behavior of a JVM desktop app, built from a module that applies `org.jetbrains.compose` with a `compose.desktop { application { ... } }` block. Follow [Desktop target](#desktop-target).
+- Behavior in shared `commonMain` code shows up in every app that depends on the module. Exercise each of those apps the repository builds.
+
+Desktop UI is user-facing UI. Criteria that describe only a desktop app still have flows to exercise, so they never settle `empty_scope`. Give each declared kind a `## Coverage` line. A kind no criterion reaches gets `skipped` with `reason: empty_scope`. Settle the whole report `skipped` with `Reason: empty_scope` only when no criterion describes behavior on any declared kind, for example a build-script or documentation-only change.
 
 ## Rules
 
@@ -10,6 +20,10 @@ Drive the app on one Android device or emulator, check the behavior the acceptan
 - Edit nothing outside the QA checkout and the invocation directory. Never commit, push, or open a pull request.
 - Never paste log bodies, raw device serials, credentials, or tokens into the report. Evidence is a path under the invocation directory.
 - Write the report to the exact `report.md` path the briefing names. An app launch alone is never a pass.
+
+## Android target
+
+The sections from here to [Desktop target](#desktop-target) apply to the `android` kind.
 
 ## Test account and environment
 
@@ -95,15 +109,55 @@ skill-bill qa lease acquire --invocation <invocation id> --device <serial>
 - After each step that matters, capture `adb exec-out screencap -p` and a `uiautomator dump` into the invocation directory.
 - Read `adb logcat -d --pid=$(adb shell pidof -s <applicationId>)` and keep only the excerpt that explains a failure, saved as a file under the invocation directory.
 
+## Desktop target
+
+A desktop app runs on the host, so the `desktop` kind needs no adb, emulator, or device lease.
+
+### Find the app
+
+- Find the application module from its `compose.desktop { application { mainClass = ... } }` block, and any root task alias such as `./gradlew run`. Name the module and main class in the report.
+- Read the app's entry point for the local state it loads at startup: files under the home directory, a local database, environment variables, or a sibling process it talks to.
+
+### Isolate local data
+
+The app runs on the operator's machine, so its default data is the operator's real data.
+
+- Point the app at a disposable copy before any flow that writes. Use the override the app already supports, such as a state-directory environment variable, a system property, or a `-Duser.home=<invocation dir>/home` JVM argument, and seed it from the project's fixtures or by copying only what the criteria need.
+- When the app offers no override, run only read-only flows against the default data and list the write flows as untested with that reason. Never mutate the operator's real app data.
+- Record the data directory and how you seeded it under `## Isolation`.
+
+### Exercise the criteria with Compose UI tests
+
+This layer works without a display, so run it on every desktop QA run.
+
+- Reuse existing `jvmTest` tests that cover the screens the criteria describe. They use `runComposeUiTest` or `createComposeRule` from `org.jetbrains.compose.ui:ui-test`. Run them filtered, for example `./gradlew :feature:chat:jvmTest --tests '<class>'`.
+- When no test covers a criterion, write a temporary test in the QA checkout. Render the screen's composable wired to its real state holder with the state the criterion needs. Drive it with `performClick`, `performTextInput`, and `performKeyInput` for keyboard shortcuts and focus moves, then assert on semantics nodes. List the file under `## Temporary edits`.
+- Capture screenshots with `onRoot().captureToImage().toAwtImage()` written as PNG under the invocation directory.
+- A rendered composable with no asserted outcome is not a pass.
+
+### Exercise the running app
+
+Launch the real app as well when a display is available, because window size, menus, multiple windows, and startup wiring only show up there.
+
+- Start it detached from the QA checkout: `nohup ./gradlew :<app module>:run > <invocation dir>/app.log 2>&1 &`, with the data override from [Isolate local data](#isolate-local-data). Register it with `skill-bill qa resource register --invocation <invocation id> --kind process --identity <pid>`.
+- Wait in a bounded loop for the window to appear, for example `xdotool search --sync --name '<window title>'` under `timeout 120`, or a startup log line.
+- Display: use `DISPLAY` or `WAYLAND_DISPLAY` when set. Otherwise start a private X server with `Xvfb :<n> -screen 0 1600x1000x24 &`, register its PID, and set `DISPLAY=:<n>` for the app. Never drive the operator's visible desktop session when a private display can be created.
+- Screenshots: `import -window root <file>.png` on X11 or Xvfb, `grim <file>.png` on Wayland, `screencapture -x <file>.png` on macOS.
+- Input on X11 or Xvfb: `xdotool mousemove <x> <y> click 1`, `xdotool type`, and `xdotool key ctrl+k`. Read positions from screenshots.
+- When no display can be created, rely on the Compose UI test layer and list the running-app checks as untested with the reason. Do not settle the kind `skipped` while the UI test layer still ran.
+- Stop the app and any display server this run started by PID before writing the report.
+
+Say in `## Assertions` which layer, UI test or running app, proved each assertion.
+
 ## Report
 
 Write `report.md` as markdown prose. The runtime applies no schema, enum, or length cap to it.
 
-- The first line names the verdict with one word: `passed`, `findings`, `incomplete`, or `skipped`. The first line that names one of them decides the verdict.
-- Follow it with a short summary of what you exercised and what you left untested, and why.
-- Name the device or emulator you used (by the hashed identifier, never the raw serial) and any fallback, such as a booted emulator, in prose.
+- The first line names the verdict with one word: `passed`, `findings_open`, `incomplete`, or `skipped`. The first line that names one of them decides the verdict.
+- Follow it with a short summary of what you exercised on each target and what you left untested, and why.
+- Name the Android device or emulator you used (by the hashed identifier, never the raw serial) and any fallback, such as a booted emulator, in prose. For desktop, name the app module, the display you used, and the data directory.
 - Write each finding as a `### <finding-id> <title>` section. The id contains a digit, for example `QA-1`. State the steps, the expected behavior, the observed behavior, and the evidence as absolute paths under the evidence prefix the briefing names. The runtime hands this section to `qa_fix` verbatim.
 - Add any other sections you need, such as `### Cleanup` or `### Device`. A heading whose first word has no digit is not a finding.
-- Use `passed` only when every acceptance criterion was exercised and no finding is open. Use `findings` when at least one finding is open. Use `incomplete` when the run started but could not finish, and `skipped` when it could not start; say how to fix it.
+- Use `passed` only when every acceptance criterion was exercised and no finding is open. Use `findings_open` when at least one finding is open. Use `incomplete` when the run started but could not finish, and `skipped` when it could not start; say how to fix it.
 
 QA never blocks the run. The runtime never rewrites the verdict you state, so claim only what you exercised.

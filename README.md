@@ -134,7 +134,7 @@ flowchart LR
 | `pull_request` | Create or update the PR, including the QA outcome. |
 | `monitor` | Watch CI and repair failing checks and merge conflicts. |
 
-QA runs only when the routed pack supports it (currently `kmp` and `ios`). Pass `qa:off` to skip it. If QA changed code, full validation runs once more before the PR.
+QA runs only when the routed pack declares a QA target (`kmp` covers Android and Compose Desktop apps). Pass `qa:off` to skip it. If QA changed code, full validation runs once more before the PR.
 
 Specs live in `.feature-specs/` as a parent spec, per-subtask specs, and a decomposition manifest. Local specs are the default; Linear-backed preparation is optional.
 

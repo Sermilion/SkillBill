@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports QA findings for the repository's declared QA targets (backend endpoints, web journeys, or a device or simulator); /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports QA findings for the repository's declared QA targets (backend endpoints, web journeys, a desktop app, or a device or simulator); /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
@@ -363,7 +363,7 @@ it finished; report it and exit non-zero.
 ## Phase QA
 
 `phase:qa` runs the report-only `qa` slot for the repository's declared QA
-targets, such as backend endpoints, web journeys, or a device or simulator. Pack
+targets, such as backend endpoints, web journeys, a desktop app, or a device or simulator. Pack
 manifests declare QA support through `qa_capability`, and one `phase:qa` serves
 every declared target. The runtime resolves the targets from the installed packs,
 not the dispatcher: each routed pack's `qa_capability` names its guidance, and a

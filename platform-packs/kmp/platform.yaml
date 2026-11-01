@@ -59,8 +59,8 @@ declared_files:
     code-quality: code-review/bill-kmp-code-review-code-quality/content.md
 
 qa_capability:
-  platforms: [android]
-  guidance_file: qa/android-qa.md
+  platforms: [android, desktop]
+  guidance_file: qa/kmp-qa.md
 validation_gate:
   full_gate_command:
     - ./gradlew
