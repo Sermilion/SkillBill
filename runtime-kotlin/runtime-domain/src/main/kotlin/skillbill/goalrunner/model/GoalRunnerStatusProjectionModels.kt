@@ -176,6 +176,33 @@ data class GoalRunnerSubtaskPhaseResults(
   val audit: GoalRunnerPhaseConclusion? = null,
   val degradedReadSource: String? = null,
   val runningReviewPass: GoalRunnerRunningReviewPass? = null,
+  val auditResult: GoalRunnerSubtaskAuditResult? = null,
+)
+
+data class GoalRunnerSubtaskAuditResult(
+  val outcome: GoalRunnerSubtaskAuditOutcome,
+  val metCount: Int?,
+  val totalCount: Int?,
+  val criteria: List<GoalRunnerSubtaskAuditCriterion>,
+  val attempts: List<GoalRunnerSubtaskAuditAttempt>,
+  val attemptTotal: Int?,
+)
+
+enum class GoalRunnerSubtaskAuditOutcome { PASSED, FAILED, RUNNING, UNKNOWN }
+
+data class GoalRunnerSubtaskAuditCriterion(
+  val ref: String,
+  val text: String,
+  val met: Boolean,
+  val fixedInAttempt: Int?,
+)
+
+data class GoalRunnerSubtaskAuditAttempt(
+  val id: String,
+  val number: Int,
+  val passed: Boolean,
+  val uncoveredCount: Int,
+  val nextPhaseId: String?,
 )
 
 data class GoalRunnerRunningReviewPass(

@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
-import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.RunningReviewLane
 import dev.skillbill.desktop.core.domain.model.RunningReviewPass
@@ -25,7 +24,7 @@ class SubtaskResultsStateTest {
   fun `a missing goal status is unreadable except while pending`() {
     assertEquals(SubtaskResultsState.Unreadable("goal_status"), subtaskResultsState(StatusKind.Skipped, null, "goal_status"))
     assertEquals(
-      SubtaskResultsState.Shown(SubtaskReviewState.RunsAfterImplementation, SubtaskAuditState.RunsAfterReview),
+      SubtaskResultsState.Shown(SubtaskReviewState.RunsAfterImplementation),
       subtaskResultsState(StatusKind.Pending, null, "goal_status"),
     )
   }
@@ -33,7 +32,7 @@ class SubtaskResultsStateTest {
   @Test
   fun `a readable page shows results after an earlier goal status failure`() {
     assertEquals(
-      SubtaskResultsState.Shown(SubtaskReviewState.Passes(listOf(pass)), SubtaskAuditState.Conclusion(null)),
+      SubtaskResultsState.Shown(SubtaskReviewState.Passes(listOf(pass))),
       subtaskResultsState(StatusKind.Completed, empty.copy(reviewPasses = listOf(pass)), "goal_status"),
     )
   }
@@ -42,7 +41,7 @@ class SubtaskResultsStateTest {
   fun `a running pass is review content and unreadable still takes priority`() {
     val running = RunningReviewPass(2, listOf(RunningReviewLane("lane-a", false)))
     assertEquals(
-      SubtaskResultsState.Shown(SubtaskReviewState.Passes(emptyList(), running), SubtaskAuditState.RunsAfterReview),
+      SubtaskResultsState.Shown(SubtaskReviewState.Passes(emptyList(), running)),
       subtaskResultsState(StatusKind.Active, empty.copy(runningReviewPass = running), null),
     )
     assertEquals(
@@ -65,7 +64,7 @@ class SubtaskResultsStateTest {
   @Test
   fun `a skipped subtask with no entry omits review`() {
     assertEquals(
-      SubtaskResultsState.Shown(SubtaskReviewState.Omitted, SubtaskAuditState.Conclusion(null)),
+      SubtaskResultsState.Shown(SubtaskReviewState.Omitted),
       subtaskResultsState(StatusKind.Skipped, null, null),
     )
   }
@@ -73,11 +72,10 @@ class SubtaskResultsStateTest {
   @Test
   fun `a blocked subtask with a pass shows it and a completed one with none omits review`() {
     val blocked = subtaskResultsState(StatusKind.Blocked, empty.copy(reviewPasses = listOf(pass)), null)
-    assertEquals(SubtaskResultsState.Shown(SubtaskReviewState.Passes(listOf(pass)), SubtaskAuditState.RunsAfterReview), blocked)
-    val audit = PhaseConclusion("pass", null, null, 1)
+    assertEquals(SubtaskResultsState.Shown(SubtaskReviewState.Passes(listOf(pass))), blocked)
     assertEquals(
-      SubtaskResultsState.Shown(SubtaskReviewState.Omitted, SubtaskAuditState.Conclusion(audit)),
-      subtaskResultsState(StatusKind.Completed, empty.copy(audit = audit), null),
+      SubtaskResultsState.Shown(SubtaskReviewState.Omitted),
+      subtaskResultsState(StatusKind.Completed, empty, null),
     )
   }
 }

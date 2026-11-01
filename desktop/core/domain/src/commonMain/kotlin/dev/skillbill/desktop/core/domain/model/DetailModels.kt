@@ -152,7 +152,23 @@ data class SubtaskPhaseResults(
   val review: PhaseConclusion?,
   val degradedReadSource: String? = null,
   val runningReviewPass: RunningReviewPass? = null,
+  val auditResult: SubtaskAuditResult? = null,
 )
+
+data class SubtaskAuditResult(
+  val outcome: AuditOutcome,
+  val metCount: Int?,
+  val totalCount: Int?,
+  val criteria: List<AuditCriterion>,
+  val attempts: List<AuditAttempt>,
+  val attemptTotal: Int?,
+)
+
+enum class AuditOutcome { Passed, Failed, Running, Unknown }
+
+data class AuditCriterion(val ref: String, val text: String, val met: Boolean, val fixedInAttempt: Int?)
+
+data class AuditAttempt(val number: Int, val passed: Boolean, val uncoveredCount: Int, val nextPhaseId: String?)
 
 data class RunningReviewPass(val passNumber: Int, val lanes: List<RunningReviewLane>)
 

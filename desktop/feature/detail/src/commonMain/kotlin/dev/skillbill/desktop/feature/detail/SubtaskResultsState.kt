@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
-import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.RunningReviewPass
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
@@ -14,7 +13,7 @@ internal sealed interface SubtaskResultsState {
   /** A started subtask whose results have not arrived with a page yet. */
   data object Loading : SubtaskResultsState
 
-  data class Shown(val review: SubtaskReviewState, val audit: SubtaskAuditState) : SubtaskResultsState
+  data class Shown(val review: SubtaskReviewState) : SubtaskResultsState
 }
 
 internal sealed interface SubtaskReviewState {
@@ -24,11 +23,6 @@ internal sealed interface SubtaskReviewState {
   ) : SubtaskReviewState
   data object RunsAfterImplementation : SubtaskReviewState
   data object Omitted : SubtaskReviewState
-}
-
-internal sealed interface SubtaskAuditState {
-  data object RunsAfterReview : SubtaskAuditState
-  data class Conclusion(val conclusion: PhaseConclusion?) : SubtaskAuditState
 }
 
 /**
@@ -42,13 +36,11 @@ internal fun subtaskResultsState(kind: StatusKind, results: SubtaskPhaseResults?
   val upcoming = kind == StatusKind.Pending || kind == StatusKind.Active || kind == StatusKind.Blocked
   val passes = results?.reviewPasses.orEmpty()
   val runningReviewPass = results?.runningReviewPass
-  val audit = results?.audit
   return SubtaskResultsState.Shown(
     review = when {
       passes.isNotEmpty() || runningReviewPass != null -> SubtaskReviewState.Passes(passes, runningReviewPass)
       upcoming -> SubtaskReviewState.RunsAfterImplementation
       else -> SubtaskReviewState.Omitted
     },
-    audit = if (audit == null && upcoming) SubtaskAuditState.RunsAfterReview else SubtaskAuditState.Conclusion(audit),
   )
 }

@@ -1,6 +1,9 @@
 package dev.skillbill.desktop.core.data.runtime
 
 import dev.skillbill.desktop.core.domain.model.ActivityEvent
+import dev.skillbill.desktop.core.domain.model.AuditAttempt
+import dev.skillbill.desktop.core.domain.model.AuditCriterion
+import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailList
@@ -36,6 +39,7 @@ import dev.skillbill.desktop.core.domain.model.RunningReviewLane
 import dev.skillbill.desktop.core.domain.model.RunningReviewPass
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.SubtaskDependency
+import dev.skillbill.desktop.core.domain.model.SubtaskAuditResult
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.SubtaskValidation
 import dev.skillbill.desktop.core.domain.model.ValidationCommand
@@ -220,6 +224,21 @@ internal fun GoalRunnerSubtaskPhaseResults.toDomain(): SubtaskPhaseResults = Sub
   degradedReadSource,
   runningReviewPass?.let { pass ->
     RunningReviewPass(pass.passNumber, pass.lanes.map { lane -> RunningReviewLane(lane.name, lane.finished) })
+  },
+  auditResult?.let { audit ->
+    SubtaskAuditResult(
+      outcome = when (audit.outcome) {
+        skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome.PASSED -> AuditOutcome.Passed
+        skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome.FAILED -> AuditOutcome.Failed
+        skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome.RUNNING -> AuditOutcome.Running
+        skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome.UNKNOWN -> AuditOutcome.Unknown
+      },
+      metCount = audit.metCount,
+      totalCount = audit.totalCount,
+      criteria = audit.criteria.map { AuditCriterion(it.ref, it.text, it.met, it.fixedInAttempt) },
+      attempts = audit.attempts.map { AuditAttempt(it.number, it.passed, it.uncoveredCount, it.nextPhaseId) },
+      attemptTotal = audit.attemptTotal,
+    )
   },
 )
 

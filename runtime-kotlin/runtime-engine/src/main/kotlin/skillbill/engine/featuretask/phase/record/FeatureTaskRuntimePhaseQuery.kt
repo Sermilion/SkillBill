@@ -59,6 +59,7 @@ public class FeatureTaskRuntimePhaseQuery
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION,
             DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE,
             DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_RESULTS,
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR,
           ),
         )
       }

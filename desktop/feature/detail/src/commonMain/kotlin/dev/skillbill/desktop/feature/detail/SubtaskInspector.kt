@@ -29,7 +29,6 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.tabular
 import dev.skillbill.desktop.core.designsystem.component.Callout
-import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.ShortId
@@ -46,7 +45,6 @@ import dev.skillbill.desktop.core.designsystem.list.SubtaskChip
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.PhaseConclusion
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
@@ -178,10 +176,7 @@ private fun SubtaskResults(detail: Detail, subtask: WorkSubtask) {
           SubtaskReviewState.RunsAfterImplementation -> ResultsPlaceholder("Review", "Runs after implementation")
           SubtaskReviewState.Omitted -> Unit
         }
-        when (val audit = state.audit) {
-          SubtaskAuditState.RunsAfterReview -> ResultsPlaceholder("Audit", "Runs after review")
-          is SubtaskAuditState.Conclusion -> audit.conclusion?.let { AuditConclusion(it) }
-        }
+        SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id)
       }
     }
   }
@@ -208,18 +203,6 @@ private fun ResultsPlaceholder(caption: String, line: String) {
   PaneSection(title = caption) {
     Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
       BasicText(line, style = SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted))
-    }
-  }
-}
-
-/** The audit line, until subtask results carry the structured audit. */
-@Composable
-private fun AuditConclusion(audit: PhaseConclusion) {
-  val verdict = audit.verdict ?: return
-  Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    InspectorLine("Audit", listOf(verdict))
-    audit.summary?.takeIf { it.isNotBlank() }?.let {
-      ExpandableText(it, SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted, lineHeight = 1.45.em))
     }
   }
 }

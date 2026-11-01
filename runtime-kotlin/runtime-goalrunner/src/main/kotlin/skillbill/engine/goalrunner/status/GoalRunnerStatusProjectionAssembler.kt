@@ -670,6 +670,8 @@ public class GoalRunnerStatusProjectionAssembler(
         null
       }
     val reviewRecord = readPhaseRecord(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, degradation)
+    val auditRecord = readPhaseRecord(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, degradation)
+    val auditConclusion = auditRecord?.toConclusion(degradation)
     return GoalRunnerSubtaskPhaseResults(
       subtaskId = subtask.id,
       reviewPasses =
@@ -697,8 +699,8 @@ public class GoalRunnerStatusProjectionAssembler(
           )
         },
       review = reviewRecord?.toConclusion(degradation),
-      audit =
-        readPhaseConclusion(artifacts, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, degradation),
+      audit = auditConclusion,
+      auditResult = projectSubtaskAudit(artifacts, auditRecord, auditConclusion, degradation),
       runningReviewPass = runningReviewPass(reviewRecord, reviewState, database, degradation),
     )
   }
@@ -719,12 +721,6 @@ public class GoalRunnerStatusProjectionAssembler(
       )
       null
     }
-
-  private fun readPhaseConclusion(
-    artifacts: DurableWorkflowArtifacts,
-    phaseId: String,
-    degradation: SubtaskReadDegradation,
-  ): GoalRunnerPhaseConclusion? = readPhaseRecord(artifacts, phaseId, degradation)?.toConclusion(degradation)
 
   private fun reviewRawResults(
     artifacts: Any,

@@ -1,7 +1,12 @@
 package dev.skillbill.desktop.core.data.runtime
 
+import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
+import skillbill.goalrunner.model.GoalRunnerSubtaskAuditAttempt
+import skillbill.goalrunner.model.GoalRunnerSubtaskAuditCriterion
+import skillbill.goalrunner.model.GoalRunnerSubtaskAuditOutcome
+import skillbill.goalrunner.model.GoalRunnerSubtaskAuditResult
 import skillbill.goalrunner.model.GoalRunnerReviewFinding
 import skillbill.goalrunner.model.GoalRunnerReviewPassResult
 import skillbill.goalrunner.model.GoalRunnerRunningReviewLane
@@ -46,5 +51,28 @@ class RuntimeDetailMapperTest {
       listOf("lane-a" to true, "lane-b" to false),
       result.runningReviewPass?.lanes?.map { it.name to it.finished },
     )
+  }
+
+  @Test
+  fun `phase results map audit counts criteria notes and attempts`() {
+    val result = GoalRunnerSubtaskPhaseResults(
+      subtaskId = 3,
+      auditResult = GoalRunnerSubtaskAuditResult(
+        outcome = GoalRunnerSubtaskAuditOutcome.PASSED,
+        metCount = 2,
+        totalCount = 2,
+        criteria = listOf(GoalRunnerSubtaskAuditCriterion("AC-001", "Retains state", true, 2)),
+        attempts = listOf(GoalRunnerSubtaskAuditAttempt("audit:1", 1, false, 1, "audit_plan_fix")),
+        attemptTotal = 2,
+      ),
+    ).toDomain().auditResult
+
+    assertEquals(AuditOutcome.Passed, result?.outcome)
+    assertEquals(2, result?.metCount)
+    assertEquals(2, result?.totalCount)
+    assertEquals("Retains state", result?.criteria?.single()?.text)
+    assertEquals(2, result?.criteria?.single()?.fixedInAttempt)
+    assertEquals("audit_plan_fix", result?.attempts?.single()?.nextPhaseId)
+    assertEquals(2, result?.attemptTotal)
   }
 }
