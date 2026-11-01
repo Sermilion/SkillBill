@@ -441,23 +441,7 @@ public abstract class StandaloneReviewStrategy(
             verification.warningClassifications.getValue(warning.identity)
           }
       }
-    val incompleteWarning = warningClassifications.values.any { it == "incomplete" }
-    val changes =
-      incompleteWarning ||
-        report.census.any { finding ->
-          when (verification.findingDispositions.getValue(finding.identity)) {
-            "unresolved" -> true
-            "rejected" -> false
-            "confirmed" -> finding.requiresChangesWhenConfirmed
-            else -> true
-          }
-        }
-    val verdict =
-      if (changes) {
-        FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue
-      } else {
-        FeatureTaskRuntimeVerdict.APPROVED.wireValue
-      }
+    val verdict = verifiedFindingVerdict(report, verification.findingDispositions, warningClassifications)
     val register =
       buildString {
         report.census.forEach { finding ->
@@ -830,6 +814,28 @@ public abstract class StandaloneReviewStrategy(
       FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
     )
     return PhaseOutcome.blocked(reason)
+  }
+}
+
+internal fun verifiedFindingVerdict(
+  report: StandaloneReviewReport,
+  findingDispositions: Map<String, String>,
+  warningClassifications: Map<String, String>,
+): String {
+  val changes =
+    warningClassifications.values.any { it == "incomplete" } ||
+      report.census.any { finding ->
+        when (findingDispositions.getValue(finding.identity)) {
+          "unresolved" -> true
+          "rejected" -> false
+          "confirmed" -> finding.requiresChangesWhenConfirmed
+          else -> true
+        }
+      }
+  return if (changes) {
+    FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue
+  } else {
+    FeatureTaskRuntimeVerdict.APPROVED.wireValue
   }
 }
 

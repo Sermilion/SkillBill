@@ -472,8 +472,8 @@ private fun requiresChangesWhenConfirmed(
 ): Boolean {
   val nextMetadata = followingCandidateMetadata(candidate, candidates)
   val severity =
-    finding?.severity ?: candidate.finding?.severity ?: explicitProseSeverity(candidate.text)
-      ?: nextMetadata?.let(::explicitProseSeverity)
+    finding?.severity ?: candidate.finding?.severity
+      ?: explicitProseSeverity(listOfNotNull(candidate.text, nextMetadata).joinToString("\n"))
   if (severity == null) return true
   if (severity !in setOf(ParallelReviewSeverity.BLOCKER, ParallelReviewSeverity.MAJOR)) return false
   val isCodeQuality =
@@ -517,11 +517,19 @@ private fun explicitProseSeverity(text: String): ParallelReviewSeverity? {
   val labels =
     text.lineSequence()
       .flatMap { line ->
-        sequenceOf(EXPLICIT_SEVERITY_PATTERN.find(line), EXPLICIT_SEVERITY_LABEL_PATTERN.find(line))
+        sequenceOf(
+          EXPLICIT_SEVERITY_PATTERN.find(line),
+          EXPLICIT_SEVERITY_LABEL_PATTERN.find(line),
+          BRACKET_SEVERITY_PATTERN.find(line),
+        )
           .mapNotNull { it?.groupValues?.get(1) }
       }
       .mapNotNull { label ->
-        ParallelReviewSeverity.entries.firstOrNull { it.displayName.equals(label, ignoreCase = true) }
+        if (label.equals("low", ignoreCase = true)) {
+          ParallelReviewSeverity.MINOR
+        } else {
+          ParallelReviewSeverity.entries.firstOrNull { it.displayName.equals(label, ignoreCase = true) }
+        }
       }
       .distinct()
       .toList()
@@ -589,13 +597,15 @@ private val SEVERE_PROSE_FINDING_PATTERN =
 private val EXPLICIT_SEVERITY_PATTERN =
   Regex(
     "^\\s*(?:(?:[-*+]|\\d+[.)])\\s+)?(?:severity\\s*[:=]\\s*|\\[)?" +
-      "(blocker|major|minor|nit)\\b",
+      "(blocker|major|minor|nit|low)\\b",
     RegexOption.IGNORE_CASE,
   )
 private val EXPLICIT_SEVERITY_LABEL_PATTERN =
-  Regex("\\bseverity\\s*[:=]\\s*(blocker|major|minor|nit)\\b", RegexOption.IGNORE_CASE)
+  Regex("\\bseverity\\s*[:=]\\s*(blocker|major|minor|nit|low)\\b", RegexOption.IGNORE_CASE)
+private val BRACKET_SEVERITY_PATTERN =
+  Regex("\\[(blocker|major|minor|nit|low)(?:\\s*[,\\]])", RegexOption.IGNORE_CASE)
 private val EXPLICIT_SEVERITY_METADATA_PATTERN =
-  Regex("^\\s*severity\\s*[:=]\\s*(?:blocker|major|minor|nit)\\b", RegexOption.IGNORE_CASE)
+  Regex("^\\s*severity\\s*[:=]\\s*(?:blocker|major|minor|nit|low)\\b", RegexOption.IGNORE_CASE)
 private val EXPLICIT_SPECIALIST_METADATA_PATTERN =
   Regex("^\\s*specialist\\s*[:=]\\s*[a-z0-9-]+\\b", RegexOption.IGNORE_CASE)
 private val EXPLICIT_SPECIALIST_PATTERN = Regex("\\bspecialist\\s*[:=]\\s*([a-z0-9-]+)\\b", RegexOption.IGNORE_CASE)

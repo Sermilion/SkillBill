@@ -198,6 +198,31 @@ class StandaloneReviewReportAdmissionTest {
   }
 
   @Test
+  fun `verified low prose findings approve while conservative controls keep requesting changes`() {
+    val cases =
+      listOf(
+        "- src/Gate.kt:124 [low, style]: consider a shorter name" to "approved",
+        "- src/Gate.kt:124: consider a shorter name\nSeverity: low" to "approved",
+        "- src/Gate.kt:124 [major, correctness]: authorization check is missing" to "changes_requested",
+        "- src/Gate.kt:124 [low, style]: consider a shorter name" to "changes_requested",
+        "- src/Gate.kt:124 [low, style]: conflicting labels\nSeverity: major" to "changes_requested",
+        "- src/Gate.kt:124 [major, confidence: low]: authorization check is missing" to "changes_requested",
+      )
+
+    cases.forEachIndexed { index, (findingText, expectedVerdict) ->
+      val report = StandaloneReviewReportAdmission.admit("$findingText\nverdict: approved", emptyResult(), false)
+
+      assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      val disposition = if (index == 3) "unresolved" else "confirmed"
+      assertEquals(
+        expectedVerdict,
+        verifiedFindingVerdict(report, mapOf("F-001" to disposition), emptyMap()),
+        findingText,
+      )
+    }
+  }
+
+  @Test
   fun `a partial clean statement cannot establish an empty census`() {
     val report =
       StandaloneReviewReportAdmission.admit(

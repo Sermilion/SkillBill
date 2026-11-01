@@ -144,7 +144,7 @@ internal object StandaloneReviewReportSourceCensusBuilder {
     }
 
     private fun collectProse(position: Int): Int {
-      val end = blockEnd(position, rejectAmbiguousContinuation = true)
+      val end = blockEnd(position, rejectAmbiguousContinuation = true, keepFindingMetadata = true)
       addCandidate(position, end, null)
       return end
     }
@@ -191,12 +191,17 @@ internal object StandaloneReviewReportSourceCensusBuilder {
       start: Int,
       rejectAmbiguousContinuation: Boolean = false,
       keepCoverageContinuations: Boolean = false,
+      keepFindingMetadata: Boolean = false,
     ): Int {
       var end = start + 1
       val startIndent = indentationOf(lines[start])
       while (end < lines.size) {
         val next = lines[end].trim()
         val coverageContinuation = keepCoverageContinuations && isIncompleteReviewWarning(next)
+        if (keepFindingMetadata && FINDING_METADATA_PATTERN.containsMatchIn(next)) {
+          end++
+          continue
+        }
         if (
           next.isEmpty() ||
           isBoundary(next) && !coverageContinuation
@@ -254,7 +259,7 @@ private fun isFindingProse(line: String): Boolean =
   !CLEAN_PROSE_PATTERN.matches(line) &&
     (
       FINDING_PROSE_PATTERN.containsMatchIn(line) || FILE_LOCATION_PATTERN.containsMatchIn(line) ||
-        line.startsWith("Severity:", ignoreCase = true) || isContextPrefixedFinding(line)
+        isContextPrefixedFinding(line)
     )
 
 private fun isContextPrefixedFinding(line: String): Boolean =
@@ -269,7 +274,14 @@ private val LIST_ITEM_PATTERN = Regex("^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)\\S")
 private val FILE_LOCATION_PATTERN = Regex("(?:[\\w./-]+\\.[A-Za-z0-9]{1,12}:\\d+)")
 private val FINDING_PROSE_PATTERN =
   Regex(
-    "\\b(?:finding|issue|bug|defect|broken|fails?|failure|incorrect|vulnerability|minor|nit|low severity)\\b",
+    "\\b(?:finding|issue|bug|defect|broken|fails?|failure|incorrect|vulnerability|minor|nit|low severity)\\b|" +
+      "\\bseverity\\s*[:=]\\s*(?:blocker|critical|major|high|minor|nit|low)\\b",
+    RegexOption.IGNORE_CASE,
+  )
+private val FINDING_METADATA_PATTERN =
+  Regex(
+    "^(?:severity\\s*[:=]\\s*(?:blocker|critical|major|high|minor|nit|low)|" +
+      "specialist\\s*[:=]\\s*[a-z0-9-]+)\\s*$",
     RegexOption.IGNORE_CASE,
   )
 
