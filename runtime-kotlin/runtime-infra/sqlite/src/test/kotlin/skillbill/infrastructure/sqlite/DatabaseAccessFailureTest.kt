@@ -5,7 +5,6 @@ import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.databaseAccessCondition
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories

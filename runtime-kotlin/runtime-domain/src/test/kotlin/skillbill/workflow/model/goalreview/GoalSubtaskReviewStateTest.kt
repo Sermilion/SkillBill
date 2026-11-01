@@ -345,13 +345,13 @@ class GoalSubtaskReviewStateTest {
     }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewArtifactDecoder.decode(
-        mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation.toArtifactMap()),
+        mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation),
       )
     }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewArtifactDecoder.decode(
         mapOf(
-          FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation.toArtifactMap(),
+          FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation,
           GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to state.toArtifactMap(),
           GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY to mapOf("1" to "stale raw review result"),
         ),
@@ -388,7 +388,7 @@ class GoalSubtaskReviewStateTest {
 
     val artifacts =
       mapOf(
-        FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation.toArtifactMap(),
+        FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation,
         GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to invalidated.toArtifactMap(),
         GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY to emptyMap<String, String>(),
       )

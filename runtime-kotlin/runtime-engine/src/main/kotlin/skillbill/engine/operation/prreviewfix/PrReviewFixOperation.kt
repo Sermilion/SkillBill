@@ -3,12 +3,14 @@ package skillbill.engine.operation.prreviewfix
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.operation.core.ConfirmAdmission
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
 import skillbill.engine.operation.core.CurrentOperationAnchors
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationPrecheck
 import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
@@ -25,13 +27,15 @@ import skillbill.ports.review.pullrequest.model.ReviewThreadListing
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.gitops.ProtectedBranches
 
-class PrReviewFixOperation(
+public class PrReviewFixOperation(
   private val reviewThreads: PullRequestReviewThreadOperations,
   private val gitOperations: WorkflowGitOperations,
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
   private val modelAssignmentSource: () -> FeatureTaskRuntimeModelAssignment,
-) : ConfirmableOperation {
-  constructor(
+) : ConfirmableOperation,
+  OperationPrecheck,
+  ConfirmAdmission {
+  public constructor(
     reviewThreads: PullRequestReviewThreadOperations,
     gitOperations: WorkflowGitOperations,
     runPhase: (PhaseRunRequest) -> PhaseRunResult,

@@ -13,21 +13,21 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-val PHASE_TERMINAL_STATUSES: Set<WorkflowStepStatus> =
+internal val PHASE_TERMINAL_STATUSES: Set<WorkflowStepStatus> =
   setOf(
     WorkflowStepStatus.COMPLETED,
     WorkflowStepStatus.BLOCKED,
   )
-val CONTINUATION_KIND_ACTIONS =
+internal val CONTINUATION_KIND_ACTIONS =
   setOf(
     FeatureTaskRuntimePhaseLedgerAction.START,
     FeatureTaskRuntimePhaseLedgerAction.RESUME,
     FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
     FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION,
   )
-val OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS: Set<String> = PhaseSlot.QUALITY_GATE.steps.toSet()
+internal val OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS: Set<String> = PhaseSlot.QUALITY_GATE.steps.toSet()
 
-fun phaseStatuses(
+internal fun phaseStatuses(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
   blockedPhaseIds: Set<String>,
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
@@ -42,7 +42,7 @@ fun phaseStatuses(
       )
     }
 
-fun goalChildHiddenPhaseIds(
+internal fun goalChildHiddenPhaseIds(
   goalChild: Boolean,
   recordedPhaseIds: Set<String>,
 ): Set<String> = if (goalChild) GOAL_FINISH_OWNED_PHASE_IDS - recordedPhaseIds else emptySet()
@@ -50,7 +50,7 @@ fun goalChildHiddenPhaseIds(
 private val GOAL_FINISH_OWNED_PHASE_IDS: Set<String> =
   listOf(PhaseSlot.QA, PhaseSlot.PULL_REQUEST, PhaseSlot.MONITOR).flatMap(PhaseSlot::steps).toSet()
 
-fun resolveCurrentPhaseId(
+internal fun resolveCurrentPhaseId(
   terminalDecomposeRecorded: Boolean,
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
   phases: List<FeatureTaskRuntimePhaseStatus>,
@@ -66,7 +66,7 @@ fun resolveCurrentPhaseId(
     }?.phaseId
 }
 
-fun openExecutionPhaseId(
+internal fun openExecutionPhaseId(
   phases: List<FeatureTaskRuntimePhaseStatus>,
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
 ): String? =
@@ -82,13 +82,13 @@ private val OPEN_EXECUTION_ACTIONS =
     FeatureTaskRuntimePhaseLedgerAction.RESUME,
   )
 
-fun shouldSkipPendingLoopOnlyPhase(
+internal fun shouldSkipPendingLoopOnlyPhase(
   phaseId: String,
   status: String,
   loopOnlyStepIds: Set<String>,
 ): Boolean = status.workflowStepStatus() == WorkflowStepStatus.PENDING && phaseId in loopOnlyStepIds
 
-fun currentReentryPhaseId(
+internal fun currentReentryPhaseId(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
 ): String? {
@@ -137,7 +137,7 @@ fun currentReentryPhaseId(
   return reopenedSpan.firstOrNull { it !in completedAfterEdge }
 }
 
-fun operatorDecisionPause(
+public fun operatorDecisionPause(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
 ): FeatureTaskRuntimeOperatorDecisionPause? =
   records.values
@@ -158,7 +158,7 @@ fun operatorDecisionPause(
       )
     }
 
-fun latestContinuationKind(
+internal fun latestContinuationKind(
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   phaseId: String,
 ): String? =
@@ -168,7 +168,7 @@ fun latestContinuationKind(
     .firstNotNullOfOrNull { FeatureTaskRuntimeContinuationKind.fromLedgerDetail(it.blockedReason) }
     ?.wireValue
 
-fun FeatureTaskRuntimePhaseRecord?.toPhaseStatus(
+public fun FeatureTaskRuntimePhaseRecord?.toPhaseStatus(
   phaseId: String,
   blocked: Boolean,
   continuationKind: String? = null,

@@ -356,7 +356,7 @@ internal fun citedRegionOf(finding: ParallelReviewMergedFinding): ReviewCitedReg
     ).takeIf { it.isNotBlank() } ?: return null
   val path = rawPath.trim().takeIf { repositoryRelativePathViolation(it) == null } ?: return null
   val line = finding.line ?: finding.location.substringAfter(':', "").toIntOrNull()?.takeIf { it >= 1 } ?: return null
-  return runCatching { ReviewCitedRegion(path, line, line) }.getOrNull()
+  return ReviewCitedRegion(path, line, line)
 }
 
 private val VERDICT_WORD = Regex("""\b(confirmed|refuted|unresolved)\b""")
@@ -385,7 +385,11 @@ private fun parseProseWorkerResult(prose: String): ReviewClaimWorkerResult {
   if (NEGATED_REFUTATION.containsMatchIn(lowered)) verdicts += "unresolved"
   val citations =
     PROSE_CITATION.findAll(prose).mapNotNull { match ->
-      runCatching { ReviewFindingCitation(match.groupValues[1], match.groupValues[2].toInt()) }.getOrNull()
+      try {
+        ReviewFindingCitation(match.groupValues[1], match.groupValues[2].toInt())
+      } catch (_: IllegalArgumentException) {
+        null
+      }
     }.distinct().toList()
   return ReviewClaimWorkerResult(claimVerdict = verdicts.singleOrNull(), citations = citations)
 }

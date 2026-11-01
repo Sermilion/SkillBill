@@ -43,6 +43,8 @@ private val FENCE_DIRECTORY: Path = Path.of("/common/skill-bill/standalone-monit
 private class RecordingDiagnostics : RuntimeDiagnostics {
   val warnings = mutableListOf<String>()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

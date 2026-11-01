@@ -7,20 +7,17 @@ import kotlin.test.assertNull
 
 class RuntimeContractModuleImportRulesTest {
   @Test
-  fun `runtime-domain imports no serialization or filesystem library`() {
+  fun `contract modules follow their forbidden import rules`() {
+    val violations =
+      scanCasesFor(IMPORT_RULES.map { rule -> rule.moduleName }.toSet()).flatMap { scanCase ->
+        val rule = IMPORT_RULES.single { candidate -> candidate.moduleName == scanCase.moduleName }
+        forbiddenImportViolations(scanCase.moduleName, rule.forbiddenPrefixes)
+          .map { violation -> "${scanCase.moduleName}: $violation" }
+      }
     assertEquals(
       emptyList(),
-      forbiddenImportViolations("runtime-domain", DOMAIN_FORBIDDEN_IMPORT_PREFIXES),
-      "runtime-domain must reach a wire format or a filesystem only through the types its callers hand it.",
-    )
-  }
-
-  @Test
-  fun `runtime-ports imports no adapter machinery`() {
-    assertEquals(
-      emptyList(),
-      forbiddenImportViolations("runtime-ports", PORTS_FORBIDDEN_IMPORT_PREFIXES),
-      "runtime-ports declares interfaces and DTOs; an adapter import means behaviour landed in the port.",
+      violations,
+      violations.joinToString("\n") + "\n" + IMPORT_RULES.joinToString("\n") { it.message },
     )
   }
 
@@ -100,6 +97,12 @@ class RuntimeContractModuleImportRulesTest {
       .toList()
 
   private companion object {
+    data class ImportRule(
+      val moduleName: String,
+      val forbiddenPrefixes: List<String>,
+      val message: String,
+    )
+
     val DOMAIN_FORBIDDEN_IMPORT_PREFIXES =
       listOf(
         "com.fasterxml.",
@@ -115,6 +118,20 @@ class RuntimeContractModuleImportRulesTest {
         "kotlinx.serialization.",
         "me.tatarka.inject.",
         "org.yaml.",
+      )
+
+    val IMPORT_RULES =
+      listOf(
+        ImportRule(
+          "runtime-domain",
+          DOMAIN_FORBIDDEN_IMPORT_PREFIXES,
+          "runtime-domain must reach a wire format or a filesystem only through the types its callers hand it.",
+        ),
+        ImportRule(
+          "runtime-ports",
+          PORTS_FORBIDDEN_IMPORT_PREFIXES,
+          "runtime-ports declares interfaces and DTOs; an adapter import means behaviour landed in the port.",
+        ),
       )
   }
 }

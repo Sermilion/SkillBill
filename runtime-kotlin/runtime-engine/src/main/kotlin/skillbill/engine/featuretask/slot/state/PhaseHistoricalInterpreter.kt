@@ -39,9 +39,9 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY
 
-internal enum class PhaseHistoricalPolicy { REVISION_1 }
+public enum class PhaseHistoricalPolicy { REVISION_1 }
 
-internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPolicy) {
+public class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPolicy) {
   private val rules: Map<String, PhaseResumeRules> =
     when (policy) {
       PhaseHistoricalPolicy.REVISION_1 ->
@@ -68,24 +68,24 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
         )
     }
 
-  fun resumeRules(stepId: String): PhaseResumeRules =
+  public fun resumeRules(stepId: String): PhaseResumeRules =
     rules[stepId]
       ?: throw InvalidPhaseStrategyCompositionError("no historical interpretation for $stepId under $policy")
 
-  fun gateReportedBy(stepId: String?): PhaseReportedGate? =
+  public fun gateReportedBy(stepId: String?): PhaseReportedGate? =
     when (stepId) {
       PHASE_BUILD -> PhaseReportedGate.BUILD
       PHASE_VALIDATE -> PhaseReportedGate.VALIDATION
       else -> null
     }
 
-  fun stepReporting(gate: PhaseReportedGate): String =
+  public fun stepReporting(gate: PhaseReportedGate): String =
     when (gate) {
       PhaseReportedGate.BUILD -> PHASE_BUILD
       PhaseReportedGate.VALIDATION -> PHASE_VALIDATE
     }
 
-  fun normalize(
+  public fun normalize(
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   ): FeatureTaskRuntimeStatelessAuditInputs {
@@ -102,7 +102,7 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
     )
   }
 
-  fun ledgerEntryFilter(
+  public fun ledgerEntryFilter(
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
   ): (FeatureTaskRuntimePhaseLedgerEntry) -> Boolean {
     val keepKnownEntry =
@@ -113,7 +113,9 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
     return { entry -> entry.phaseId !in rules || keepKnownEntry(entry) }
   }
 
-  fun currentExecution(context: FeatureTaskRuntimeCurrentPhaseExecutionContext): IdeStatusCurrentPhaseExecution? {
+  public fun currentExecution(
+    context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
+  ): IdeStatusCurrentPhaseExecution? {
     val stepId = context.currentPhaseId ?: return null
     if (context.phases.none { it.phaseId == stepId }) return null
     return when (stepId) {

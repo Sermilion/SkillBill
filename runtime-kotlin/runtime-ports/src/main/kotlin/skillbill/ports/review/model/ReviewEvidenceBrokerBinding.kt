@@ -1,6 +1,5 @@
 package skillbill.ports.review.model
 
-import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewAssignment

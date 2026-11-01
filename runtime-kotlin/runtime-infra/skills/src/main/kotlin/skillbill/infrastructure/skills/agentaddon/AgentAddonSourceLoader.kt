@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.AgentAddonCatalogueEntry
 import skillbill.agentaddon.model.AgentAddonCatalogueInspection
 import skillbill.agentaddon.model.AgentAddonDeclaration
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.missingAgentAddonDeclaration
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -129,7 +130,7 @@ internal fun parseSource(
     val agentIds = values.stringList("agent_ids", sourceLabel)
     val agents =
       agentIds.map { id ->
-        runCatching { SupportedAgent.parseAgentAddonId(id) }.getOrElse {
+        catchingNonCancellation { SupportedAgent.parseAgentAddonId(id) }.getOrElse {
           violations += "unknown agent id '$id'; supported: ${SupportedAgent.supportedIds.joinToString()}"
           null
         }
@@ -137,7 +138,9 @@ internal fun parseSource(
     val consumerIds = values.stringList("consumers", sourceLabel)
     val consumers =
       consumerIds.map { id ->
-        runCatching { decodeAgentAddonConsumer(id, AGENT_ADDON_DECLARED_CONSUMER_SEAM, diagnostics) }.getOrElse {
+        catchingNonCancellation {
+          decodeAgentAddonConsumer(id, AGENT_ADDON_DECLARED_CONSUMER_SEAM, diagnostics)
+        }.getOrElse {
           violations += it.message ?: "unknown consumer '$id'"
           null
         }

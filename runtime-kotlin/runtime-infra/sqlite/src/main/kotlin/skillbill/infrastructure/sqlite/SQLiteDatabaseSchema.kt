@@ -1,7 +1,6 @@
 package skillbill.infrastructure.sqlite
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics

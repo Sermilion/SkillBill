@@ -11,7 +11,7 @@ import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationRunResult
 
-class UpdateCheckOperation(
+public class UpdateCheckOperation(
   private val service: UpdateCheckService,
 ) : Operation {
   override val id: String = "update-check"
@@ -27,7 +27,7 @@ class UpdateCheckOperation(
   }
 }
 
-fun updateCheckContract(result: UpdateCheckResult): UpdateCheckContract =
+public fun updateCheckContract(result: UpdateCheckResult): UpdateCheckContract =
   UpdateCheckContract(
     status = result.status.wireName,
     installedVersion = result.installedVersion,

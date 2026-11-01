@@ -4,6 +4,10 @@ plugins {
   `java-test-fixtures`
 }
 
+kotlin {
+  explicitApi()
+}
+
 dependencies {
   api(project(":runtime-contracts"))
   api(project(":runtime-domain"))
@@ -15,8 +19,13 @@ dependencies {
   testFixturesImplementation(project(":runtime-ports"))
   testFixturesImplementation(project(":runtime-infra:sqlite"))
   testFixturesImplementation(project(":runtime-infra:contracts"))
+  testFixturesImplementation(project(":runtime-infra:workflow"))
   testFixturesImplementation(testFixtures(project(":runtime-application")))
   testFixturesImplementation(testFixtures(project(":runtime-ports")))
+  testFixturesImplementation(testFixtures(project(":runtime-infra:sqlite")))
+  testFixturesImplementation(libs.kotlin.test)
+  testFixturesImplementation(libs.junit.jupiter)
+  testFixturesImplementation(libs.jackson.dataformat.yaml)
   testImplementation(testFixtures(project(":runtime-ports")))
   testImplementation(testFixtures(project(":runtime-application")))
   testImplementation(project(":runtime-infra:contracts"))

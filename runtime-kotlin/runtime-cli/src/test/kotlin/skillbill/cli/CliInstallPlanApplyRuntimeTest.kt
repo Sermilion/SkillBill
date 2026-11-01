@@ -12,9 +12,9 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.infrastructure.sqlite.SqliteTestDatabasePaths
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
-import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.install.model.InstallAgentSelection
 import skillbill.install.model.InstallAgentSelectionMode
 import skillbill.install.model.InstallAgentTarget
@@ -740,8 +740,8 @@ class CliInstallPlanApplyRuntimeTest {
 private val supportedAgents = setOf("claude", "codex", "junie", "cursor")
 
 private fun installPlanApplyFixture(): InstallPlanApplyFixture {
-  val home = Files.createTempDirectory("skillbill-cli-install-plan-apply-home")
-  val repoRoot = Files.createTempDirectory("skillbill-cli-install-plan-apply-repo")
+  val home = Files.createTempDirectory("skillbill-cli-install-plan-apply-home").toRealPath()
+  val repoRoot = Files.createTempDirectory("skillbill-cli-install-plan-apply-repo").toRealPath()
   seedCliBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
   seedCliBaseSkill(repoRoot, "bill-code-review")
   seedCliBaseSkill(repoRoot, "bill-code-check")
@@ -751,8 +751,8 @@ private fun installPlanApplyFixture(): InstallPlanApplyFixture {
 }
 
 private fun installByteEquivalenceFixture(): InstallPlanApplyFixture {
-  val home = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-home")
-  val repoRoot = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-repo")
+  val home = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-home").toRealPath()
+  val repoRoot = Files.createTempDirectory("skillbill-cli-install-byte-equivalence-repo").toRealPath()
   Files.createDirectories(repoRoot.resolve("platform-packs"))
   seedCliBaseSkill(repoRoot, "bill-code-review")
   seedCliBaseSkill(repoRoot, "bill-code-check")

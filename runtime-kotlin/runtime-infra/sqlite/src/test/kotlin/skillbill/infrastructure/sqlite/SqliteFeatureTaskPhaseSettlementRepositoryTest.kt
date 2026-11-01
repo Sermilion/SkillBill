@@ -2,8 +2,6 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementRefusalReason

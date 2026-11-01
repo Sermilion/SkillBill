@@ -1,8 +1,9 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
-const val PROJECT_AUTHORING_DISCIPLINE_HEADING: String = "## Project authoring discipline (discover before write)"
+internal const val PROJECT_AUTHORING_DISCIPLINE_HEADING: String =
+  "## Project authoring discipline (discover before write)"
 
-fun projectAuthoringDisciplineDirective(): String =
+internal fun projectAuthoringDisciplineDirective(): String =
   """
   $PROJECT_AUTHORING_DISCIPLINE_HEADING
   Discovery. Before the first code write, and again whenever owned or repair scope changes, discover what

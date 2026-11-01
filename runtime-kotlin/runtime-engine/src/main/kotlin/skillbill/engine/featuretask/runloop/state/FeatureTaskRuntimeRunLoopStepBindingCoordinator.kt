@@ -7,21 +7,21 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
-internal class FeatureTaskRuntimeRunLoopStepBindingCoordinator {
+public class FeatureTaskRuntimeRunLoopStepBindingCoordinator {
   private val coordinatorDispatch = AtomicReference<PhaseRun?>(null)
   private val openDispatchBinding = AtomicReference<PhaseRun?>(null)
   private val authorizedFanOutWave = AtomicReference<PhaseRun?>(null)
   private val openFanOutUnitBindings = ConcurrentHashMap.newKeySet<FanOutUnitBindingKey>()
 
-  fun authorizeCoordinatorDispatch(run: PhaseRun) {
+  public fun authorizeCoordinatorDispatch(run: PhaseRun) {
     coordinatorDispatch.set(run)
   }
 
-  fun releaseCoordinatorDispatch() {
+  public fun releaseCoordinatorDispatch() {
     coordinatorDispatch.set(null)
   }
 
-  fun authorizeFanOutWave(run: PhaseRun) {
+  internal fun authorizeFanOutWave(run: PhaseRun) {
     val dispatch =
       coordinatorDispatch.get()
         ?: error("Fan-out wave requires coordinator-issued dispatch for the active run step.")
@@ -33,32 +33,32 @@ internal class FeatureTaskRuntimeRunLoopStepBindingCoordinator {
     }
   }
 
-  fun releaseFanOutWave(run: PhaseRun) {
+  internal fun releaseFanOutWave(run: PhaseRun) {
     authorizedFanOutWave.compareAndSet(run, null)
   }
 
-  fun requireAuthorizedFanOutWave(): PhaseRun {
+  internal fun requireAuthorizedFanOutWave(): PhaseRun {
     val wave =
       authorizedFanOutWave.get()
         ?: error("Fan-out unit state requires an authorized fan-out wave for the active run step.")
     return wave
   }
 
-  fun trackFanOutUnitBinding(
+  internal fun trackFanOutUnitBinding(
     run: PhaseRun,
     unitId: Int,
   ) {
     openFanOutUnitBindings.add(FanOutUnitBindingKey(run, unitId))
   }
 
-  fun releaseFanOutUnitBinding(
+  internal fun releaseFanOutUnitBinding(
     run: PhaseRun,
     unitId: Int,
   ) {
     openFanOutUnitBindings.remove(FanOutUnitBindingKey(run, unitId))
   }
 
-  fun beginStepBinding(
+  internal fun beginStepBinding(
     run: PhaseRun,
     fanOutUnitId: Int? = null,
   ) {
@@ -83,7 +83,7 @@ internal class FeatureTaskRuntimeRunLoopStepBindingCoordinator {
     }
   }
 
-  fun requireActiveStepBinding(
+  internal fun requireActiveStepBinding(
     run: PhaseRun,
     fanOutUnitId: Int? = null,
   ) {
@@ -99,7 +99,7 @@ internal class FeatureTaskRuntimeRunLoopStepBindingCoordinator {
     }
   }
 
-  fun endStepBinding(
+  internal fun endStepBinding(
     run: PhaseRun,
     fanOutUnitId: Int? = null,
   ) {

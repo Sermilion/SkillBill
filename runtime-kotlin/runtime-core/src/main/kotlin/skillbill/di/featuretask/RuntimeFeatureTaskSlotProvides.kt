@@ -3,6 +3,7 @@ package skillbill.di.featuretask
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
+import skillbill.engine.featuretask.phaserun.LegacySpecReplanSource
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistration
@@ -15,6 +16,8 @@ import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.intake.FeatureTaskRuntimePlanIntake
+import skillbill.engine.featuretask.slot.intake.LegacySpecReplanIntake
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
@@ -32,14 +35,11 @@ import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneRev
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
-import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
 import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
 import skillbill.model.EnvironmentContext
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
-import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
-import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -70,12 +70,6 @@ internal interface RuntimeFeatureTaskSlotProvides {
       pullRequestIdentityLookup,
       templateFiles,
     )
-
-  @Provides
-  fun monitorStrategy(
-    pullRequestIdentityLookup: MergeStatePullRequestIdentityLookup,
-    pullRequestChecksLookup: PullRequestChecksLookup,
-  ): MonitorStrategy = MonitorStrategy(pullRequestIdentityLookup, pullRequestChecksLookup)
 
   @Provides
   fun pullRequestPhaseStrategies(
@@ -131,6 +125,9 @@ internal interface RuntimeFeatureTaskSlotProvides {
 
   @Provides
   fun phaseInstructionFileSource(adapter: FileSystemPhaseInstructionFileSource): PhaseInstructionFileSource = adapter
+
+  @Provides
+  fun legacySpecReplanSource(intake: LegacySpecReplanIntake): LegacySpecReplanSource = intake
 
   @Provides
   fun phaseStrategyLookup(

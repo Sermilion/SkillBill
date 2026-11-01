@@ -1,14 +1,15 @@
 package skillbill.engine.diagnostics
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
-internal object RuntimeDiagnosticsBestEffortWarning {
-  fun record(
+public object RuntimeDiagnosticsBestEffortWarning {
+  public fun record(
     diagnostics: RuntimeDiagnostics,
     message: String,
     cause: Throwable? = null,
   ) {
-    runCatching {
+    catchingNonCancellation {
       if (cause == null) {
         diagnostics.warning(message)
       } else {

@@ -205,6 +205,8 @@ private class FailingStateRootUninstallPathsPort(
 }
 
 private object NoopDestructiveSemanticsDiagnostics : RuntimeDiagnostics {
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

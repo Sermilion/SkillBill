@@ -2,12 +2,14 @@ package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestDiscoveryPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
 
 @Inject
 class FileSystemDecompositionManifestFileStore(
@@ -56,20 +58,21 @@ class FileSystemDecompositionManifestFileStore(
           val existed = isRegularFile(path)
           DecompositionManifestBundleSnapshot(path, existed, if (existed) readText(path) else null)
         }
-      return runCatching {
+      return restoringOnFailure(
+        restore = { failure ->
+          snapshots.asReversed().forEach { snapshot ->
+            catchingNonCancellation {
+              if (snapshot.existed) {
+                writeTextAtomically(snapshot.path, requireNotNull(snapshot.content))
+              } else {
+                deleteIfExists(snapshot.path)
+              }
+            }.onFailure(failure::addSuppressed)
+          }
+        },
+      ) {
         writes.forEach { (path, content) -> writeTextAtomically(path, content) }
         verify()
-      }.getOrElse { failure ->
-        snapshots.asReversed().forEach { snapshot ->
-          runCatching {
-            if (snapshot.existed) {
-              writeTextAtomically(snapshot.path, requireNotNull(snapshot.content))
-            } else {
-              deleteIfExists(snapshot.path)
-            }
-          }.onFailure(failure::addSuppressed)
-        }
-        throw failure
       }
     }
 
@@ -83,23 +86,24 @@ class FileSystemDecompositionManifestFileStore(
           DecompositionManifestBundleSnapshot(normalized, existed, if (existed) Files.readString(normalized) else null)
         }
       val transaction = bundleJournal.create(parent, distinctWrites)
-      runCatching {
+      restoringOnFailure(
+        restore = { failure ->
+          snapshots.asReversed().forEach { snapshot ->
+            catchingNonCancellation {
+              if (snapshot.existed) {
+                bundleJournal.writeAtomically(snapshot.path, requireNotNull(snapshot.content))
+              } else {
+                Files.deleteIfExists(snapshot.path)
+              }
+            }.onFailure(failure::addSuppressed)
+          }
+          catchingNonCancellation { cleanupValidatedBundleJournal(transaction) }.onFailure(failure::addSuppressed)
+        },
+      ) {
         bundleJournal.apply(transaction)
         val result = verify()
         bundleJournal.cleanup(transaction)
         result
-      }.getOrElse { failure ->
-        snapshots.asReversed().forEach { snapshot ->
-          runCatching {
-            if (snapshot.existed) {
-              bundleJournal.writeAtomically(snapshot.path, requireNotNull(snapshot.content))
-            } else {
-              Files.deleteIfExists(snapshot.path)
-            }
-          }.onFailure(failure::addSuppressed)
-        }
-        runCatching { cleanupValidatedBundleJournal(transaction) }.onFailure(failure::addSuppressed)
-        throw failure
       }
     }
   }
@@ -124,3 +128,20 @@ class FileSystemDecompositionManifestFileStore(
     }
   }
 }
+
+private inline fun <T> restoringOnFailure(
+  restore: (Throwable) -> Unit,
+  block: () -> T,
+): T =
+  try {
+    catchingNonCancellation(block).getOrElse { failure ->
+      restore(failure)
+      throw failure
+    }
+  } catch (interrupted: InterruptedException) {
+    restore(interrupted)
+    throw interrupted
+  } catch (cancelled: CancellationException) {
+    restore(cancelled)
+    throw cancelled
+  }

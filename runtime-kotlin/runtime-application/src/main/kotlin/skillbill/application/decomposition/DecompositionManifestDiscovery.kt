@@ -85,7 +85,11 @@ private fun manifestLabel(
   path: Path,
 ): String =
   store.classifySpecPath(path.toAbsolutePath().normalize(), repoRoot.toAbsolutePath().normalize())?.relative
-    ?: runCatching { repoRoot.relativize(path).toString() }.getOrElse { path.toString() }
+    ?: try {
+      repoRoot.relativize(path).toString()
+    } catch (_: IllegalArgumentException) {
+      path.toString()
+    }
 
 fun resolveDecompositionManifest(
   scope: SpecBundleScope,

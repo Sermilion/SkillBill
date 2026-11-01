@@ -8,7 +8,9 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.MonitorRepairCapability
+import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
@@ -25,7 +27,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class StandaloneMonitorStrategy(
+public class StandaloneMonitorStrategy(
   private val service: StandaloneMonitorService,
 ) : PhaseStrategy(),
   MonitorRepairCapability by MonitorRepairRoles {
@@ -71,7 +73,10 @@ class StandaloneMonitorStrategy(
   }
 
   private val repairHooks =
-    object : PhaseStepHooks<PhaseStandaloneMonitorStepBinding> {
+    object :
+      PhaseStepHooks<PhaseStandaloneMonitorStepBinding>,
+      PhaseLaunchPromptHooks<PhaseStandaloneMonitorStepBinding>,
+      PhaseBeforeLaunchHooks<PhaseStandaloneMonitorStepBinding> {
       override fun launchPromptSupplement(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
@@ -137,8 +142,8 @@ class StandaloneMonitorStrategy(
     return finalLine.trim('`', '*', ' ').equals(StandaloneMonitorDirectives.REPAIR_FIXED_LINE, ignoreCase = true)
   }
 
-  companion object {
-    const val ID = "standalone-monitor-ci"
+  public companion object {
+    public const val ID: String = "standalone-monitor-ci"
   }
 }
 

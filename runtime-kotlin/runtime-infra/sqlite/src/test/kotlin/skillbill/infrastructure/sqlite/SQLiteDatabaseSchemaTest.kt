@@ -3,8 +3,6 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import java.nio.file.Files
 import java.nio.file.Path

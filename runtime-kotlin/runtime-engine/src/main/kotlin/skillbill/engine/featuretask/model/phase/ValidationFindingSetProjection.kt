@@ -4,10 +4,10 @@ import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadK
 import skillbill.contracts.workflow.identity.evidence.ValidationGateFindingPayloadKeys
 import skillbill.ports.validation.model.ValidationGateFinding
 
-data class ValidationFindingSetProjection(
-  val findings: List<ValidationGateFinding>,
+public data class ValidationFindingSetProjection(
+  public val findings: List<ValidationGateFinding>,
 ) {
-  fun toHandoffMaps(): List<Map<String, String?>> =
+  public fun toHandoffMaps(): List<Map<String, String?>> =
     findings.map { finding ->
       linkedMapOf(
         ValidationGateFindingPayloadKeys.MODULE to finding.module,

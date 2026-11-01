@@ -38,7 +38,7 @@ class PackageSiblingCountArchitectureTest {
       )
     val goalRunnerRoot =
       ArchitectureScanSupport.runtimeRoot.resolve(
-        "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner",
+        "runtime-kotlin/runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner",
       )
     val goalRunnerPlanningRoot = goalRunnerRoot.resolve("planning")
     assertEquals(
@@ -191,7 +191,7 @@ class PackageSiblingCountArchitectureTest {
   fun `goal-runner model sources stay data-only and below their parent boundary`() {
     val modelRoot =
       ArchitectureScanSupport.runtimeRoot.resolve(
-        "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/model",
+        "runtime-kotlin/runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/model",
       )
     val violations =
       ArchitectureScanSupport.kotlinFilesUnder(modelRoot).flatMap { sourceFile ->
@@ -217,8 +217,8 @@ class PackageSiblingCountArchitectureTest {
   fun `goal-runner test sources use the production package they exercise`() {
     val sourceSetRoots =
       listOf(
-        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-engine/src/test/kotlin"),
-        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-engine/src/testFixtures/kotlin"),
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-goalrunner/src/test/kotlin"),
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-goalrunner/src/testFixtures/kotlin"),
       )
     val misplaced =
       sourceSetRoots.flatMap { sourceSetRoot ->

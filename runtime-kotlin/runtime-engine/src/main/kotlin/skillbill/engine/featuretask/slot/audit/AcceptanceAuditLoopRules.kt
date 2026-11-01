@@ -6,20 +6,25 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.lifecycle.checkpoint.auditReviewCheckpointWarning
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.engine.featuretask.slot.PhaseEntrySettlementRules
 import skillbill.engine.featuretask.slot.PhaseForwardCheckpoint
+import skillbill.engine.featuretask.slot.PhaseForwardCheckpointRules
+import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopContext
-import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseStepLoopRules
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeOperatorRetry
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object AcceptanceAuditLoopRules : PhaseLoopRules, PhaseStepLoopRules<PhaseQaStepBinding> {
+internal object AcceptanceAuditLoopRules :
+  PhaseInFlightReentryRules,
+  PhaseForwardCheckpointRules,
+  PhaseEntrySettlementRules<PhaseQaStepBinding> {
   override fun resumesInFlightReentry(loopId: String): Boolean =
     loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID
 
@@ -45,7 +50,7 @@ internal object AcceptanceAuditLoopRules : PhaseLoopRules, PhaseStepLoopRules<Ph
     if (stepId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT) return null
     val retry =
       NoChangeClaimResolution.pendingOperatorRetry(context.noChangePause(), context.phaseRecord(stepId)) ?: return null
-    return runCatching { state.settleRuntimeAuthoredCompletion(stepId, retryEnvelope(retry)) }.fold(
+    return catchingNonCancellation { state.settleRuntimeAuthoredCompletion(stepId, retryEnvelope(retry)) }.fold(
       onSuccess = { PhaseEntrySettlement.Completed(FeatureTaskRuntimeVerdict.ADVANCE) },
       onFailure = { error ->
         PhaseEntrySettlement.Blocked(

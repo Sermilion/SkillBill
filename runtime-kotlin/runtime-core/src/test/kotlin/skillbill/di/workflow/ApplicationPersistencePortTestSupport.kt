@@ -18,19 +18,19 @@ import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
-import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.application.workflow.service.openFeatureTask
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
-import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.testExecutionPlan
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.missingCompositionLayer
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
@@ -133,8 +133,6 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
@@ -157,7 +155,7 @@ import java.time.Clock
 import kotlin.test.assertEquals
 import java.lang.Double.TYPE as DoubleTYPE
 import java.lang.Long.TYPE as LongTYPE
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.wire.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 internal fun <T> noopPort(type: Class<T>): T {
   @Suppress("UNCHECKED_CAST")
@@ -885,7 +883,7 @@ internal fun blockedGoalChildRetryFixture(): BlockedGoalChildRetryFixture {
                 goalBranch = "feat/SKILL-51-demo",
                 parentWorkflowId = parentWorkflowId,
                 codeReviewMode = CodeReviewExecutionMode.INLINE,
-              ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
+              ),
           ),
         ),
     ),
@@ -1237,7 +1235,7 @@ internal fun testWorkflowService(
     decompositionManifestValidator = DecompositionManifestSchemaValidator(),
     decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
     repositoryRoot = RepositoryRoot(Path.of("").toAbsolutePath().normalize()),
-    goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
+    goalObservabilityEventValidator = featureTaskRuntimeWireArtifactValidatorForTest(),
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
     projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),

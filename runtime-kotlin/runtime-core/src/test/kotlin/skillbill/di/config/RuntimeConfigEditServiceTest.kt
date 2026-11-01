@@ -94,13 +94,14 @@ class RuntimeConfigEditServiceTest {
   fun `legacy project config is carried into the store before an edit`(
     @TempDir tempDir: Path,
   ) {
-    val configPath = tempDir.resolve("machine.json")
-    val repoRoot = tempDir.resolve("repo")
+    val canonicalTempDir = tempDir.toRealPath()
+    val configPath = canonicalTempDir.resolve("machine.json")
+    val repoRoot = canonicalTempDir.resolve("repo")
     val legacy = repoRoot.resolve(".skill-bill/config.yaml")
     Files.createDirectories(legacy.parent)
     val legacyBytes = "validation_gate:\n  gradle_wrapper: runtime-kotlin/gradlew\n".toByteArray()
     Files.write(legacy, legacyBytes)
-    val service = service(tempDir, configPath, repoRoot)
+    val service = service(canonicalTempDir, configPath, repoRoot)
     val snapshot = assertIs<ConfigDocumentRead.Present<*>>(service.readProjectConfig(repoRoot))
 
     val result =
@@ -111,7 +112,10 @@ class RuntimeConfigEditServiceTest {
       )
 
     val written = assertIs<ConfigWriteResult.Written>(result)
-    assertEquals(FileConfigDocumentLocks.canonicalPath(tempDir.resolve("project-store/config.yaml")), written.path)
+    assertEquals(
+      FileConfigDocumentLocks.canonicalPath(canonicalTempDir.resolve("project-store/config.yaml")),
+      written.path,
+    )
     val updated = assertIs<ConfigDocumentRead.Present<ProjectConfigValues>>(service.readProjectConfig(repoRoot))
     assertEquals(SpecType.LINEAR, updated.values.specType)
     assertEquals("runtime-kotlin/gradlew", updated.values.gradleWrapper)
@@ -160,8 +164,9 @@ class RuntimeConfigEditServiceTest {
   fun `machine snapshot carries only the pinned config candidate`(
     @TempDir tempDir: Path,
   ) {
-    val pinned = tempDir.resolve("custom/config.json")
-    val snapshot = service(tempDir, pinned).readMachineConfigSnapshot()
+    val canonicalTempDir = tempDir.toRealPath()
+    val pinned = canonicalTempDir.resolve("custom/config.json")
+    val snapshot = service(canonicalTempDir, pinned).readMachineConfigSnapshot()
 
     assertEquals(listOf(FileConfigDocumentLocks.canonicalPath(pinned)), snapshot.candidatePaths)
   }
@@ -170,22 +175,23 @@ class RuntimeConfigEditServiceTest {
   fun `project snapshot rejects a same-byte move from the legacy fallback to the store`(
     @TempDir tempDir: Path,
   ) {
-    val repoRoot = tempDir.resolve("repo")
+    val canonicalTempDir = tempDir.toRealPath()
+    val repoRoot = canonicalTempDir.resolve("repo")
     val legacy = repoRoot.resolve(".skill-bill/config.yaml")
-    val store = tempDir.resolve("project-store/config.yaml")
+    val store = canonicalTempDir.resolve("project-store/config.yaml")
     Files.createDirectories(legacy.parent)
     val original = "spec_type: local\n".toByteArray()
     Files.write(legacy, original)
     val backing =
-      FileConfigDocumentFiles(NoopRuntimeDiagnostics, FixedProjectStorePort(tempDir.resolve("project-store")))
+      FileConfigDocumentFiles(NoopRuntimeDiagnostics, FixedProjectStorePort(canonicalTempDir.resolve("project-store")))
     val documents = ControlledProjectConfigFiles(backing, store, legacy)
     val service =
       RuntimeConfigEditService(
         documents,
         FileTelemetryConfigStore(
           EnvironmentContext(
-            environment = mapOf(CONFIG_ENVIRONMENT_KEY to tempDir.resolve("machine.json").toString()),
-            userHome = tempDir,
+            environment = mapOf(CONFIG_ENVIRONMENT_KEY to canonicalTempDir.resolve("machine.json").toString()),
+            userHome = canonicalTempDir,
             repositoryRoot = repoRoot,
           ),
         ),

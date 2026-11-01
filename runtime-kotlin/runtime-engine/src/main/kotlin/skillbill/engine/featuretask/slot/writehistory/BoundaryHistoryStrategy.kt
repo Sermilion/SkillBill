@@ -23,7 +23,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class BoundaryHistoryStrategy : PhaseStrategy() {
+public class BoundaryHistoryStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY to
@@ -129,8 +129,8 @@ class BoundaryHistoryStrategy : PhaseStrategy() {
       attested.withMeasuredFacts(WriteHistoryMeasurement(context.diagnostics).facts(capture.fileManifest))
   }
 
-  companion object {
-    const val ID = "boundary-history"
+  public companion object {
+    public const val ID: String = "boundary-history"
     internal const val HISTORY_RULES_RESOURCE =
       "/skillbill/engine/featuretask/slot/writehistory/boundary-history-directive.md"
     internal const val DECISIONS_RULES_RESOURCE =

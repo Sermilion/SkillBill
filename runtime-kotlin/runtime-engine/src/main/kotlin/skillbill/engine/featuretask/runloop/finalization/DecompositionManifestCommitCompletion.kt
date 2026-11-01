@@ -23,15 +23,15 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import java.io.IOException
 import java.nio.file.Path
 
-interface CommitPushManifestCompletion {
-  fun markCompleteBeforeFinalCommit(
+public interface CommitPushManifestCompletion {
+  public fun markCompleteBeforeFinalCommit(
     request: FeatureTaskRuntimeRunFacts,
     lastResumableStep: String,
   ): String?
 }
 
 @Inject
-class DecompositionManifestCommitCompletion(
+public class DecompositionManifestCommitCompletion(
   private val writer: DecompositionManifestWriter,
   private val validator: DecompositionManifestValidator,
   private val fileStore: DecompositionManifestStore,

@@ -1,6 +1,7 @@
 package skillbill.ports.workflow.model
 
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 
@@ -21,6 +22,7 @@ data class WorkflowStateRecord(
   val issueKey: String? = null,
   val stateEnteredAt: String? = null,
   val stateEnteredAtEstimated: Boolean = false,
+  val typedArtifacts: DurableWorkflowArtifacts = DurableWorkflowArtifacts.EMPTY,
 ) {
   companion object {
     internal fun requiredWorkflowStatus(value: String): WorkflowStatus =

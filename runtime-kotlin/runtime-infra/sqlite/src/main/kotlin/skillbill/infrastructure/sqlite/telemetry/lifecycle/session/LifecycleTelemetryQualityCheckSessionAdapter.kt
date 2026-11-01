@@ -3,8 +3,8 @@ package skillbill.infrastructure.sqlite.telemetry.lifecycle.session
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.TerminalSaveOutcome
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.emitQualityCheckFinished
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.emitQualityCheckStarted
-import skillbill.infrastructure.sqlite.telemetry.redaction.saveQualityCheckFinished
-import skillbill.infrastructure.sqlite.telemetry.redaction.saveQualityCheckStarted
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.saveQualityCheckFinished
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.saveQualityCheckStarted
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.lifecycle.QualityCheckLifecycleTelemetryRepository
 import skillbill.telemetry.model.QualityCheckFinishedRecord

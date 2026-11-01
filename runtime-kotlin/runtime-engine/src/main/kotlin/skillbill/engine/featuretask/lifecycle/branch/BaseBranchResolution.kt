@@ -6,7 +6,7 @@ import java.nio.file.Path
 
 private const val FALLBACK_BASE_BRANCH = "main"
 
-fun DefaultBranchGitOperations.baseBranchOrDefault(
+public fun DefaultBranchGitOperations.baseBranchOrDefault(
   repoRoot: Path,
   recordedBaseBranch: String?,
 ): String =
@@ -14,5 +14,5 @@ fun DefaultBranchGitOperations.baseBranchOrDefault(
     ?: repositoryDefaultBranch(repoRoot)
     ?: FALLBACK_BASE_BRANCH
 
-internal fun DefaultBranchGitOperations.repositoryDefaultBranch(repoRoot: Path): String? =
+public fun DefaultBranchGitOperations.repositoryDefaultBranch(repoRoot: Path): String? =
   (defaultBranch(repoRoot) as? WorkflowGitOperationResult.Ok)?.value?.trim()?.takeIf(String::isNotBlank)

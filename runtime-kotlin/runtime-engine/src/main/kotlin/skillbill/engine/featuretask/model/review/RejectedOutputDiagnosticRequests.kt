@@ -2,23 +2,23 @@ package skillbill.engine.featuretask.model.review
 
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDiagnosticFailureClass
 
-data class RejectedOutputDiagnosticDegradeRequest(
-  val workflowId: String,
-  val operation: String,
-  val conflictingKey: String,
-  val phaseId: String,
-  val attempt: Int,
-  val repairTurn: Int?,
-  val generation: Int,
+internal data class RejectedOutputDiagnosticDegradeRequest(
+  public val workflowId: String,
+  public val operation: String,
+  public val conflictingKey: String,
+  public val phaseId: String,
+  public val attempt: Int,
+  public val repairTurn: Int?,
+  public val generation: Int,
 )
 
-data class RejectedOutputDiagnosticPersistRequest(
-  val workflowId: String,
-  val operation: String,
-  val conflictingKey: String,
-  val phaseId: String,
-  val attempt: Int,
-  val repairTurn: Int?,
-  val generation: Int,
-  val failureClass: FeatureTaskRuntimeDiagnosticFailureClass,
+internal data class RejectedOutputDiagnosticPersistRequest(
+  public val workflowId: String,
+  public val operation: String,
+  public val conflictingKey: String,
+  public val phaseId: String,
+  public val attempt: Int,
+  public val repairTurn: Int?,
+  public val generation: Int,
+  public val failureClass: FeatureTaskRuntimeDiagnosticFailureClass,
 )

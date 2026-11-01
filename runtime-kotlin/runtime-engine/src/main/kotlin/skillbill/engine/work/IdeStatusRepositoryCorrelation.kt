@@ -1,7 +1,8 @@
 package skillbill.engine.work
 
-import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
+import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -10,7 +11,7 @@ import skillbill.ports.work.model.WorkItem
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Path
 
-class IdeStatusRepositoryCorrelation(
+internal class IdeStatusRepositoryCorrelation(
   private val unitOfWork: UnitOfWork,
   private val repositoryIdentity: String,
 ) {
@@ -67,7 +68,7 @@ internal fun resolveRepositoryIdentity(
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): IdeStatusRepositoryResolution {
   val resolvedStart =
-    runCatching {
+    catchingNonCancellation {
       repositoryEnclosingRootPort.canonicalPath(Path.of(repoRootArg))
     }.getOrNull()
       ?: return IdeStatusRepositoryResolution.Invalid("Repository root cannot be resolved: $repoRootArg")

@@ -3,7 +3,7 @@ package skillbill.engine.work
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeOperatorDecisionPause
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.runner.operatorDecisionPause
-import skillbill.engine.goalrunner.telemetry.GOAL_PLANNING_OPERATION_KIND
+import skillbill.engine.goal.GOAL_PLANNING_OPERATION_KIND
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
@@ -296,9 +296,15 @@ internal fun parseInstantOrNull(value: String?): Instant? {
   return try {
     Instant.parse(value)
   } catch (_: DateTimeParseException) {
-    runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull()
-      ?: runCatching { LocalDateTime.parse(value.trim(), SQLITE_TIMESTAMP_FORMATTER).toInstant(ZoneOffset.UTC) }
-        .getOrNull()
+    try {
+      OffsetDateTime.parse(value).toInstant()
+    } catch (_: DateTimeParseException) {
+      null
+    } ?: try {
+      LocalDateTime.parse(value.trim(), SQLITE_TIMESTAMP_FORMATTER).toInstant(ZoneOffset.UTC)
+    } catch (_: DateTimeParseException) {
+      null
+    }
   }
 }
 

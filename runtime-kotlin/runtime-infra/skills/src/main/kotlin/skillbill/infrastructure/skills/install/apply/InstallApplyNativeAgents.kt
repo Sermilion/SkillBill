@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOutcome
@@ -7,9 +8,9 @@ import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkO
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkRequest
 import skillbill.infrastructure.skills.install.nativeagent.link.effectivePackRootsForInstall
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
+import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
-import skillbill.infrastructure.skills.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
@@ -21,6 +22,8 @@ import skillbill.install.model.NativeAgentProviderId
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
+import java.io.InterruptedIOException
+import java.nio.channels.ClosedByInterruptException
 import java.nio.file.Path
 
 internal fun applyNativeAgents(
@@ -62,12 +65,15 @@ private fun applyNativeAgentProvider(
   installer: NativeAgentInstaller,
   context: NativeAgentApplyContext,
 ): List<NativeAgentApplyOutcome> =
-  runCatching {
+  catchingNonCancellation {
     installer.link(nativeAgentLinkRequest(context))
   }.fold(
     onSuccess = { outcome -> nativeAgentProviderOutcomes(installer, outcome) },
     onFailure = { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
+      if (error is InterruptedIOException || error is ClosedByInterruptException) {
+        Thread.currentThread().interrupt()
+        throw error
+      }
       listOf(
         failedNativeAgentOutcome(installer, error).also { nativeOutcome ->
           nativeOutcome.issue?.let(context.failures::add)

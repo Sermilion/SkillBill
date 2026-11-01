@@ -36,6 +36,7 @@ object PackagedDataSmoke {
       TransportContext(), WorkflowOpsContext(), OptionalCallbacks()))
     val now = Instant.now()
     val owner = JdkFeatureTaskRuntimeWorkerSupervisor(object : RuntimeDiagnostics {
+      override fun info(message: String) = Unit
       override fun warning(message: String, error: Throwable?) = Unit
       override fun error(message: String, error: Throwable?) = Unit
     }, JdkHostPlatformPort).currentProcess()

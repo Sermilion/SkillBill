@@ -30,7 +30,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
-class PhaseRunPlanResolver(
+public class PhaseRunPlanResolver(
   private val strategies: PhaseStrategyLookup,
   private val gitOperations: WorkflowGitOperations,
   private val agentRunLauncher: AgentRunLauncher,
@@ -39,7 +39,7 @@ class PhaseRunPlanResolver(
   private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  fun resolveGoalQualityExecutionPlan(
+  public fun resolveGoalQualityExecutionPlan(
     request: PhaseRunRequest,
     workflowId: String,
   ): String =
@@ -63,7 +63,7 @@ class PhaseRunPlanResolver(
       )
     }
 
-  fun validateGoalQualityExecutionPlan(
+  public fun validateGoalQualityExecutionPlan(
     encoded: String,
     expectedDefinitionId: String,
     expectedAgentId: String,
@@ -215,7 +215,8 @@ class PhaseRunPlanResolver(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
       "The outcome of goal-quality step '${record.phaseId}#${record.attemptCount}' is unknown. " +
         "Inspect authoritative process or phase evidence, or explicitly retire " +
-        "this quality execution and accept new cycles.",
+        "this quality execution and accept new cycles: " +
+        "skill-bill goal fresh-quality <issue-key> --reason \"<why>\".",
     )
 
   internal fun invalidQualityPlan(): Nothing =

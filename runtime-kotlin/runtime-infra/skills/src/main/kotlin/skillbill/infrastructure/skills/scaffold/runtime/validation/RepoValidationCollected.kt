@@ -1,13 +1,13 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionContext
+import skillbill.error.core.catchingNonCancellation
+import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.discoverRepoNativeAgentSourceEntries
 import skillbill.infrastructure.skills.nativeagent.validation.validateRepoNativeAgents
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.SKILL_CLASSES_DIR
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.discoverSkillClasses
 import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.PlatformPackSubstanceAudit
 import skillbill.infrastructure.skills.scaffold.pointer.validateGeneratedArtifactGuard
-import skillbill.infrastructure.skills.scaffold.validation.shape.validateGovernedSkillDrift
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
 
@@ -32,7 +32,7 @@ internal fun collectRepoValidationIssues(
   val platformPacks = validatePlatformPacks(root, issues)
   val portableReviewSkills = discoverPortableReviewSkills(root, issues)
   val nativeAgentSources =
-    runCatching { discoverRepoNativeAgentSourceEntries(root) }
+    catchingNonCancellation { discoverRepoNativeAgentSourceEntries(root) }
       .onFailure { error -> issues += "native agent sources: ${describeDiscoveryFailure(error)}" }
       .getOrDefault(emptyList())
   skillClassDiscoveryFailure(root)?.let { error ->
@@ -88,7 +88,7 @@ internal fun collectRepoValidationIssues(
 
 private fun skillClassDiscoveryFailure(root: Path): Throwable? =
   if (root.resolve(SKILL_CLASSES_DIR).isDirectory()) {
-    runCatching { discoverSkillClasses(root) }.exceptionOrNull()
+    catchingNonCancellation { discoverSkillClasses(root) }.exceptionOrNull()
   } else {
     null
   }

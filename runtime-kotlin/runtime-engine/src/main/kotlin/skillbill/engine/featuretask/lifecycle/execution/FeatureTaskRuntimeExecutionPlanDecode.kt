@@ -22,7 +22,7 @@ import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
-internal fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecutionPlan {
+public fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecutionPlan {
   val definition = planObject(payload[Keys.DEFINITION])
   val contractVersion = payload[Keys.CONTRACT_VERSION] as? String ?: invalidPlanValue()
   val plan =
@@ -97,7 +97,7 @@ private fun decodeDispatch(payload: Map<String, Any?>): Map<String, ResolvedPhas
     planString(dispatch, Keys.STEP) to ResolvedPhaseStrategyDispatch(planSlot(dispatch), strategyId, revision)
   }
 
-private fun decodePolicies(
+public fun decodePolicies(
   payload: Map<String, Any?>,
   key: String,
 ): Map<String, String> =
@@ -142,31 +142,31 @@ private fun decodeAssignments(payload: Map<String, Any?>): Map<String, StepLaunc
   } ?: invalidPlanValue()
 }
 
-private fun planSlot(payload: Map<String, Any?>): PhaseSlot =
+public fun planSlot(payload: Map<String, Any?>): PhaseSlot =
   PhaseSlot.entries.singleOrNull { it.wireValue == payload[Keys.SLOT] }
     ?: throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
 
-private fun planRevision(payload: Map<String, Any?>): Int =
+public fun planRevision(payload: Map<String, Any?>): Int =
   (payload[Keys.SEMANTIC_REVISION] as? Number)?.toInt() ?: invalidPlanValue()
 
-internal fun planString(
+public fun planString(
   payload: Map<String, Any?>,
   key: String,
 ): String = payload[key] as? String ?: invalidPlanValue()
 
-internal fun planObject(value: Any?): Map<String, Any?> = JsonCodec.anyToStringAnyMap(value) ?: invalidPlanValue()
+public fun planObject(value: Any?): Map<String, Any?> = JsonCodec.anyToStringAnyMap(value) ?: invalidPlanValue()
 
-internal fun planObjects(
+public fun planObjects(
   payload: Map<String, Any?>,
   key: String,
 ): List<Map<String, Any?>> = (payload[key] as? List<*>)?.map(::planObject) ?: invalidPlanValue()
 
-internal fun planStrings(
+public fun planStrings(
   payload: Map<String, Any?>,
   key: String,
 ): List<String> = (payload[key] as? List<*>)?.map { it as? String ?: invalidPlanValue() } ?: invalidPlanValue()
 
-private fun invalidPlanValue(): Nothing =
+public fun invalidPlanValue(): Nothing =
   throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan contains an invalid semantic value or digest")
 
 private fun invalidSettings(reason: String): Nothing =

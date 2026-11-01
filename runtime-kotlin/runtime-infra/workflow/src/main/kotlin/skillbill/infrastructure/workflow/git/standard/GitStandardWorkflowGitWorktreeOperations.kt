@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.git.standard
 
-import skillbill.infrastructure.workflow.git.GitRepositoryFingerprintOperations
+import skillbill.infrastructure.workflow.git.fingerprint.GitRepositoryFingerprintOperations
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowIgnoredFilesCopyResult

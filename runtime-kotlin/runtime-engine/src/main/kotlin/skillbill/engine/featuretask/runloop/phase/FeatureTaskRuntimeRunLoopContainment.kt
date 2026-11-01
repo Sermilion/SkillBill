@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -24,10 +25,10 @@ internal object FeatureTaskRuntimeRunLoopContainment {
     route: (String, FeatureTaskRuntimeVerdict) -> String?,
   ): String? =
     with(context) {
-      val claim = runCatching { FeatureTaskRuntimeRunLoopPlanningBranch.claimsFailure(this, phaseId) }
+      val claim = catchingNonCancellation { FeatureTaskRuntimeRunLoopPlanningBranch.claimsFailure(this, phaseId) }
       claim.exceptionOrNull()?.let { claimFailure -> error.addSuppressed(claimFailure.containableOrThrow()) }
       if (claim.getOrNull() != true) throw error
-      val resolved = runCatching { containedOutput(phaseId, error) }
+      val resolved = catchingNonCancellation { containedOutput(phaseId, error) }
       val contained =
         resolved.getOrNull()
           ?: return stopContained(
@@ -37,7 +38,7 @@ internal object FeatureTaskRuntimeRunLoopContainment {
             resolved.exceptionOrNull()?.containableOrThrow(),
             originalLogged = false,
           )
-      val persisted = runCatching { persistContained(phaseId, contained.output) }
+      val persisted = catchingNonCancellation { persistContained(phaseId, contained.output) }
       val completion =
         persisted.getOrNull()
           ?: return stopContained(
@@ -49,7 +50,7 @@ internal object FeatureTaskRuntimeRunLoopContainment {
           )
       observability.completedEvent(phaseId, completion.resolvedAgentId, completion.iteration)
       val verdict = FeatureTaskRuntimeVerdict.fromWire(requireNotNull(contained.output.verdict))
-      runCatching { route(phaseId, verdict) }
+      catchingNonCancellation { route(phaseId, verdict) }
         .getOrElse { routing ->
           stopContained(
             phaseId,

@@ -29,7 +29,7 @@ internal fun latestResolvedReviewFixCheckpointCommit(
         ?.let { ResolvedReviewFixCheckpoint(identity, it) }
     }
 
-fun resolvesCommit(
+internal fun resolvesCommit(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   sha: String,
@@ -38,7 +38,7 @@ fun resolvesCommit(
   return resolved is WorkflowGitOperationResult.Ok && resolved.value.orEmpty().trim().isNotBlank()
 }
 
-fun resolveCheckpointRefCommit(
+internal fun resolveCheckpointRefCommit(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   checkpointRef: String,
@@ -53,7 +53,7 @@ fun resolveCheckpointRefCommit(
   return resolved.value.orEmpty().trim().takeIf(String::isNotBlank)
 }
 
-val remediationBlockedCause: (String?, Boolean, String?) -> String = { stored, storedResolves, failedRef ->
+internal val remediationBlockedCause: (String?, Boolean, String?) -> String = { stored, storedResolves, failedRef ->
   when {
     stored != null && !storedResolves ->
       "stored remediation_base_sha '$stored' did not resolve to a commit"
@@ -63,7 +63,7 @@ val remediationBlockedCause: (String?, Boolean, String?) -> String = { stored, s
   }
 }
 
-val latestReviewFixCheckpointRef: (List<FeatureTaskRuntimeCheckpointIdentity>) -> String? = { checkpoints ->
+internal val latestReviewFixCheckpointRef: (List<FeatureTaskRuntimeCheckpointIdentity>) -> String? = { checkpoints ->
   checkpoints
     .asReversed()
     .firstOrNull { it.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID }

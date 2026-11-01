@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.lifecycle.remediation.RemediationDegradation
 import skillbill.engine.featuretask.lifecycle.subtask.SubtaskCommitPreservationRequest
 import skillbill.engine.featuretask.lifecycle.subtask.writeSubtaskCommitPreservingHistory
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.execution.GoalChildHistoryDraftWriter
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -39,7 +40,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.model.history.GoalChildHistoryDraft
@@ -416,7 +416,7 @@ private fun <T> AdmittedFeatureTaskRuntimeExecution.ownedWrite(
 internal class DurablePhaseRunGoal(
   private val recorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution,
-  private val historyDraftStore: GoalRunnerGoalChildHistoryDraftStore,
+  private val historyDraftStore: GoalChildHistoryDraftWriter,
 ) : PhaseRunGoal {
   override fun saveGoalChildHistoryDraft(draft: GoalChildHistoryDraft): GoalChildHistoryDraftSaveResult =
     historyDraftStore.saveGoalChildHistoryDraft(draft, admitted)

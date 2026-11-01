@@ -7,10 +7,12 @@ import skillbill.application.workflow.model.WorkflowGetResult
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,6 +22,15 @@ import kotlin.test.assertTrue
 
 private val FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label()
+
+private fun demoContinuation() =
+  FeatureTaskRuntimeGoalContinuationArtifact(
+    issueKey = "SKILL-51",
+    subtaskId = 1,
+    suppressPr = true,
+    goalBranch = "feature/skill-51-demo",
+    codeReviewMode = CodeReviewExecutionMode.INLINE,
+  )
 
 class ApplicationPersistencePortDecompositionWorkflowTest {
   fun `workflow service writes decomposition manifest when implement plan decomposes`() {
@@ -383,14 +394,7 @@ class ApplicationPersistencePortDecompositionWorkflowTest {
           WorkflowArtifactPatch.from(
             mapOf(
               "assessment" to mapOf("spec_path" to subtaskOne.toString()),
-              "goal_continuation" to
-                mapOf(
-                  "issue_key" to "SKILL-51",
-                  "subtask_id" to 1,
-                  "suppress_pr" to true,
-                  "goal_branch" to "feature/skill-51-demo",
-                  "code_review_mode" to "inline",
-                ),
+              "goal_continuation" to demoContinuation(),
               "commit_push_result" to mapOf("commit_sha" to "abc123"),
             ),
           ),
@@ -457,14 +461,7 @@ class ApplicationPersistencePortDecompositionWorkflowTest {
           WorkflowArtifactPatch.from(
             mapOf(
               "assessment" to mapOf("spec_path" to subtaskOne.toString()),
-              "goal_continuation" to
-                mapOf(
-                  "issue_key" to "SKILL-51",
-                  "subtask_id" to 1,
-                  "suppress_pr" to true,
-                  "goal_branch" to "feature/skill-51-demo",
-                  "code_review_mode" to "inline",
-                ),
+              "goal_continuation" to demoContinuation(),
             ),
           ),
       ),

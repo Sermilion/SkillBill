@@ -3,9 +3,9 @@ package skillbill.infrastructure.workflow.review.broker
 import skillbill.error.shellcontent.reviewHunkEvidenceIntegrityError
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.infrastructure.workflow.featuretask.storePath
-import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
 import skillbill.ports.review.model.ReviewEvidenceRequest
 import skillbill.ports.review.model.ReviewEvidenceResult
+import skillbill.ports.review.model.ReviewStoredHunkBodyExtractor
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
 import skillbill.review.context.model.accounting.ReviewBudgetKind

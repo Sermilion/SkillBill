@@ -12,8 +12,8 @@ import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummaryPayloadKeys
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -207,7 +207,7 @@ class WireVocabularyArchitectureTest {
     val files =
       listOf(
         syntheticSourceFile(
-          "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifactKeys.kt",
+          "infrastructure/sqlite/workflow/artifact/GoalContinuationArtifactKeys.kt",
           """
 
           object FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys {
@@ -216,7 +216,7 @@ class WireVocabularyArchitectureTest {
           """.trimIndent(),
         ),
         syntheticSourceFile(
-          "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifact.kt",
+          "infrastructure/sqlite/workflow/artifact/GoalContinuationArtifactCodec.kt",
           """
 
           fun read(raw: Map<String, Any?>) = raw["suppress_pr"]

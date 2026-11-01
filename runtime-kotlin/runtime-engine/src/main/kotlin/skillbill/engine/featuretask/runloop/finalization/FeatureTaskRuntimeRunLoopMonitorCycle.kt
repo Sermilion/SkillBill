@@ -29,6 +29,7 @@ import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunn
 import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -375,7 +376,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     qualifiedFailedRepairSha: String? = null,
   ): PhaseOutcome {
     val normalizedOutput =
-      runCatching { NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId) }
+      catchingNonCancellation { NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId) }
         .getOrElse { error ->
           return block(
             run,

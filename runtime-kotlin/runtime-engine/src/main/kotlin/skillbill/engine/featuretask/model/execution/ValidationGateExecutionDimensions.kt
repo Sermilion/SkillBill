@@ -1,11 +1,11 @@
 package skillbill.engine.featuretask.model.execution
 
-enum class ValidationGateCyclePhase {
+public enum class ValidationGateCyclePhase {
   INITIAL_DISCOVERY,
   POST_REPAIR_VERIFY,
 }
 
-enum class ValidationGateCommandFamily {
+public enum class ValidationGateCommandFamily {
   BUILD,
   VALIDATION,
 }

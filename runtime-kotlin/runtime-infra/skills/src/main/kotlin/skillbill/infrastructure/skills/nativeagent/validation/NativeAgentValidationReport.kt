@@ -1,18 +1,19 @@
 package skillbill.infrastructure.skills.nativeagent.validation
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_SOURCE_DIR
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
-import skillbill.infrastructure.skills.nativeagent.composition.composeNativeAgentSource
-import skillbill.infrastructure.skills.nativeagent.composition.displayPath
-import skillbill.infrastructure.skills.nativeagent.composition.nativeAgentCompositionRepoRoot
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
-import skillbill.infrastructure.skills.nativeagent.composition.resolveNativeAgentCompositionTarget
 import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceFiles
 import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceFilesInRoots
+import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.nativeagent.rendering.composeNativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.rendering.discoverRepoNativeAgentSourceFiles
+import skillbill.infrastructure.skills.nativeagent.rendering.displayPath
 import skillbill.infrastructure.skills.nativeagent.rendering.enforceAddonProjectionParity
+import skillbill.infrastructure.skills.nativeagent.rendering.nativeAgentCompositionRepoRoot
+import skillbill.infrastructure.skills.nativeagent.rendering.resolveNativeAgentCompositionTarget
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -80,7 +81,7 @@ private fun parseNativeAgentSourcesForValidation(
   issues: MutableList<String>,
 ): List<NativeAgentSource> =
   sourceFiles.flatMap { sourcePath ->
-    runCatching { parseNativeAgentSourceFile(sourcePath) }
+    catchingNonCancellation { parseNativeAgentSourceFile(sourcePath) }
       .getOrElse { error ->
         issues += "${displayPath(root, sourcePath)}: ${error.message.orEmpty()}"
         emptyList()
@@ -106,7 +107,7 @@ private fun validateNativeAgentSources(
         "native agent bodies must be provider-agnostic; conditionals belong in the renderer"
     }
     val composed =
-      runCatching {
+      catchingNonCancellation {
         composeNativeAgentSource(
           root,
           source,
@@ -120,7 +121,7 @@ private fun validateNativeAgentSources(
       issues += "${nativeAgentSourceDisplay(root, source)}: " +
         "composed native agent bodies must be provider-agnostic; conditionals belong in the renderer"
     }
-    runCatching {
+    catchingNonCancellation {
       val pack =
         resolveNativeAgentCompositionTarget(
           root,
@@ -135,7 +136,7 @@ private fun validateNativeAgentSources(
       issues += "${nativeAgentSourceDisplay(root, source)}: ${error.message.orEmpty()}"
     }
     NativeAgentProvider.entries.forEach { provider ->
-      runCatching { provider.render(composed) }.getOrElse { error ->
+      catchingNonCancellation { provider.render(composed) }.getOrElse { error ->
         issues += "${nativeAgentSourceDisplay(root, source)}: cannot render ${provider.directoryName}: " +
           error.message.orEmpty()
       }

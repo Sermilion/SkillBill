@@ -28,6 +28,7 @@ import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunRecords
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -39,9 +40,10 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.util.concurrent.CancellationException
 
 @Inject
-class FeatureTaskRuntimeRunnerExecute(
+public class FeatureTaskRuntimeRunnerExecute(
   private val specSourceResolver: SpecSourceResolver,
   private val diagnostics: RuntimeDiagnostics,
   private val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
@@ -52,12 +54,12 @@ class FeatureTaskRuntimeRunnerExecute(
   private val agentContextTelemetry: FeatureTaskRuntimeAgentContextTelemetry,
   private val acceptanceRecorder: AcceptanceCriterionRepairPhaseRecorder,
 ) {
-  fun intakeCompleted(workflowId: String): Boolean {
+  internal fun intakeCompleted(workflowId: String): Boolean {
     val records = recorder.loadPhaseRecords(workflowId).orEmpty()
     return PhaseSlot.INTAKE.steps.all { stepId -> records[stepId]?.status == WorkflowStepStatus.COMPLETED }
   }
 
-  fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
+  internal fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
     val existingMode = recorder.phaseQuery.existingWorkflowMode(request.workflowId)
     if (existingMode == null || existingMode == FeatureTaskWorkflowMode.RUNTIME) {
       return null
@@ -77,7 +79,7 @@ class FeatureTaskRuntimeRunnerExecute(
     )
   }
 
-  fun terminalWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
+  internal fun terminalWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
     val terminal = recorder.phaseQuery.terminalWorkflow(request.workflowId) ?: return null
     return FeatureTaskRuntimeRunReport.Blocked(
       issueKey = request.issueKey,
@@ -90,7 +92,7 @@ class FeatureTaskRuntimeRunnerExecute(
     )
   }
 
-  fun executePreparedRun(
+  public fun executePreparedRun(
     runRequest: FeatureTaskRuntimeRunRequest,
     reconciliation: FeatureTaskRuntimeCrashReconciliationResult,
     repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,
@@ -134,20 +136,25 @@ class FeatureTaskRuntimeRunnerExecute(
         executionPlan.dispatchStrategyByStep,
       )
     val report =
-      runCatching {
-        executePrepared.driveExecutePreparedRunLoop(
-          runRequest,
-          specSource,
-          executionPlan,
-          observability,
-          state,
-        )
-      }.onFailure { error ->
-        lifecycleTelemetry.finishedError(
-          telemetryContext,
-          error,
-        )
-      }.getOrThrow()
+      try {
+        catchingNonCancellation {
+          executePrepared.driveExecutePreparedRunLoop(
+            runRequest,
+            specSource,
+            executionPlan,
+            observability,
+            state,
+          )
+        }.onFailure { error ->
+          lifecycleTelemetry.finishedError(telemetryContext, error)
+        }.getOrThrow()
+      } catch (cancelled: CancellationException) {
+        lifecycleTelemetry.finishedError(telemetryContext, cancelled)
+        throw cancelled
+      } catch (interrupted: InterruptedException) {
+        lifecycleTelemetry.finishedError(telemetryContext, interrupted)
+        throw interrupted
+      }
     val terminalReport = executePrepared.finalizeExecutePreparedRunReport(runRequest, report, specSource, executionPlan)
     lifecycleTelemetry.finished(terminalReport, telemetryContext)
     return terminalReport

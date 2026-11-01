@@ -80,9 +80,17 @@ ran blocks before QA with "ambiguous historical quality state". When the origina
 quality evidence is gone, record the operator's choice with
 `skill-bill goal fresh-quality <issue-key> --reason <why>`. The parent's quality
 record becomes clean and unstarted, and the next goal run admits a fresh quality
-execution with new cycles. The command refuses while a runner holds the goal and
-when the parent has no ambiguous state. It does not change subtasks, child
-workflows, specs or commits.
+execution with new cycles.
+
+The same command handles a goal that blocks with "The outcome of goal-quality
+step '<step>#<attempt>' is unknown". That happens when the runner died during an
+agent-backed QA or validation step, before the step recorded its outcome. The
+command retires the unsettled quality execution, and the next goal run admits a
+fresh one.
+
+The command refuses while a runner holds the goal, and when the parent has
+neither ambiguous nor unsettled quality state. It does not change subtasks,
+child workflows, specs or commits.
 
 ## Completing a goal outside the runtime
 
@@ -473,8 +481,9 @@ monitoring start repair on the first poll reporting a failed check,
 even while other checks are pending, and on the first poll reporting a merge
 conflict, even when no checks are listed. The repair agent runs the project's local checks, as validation does, and settles completed only when they pass; the runtime commits and pushes only a completed repair. Success still requires every check to pass,
 be skipped, or be cancelled with none pending. A missing pull request, wrong
-branch, unavailable checks, or exhausted repair loop stops the goal at the failing
-finalization step. A later goal run reuses completed subtasks and the existing PR
+branch, or exhausted repair loop stops the goal at the failing finalization step. A failed GitHub identity or CI
+checks read is recorded as unknown for that round and retried; only a usable no-check observation can start the
+no-start timeout. A later goal run reuses completed subtasks and the existing PR
 and monitors again. Accepted no-change goals create no PR and skip monitoring.
 
 Finishing the subtasks does not complete the goal. PR publication and monitoring

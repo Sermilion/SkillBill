@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import skillbill.contracts.agentaddon.AGENT_ADDON_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.invalidAgentAddonSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
@@ -68,7 +69,7 @@ private inline fun <T> schemaOperation(
   fallbackReason: String,
   operation: () -> T,
 ): T =
-  runCatching(operation).getOrElse { error ->
+  catchingNonCancellation(operation).getOrElse { error ->
     throw error.asAgentAddonSchemaError(sourceLabel, fallbackReason)
   }
 

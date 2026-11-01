@@ -1,9 +1,12 @@
 package skillbill.architecture
 
+import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.createDirectories
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 object PortNullObjectCensus {
   private val declaration =
@@ -14,6 +17,8 @@ object PortNullObjectCensus {
   private val companionNullObjectVal = Regex("""^\s*val\s+(NONE|IDLE|NOOP|DISABLED)\s*:""")
 
   val COMPANION_VAL_MODULES: List<String> = listOf("runtime-kotlin/runtime-ports", "runtime-kotlin/runtime-engine")
+
+  fun interfaceNullObjectBodiesIn(source: String): List<String> = InterfaceNullObjectBodyScanner.scan(source)
 
   fun namesIn(source: String): Set<String> = declaration.findAll(source).map { it.groupValues[1] }.toSet()
 
@@ -105,6 +110,128 @@ class PortNullObjectAbsenceArchitectureTest {
     assertEquals(
       emptySet(),
       PortNullObjectCensus.namesIn("  enum class Unavailable : ReviewCheckpointFileIdentity"),
+    )
+  }
+
+  @Test
+  fun `no module interface member has a null-object default body`() {
+    val reports = interfaceNullObjectBodyReports(runtimeRoot)
+
+    assertEquals(
+      emptyList(),
+      reports,
+      "An interface member body that only returns null, a literal, an empty collection, Unit or a throw lets a " +
+        "fake or a new implementation silently report nothing. Declare the member without a body, split the " +
+        "interface so only the implementations that need it carry it, and implement it explicitly.",
+    )
+  }
+
+  @Test
+  fun `interface default scan covers relocated and sibling catalog roots`(
+    @TempDir temporaryRoot: Path,
+  ) {
+    val scanCases = PrincipleEnforcementInventory.moduleArchitectureScanCases
+    assertTrue(scanCases.isNotEmpty(), "Interface-default scan catalog must not be empty.")
+    scanCases.forEach { scanCase ->
+      val sourcePath = temporaryRoot.resolve(scanCase.mainScanRoot).resolve("CatalogRootFixture.kt")
+      sourcePath.parent.createDirectories()
+      Files.writeString(sourcePath, "interface CatalogRootFixture { fun operation(): Int }")
+    }
+    val goalrunnerSource =
+      """
+      package skillbill.engine.goalrunner.persist
+
+      interface GoalRunnerQualityExecutionStore {
+        fun goalQualityExecution(goalId: String): GoalQualityExecutionRecord? = null
+        fun abstractOperation(): Int
+        fun withDefaultParameter(value: Int = 0): Int
+      }
+      """.trimIndent()
+    val portsSource =
+      """
+      package skillbill.ports.example
+
+      interface ExamplePort {
+        fun count(): Int = 0
+      }
+      """.trimIndent()
+
+    val goalrunnerPath =
+      temporaryRoot
+        .resolve("runtime-kotlin/runtime-goalrunner/src/main/kotlin")
+        .resolve("skillbill/engine/goalrunner/persist/GoalRunnerWorkflowOutcomeStore.kt")
+    val portsPath =
+      temporaryRoot
+        .resolve("runtime-kotlin/runtime-ports/src/main/kotlin")
+        .resolve("skillbill/ports/example/ExamplePort.kt")
+    goalrunnerPath.parent.createDirectories()
+    portsPath.parent.createDirectories()
+    Files.writeString(goalrunnerPath, goalrunnerSource)
+    Files.writeString(portsPath, portsSource)
+
+    assertEquals(
+      listOf(
+        "runtime-kotlin/runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/" +
+          "GoalRunnerWorkflowOutcomeStore.kt: " +
+          "GoalRunnerQualityExecutionStore.goalQualityExecution (NULL)",
+        "runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/example/ExamplePort.kt: " +
+          "ExamplePort.count (LITERAL)",
+      ),
+      interfaceNullObjectBodyReports(temporaryRoot),
+    )
+  }
+
+  private fun interfaceNullObjectBodyReports(scanRoot: Path): List<String> {
+    val scanCases = PrincipleEnforcementInventory.moduleArchitectureScanCases
+    assertTrue(scanCases.isNotEmpty(), "Interface-default scan catalog must not be empty.")
+    return scanCases.flatMap { scanCase ->
+      val root = scanRoot.resolve(scanCase.mainScanRoot)
+      val sourceFiles = kotlinFilesUnderWithArchitectureAsserts(root)
+      sourceFiles.flatMap { path ->
+        PortNullObjectCensus.interfaceNullObjectBodiesIn(Files.readString(path))
+          .map { report -> "${scanRoot.relativize(path)}: $report" }
+      }
+    }.sorted()
+  }
+
+  @Test
+  fun `the interface census reports null, throw and getter bodies but not forwarding or default parameters`() {
+    val source =
+      """
+      interface Sample {
+        fun a(): String? = null
+
+        fun wrapped(
+          id: String,
+        ): Boolean =
+          throw IllegalStateException("x")
+
+        val b: Int get() = 0
+
+        fun c(u: Int): String? = a()
+
+        fun d(x: String? = null): Int
+
+        fun e(): Int {
+          return 1
+        }
+
+        fun f(): List<String> {
+        }
+
+        fun g(): Int = compute { 0 }
+      }
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "Sample.a (NULL)",
+        "Sample.wrapped (THROW)",
+        "Sample.b (LITERAL)",
+        "Sample.e (LITERAL)",
+        "Sample.f (UNIT_OR_EMPTY_BLOCK)",
+      ),
+      PortNullObjectCensus.interfaceNullObjectBodiesIn(source),
     )
   }
 

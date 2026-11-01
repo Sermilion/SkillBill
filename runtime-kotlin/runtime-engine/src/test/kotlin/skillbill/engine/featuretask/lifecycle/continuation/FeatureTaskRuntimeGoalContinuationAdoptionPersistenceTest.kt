@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.lifecycle.continuation
 
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
-import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
@@ -18,6 +17,7 @@ import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -35,8 +35,11 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.taskruntime.artifact.goalContinuationFieldAdoption
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.UndecodedTypedArtifact
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
@@ -63,8 +66,8 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
   private val baselineSha = "a".repeat(40)
 
   @Test
-  fun `engine artifact patch rejects malformed payload before persistence`() {
-    val harness = seedHarness(preContractContinuationMap())
+  fun `engine artifact patch rejects a non-typed payload before persistence`() {
+    val harness = seedHarness(preContractContinuation())
     val before = requireNotNull(harness.repository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
     val persistence =
       FeatureTaskRuntimeWorkflowPersistence(
@@ -86,7 +89,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         before.toSnapshot(),
         mapOf(
           FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to
-            preContractContinuationMap().plus("subtask_id" to 2.7),
+            mapOf("issue_key" to "SKILL-176", "subtask_id" to 2.7),
         ),
       )
     }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
@@ -98,7 +101,10 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
   fun `malformed durable continuation blocks engine preparation instead of becoming no child`() {
     val harness =
       seedHarness(
-        continuationMap = preContractContinuationMap().plus("subtask_id" to 2.7),
+        UndecodedTypedArtifact(
+          jsonText = """{"issue_key":"SKILL-176","subtask_id":2.7}""",
+          failure = invalidWorkflowStateSchemaError("Goal-continuation artifact subtask_id must be an integer."),
+        ),
       )
 
     val prepared = harness.prepare(resumeRequest(validationDepth = ValidationDepth.FULL))
@@ -110,10 +116,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
   @Test
   fun `resume from durable map missing validation_depth adopts supplied depth and records evidence`() {
-    val harness =
-      seedHarness(
-        continuationMap = preContractContinuationMap(includeValidationDepth = null),
-      )
+    val harness = seedHarness(preContractContinuation(validationDepth = null))
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
@@ -121,20 +124,13 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
       )
 
     assertEquals(ValidationDepth.FULL, prepared.request.goalContinuation?.validationDepth)
-    val artifacts = harness.repository.taskRuntimeArtifacts(workflowId)
-    val continuation =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY]),
-      )
-    assertEquals("full", continuation["validation_depth"])
-    val adoption =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY]),
-      )
-    assertEquals("validation_depth", adoption["field"])
-    assertEquals("full", adoption["adopted_value"])
+    val artifacts = harness.repository.taskRuntimeTypedArtifacts(workflowId)
+    assertEquals(ValidationDepth.FULL, requireNotNull(artifacts.goalContinuationArtifact()).validationDepth)
+    val adoption = requireNotNull(artifacts.goalContinuationFieldAdoption())
+    assertEquals("validation_depth", adoption.field)
+    assertEquals("full", adoption.adoptedValue)
     assertTrue(
-      (adoption["reason"] as String).contains("predated the validation_depth contract"),
+      adoption.reason.contains("predated the validation_depth contract"),
       "adoption evidence must record why the heal happened",
     )
   }
@@ -143,11 +139,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
   fun `resume from durable map missing quality_gate_selection resolves validate and records evidence`() {
     val harness =
       seedHarness(
-        continuationMap =
-          preContractContinuationMap(
-            includeValidationDepth = "full",
-            includeQualityGateSelection = null,
-          ),
+        preContractContinuation(validationDepth = ValidationDepth.FULL, qualityGateSelection = null),
       )
 
     val prepared =
@@ -164,32 +156,19 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
       VALIDATE,
       prepared.request.goalContinuation?.qualityGateSelection,
     )
-    val artifacts = harness.repository.taskRuntimeArtifacts(workflowId)
-    val continuation =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY]),
-      )
-    assertEquals("validate", continuation["quality_gate_selection"])
-    val adoption =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY]),
-      )
-    assertEquals("quality_gate_selection", adoption["field"])
-    assertEquals("validate", adoption["adopted_value"])
-    assertTrue(
-      (adoption["reason"] as String).contains("resolved legacy selection to validate"),
-    )
+    val artifacts = harness.repository.taskRuntimeTypedArtifacts(workflowId)
+    assertEquals(VALIDATE, requireNotNull(artifacts.goalContinuationArtifact()).qualityGateSelection)
+    val adoption = requireNotNull(artifacts.goalContinuationFieldAdoption())
+    assertEquals("quality_gate_selection", adoption.field)
+    assertEquals("validate", adoption.adoptedValue)
+    assertTrue(adoption.reason.contains("resolved legacy selection to validate"))
   }
 
   @Test
   fun `resume with equal recorded validation_depth proceeds without adoption evidence`() {
     val harness =
       seedHarness(
-        continuationMap =
-          preContractContinuationMap(
-            includeValidationDepth = "full",
-            includeQualityGateSelection = "validate",
-          ),
+        preContractContinuation(validationDepth = ValidationDepth.FULL, qualityGateSelection = VALIDATE),
       )
 
     val prepared =
@@ -198,24 +177,16 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
       )
 
     assertEquals(ValidationDepth.FULL, prepared.request.goalContinuation?.validationDepth)
-    val artifacts = harness.repository.taskRuntimeArtifacts(workflowId)
+    val artifacts = harness.repository.taskRuntimeTypedArtifacts(workflowId)
     assertNull(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY])
-    val continuation =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY]),
-      )
-    assertEquals("full", continuation["validation_depth"])
+    assertEquals(ValidationDepth.FULL, requireNotNull(artifacts.goalContinuationArtifact()).validationDepth)
   }
 
   @Test
   fun `resume with recorded quality_gate_selection build preserves build on durable artifact`() {
     val harness =
       seedHarness(
-        continuationMap =
-          preContractContinuationMap(
-            includeValidationDepth = "full",
-            includeQualityGateSelection = "build",
-          ),
+        preContractContinuation(validationDepth = ValidationDepth.FULL, qualityGateSelection = BUILD),
       )
 
     val prepared =
@@ -232,30 +203,25 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
       BUILD,
       prepared.request.goalContinuation?.qualityGateSelection,
     )
-    val artifacts = harness.repository.taskRuntimeArtifacts(workflowId)
+    val artifacts = harness.repository.taskRuntimeTypedArtifacts(workflowId)
     assertNull(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY])
-    val continuation =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY]),
-      )
-    assertEquals("build", continuation["quality_gate_selection"])
+    assertEquals(BUILD, requireNotNull(artifacts.goalContinuationArtifact()).qualityGateSelection)
   }
 
-  private fun preContractContinuationMap(
-    includeValidationDepth: String? = null,
-    includeQualityGateSelection: String? = null,
-  ): Map<String, Any?> =
-    linkedMapOf<String, Any?>(
-      "issue_key" to "SKILL-176",
-      "subtask_id" to 1,
-      "suppress_pr" to true,
-      "goal_branch" to "feat/SKILL-176",
-      "parent_workflow_id" to "wfl-parent",
-      "code_review_mode" to "inline",
-    ).apply {
-      includeValidationDepth?.let { put("validation_depth", it) }
-      includeQualityGateSelection?.let { put("quality_gate_selection", it) }
-    }
+  private fun preContractContinuation(
+    validationDepth: ValidationDepth? = null,
+    qualityGateSelection: FeatureTaskRuntimeQualityGateSelection? = null,
+  ): FeatureTaskRuntimeGoalContinuationArtifact =
+    FeatureTaskRuntimeGoalContinuationArtifact(
+      issueKey = "SKILL-176",
+      subtaskId = 1,
+      suppressPr = true,
+      goalBranch = "feat/SKILL-176",
+      parentWorkflowId = "wfl-parent",
+      codeReviewMode = CodeReviewExecutionMode.INLINE,
+      validationDepth = validationDepth,
+      qualityGateSelection = qualityGateSelection,
+    )
 
   private fun resumeRequest(
     validationDepth: ValidationDepth,
@@ -290,7 +256,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         ),
     )
 
-  private fun seedHarness(continuationMap: Map<String, Any?>): AdoptionHarness {
+  private fun seedHarness(continuation: Any): AdoptionHarness {
     val repository = InMemoryRuntimeWorkflowRepository()
     val engine = WorkflowEngine()
     val definition = WorkflowFamily.TASK_RUNTIME.definition
@@ -307,7 +273,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuationMap,
+                FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation,
                 GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to
                   GoalSubtaskReviewState.initial(
                     reviewBaseSha = baselineSha,

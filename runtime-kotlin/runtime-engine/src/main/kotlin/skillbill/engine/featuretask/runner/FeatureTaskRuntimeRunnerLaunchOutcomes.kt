@@ -34,7 +34,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitDetector
 
-internal fun terminalBlockedReasonFrom(
+public fun terminalBlockedReasonFrom(
   phaseId: String,
   outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   blockedDisposition: FeatureTaskRuntimeFailureDisposition,
@@ -78,15 +78,15 @@ internal fun terminalBlockedReasonFrom(
 }
 
 @Inject
-class FeatureTaskRuntimeLaunchOutcomes(
+public class FeatureTaskRuntimeLaunchOutcomes(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val gitOperations: WorkflowGitOperations,
   private val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
 ) {
-  fun finalizingAgentId(request: FeatureTaskRuntimeRunRequest): String? =
+  internal fun finalizingAgentId(request: FeatureTaskRuntimeRunRequest): String? =
     agentAttributionFromPhaseState(recorder.phaseQuery, request.workflowId).finalizingAgentId
 
-  fun persistGoalContinuationOutcome(
+  internal fun persistGoalContinuationOutcome(
     request: FeatureTaskRuntimeRunRequest,
     report: FeatureTaskRuntimeRunReport,
     commitStepId: String,
@@ -175,7 +175,7 @@ class FeatureTaskRuntimeLaunchOutcomes(
     }
 }
 
-fun infraFailureReason(
+internal fun infraFailureReason(
   phaseId: String,
   facts: AgentRunLaunchFacts,
 ): String? =
@@ -199,13 +199,13 @@ fun infraFailureReason(
       }
   }
 
-fun providerLimitSignal(facts: AgentRunLaunchFacts): FeatureTaskRuntimeProviderLimitSignal? {
+internal fun providerLimitSignal(facts: AgentRunLaunchFacts): FeatureTaskRuntimeProviderLimitSignal? {
   val exited = facts.termination as? AgentRunTermination.Exited ?: return null
   if (exited.code == 0) return null
   return FeatureTaskRuntimeProviderLimitDetector.detect(facts.stderr, facts.stdout)
 }
 
-fun providerLimitPauseReason(
+internal fun providerLimitPauseReason(
   phaseId: String,
   signal: FeatureTaskRuntimeProviderLimitSignal,
 ): String {
@@ -215,7 +215,7 @@ fun providerLimitPauseReason(
     "resumes at '$phaseId'. Provider said: ${signal.evidence}"
 }
 
-fun isProcessFailureBlockReason(
+internal fun isProcessFailureBlockReason(
   phaseId: String,
   reason: String,
 ): Boolean =
@@ -231,14 +231,14 @@ private val PROCESS_FAILURE_REASON_MARKERS: List<String> =
     "could not launch an agent",
   )
 
-fun phaseDeclaration(
+public fun phaseDeclaration(
   phaseId: String,
   featureSize: FeatureTaskRuntimeFeatureSize,
   omittedStepIds: Set<String>,
 ): FeatureTaskRuntimePhaseDeclaration =
   FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationWithoutSteps(phaseId, featureSize, omittedStepIds)
 
-fun missingUpstream(
+internal fun missingUpstream(
   declaration: FeatureTaskRuntimePhaseDeclaration,
   recordedOutputs: List<FeatureTaskRuntimePhaseOutput>,
 ): List<String>? {

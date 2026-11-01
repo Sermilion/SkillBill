@@ -1,8 +1,9 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle
 
+import skillbill.infrastructure.sqlite.DatabaseRuntime
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.ensureDatabase
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceOutcome
 import java.nio.file.Files

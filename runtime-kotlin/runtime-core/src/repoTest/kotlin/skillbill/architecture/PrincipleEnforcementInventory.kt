@@ -8,7 +8,6 @@ object PrincipleEnforcementInventory {
   const val RUNTIME_ENGINE_MAIN: String = "runtime-kotlin/runtime-engine/src/main/kotlin"
   const val APPLICATION_PACKAGE_PREFIX: String = "skillbill.application."
   const val CLI_PACKAGE_PREFIX: String = "skillbill.cli."
-  const val SPILLOVER_FILE_NAME_BASELINE: String = "spillover-file-name-baseline.txt"
   const val CUSTOM_THROWABLE_BASELINE: String = "custom-throwable-baseline.txt"
   const val RUNTIME_COMPONENT_SOURCE: String =
     "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeComponent.kt"
@@ -18,8 +17,6 @@ object PrincipleEnforcementInventory {
     val mainScanRoot: String,
     val moduleSourceRoot: String,
     val packagePrefix: String,
-    val packageCycleBaseline: String,
-    val packageCycleGranularity: ArchitectureScanSupport.PackageCycleGranularity,
     val ambientClockBaseline: String,
     val ambientEnvironmentBaseline: String,
     val injectDefaultsBaseline: String,
@@ -38,13 +35,6 @@ object PrincipleEnforcementInventory {
       mainScanRoot = "runtime-kotlin/$directoryPath/src/main/kotlin",
       moduleSourceRoot = "runtime-kotlin/$directoryPath/src",
       packagePrefix = packagePrefixForModule(moduleName),
-      packageCycleBaseline = packageCycleBaselineForModule(moduleName, baselineStem),
-      packageCycleGranularity =
-        if (moduleName == "runtime-domain" || moduleName == "runtime-contracts" || moduleName == "runtime-cli") {
-          ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC
-        } else {
-          ArchitectureScanSupport.PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR
-        },
       ambientClockBaseline = ambientClockBaselineForModule(moduleName, baselineStem),
       ambientEnvironmentBaseline = ambientEnvironmentBaselineForModule(moduleName, baselineStem),
       injectDefaultsBaseline = injectDefaultsBaselineForModule(moduleName, baselineStem),
@@ -60,16 +50,6 @@ object PrincipleEnforcementInventory {
       "runtime-mcp" -> "skillbill.mcp."
       "runtime-core" -> "skillbill.di."
       else -> RuntimeModuleCatalog.moduleMainPackageRoots[moduleName]?.let { "$it." } ?: "skillbill."
-    }
-
-  private fun packageCycleBaselineForModule(
-    moduleName: String,
-    baselineStem: String,
-  ): String =
-    when (moduleName) {
-      "runtime-application" -> "application-package-cycle-baseline.txt"
-      "runtime-cli" -> "runtime-cli-package-cycle-baseline.txt"
-      else -> "$baselineStem-package-cycle-baseline.txt"
     }
 
   private fun ambientClockBaselineForModule(
@@ -143,13 +123,15 @@ object PrincipleEnforcementInventory {
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/testFixtures/kotlin/skillbill/engine/featuretask/runner/" +
+          "FeatureTaskRuntimeRunnerTestSupport.kt",
         "noopPort",
         "UNCHECKED_CAST",
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/testFixtures/kotlin/skillbill/engine/featuretask/runner/" +
+          "FeatureTaskRuntimeRunnerTestSupport.kt",
         "recordHarnessFindingVerdicts",
         "UNCHECKED_CAST",
         "Dynamic ReviewRepository proxy passes typed verdict list through erased invoke",
@@ -170,6 +152,12 @@ object PrincipleEnforcementInventory {
       "runtime-kotlin/runtime-mcp/src/main/kotlin/skillbill/mcp/core/Main.kt",
       "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeBootstrapBindings.kt",
     )
+
+  val processAdapterModules: Set<String> =
+    setOf("runtime-infra:host", "runtime-infra:launcher", "runtime-infra:workflow")
+
+  val injectPropertyExposureModules: Set<String> =
+    setOf("runtime-application", "runtime-cli", "runtime-engine")
 
   data class EnforcedRule(
     val rule: String,
@@ -209,14 +197,18 @@ object PrincipleEnforcementInventory {
         ProductionLogicalTypeLineCeilingArchitectureTest::class,
       ),
       EnforcedRule(
-        "Package acyclicity: mutual imports among areas under each module package prefix stay within that " +
-          "module baseline across all declared runtime Gradle modules.",
+        "Package acyclicity: every declared runtime Gradle module's main sources have an empty exact-package " +
+          "strongly connected component set, except runtime-engine and runtime-goalrunner, which equal their " +
+          "recorded census.",
         ApplicationPackageAcyclicityArchitectureTest::class,
       ),
       EnforcedRule(
-        "Ambient clock ban: Instant.now, LocalDateTime.now, LocalDate.now, OffsetDateTime.now, " +
-          "ZonedDateTime.now, Clock.systemUTC, and JvmSystemClock.instant require a baseline row in every " +
-          "module main source root.",
+        "A8 ambient effects: Instant.now, LocalDateTime.now, LocalDate.now, OffsetDateTime.now, " +
+          "ZonedDateTime.now, Clock.systemUTC, JvmSystemClock.instant, and System.currentTimeMillis require " +
+          "baseline rows in every module main source root. System.nanoTime and ProcessHandle are scanned in " +
+          "every other module; monotonic-time and process-handle reads are " +
+          "allowed only in the runtime-infra:host, runtime-infra:launcher and runtime-infra:workflow process " +
+          "adapters named by processAdapterModules.",
         RuntimeApplicationAmbientClockArchitectureTest::class,
       ),
       EnforcedRule(
@@ -237,6 +229,10 @@ object PrincipleEnforcementInventory {
         "Inline FQN ban: production and test Kotlin use no inline fully-qualified references outside the " +
           "keep-list.",
         InlineFqnArchitectureTest::class,
+      ),
+      EnforcedRule(
+        "runCatching ban: every catalog main source root has no runCatching call.",
+        RunCatchingBanArchitectureTest::class,
       ),
       EnforcedRule(
         "Convention ownership: module build files do not re-apply Test or toolchain settings owned by " +
@@ -267,8 +263,9 @@ object PrincipleEnforcementInventory {
       ),
       EnforcedRule(
         "Port null-object absence: no runtime module main source declares an Unavailable, Noop, Empty, or " +
-          "Unconfigured substitute; a reached absence is a nullable port resolved at the call site and the " +
-          "test-only substitutes live in testFixtures.",
+          "Unconfigured substitute, and every catalog module is scanned for interface defaults that return null, " +
+          "literals, empty collections, Unit or empty blocks, or throws; a reached absence is a nullable port " +
+          "resolved at the call site and the test-only substitutes live in testFixtures.",
         PortNullObjectAbsenceArchitectureTest::class,
       ),
       EnforcedRule(
@@ -290,12 +287,6 @@ object PrincipleEnforcementInventory {
       EnforcedRule(
         "Runtime-core tests declare packages under skillbill.di and avoid retired absent and runtime packages.",
         RuntimeCompositionGuardArchitectureTest::class,
-      ),
-      EnforcedRule(
-        "RuntimeComponent composition surface: abstract service properties are pinned separately from " +
-          "@Provides generated wiring; any other public function on RuntimeComponent or a Runtime*Provides " +
-          "mixin fails even when the abstract property set is unchanged.",
-        RuntimeComponentInboundApiArchitectureTest::class,
       ),
       EnforcedRule(
         "Comment and KDoc policy: authored Kotlin under inlineFqnScanRoots contains no // line comments, no " +
@@ -393,7 +384,7 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/workflow/service/" +
+          "runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/workflow/persist/" +
             "LegacyGoalRunnerControlMigration.kt",
         functionNames =
           setOf(
@@ -498,9 +489,9 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "FeatureTaskRuntimeGoalContinuationArtifact.kt",
-        functionNames = setOf("fromArtifactMap"),
+          "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/artifact/" +
+            "GoalContinuationArtifactCodec.kt",
+        functionNames = setOf("decode"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
@@ -540,9 +531,9 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "FeatureTaskRuntimeGoalContinuationPersistenceModels.kt",
-        functionNames = setOf("fromArtifactMap"),
+          "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/artifact/" +
+            "GoalPlanningArtifactCodecs.kt",
+        functionNames = setOf("decode"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
@@ -657,80 +648,17 @@ object PrincipleEnforcementInventory {
       "Deeper noun-family relatedness inside a single area cluster — only cross-area loose-file " +
         "buckets are mechanically provable.",
       "Open harness and capability vocabulary keys — reviewed by hand instead of an enum gate.",
+      "A2 shared-kernel vocabulary ownership — whether a runtime-contracts type has multiple owners or readers, " +
+        "or is foreign vendor vocabulary, depends on intent that no import scan can decide.",
+      "A5 YAGNI / KISS — whether an abstraction, alias or forwarder has a current consumer or justified change " +
+        "is a judgment call that no mechanical scan can decide.",
+      "A11 encapsulation and least visibility — explicitApi can require a visibility choice but cannot decide " +
+        "whether public is narrower than needed.",
     )
 
   const val PRODUCTION_LINE_CEILING: Int = 1200
 
   val productionLineCeilingExemptions: Map<String, String> = emptyMap()
-
-  val runtimeComponentInboundApi: List<String> =
-    listOf(
-      "agentRunLauncher",
-      "agentRunService",
-      "checkedOutBranchSource",
-      "configResolutionService",
-      "runtimeConfigEditService",
-      "databaseReadConnections",
-      "databaseSchema",
-      "databaseSession",
-      "externalAddonOverlayService",
-      "externalAgentAddonSourceConfigPort",
-      "externalPlatformPackResolutionService",
-      "featureSpecPathResolverPort",
-      "featureTaskContinuationLookupService",
-      "featureTaskPhaseSettlementService",
-      "featureTaskRuntimeRunInvariantsSource",
-      "featureTaskRuntimeRunEntry",
-      "featureTaskRuntimeCrashReconciler",
-      "featureTaskRuntimeExecutionPlanResolver",
-      "featureTaskRuntimeStatusService",
-      "featureTaskRuntimeWorkerCoordinator",
-      "fileEditorLauncherPort",
-      "goalOperatorDecisionService",
-      "goalPlanningLogService",
-      "goalPreflightService",
-      "goalRunner",
-      "goalRunnerStatusService",
-      "ideStatusService",
-      "installAgentService",
-      "installMcpRegistrationPort",
-      "installNativeAgentLinkPort",
-      "installSelectionPersistencePort",
-      "installService",
-      "learningService",
-      "lifecycleTelemetryService",
-      "operationExecutor",
-      "operationRegistry",
-      "phaseRunEntry",
-      "projectConfigFilePort",
-      "projectStorePort",
-      "qaDeviceLeasePort",
-      "qaOwnedResourcePort",
-      "phaseStrategyLookup",
-      "repoValidationGateway",
-      "repositoryEnclosingRootPort",
-      "resolvedEnvironmentContext",
-      "reviewService",
-      "reviewSnapshotPruneService",
-      "runtimeDiagnostics",
-      "scaffoldCatalogGateway",
-      "scaffoldGateway",
-      "skillRemove",
-      "specBrowserService",
-      "standalonePlanRun",
-      "systemService",
-      "skillBillUpdateService",
-      "skillBillUninstallService",
-      "updateCheckService",
-      "telemetryLevelMutator",
-      "telemetryService",
-      "unaddressedFindingsLedgerService",
-      "workChangesPort",
-      "workControlService",
-      "workObservationService",
-      "workListService",
-      "workflowService",
-    )
 
   val packageClusteringGenericSegments: Set<String> =
     setOf(

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.review.specialists
 
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import java.nio.file.Files
 import java.nio.file.Path
@@ -31,7 +32,7 @@ class FileSystemReviewAttributionTest {
   fun `composed launch plan carries baseline sourced lanes with their owning pack and depth`() {
     val repoRoot = composedPackFixture()
 
-    val plan = FileSystemReviewAttribution(installedCatalog(repoRoot)).composedLaunchPlan("kmp")
+    val plan = FileSystemReviewAttribution(installedCatalog(repoRoot), NoopRuntimeDiagnostics).composedLaunchPlan("kmp")
 
     assertEquals(
       listOf("kmp" to "architecture", "kotlin" to "testing"),
@@ -49,7 +50,8 @@ class FileSystemReviewAttributionTest {
   fun `an unknown routed pack slug yields an empty plan rather than failing`() {
     val repoRoot = composedPackFixture()
 
-    val plan = FileSystemReviewAttribution(installedCatalog(repoRoot)).composedLaunchPlan("nowhere")
+    val plan =
+      FileSystemReviewAttribution(installedCatalog(repoRoot), NoopRuntimeDiagnostics).composedLaunchPlan("nowhere")
 
     assertEquals("nowhere", plan.routedPackSlug)
     assertEquals(emptyList(), plan.lanes)

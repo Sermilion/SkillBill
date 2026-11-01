@@ -4,16 +4,17 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.engine.featuretask.slot.PhaseEntrySettlementRules
 import skillbill.engine.featuretask.slot.PhaseLoopContext
-import skillbill.engine.featuretask.slot.PhaseStepLoopRules
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object ImplementThenSimplifyLoopRules : PhaseStepLoopRules<PhaseAgentStepBinding> {
+internal object ImplementThenSimplifyLoopRules : PhaseEntrySettlementRules<PhaseAgentStepBinding> {
   private const val IMPLEMENT = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
   private const val SIMPLIFY = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY
   private const val SKIP_PROSE =
@@ -25,7 +26,7 @@ internal object ImplementThenSimplifyLoopRules : PhaseStepLoopRules<PhaseAgentSt
     state: PhaseAgentStepBinding,
   ): PhaseEntrySettlement? {
     if (stepId != SIMPLIFY || !implementClaimsNoChange(state)) return null
-    return runCatching { state.settleRuntimeAuthoredCompletion(SIMPLIFY, skipEnvelope()) }.fold(
+    return catchingNonCancellation { state.settleRuntimeAuthoredCompletion(SIMPLIFY, skipEnvelope()) }.fold(
       onSuccess = { PhaseEntrySettlement.Completed(FeatureTaskRuntimeVerdict.ADVANCE) },
       onFailure = { error ->
         PhaseEntrySettlement.Blocked(

@@ -2,6 +2,7 @@ package skillbill.infrastructure.host
 
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
+import skillbill.infrastructure.host.process.processBirthToken
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -19,6 +20,8 @@ import kotlin.test.assertTrue
 private class RecordingDiagnostics : RuntimeDiagnostics {
   val warnings = CopyOnWriteArrayList<String>()
   val errors = CopyOnWriteArrayList<String>()
+
+  override fun info(message: String) = Unit
 
   override fun warning(
     message: String,

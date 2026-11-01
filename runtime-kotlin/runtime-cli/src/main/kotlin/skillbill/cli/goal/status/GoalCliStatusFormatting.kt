@@ -13,7 +13,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
-import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.goal.GoalRunnerStatusRequest
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.goalrunner.model.GoalRunnerStatusProjection

@@ -7,7 +7,7 @@ internal const val FEATURE_TASK_ENGINE_ROOT =
   "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask"
 
 internal const val GOAL_PLANNING_ENGINE_ROOT =
-  "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/planning"
+  "runtime-kotlin/runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/planning"
 
 internal const val OPERATION_ENGINE_ROOT =
   "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/operation"

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.infrastructure.skills.nativeagent.rendering.YAML_DOUBLE_QUOTE_ESCAPES
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -147,6 +146,15 @@ private fun parseSimpleFrontmatter(
   }
   return parsed
 }
+
+internal val YAML_DOUBLE_QUOTE_ESCAPES: Map<Char, String> =
+  mapOf(
+    '\\' to "\\\\",
+    '"' to "\\\"",
+    '\n' to "\\n",
+    '\r' to "\\r",
+    '\t' to "\\t",
+  )
 
 private val DOUBLE_QUOTE_DECODE_MAP: Map<String, String> =
   YAML_DOUBLE_QUOTE_ESCAPES.entries.associate { (decoded, escape) -> escape to decoded.toString() }

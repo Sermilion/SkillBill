@@ -323,8 +323,10 @@ internal fun Map<String, String>.firstIncompletePhase(): String =
   entries.firstOrNull { it.value.workflowStepStatus() != WorkflowStepStatus.COMPLETED }?.key?.takeIf(String::isNotBlank)
     ?: "unknown"
 
-internal fun QualityCheckStartedRequest.normalizedLabels(): QualityCheckStartedRequest {
-  val stack = normalizeStackLabel(detectedStack)
+internal fun QualityCheckStartedRequest.normalizedLabels(
+  knownPlatformSlugs: Collection<String>,
+): QualityCheckStartedRequest {
+  val stack = normalizeStackLabel(detectedStack, knownPlatformSlugs)
   return copy(
     routedSkill = QUALITY_CHECK_ROUTED_SKILL,
     detectedStack = stack.stack,
@@ -333,8 +335,10 @@ internal fun QualityCheckStartedRequest.normalizedLabels(): QualityCheckStartedR
   )
 }
 
-internal fun QualityCheckFinishedRequest.normalizedLabels(): QualityCheckFinishedRequest {
-  val stack = normalizeStackLabel(detectedStack)
+internal fun QualityCheckFinishedRequest.normalizedLabels(
+  knownPlatformSlugs: Collection<String>,
+): QualityCheckFinishedRequest {
+  val stack = normalizeStackLabel(detectedStack, knownPlatformSlugs)
   return copy(
     routedSkill = QUALITY_CHECK_ROUTED_SKILL,
     detectedStack = stack.stack,

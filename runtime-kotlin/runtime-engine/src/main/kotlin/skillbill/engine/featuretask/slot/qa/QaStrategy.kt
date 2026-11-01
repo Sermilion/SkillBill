@@ -25,8 +25,11 @@ import skillbill.engine.featuretask.qa.report.qaVerdictOf
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationHooks
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhasePreparedRunCapability
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
@@ -55,7 +58,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 @Inject
-class QaStrategy(
+public class QaStrategy(
   private val reports: QaReportSettlement,
   private val execution: QaExecutionLifecycle,
   private val outcomes: FeatureTaskQaOutcomeRecorder,
@@ -186,7 +189,11 @@ class QaStrategy(
   private val repairHooks = QaRepairHooks(execution, outcomes, reports, stops)
 
   private val hooks =
-    object : PhaseStepHooks<PhaseQaStepBinding> {
+    object :
+      PhaseStepHooks<PhaseQaStepBinding>,
+      PhaseFailureContinuationHooks<PhaseQaStepBinding>,
+      PhaseLaunchPromptHooks<PhaseQaStepBinding>,
+      PhaseBeforeLaunchHooks<PhaseQaStepBinding> {
       override fun failureContinuationOutput(
         run: PhaseRun,
         failure: PhaseStepFailure,
@@ -293,8 +300,8 @@ class QaStrategy(
       }
     }
 
-  companion object {
-    const val ID = "agent-qa"
+  public companion object {
+    public const val ID: String = "agent-qa"
     private const val MISSING_WORKSPACE = "QA execution was not prepared before step admission."
   }
 }

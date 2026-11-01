@@ -16,6 +16,7 @@ dependencies {
   implementation(project(":runtime-core"))
   implementation(project(":runtime-domain"))
   implementation(project(":runtime-engine"))
+  implementation(project(":runtime-goalrunner"))
   implementation(project(":runtime-ports"))
   implementation(libs.clikt)
   implementation(libs.kotlin.inject.runtime)
@@ -26,6 +27,7 @@ dependencies {
 
   testImplementation(testFixtures(project(":runtime-application")))
   testImplementation(testFixtures(project(":runtime-engine")))
+  testImplementation(testFixtures(project(":runtime-goalrunner")))
   testImplementation(testFixtures(project(":runtime-ports")))
   testImplementation(project(":runtime-infra:host"))
   testImplementation(project(":runtime-infra:contracts"))

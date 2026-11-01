@@ -1,15 +1,16 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryRefusal
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryRequest
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryResult
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryResumeClaim
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunTarget
+import skillbill.engine.work.recovery.BlockIncidentRecoveryRefusal
+import skillbill.engine.work.recovery.BlockIncidentRecoveryRequest
+import skillbill.engine.work.recovery.BlockIncidentRecoveryResult
+import skillbill.engine.work.recovery.BlockIncidentRecoveryResumeClaim
+import skillbill.engine.work.recovery.BlockIncidentRecoveryService
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
@@ -19,15 +20,14 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 import java.nio.file.Path
-import java.util.concurrent.CancellationException
 
 @Inject
-class WorkControlRecovery(
+public class WorkControlRecovery(
   private val status: IdeStatusService,
   private val recovery: BlockIncidentRecoveryService,
   private val runs: WorkRunActions,
 ) {
-  fun preview(
+  internal fun preview(
     workId: String,
     incidentToken: String,
     confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
@@ -38,7 +38,7 @@ class WorkControlRecovery(
     return preview(target, incidentToken, confirmedPrerequisites)
   }
 
-  fun recover(
+  internal fun recover(
     workId: String,
     incidentToken: String,
     incidentRevision: Long,
@@ -83,7 +83,7 @@ class WorkControlRecovery(
       else -> WorkIncidentRecoveryOutcome.Accepted
     }
 
-  fun preview(
+  internal fun preview(
     target: WorkRunTarget,
     incidentToken: String,
     confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
@@ -108,7 +108,7 @@ class WorkControlRecovery(
     }
   }
 
-  fun recover(
+  internal fun recover(
     target: WorkRunTarget,
     incidentToken: String,
     incidentRevision: Long,
@@ -214,8 +214,7 @@ class WorkControlRecovery(
         item.snapshot.updatedAt,
         requested.databaseFileObservation,
       )
-    return runCatching { runs.launch(resumed, agentId) }.getOrElse { failure ->
-      if (failure is CancellationException) throw failure
+    return catchingNonCancellation { runs.launch(resumed, agentId) }.getOrElse { failure ->
       WorkControlResult.LaunchFailed(failure.message ?: failure::class.simpleName.orEmpty())
     }
   }

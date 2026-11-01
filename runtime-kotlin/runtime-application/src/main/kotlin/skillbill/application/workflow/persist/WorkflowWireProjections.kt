@@ -1,9 +1,12 @@
 package skillbill.application.workflow.persist
 
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowCompactContinueView
 import skillbill.workflow.engine.model.WorkflowContinuationArtifactSummary
 import skillbill.workflow.engine.model.WorkflowContinueView
@@ -15,10 +18,13 @@ import skillbill.workflow.engine.model.WorkflowSummaryView
 import skillbill.workflow.engine.model.WorkflowUpdateAcknowledgementView
 
 object WorkflowWireProjections {
-  fun snapshotMap(view: WorkflowSnapshotView): JsonPayloadContract =
+  fun snapshotMap(
+    view: WorkflowSnapshotView,
+    encoder: WorkflowArtifactWireEncoder,
+  ): JsonPayloadContract =
     payload(
       linkedMapOf<String, Any?>().apply {
-        putSnapshotFields(view)
+        putSnapshotFields(view, encoder)
         removeModeWhenNull(view.mode)
       },
     )
@@ -40,19 +46,25 @@ object WorkflowWireProjections {
       },
     )
 
-  fun resumeMap(view: WorkflowResumeView): JsonPayloadContract =
+  fun resumeMap(
+    view: WorkflowResumeView,
+    encoder: WorkflowArtifactWireEncoder,
+  ): JsonPayloadContract =
     payload(
       linkedMapOf<String, Any?>().apply {
-        putSnapshotFields(view.snapshot)
+        putSnapshotFields(view.snapshot, encoder)
         removeModeWhenNull(view.snapshot.mode)
         putResumeFields(view)
       },
     )
 
-  fun continueMap(view: WorkflowContinueView): JsonPayloadContract =
+  fun continueMap(
+    view: WorkflowContinueView,
+    encoder: WorkflowArtifactWireEncoder,
+  ): JsonPayloadContract =
     payload(
       linkedMapOf<String, Any?>().apply {
-        putSnapshotFields(view.resume.snapshot)
+        putSnapshotFields(view.resume.snapshot, encoder)
         removeModeWhenNull(view.resume.snapshot.mode)
         putResumeFields(view.resume)
         put(WorkflowWirePayloadKeys.SKILL_NAME, view.skillName)
@@ -115,20 +127,29 @@ object WorkflowWireProjections {
       ),
     )
 
-  fun inputProjectionMap(projection: WorkflowInputProjection): JsonPayloadContract =
+  fun inputProjectionMap(
+    projection: WorkflowInputProjection,
+    encoder: WorkflowArtifactWireEncoder,
+  ): JsonPayloadContract =
     payload(
       linkedMapOf(
         SharedPayloadKeys.STEP_ID to projection.stepId,
         WorkflowWirePayloadKeys.PRODUCER_ITERATION to projection.producerIteration,
         ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT to projection.repositoryCheckpoint,
-        WorkflowWirePayloadKeys.ARTIFACTS to projection.artifacts.toMap(),
+        WorkflowWirePayloadKeys.ARTIFACTS to
+          JsonCodec.parseValue(
+            encoder.encode(DurableWorkflowArtifacts.fromMap(projection.artifacts)),
+          ),
         WorkflowWirePayloadKeys.UTF8_BYTES to projection.utf8Bytes,
       ),
     )
 
   private fun payload(map: Map<String, Any?>): JsonPayloadContract = WorkflowWirePayload(map)
 
-  private fun MutableMap<String, Any?>.putSnapshotFields(view: WorkflowSnapshotView) {
+  private fun MutableMap<String, Any?>.putSnapshotFields(
+    view: WorkflowSnapshotView,
+    encoder: WorkflowArtifactWireEncoder,
+  ) {
     put(SharedPayloadKeys.WORKFLOW_ID, view.workflowId)
     put(WorkflowWirePayloadKeys.SESSION_ID, view.sessionId)
     put(WorkflowWirePayloadKeys.WORKFLOW_NAME, view.workflowName)
@@ -137,7 +158,7 @@ object WorkflowWireProjections {
     put(WorkflowWirePayloadKeys.WORKFLOW_STATUS, view.workflowStatus.wireValue)
     put(WorkflowWirePayloadKeys.CURRENT_STEP_ID, view.currentStepId)
     put(WorkflowWirePayloadKeys.STEPS, view.steps.map(::workflowStepWireMap))
-    put(WorkflowWirePayloadKeys.ARTIFACTS, view.artifacts.toMap())
+    put(WorkflowWirePayloadKeys.ARTIFACTS, JsonCodec.parseValue(encoder.encode(view.artifacts)))
     put(WorkflowWirePayloadKeys.STARTED_AT, view.startedAt)
     put(WorkflowWirePayloadKeys.UPDATED_AT, view.updatedAt)
     put(WorkflowWirePayloadKeys.FINISHED_AT, view.finishedAt)

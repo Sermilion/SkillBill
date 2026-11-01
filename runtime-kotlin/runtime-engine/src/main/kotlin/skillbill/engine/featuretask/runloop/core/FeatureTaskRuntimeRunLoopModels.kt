@@ -67,7 +67,7 @@ internal sealed interface PhaseSettlement {
   }
 }
 
-internal data class PendingReentry(
+public data class PendingReentry(
   val phaseId: String,
   val loopId: String,
   val edgeIteration: Int,
@@ -143,18 +143,18 @@ internal data class FixLoopBranchContext(
   val loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
 )
 
-class ValidatedOutputCapture internal constructor(
+public class ValidatedOutputCapture internal constructor(
   internal val run: PhaseRun,
-  val iteration: Int,
+  internal val iteration: Int,
   internal val captured: CapturedPhaseOutput,
-  val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
+  internal val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
   internal val fileManifest: FeatureTaskRuntimePhaseFileManifest,
 ) {
-  val outputText: String get() = captured.text
-  val outputBytes: ByteArray get() = captured.bytes
-  val outputTruncated: Boolean get() = captured.truncated
-  val outputByteSize: Long get() = captured.byteSize
-  val outputSha256: String get() = captured.sha256
+  internal val outputText: String get() = captured.text
+  internal val outputBytes: ByteArray get() = captured.bytes
+  internal val outputTruncated: Boolean get() = captured.truncated
+  internal val outputByteSize: Long get() = captured.byteSize
+  internal val outputSha256: String get() = captured.sha256
 }
 
 internal data class RejectedOutputTargeting(
@@ -242,7 +242,7 @@ internal data class PhaseReviewPersistenceArgs(
 
 internal sealed interface CommitPushFinalisation
 
-data object CommitPushNotApplicable : CommitPushFinalisation
+internal data object CommitPushNotApplicable : CommitPushFinalisation
 
 internal data class CommitPushSettled(
   val output: NormalizedFeatureTaskRuntimePhaseOutput,
@@ -286,7 +286,7 @@ internal data class LaunchRequiredWriteRejected(
   val rejection: RequiredPhaseWrite.Rejected,
 ) : LaunchPreparation
 
-internal data class PhaseRun(
+public data class PhaseRun(
   val phaseId: String,
   val declaration: FeatureTaskRuntimePhaseDeclaration,
   val resolvedAgent: FeatureTaskRuntimeResolvedPhaseAgent,

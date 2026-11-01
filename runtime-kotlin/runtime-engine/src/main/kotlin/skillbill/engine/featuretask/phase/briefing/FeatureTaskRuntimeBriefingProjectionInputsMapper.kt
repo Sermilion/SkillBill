@@ -4,7 +4,7 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeBriefingProjectionInputs
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffProjectionInputs
 
-fun briefingProjectionInputs(
+internal fun briefingProjectionInputs(
   inputs: FeatureTaskRuntimeBriefingProjectionInputs,
 ): FeatureTaskRuntimeHandoffProjectionInputs =
   FeatureTaskRuntimeHandoffProjectionInputs(

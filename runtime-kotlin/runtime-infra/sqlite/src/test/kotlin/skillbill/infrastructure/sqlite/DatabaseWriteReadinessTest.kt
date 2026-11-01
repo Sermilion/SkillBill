@@ -6,10 +6,6 @@ import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
-import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.core.schema.DatabaseWriteReadinessGate
 import skillbill.infrastructure.sqlite.core.schema.databaseFileIdentity
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME

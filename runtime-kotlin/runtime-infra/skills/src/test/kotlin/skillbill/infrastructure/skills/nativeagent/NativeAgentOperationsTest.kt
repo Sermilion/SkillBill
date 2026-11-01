@@ -1,7 +1,6 @@
 package skillbill.infrastructure.skills.nativeagent
 
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentRegenerationRequest
 import java.nio.file.Files

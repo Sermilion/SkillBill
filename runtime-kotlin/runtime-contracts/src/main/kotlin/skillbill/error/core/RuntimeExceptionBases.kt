@@ -1,5 +1,7 @@
 package skillbill.error.core
 
+import kotlin.coroutines.cancellation.CancellationException
+
 /** Marker for owner-declared failure code enums. */
 interface RuntimeFailureCode
 
@@ -24,6 +26,16 @@ fun SkillBillRuntimeException.rethrowUnless(handled: Boolean): SkillBillRuntimeE
   if (!handled) throw this
   return this
 }
+
+fun Throwable.isCooperativeCancellation(): Boolean = this is CancellationException || this is InterruptedException
+
+inline fun <T> catchingNonCancellation(block: () -> T): Result<T> =
+  try {
+    Result.success(block())
+  } catch (expectedFailure: Throwable) {
+    if (expectedFailure.isCooperativeCancellation()) throw expectedFailure
+    Result.failure(expectedFailure)
+  }
 
 fun Throwable.failureCodeLabel(): String? {
   val failureCode = (this as? SkillBillRuntimeException)?.code

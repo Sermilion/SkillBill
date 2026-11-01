@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.github
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
@@ -30,7 +31,7 @@ internal class ProcessGhCommandRunner(
     root: Path,
     args: List<String>,
   ): GhCommandResult =
-    runCatching {
+    catchingNonCancellation {
       val executable =
         ghExecutableResolver(root)
           ?: return GhCommandResult(exitCode = 1, stdout = "GitHub CLI executable was not found on PATH.")

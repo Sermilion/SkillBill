@@ -1,6 +1,9 @@
 package skillbill.infrastructure.workflow.git
 
 import skillbill.infrastructure.workflow.git.checkpoint.GitCheckpointHistoryOperations
+import skillbill.infrastructure.workflow.git.fingerprint.GitRepositoryFingerprintOperations
+import skillbill.infrastructure.workflow.git.fingerprint.GitRuntimePhaseFileManifestOperations
+import skillbill.infrastructure.workflow.git.fingerprint.GitSuppressionEvidenceOperations
 import skillbill.infrastructure.workflow.git.goal.GitGoalSubtaskReviewOperations
 import skillbill.infrastructure.workflow.git.scoped.GIT_NUL
 import skillbill.infrastructure.workflow.git.scoped.GitScopedStagingOperations

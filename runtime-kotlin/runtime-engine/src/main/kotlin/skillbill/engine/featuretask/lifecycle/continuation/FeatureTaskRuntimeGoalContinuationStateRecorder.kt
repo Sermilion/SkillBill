@@ -15,11 +15,10 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.time.Clock
 
-class FeatureTaskRuntimeGoalContinuationStateRecorder(
+internal class FeatureTaskRuntimeGoalContinuationStateRecorder(
   private val database: DatabaseSessionFactory,
   private val engine: WorkflowEngine,
   private val clock: Clock,
@@ -64,11 +63,7 @@ class FeatureTaskRuntimeGoalContinuationStateRecorder(
         }.orEmpty()
       val adoptionPatch =
         request.fieldAdoption?.let {
-          mapOf(
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION.entry(
-              it.asWorkflowArtifactEntry(),
-            ),
-          )
+          mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION.entry(it))
         }.orEmpty()
       val updated =
         engine.updateRecord(

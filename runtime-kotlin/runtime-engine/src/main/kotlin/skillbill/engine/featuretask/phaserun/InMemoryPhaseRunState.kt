@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepB
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
+import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
@@ -28,16 +29,20 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
+import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.missingValidationGate
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ParallelReviewLaneRunResult
@@ -47,29 +52,29 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
-internal class InMemoryPhaseRunState(
-  private val facts: InMemoryPhaseRunFacts,
-  private val executionPlan: ResolvedPhaseExecutionPlan,
-  override val progress: FeatureTaskRuntimeRunState,
-  override val records: InMemoryPhaseRunRecords,
-  override val telemetry: FeatureTaskRuntimeRunObservability,
-  val invocationId: String,
-  private val strategies: PhaseStrategyLookup,
-  private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
-  private val lifecycleTelemetry: LifecycleTelemetryService,
-  override val clock: Clock,
-  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
+public class InMemoryPhaseRunState(
+  public val facts: InMemoryPhaseRunFacts,
+  public val executionPlan: ResolvedPhaseExecutionPlan,
+  public override val progress: FeatureTaskRuntimeRunState,
+  public override val records: InMemoryPhaseRunRecords,
+  public override val telemetry: FeatureTaskRuntimeRunObservability,
+  public val invocationId: String,
+  public val strategies: PhaseStrategyLookup,
+  public val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
+  public val lifecycleTelemetry: LifecycleTelemetryService,
+  public override val clock: Clock,
+  public val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
   override val settlements: PhaseRunSettlements =
     GoalQualityPhaseRunSettlements(records)
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
   override var commitPushManifestCompletion: CommitPushManifestCompletion? = null
-  override val diagnostics get() = telemetry.diagnostics
+  override val diagnostics: RuntimeDiagnostics get() = telemetry.diagnostics
 
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
@@ -82,8 +87,8 @@ internal class InMemoryPhaseRunState(
     get() = progress.transitions
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
 
-  var reviewResult: ParallelCodeReviewResult? = null
-  var reviewRunId: String? = null
+  internal var reviewResult: ParallelCodeReviewResult? = null
+  internal var reviewRunId: String? = null
     private set
 
   private var qualityCheck: QualityCheckSession? = null
@@ -92,7 +97,7 @@ internal class InMemoryPhaseRunState(
 
   override fun strategyFor(stepId: String): PhaseStrategy = strategies.strategyFor(stepId, executionPlan)
 
-  override fun runnerFor(stepId: String) = strategies.runnerFor(stepId, executionPlan)
+  override fun runnerFor(stepId: String): PhaseRunner = strategies.runnerFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
@@ -102,7 +107,11 @@ internal class InMemoryPhaseRunState(
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
-  override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
+  override fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? = executionPlan.stepLaunchAssignments[stepId]
+
+  override val launchPromptContext: String = ""
+
+  override fun fanOut(stepId: String): PhaseRunFanOut = throw PhaseRunFanOutUnsupportedError(stepId)
 
   override fun bindings(run: PhaseRun): PhaseBindingFactory {
     require(run.request === facts)
@@ -154,9 +163,8 @@ internal class InMemoryPhaseRunState(
       lastKind = kind
       lastPublishedAt = now
       val bounded = boundedIdeStatusActivity(activity) ?: return
-      runCatching { output(stepName, bounded) }
+      catchingNonCancellation { output(stepName, bounded) }
         .onFailure { error ->
-          if (error is CancellationException) throw error
           RuntimeDiagnosticsBestEffortWarning.record(
             diagnostics,
             "Phase run $invocationId could not publish launch activity for '$stepName'.",
@@ -226,7 +234,7 @@ internal class InMemoryPhaseRunState(
     val assembly = reviewResultAssembly
     assembly.persistReviewPassClaims(reviewRunId, result.mergeResult.findings, persistEmpty = true)
     if (laneTelemetryRecorded) return
-    runCatching {
+    catchingNonCancellation {
       assembly.emitReviewStageDegradations(
         reviewRunId,
         ParallelReviewLaneRunResult(
@@ -308,7 +316,7 @@ internal class InMemoryPhaseRunState(
     stepName: String,
     emit: () -> T,
   ): T? =
-    runCatching(emit)
+    catchingNonCancellation(emit)
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,
@@ -332,7 +340,7 @@ private enum class QualityCheckResult(
   FAIL("fail"),
 }
 
-private const val QUALITY_CHECK_ROUTED_SKILL = "bill-code-check"
+public const val QUALITY_CHECK_ROUTED_SKILL: String = "bill-code-check"
 private const val QUALITY_CHECK_SCOPE_TYPE = "working_tree"
 private const val ACTIVITY_REFRESH_SECONDS = 30L
 private val ACTIVITY_REFRESH_INTERVAL = Duration.ofSeconds(ACTIVITY_REFRESH_SECONDS)

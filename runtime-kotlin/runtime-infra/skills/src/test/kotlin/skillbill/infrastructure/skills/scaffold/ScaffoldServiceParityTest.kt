@@ -4,8 +4,8 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.error.shellcontent.SkillStagingFailureCode
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.testNativeAgentCompositionContext
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringTarget

@@ -3,7 +3,6 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.SQLException

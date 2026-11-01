@@ -9,14 +9,14 @@ import java.nio.file.Path
  * What one review call inspects. Each target composes the opening lines of the review prompt; last commit reads its
  * revisions from the prepared review input.
  */
-sealed interface ReviewTarget {
+public sealed interface ReviewTarget {
   /** The opening prompt lines for this target, given the prepared input's base and head revisions. */
-  fun openingLines(
+  public fun openingLines(
     baseRevision: String,
     headRevision: String,
   ): List<String>
 
-  data object LastCommit : ReviewTarget {
+  public data object LastCommit : ReviewTarget {
     override fun openingLines(
       baseRevision: String,
       headRevision: String,
@@ -27,7 +27,7 @@ sealed interface ReviewTarget {
       )
   }
 
-  data object Uncommitted : ReviewTarget {
+  public data object Uncommitted : ReviewTarget {
     override fun openingLines(
       baseRevision: String,
       headRevision: String,
@@ -38,7 +38,7 @@ sealed interface ReviewTarget {
       )
   }
 
-  data class Commit(val sha: String) : ReviewTarget {
+  public data class Commit(val sha: String) : ReviewTarget {
     override fun openingLines(
       baseRevision: String,
       headRevision: String,
@@ -49,11 +49,11 @@ sealed interface ReviewTarget {
       )
   }
 
-  data class Scoped(
-    val scope: ParallelReviewScope,
-    val baseRevision: String? = null,
-    val headRevision: String? = null,
-    val suppliedDiffPath: Path? = null,
+  public data class Scoped(
+    public val scope: ParallelReviewScope,
+    public val baseRevision: String? = null,
+    public val headRevision: String? = null,
+    public val suppliedDiffPath: Path? = null,
   ) : ReviewTarget {
     override fun openingLines(
       baseRevision: String,
@@ -96,10 +96,10 @@ sealed interface ReviewTarget {
   }
 }
 
-data class ReviewInvocation(
-  val target: ReviewTarget? = null,
-  val reviewRunId: String? = null,
-  val reviewSessionId: String? = null,
-  val prelaunchExpansions: List<ReviewPrelaunchExpansion> = emptyList(),
-  val baselineUntrackedPolicy: ReviewBaselineUntrackedPolicy = ReviewBaselineUntrackedPolicy.EMPTY,
+public data class ReviewInvocation(
+  public val target: ReviewTarget? = null,
+  public val reviewRunId: String? = null,
+  public val reviewSessionId: String? = null,
+  public val prelaunchExpansions: List<ReviewPrelaunchExpansion> = emptyList(),
+  public val baselineUntrackedPolicy: ReviewBaselineUntrackedPolicy = ReviewBaselineUntrackedPolicy.EMPTY,
 )

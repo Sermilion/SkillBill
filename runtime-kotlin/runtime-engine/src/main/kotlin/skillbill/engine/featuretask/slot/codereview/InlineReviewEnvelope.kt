@@ -29,7 +29,7 @@ internal data class InlineReviewCycle(
   val blockerDispositions: List<GoalSubtaskBlockerDisposition> = emptyList(),
 )
 
-object InlineReviewEnvelope {
+internal object InlineReviewEnvelope {
   private const val REVIEW_RUN_ID_SUFFIX_LENGTH = 4
   private const val SUMMARY_MAX_CHARS = 2_000
 

@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.runloop.observability.paused
 import skillbill.engine.featuretask.runner.disposition
-import skillbill.engine.goalrunner.status.completed
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -45,8 +44,6 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.upsertRepairReceipt
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asCheckpointIdentitiesArtifactEntry
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Files
@@ -123,7 +120,7 @@ class GoalSubtaskReviewStateDurablePersistenceTest {
             suppressPr = true,
             goalBranch = goalBranch,
             codeReviewMode = CodeReviewExecutionMode.INLINE,
-          ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
+          ),
         GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to state.toPersistenceWire(),
         GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY to
           state.passResults.associate { result ->

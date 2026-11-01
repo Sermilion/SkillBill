@@ -10,7 +10,6 @@ import skillbill.telemetry.model.SyncResult
 import skillbill.telemetry.model.TelemetrySettings
 import java.nio.file.Path
 import java.time.Instant
-import kotlin.coroutines.cancellation.CancellationException
 
 object TelemetrySyncRuntime {
   fun disabledSync(settings: TelemetrySettings): SyncResult = disabledSyncResult(settings)
@@ -68,16 +67,11 @@ object TelemetrySyncRuntime {
     nowSupplier: () -> Instant,
     interruptSignal: InterruptSignalPort,
   ): SyncResult? =
-    runCatching { syncTelemetry(settings, outboxRepository, client, nowSupplier, interruptSignal) }
+    catchingTelemetryFailure(interruptSignal) {
+      syncTelemetry(settings, outboxRepository, client, nowSupplier, interruptSignal)
+    }
       .getOrElse { thrown ->
-        when (thrown) {
-          is CancellationException -> throw thrown
-          is InterruptedException -> {
-            rethrowInterrupted(thrown, interruptSignal)
-          }
-          is Exception -> null
-          else -> throw thrown
-        }
+        if (thrown is Exception) null else throw thrown
       }
 }
 

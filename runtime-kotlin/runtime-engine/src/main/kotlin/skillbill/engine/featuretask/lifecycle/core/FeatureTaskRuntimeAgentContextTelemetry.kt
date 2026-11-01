@@ -10,7 +10,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
-fun featureTaskRuntimeAgentContext(
+public fun featureTaskRuntimeAgentContext(
   records: Map<String, FeatureTaskRuntimePhaseRecord>?,
 ): FeatureTaskRuntimeAgentContext {
   val phaseRecords = records?.withoutPlanSubtaskUnitRecords()?.values ?: return FeatureTaskRuntimeAgentContext()
@@ -20,7 +20,7 @@ fun featureTaskRuntimeAgentContext(
   )
 }
 
-fun featureTaskRuntimePhaseStrategies(
+public fun featureTaskRuntimePhaseStrategies(
   phaseIds: Collection<String>,
   dispatch: Map<String, ResolvedPhaseStrategyDispatch>?,
 ): FeatureTaskRuntimePhaseStrategies {
@@ -51,7 +51,7 @@ fun featureTaskRuntimePhaseStrategies(
   )
 }
 
-private fun Collection<FeatureTaskRuntimePhaseRecord>.distinctNames(
+public fun Collection<FeatureTaskRuntimePhaseRecord>.distinctNames(
   select: (FeatureTaskRuntimePhaseRecord) -> String?,
 ): List<String>? =
   mapNotNull { select(it)?.takeIf(String::isNotBlank) }
@@ -60,9 +60,9 @@ private fun Collection<FeatureTaskRuntimePhaseRecord>.distinctNames(
     .takeIf { it.isNotEmpty() }
 
 @Inject
-class FeatureTaskRuntimeAgentContextTelemetry(
+public class FeatureTaskRuntimeAgentContextTelemetry(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
 ) {
-  fun context(workflowId: String): FeatureTaskRuntimeAgentContext =
+  internal fun context(workflowId: String): FeatureTaskRuntimeAgentContext =
     featureTaskRuntimeAgentContext(recorder.loadPhaseRecords(workflowId))
 }

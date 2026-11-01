@@ -17,8 +17,9 @@ class GoalStatusReadStoreTest {
       it.prepareStatement(
         """
         INSERT INTO feature_task_workflows (
-          workflow_id, mode, contract_version, workflow_status, steps_json, artifacts_json, started_at, state_entered_at
-        ) VALUES (?, 'runtime', ?, 'running', '[]', ?, '2026-10-20T19:20:19Z', '2026-10-20T19:20:19Z')
+          workflow_id, mode, contract_version, workflow_status, steps_json, artifacts_json, started_at, state_entered_at,
+          parent_workflow_id, goal_subtask_id, goal_issue_key
+        ) VALUES (?, 'runtime', ?, 'running', '[]', ?, '2026-10-20T19:20:19Z', '2026-10-20T19:20:19Z', ?, 1, '0AC-68')
         """.trimIndent(),
       ).use { statement ->
         listOf("current-parent", "foreign-parent", null).forEachIndexed { index, parentId ->
@@ -31,7 +32,12 @@ class GoalStatusReadStoreTest {
                   "parent_workflow_id" to parentId,
                 ),
             )
-          statement.bindAll("child-$index", if (index == 0) "0.1" else "99.0", JsonCodec.valueToJsonString(artifacts))
+          statement.bindAll(
+            "child-$index",
+            if (index == 0) "0.1" else "99.0",
+            JsonCodec.valueToJsonString(artifacts),
+            parentId,
+          )
           statement.executeUpdate()
         }
       }

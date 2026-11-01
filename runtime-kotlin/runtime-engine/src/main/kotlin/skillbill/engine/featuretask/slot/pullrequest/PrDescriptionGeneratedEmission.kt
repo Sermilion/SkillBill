@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.pullrequest
 import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.slot.state.PhasePullRequestContext
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -17,7 +18,7 @@ internal class PrDescriptionGeneratedEmission(
     branch: String,
     baseBranch: String,
   ) {
-    runCatching { request(before, after, branch, baseBranch) }
+    catchingNonCancellation { request(before, after, branch, baseBranch) }
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, "$SKIPPED: measurement failed", error)
       }.getOrNull()

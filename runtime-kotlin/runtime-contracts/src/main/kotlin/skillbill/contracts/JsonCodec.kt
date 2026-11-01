@@ -275,7 +275,11 @@ private fun decodeDecimalPrimitive(primitive: JsonPrimitive): BigDecimal? {
   if (!content.contains('.')) {
     return null
   }
-  return runCatching { BigDecimal(content) }.getOrNull()
+  return try {
+    BigDecimal(content)
+  } catch (_: NumberFormatException) {
+    null
+  }
 }
 
 private fun decodeIntegralPrimitive(primitive: JsonPrimitive): Any? {
@@ -283,7 +287,7 @@ private fun decodeIntegralPrimitive(primitive: JsonPrimitive): Any? {
   if (content.contains('.') || content.contains('e', ignoreCase = true)) {
     return null
   }
-  return runCatching { BigInteger(content) }.getOrNull()?.let { integral ->
+  return content.toBigIntegerOrNull()?.let { integral ->
     if (integral >= BigInteger.valueOf(Long.MIN_VALUE) &&
       integral <= BigInteger.valueOf(Long.MAX_VALUE)
     ) {

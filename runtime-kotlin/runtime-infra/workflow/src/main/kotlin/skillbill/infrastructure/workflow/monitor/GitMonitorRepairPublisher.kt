@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.monitor
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.workflow.process.GIT_HOOKED_COMMAND_TIMEOUT_SECONDS
 import skillbill.infrastructure.workflow.process.invokeGitProcess
 import skillbill.ports.monitor.MonitorRepairPublisher
@@ -41,7 +42,7 @@ class GitMonitorRepairPublisher : MonitorRepairPublisher {
   ): MonitorPublicationResult {
     val worktree = request.worktree.path
     val hookDirectory =
-      runCatching(::writeMonitorPrePushGuard).getOrElse { failure ->
+      catchingNonCancellation(::writeMonitorPrePushGuard).getOrElse { failure ->
         return MonitorPublicationResult.Rejected(
           MonitorPublicationRefusal.GUARD_REFUSED,
           "The pre-push guard could not be installed, so the push fails closed: ${failure.message}",

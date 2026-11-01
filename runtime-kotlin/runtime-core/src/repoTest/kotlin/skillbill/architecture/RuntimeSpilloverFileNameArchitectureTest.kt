@@ -5,11 +5,7 @@ import kotlin.test.assertEquals
 
 class RuntimeSpilloverFileNameArchitectureTest {
   @Test
-  fun `spillover filename census equals the recorded baseline`() {
-    val baseline =
-      ArchitectureScanSupport.parseStringSetBaseline(
-        ArchitectureBaselineSupport.readBaseline(PrincipleEnforcementInventory.SPILLOVER_FILE_NAME_BASELINE),
-      )
+  fun `spillover filename census stays empty`() {
     val scanRoots =
       PrincipleEnforcementInventory.moduleArchitectureScanCases.map { scanCase ->
         scanCase.moduleSourceRoot
@@ -19,38 +15,11 @@ class RuntimeSpilloverFileNameArchitectureTest {
         scanRoots = scanRoots,
         exemptPaths = PrincipleEnforcementInventory.spilloverFileNameExemptions,
       )
-    assertEquals(
-      baseline,
-      current,
-      "Re-record ${PrincipleEnforcementInventory.SPILLOVER_FILE_NAME_BASELINE} with RECORD_ARCHITECTURE_BASELINES=1.",
-    )
+    assertEquals(emptySet(), current, current.joinToString("\n"))
   }
 
   @Test
-  fun `spillover filename violations minus baseline stay empty`() {
-    val baseline =
-      ArchitectureScanSupport.parseStringSetBaseline(
-        ArchitectureBaselineSupport.readBaseline(PrincipleEnforcementInventory.SPILLOVER_FILE_NAME_BASELINE),
-      )
-    val scanRoots =
-      PrincipleEnforcementInventory.moduleArchitectureScanCases.map { scanCase ->
-        scanCase.moduleSourceRoot
-      }
-    val current =
-      ArchitectureScanSupport.spilloverFileNamePaths(
-        scanRoots = scanRoots,
-        exemptPaths = PrincipleEnforcementInventory.spilloverFileNameExemptions,
-      )
-    val unlisted = current - baseline
-    assertEquals(emptySet(), unlisted, unlisted.joinToString("\n"))
-  }
-
-  @Test
-  fun `spillover identifier census minus baseline stays empty`() {
-    val baseline =
-      ArchitectureScanSupport.parseStringSetBaseline(
-        ArchitectureBaselineSupport.readBaseline(PrincipleEnforcementInventory.SPILLOVER_FILE_NAME_BASELINE),
-      )
+  fun `spillover identifier census stays empty`() {
     val scanRoots =
       PrincipleEnforcementInventory.moduleArchitectureScanCases.map { scanCase ->
         scanCase.moduleSourceRoot
@@ -60,8 +29,7 @@ class RuntimeSpilloverFileNameArchitectureTest {
         scanRoots = scanRoots,
         exemptPaths = PrincipleEnforcementInventory.spilloverFileNameExemptions,
       )
-    val unlisted = current - baseline
-    assertEquals(emptySet(), unlisted, unlisted.joinToString("\n"))
+    assertEquals(emptySet(), current, current.joinToString("\n"))
   }
 
   @Test

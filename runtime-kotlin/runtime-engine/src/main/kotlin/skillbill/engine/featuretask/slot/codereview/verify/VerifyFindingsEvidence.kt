@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview.verify
 
-import skillbill.application.review.spec.toProjectionPayload
+import skillbill.application.review.packet.toProjectionPayload
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning

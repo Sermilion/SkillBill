@@ -1,6 +1,6 @@
 package skillbill.engine.migration
 
-data class RuntimeMigrationReceipt(
+internal data class RuntimeMigrationReceipt(
   val sourceVersion: String,
   val targetVersion: String,
   val result: Result,

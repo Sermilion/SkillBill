@@ -116,11 +116,14 @@ data class SkillRunGoalContinuationContext(
 fun interface AgentRunProgressProbe {
   fun progressToken(): String?
 
-  fun progressLabel(): String? = null
-
   companion object {
     val NONE: AgentRunProgressProbe = AgentRunProgressProbe { null }
   }
+}
+
+/** Optional capability of an [AgentRunProgressProbe]: a human-readable label for the latest progress. */
+interface AgentRunProgressLabelProbe {
+  fun progressLabel(): String?
 }
 
 fun interface AgentRunDeclaredProgressProbe {

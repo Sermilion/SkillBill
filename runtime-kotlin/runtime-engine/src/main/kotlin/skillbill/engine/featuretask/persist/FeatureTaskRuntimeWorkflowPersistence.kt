@@ -61,21 +61,21 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 
-const val GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY: String = "goal_child_repair_evidence"
+public const val GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY: String = "goal_child_repair_evidence"
 
-internal data class WorkflowRowAdvance(
-  val currentStepId: String,
-  val workflowStatus: String,
-  val stepUpdates: List<FeatureTaskRuntimePhaseStepWireUpdate>? = null,
-  val terminalInstant: Instant? = null,
+public data class WorkflowRowAdvance internal constructor(
+  internal val currentStepId: String,
+  internal val workflowStatus: String,
+  internal val stepUpdates: List<FeatureTaskRuntimePhaseStepWireUpdate>? = null,
+  internal val terminalInstant: Instant? = null,
 ) {
-  companion object {
-    fun keepFrom(record: WorkflowStateSnapshot): WorkflowRowAdvance =
+  internal companion object {
+    internal fun keepFrom(record: WorkflowStateSnapshot): WorkflowRowAdvance =
       WorkflowRowAdvance(currentStepId = record.currentStepId, workflowStatus = record.workflowStatus.wireValue)
   }
 }
 
-class FeatureTaskRuntimeWorkflowPersistence
+public class FeatureTaskRuntimeWorkflowPersistence
   @Inject
   constructor(
     private val database: DatabaseSessionFactory,
@@ -84,7 +84,7 @@ class FeatureTaskRuntimeWorkflowPersistence
   ) {
     private val engine: WorkflowEngine = WorkflowEngine()
 
-    fun ensureWorkflowOpen(
+    internal fun ensureWorkflowOpen(
       workflowId: String,
       sessionId: String,
       issueKey: String? = null,
@@ -156,7 +156,7 @@ class FeatureTaskRuntimeWorkflowPersistence
         true
       }
 
-    fun readArtifacts(workflowId: String): DurableWorkflowArtifacts? =
+    internal fun readArtifacts(workflowId: String): DurableWorkflowArtifacts? =
       database.read { unitOfWork ->
         val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
         workflowSnapshotValidator.validate(record, record.workflowName)
@@ -164,7 +164,7 @@ class FeatureTaskRuntimeWorkflowPersistence
         record.artifacts
       }
 
-    fun readQaRepairState(workflowId: String): QaRepairState? {
+    internal fun readQaRepairState(workflowId: String): QaRepairState? {
       val artifacts =
         readArtifacts(workflowId)
           ?: throw invalidWorkflowStateSchemaError("Workflow '$workflowId' is missing its QA state.")
@@ -185,7 +185,7 @@ class FeatureTaskRuntimeWorkflowPersistence
       return FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts)).toQaRepairState()
     }
 
-    fun readAcceptanceCriterionRepairState(
+    internal fun readAcceptanceCriterionRepairState(
       workflowId: String,
       expectedCatalogId: String,
       expectedExecutionId: String,
@@ -215,7 +215,7 @@ class FeatureTaskRuntimeWorkflowPersistence
         state
       }
 
-    fun readAcceptanceCriterionRepairStatus(workflowId: String): AcceptanceCriterionRepairStatusRead? =
+    internal fun readAcceptanceCriterionRepairStatus(workflowId: String): AcceptanceCriterionRepairStatusRead? =
       database.read { unitOfWork ->
         val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
         workflowSnapshotValidator.validate(record, record.workflowName)
@@ -297,7 +297,7 @@ class FeatureTaskRuntimeWorkflowPersistence
       return payload.toImplementationProgress("workflow-artifact:${family.label()}")
     }
 
-    internal fun persistArtifactsPatch(
+    public fun persistArtifactsPatch(
       workflowStates: WorkflowStateRepository,
       record: WorkflowStateSnapshot,
       patch: Map<String, Any?>,
@@ -459,24 +459,24 @@ class FeatureTaskRuntimeWorkflowPersistence
     }
   }
 
-internal object FeatureTaskRuntimeWorkflowArtifactPatches {
-  fun clearGoalContinuationOutcome(): Map<String, Any?> =
+public object FeatureTaskRuntimeWorkflowArtifactPatches {
+  public fun clearGoalContinuationOutcome(): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME.entry(null))
 
-  fun goalContinuationArtifact(entry: Any): Map<String, Any?> =
+  public fun goalContinuationArtifact(entry: Any): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(entry))
 
-  fun goalSubtaskReviewState(entry: Any): Map<String, Any?> =
+  public fun goalSubtaskReviewState(entry: Any): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(entry))
 
-  fun goalReviewBaseRecoveries(entries: List<Any?>): Map<String, Any?> =
+  public fun goalReviewBaseRecoveries(entries: List<Any?>): Map<String, Any?> =
     mapOf(DurableWorkflowArtifactFamily.GOAL_REVIEW_BASE_RECOVERIES.entry(entries))
 
-  fun goalChildRepairEvidence(entries: List<Any?>): Map<String, Any?> =
+  public fun goalChildRepairEvidence(entries: List<Any?>): Map<String, Any?> =
     mapOf(GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY to entries)
 }
 
-internal fun stepUpdatesFrom(
+public fun stepUpdatesFrom(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
 ): List<FeatureTaskRuntimePhaseStepWireUpdate> {
   fun stepStatusFor(record: FeatureTaskRuntimePhaseRecord): String =
@@ -500,7 +500,7 @@ internal fun stepUpdatesFrom(
   }
 }
 
-fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
+public fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
   when {
     request.status.workflowStepStatus() == WorkflowStepStatus.PAUSED -> "paused"
     request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED -> "blocked"
@@ -509,7 +509,7 @@ fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
     else -> "running"
   }
 
-private fun FeatureTaskRuntimePhaseStateRequest.reentersWorkflow(): Boolean {
+public fun FeatureTaskRuntimePhaseStateRequest.reentersWorkflow(): Boolean {
   val transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
   return phaseId in transitions.loopOnlyPhaseIds ||
     transitions.backwardEdges.any { edge ->
@@ -517,21 +517,21 @@ private fun FeatureTaskRuntimePhaseStateRequest.reentersWorkflow(): Boolean {
     }
 }
 
-fun attemptStatusFor(request: FeatureTaskRuntimePhaseStateRequest): FeatureTaskRuntimeImplementationAttemptStatus =
+internal fun attemptStatusFor(
+  request: FeatureTaskRuntimePhaseStateRequest,
+): FeatureTaskRuntimeImplementationAttemptStatus =
   when (request.status.workflowStepStatus()) {
     WorkflowStepStatus.COMPLETED -> FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED
     WorkflowStepStatus.BLOCKED -> FeatureTaskRuntimeImplementationAttemptStatus.BLOCKED
     else -> FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE
   }
 
-fun durationMillis(
+public fun durationMillis(
   startedAt: Instant,
   finishedAt: Instant,
 ): Long = Duration.between(startedAt, finishedAt).toMillis().coerceAtLeast(0)
 
-fun sha256Hex(value: String): String =
+public fun sha256Hex(value: String): String =
   MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray())
     .joinToString("") { "%02x".format(it) }
-
-const val PHASE_RECORDER_STATUS_RUNNING = "running"

@@ -633,7 +633,7 @@ Two bundles fit the work: one for the runtime (R1–R5) and one for the app. Sug
 | Spec browser | `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/specbrowser/` |
 | Operator decision | `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/GoalOperatorDecisionService.kt` |
 | Commit signal | `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/persistence/DesktopCommitSignal.kt`, `DesktopReadSchema.kt`; `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/DesktopCommitSignalPublisher.kt`, `core/schema/DesktopChangeRevisions.kt` |
-| Read sessions | `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/SQLiteDatabaseSessionFactory.kt`, `core/schema/DatabaseRuntime.kt` |
+| Read sessions | `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/SQLiteDatabaseSessionFactory.kt`, `DatabaseRuntime.kt` |
 | Config models | `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/config/model/` |
 | Config reads | `runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/config/ConfigResolutionService.kt` |
 | Telemetry config | `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/telemetry/TelemetryConfigRules.kt`, `runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/telemetry/transport/TelemetryConfigStore.kt` |

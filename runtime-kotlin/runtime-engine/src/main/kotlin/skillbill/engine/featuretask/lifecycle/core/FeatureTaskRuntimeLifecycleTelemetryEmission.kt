@@ -5,6 +5,7 @@ import skillbill.application.telemetry.model.FeatureTaskRuntimeAgentContext
 import skillbill.application.telemetry.model.FeatureTaskRuntimeFinishedRequest
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingVerificationTelemetry
@@ -13,19 +14,22 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStrategies
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRegenerationTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.review.core.auditGapIterationCount
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 
-internal fun emitFeatureTaskRuntimeFinished(
+public fun emitFeatureTaskRuntimeFinished(
   lifecycleTelemetryService: LifecycleTelemetryService,
+  diagnostics: RuntimeDiagnostics,
   report: FeatureTaskRuntimeRunReport,
   context: FeatureTaskRuntimeFinishedTelemetryContext,
   completionStatus: String,
 ) {
   val outcomes = context.phaseOutcomes()
-  val telemetryPayload = resolvedFeatureTaskRuntimeTelemetryPayload(context)
+  val telemetryPayload = resolvedFeatureTaskRuntimeTelemetryPayload(diagnostics, context)
   lifecycleTelemetryService.featureTaskRuntimeFinished(
     FeatureTaskRuntimeFinishedRequest(
       sessionId = context.telemetrySessionId,
@@ -54,13 +58,14 @@ internal fun emitFeatureTaskRuntimeFinished(
   )
 }
 
-internal fun emitFeatureTaskRuntimeFinishedError(
+public fun emitFeatureTaskRuntimeFinishedError(
   lifecycleTelemetryService: LifecycleTelemetryService,
+  diagnostics: RuntimeDiagnostics,
   context: FeatureTaskRuntimeFinishedTelemetryContext,
   outcomes: Map<String, String>,
   error: Throwable? = null,
 ) {
-  val telemetryPayload = resolvedFeatureTaskRuntimeTelemetryPayload(context)
+  val telemetryPayload = resolvedFeatureTaskRuntimeTelemetryPayload(diagnostics, context)
   lifecycleTelemetryService.featureTaskRuntimeFinished(
     FeatureTaskRuntimeFinishedRequest(
       sessionId = context.telemetrySessionId,
@@ -97,7 +102,7 @@ internal fun emitFeatureTaskRuntimeFinishedError(
   )
 }
 
-private fun Throwable.terminalFailureClass(): String =
+public fun Throwable.terminalFailureClass(): String =
   failureCodeLabel()
     ?: (this::class.simpleName ?: "Throwable")
       .let { name -> if (name.endsWith("Exception") || name.endsWith("Error")) name else "$name exception" }
@@ -116,29 +121,48 @@ internal data class ResolvedFeatureTaskRuntimeTelemetryPayload(
 )
 
 internal fun resolvedFeatureTaskRuntimeTelemetryPayload(
+  diagnostics: RuntimeDiagnostics,
   context: FeatureTaskRuntimeFinishedTelemetryContext,
 ): ResolvedFeatureTaskRuntimeTelemetryPayload {
-  val (tokenBreakdownJson, totalTokens) = runCatching(context.phaseTokenData).getOrDefault(null to null)
-  val phaseOutcomes = runCatching(context.phaseOutcomes).getOrDefault(emptyMap())
+  val (tokenBreakdownJson, totalTokens) = measured(diagnostics, "phaseTokenData", null to null, context.phaseTokenData)
+  val phaseOutcomes = measured(diagnostics, "phaseOutcomes", emptyMap(), context.phaseOutcomes)
   val verificationTelemetry =
-    runCatching(context.findingVerificationTelemetry)
-      .getOrDefault(FeatureTaskRuntimeFindingVerificationTelemetry())
-  val regeneration = runCatching(context.regenerationTelemetry).getOrNull() ?: FeatureTaskRuntimeRegenerationTelemetry()
+    measured(
+      diagnostics,
+      "findingVerificationTelemetry",
+      FeatureTaskRuntimeFindingVerificationTelemetry(),
+      context.findingVerificationTelemetry,
+    )
+  val regeneration =
+    measured(
+      diagnostics,
+      "regenerationTelemetry",
+      FeatureTaskRuntimeRegenerationTelemetry(),
+      context.regenerationTelemetry,
+    )
   val reconciliation =
-    runCatching(context.crashReconciliation).getOrNull()
-      ?: FeatureTaskRuntimeCrashReconciliationResult.NONE
+    measured(
+      diagnostics,
+      "crashReconciliation",
+      FeatureTaskRuntimeCrashReconciliationResult.NONE,
+      context.crashReconciliation,
+    )
   val phaseStrategies =
-    runCatching(context.phaseStrategies).getOrNull()
-      ?: FeatureTaskRuntimePhaseStrategies(
+    measured(
+      diagnostics,
+      "phaseStrategies",
+      FeatureTaskRuntimePhaseStrategies(
         availability = TelemetryMeasurementAvailability.UNAVAILABLE_NO_DURABLE_STATE,
         values = null,
-      )
+      ),
+      context.phaseStrategies,
+    )
   return ResolvedFeatureTaskRuntimeTelemetryPayload(
     tokenBreakdownJson = tokenBreakdownJson,
     totalTokens = totalTokens,
-    reviewFixIterationCount = runCatching(context.reviewFixIterationCount).getOrDefault(0),
-    auditGapIterationCount = runCatching(context.auditGapIterationCount).getOrNull(),
-    agentContext = runCatching(context.agentContext).getOrNull() ?: FeatureTaskRuntimeAgentContext(),
+    reviewFixIterationCount = measured(diagnostics, "reviewFixIterationCount", 0, context.reviewFixIterationCount),
+    auditGapIterationCount = measured(diagnostics, "auditGapIterationCount", null, context.auditGapIterationCount),
+    agentContext = measured(diagnostics, "agentContext", FeatureTaskRuntimeAgentContext(), context.agentContext),
     verificationTelemetry = verificationTelemetry,
     regeneration = regeneration,
     reconciliation = reconciliation,
@@ -150,6 +174,23 @@ internal fun resolvedFeatureTaskRuntimeTelemetryPayload(
   )
 }
 
+public fun <T> measured(
+  diagnostics: RuntimeDiagnostics,
+  name: String,
+  fallback: T,
+  read: () -> T,
+): T =
+  catchingNonCancellation(read)
+    .onFailure { failure ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Feature-task-runtime finished telemetry could not read $name; emitting the fallback. " +
+          "failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+        failure,
+      )
+    }
+    .getOrDefault(fallback)
+
 internal fun completionStatusOf(report: FeatureTaskRuntimeRunReport): String =
   when (report) {
     is FeatureTaskRuntimeRunReport.Completed -> "completed"
@@ -158,7 +199,7 @@ internal fun completionStatusOf(report: FeatureTaskRuntimeRunReport): String =
     is FeatureTaskRuntimeRunReport.Decomposed -> "decomposed_at_planning"
   }
 
-fun completedPhaseIdsOf(report: FeatureTaskRuntimeRunReport): List<String> =
+internal fun completedPhaseIdsOf(report: FeatureTaskRuntimeRunReport): List<String> =
   when (report) {
     is FeatureTaskRuntimeRunReport.Completed -> report.completedPhaseIds
     is FeatureTaskRuntimeRunReport.Blocked -> report.completedPhaseIds
@@ -166,7 +207,7 @@ fun completedPhaseIdsOf(report: FeatureTaskRuntimeRunReport): List<String> =
     is FeatureTaskRuntimeRunReport.Decomposed -> report.completedPhaseIds
   }
 
-fun lastIncompletePhaseOf(
+internal fun lastIncompletePhaseOf(
   report: FeatureTaskRuntimeRunReport,
   outcomes: Map<String, String>,
 ): String =
@@ -178,11 +219,11 @@ fun lastIncompletePhaseOf(
       report.lastIncompletePhase.takeIf(String::isNotBlank) ?: outcomes.firstIncompletePhase()
   }
 
-fun Map<String, String>.firstIncompletePhase(): String =
+public fun Map<String, String>.firstIncompletePhase(): String =
   entries.firstOrNull { it.value.workflowStepStatus() != WorkflowStepStatus.COMPLETED }?.key?.takeIf(String::isNotBlank)
     ?: "unknown"
 
-fun blockedReasonOf(report: FeatureTaskRuntimeRunReport): String =
+public fun blockedReasonOf(report: FeatureTaskRuntimeRunReport): String =
   when (report) {
     is FeatureTaskRuntimeRunReport.Blocked ->
       normalizedBlockedReason(

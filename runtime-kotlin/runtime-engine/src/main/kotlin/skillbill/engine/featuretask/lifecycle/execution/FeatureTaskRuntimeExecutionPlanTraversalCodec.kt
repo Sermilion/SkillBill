@@ -46,7 +46,7 @@ internal fun encodeExecutionPlanTraversal(
       },
   )
 
-internal fun decodeExecutionPlanTraversal(payload: Map<String, Any?>): FeatureTaskRuntimeTransitionDeclaration =
+public fun decodeExecutionPlanTraversal(payload: Map<String, Any?>): FeatureTaskRuntimeTransitionDeclaration =
   FeatureTaskRuntimeTransitionDeclaration(
     forwardPhaseIds = planStrings(payload, Keys.FORWARD_STEPS),
     backwardEdges =

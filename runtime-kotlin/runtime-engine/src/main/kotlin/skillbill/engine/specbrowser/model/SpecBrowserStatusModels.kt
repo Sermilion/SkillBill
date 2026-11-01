@@ -1,6 +1,6 @@
 package skillbill.engine.specbrowser.model
 
-enum class SpecBrowserStatus {
+public enum class SpecBrowserStatus {
   COMPLETE,
   IN_PROGRESS,
   RUNNING,
@@ -11,7 +11,7 @@ enum class SpecBrowserStatus {
   CANCELED,
 }
 
-enum class SpecBrowserStatusGroup {
+public enum class SpecBrowserStatusGroup {
   ACTIVE,
   PENDING,
   DONE,

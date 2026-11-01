@@ -5,19 +5,16 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
-import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.decodeGoalContinuationArtifactFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeHandoffEnvelopeFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
 import skillbill.workflow.taskruntime.artifact.toImplementationProgress
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.nio.file.Path
@@ -25,8 +22,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 
-private val FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY =
-  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()
 private val FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME.label()
 private val FEATURE_TASK_RUNTIME_PHASE_LEDGER_ARTIFACT_KEY =
@@ -47,26 +42,6 @@ class FeatureTaskRuntimeWorkflowPersistenceSeamTest {
 
   @Test
   fun `supported artifact families decode after owner round trip`() {
-    assertFamilyRoundTrip(
-      key = FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY,
-      expected =
-        FeatureTaskRuntimeGoalContinuationArtifact(
-          issueKey = "SKILL-352",
-          subtaskId = 2,
-          suppressPr = false,
-          goalBranch = "feat/skill-352",
-          codeReviewMode = CodeReviewExecutionMode.AUTO,
-        ),
-      wire =
-        FeatureTaskRuntimeGoalContinuationArtifact(
-          issueKey = "SKILL-352",
-          subtaskId = 2,
-          suppressPr = false,
-          goalBranch = "feat/skill-352",
-          codeReviewMode = CodeReviewExecutionMode.AUTO,
-        ).asWorkflowArtifactEntry(),
-      decode = { raw -> requireNotNull(decodeGoalContinuationArtifactFromArtifact(raw)) },
-    )
     assertFamilyRoundTrip(
       key = FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_ARTIFACT_KEY,
       expected =

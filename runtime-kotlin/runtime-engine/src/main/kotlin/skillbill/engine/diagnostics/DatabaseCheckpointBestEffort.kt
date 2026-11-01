@@ -1,15 +1,16 @@
 package skillbill.engine.diagnostics
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.isCooperativeCancellation
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
-internal fun DatabaseCheckpoint.truncateWalBestEffort(
+public fun DatabaseCheckpoint.truncateWalBestEffort(
   diagnostics: RuntimeDiagnostics,
   boundary: String,
 ) {
-  runCatching { truncateWal() }.exceptionOrNull()?.let { error ->
-    error.rethrowIfCooperativeCancellationOrInterruption()
+  catchingNonCancellation { truncateWal() }.exceptionOrNull()?.let { error ->
+    if (error.isCooperativeCancellation()) throw error
     val cause =
       (
         error.message?.takeIf(

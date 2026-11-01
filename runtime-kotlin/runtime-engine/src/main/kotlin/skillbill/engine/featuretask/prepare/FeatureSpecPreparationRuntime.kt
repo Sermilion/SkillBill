@@ -6,7 +6,7 @@ import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationIntake
 
 @Inject
-class FeatureSpecPreparationRuntime {
-  fun prepareForFeatureSpec(intake: FeatureSpecPreparationIntake): FeatureSpecPreparationDecision =
+public class FeatureSpecPreparationRuntime {
+  internal fun prepareForFeatureSpec(intake: FeatureSpecPreparationIntake): FeatureSpecPreparationDecision =
     FeatureSpecPreparationPolicy.prepare(intake)
 }

@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseAfterCompletionHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
@@ -29,13 +30,13 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class PlanFanOutStrategy private constructor(
+public class PlanFanOutStrategy private constructor(
   private val fanOutPort: BoundedWorkFanOutPort,
   private val planFanOutCap: Int,
   private val plan: AgentPlanStrategy,
 ) : PhaseStrategy(),
   PhaseResumeCapability by PlanFanOutResume(plan) {
-  constructor(
+  public constructor(
     fanOutPort: BoundedWorkFanOutPort,
     planFanOutCap: Int,
   ) : this(fanOutPort, planFanOutCap, AgentPlanStrategy())
@@ -153,7 +154,9 @@ class PlanFanOutStrategy private constructor(
     }
   }
 
-  private object PlanSubtasksStepHooks : PhaseStepHooks<PhasePlanningAgentStepBinding> {
+  private object PlanSubtasksStepHooks :
+    PhaseStepHooks<PhasePlanningAgentStepBinding>,
+    PhaseAfterCompletionHooks {
     override val contextKind = PhaseStepHookContextKind.PLANNING
 
     override fun afterCompletion(
@@ -199,9 +202,9 @@ class PlanFanOutStrategy private constructor(
       }
   }
 
-  companion object {
-    const val ID = "goal-plan-fan-out"
-    const val SEMANTIC_REVISION = 2
+  public companion object {
+    public const val ID: String = "goal-plan-fan-out"
+    private const val SEMANTIC_REVISION: Int = 2
 
     private const val PLAN_SPEC_DIRECTIVE: String =
       "Plan the current governed sub-spec and write the plan into that same file. Edit only the assigned " +

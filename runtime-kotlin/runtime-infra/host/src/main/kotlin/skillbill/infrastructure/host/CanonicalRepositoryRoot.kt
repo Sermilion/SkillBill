@@ -2,6 +2,7 @@ package skillbill.infrastructure.host
 
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -15,13 +16,22 @@ object CanonicalRepositoryRoot : RepositoryEnclosingRootPort {
     return canonicalPath(candidate)
   }
 
-  override fun canonicalPath(path: Path): Path =
-    runCatching { path.toAbsolutePath().normalize().toRealPath() }
-      .getOrElse { path.toAbsolutePath().normalize() }
+  override fun canonicalPath(path: Path): Path {
+    val normalized = path.toAbsolutePath().normalize()
+    return try {
+      normalized.toRealPath()
+    } catch (_: IOException) {
+      normalized
+    }
+  }
 
   override fun optionalRealPath(path: Path): Path? =
     if (Files.exists(path)) {
-      runCatching { path.toRealPath() }.getOrNull()
+      try {
+        path.toRealPath()
+      } catch (_: IOException) {
+        null
+      }
     } else {
       null
     }
@@ -56,7 +66,14 @@ object CanonicalRepositoryRoot : RepositoryEnclosingRootPort {
     return commonDir?.let { gitDir.resolve(it).normalize() } ?: gitDir
   }
 
-  private fun readTrimmed(path: Path): String? = runCatching { Files.readString(path).trim() }.getOrNull()
+  private fun readTrimmed(path: Path): String? {
+    if (!Files.isRegularFile(path)) return null
+    return try {
+      Files.readString(path).trim()
+    } catch (_: IOException) {
+      null
+    }
+  }
 
   private const val GIT_MARKER = ".git"
   private const val GITDIR_PREFIX = "gitdir:"

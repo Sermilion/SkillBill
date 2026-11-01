@@ -43,21 +43,21 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import java.time.Clock
 
-class FeatureTaskRuntimeGoalReviewCompletionRecorder(
-  private val database: DatabaseSessionFactory,
-  private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-  private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
-  private val phaseSettlementService: FeatureTaskPhaseSettlementService,
-  private val clock: Clock,
+public class FeatureTaskRuntimeGoalReviewCompletionRecorder(
+  public val database: DatabaseSessionFactory,
+  public val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+  public val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
+  public val phaseSettlementService: FeatureTaskPhaseSettlementService,
+  public val clock: Clock,
 ) {
-  fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean {
+  public fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean {
     val request = validatedGoalReviewPhaseState(completion)
     return database.transaction { unitOfWork ->
       persistCompletedGoalReview(unitOfWork, request, completion)
     }
   }
 
-  fun completeOwnedGoalReviewPhase(
+  public fun completeOwnedGoalReviewPhase(
     completion: GoalReviewPhaseCompletionRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean {

@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
-fun mutatingPhaseIdempotencyDirective(mutating: Boolean): String {
+internal fun mutatingPhaseIdempotencyDirective(mutating: Boolean): String {
   if (!mutating) {
     return ""
   }
@@ -17,7 +17,7 @@ fun mutatingPhaseIdempotencyDirective(mutating: Boolean): String {
     """.trimIndent()
 }
 
-fun minimalismDisciplineDirective(mutating: Boolean): String {
+internal fun minimalismDisciplineDirective(mutating: Boolean): String {
   if (!mutating) {
     return ""
   }
@@ -62,7 +62,7 @@ fun minimalismDisciplineDirective(mutating: Boolean): String {
     """.trimIndent()
 }
 
-fun testValueDisciplineDirective(applies: Boolean): String {
+internal fun testValueDisciplineDirective(applies: Boolean): String {
   if (!applies) {
     return ""
   }

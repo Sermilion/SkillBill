@@ -52,17 +52,7 @@ object GoalSubtaskReviewArtifactDecoder {
         "must be present whenever a goal-continuation child exists.",
       )
     }
-    val continuation =
-      try {
-        FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(
-          artifacts.getValue(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY).toReviewStateMap(
-            FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY,
-          ),
-        )
-      } catch (error: SkillBillRuntimeException) {
-        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
-        reviewStateError(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY, error.message.orEmpty(), error)
-      }
+    val continuation = decodeContinuationDirect(artifacts)
     val state =
       GoalSubtaskReviewState.fromArtifactMap(
         artifacts.getValue(GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY).toReviewStateMap(
@@ -111,11 +101,9 @@ object GoalSubtaskReviewArtifactDecoder {
 
   private fun decodeContinuationDirect(artifacts: Map<String, Any?>): FeatureTaskRuntimeGoalContinuationArtifact =
     try {
-      FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(
-        artifacts.getValue(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY).toReviewStateMap(
-          FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY,
-        ),
-      )
+      artifacts.typedArtifactRecordOrNull<FeatureTaskRuntimeGoalContinuationArtifact>(
+        FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY,
+      ) ?: reviewStateError(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY, "must be present.")
     } catch (error: SkillBillRuntimeException) {
       error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       reviewStateError(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY, error.message.orEmpty(), error)

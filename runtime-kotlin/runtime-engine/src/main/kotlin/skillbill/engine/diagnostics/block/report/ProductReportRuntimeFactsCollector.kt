@@ -8,12 +8,12 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
 import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportRuntimeFacts
 
 @Inject
-class ProductReportRuntimeFactsCollector(
+public class ProductReportRuntimeFactsCollector(
   private val runtimeVersion: RuntimeVersion,
   private val host: HostPlatformPort,
   private val buildIdentity: RuntimeBuildIdentityPort,
 ) {
-  fun collect(diagnosis: BlockIncidentDiagnosisRecord): ProductReportRuntimeFacts =
+  internal fun collect(diagnosis: BlockIncidentDiagnosisRecord): ProductReportRuntimeFacts =
     ProductReportRuntimeFacts(
       runtimeVersion = runtimeVersion.value.takeIf(String::isNotBlank),
       runtimeBuild = buildIdentity.readIdentity(),

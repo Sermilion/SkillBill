@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.scaffold.ScaffoldGateway
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import java.time.Clock
 
 @Component
@@ -24,6 +25,7 @@ internal abstract class McpComponent(
   abstract val telemetryService: TelemetryService
   abstract val reviewService: ReviewService
   abstract val systemService: SystemService
+  abstract val workflowArtifactWireEncoder: WorkflowArtifactWireEncoder
   abstract val workflowService: WorkflowService
   abstract val updateCheckService: UpdateCheckService
   abstract val featureTaskPhaseSettlementService: FeatureTaskPhaseSettlementService

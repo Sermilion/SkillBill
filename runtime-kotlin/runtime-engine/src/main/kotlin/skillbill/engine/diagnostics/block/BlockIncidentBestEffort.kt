@@ -1,13 +1,12 @@
 package skillbill.engine.diagnostics.block
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.containableFailure
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import java.util.concurrent.CancellationException
 
 internal inline fun recoverableFailureOf(block: () -> Unit): Exception? {
-  val failure = runCatching(block).exceptionOrNull() ?: return null
-  if (failure is CancellationException || failure !is Exception) throw failure
-  return failure
+  return catchingNonCancellation(block).exceptionOrNull()?.let(::containableFailure)
 }
 
 internal inline fun <T> RuntimeDiagnostics.bestEffort(

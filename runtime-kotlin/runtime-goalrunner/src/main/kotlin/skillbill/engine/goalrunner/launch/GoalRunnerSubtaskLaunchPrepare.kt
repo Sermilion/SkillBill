@@ -1,0 +1,411 @@
+package skillbill.engine.goalrunner.launch
+
+import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.baseBranch
+import skillbill.application.workflow.persist.generateWorkflowId
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
+import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
+import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
+import skillbill.engine.goalrunner.execution.core.workflowIdFor
+import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
+import skillbill.engine.goalrunner.execution.support.PreparedLaunch
+import skillbill.engine.goalrunner.execution.support.RUNTIME_WORKFLOW_ID_PREFIX
+import skillbill.engine.goalrunner.execution.support.branchPlanFor
+import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
+import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
+import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
+import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
+import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
+import skillbill.engine.goalrunner.planning.recovery.goalPlanningChildImportConflictBlockedReason
+import skillbill.engine.goalrunner.reset.reviewBaselineBlockedReason
+import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
+import skillbill.engine.goalrunner.status.stopped
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
+import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.goalrunner.model.GoalRunnerSelection
+import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
+import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
+import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.withAttemptedSubtask
+import skillbill.workflow.decomposition.withBranchSetupBlockedSubtask
+import skillbill.workflow.decomposition.withWorkflowId
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
+import java.time.Clock
+import kotlin.random.Random
+
+@Inject
+public class GoalRunnerSubtaskLaunchPrepare(
+  private val manifestStore: GoalRunnerManifestStore,
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  private val gitOperations: WorkflowGitOperations,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val clock: Clock,
+  private val random: Random,
+  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
+  private val strategies: PhaseStrategyLookup,
+  private val agentRunLauncher: AgentRunLauncher,
+  private val projectStore: ProjectStorePort,
+  private val diagnostics: RuntimeDiagnostics,
+) {
+  internal fun goalReviewBaseline(
+    state: GoalRunnerManifestState,
+    subtaskId: Int,
+    request: GoalRunnerRunRequest,
+  ): GoalSubtaskReviewBaselineResult {
+    val existingWorkflowId = state.manifest.workflowIdFor(subtaskId)
+    if (existingWorkflowId != null) {
+      return catchingNonCancellation {
+        outcomeStore.goalSubtaskReviewState(existingWorkflowId)
+          ?.let { reviewState ->
+            GoalSubtaskReviewBaselineResult(
+              status = WorkflowGitOperationStatus.OK,
+              baseline = GoalSubtaskReviewBaseline(reviewState.reviewBaseSha, reviewState.baselineUntrackedPaths),
+            )
+          }
+          ?: GoalSubtaskReviewBaselineResult(
+            status = WorkflowGitOperationStatus.ERROR,
+            error =
+              "Goal-subtask review state is missing for existing child '$existingWorkflowId'; " +
+                "refusing to recapture its immutable baseline.",
+          )
+      }.getOrElse { error ->
+        GoalSubtaskReviewBaselineResult(
+          status = WorkflowGitOperationStatus.ERROR,
+          error =
+            "Goal-subtask review persistence is malformed for existing child '$existingWorkflowId': " +
+              error.message.orEmpty(),
+        )
+      }
+    }
+    val branch =
+      state.manifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
+        ?: state.manifest.featureBranch?.takeIf(String::isNotBlank)
+        ?: return GoalSubtaskReviewBaselineResult(
+          status = WorkflowGitOperationStatus.ERROR,
+          error = "Goal subtask '$subtaskId' has no durable child branch for review baseline capture.",
+        )
+    return gitOperations.captureGoalSubtaskReviewBaseline(request.repoRoot, branch)
+  }
+
+  internal fun blockedReviewBaselineIteration(
+    state: GoalRunnerManifestState,
+    subtaskId: Int,
+    reason: String,
+    request: GoalRunnerRunRequest,
+    acceptedBlock: GoalRunnerAcceptedBlock? = null,
+  ): GoalRunnerIterationResult {
+    val blockedReason = reviewBaselineBlockedReason(state.manifest, subtaskId, reason)
+    val blocked = state.manifest.withBranchSetupBlockedSubtask(subtaskId, blockedReason)
+    val saved = manifestStore.save(state.copy(manifest = blocked))
+    request.eventSink.emit(
+      GoalRunnerRunEvent.SubtaskStopped(
+        issueKey = saved.manifest.issueKey,
+        subtaskId = subtaskId,
+        reason = GoalRunnerStopReason.BLOCKED.name.lowercase(),
+        blockedReason = blockedReason,
+        currentStepId = "preplan",
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = saved.manifest.workflowIdFor(subtaskId),
+      ),
+    )
+    return GoalRunnerIterationResult(
+      state = saved,
+      report =
+        stopped(
+          StoppedReportArgs(
+            issueKey = saved.manifest.issueKey,
+            attempted = emptyList(),
+            subtaskId = subtaskId,
+            reason = GoalRunnerStopReason.BLOCKED,
+            blockedReason = blockedReason,
+            workflowId = state.manifest.workflowIdFor(subtaskId),
+            lastResumableStep = "preplan",
+            incidentToken = acceptedBlock?.incidentToken,
+            acceptedBlockReference = acceptedBlock?.acceptedBlockReference,
+          ),
+        ),
+    )
+  }
+
+  internal fun blockedOnPreparationConflict(
+    state: GoalRunnerManifestState,
+    conflict: GoalPlanningPreparationConflict,
+    request: GoalRunnerRunRequest,
+  ): GoalRunnerIterationResult {
+    val targetSubtaskId = conflict.subtaskId
+    val reason = goalPlanningChildImportConflictBlockedReason(state.manifest.issueKey, targetSubtaskId, conflict)
+    val acceptedBlock =
+      state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
+        catchingNonCancellation {
+          outcomeStore.markBlocked(
+            GoalRunnerBlockRequest(workflowId = workflowId, blockedReason = reason, lastResumableStep = "preplan"),
+          )
+        }.onFailure { failure ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "seam=goal_planning_conflict_block value_expected=accepted_block value_used=unrecorded " +
+              "workflow_id=$workflowId failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+            failure,
+          )
+        }.getOrNull()
+      }
+    return blockedReviewBaselineIteration(
+      state,
+      targetSubtaskId,
+      reason,
+      request,
+      acceptedBlock,
+    )
+  }
+
+  internal fun emitGoalReviewSummaries(
+    issueKey: String,
+    subtaskId: Int,
+    workflowId: String,
+    request: GoalRunnerRunRequest,
+  ) {
+    outcomeStore.unemittedGoalReviewPasses(workflowId).forEach { pass ->
+      request.eventSink.emit(
+        GoalRunnerRunEvent.SubtaskReviewSummary(
+          issueKey = issueKey,
+          subtaskId = subtaskId,
+          passNumber = pass.passNumber,
+          verdict = pass.verdict.wireValue,
+          findingCount = pass.findings.size,
+          unresolvedFindingCount = pass.unresolvedFindingCount,
+          findings = pass.findings,
+        ),
+      )
+      check(outcomeStore.acknowledgeGoalReviewPass(workflowId, pass.passNumber)) {
+        "Goal-subtask review summary pass ${pass.passNumber} could not be acknowledged after emission."
+      }
+    }
+  }
+
+  internal fun prepareAttemptedLaunch(
+    state: GoalRunnerManifestState,
+    subtaskId: Int,
+    request: GoalRunnerRunRequest,
+    reviewBaseline: GoalSubtaskReviewBaseline,
+    planning: GoalPlanningSweepOutcome.PreparedAll,
+  ): GoalSubtaskLaunchPrepareResult {
+    val priorWorkflowId = state.manifest.workflowIdFor(subtaskId)
+    val subtask =
+      requireNotNull(state.manifest.subtasks.firstOrNull { it.id == subtaskId }) {
+        "Goal subtask '$subtaskId' is missing from the decomposition manifest."
+      }
+    val reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT
+    val qualityGate =
+      priorWorkflowId?.let(outcomeStore::recordedQualityGateSelection)
+        ?: GoalRunnerQualityGateSelectionResolver.resolve()
+    val qaSelection = recordedChildQaSelection(priorWorkflowId)
+    val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, priorWorkflowId)
+    val firstRun = priorWorkflowId == null
+    val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
+    val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
+    val canonicalRepository = repositoryEnclosingRootPort.canonicalPath(request.repoRoot)
+    val governedSpecPath = governedChildSpecPath(assignedWorkflowId, subtaskId, subtask.specPath, request.repoRoot)
+    val attemptedManifest =
+      state.manifest.withAttemptedSubtask(subtaskId)
+        .let { manifest -> if (firstRun) manifest.withWorkflowId(subtaskId, assignedWorkflowId) else manifest }
+    val saved =
+      run {
+        val branch =
+          attemptedManifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
+            ?: attemptedManifest.featureBranch?.takeIf(String::isNotBlank)
+            ?: error("Goal subtask '$subtaskId' has no durable branch for review baseline persistence.")
+        manifestStore.saveNewChildWorkflow(
+          state.copy(manifest = attemptedManifest),
+          GoalRunnerChildWorkflowSetup(
+            subtaskId = subtaskId,
+            workflowId = assignedWorkflowId,
+            goalBranch = branch,
+            normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
+            repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(canonicalRepository),
+            governedSpecPath = governedSpecPath,
+            reviewBaseline = reviewBaseline,
+            reviewPolicy =
+              GoalRunnerReviewPolicy(
+                codeReviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
+                agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
+              ),
+            planningHydration = planning.hydrationFor(subtaskId),
+            executionPlan = executionPlan,
+            qaSelection = qaSelection,
+            operatorResumePhaseId =
+              (
+                subtask.lastResumableStep?.takeIf(String::isNotBlank)
+                  ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
+              )
+                .takeIf { resumesBlockedChild },
+            operatorResumeReason =
+              "Operator resumed the goal after a blocked stop at subtask $subtaskId."
+                .takeIf { resumesBlockedChild },
+          ),
+        )
+      }
+    return when (saved) {
+      is GoalRunnerChildWorkflowSaveResult.Conflicted -> GoalSubtaskLaunchPrepareResult.Conflicted(saved.conflict)
+      is GoalRunnerChildWorkflowSaveResult.Saved ->
+        GoalSubtaskLaunchPrepareResult.Prepared(
+          PreparedLaunch(saved.state, assignedWorkflowId.takeIf { firstRun }),
+        )
+    }
+  }
+
+  private fun recordedChildQaSelection(priorWorkflowId: String?): FeatureTaskRuntimeQaSelection? =
+    priorWorkflowId?.let { outcomeStore.childQaSelection(it, null) }
+
+  private fun governedChildSpecPath(
+    workflowId: String,
+    subtaskId: Int,
+    specPath: String,
+    repoRoot: Path,
+  ): String {
+    val rawSpecPath =
+      requireNotNull(
+        specPath.takeIf(String::isNotBlank),
+      ) { "Goal subtask '$subtaskId' has no governed spec path." }
+    return repositoryEnclosingRootPort.governedFeatureTaskSpecPath(
+      projectStore,
+      workflowId,
+      repoRoot,
+      Path.of(rawSpecPath),
+    )
+  }
+
+  internal fun goalBranchSetupFailure(
+    state: GoalRunnerManifestState,
+    selection: GoalRunnerSelection.Run,
+    request: GoalRunnerRunRequest,
+  ): GoalRunnerIterationResult? {
+    val subtaskId = selection.decision.subtask.id
+    val branchPlan = state.manifest.branchPlanFor(subtaskId)
+    if (branchPlan.branch.isBlank()) {
+      return null
+    }
+    val checkout = gitOperations.checkoutBranch(request.repoRoot, branchPlan.branch, branchPlan.baseBranch)
+    val setupError =
+      if (checkout !is WorkflowGitOperationResult.Ok) {
+        checkout.error
+      } else if (branchPlan.validateBase) {
+        gitOperations.validateBranchBase(request.repoRoot, branchPlan.branch, branchPlan.baseBranch)
+          .takeUnless { it is WorkflowGitOperationResult.Ok }
+          ?.error
+          .orEmpty()
+      } else {
+        ""
+      }
+    return setupError.takeIf(String::isNotBlank)?.let { error ->
+      blockedBranchSetupIteration(state, subtaskId, error, request)
+    }
+  }
+
+  private fun childExecutionPlan(
+    request: GoalRunnerRunRequest,
+    reviewMode: CodeReviewExecutionMode,
+    qualityGate: FeatureTaskRuntimeQualityGateSelection?,
+    priorWorkflowId: String?,
+  ): ValidatedFeatureTaskRuntimeExecutionPlan {
+    val assignedQualityGate =
+      if (priorWorkflowId == null) executionPlans.creationQualityGate(request.repoRoot, qualityGate) else qualityGate
+    return executionPlans.resolveCreation(
+      FeatureTaskRuntimeExecutionPlanCreationRequest(
+        repoRoot = request.repoRoot,
+        definition = SkeletonDefinition.GOAL_CHILD_REVISION_5,
+        reviewMode = reviewMode,
+        qualityGate = qualityGate,
+        validationDepth = ValidationDepth.FULL,
+        timeout = request.timeout,
+        workflowId = priorWorkflowId,
+        stepLaunchAssignments =
+          FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+            launcher = agentRunLauncher,
+            lookup = strategies,
+            facts =
+              PhaseStrategySelectionFacts(
+                SkeletonDefinition.GOAL_CHILD_REVISION_5,
+                setOfNotNull(reviewMode, assignedQualityGate),
+              ),
+            inputs =
+              StepLaunchAssignmentInputs(
+                invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+                agentAssignment = FeatureTaskRuntimeAgentAssignment(),
+                modelAssignment = request.modelAssignment,
+                environmentKind = LaunchEnvironmentKind.GOVERNED_CHILD,
+              ),
+          ),
+      ),
+    )
+  }
+
+  private fun blockedBranchSetupIteration(
+    state: GoalRunnerManifestState,
+    subtaskId: Int,
+    reason: String,
+    request: GoalRunnerRunRequest,
+  ): GoalRunnerIterationResult {
+    val blocked = state.manifest.withBranchSetupBlockedSubtask(subtaskId, reason)
+    val saved = manifestStore.save(state.copy(manifest = blocked))
+    request.eventSink.emit(
+      GoalRunnerRunEvent.SubtaskStopped(
+        issueKey = saved.manifest.issueKey,
+        subtaskId = subtaskId,
+        reason = GoalRunnerStopReason.BLOCKED.name.lowercase(),
+        blockedReason = reason,
+        currentStepId = "create_branch",
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = saved.manifest.workflowIdFor(subtaskId),
+      ),
+    )
+    return GoalRunnerIterationResult(
+      state = saved,
+      report =
+        stopped(
+          StoppedReportArgs(
+            issueKey = saved.manifest.issueKey,
+            attempted = emptyList(),
+            subtaskId = subtaskId,
+            reason = GoalRunnerStopReason.BLOCKED,
+            blockedReason = reason,
+            workflowId = null,
+            lastResumableStep = "create_branch",
+          ),
+        ),
+    )
+  }
+}

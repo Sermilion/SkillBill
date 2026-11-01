@@ -33,7 +33,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 @Inject
-class AcceptanceCriterionRepairVersionRecovery(
+public class AcceptanceCriterionRepairVersionRecovery(
   private val boundary: RuntimeOwnedPersistenceBoundary,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val validator: FeatureTaskRuntimeWireArtifactValidator,
@@ -41,7 +41,7 @@ class AcceptanceCriterionRepairVersionRecovery(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun recoverSupersededVersion(
+  internal fun recoverSupersededVersion(
     worker: AcquiredFeatureTaskRuntimeWorker,
   ): AcceptanceCriterionRepairVersionRecoveryResult {
     val plan = pendingPlan(worker) ?: return AcceptanceCriterionRepairVersionRecoveryResult.Unchanged

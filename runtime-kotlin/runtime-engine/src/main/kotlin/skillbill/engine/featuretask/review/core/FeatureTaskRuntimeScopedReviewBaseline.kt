@@ -7,8 +7,8 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import java.nio.file.Path
 
-object FeatureTaskRuntimeScopedReviewBaseline {
-  fun untrackedExclusions(
+public object FeatureTaskRuntimeScopedReviewBaseline {
+  internal fun untrackedExclusions(
     gitOperations: RepositoryOwnedPathsGitOperations,
     repoRoot: Path,
     resolved: FeatureTaskRuntimeResolvedBranch,
@@ -26,7 +26,7 @@ object FeatureTaskRuntimeScopedReviewBaseline {
     )
   }
 
-  fun of(
+  public fun of(
     gitOperations: RepositoryOwnedPathsGitOperations,
     repoRoot: Path,
     resolved: FeatureTaskRuntimeResolvedBranch,

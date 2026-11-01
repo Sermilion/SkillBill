@@ -5,6 +5,7 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
+import skillbill.application.reviewevidence.parseOrRejection
 import skillbill.error.shellcontent.reviewHunkEvidenceIntegrityError
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorUnreadableError

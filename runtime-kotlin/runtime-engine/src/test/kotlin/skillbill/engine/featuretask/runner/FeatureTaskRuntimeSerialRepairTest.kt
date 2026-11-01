@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -1206,6 +1207,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         harness.gitOperations,
         source,
         RUNNER_TEST_PROJECT_STORE,
+        SqliteWorkflowArtifactWireEncoder(),
       ),
       AcceptanceCriterionRepairAuditAdmission(validator),
     )

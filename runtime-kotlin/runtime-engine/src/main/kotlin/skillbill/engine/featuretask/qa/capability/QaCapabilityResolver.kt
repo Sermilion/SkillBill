@@ -12,34 +12,34 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path
 
-sealed interface QaCapabilityResolution {
-  data class Declared(val targets: List<QaDeclaredTarget>) : QaCapabilityResolution {
+public sealed interface QaCapabilityResolution {
+  public data class Declared(val targets: List<QaDeclaredTarget>) : QaCapabilityResolution {
     init {
       require(targets.isNotEmpty()) { "A declared QA capability needs at least one target." }
     }
   }
 
-  data class Absent(val routedPackSlug: String?) : QaCapabilityResolution {
-    val detail: String
+  public data class Absent(val routedPackSlug: String?) : QaCapabilityResolution {
+    internal val detail: String
       get() = "no installed pack declares qa_capability for ${routedPackSlug ?: "this repository"}"
   }
 
-  data class Incompatible(val reason: String) : QaCapabilityResolution
+  public data class Incompatible(val reason: String) : QaCapabilityResolution
 }
 
 @Inject
-class QaCapabilityResolver(
+public class QaCapabilityResolver(
   private val gitOperations: WorkflowGitOperations,
   private val installedCatalog: InstalledPlatformPackCatalogPort,
 ) {
-  internal fun resolve(repoRoot: Path): QaCapabilityResolution =
+  public fun resolve(repoRoot: Path): QaCapabilityResolution =
     when (val paths = gitOperations.trackedPaths(repoRoot)) {
       is WorkflowGitNameListResult.Listed -> resolve(paths.names)
       is WorkflowGitNameListResult.Failed ->
         QaCapabilityResolution.Incompatible("QA could not read tracked paths: ${paths.error}")
     }
 
-  fun resolve(changedPaths: List<String>): QaCapabilityResolution {
+  internal fun resolve(changedPaths: List<String>): QaCapabilityResolution {
     val manifests =
       try {
         installedCatalog.manifests()

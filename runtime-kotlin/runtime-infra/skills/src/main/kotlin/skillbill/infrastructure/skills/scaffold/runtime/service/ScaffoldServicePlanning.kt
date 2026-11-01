@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
+import skillbill.error.core.ExternalPlatformPackConfigError
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.error.shellcontent.missingPlatformPackError
 import skillbill.error.shellcontent.skillAlreadyExistsError
@@ -11,7 +12,11 @@ import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatform
 import skillbill.infrastructure.skills.scaffold.rendering.defaultAreaFocus
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.APPROVED_CODE_REVIEW_AREAS
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELLED_FAMILIES
-import skillbill.infrastructure.skills.scaffold.runtime.service.externalpack.registerPlannedExternalPlatformPack
+import skillbill.install.model.ExternalPlatformPackSource
+import skillbill.ports.install.platformpack.model.ExternalPlatformPackRootRequest
+import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceRegistrationRequest
+import skillbill.ports.install.platformpack.model.PlatformPackCatalogRequest
+import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
 import skillbill.scaffold.policy.SKILL_KIND_ADD_ON
 import skillbill.scaffold.policy.SKILL_KIND_AGENT_ADDON
@@ -57,6 +62,55 @@ internal fun executeScaffold(
     installTargets = installTargets,
     notes = execution.notes + installNotes + subagentEmissionNotes(plan),
   )
+}
+
+internal fun registerPlannedExternalPlatformPack(
+  plan: ScaffoldPlan,
+  txn: ScaffoldTransaction,
+  repoRoot: Path,
+  runtime: ScaffoldRuntimeContext,
+) {
+  val root = plan.externalPackRoot ?: return
+  val mode = plan.externalPackRegistrationMode ?: return
+  if (mode != PACK_REGISTRATION_CREATE && mode != PACK_REGISTRATION_REGISTER) {
+    return
+  }
+  val loader =
+    runtime.catalogLoader ?: throw ExternalPlatformPackConfigError(
+      "External platform pack registration requires a catalog loader.",
+    )
+  val store =
+    runtime.packSourceConfig ?: throw ExternalPlatformPackConfigError(
+      "External platform pack registration requires a source config store.",
+    )
+  val normalizedRoot = root.toAbsolutePath().normalize()
+  loader.assertRegistrableExternalPack(
+    ExternalPlatformPackRootRequest(
+      packRoot = normalizedRoot,
+      catalog =
+        PlatformPackCatalogRequest(
+          repoRoot = repoRoot,
+          userHome = runtime.userHome,
+          environment = runtime.environment,
+        ),
+    ),
+  )
+  val source = ExternalPlatformPackSource(normalizedRoot.toFileLocation())
+  val registration =
+    store.registerExternalPlatformPackSource(
+      ExternalPlatformPackSourceRegistrationRequest(
+        userHome = runtime.userHome,
+        environment = runtime.environment,
+        source = source,
+      ),
+    )
+  if (registration.inserted) {
+    txn.registeredExternalPackRoot = normalizedRoot
+    txn.externalPackConfigHome = runtime.userHome
+    txn.externalPackConfigEnvironment = runtime.environment
+    txn.packSourceConfig = store
+    txn.externalPackPreviousFieldState = registration.previousFieldState
+  }
 }
 
 internal fun resolveRepoRoot(

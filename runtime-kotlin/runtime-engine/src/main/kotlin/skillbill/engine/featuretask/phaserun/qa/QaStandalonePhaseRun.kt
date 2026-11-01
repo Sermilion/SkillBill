@@ -16,11 +16,11 @@ import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 
 @Inject
-class QaStandalonePhaseRun(
+public class QaStandalonePhaseRun(
   private val execution: QaExecutionLifecycle,
   private val settlement: QaReportSettlement,
 ) {
-  fun run(
+  internal fun run(
     request: PhaseRunRequest,
     invocationId: String,
     launch: (PhaseRunRequest) -> PhaseRunResult,

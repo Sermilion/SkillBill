@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopRepa
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
@@ -37,7 +38,7 @@ internal data class RemediationCommitPrepared(
   val message: String,
 )
 
-object FeatureTaskRuntimeRunLoopCheckpointRemediation {
+internal object FeatureTaskRuntimeRunLoopCheckpointRemediation {
   internal fun recordRemediationBaseSha(
     context: PhaseCheckpointRemediationContext,
     precedingPhaseId: String,
@@ -66,7 +67,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
           }
           head.value.trim()
         }
-      return runCatching {
+      return catchingNonCancellation {
         goalContinuationRecorder.updateReviewState(
           request.workflowId,
         ) { state ->
@@ -583,7 +584,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
   }
 }
 
-fun FeatureTaskRuntimeResolvedBranch.baselineOwnedPathsForCheckpoint(): List<String> =
+internal fun FeatureTaskRuntimeResolvedBranch.baselineOwnedPathsForCheckpoint(): List<String> =
   baselineOwnedPaths.ifEmpty { baselineUntrackedPaths }
 
 internal fun PhaseRunRecords.goalStartBaselinePaths(request: FeatureTaskRuntimeRunFacts): List<String>? =

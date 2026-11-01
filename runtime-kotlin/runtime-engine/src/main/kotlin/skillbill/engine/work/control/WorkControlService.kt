@@ -1,9 +1,9 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
-import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.goal.GoalRunnerPauseStatus
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.GoalRunnerStopStatus
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
@@ -11,6 +11,8 @@ import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
+import skillbill.engine.work.eligibility.workControlEligible
+import skillbill.engine.work.eligibility.workPauseEligible
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
@@ -23,10 +25,10 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequis
 import java.nio.file.Path
 
 @Inject
-class WorkControlService(
+public class WorkControlService(
   private val database: DatabaseSessionFactory,
   private val status: IdeStatusService,
-  private val controls: GoalRunnerStatusService,
+  private val controls: GoalRunnerStatusPort,
   private val cancellation: WorkCancellation,
   private val runs: WorkRunActions,
   private val recovery: WorkControlRecovery,
@@ -46,17 +48,17 @@ class WorkControlService(
   ): WorkIncidentRecoveryOutcome =
     recovery.recover(workId, incidentToken, incidentRevision, confirmedPrerequisites, agentId)
 
-  fun options(target: WorkRunTarget): WorkRunOptions? =
+  public fun options(target: WorkRunTarget): WorkRunOptions? =
     database.read { unit ->
       matchingRun(status, target)?.let { runs.options(it, unit) }
     }
 
-  fun options(item: WorkDetailItem): WorkRunOptions? =
+  public fun options(item: WorkDetailItem): WorkRunOptions? =
     database.read { unit ->
       item.takeIf { it.observation == unit.workList.observation() }?.let { runs.options(it, unit) }
     }
 
-  fun request(
+  public fun request(
     target: WorkRunTarget,
     action: WorkControlAction,
     agentId: String? = null,
@@ -70,19 +72,19 @@ class WorkControlService(
         )
     }
 
-  fun startGoal(
+  public fun startGoal(
     repoRoot: Path,
     issueKey: String,
     agentId: String?,
   ): WorkControlResult = runs.startGoal(repoRoot, issueKey, agentId)
 
-  fun recoveryPreview(
+  public fun recoveryPreview(
     target: WorkRunTarget,
     incidentToken: String,
     confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind> = emptySet(),
   ): WorkRecoveryPreviewResult = recovery.preview(target, incidentToken, confirmedPrerequisites)
 
-  fun recover(
+  public fun recover(
     target: WorkRunTarget,
     incidentToken: String,
     incidentRevision: Long,
@@ -90,7 +92,7 @@ class WorkControlService(
     agentId: String? = null,
   ): WorkControlResult = recovery.recover(target, incidentToken, incidentRevision, confirmedPrerequisites, agentId)
 
-  fun request(
+  public fun request(
     target: WorkControlTarget,
     action: WorkControlAction,
     storeIsCurrent: () -> Boolean = { true },

@@ -21,8 +21,14 @@ internal class HeldAdmission(
   private val lock: FileLock,
 ) : AutoCloseable {
   override fun close() {
-    runCatching { lock.release() }
-    runCatching { channel.close() }
+    try {
+      lock.release()
+    } catch (_: IOException) {
+    }
+    try {
+      channel.close()
+    } catch (_: IOException) {
+    }
     MonitorAdmissionFiles.unreserve(lockFile)
   }
 }

@@ -1,8 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.rendering
 
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.skills.nativeagent.rendering.YAML_DOUBLE_QUOTE_ESCAPES
-import skillbill.infrastructure.skills.scaffold.runtime.service.areaFocus
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
 
 private val FRONTMATTER_BLOCK_LEADING = Regex("""(?s)\A---\n.*?\n---\n""")

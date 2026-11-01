@@ -90,8 +90,8 @@ internal object AuthoredInteractionScenarioCheck {
 }
 
 internal data class ParentSectionCheck(
-  val specText: String,
-  val parentLabel: String,
-  val subtaskIds: Set<Int>,
-  val rewritable: Boolean,
+  public val specText: String,
+  public val parentLabel: String,
+  public val subtaskIds: Set<Int>,
+  public val rewritable: Boolean,
 )

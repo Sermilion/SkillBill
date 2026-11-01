@@ -30,7 +30,7 @@ import java.nio.file.Path
 
 interface UnitOfWork : GoalRunnerPersistenceSession {
   val dbPath: Path
-  val databaseFileObservation: DatabaseFileObservation? get() = null
+  val databaseFileObservation: DatabaseFileObservation?
   override val reviews: ReviewRepository
   val learnings: LearningRepository
   val lifecycleTelemetry: LifecycleTelemetryRepository

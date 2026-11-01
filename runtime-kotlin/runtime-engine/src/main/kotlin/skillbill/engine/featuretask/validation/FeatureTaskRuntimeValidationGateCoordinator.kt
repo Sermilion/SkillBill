@@ -24,8 +24,8 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
 private const val VALIDATE_PHASE_STATUS_COMPLETED = "completed"
 
 @Inject
-class FeatureTaskRuntimeValidationGateCoordinator {
-  fun execute(agentRepairLauncher: ValidationGateAgentRepairLauncher): ValidationGateCycleResult =
+public class FeatureTaskRuntimeValidationGateCoordinator {
+  public fun execute(agentRepairLauncher: ValidationGateAgentRepairLauncher): ValidationGateCycleResult =
     when (
       val result = agentRepairLauncher.launch(ValidationFindingSetProjection(emptyList()), 1, null)
     ) {
@@ -45,13 +45,13 @@ class FeatureTaskRuntimeValidationGateCoordinator {
         )
     }
 
-  companion object {
+  internal companion object {
     private fun invalidValidationEvidence(
       phaseId: String,
       reason: String,
     ): Nothing = throw invalidFeatureTaskRuntimeValidationEvidenceSchema(phaseId, reason)
 
-    fun runtimeOwnedValidationOutput(
+    internal fun runtimeOwnedValidationOutput(
       phaseId: String,
       repositoryCheckpoint: String,
       measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,

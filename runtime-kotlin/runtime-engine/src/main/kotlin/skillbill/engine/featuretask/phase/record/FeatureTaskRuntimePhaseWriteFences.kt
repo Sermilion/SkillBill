@@ -15,7 +15,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 internal val WORKER_TERMINAL_STATUSES =
   setOf(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.ABANDONED)
 
-internal fun requireCurrentWorker(
+public fun requireCurrentWorker(
   admitted: AdmittedFeatureTaskRuntimeExecution,
   states: WorkflowStateRepository,
   workflowId: String,

@@ -15,7 +15,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.runloop.planning.PlanBundleAuthorization
 import skillbill.engine.featuretask.runloop.planning.PlanBundleListing
-import skillbill.engine.goalrunner.manifest
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema

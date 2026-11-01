@@ -6,7 +6,6 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerControlState
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.LEGACY_UNKNOWN_PAUSED_AT
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance

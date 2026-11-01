@@ -19,7 +19,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonTraversalResult
 import skillbill.workflow.taskruntime.phase.task.traversalOrViolation
 
 @Inject
-class FeatureTaskRuntimeExecutionPlanCompatibility(
+public class FeatureTaskRuntimeExecutionPlanCompatibility(
   private val codec: FeatureTaskRuntimeExecutionPlanCodec,
   private val strategies: PhaseStrategyLookup,
 ) {
@@ -28,7 +28,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
   )
 
-  fun requireSupportedExecution(
+  internal fun requireSupportedExecution(
     encoded: ByteArray?,
     effectiveInputs: EffectiveGatePolicyInputs,
     onMapping: (() -> Unit)? = null,
@@ -53,7 +53,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     return SupportedExecution(plan, composition.recordedMonitorSemantics)
   }
 
-  fun requireCompatibleExecution(
+  internal fun requireCompatibleExecution(
     encoded: ByteArray?,
     expectedDescriptor: ValidatedFeatureTaskRuntimeExecutionPlan?,
   ): ResolvedPhaseExecutionPlan {
@@ -67,7 +67,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     return plan
   }
 
-  fun requireSupportedRecovery(
+  internal fun requireSupportedRecovery(
     encoded: ByteArray?,
     effectiveInputs: EffectiveGatePolicyInputs?,
   ): ResolvedPhaseExecutionPlan {
@@ -82,7 +82,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     return plan
   }
 
-  fun requireSupportedComposition(encoded: ByteArray?): ResolvedPhaseExecutionPlan {
+  internal fun requireSupportedComposition(encoded: ByteArray?): ResolvedPhaseExecutionPlan {
     return requireSupportedCompositionWithRecordedSemantics(encoded).plan
   }
 

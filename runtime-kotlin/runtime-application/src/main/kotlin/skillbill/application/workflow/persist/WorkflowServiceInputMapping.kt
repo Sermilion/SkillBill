@@ -6,14 +6,8 @@ import skillbill.application.workflow.model.PersistOpenedWorkflowArgs
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
-import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
-import skillbill.application.workflow.service.FEATURE_TASK_FAMILY_KINDS
-import skillbill.application.workflow.service.INCOMPLETE_FEATURE_TASK_IDENTITY_ERROR
-import skillbill.application.workflow.service.SUFFIX_CHARS
-import skillbill.application.workflow.service.WORKFLOW_ID_SUFFIX_LENGTH
-import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
@@ -302,25 +296,6 @@ internal fun launchProjectionIfReady(
       request.repositoryCheckpointIdentity(),
     )
   }
-
-fun WorkflowService.openFeatureTask(args: WorkflowServiceOpenFeatureTaskArgs): WorkflowOpenResult {
-  require(args.kind in FEATURE_TASK_FAMILY_KINDS) {
-    "Only runtime feature-task workflows use execution identity."
-  }
-  return open(
-    WorkflowServiceOpenArgs(
-      kind = args.kind,
-      sessionId = args.sessionId,
-      currentStepId = args.currentStepId,
-      issueKey = args.issueKey,
-      repositoryIdentity = args.repositoryIdentity,
-      governedSpecPath = args.governedSpecPath,
-      routeScope = args.routeScope,
-      executionPlan = args.executionPlan,
-      initialArtifacts = args.initialArtifacts,
-    ),
-  )
-}
 
 fun generateWorkflowId(
   prefix: String,

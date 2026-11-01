@@ -3,7 +3,7 @@ package skillbill.cli.goal.control
 import skillbill.cli.goal.run.toAppliedRepairCliMap
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
+import skillbill.engine.goal.GoalRunnerAppliedRepair
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult

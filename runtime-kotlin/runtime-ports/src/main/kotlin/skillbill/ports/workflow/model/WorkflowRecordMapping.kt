@@ -5,10 +5,12 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.persistence.isTypedArtifactRecord
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
@@ -30,7 +32,7 @@ fun WorkflowStateRecord.toSnapshot(): WorkflowStateSnapshot =
     workflowStatus = WorkflowStateRecord.requiredWorkflowStatus(workflowStatus),
     currentStepId = currentStepId,
     steps = decodeSteps(stepsJson),
-    artifacts = DurableWorkflowArtifacts.fromMap(decodeObject(artifactsJson)),
+    artifacts = mergeTypedArtifacts(decodeObject(artifactsJson), typedArtifacts),
     startedAt = decodeInstant(startedAt, "started_at"),
     updatedAt = decodeInstant(updatedAt, "updated_at"),
     finishedAt = decodeInstant(finishedAt, "finished_at"),
@@ -39,7 +41,9 @@ fun WorkflowStateRecord.toSnapshot(): WorkflowStateSnapshot =
 fun WorkflowStateSnapshot.mapToRecord(source: WorkflowStateRecord? = null): WorkflowStateRecord {
   val sourceSnapshot = source?.toSnapshot()
   val stepsJson = encodeSteps(steps)
-  val persistedArtifacts = preserveArtifactTimestampText(artifacts, sourceSnapshot?.artifacts)
+  val (typedPart, plainPart) = artifacts.partitionTypedArtifacts()
+  val sourcePlain = sourceSnapshot?.artifacts?.partitionTypedArtifacts()?.second
+  val persistedArtifacts = preserveArtifactTimestampText(plainPart, sourcePlain)
   val artifactsJson = JsonCodec.valueToJsonString(persistedArtifacts)
   return WorkflowStateRecord(
     workflowId = workflowId,
@@ -49,8 +53,7 @@ fun WorkflowStateSnapshot.mapToRecord(source: WorkflowStateRecord? = null): Work
     workflowStatus = workflowStatus.wireValue,
     currentStepId = currentStepId,
     stepsJson = source?.takeIf { sourceSnapshot?.steps == steps }?.stepsJson ?: stepsJson,
-    artifactsJson =
-      source?.takeIf { sourceSnapshot?.artifacts?.toMap() == persistedArtifacts }?.artifactsJson ?: artifactsJson,
+    artifactsJson = source?.takeIf { sourcePlain == persistedArtifacts }?.artifactsJson ?: artifactsJson,
     startedAt = encodeInstant(startedAt, source?.startedAt),
     updatedAt = encodeInstant(updatedAt, source?.updatedAt),
     finishedAt = encodeInstant(finishedAt, source?.finishedAt),
@@ -59,7 +62,34 @@ fun WorkflowStateSnapshot.mapToRecord(source: WorkflowStateRecord? = null): Work
     issueKey = source?.issueKey,
     stateEnteredAt = source?.stateEnteredAt,
     stateEnteredAtEstimated = source?.stateEnteredAtEstimated ?: false,
+    typedArtifacts = typedPart,
   )
+}
+
+private fun mergeTypedArtifacts(
+  plain: Map<String, Any?>,
+  typed: DurableWorkflowArtifacts,
+): DurableWorkflowArtifacts {
+  typed.keys.firstOrNull { it in plain }?.let { key ->
+    throw invalidWorkflowStateSchemaError("Workflow state artifacts repeat typed artifact '$key' in the JSON object.")
+  }
+  return DurableWorkflowArtifacts.fromMap(plain + typed)
+}
+
+private fun DurableWorkflowArtifacts.partitionTypedArtifacts(): Pair<DurableWorkflowArtifacts, Map<String, Any?>> {
+  val typedKeys = DurableWorkflowArtifactFamily.TYPED_RECORD_FAMILIES.mapTo(hashSetOf()) { it.label() }
+  val typed = linkedMapOf<String, Any?>()
+  val plain = linkedMapOf<String, Any?>()
+  forEach { (key, value) ->
+    if (key !in typedKeys) {
+      plain[key] = value
+    } else if (isTypedArtifactRecord(value)) {
+      typed[key] = value
+    } else {
+      throw invalidWorkflowStateSchemaError("Workflow artifact '$key' must be a typed record.")
+    }
+  }
+  return DurableWorkflowArtifacts.fromMap(typed) to plain
 }
 
 private fun decodeSteps(raw: String): List<WorkflowStepState> {
@@ -146,18 +176,22 @@ private fun decodeInstant(
   raw: String?,
   field: String,
 ): Instant? =
-  raw?.takeIf(String::isNotBlank)?.let {
+  raw?.takeIf(String::isNotBlank)?.let { value ->
+    decodeInstantOrNull(value)
+      ?: throw invalidWorkflowStateSchemaError("Workflow state $field contains an invalid timestamp.")
+  }
+
+private fun decodeInstantOrNull(raw: String): Instant? =
+  try {
+    Instant.parse(raw)
+  } catch (_: DateTimeParseException) {
     try {
-      Instant.parse(it)
+      OffsetDateTime.parse(raw).toInstant()
     } catch (_: DateTimeParseException) {
       try {
-        OffsetDateTime.parse(it).toInstant()
+        LocalDateTime.parse(raw, DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss")).toInstant(ZoneOffset.UTC)
       } catch (_: DateTimeParseException) {
-        try {
-          LocalDateTime.parse(it, DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss")).toInstant(ZoneOffset.UTC)
-        } catch (error: DateTimeParseException) {
-          throw invalidWorkflowStateSchemaError("Workflow state $field contains an invalid timestamp.", error)
-        }
+        null
       }
     }
   }
@@ -169,7 +203,7 @@ private fun encodeInstant(
   if (value == null) {
     source?.takeIf(String::isBlank)
   } else {
-    source?.takeIf { runCatching { decodeInstant(it, "timestamp") == value }.getOrDefault(false) }
+    source?.takeIf { decodeInstantOrNull(it) == value }
       ?: formatChangedInstant(value, source)
   }
 
@@ -181,7 +215,12 @@ private fun formatChangedInstant(
   if (sourceText.matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"))) {
     return DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC).format(value)
   }
-  val offsetSource = runCatching { OffsetDateTime.parse(sourceText) }.getOrNull()
+  val offsetSource =
+    try {
+      OffsetDateTime.parse(sourceText)
+    } catch (_: DateTimeParseException) {
+      null
+    }
   if (offsetSource != null) {
     val fractionDigits = Regex("\\.(\\d+)(?=Z|[+-]\\d{2}:\\d{2}$)").find(sourceText)?.groupValues?.get(1)?.length ?: 0
     val formatter =
@@ -203,8 +242,14 @@ private fun Any?.toExactIntOrNull(): Int? =
     is Short -> toInt()
     is Int -> this
     is Long -> takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
-    is BigInteger -> runCatching { intValueExact() }.getOrNull()
-    is BigDecimal -> runCatching { intValueExact() }.getOrNull()
+    is BigInteger -> takeIf { bitLength() < Int.SIZE_BITS }?.toInt()
+    is BigDecimal -> {
+      try {
+        intValueExact()
+      } catch (_: ArithmeticException) {
+        null
+      }
+    }
     is String -> toIntOrNull()
     else -> null
   }

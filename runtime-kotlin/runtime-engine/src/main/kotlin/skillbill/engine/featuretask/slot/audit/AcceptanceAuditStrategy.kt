@@ -29,7 +29,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AcceptanceAuditStrategy :
+public class AcceptanceAuditStrategy :
   PhaseStrategy(),
   AcceptanceRepairCapability,
   PhaseLoopCapability by AcceptanceAuditCapabilities,
@@ -39,7 +39,7 @@ class AcceptanceAuditStrategy :
   PhaseVerdictCapability {
   private val policies: Map<String, PhaseStepPolicy> = ACCEPTANCE_AUDIT_POLICIES
 
-  override val acceptanceRepairSteps =
+  override val acceptanceRepairSteps: AcceptanceCriterionRepairStepRoles =
     AcceptanceCriterionRepairStepRoles(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
@@ -101,8 +101,8 @@ class AcceptanceAuditStrategy :
     return if (stepId == entryStep) AcceptanceAuditVerdictRule(diagnostics) else null
   }
 
-  companion object {
-    const val ID = "acceptance-audit"
+  public companion object {
+    public const val ID: String = "acceptance-audit"
   }
 }
 

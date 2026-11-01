@@ -2,6 +2,7 @@ package skillbill.application.scaffold
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.ports.skillremove.SkillRemoveFileSystem
 import skillbill.skillremove.SkillBillRollbackException
@@ -13,7 +14,6 @@ import skillbill.skillremove.model.SkillRemovalResult
 import skillbill.skillremove.model.SkillRemovalTarget
 import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class SkillRemove(
@@ -129,13 +129,10 @@ class SkillRemove(
     }
 
   private inline fun tryExecute(block: () -> SkillRemovalResult): SkillRemovalResult {
-    val outcome = runCatching(block)
-    if (outcome.isSuccess) return outcome.getOrThrow()
-    return mapSkillRemovalFailure(outcome.exceptionOrNull()!!)
+    return catchingNonCancellation(block).getOrElse(::mapSkillRemovalFailure)
   }
 
   private fun mapSkillRemovalFailure(error: Throwable): SkillRemovalResult {
-    if (error is CancellationException) throw error
     if (error is Error) throw error
     if (error is SkillBillRollbackException) return removalFailed(error, rollbackComplete = false)
     if (error is SkillBillRuntimeException) return removalFailed(error, rollbackComplete = true)

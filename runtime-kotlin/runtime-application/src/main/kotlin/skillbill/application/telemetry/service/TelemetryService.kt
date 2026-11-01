@@ -15,6 +15,8 @@ import skillbill.application.telemetry.settings.mapWorkflow
 import skillbill.application.telemetry.settings.telemetryMutationResult
 import skillbill.application.telemetry.settings.telemetrySettingsOrNull
 import skillbill.application.telemetry.sync.TelemetrySyncRuntime
+import skillbill.application.telemetry.sync.catchingTelemetryFailure
+import skillbill.application.telemetry.sync.rethrowInterrupted
 import skillbill.application.telemetry.sync.syncResult
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.ports.concurrency.InterruptSignalPort
@@ -43,6 +45,8 @@ import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
 internal const val TELEMETRY_BACKGROUND_SYNC_FAILURE_SIGNATURE = "telemetry background sync failed"
+internal const val TELEMETRY_LEVEL_UNREADABLE = "telemetry level unreadable; runtime exception enqueued without a level"
+internal const val TELEMETRY_CAPTURE_FAILURE_SIGNATURE = "telemetry runtime exception capture failed"
 internal const val TELEMETRY_RESERVED_TEST_IDENTITY_REFUSAL =
   "skillbill telemetry: record_kind=refusal; seam=telemetry_sync; value_used=skipped; " +
     "value_expected=hosted_relay_delivery; cause=reserved_test_install_id"
@@ -126,9 +130,9 @@ class TelemetryService(
         recordBackgroundSyncFailure(null)
       }
     } catch (cancelled: CancellationException) {
-      rethrowTelemetryFailure(cancelled)
+      throw cancelled
     } catch (interrupted: InterruptedException) {
-      rethrowTelemetryInterrupted(interrupted, interruptSignal)
+      rethrowInterrupted(interrupted, interruptSignal)
     }
   }
 
@@ -139,29 +143,15 @@ class TelemetryService(
 
   private fun recordBackgroundSyncFailure(cause: Throwable?) {
     diagnostics.warning(TELEMETRY_BACKGROUND_SYNC_FAILURE_SIGNATURE, cause)
-    val enqueueResult =
-      runCatching {
-        if (!database.databaseExists()) {
-          return@runCatching
-        }
-        val level =
-          runCatching { telemetrySettingsOrNull(settingsProvider, diagnostics)?.level }
-            .getOrElse { thrown ->
-              rethrowIfCooperative(thrown)
-              null
-            }
-            .orEmpty()
-        enqueueRuntimeException(
-          sessionTelemetryOutboxRepository(database),
-          "telemetry_background_sync",
-          cause as? Exception ?: Exception(TELEMETRY_BACKGROUND_SYNC_FAILURE_SIGNATURE),
-          level,
-        )
-      }
-    enqueueResult.exceptionOrNull()?.let { thrown ->
-      rethrowIfCooperative(thrown)
-      diagnostics.warning(TELEMETRY_BACKGROUND_SYNC_FAILURE_SIGNATURE, thrown)
-    }
+    catchingTelemetryFailure(interruptSignal) {
+      if (!database.databaseExists()) return@catchingTelemetryFailure
+      enqueueRuntimeException(
+        sessionTelemetryOutboxRepository(database),
+        "telemetry_background_sync",
+        cause as? Exception ?: Exception(TELEMETRY_BACKGROUND_SYNC_FAILURE_SIGNATURE),
+        telemetryLevelOrEmpty(),
+      )
+    }.exceptionOrNull()?.let { diagnostics.warning(TELEMETRY_BACKGROUND_SYNC_FAILURE_SIGNATURE, it) }
   }
 
   fun setLevel(level: String): TelemetryMutationResult {
@@ -262,56 +252,30 @@ class TelemetryService(
     error: Exception,
   ) {
     if (!database.databaseExists()) return
-    val level =
-      runCatching { telemetrySettingsOrNull(settingsProvider, diagnostics)?.level }
-        .getOrElse { thrown ->
-          rethrowIfCooperative(thrown)
-          null
-        }
-        .orEmpty()
-    val enqueueResult =
-      runCatching {
-        enqueueRuntimeException(sessionTelemetryOutboxRepository(database), workflowPhase, error, level)
-      }
-    enqueueResult.exceptionOrNull()?.let(::rethrowIfCooperative)
+    catchingTelemetryFailure(interruptSignal) {
+      enqueueRuntimeException(sessionTelemetryOutboxRepository(database), workflowPhase, error, telemetryLevelOrEmpty())
+    }.onFailure { diagnostics.warning(TELEMETRY_CAPTURE_FAILURE_SIGNATURE, it) }
   }
 
-  private fun rethrowIfCooperative(error: Throwable): Nothing? =
-    when (error) {
-      is CancellationException -> throw error
-      is InterruptedException -> rethrowTelemetryInterrupted(error, interruptSignal)
-      else -> null
-    }
+  private fun telemetryLevelOrEmpty(): String =
+    catchingTelemetryFailure(interruptSignal) { telemetrySettingsOrNull(settingsProvider, diagnostics)?.level }
+      .getOrElse { error ->
+        diagnostics.warning(TELEMETRY_LEVEL_UNREADABLE, error)
+        null
+      }
+      .orEmpty()
 
   private fun reconcileBeforeSync(request: TelemetryReconciliationRequest) {
     if (!database.databaseExists()) return
-    runCatching {
+    catchingTelemetryFailure(interruptSignal) {
       database.transaction { unitOfWork ->
         unitOfWork.telemetryReconciliation.reconcileStaleSessions(request)
       }
     }.onFailure { error ->
-      when (error) {
-        is CancellationException -> rethrowTelemetryFailure(error)
-        is InterruptedException -> rethrowTelemetryInterrupted(error, interruptSignal)
-        is Exception -> captureException("telemetry_stale_session_reconciliation", error)
-        else -> rethrowTelemetryFailure(error)
-      }
+      if (error !is Exception) throw error
+      captureException("telemetry_stale_session_reconciliation", error)
     }
   }
-}
-
-private fun rethrowTelemetryFailure(error: Throwable): Nothing = throw error
-
-private fun rethrowTelemetryInterrupted(
-  error: InterruptedException,
-  interruptSignal: InterruptSignalPort,
-): Nothing {
-  runCatching { interruptSignal.restore() }.exceptionOrNull()?.let { restorationFailure ->
-    if (restorationFailure !== error) {
-      error.addSuppressed(restorationFailure)
-    }
-  }
-  throw error
 }
 
 private fun sessionTelemetryOutboxRepository(database: DatabaseSessionFactory): TelemetryOutboxRepository =

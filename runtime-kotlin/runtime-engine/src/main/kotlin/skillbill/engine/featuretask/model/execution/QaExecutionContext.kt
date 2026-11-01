@@ -5,42 +5,42 @@ import skillbill.ports.qa.model.QaWorkspace
 import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Path
 
-data class QaExecutionContext(
-  val workspace: QaWorkspace,
-  val expected: QaExpectedIdentity,
-  val target: QaExecutionTarget,
-  val policy: QaPolicy = QaPolicy.STANDALONE,
-  val preparationWarnings: List<String> = emptyList(),
-  val callerBaseline: QaCallerBaseline? = null,
+public data class QaExecutionContext(
+  public val workspace: QaWorkspace,
+  public val expected: QaExpectedIdentity,
+  public val target: QaExecutionTarget,
+  public val policy: QaPolicy = QaPolicy.STANDALONE,
+  internal val preparationWarnings: List<String> = emptyList(),
+  internal val callerBaseline: QaCallerBaseline? = null,
 )
 
-sealed interface QaExecutionTarget {
-  data class Supported(
-    val targets: List<QaDeclaredTarget>,
-    val checkout: Path,
+public sealed interface QaExecutionTarget {
+  public data class Supported(
+    public val targets: List<QaDeclaredTarget>,
+    public val checkout: Path,
   ) : QaExecutionTarget {
     init {
       require(targets.isNotEmpty()) { "A supported QA target needs at least one declared target." }
     }
   }
 
-  data class Skipped(val reason: QaSkipReason, val detail: String) : QaExecutionTarget
+  public data class Skipped(val reason: QaSkipReason, val detail: String) : QaExecutionTarget
 }
 
-data class QaDeclaredTarget(
-  val packSlug: String,
-  val kinds: Set<QaTargetKind>,
-  val guidancePath: FileLocation,
+public data class QaDeclaredTarget(
+  public val packSlug: String,
+  public val kinds: Set<QaTargetKind>,
+  public val guidancePath: FileLocation,
 )
 
-data class QaExpectedIdentity(
-  val headRevision: String,
-  val treeIdentity: String,
-  val evidencePrefix: String,
+public data class QaExpectedIdentity(
+  public val headRevision: String,
+  public val treeIdentity: String,
+  public val evidencePrefix: String,
 )
 
-data class QaCallerBaseline(
-  val head: String,
-  val treeIdentity: String,
-  val status: String,
+public data class QaCallerBaseline(
+  public val head: String,
+  public val treeIdentity: String,
+  public val status: String,
 )

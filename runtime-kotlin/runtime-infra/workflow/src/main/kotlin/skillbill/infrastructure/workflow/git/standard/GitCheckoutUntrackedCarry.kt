@@ -21,10 +21,12 @@ internal fun gitCheckoutCarryingUntracked(
       "checkout-carry-",
     )
   colliding.forEach { path -> movePath(repoRoot.resolve(path), carryRoot.resolve(path)) }
-  val outcome = runCatching(checkout)
-  colliding.forEach { path -> movePath(carryRoot.resolve(path), repoRoot.resolve(path)) }
-  removeEmptyTree(carryRoot)
-  return outcome.getOrThrow()
+  return try {
+    checkout()
+  } finally {
+    colliding.forEach { path -> movePath(carryRoot.resolve(path), repoRoot.resolve(path)) }
+    removeEmptyTree(carryRoot)
+  }
 }
 
 private fun collidingUntrackedPaths(

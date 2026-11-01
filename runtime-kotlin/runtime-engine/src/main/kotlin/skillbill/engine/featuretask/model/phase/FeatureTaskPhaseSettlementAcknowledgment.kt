@@ -3,21 +3,21 @@ package skillbill.engine.featuretask.model.phase
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
-enum class FeatureTaskPhaseSettlementAckStatus(val wireValue: String) {
+public enum class FeatureTaskPhaseSettlementAckStatus(public val wireValue: String) {
   OK("ok"),
   ERROR("error"),
 }
 
-data class FeatureTaskPhaseSettlementAcknowledgment(
-  val status: FeatureTaskPhaseSettlementAckStatus,
-  val workflowId: String,
-  val phaseId: String,
-  val attempt: Int,
-  val kind: FeatureTaskPhaseSettlementKind,
-  val envelope: FeatureTaskRuntimeWorkflowArtifactMap?,
-  val diagnosticCode: String? = null,
+public data class FeatureTaskPhaseSettlementAcknowledgment(
+  public val status: FeatureTaskPhaseSettlementAckStatus,
+  public val workflowId: String,
+  public val phaseId: String,
+  public val attempt: Int,
+  public val kind: FeatureTaskPhaseSettlementKind,
+  public val envelope: FeatureTaskRuntimeWorkflowArtifactMap?,
+  public val diagnosticCode: String? = null,
 )
 
-data class FeatureTaskPhaseSettlementEnvelope(
-  val envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+public data class FeatureTaskPhaseSettlementEnvelope(
+  public val envelope: FeatureTaskRuntimeWorkflowArtifactMap,
 )

@@ -12,8 +12,8 @@ private const val RUNTIME_TRACKABLE_CONFIG = "${LegacyProjectStatePaths.RUNTIME_
 private const val RUNTIME_TRACKABLE_PHASES = "${LegacyProjectStatePaths.RUNTIME_STATE_PREFIX}phases"
 private const val MAX_REPORTED_PATHS = 10
 
-object FeatureTaskRuntimeCheckpointScope {
-  fun decide(input: FeatureTaskRuntimeCheckpointScopeInput): FeatureTaskRuntimeCheckpointDecision {
+public object FeatureTaskRuntimeCheckpointScope {
+  public fun decide(input: FeatureTaskRuntimeCheckpointScopeInput): FeatureTaskRuntimeCheckpointDecision {
     val runtimeOwned: (String) -> Boolean = { path ->
       isRuntimePrivatePath(path) ||
         FeatureTaskRuntimeRunEvidenceOwnership.isOwnedByRun(path, input.workflowId)
@@ -61,12 +61,12 @@ object FeatureTaskRuntimeCheckpointScope {
   }
 }
 
-internal fun sanitized(
+public fun sanitized(
   paths: Collection<String>,
   runtimeOwned: (String) -> Boolean,
 ): List<String> = paths.filter(String::isNotBlank).filterNot(runtimeOwned)
 
-fun isRuntimePrivatePath(path: String): Boolean {
+public fun isRuntimePrivatePath(path: String): Boolean {
   val normalized = normalizeForAliasComparison(path)
   if (normalized == RUNTIME_TRACKABLE_CONFIG) return false
   if (normalized == RUNTIME_TRACKABLE_PHASES || normalized.startsWith("$RUNTIME_TRACKABLE_PHASES/")) return false
@@ -75,7 +75,7 @@ fun isRuntimePrivatePath(path: String): Boolean {
     normalized.startsWith(LegacyProjectStatePaths.RUNTIME_STATE_PREFIX)
 }
 
-fun goalScopedBaselinePaths(
+public fun goalScopedBaselinePaths(
   ownBaseline: List<String>,
   goalStartBaseline: List<String>?,
 ): List<String> {
@@ -83,7 +83,7 @@ fun goalScopedBaselinePaths(
   return ownBaseline.filter { it in goalStart }
 }
 
-fun phaseWrittenPaths(
+public fun phaseWrittenPaths(
   worktreeDeltaPaths: List<String>,
   phaseManifestPaths: List<String>,
 ): List<String> {
@@ -97,7 +97,7 @@ fun phaseWrittenPaths(
     }.distinct().sorted()
 }
 
-fun reviewUntrackedExclusions(
+public fun reviewUntrackedExclusions(
   baselineUntrackedPaths: List<String>,
   currentUntrackedPaths: List<String>,
   ownedPaths: List<String>,
@@ -109,7 +109,7 @@ fun reviewUntrackedExclusions(
   return (baselineUntrackedPaths + foreign).filter(String::isNotBlank).distinct().sorted()
 }
 
-fun adoptionWarning(
+internal fun adoptionWarning(
   branch: String,
   paths: List<String>,
 ): String =
@@ -117,7 +117,7 @@ fun adoptionWarning(
     "working-tree content diverged from what this run wrote. The working-tree content is committed " +
     "to '$branch' as this workflow's work rather than blocking the run."
 
-fun normalizeForAliasComparison(path: String): String = path.trim().trimEnd('/').lowercase(Locale.ROOT)
+internal fun normalizeForAliasComparison(path: String): String = path.trim().trimEnd('/').lowercase(Locale.ROOT)
 
 private fun formatCheckpointPaths(paths: List<String>): String {
   val reported = paths.take(MAX_REPORTED_PATHS).joinToString(", ") { "'$it'" }
@@ -125,12 +125,12 @@ private fun formatCheckpointPaths(paths: List<String>): String {
   return if (overflow > 0) "$reported (+$overflow more)" else reported
 }
 
-class FeatureTaskRuntimeCheckpointMetadata(
-  val phaseId: String,
-  val loopId: String?,
-  val generation: Int,
-  val branch: String,
-  val intent: String,
+public class FeatureTaskRuntimeCheckpointMetadata(
+  public val phaseId: String,
+  public val loopId: String?,
+  public val generation: Int,
+  public val branch: String,
+  public val intent: String,
 ) {
   override fun toString(): String =
     buildList {
@@ -140,8 +140,8 @@ class FeatureTaskRuntimeCheckpointMetadata(
     }.joinToString(" ")
 }
 
-object FeatureTaskRuntimeCheckpointMessage {
-  fun build(
+public object FeatureTaskRuntimeCheckpointMessage {
+  public fun build(
     issueKey: String,
     subtaskName: String?,
     metadata: FeatureTaskRuntimeCheckpointMetadata,
@@ -150,7 +150,7 @@ object FeatureTaskRuntimeCheckpointMessage {
     return compose(subject(issueKey, subtaskName, identity.subtaskId), metadata, identity)
   }
 
-  fun subject(
+  public fun subject(
     issueKey: String,
     subtaskName: String?,
     subtaskId: String,
@@ -158,13 +158,13 @@ object FeatureTaskRuntimeCheckpointMessage {
     subtaskName?.trim()?.takeIf(String::isNotBlank)?.let { "$issueKey: $it" }
       ?: fallbackSubject(issueKey, subtaskId)
 
-  fun finalise(
+  public fun finalise(
     subject: String,
     metadata: FeatureTaskRuntimeCheckpointMetadata,
     identity: FeatureTaskRuntimeSubtaskCommitIdentity,
   ): String = compose(subject.trim(), metadata, identity)
 
-  private fun compose(
+  public fun compose(
     subject: String,
     metadata: FeatureTaskRuntimeCheckpointMetadata,
     identity: FeatureTaskRuntimeSubtaskCommitIdentity,
@@ -173,12 +173,12 @@ object FeatureTaskRuntimeCheckpointMessage {
     return "$subject\n\n$body\n$metadata\n\n${identity.trailer}\n"
   }
 
-  fun fallbackSubject(
+  internal fun fallbackSubject(
     issueKey: String,
     subtaskId: String,
   ): String = "$issueKey: subtask $subtaskId"
 
-  fun missingSubtaskNameRecord(
+  internal fun missingSubtaskNameRecord(
     issueKey: String,
     subtaskId: String,
   ): String =
@@ -187,7 +187,7 @@ object FeatureTaskRuntimeCheckpointMessage {
       "cause=the durable goal-continuation row carried no subtask name; the commit subject " +
       "degrades to the issue key and subtask id"
 
-  const val INTENT_AUDITED_IMPLEMENTATION: String = "audited implementation"
-  const val INTENT_REMEDIATION: String = "remediation"
-  const val INTENT_FINALISED_SUBTASK: String = "finalised subtask"
+  public const val INTENT_AUDITED_IMPLEMENTATION: String = "audited implementation"
+  public const val INTENT_REMEDIATION: String = "remediation"
+  public const val INTENT_FINALISED_SUBTASK: String = "finalised subtask"
 }

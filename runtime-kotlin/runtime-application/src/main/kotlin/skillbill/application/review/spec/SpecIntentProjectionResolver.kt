@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.branchName
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.resolvedParentSpecPath
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -142,8 +141,7 @@ class SpecIntentProjectionResolver(
         is DecompositionManifestValidationResult.AcceptedAfterRepair -> result.manifest
         is DecompositionManifestValidationResult.Rejected -> null
       }
-    } catch (error: IOException) {
-      error.rethrowIfCooperativeCancellationOrInterruption()
+    } catch (_: IOException) {
       null
     } catch (error: SkillBillRuntimeException) {
       error.rethrowUnless(error.isDecompositionManifestSchemaFailure())

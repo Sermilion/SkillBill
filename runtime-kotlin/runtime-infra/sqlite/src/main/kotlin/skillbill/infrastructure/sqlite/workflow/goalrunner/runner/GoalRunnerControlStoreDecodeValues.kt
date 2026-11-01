@@ -9,8 +9,8 @@ import java.math.BigInteger
 internal fun Map<String, Any?>.nonNegativeLongOrDefault(key: String): Long =
   when (val value = this[key]) {
     null -> 0L
-    is BigInteger -> runCatching { value.longValueExact() }.getOrNull()
-    is BigDecimal -> runCatching { value.toBigIntegerExact().longValueExact() }.getOrNull()
+    is BigInteger -> exactOrNull { value.longValueExact() }
+    is BigDecimal -> exactOrNull { value.toBigIntegerExact().longValueExact() }
     is Number -> value.toLong()
     else -> null
   }?.takeIf { it >= 0 }
@@ -91,9 +91,9 @@ internal fun Any?.toPositiveLong(key: String): Long =
     is Short -> toLong()
     is Int -> toLong()
     is Long -> this
-    is BigInteger -> runCatching { longValueExact() }.getOrNull()
-    is BigDecimal -> runCatching { toBigIntegerExact().longValueExact() }.getOrNull()
-    is Number -> runCatching { BigDecimal(toString()).longValueExact() }.getOrNull()
+    is BigInteger -> exactOrNull { longValueExact() }
+    is BigDecimal -> exactOrNull { toBigIntegerExact().longValueExact() }
+    is Number -> exactOrNull { BigDecimal(toString()).longValueExact() }
     else -> null
   }?.also {
     if (it <= 0) goalRunnerControlSchemaError("execution lease field '$key' must be positive.")
@@ -106,9 +106,9 @@ internal fun Any?.toPositiveIntOrNull(key: String): Int? =
     is Short -> toInt()
     is Int -> this
     is Long -> takeIf { it in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() }?.toInt()
-    is BigInteger -> runCatching { intValueExact() }.getOrNull()
-    is BigDecimal -> runCatching { toBigIntegerExact().intValueExact() }.getOrNull()
-    is Number -> runCatching { BigDecimal(toString()).intValueExact() }.getOrNull()
+    is BigInteger -> exactOrNull { intValueExact() }
+    is BigDecimal -> exactOrNull { toBigIntegerExact().intValueExact() }
+    is Number -> exactOrNull { BigDecimal(toString()).intValueExact() }
     else -> goalRunnerControlSchemaError("field '$key' must be a positive integer or null.")
   }?.also {
     if (it <= 0) goalRunnerControlSchemaError("field '$key' must be positive.")
@@ -135,6 +135,15 @@ internal fun Map<String, Any?>.intIntMap(key: String): Map<Int, Int> {
     subtaskId to retries
   }
 }
+
+private inline fun <T : Any> exactOrNull(convert: () -> T): T? =
+  try {
+    convert()
+  } catch (_: ArithmeticException) {
+    null
+  } catch (_: NumberFormatException) {
+    null
+  }
 
 internal fun Map<String, Any?>.intStringMap(key: String): Map<Int, String> {
   val raw = this[key] ?: return emptyMap()

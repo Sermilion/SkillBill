@@ -15,7 +15,7 @@ import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import java.nio.file.Path
 
 @Inject
-class QaReportSettlement(
+public class QaReportSettlement(
   private val workspaces: QaWorkspacePort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
@@ -101,7 +101,7 @@ class QaReportSettlement(
     }
   }
 
-  fun settle(qa: QaExecutionContext): QaReport =
+  internal fun settle(qa: QaExecutionContext): QaReport =
     try {
       val source = workspaces.readReport(qa.workspace.reportPath)
       if (source == null) {
@@ -153,10 +153,10 @@ class QaReportSettlement(
 }
 
 internal data class QaRetainedFindingRequest(
-  val repoRoot: Path,
-  val reference: String?,
-  val findingId: String,
-  val storedReportText: String?,
-  val storedEvidencePaths: List<String>,
-  val currentReport: QaReport? = null,
+  public val repoRoot: Path,
+  public val reference: String?,
+  public val findingId: String,
+  public val storedReportText: String?,
+  internal val storedEvidencePaths: List<String>,
+  internal val currentReport: QaReport? = null,
 )

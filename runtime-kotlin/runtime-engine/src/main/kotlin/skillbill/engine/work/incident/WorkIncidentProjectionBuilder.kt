@@ -4,8 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.BlockIncidentLiveReferenceResolution
 import skillbill.engine.diagnostics.block.BlockIncidentLiveReferenceResolver
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentProjectionAssessment
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
+import skillbill.engine.work.recovery.BlockIncidentProjectionAssessment
+import skillbill.engine.work.recovery.BlockIncidentRecoveryService
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -39,12 +39,12 @@ private val RECOVERING_ATTEMPTS =
   )
 
 @Inject
-class WorkIncidentProjectionBuilder(
+public class WorkIncidentProjectionBuilder(
   private val recovery: BlockIncidentRecoveryService,
   private val telemetry: BlockIncidentTelemetryPort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun build(
+  internal fun build(
     unit: UnitOfWork,
     workflowId: String?,
     invocationId: String?,

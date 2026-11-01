@@ -10,18 +10,17 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.model.ReviewRunLane
-import java.util.concurrent.CancellationException
 
 /** Resolves the specialist rubrics an inline review merges into its single prompt, and records the lanes it applied. */
-fun interface InlineReviewRubricResolver {
-  /** The rendered rubrics, or null when no lane applies. */
-  fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
+public fun interface InlineReviewRubricResolver {
+  public fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
 
   /** The rendered rubrics with the lanes they came from; a resolver without lane records reports none. */
-  fun plan(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<InlineReviewRubricPlan?> =
+  public fun plan(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<InlineReviewRubricPlan?> =
     when (val resolved = resolve(request)) {
       is ParallelCodeReviewPlanned.Failed -> resolved
       is ParallelCodeReviewPlanned.Ready ->
@@ -31,27 +30,28 @@ fun interface InlineReviewRubricResolver {
           },
         )
     }
-
-  /** Records [lanes] as the lanes review run [reviewRunId] applied. */
-  fun recordLanes(
-    reviewRunId: String,
-    lanes: List<ReviewRunLane>,
-  ) = Unit
 }
 
-class ParallelReviewInlineRubricResolver(
+public interface InlineReviewLaneRecorder {
+  public fun recordLanes(
+    reviewRunId: String,
+    lanes: List<ReviewRunLane>,
+  ): Unit
+}
+
+public class ParallelReviewInlineRubricResolver(
   private val reviewRunner: ParallelCodeReviewRunner,
-) : InlineReviewRubricResolver {
+) : InlineReviewRubricResolver, InlineReviewLaneRecorder {
   override fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
     reviewRunner.resolveInlineReviewRubrics(request)
 
   override fun plan(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<InlineReviewRubricPlan?> =
     reviewRunner.planInlineReviewRubrics(request)
 
-  override fun recordLanes(
+  public override fun recordLanes(
     reviewRunId: String,
     lanes: List<ReviewRunLane>,
-  ) = reviewRunner.recordInlineReviewLanes(reviewRunId, lanes)
+  ): Unit = reviewRunner.recordInlineReviewLanes(reviewRunId, lanes)
 }
 
 internal object InlineReviewLanesSection {
@@ -103,9 +103,19 @@ internal fun InlineReviewRubricResolver?.recordInlineLanes(
 ) {
   if (this == null || plan == null || plan.lanes.isEmpty()) return
   val disposition = if (completed) ReviewLaneReviewDisposition.COMPLETE else ReviewLaneReviewDisposition.INCOMPLETE
-  runCatching { recordLanes(reviewRunId, plan.lanes.map { it.copy(reviewDisposition = disposition) }) }
+  val laneRecorder = this as? InlineReviewLaneRecorder
+  if (laneRecorder == null) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Inline review lanes for $reviewRunId were not recorded",
+      IllegalStateException("The rubric resolver does not record lanes"),
+    )
+    return
+  }
+  catchingNonCancellation {
+    laneRecorder.recordLanes(reviewRunId, plan.lanes.map { it.copy(reviewDisposition = disposition) })
+  }
     .onFailure { error ->
-      if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "Inline review lanes for $reviewRunId were not recorded",

@@ -8,7 +8,9 @@ import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -217,26 +219,38 @@ class CliGoalRuntimeExecutionTest {
   }
 
   @Test
-  fun `goal CLI blocks when CI checks cannot be read`() {
+  fun `goal CLI observes a merge when CI checks cannot be read`() {
     val fixture = goalFixture(subtaskCount = 1)
     val launcher = GoalFixtureAgentRunLauncher(fixture)
     val context = fixture.context(launcher = launcher)
+    val openIdentity = requireNotNull(context.pullRequestIdentityLookup)
+    var checksUnavailable = false
     val unavailable =
       context.copy(
+        pullRequestIdentityLookup =
+          PullRequestIdentityLookup { root, branch ->
+            if (checksUnavailable) {
+              PullRequestIdentity.Merged("https://github.com/example/skill-bill/pull/901", 901)
+            } else {
+              openIdentity.lookup(root, branch)
+            }
+          },
         pullRequestChecksLookup =
           PullRequestChecksLookup {
               _,
               _,
             ->
+            checksUnavailable = true
             PullRequestChecks.Unavailable("CI lookup unavailable")
           },
       )
 
-    val blocked = CliRuntime.run(fixture.goalCommand(), unavailable)
+    val result = CliRuntime.run(fixture.goalCommand(), unavailable)
 
-    assertEquals(3, blocked.exitCode, blocked.stdout)
-    assertContains(blocked.stdout, "CI lookup unavailable")
-    assertFalse(blocked.stdout.contains("goal SKILL-901: finished"))
+    assertTrue(checksUnavailable)
+    assertEquals(0, result.exitCode, result.stdout)
+    assertContains(result.stdout, "goal SKILL-901: finished")
+    assertContains(result.stdout, "merged")
     assertEquals(listOf(1), launcher.childLaunches.map { it.skillRunRequest.subtaskId })
   }
 

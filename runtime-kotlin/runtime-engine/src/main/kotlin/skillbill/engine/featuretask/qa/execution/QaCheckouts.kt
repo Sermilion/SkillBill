@@ -20,7 +20,7 @@ internal sealed interface QaCheckoutOpening {
 }
 
 @Inject
-class QaCheckouts(
+public class QaCheckouts(
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
 ) {

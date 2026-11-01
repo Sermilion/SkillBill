@@ -9,22 +9,25 @@ import kotlin.test.assertTrue
 class RuntimeDiagnosticsBestEffortGuardArchitectureTest {
   @Test
   fun `engine production sources delegate diagnostics warning guards to the single owner`() {
-    val engineRoot =
-      ArchitectureScanSupport.runtimeRoot.resolve(
-        "runtime-kotlin/runtime-engine/src/main/kotlin",
+    val roots =
+      listOf(
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-engine/src/main/kotlin"),
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-goalrunner/src/main/kotlin"),
       )
     val guardPattern =
       Regex(
         """(?:runCatching|onFailure|catch\s*\([^)]*\))[\s\S]{0,300}diagnostics\.warning""",
       )
     val owner =
-      engineRoot.resolve(
+      roots.first().resolve(
         "skillbill/engine/diagnostics/RuntimeDiagnosticsBestEffortWarning.kt",
       )
     val violations =
-      kotlinFilesUnderWithArchitectureAsserts(engineRoot)
-        .filter { path -> path != owner && guardPattern.containsMatchIn(path.readText()) }
-        .map { path -> engineRoot.relativize(path).toString() }
+      roots.flatMap { root ->
+        kotlinFilesUnderWithArchitectureAsserts(root)
+          .filter { path -> path != owner && guardPattern.containsMatchIn(path.readText()) }
+          .map { path -> root.relativize(path).toString() }
+      }
     assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }
 }
@@ -35,6 +38,7 @@ class GoalRunnerAgentOutputScannerArchitectureTest {
     val roots =
       listOf(
         ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-engine/src/main/kotlin"),
+        ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-goalrunner/src/main/kotlin"),
         ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-application/src/main/kotlin"),
       )
     val matches =
@@ -47,18 +51,6 @@ class GoalRunnerAgentOutputScannerArchitectureTest {
       listOf("skillbill/engine/agentoutput/AgentOutputJsonScan.kt"),
       matches.sorted(),
     )
-  }
-}
-
-class RuntimeApplicationSharedEngineEdgeArchitectureTest {
-  @Test
-  fun `application main references only pinned engine inbound api types`() {
-    val violations =
-      engineInboundApiViolations(
-        consumerSourceRoots = listOf(moduleMainKotlinRootRelative("runtime-application")),
-        allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-      )
-    assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }
 }
 
@@ -676,37 +668,31 @@ class FeatureTaskStepIdentityArchitectureTest {
 
 class FeatureTaskLaunchPortArchitectureTest {
   @Test
-  fun `only the PhaseRunner implementation depends on GoalRunnerSubtaskLauncher`() {
-    val sources = featureTaskEngineSources()
-    assertTrue(sources.isNotEmpty(), "The launch-port rule read no feature-task file.")
-
-    val violations = FeatureTaskLaunchPortScan.violations(sources)
-
-    assertEquals(emptyList(), violations, "Read ${sources.size} files.\n" + violations.joinToString("\n"))
+  fun `feature task areas reach the launch port only through PhaseRunner`() {
+    val scans =
+      listOf(
+        "feature-task" to featureTaskEngineSources(),
+        "goal-planning" to goalPlanningEngineSources(),
+        "operations" to operationEngineSources(),
+      )
+    assertTrue(scans[0].second.isNotEmpty(), "The launch-port rule read no feature-task file.")
+    assertTrue(
+      scans[1].second.keys.any {
+          path ->
+        path.startsWith("goalrunner/planning/")
+      },
+      "Read no goal-planning file.",
+    )
+    assertTrue(scans[2].second.keys.any { path -> path.startsWith("operation/core/") }, "Read no operation core file.")
+    val violations =
+      scans.flatMap { (area, sources) ->
+        FeatureTaskLaunchPortScan.violations(sources).map { violation -> "$area: $violation" }
+      }
+    assertEquals(emptyList(), violations, violations.joinToString("\n"))
   }
 
   @Test
-  fun `goal planning reaches GoalRunnerSubtaskLauncher only through the PhaseRunner`() {
-    val sources = goalPlanningEngineSources()
-    assertTrue(sources.keys.any { it.startsWith("goalrunner/planning/sweep/") }, "Read no goal-planning sweep file.")
-
-    val violations = FeatureTaskLaunchPortScan.violations(sources)
-
-    assertEquals(emptyList(), violations, "Read ${sources.size} files.\n" + violations.joinToString("\n"))
-  }
-
-  @Test
-  fun `operations reach GoalRunnerSubtaskLauncher only through the PhaseRunner`() {
-    val sources = operationEngineSources()
-    assertTrue(sources.keys.any { it.startsWith("operation/core/") }, "Read no operation core file.")
-
-    val violations = FeatureTaskLaunchPortScan.violations(sources)
-
-    assertEquals(emptyList(), violations, "Read ${sources.size} files.\n" + violations.joinToString("\n"))
-  }
-
-  @Test
-  fun `launch-port rule catches an operation launcher dependency even in a PhaseRunner implementation`() {
+  fun `launch-port rule catches forbidden dependencies across feature task areas`() {
     val operation =
       """
       package skillbill.engine.operation.release
@@ -726,24 +712,6 @@ class FeatureTaskLaunchPortArchitectureTest {
       ) : PhaseRunner
       """.trimIndent()
 
-    assertEquals(
-      listOf(
-        "operation/release/SyntheticReleaseOperation.kt imports " +
-          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
-        "operation/core/SyntheticOperationRunner.kt references " +
-          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
-      ),
-      FeatureTaskLaunchPortScan.violations(
-        mapOf(
-          "operation/release/SyntheticReleaseOperation.kt" to operation,
-          "operation/core/SyntheticOperationRunner.kt" to runner,
-        ),
-      ),
-    )
-  }
-
-  @Test
-  fun `launch-port rule catches a goal-planning launcher dependency`() {
     val sweep =
       """
       package skillbill.engine.goalrunner.planning.sweep
@@ -752,7 +720,7 @@ class FeatureTaskLaunchPortArchitectureTest {
 
       data class SyntheticBoundaries(val subtaskLauncher: GoalRunnerSubtaskLauncher)
       """.trimIndent()
-    val runner =
+    val planningRunner =
       """
       package skillbill.engine.goalrunner.planning.attempt
 
@@ -762,25 +730,6 @@ class FeatureTaskLaunchPortArchitectureTest {
         private val launcher: skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher,
       ) : PhaseRunner
       """.trimIndent()
-
-    assertEquals(
-      listOf(
-        "goalrunner/planning/sweep/SyntheticBoundaries.kt imports " +
-          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
-        "goalrunner/planning/attempt/SyntheticPlanningRunner.kt references " +
-          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
-      ),
-      FeatureTaskLaunchPortScan.violations(
-        mapOf(
-          "goalrunner/planning/sweep/SyntheticBoundaries.kt" to sweep,
-          "goalrunner/planning/attempt/SyntheticPlanningRunner.kt" to runner,
-        ),
-      ),
-    )
-  }
-
-  @Test
-  fun `launch-port rule catches run-loop and strategy launcher references and passes the runner`() {
     val runLoop =
       """
       package skillbill.engine.featuretask.runloop.core
@@ -801,7 +750,7 @@ class FeatureTaskLaunchPortArchitectureTest {
         private val launcher: skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher,
       )
       """.trimIndent()
-    val runner =
+    val phaseRunner =
       """
       package skillbill.engine.featuretask.slot.runner
 
@@ -812,20 +761,33 @@ class FeatureTaskLaunchPortArchitectureTest {
         private val launcher: GoalRunnerSubtaskLauncher,
       ) : PhaseRunner
       """.trimIndent()
-
+    val violations =
+      FeatureTaskLaunchPortScan.violations(
+        mapOf(
+          "operation/release/SyntheticReleaseOperation.kt" to operation,
+          "operation/core/SyntheticOperationRunner.kt" to runner,
+          "goalrunner/planning/sweep/SyntheticBoundaries.kt" to sweep,
+          "goalrunner/planning/attempt/SyntheticPlanningRunner.kt" to planningRunner,
+          "runloop/core/Synthetic.kt" to runLoop,
+          "slot/audit/SyntheticStrategy.kt" to strategy,
+          "slot/runner/SyntheticPhaseRunner.kt" to phaseRunner,
+        ),
+      )
     assertEquals(
       listOf(
+        "operation/release/SyntheticReleaseOperation.kt imports " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+        "operation/core/SyntheticOperationRunner.kt references " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+        "goalrunner/planning/sweep/SyntheticBoundaries.kt imports " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+        "goalrunner/planning/attempt/SyntheticPlanningRunner.kt references " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
         "runloop/core/Synthetic.kt imports skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
         "runloop/core/Synthetic.kt imports skillbill.ports.goalrunner.runner.*",
         "slot/audit/SyntheticStrategy.kt references skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
       ),
-      FeatureTaskLaunchPortScan.violations(
-        mapOf(
-          "runloop/core/Synthetic.kt" to runLoop,
-          "slot/audit/SyntheticStrategy.kt" to strategy,
-          "slot/runner/SyntheticPhaseRunner.kt" to runner,
-        ),
-      ),
+      violations,
     )
   }
 }

@@ -7,14 +7,14 @@ import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorSettlement
 import java.nio.file.Path
 
-data class MonitorPreparationRequest(
-  val callerRoot: Path,
-  val intake: String?,
-  val currentBranch: String?,
-  val expectedStaleOwner: MonitorExpectedOwnerToken? = null,
+public data class MonitorPreparationRequest(
+  public val callerRoot: Path,
+  public val intake: String?,
+  public val currentBranch: String?,
+  public val expectedStaleOwner: MonitorExpectedOwnerToken? = null,
 )
 
-enum class MonitorBlockKind {
+public enum class MonitorBlockKind {
   CLOSED_UNMERGED,
   LIVE_OWNER,
   STALE_OWNER,
@@ -27,40 +27,40 @@ enum class MonitorBlockKind {
   BASE_MOVED,
 }
 
-internal data class MonitorAttemptTarget(
+public data class MonitorAttemptTarget(
   val target: MonitorResolvedTarget,
   val callerRoot: Path,
   val primaryRoot: Path,
   val worktreePath: Path? = null,
 )
 
-internal sealed interface MonitorPreparation {
-  data class Prepared(
-    val context: MonitorExecutionContext,
-    val cleanup: MonitorCleanupOwnership,
+public sealed interface MonitorPreparation {
+  public data class Prepared(
+    public val context: MonitorExecutionContext,
+    public val cleanup: MonitorCleanupOwnership,
   ) : MonitorPreparation
 
-  data class Completed(val pullRequest: MonitorPullRequestIdentity?) : MonitorPreparation
+  public data class Completed(val pullRequest: MonitorPullRequestIdentity?) : MonitorPreparation
 
-  data class Blocked(
-    val kind: MonitorBlockKind,
-    val detail: String,
-    val pullRequest: MonitorPullRequestIdentity?,
-    val path: Path? = null,
-    val settlement: MonitorSettlement? = null,
-    val attempt: MonitorAttemptTarget? = null,
+  public data class Blocked(
+    public val kind: MonitorBlockKind,
+    public val detail: String,
+    public val pullRequest: MonitorPullRequestIdentity?,
+    public val path: Path? = null,
+    public val settlement: MonitorSettlement? = null,
+    public val attempt: MonitorAttemptTarget? = null,
   ) : MonitorPreparation
 
-  data class Refused(
-    val reason: MonitorTargetRefusal,
-    val detail: String,
-    val candidateUrls: List<String> = emptyList(),
+  public data class Refused(
+    public val reason: MonitorTargetRefusal,
+    public val detail: String,
+    public val candidateUrls: List<String> = emptyList(),
   ) : MonitorPreparation
 
-  data class Failed(
-    val reason: String,
-    val pullRequest: MonitorPullRequestIdentity? = null,
-    val settlement: MonitorSettlement? = null,
-    val attempt: MonitorAttemptTarget? = null,
+  public data class Failed(
+    public val reason: String,
+    public val pullRequest: MonitorPullRequestIdentity? = null,
+    public val settlement: MonitorSettlement? = null,
+    public val attempt: MonitorAttemptTarget? = null,
   ) : MonitorPreparation
 }

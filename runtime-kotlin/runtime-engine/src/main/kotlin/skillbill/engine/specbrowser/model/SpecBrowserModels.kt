@@ -2,21 +2,21 @@ package skillbill.engine.specbrowser.model
 
 import java.nio.file.Path
 
-data class SpecBrowserProject(
+public data class SpecBrowserProject(
   val projectId: String,
   val displayName: String,
   val specsRoot: Path?,
   val repoRoot: Path?,
 )
 
-data class SpecBrowserCounts(
+public data class SpecBrowserCounts(
   val all: Int,
   val active: Int,
   val pending: Int,
   val done: Int,
 )
 
-data class SpecBrowserSnapshot(
+public data class SpecBrowserSnapshot(
   val project: SpecBrowserProject,
   val roots: List<SpecBrowserNode>,
   val counts: SpecBrowserCounts,
@@ -24,18 +24,18 @@ data class SpecBrowserSnapshot(
   val failure: String?,
 )
 
-enum class SpecBrowserFileKind {
+public enum class SpecBrowserFileKind {
   PARENT_SPEC,
   SUBTASK_SPEC,
   OTHER,
 }
 
-sealed interface SpecBrowserNode {
-  val name: String
-  val path: String
-  val absolutePath: Path
+public sealed interface SpecBrowserNode {
+  public val name: String
+  public val path: String
+  public val absolutePath: Path
 
-  data class Folder(
+  public data class Folder(
     override val name: String,
     override val path: String,
     override val absolutePath: Path,
@@ -44,7 +44,7 @@ sealed interface SpecBrowserNode {
     val statusCounts: Map<SpecBrowserStatus, Int>,
   ) : SpecBrowserNode
 
-  data class Bundle(
+  public data class Bundle(
     override val name: String,
     override val path: String,
     override val absolutePath: Path,
@@ -57,7 +57,7 @@ sealed interface SpecBrowserNode {
     val children: List<SpecBrowserNode>,
   ) : SpecBrowserNode
 
-  data class File(
+  public data class File(
     override val name: String,
     override val path: String,
     override val absolutePath: Path,

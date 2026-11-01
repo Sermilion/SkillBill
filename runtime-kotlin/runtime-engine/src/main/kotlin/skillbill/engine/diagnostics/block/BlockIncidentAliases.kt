@@ -6,15 +6,15 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.HexFormat
 
-internal object BlockIncidentAliases {
-  fun featureTaskPhase(
+public object BlockIncidentAliases {
+  internal fun featureTaskPhase(
     workflowId: String,
     phaseId: String,
     invocationId: String,
     attempt: Int,
   ) = BlockIncidentAlias(BlockIncidentAliasKind.PHASE_TRANSITION, "$workflowId:$phaseId:$invocationId:$attempt")
 
-  fun goal(
+  public fun goal(
     workflowId: String,
     stepId: String,
     acceptedGeneration: Long?,
@@ -30,23 +30,24 @@ internal object BlockIncidentAliases {
     )
   }
 
-  fun BlockIncidentAlias.withBlockCause(blockCause: String?): BlockIncidentAlias =
+  public fun BlockIncidentAlias.withBlockCause(blockCause: String?): BlockIncidentAlias =
     blockCause?.let { copy(value = "$value:cause=$it") } ?: this
 
-  fun recoveredBlock(
+  internal fun recoveredBlock(
     workflowId: String,
     stepId: String,
     blockEnteredAt: Instant,
   ) = BlockIncidentAlias(BlockIncidentAliasKind.PHASE_TRANSITION, "$workflowId:recovered:$stepId:at=$blockEnteredAt")
 
-  fun childCause(childToken: String) = BlockIncidentAlias(BlockIncidentAliasKind.CHILD_CAUSE, childToken)
+  public fun childCause(childToken: String): BlockIncidentAlias =
+    BlockIncidentAlias(BlockIncidentAliasKind.CHILD_CAUSE, childToken)
 
-  fun entryBoundary(
+  internal fun entryBoundary(
     identity: String,
     attempt: Int?,
   ) = BlockIncidentAlias(BlockIncidentAliasKind.ENTRY_BOUNDARY, "$identity:${attempt ?: 0}")
 
-  fun fallback(observation: BlockIncidentObservation): BlockIncidentAlias =
+  internal fun fallback(observation: BlockIncidentObservation): BlockIncidentAlias =
     observation.alias ?: run {
       val identity =
         listOfNotNull(
@@ -63,7 +64,7 @@ internal object BlockIncidentAliases {
       }
     }
 
-  fun token(alias: BlockIncidentAlias): String {
+  public fun token(alias: BlockIncidentAlias): String {
     val digest =
       MessageDigest.getInstance("SHA-256")
         .digest("${alias.kind.wireValue}:${alias.value}".toByteArray())

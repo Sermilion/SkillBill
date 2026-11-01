@@ -3,12 +3,12 @@ package skillbill.application.review.parallel.verification
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.agentoutput.agentFailureExcerpt
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
-import skillbill.application.review.parallel.runner.NO_OP_RESUME_TERMINAL_STATUS
-import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_FIRST_SOURCE_LINE
-import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_REGISTER_ABSENCE_EXCERPT_MAX_LENGTH
-import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_STDERR_EXCERPT_MAX_LENGTH
-import skillbill.application.review.parallel.runner.ParallelCodeReviewInlineParentLaunch
-import skillbill.application.review.parallel.runner.ParallelCodeReviewSoftRegisterAdmission
+import skillbill.application.review.parallel.planning.NO_OP_RESUME_TERMINAL_STATUS
+import skillbill.application.review.parallel.planning.PARALLEL_REVIEW_FIRST_SOURCE_LINE
+import skillbill.application.review.parallel.planning.PARALLEL_REVIEW_REGISTER_ABSENCE_EXCERPT_MAX_LENGTH
+import skillbill.application.review.parallel.planning.PARALLEL_REVIEW_STDERR_EXCERPT_MAX_LENGTH
+import skillbill.application.review.parallel.planning.ParallelCodeReviewInlineParentLaunch
+import skillbill.application.review.parallel.planning.ParallelCodeReviewSoftRegisterAdmission
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.terminalStatus
@@ -23,7 +23,6 @@ import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import java.io.IOException
-import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class ParallelCodeReviewRunnerFailureAdmission(
@@ -164,19 +163,19 @@ internal fun parallelCodeReviewInlineTerminalStatus(
   }
 
 internal fun parallelCodeReviewCaptureLane(lane: () -> ParallelReviewLaneOutcome): ParallelReviewLaneOutcome {
-  val outcome = runCatching { lane() }
-  if (outcome.isSuccess) return outcome.getOrThrow()
-  val error = outcome.exceptionOrNull()!!
-  val terminal =
-    when (error) {
-      is CancellationException, is InterruptedException -> error
-      is IOException, is SkillBillRuntimeException -> return ParallelReviewLaneOutcome(
-        success = false,
-        rawOutput = "",
-        failureReason =
-          "lane launch threw ${error.failureCodeLabel() ?: error::class.simpleName}: ${error.message ?: "no detail"}",
-      )
-      else -> error
-    }
-  throw terminal
+  try {
+    return lane()
+  } catch (error: IOException) {
+    return failedLane(error)
+  } catch (error: SkillBillRuntimeException) {
+    return failedLane(error)
+  }
 }
+
+private fun failedLane(error: Exception): ParallelReviewLaneOutcome =
+  ParallelReviewLaneOutcome(
+    success = false,
+    rawOutput = "",
+    failureReason =
+      "lane launch threw ${error.failureCodeLabel() ?: error::class.simpleName}: ${error.message ?: "no detail"}",
+  )

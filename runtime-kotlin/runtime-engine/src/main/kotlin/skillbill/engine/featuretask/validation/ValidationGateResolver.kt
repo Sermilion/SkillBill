@@ -13,13 +13,13 @@ import skillbill.review.plan.model.ReviewStackRoutingResult
 import skillbill.scaffold.model.PlatformManifest
 
 @Inject
-class ValidationGateResolver(
+public class ValidationGateResolver(
   private val installedCatalog: InstalledPlatformPackCatalogPort,
 ) {
-  fun resolve(changedPaths: List<String>): ValidationGateResolution =
+  internal fun resolve(changedPaths: List<String>): ValidationGateResolution =
     withManifests { manifests -> resolution(manifests, dominantPacks(manifests, changedPaths)) }
 
-  fun declaredCandidates(): List<ValidationGateResolution> =
+  internal fun declaredCandidates(): List<ValidationGateResolution> =
     installedCatalog.manifests().map { manifest ->
       manifest.validationGate?.let { ValidationGateResolution.Declared(manifest.slug, it) }
         ?: ValidationGateResolution.Absent(manifest.slug)

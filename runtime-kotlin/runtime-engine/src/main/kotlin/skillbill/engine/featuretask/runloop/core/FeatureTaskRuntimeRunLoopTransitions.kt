@@ -6,10 +6,12 @@ import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRul
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
+import skillbill.engine.featuretask.slot.PhaseForwardCheckpointRules
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -35,7 +37,7 @@ internal fun spanBetween(
   sourcePhaseId: String,
 ): List<String> = transitions.spanBetween(destinationPhaseId, sourcePhaseId)
 
-object FeatureTaskRuntimeRunLoopTransitions {
+internal object FeatureTaskRuntimeRunLoopTransitions {
   internal fun transitionTarget(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
@@ -127,10 +129,11 @@ object FeatureTaskRuntimeRunLoopTransitions {
   ): Boolean {
     val checkpoint =
       (context.strategyFor(precedingPhaseId) as? PhaseLoopCapability)
-        ?.loopRules?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
+        ?.loopRules.let { it as? PhaseForwardCheckpointRules }
+        ?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
         ?: return true
     val failures = mutableListOf<String>()
-    runCatching {
+    catchingNonCancellation {
       context.coupledRunTransitions.checkpointBlocksAsWarnings(failures::add) {
         FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
           context,
@@ -141,7 +144,6 @@ object FeatureTaskRuntimeRunLoopTransitions {
         )
       }
     }.onFailure { error ->
-      if (error is InterruptedException) throw error
       failures += checkpoint.failureWarning(context.session.resolvedBranch.orEmpty(), error.message.orEmpty())
     }
     failures.forEach { warning ->

@@ -10,7 +10,7 @@ import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificati
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import java.nio.file.Path
 
-fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.validateDispositionBoundaryBodies(
+public fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.validateDispositionBoundaryBodies(
   repoRoot: Path,
   sections: List<FeatureTaskRuntimeFindingBoundaryMemorySection>,
   dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
@@ -27,7 +27,7 @@ fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.validateDispositionBound
   }
 }
 
-private fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.dispositionBoundaryBodyFailure(
+public fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.dispositionBoundaryBodyFailure(
   repoRoot: Path,
   section: FeatureTaskRuntimeFindingBoundaryMemorySection?,
   disposition: FeatureTaskRuntimeFindingVerificationDisposition,
@@ -51,7 +51,7 @@ private fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.dispositionBound
   }
 }
 
-fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.resolvedBodiesPromptSection(
+public fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.resolvedBodiesPromptSection(
   repoRoot: Path,
   sections: List<FeatureTaskRuntimeFindingBoundaryMemorySection>,
   selectionsByFindingId: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
@@ -97,7 +97,7 @@ fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.resolvedBodiesPromptSect
   }
 }
 
-fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.promptSection(
+public fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.promptSection(
   sections: List<FeatureTaskRuntimeFindingBoundaryMemorySection>,
 ): String {
   if (sections.isEmpty()) return ""

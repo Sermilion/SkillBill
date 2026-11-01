@@ -19,6 +19,5 @@ class PathExecutableLookup(
       .any { directory -> isRunnable(Path.of(directory).resolve(executable)) }
   }
 
-  private fun isRunnable(candidate: Path): Boolean =
-    runCatching { Files.isRegularFile(candidate) && Files.isExecutable(candidate) }.getOrDefault(false)
+  private fun isRunnable(candidate: Path): Boolean = Files.isRegularFile(candidate) && Files.isExecutable(candidate)
 }

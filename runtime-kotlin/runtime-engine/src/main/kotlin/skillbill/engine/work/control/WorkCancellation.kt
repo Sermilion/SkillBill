@@ -1,8 +1,8 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
-import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goal.GoalRunnerStopStatus
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -33,15 +33,15 @@ import java.time.Clock
 import java.time.Duration
 
 @Inject
-class WorkCancellation(
+public class WorkCancellation(
   private val database: DatabaseSessionFactory,
   private val status: IdeStatusService,
-  private val goals: GoalRunnerStatusService,
+  private val goals: GoalRunnerStatusPort,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val clock: Clock,
   private val launcher: WorkRunLauncher,
 ) {
-  fun cancel(target: WorkRunTarget): WorkControlResult {
+  public fun cancel(target: WorkRunTarget): WorkControlResult {
     val item =
       database.read { matchingRun(status, target) }
         ?: return WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)

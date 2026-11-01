@@ -116,6 +116,8 @@ private class TrackingTransport(
 private class InstallerRecordingDiagnostics : RuntimeDiagnostics {
   val warnings = mutableListOf<String>()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,
@@ -130,6 +132,8 @@ private class InstallerRecordingDiagnostics : RuntimeDiagnostics {
 }
 
 private object SilentInstallerDiagnostics : RuntimeDiagnostics {
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

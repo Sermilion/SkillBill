@@ -50,7 +50,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-object PhaseAttemptContinuations {
+internal object PhaseAttemptContinuations {
   internal fun settleIncompleteWork(
     recorder: PhaseRunRecords,
     context: FixLoopBranchContext,

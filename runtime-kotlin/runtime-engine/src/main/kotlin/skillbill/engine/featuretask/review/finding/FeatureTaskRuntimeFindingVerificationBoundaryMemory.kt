@@ -11,11 +11,11 @@ import skillbill.ports.goalrunner.planning.model.GoalPlanningResolvedBoundaryBod
 import java.nio.file.Path
 
 @Inject
-class FeatureTaskRuntimeFindingVerificationBoundaryMemory(
+public class FeatureTaskRuntimeFindingVerificationBoundaryMemory(
   private val contextDiscovery: GoalPlanningContextDiscovery,
   private val boundaryBodyResolver: GoalPlanningBoundaryBodyResolver,
 ) {
-  fun sectionsForFindings(
+  public fun sectionsForFindings(
     repoRoot: Path,
     requests: List<FeatureTaskRuntimeFindingBoundaryMemoryRequest>,
   ): List<FeatureTaskRuntimeFindingBoundaryMemorySection> =
@@ -31,7 +31,7 @@ class FeatureTaskRuntimeFindingVerificationBoundaryMemory(
       )
     }
 
-  fun resolveSelectedBodies(
+  internal fun resolveSelectedBodies(
     repoRoot: Path,
     catalog: List<GoalPlanningBoundaryHeading>,
     selectedHeadingIds: List<String>,

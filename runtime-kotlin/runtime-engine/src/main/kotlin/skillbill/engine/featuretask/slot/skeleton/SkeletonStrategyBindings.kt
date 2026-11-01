@@ -26,7 +26,7 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
-object SkeletonStrategyBindings {
+public object SkeletonStrategyBindings {
   private val standaloneRevision2Bindings: Map<PhaseSlot, PhaseStrategyBinding> =
     sharedBindings() +
       mapOf(
@@ -47,7 +47,7 @@ object SkeletonStrategyBindings {
           ),
       )
 
-  val bindings: Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> =
+  public val bindings: Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> =
     mapOf(
       SkeletonDefinition.STANDALONE_REVISION_2 to standaloneRevision2Bindings,
       SkeletonDefinition.GOAL_CHILD_REVISION_2 to goalChildRevision2Bindings,

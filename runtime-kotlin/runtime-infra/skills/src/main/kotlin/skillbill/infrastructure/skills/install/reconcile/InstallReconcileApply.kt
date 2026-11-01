@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.reconcile
 
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.reconciliationConflictError
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
@@ -144,7 +145,7 @@ private fun deleteLivePackFilesAbsentUpstream(
   Files.walk(livePacks).use { stream ->
     stream.sorted(Comparator.reverseOrder()).forEach { path ->
       if (path != livePacks && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-        runCatching { Files.delete(path) }
+        path.toFile().delete()
       }
     }
   }
@@ -241,7 +242,7 @@ private fun reconcileSkillDirectory(
       if (backup != null && Files.exists(backup, LinkOption.NOFOLLOW_LINKS) &&
         !Files.exists(liveDir, LinkOption.NOFOLLOW_LINKS)
       ) {
-        runCatching { moveDir(backup, liveDir) }
+        catchingNonCancellation { moveDir(backup, liveDir) }.onFailure(error::addSuppressed)
       }
       throw error
     }

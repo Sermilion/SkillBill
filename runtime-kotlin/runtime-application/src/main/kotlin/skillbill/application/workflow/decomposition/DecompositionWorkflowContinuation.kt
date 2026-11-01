@@ -9,13 +9,7 @@ import skillbill.application.workflow.model.CheckoutAndValidateBranchRequest
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.persist.generateWorkflowId
-import skillbill.application.workflow.service.ContinuationStepResult
-import skillbill.application.workflow.service.blockedGitResult
-import skillbill.application.workflow.service.blockedSubtaskResult
-import skillbill.application.workflow.service.decompositionRuntimeArtifacts
-import skillbill.application.workflow.service.doneDecompositionResult
-import skillbill.application.workflow.service.migrateLegacyGoalRunnerControls
-import skillbill.application.workflow.service.missingSubtaskWorkflowResult
+import skillbill.application.workflow.persist.migrateLegacyGoalRunnerControls
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
@@ -42,7 +36,6 @@ import skillbill.workflow.decomposition.runtime.withImportedGoalQualityReadiness
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.decomposition.withStartedSubtask
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -144,6 +137,12 @@ class DecompositionWorkflowContinuation(
       } else {
         null
       }
+    val qualityPlanWorkflowId =
+      if (existing == null) {
+        planWorkflowId ?: unitOfWork.workflowStates.findCompletedPlanWorkflowIdForProjectSpec(manifest)
+      } else {
+        null
+      }
     val imported =
       engine.updateRecord(
         WorkflowFamily.TASK_RUNTIME.definition,
@@ -155,7 +154,7 @@ class DecompositionWorkflowContinuation(
           artifactsPatch =
             parentProjectionArtifacts(manifest, validator, base.artifacts).withImportedPlan(planWorkflowId).let {
                 patch ->
-              if (existing == null) patch.withImportedGoalQualityReadiness(manifest, planWorkflowId) else patch
+              if (existing == null) patch.withImportedGoalQualityReadiness(manifest, qualityPlanWorkflowId) else patch
             },
           sessionId = base.sessionId.orEmpty(),
           replaceArtifacts = true,
@@ -229,20 +228,8 @@ class DecompositionWorkflowContinuation(
     val snapshot = findSubtaskSnapshot(subtask, issueKey, unitOfWork) ?: return subtask
     val artifacts = DurableWorkflowArtifacts.fromMap(snapshot.artifacts)
     val commitPushResult = artifacts.commitPushResultArtifact()
-    val goalContinuation =
-      (
-        artifacts[
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.value(snapshot.artifacts),
-        ] as? Map<*, *>
-      )
-    val commitPushCompleted =
-      snapshot.steps.any { step ->
-        step.stepId == "commit_push" && step.status == WorkflowStepStatus.COMPLETED
-      }
     return when {
-      snapshot.workflowStatus == WorkflowStatus.COMPLETED ||
-        goalContinuation?.get("suppress_pr") == true &&
-        (snapshot.currentStepId == "pr" || commitPushResult?.commitSha != null) ->
+      snapshot.workflowStatus == WorkflowStatus.COMPLETED ->
         subtask.copy(
           status = DecompositionStatus.COMPLETE.wireValue,
           blockedReason = null,
@@ -258,14 +245,6 @@ class DecompositionWorkflowContinuation(
               category = "runtime",
               fallback = "Workflow step '${snapshot.currentStepId.ifBlank { "unknown" }}' is blocked.",
             ),
-        )
-      goalContinuation?.get("suppress_pr") == true &&
-        commitPushCompleted &&
-        commitPushResult?.commitSha == null ->
-        subtask.copy(
-          status = DecompositionStatus.BLOCKED.wireValue,
-          blockedReason = "git: Goal-continuation commit_push completed without commit_push_result.commit_sha.",
-          lastResumableStep = snapshot.currentStepId,
         )
       else -> subtask
     }

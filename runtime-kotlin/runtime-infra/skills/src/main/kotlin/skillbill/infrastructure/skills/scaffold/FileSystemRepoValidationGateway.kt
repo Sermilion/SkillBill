@@ -2,7 +2,7 @@ package skillbill.infrastructure.skills.scaffold
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.infrastructure.skills.nativeagent.FileSystemNativeAgentPlatformPackLoader
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionContext
+import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.validatePlannedNativeAgentWorkers
 import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoredContentBody
 import skillbill.infrastructure.skills.scaffold.runtime.validation.ReleaseRefMetadata

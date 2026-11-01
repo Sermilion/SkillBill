@@ -4,6 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.nativeagent.NATIVE_AGENT_LINK_INVENTORY_CONTRACT_VERSION
 import skillbill.error.core.InvalidNativeAgentLinkInventoryWriteError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
@@ -64,7 +65,7 @@ internal object NativeAgentLinkInventoryWrite {
     } catch (error: IOException) {
       initiatingFailure = writeError(request.path, error.message.orEmpty(), error)
     }
-    val cleanupFailure = runCatching { Files.deleteIfExists(temporary) }.exceptionOrNull()
+    val cleanupFailure = catchingNonCancellation { Files.deleteIfExists(temporary) }.exceptionOrNull()
     cleanupFailure?.let { initiatingFailure?.addSuppressed(it) }
     val terminalFailure = initiatingFailure ?: cleanupFailure
     terminalFailure?.let { throw it }

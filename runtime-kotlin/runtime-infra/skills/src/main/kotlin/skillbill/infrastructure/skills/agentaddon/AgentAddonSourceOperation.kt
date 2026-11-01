@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.agentaddon
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.invalidAgentAddonSchema
 
@@ -9,7 +10,7 @@ internal inline fun <T> sourceOperation(
   fallbackReason: String,
   operation: () -> T,
 ): T =
-  runCatching(operation).getOrElse { error ->
+  catchingNonCancellation(operation).getOrElse { error ->
     throw error.asSourceSchemaError(sourceLabel, fallbackReason)
   }
 

@@ -4,21 +4,21 @@ import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckp
 
 internal const val SUBTASK_TRAILER_KEY = "Skill-Bill-Subtask"
 
-data class FeatureTaskRuntimeSubtaskCommitIdentity(val issueKey: String, val subtaskId: String) {
+public data class FeatureTaskRuntimeSubtaskCommitIdentity(val issueKey: String, val subtaskId: String) {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeSubtaskCommitIdentity.issueKey must be non-blank." }
     require(subtaskId.isNotBlank()) { "FeatureTaskRuntimeSubtaskCommitIdentity.subtaskId must be non-blank." }
   }
 
-  val trailer: String get() = "$SUBTASK_TRAILER_KEY: $issueKey/$subtaskId"
+  public val trailer: String get() = "$SUBTASK_TRAILER_KEY: $issueKey/$subtaskId"
 
-  fun checkpointRefName(sequenceNumber: Int): String =
+  public fun checkpointRefName(sequenceNumber: Int): String =
     featureTaskRuntimeCheckpointRefName(issueKey, subtaskId, sequenceNumber)
 
-  fun matches(commitMessage: String): Boolean = parse(commitMessage) == this
+  public fun matches(commitMessage: String): Boolean = parse(commitMessage) == this
 
-  companion object {
-    fun parse(commitMessage: String): FeatureTaskRuntimeSubtaskCommitIdentity? =
+  public companion object {
+    public fun parse(commitMessage: String): FeatureTaskRuntimeSubtaskCommitIdentity? =
       commitMessage.lineSequence()
         .map(String::trim)
         .filter { it.startsWith("$SUBTASK_TRAILER_KEY:") }

@@ -11,7 +11,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class GoalAssessmentStrategy : PhaseStrategy() {
+public class GoalAssessmentStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT to
@@ -45,8 +45,8 @@ class GoalAssessmentStrategy : PhaseStrategy() {
     }
   }
 
-  companion object {
-    const val ID = "goal-assessment"
+  internal companion object {
+    internal const val ID: String = "goal-assessment"
 
     private const val DIRECTIVE: String =
       "When the operator instructions ask for a repair plan, produce that plan as ordinary prose, " +

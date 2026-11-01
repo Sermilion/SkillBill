@@ -2,8 +2,8 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.model.EnvironmentContext
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -63,6 +63,8 @@ object SqliteTestDiagnostics : RuntimeDiagnostics {
   fun reset() {
     warnings.clear()
   }
+
+  override fun info(message: String) = Unit
 
   override fun warning(
     message: String,

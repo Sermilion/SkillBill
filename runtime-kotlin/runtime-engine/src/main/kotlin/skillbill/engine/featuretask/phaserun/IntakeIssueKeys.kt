@@ -5,7 +5,7 @@ import skillbill.contracts.issuekey.goalIntakeSpecBundleDirectory
 import skillbill.contracts.issuekey.issueAndFeature
 import java.nio.file.Path
 
-object IntakeIssueKeys {
+internal object IntakeIssueKeys {
   private val WHITESPACE = Regex("\\s+")
   private val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
   private const val SPEC_EXTENSION = ".md"

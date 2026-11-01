@@ -2,12 +2,12 @@ package skillbill.engine.specbrowser.model
 
 import java.nio.file.Path
 
-sealed interface SpecBundleDeletion {
-  data class Deleted(val directory: Path) : SpecBundleDeletion
+public sealed interface SpecBundleDeletion {
+  public data class Deleted(public val directory: Path) : SpecBundleDeletion
 
-  data object Absent : SpecBundleDeletion
+  public data object Absent : SpecBundleDeletion
 
-  data class Refused(val reason: String) : SpecBundleDeletion
+  public data class Refused(public val reason: String) : SpecBundleDeletion
 
-  data class Failed(val reason: String) : SpecBundleDeletion
+  public data class Failed(public val reason: String) : SpecBundleDeletion
 }

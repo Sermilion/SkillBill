@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.install
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.unreadableBaselineManifestError
 import skillbill.infrastructure.skills.install.reconcile.skillRelativePath
@@ -25,7 +26,7 @@ internal fun parseBaselineManifestPayload(
     JsonCodec.anyToStringAnyMap(
       JsonCodec.parseObjectOrNull(rawPayload)?.let(JsonCodec::jsonElementToValue),
     ) ?: throw unreadableBaseline(path, "Root value must be a JSON object.")
-  return runCatching { payload.toBaselineManifest(path) }
+  return catchingNonCancellation { payload.toBaselineManifest(path) }
     .getOrElse { error -> throw error.toUnreadableBaseline(path) }
 }
 

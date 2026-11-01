@@ -3,11 +3,11 @@ package skillbill.infrastructure.sqlite.telemetry.lifecycle.session
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalFinishedSaveOutcome
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueIdentity
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueSegmentStart
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalStartedSaveOutcome
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalIssueFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalStarted

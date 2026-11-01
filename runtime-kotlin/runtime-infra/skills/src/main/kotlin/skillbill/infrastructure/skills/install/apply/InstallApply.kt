@@ -1,9 +1,12 @@
 package skillbill.infrastructure.skills.install.apply
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
+import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
+import skillbill.infrastructure.skills.install.symlink.windowsSymlinkGuidance
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.FAILURE
 import skillbill.install.model.InstallAppliedSkill
@@ -189,7 +192,7 @@ private fun stagePlannedSkill(
   failures: MutableList<InstallApplyIssue>,
   catalogLoader: PlatformPackCatalogLoader? = null,
 ): InstallSkillStagingOutcome =
-  runCatching {
+  catchingNonCancellation {
     val intent = plannedStagingIntent(plan, skill)
     val staging =
       validatedPlannedStaging(

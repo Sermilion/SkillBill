@@ -19,6 +19,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.state.PhaseFindingVerificationState
 import skillbill.engine.featuretask.slot.state.PhaseRepairReceiptState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
@@ -121,7 +122,7 @@ internal object FeatureTaskRuntimeRunLoopCarriedForwardReview {
         ),
       )
     val prefix = "Carried-forward goal review could not atomically persist its canonical result."
-    return runCatching {
+    return catchingNonCancellation {
       environment.coupledRunTransitions.persistAuthoritativePhaseCompletion(
         recorder = environment.recorder,
         phaseState = phaseState,

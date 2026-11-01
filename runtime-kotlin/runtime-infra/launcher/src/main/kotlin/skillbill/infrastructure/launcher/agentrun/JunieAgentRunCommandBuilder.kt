@@ -1,8 +1,11 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import java.nio.file.Path
 import kotlin.time.DurationUnit
@@ -19,6 +22,11 @@ internal class JunieAgentRunCommandBuilder(
   override val agent: SupportedAgent = SupportedAgent.JUNIE
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.JUNIE_TEXT
+
+  override fun continuation(
+    command: AgentRunCommand,
+    diagnostics: RuntimeDiagnostics,
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)

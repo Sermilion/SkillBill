@@ -7,6 +7,35 @@ enum class PortNullObjectKind {
   DIAGNOSTIC_SINK,
 }
 
+enum class InterfaceNullObjectBodyForm {
+  NULL,
+  LITERAL,
+  EMPTY_COLLECTION,
+  UNIT_OR_EMPTY_BLOCK,
+  THROW,
+  ;
+
+  companion object {
+    private val literal = Regex("""true|false|-?\d[\d_]*(?:\.\d+)?[LlFfUu]*|"[^"$]*"""")
+    private val emptyCollection =
+      Regex("""empty(?:List|Set|Map)(?:<[^()]*>)?\(\)|(?:list|set|map)Of(?:<[^()]*>)?\(\)""")
+    private val throwExpression = Regex("""throw\b[\s\S]*""")
+
+    fun classify(expression: String): InterfaceNullObjectBodyForm? =
+      when {
+        expression == "null" -> NULL
+        expression == "Unit" -> UNIT_OR_EMPTY_BLOCK
+        literal.matches(expression) -> LITERAL
+        emptyCollection.matches(expression) -> EMPTY_COLLECTION
+        throwExpression.matches(expression) -> THROW
+        else -> null
+      }
+
+    fun classifyBlockStatement(statement: String): InterfaceNullObjectBodyForm? =
+      if (statement.isEmpty()) UNIT_OR_EMPTY_BLOCK else classify(statement.removePrefix("return ").trim())
+  }
+}
+
 object PortNullObjectClassification {
   val classifiedObjects: Map<String, PortNullObjectKind> =
     mapOf(

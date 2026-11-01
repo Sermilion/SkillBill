@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
@@ -32,7 +33,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
-class PrDescriptionStrategy(
+public class PrDescriptionStrategy(
   private val pullRequestIdentityLookup: PullRequestIdentityLookup,
   private val templateFiles: PullRequestTemplateFiles,
 ) : PhaseStrategy() {
@@ -52,7 +53,9 @@ class PrDescriptionStrategy(
   private val templates = ConcurrentHashMap<Path, PullRequestTemplate>()
 
   private val measuredHooks =
-    object : PhaseStepHooks<PhasePullRequestStepBinding> {
+    object :
+      PhaseStepHooks<PhasePullRequestStepBinding>,
+      PhaseBeforeLaunchHooks<PhasePullRequestStepBinding> {
       override val contextKind = PhaseStepHookContextKind.PULL_REQUEST
 
       override fun beforeAgentLaunch(
@@ -155,8 +158,8 @@ class PrDescriptionStrategy(
     @Volatile var after: PullRequestIdentity? = null
   }
 
-  companion object {
-    const val ID = "pr-description"
+  public companion object {
+    public const val ID: String = "pr-description"
     private const val RULES_RESOURCE = "/skillbill/engine/featuretask/slot/pullrequest/pr-description-directive.md"
 
     private val RULES: String by lazy { directiveResource(RULES_RESOURCE).trimEnd() }
