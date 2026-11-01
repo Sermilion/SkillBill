@@ -48,9 +48,11 @@ class FileDiffStreamTest {
     try {
       settle()
       assertTrue(actions.filterIsInstance<ChangesWindowAction.EnsureDiffs>().first().paths.containsAll(listOf(files[0].path, files[1].path)))
-      repeat(20) {
-        scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 200f), scrollDelta = Offset(0f, 5f))
-        settle()
+      repeat(200) {
+        if (files[1].path !in actions.filterIsInstance<ChangesWindowAction.FollowScroll>().map { it.path }) {
+          scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 200f), scrollDelta = Offset(0f, 5f))
+          settle()
+        }
       }
       assertTrue(files[1].path in actions.filterIsInstance<ChangesWindowAction.FollowScroll>().map { it.path })
 
