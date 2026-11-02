@@ -186,3 +186,8 @@ Reason: The snapshot includes WAL changes without writing the source; the tempor
 Context: `DatabaseDispatcher` capped runtime reads and writes at two. Cancelled reads keep their slot until they finish, so a burst of spec tree reads after a delete held up the refresh behind them.
 Decision: Run runtime calls on `Dispatchers.IO` without a separate cap.
 Reason: The IO pool already bounds blocking threads. SQLite in WAL mode runs concurrent readers beside one writer, and no caller relies on the cap for mutual exclusion.
+
+## [2026-11-02] Blend the Swing terminal beneath Compose overlays
+Context: The terminal's SwingPanel painted over the Changes dialog and its scrim.
+Decision: DesktopLauncher enables `compose.interop.blending` before either the runtime refusal window or the application initializes Compose.
+Reason: SwingPanel otherwise paints above Compose content regardless of composable order. Blending lets dialogs, scrims and other overlays cover the terminal while its session stays attached.
