@@ -232,7 +232,7 @@ private fun BackgroundPages(state: DetailUiState, onAction: (DetailAction) -> Un
   }
 }
 
-/** A standalone run with more than one step; a goal shows its pipeline on each subtask and on Goal finish. */
+/** A standalone run with more than one step; a goal shows its pipeline on the current subtask or active Goal finish row. */
 internal fun DetailSections.pipelineSection(item: WorkItem, detail: Detail) {
   if (item.kind == WorkKind.Goal || detail.stepPipeline.size <= 1) return
   section("pipeline", "Phase pipeline") {

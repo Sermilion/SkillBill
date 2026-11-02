@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,9 +51,10 @@ internal fun ActivityText(
   sans: Boolean = false,
   color: Color = if (faint) SkillBillTheme.colors.fgFaint else SkillBillTheme.colors.fgMuted,
   maxLines: Int = 1,
+  onTextLayout: (TextLayoutResult) -> Unit = {},
 ) {
   BasicText(text, modifier, style = if (sans) changesSans(size, weight, color, size * 1.4f) else changesMono(size, weight, color, size * 1.4f),
-    maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = onTextLayout)
 }
 
 @Composable

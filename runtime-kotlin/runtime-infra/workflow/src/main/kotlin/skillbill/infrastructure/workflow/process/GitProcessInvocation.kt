@@ -26,7 +26,9 @@ internal fun invokeGitProcess(
     )
   return GitProcessResult(
     output =
-      if (args.firstOrNull() == "status" && "--porcelain" in args) {
+      if ("-z" in args) {
+        result.output
+      } else if (args.firstOrNull() == "status" && "--porcelain" in args) {
         result.output.trimEnd()
       } else {
         result.output.trim()

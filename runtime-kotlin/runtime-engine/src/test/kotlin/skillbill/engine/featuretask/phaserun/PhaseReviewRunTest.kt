@@ -37,6 +37,7 @@ import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
+import skillbill.engine.featuretask.slot.standaloneVerificationOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.validJsonOutput
@@ -86,6 +87,25 @@ class PhaseReviewRunTest {
   }
 
   @Test
+  fun `incomplete review warnings remain visible and prevent a clean phase approval`() {
+    val warnings =
+      listOf(
+        "warning: the review was not completed",
+        "warning: no files were omitted from the review but the review was incomplete",
+      )
+    warnings.forEach { warning ->
+      val result =
+        inlineEntry(fixLauncher()) { "$APPROVED_REVIEW\n$warning" }
+          .run(reviewRequest(CodeReviewExecutionMode.INLINE))
+
+      assertIs<PhaseRunResult.Completed>(result, result.toString())
+      val output = requireNotNull(result.reviewResult).output
+      assertTrue(warning in output, output)
+      assertTrue("verdict: changes_requested" in output, output)
+    }
+  }
+
+  @Test
   fun `inline phase review reports defects and preserves the reviewed file without launching repair`() {
     var reviews = 0
     val launcher = fixLauncher()
@@ -100,7 +120,7 @@ class PhaseReviewRunTest {
     assertEquals(listOf(PHASE_PRESENT_FINDINGS), result.completedStepIds)
     assertEquals(LEAKY_SOURCE, Files.readString(source))
     assertEquals(1, reviews)
-    assertTrue(launcher.requests.isEmpty(), "report-only review must never launch verification or repair")
+    assertTrue(launcher.requests.isEmpty(), "inline review must not launch a repair")
     assertTrue(requireNotNull(result.reviewResult).output.contains("verdict: changes_requested"))
     git.assertNoCommitOrCheckpointRef(headBefore)
     database.assertNoDurableWorkflowState()
@@ -119,7 +139,10 @@ class PhaseReviewRunTest {
     assertEquals(listOf(PHASE_PRESENT_FINDINGS), result.completedStepIds)
     assertTrue(lanes.launches.any { it.skillRunRequest.issueKey == DELEGATED_SPECIALIST_ISSUE_KEY })
     assertEquals(LEAKY_SOURCE, Files.readString(source))
-    assertTrue(launcher.requests.isEmpty(), "report-only review must never launch verification or repair")
+    assertEquals(1, launcher.requests.size)
+    assertTrue(
+      requireNotNull(launcher.requests.single().skillRunRequest.promptOverride).startsWith("Independently verify"),
+    )
     assertTrue(requireNotNull(result.reviewResult).output.contains("verdict: changes_requested"))
     git.assertNoCommitOrCheckpointRef(headBefore)
     database.assertNoDurableWorkflowState()
@@ -490,7 +513,9 @@ class PhaseReviewRunTest {
     var verifies = 0
     var fixes = 0
     return RuntimeRecordingLauncher { request ->
-      when (val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+      val prompt = requireNotNull(request.skillRunRequest.promptOverride)
+      standaloneVerificationOutput(prompt)?.let { return@RuntimeRecordingLauncher facts(it) }
+      when (val phaseId = phaseIdFromPrompt(prompt)) {
         "verify_findings" -> {
           verifies += 1
           val verified = if (verifyEveryPass || verifies == 1) listOf(REVIEW_FIX_BLOCKER_FINDING_ID) else emptyList()

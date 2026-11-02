@@ -117,7 +117,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
     laneTelemetryRecorded: Boolean,
   ) {
     val findings = result.mergeResult.findings
-    if (findings.isNotEmpty()) {
+    if (findings.isNotEmpty() || result.mergeResult.formattedOutput.isNotBlank()) {
       reviewResultAssembly.saveImportedReview(
         ImportedReview(
           reviewRunId = reviewRunId,

@@ -1,5 +1,16 @@
 # featuretask runtime boundary history
 
+## [2026-11-01] SKILL-458 standalone review verifies findings before presentation
+Areas: runtime-engine featuretask standalone review and runloop; runtime-application review verification; runtime-ports and runtime-infra Git observations and validation; runtime-cli review output; runtime documentation; runtime-engine work timeline and desktop Activity
+- MEDIUM feature. Inline and delegated standalone review build a complete finding census, retain warning and coverage blocks separately, and block ambiguous or incomplete reports.
+- A fresh read-only verifier gives each finding one confirmed, rejected or unresolved disposition and classifies retained blocks as complete or incomplete. The runtime derives the verdict from dispositions and warnings and retains failed output as unaccepted evidence. An empty census without retained blocks skips the verifier after source checks.
+- Strict source observations compare HEAD, index, tracked and untracked contents, modes, symlink targets and deletions. Changed, unreadable or unsupported source blocks settlement.
+- Standalone review remains report-only; full-run review and repair keep separate ownership.
+- The branch also changes Activity with no SKILL-458 criterion behind it. Parent blocks move into a General blocks group, loops and clipped text get disclosures, and the desktop plan Implement action stays disabled after an accepted request.
+- When no root or configured Gradle wrapper exists, the validation gate discovers executable wrappers in non-hidden direct child directories and combines their results. Deeper layouts require a configured wrapper.
+Feature flag: N/A
+Acceptance criteria: 4/4 subtask criteria implemented; 1/1 parent criterion implemented
+
 ## [2026-10-25] SKILL-442 subtask 4 - Validate test probes
 Areas: runtime-engine featuretask slot/qualitygate (ValidateProbePrompt, ValidateProbeActivation) and slot/qualitygate/agentvalidate (strategy, step hooks, ValidateProbeSettlement), slot/attempt launch preparation, prompt compose inputs, runloop record rejection and progress observations, opus-5-5-agent-validate.md; runtime-domain model/validation (ValidationTestProbe, parser) and artifact wire; runtime-contracts payload keys and failure code; runtime-infra contracts validator and schema paths; orchestration/contracts; docs/block-incident-classification
 - MEDIUM feature. Goal-child agent validate (not gate triage) asks for up to 6 test probes per run, one `survived`, `repaired` or `not_run` line each; `not_run` needs a reason, and survived or not_run imply repaired false. The ordered list is stored as `produced_outputs.test_probes` and never changes the verdict.

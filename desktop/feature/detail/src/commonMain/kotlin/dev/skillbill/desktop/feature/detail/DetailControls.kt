@@ -94,12 +94,14 @@ internal class DetailControls(
   }
 
   private fun implementPlan(ui: DetailUiState): Boolean {
-    val detail = (ui.sections as? SectionsUi.Loaded)?.detail ?: return false
     val key = ui.header.issueKey ?: return false
-    if (ui.stale || ui.controls.inFlight != null || !planImplementationEnabled(ui.header, detail) || key in ui.controls.reservations) return false
+    if (runActionsView(ui).implement?.enabled != true) return false
     return call(InFlightControl.Launch) {
       val agent = runActionsView(ui).agentId ?: ui.header.agentId
       val outcome = controls.startGoal(ui.header.repositoryRoot, key, agent)
+      if (outcome == ControlOutcome.RequestAccepted) {
+        mutableState.update { it.copy(implementationStarted = true) }
+      }
       toasts.show(controlFeedback(ControlAction.Launch, outcome, FeedbackSubject(key, "Implement", agent)))
     }
   }

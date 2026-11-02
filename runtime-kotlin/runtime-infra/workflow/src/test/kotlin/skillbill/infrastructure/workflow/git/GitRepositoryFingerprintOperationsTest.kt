@@ -92,6 +92,64 @@ class GitRepositoryFingerprintOperationsTest {
   }
 
   @Test
+  fun `standalone review source identity detects same status content edits and untracked source`() {
+    val repoRoot = initRepo("skillbill-review-source-fingerprint")
+    val operations = GitWorkflowGitOperations()
+    val tracked = repoRoot.resolve("tracked.txt")
+    val trackedBefore =
+      assertIs<WorkflowGitOperationResult.Ok>(
+        operations.standaloneReviewSourceFingerprint(repoRoot),
+      ).value
+    Files.writeString(tracked, "edit\n")
+    val trackedAfter =
+      assertIs<WorkflowGitOperationResult.Ok>(
+        operations.standaloneReviewSourceFingerprint(repoRoot),
+      ).value
+    assertEquals(trackedAfter, operations.standaloneReviewSourceFingerprint(repoRoot).value)
+    val statusBefore = assertIs<WorkflowGitOperationResult.Ok>(operations.worktreeStatus(repoRoot)).value
+    Files.writeString(tracked, "another edit\n")
+    assertEquals(statusBefore, assertIs<WorkflowGitOperationResult.Ok>(operations.worktreeStatus(repoRoot)).value)
+    assertNotEquals(trackedBefore, trackedAfter)
+    assertNotEquals(trackedAfter, operations.standaloneReviewSourceFingerprint(repoRoot).value)
+    val untracked = repoRoot.resolve("new-source.kt")
+    Files.writeString(untracked, "first\n")
+    val untrackedBefore =
+      assertIs<WorkflowGitOperationResult.Ok>(
+        operations.standaloneReviewSourceFingerprint(repoRoot),
+      ).value
+    Files.writeString(untracked, "other\n")
+    assertNotEquals(untrackedBefore, operations.standaloneReviewSourceFingerprint(repoRoot).value)
+  }
+
+  @Test
+  fun `standalone review source identity tracks whitespace names and nested repository edits`() {
+    val root = initRepo("skillbill-review-source-names")
+    try {
+      val whitespace = root.resolve(" ")
+      Files.writeString(whitespace, "first")
+      Files.createSymbolicLink(root.resolve("link"), Path.of("tracked.txt"))
+      val nested = initRepo("skillbill-review-nested")
+      try {
+        git(root, "-c", "protocol.file.allow=always", "submodule", "add", nested.toString(), "child")
+        val operations = GitWorkflowGitOperations()
+
+        fun fingerprint() =
+          assertIs<WorkflowGitOperationResult.Ok>(operations.standaloneReviewSourceFingerprint(root)).value
+        val before = fingerprint()
+        Files.writeString(whitespace, "other")
+        val changedName = fingerprint()
+        assertNotEquals(before, changedName)
+        Files.writeString(root.resolve("child/tracked.txt"), "changed")
+        assertNotEquals(changedName, fingerprint())
+      } finally {
+        nested.toFile().deleteRecursively()
+      }
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `repository fingerprint stays within the durable fingerprint bound`() {
     val repoRoot = initRepo("skillbill-fingerprint-bound")
     repeat(20) { index ->

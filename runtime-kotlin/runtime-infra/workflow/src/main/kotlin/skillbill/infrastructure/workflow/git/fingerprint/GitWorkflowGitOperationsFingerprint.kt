@@ -46,6 +46,71 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 
 internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOperations {
+  override fun standaloneReviewSourceFingerprint(repoRoot: Path): WorkflowGitOperationResult {
+    val head = runGitCommand(repoRoot, "rev-parse", "HEAD")
+    val index = runGitCommand(repoRoot, "ls-files", "--stage", "-z")
+    val tracked = runGitCommand(repoRoot, "ls-files", "--cached", "-z")
+    val untracked = runGitCommand(repoRoot, "ls-files", "--others", "--exclude-standard", "-z")
+    val failure = listOf(head, index, tracked, untracked).firstOrNull { it !is WorkflowGitOperationResult.Ok }
+    if (failure != null) return failure
+    return catchingNonCancellation {
+      val root = repoRoot.toAbsolutePath().normalize()
+      val digest = newSha256Digest()
+      UntrackedFingerprintDigest.digestPart(digest, "head", head.value.orEmpty().toByteArray())
+      UntrackedFingerprintDigest.digestPart(digest, "index", index.value.orEmpty().toByteArray())
+      val paths =
+        (tracked.value.orEmpty().split('\u0000') + untracked.value.orEmpty().split('\u0000'))
+          .filter(String::isNotEmpty).distinct().sorted()
+      paths.forEach { path ->
+        val resolved = root.resolve(path).normalize()
+        val containedPath = if (Files.isSymbolicLink(resolved)) resolved.parent else resolved
+        requirePathContainedIn(containedPath, root) { "Review source path escapes repository root: $path" }
+        val attributes =
+          try {
+            Files.readAttributes(resolved, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+          } catch (_: NoSuchFileException) {
+            UntrackedFingerprintDigest.digestPart(digest, path, "deleted".toByteArray())
+            return@forEach
+          }
+        val content =
+          when {
+            attributes.isSymbolicLink -> "symlink:${Files.readSymbolicLink(resolved)}"
+            attributes.isDirectory -> {
+              if (Files.exists(resolved.resolve(".git"), LinkOption.NOFOLLOW_LINKS)) {
+                val nested = standaloneReviewSourceFingerprint(resolved)
+                check(
+                  nested is WorkflowGitOperationResult.Ok,
+                ) { "Cannot observe nested repository $path: ${nested.error}" }
+                "repository:${nested.value}"
+              } else {
+                Files.newDirectoryStream(resolved).use { entries ->
+                  check(!entries.iterator().hasNext()) { "Cannot observe nonempty source directory: $path" }
+                }
+                "empty-directory"
+              }
+            }
+            attributes.isRegularFile -> {
+              val fileDigest = newSha256Digest()
+              Files.newInputStream(resolved).use { input ->
+                val buffer = ByteArray(UNTRACKED_FINGERPRINT_BUFFER_BYTES)
+                var read = input.read(buffer)
+                while (read >= 0) {
+                  fileDigest.update(buffer, 0, read)
+                  read = input.read(buffer)
+                }
+              }
+              "file:${Files.isExecutable(resolved)}:${fileDigest.digest().joinToString("") { "%02x".format(it) }}"
+            }
+            else -> error("Unsupported review source entry: $path")
+          }
+        UntrackedFingerprintDigest.digestPart(digest, path, content.toByteArray())
+      }
+      WorkflowGitOperationResult.Ok(value = digest.digest().joinToString("") { "%02x".format(it) })
+    }.getOrElse { error ->
+      WorkflowGitOperationResult.Failed(error = "Could not observe standalone review source: ${error.message}")
+    }
+  }
+
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     worktreeDigest(repoRoot, "head", "HEAD")
 

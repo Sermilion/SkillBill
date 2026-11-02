@@ -18,8 +18,16 @@ fun scriptedReviewPhaseRunner(stdout: () -> String): PhaseRunner =
     override fun run(
       input: PhaseStepInput,
       state: PhaseLaunchState,
-    ): PhaseStepOutput = reviewStepOutput(stdout())
+    ): PhaseStepOutput = reviewStepOutput(standaloneVerificationOutput(input.directive) ?: stdout())
   }
+
+fun standaloneVerificationOutput(prompt: String): String? {
+  if (!prompt.startsWith("Independently verify each finding")) return null
+  return Regex("(?m)^([FW]-\\d{3}): source=").findAll(prompt).joinToString("\n") { match ->
+    val identity = match.groupValues[1]
+    "$identity: ${if (identity.startsWith("F-")) "confirmed" else "complete"}"
+  }
+}
 
 fun reviewStepOutput(stdout: String): PhaseStepOutput {
   val bytes = stdout.toByteArray()

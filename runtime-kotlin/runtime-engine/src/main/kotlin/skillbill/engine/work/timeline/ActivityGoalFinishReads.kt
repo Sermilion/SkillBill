@@ -5,6 +5,7 @@ import skillbill.engine.work.timeline.model.WorkActivityBlock
 import skillbill.engine.work.timeline.model.WorkActivityBlockKind
 import skillbill.engine.work.timeline.model.WorkActivityFact
 import skillbill.engine.work.timeline.model.WorkActivityGroup
+import skillbill.engine.work.timeline.model.WorkActivityGroupKind
 import skillbill.engine.work.timeline.model.WorkActivityStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
@@ -20,12 +21,12 @@ import java.time.Instant
 
 @Inject
 public class ActivityGoalFinishReads {
-  public fun group(
+  internal fun groups(
     goal: WorkItem,
     children: List<WorkActivityGroup>,
     stops: List<WorkActivityStop>,
     unit: UnitOfWork,
-  ): WorkActivityGroup? {
+  ): List<WorkActivityGroup> {
     val artifacts =
       unit.workflowStates.readFeatureTaskArtifacts(
         goal.workflowId,
@@ -40,20 +41,55 @@ public class ActivityGoalFinishReads {
         FeatureTaskRuntimeWorkflowArtifactMap.from(it).toGoalAssessmentRecord(family.label())
       }
     val progress = artifacts?.let(::declaredProgressEventFrom)
-    val blocks = finishBlocks(goal.workflowId, children, stops, unit)
+    val blocks = parentBlocks(goal.workflowId, children, stops, unit)
+    val childrenFinished = childrenFinished(children)
     val before = assessment?.let { listOf(assessmentFact(it)) }.orEmpty()
-    val status = finishStatus(activityStatus(goal.currentState), children)
     val after =
-      progress?.takeIf { status == WorkActivityStatus.RUNNING }
+      progress?.takeIf {
+        activityStatus(goal.currentState) == WorkActivityStatus.RUNNING &&
+          childrenFinished
+      }
         ?.let(::latestFact)?.let(::listOf).orEmpty()
-    if (before.isEmpty() && after.isEmpty() && blocks.isEmpty()) return null
-    return WorkActivityGroup(
-      "goal-finish", null, "Goal finish", status,
-      null, null, emptyList(), blocks, before, after,
-    )
+    return buildList {
+      if (blocks.isNotEmpty()) {
+        add(
+          WorkActivityGroup(
+            "goal-interruptions",
+            null,
+            "General blocks",
+            WorkActivityStatus.INTERRUPTED,
+            null,
+            null,
+            emptyList(),
+            blocks,
+            kind = WorkActivityGroupKind.GENERAL_BLOCKS,
+          ),
+        )
+      }
+      if (before.isNotEmpty() || after.isNotEmpty()) {
+        add(
+          WorkActivityGroup(
+            "goal-finish", null, "Goal finish",
+            finishStatus(activityStatus(goal.currentState), children),
+            null, null, emptyList(), emptyList(), before, after, WorkActivityGroupKind.GOAL_FINISH,
+          ),
+        )
+      }
+    }
   }
 
-  private fun finishBlocks(
+  private fun childrenFinished(children: List<WorkActivityGroup>): Boolean {
+    val latest =
+      children.groupBy { it.subtaskId }.values.map { attempts ->
+        attempts.maxWith(compareBy { it.startedAt })
+      }
+    return latest.isNotEmpty() &&
+      latest.all {
+        it.status == WorkActivityStatus.COMPLETE
+      }
+  }
+
+  private fun parentBlocks(
     id: String,
     children: List<WorkActivityGroup>,
     stops: List<WorkActivityStop>,

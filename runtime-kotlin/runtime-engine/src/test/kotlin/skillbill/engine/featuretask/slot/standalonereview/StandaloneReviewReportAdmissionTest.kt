@@ -9,6 +9,7 @@ import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewCoverageReport
+import skillbill.review.model.ReviewLaneAggregationInput
 import skillbill.review.model.ReviewLaneReviewDisposition
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,11 +37,137 @@ class StandaloneReviewReportAdmissionTest {
   }
 
   @Test
-  fun `prose that admits a gap or names a severe finding cannot present as approved`() {
-    val outputs =
+  fun `a warning that the review could not be completed prevents approval`() {
+    val warning = "warning: the review could not be completed"
+    val report = StandaloneReviewReportAdmission.admit("NO_FINDINGS\nverdict: approved\n$warning", emptyResult(), false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertTrue(report.hasIncompleteReviewWarning)
+    assertEquals("changes_requested", report.verdict)
+    assertTrue(warning in report.registerOutput)
+  }
+
+  @Test
+  fun `scope warnings preserve incomplete coverage without treating a negated gap as incomplete`() {
+    val warnings =
       listOf(
         "I couldn't open the diffs of the agent notes, so they are not covered.",
         "Some files were not reviewed.",
+      )
+    warnings.forEach { warning ->
+      val report =
+        StandaloneReviewReportAdmission.admit(
+          "NO_FINDINGS\n$warning\nverdict: approved",
+          emptyResult(),
+          false,
+        )
+      assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      assertTrue(report.hasIncompleteReviewWarning, warning)
+      assertTrue(warning in report.warnings)
+    }
+    val complete =
+      StandaloneReviewReportAdmission.admit(
+        "NO_FINDINGS\nwarning: no files were omitted from the review\nverdict: approved",
+        emptyResult(),
+        false,
+      )
+    assertTrue(complete.admitted, complete.rejectionReasons.joinToString())
+    assertFalse(complete.hasIncompleteReviewWarning)
+  }
+
+  @Test
+  fun `coverage without an explicit gap waits for verifier classification`() {
+    val output = "NO_FINDINGS\ncoverage: all changed files reviewed\nverdict: approved"
+
+    val report = StandaloneReviewReportAdmission.admit(output, emptyResult(), false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("approved", report.verdict)
+    assertFalse(report.hasIncompleteReviewWarning)
+    assertTrue(report.warnings.isEmpty())
+    assertEquals("coverage: all changed files reviewed", report.reviewWarnings.single().text)
+    assertFalse(report.reviewWarnings.single().alreadyIncomplete)
+    assertTrue("coverage: all changed files reviewed" in report.registerOutput)
+  }
+
+  @Test
+  fun `delegated integration coverage without an explicit gap waits for verifier classification`() {
+    val result =
+      emptyResult().copy(
+        lane1 = ParallelReviewLaneStatus("codex", true, reviewDisposition = ReviewLaneReviewDisposition.COMPLETE),
+        coverage = ReviewCoverageReport(listOf("security"), emptyList(), true),
+        integration =
+          ReviewIntegrationPassOutcome(
+            commitSequenceDigest = "sequence",
+            terminalOutcome = ReviewIntegrationTerminalOutcome.COMPLETED,
+            summarizedLaneCount = 1,
+            rawOutput = "coverage: all changed files reviewed\nNO_FINDINGS",
+          ),
+      )
+
+    val report = StandaloneReviewReportAdmission.admit("NO_FINDINGS\nverdict: approved", result, false, true)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("approved", report.verdict)
+    assertFalse(report.hasIncompleteReviewWarning)
+    assertTrue(report.warnings.isEmpty())
+    val integrationWarning = report.reviewWarnings.single { it.source == "delegated integration report" }
+    assertFalse(integrationWarning.alreadyIncomplete)
+    assertTrue("coverage: all changed files reviewed" in report.registerOutput)
+  }
+
+  @Test
+  fun `coverage continuations that state a gap remain incomplete`() {
+    val coverage = "coverage: partial\nSome files were not reviewed."
+    val report =
+      StandaloneReviewReportAdmission.admit(
+        "NO_FINDINGS\n$coverage\nverdict: approved",
+        emptyResult(),
+        false,
+      )
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
+    assertTrue(report.hasIncompleteReviewWarning)
+    assertEquals(coverage, report.reviewWarnings.single().text)
+    assertTrue(report.reviewWarnings.single().alreadyIncomplete)
+    assertTrue(coverage in report.warnings)
+  }
+
+  @Test
+  fun `typed delegated coverage remains authoritative when lanes are incomplete`() {
+    val result =
+      emptyResult().copy(
+        coverage =
+          ReviewCoverageReport(
+            cleanLanes = emptyList(),
+            incompleteLanes =
+              listOf(
+                ReviewLaneAggregationInput(
+                  lane = "security",
+                  commitSequenceDigest = "sequence",
+                  disposition = ReviewLaneReviewDisposition.INCOMPLETE,
+                  unreviewedUnits = listOf("src/Auth.kt"),
+                ),
+              ),
+            integrationCompleted = false,
+          ),
+      )
+
+    val report = StandaloneReviewReportAdmission.admit("NO_FINDINGS\nverdict: approved", result, false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
+    assertTrue(report.hasIncompleteReviewWarning)
+    assertTrue(report.reviewWarnings.single().alreadyIncomplete)
+    assertTrue(report.coverage?.contains("Coverage: NOT clean") == true)
+    assertTrue(report.registerOutput.contains("Coverage: NOT clean"), report.registerOutput)
+  }
+
+  @Test
+  fun `prose that admits a gap or names a severe finding cannot present as approved`() {
+    val outputs =
+      listOf(
         "- `src/Gate.kt:124` [high, correctness]: the marker list misses too-old Java output.",
         "One high-severity issue in the token refresh path.",
         "Severity: critical. The migration drops the users table.",
@@ -58,8 +185,7 @@ class StandaloneReviewReportAdmissionTest {
   fun `clean prose approvals stay approved`() {
     val outputs =
       listOf(
-        "I reviewed all six files and could not find any issues.",
-        "No high-severity issues found; the change is small and well tested.",
+        "No findings.",
         "- `src/Gate.kt:124` [low, style]: consider a shorter name.",
       )
 
@@ -72,9 +198,45 @@ class StandaloneReviewReportAdmissionTest {
   }
 
   @Test
-  fun `a prose report is admitted and presented as written`() {
+  fun `verified low prose findings approve while conservative controls keep requesting changes`() {
+    val cases =
+      listOf(
+        "- src/Gate.kt:124 [low, style]: consider a shorter name" to "approved",
+        "- src/Gate.kt:124: consider a shorter name\nSeverity: low" to "approved",
+        "- src/Gate.kt:124 [major, correctness]: authorization check is missing" to "changes_requested",
+        "- src/Gate.kt:124 [low, style]: consider a shorter name" to "changes_requested",
+        "- src/Gate.kt:124 [low, style]: conflicting labels\nSeverity: major" to "changes_requested",
+        "- src/Gate.kt:124 [major, confidence: low]: authorization check is missing" to "changes_requested",
+      )
+
+    cases.forEachIndexed { index, (findingText, expectedVerdict) ->
+      val report = StandaloneReviewReportAdmission.admit("$findingText\nverdict: approved", emptyResult(), false)
+
+      assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      val disposition = if (index == 3) "unresolved" else "confirmed"
+      assertEquals(
+        expectedVerdict,
+        verifiedFindingVerdict(report, mapOf("F-001" to disposition), emptyMap()),
+        findingText,
+      )
+    }
+  }
+
+  @Test
+  fun `a partial clean statement cannot establish an empty census`() {
+    val report =
+      StandaloneReviewReportAdmission.admit(
+        "No high-severity issues found; the change is small and well tested.\nverdict: approved",
+        emptyResult(),
+        false,
+      )
+    assertFalse(report.admitted)
+  }
+
+  @Test
+  fun `a prose report retains each finding in the census`() {
     val prose =
-      "I reviewed the six modified files against HEAD.\n\n" +
+      "I reviewed.\n\n" +
         "- `src/Gate.kt:124` [medium, correctness]: the marker list misses too-old Java output.\n" +
         "- `docs/policy.md:36` [low, docs-accuracy]: the doc overstates the check."
     val rawOutput = "$prose\n\nverdict: changes_requested"
@@ -83,7 +245,9 @@ class StandaloneReviewReportAdmissionTest {
 
     assertTrue(report.admitted, report.rejectionReasons.joinToString())
     assertEquals("changes_requested", report.verdict)
-    assertEquals("$prose\nverdict: changes_requested", report.registerOutput)
+    assertEquals(2, report.census.size)
+    assertTrue(report.census.any { "the marker list misses too-old Java output" in it.text })
+    assertTrue(report.census.any { "the doc overstates the check" in it.text })
   }
 
   @Test
@@ -229,10 +393,45 @@ class StandaloneReviewReportAdmissionTest {
 
     val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
 
-    assertTrue(report.admitted, report.rejectionReasons.joinToString())
-    assertEquals("changes_requested", report.verdict)
-    assertTrue(malformed in report.registerOutput, report.registerOutput)
+    assertFalse(report.admitted, report.rejectionReasons.joinToString())
+    assertTrue(report.rejectionReasons.any { "unambiguously" in it || "malformed" in it })
     assertEquals(rawOutput, report.rawOutput)
+  }
+
+  @Test
+  fun `census retains prose and integration findings and keeps a clean census empty`() {
+    val prose = "- `src/Style.kt:8` [low, style]: simplify this expression."
+    val integration =
+      ParallelReviewRawFinding(
+        ParallelReviewSeverity.MINOR,
+        "Low",
+        "src/Integration.kt:12",
+        "integration-only issue",
+      )
+    val result =
+      ParallelCodeReviewResult(
+        mergeResult = ParallelReviewMergeResult(emptyList(), ""),
+        lane1 = ParallelReviewLaneStatus("codex", true, reviewDisposition = ReviewLaneReviewDisposition.COMPLETE),
+        coverage = ReviewCoverageReport(listOf("style"), emptyList(), true),
+        integration =
+          ReviewIntegrationPassOutcome(
+            commitSequenceDigest = "sequence",
+            terminalOutcome = ReviewIntegrationTerminalOutcome.COMPLETED,
+            summarizedLaneCount = 1,
+            findings = listOf(integration),
+            rawOutput = "- [F-001] Minor | Low | src/Integration.kt:12 | integration-only issue",
+          ),
+      )
+
+    val report = StandaloneReviewReportAdmission.admit("$prose\nverdict: approved", result, false, true)
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals(2, report.census.size)
+    assertTrue(report.census.any { prose in it.text })
+    assertTrue(report.census.any { "integration-only issue" in it.text })
+    assertEquals(
+      emptyList(),
+      StandaloneReviewReportAdmission.admit("NO_FINDINGS\nverdict: approved", emptyResult(), false).census,
+    )
   }
 
   @Test

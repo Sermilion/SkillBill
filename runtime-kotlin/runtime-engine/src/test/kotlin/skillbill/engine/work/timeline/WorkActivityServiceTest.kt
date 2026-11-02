@@ -1,6 +1,7 @@
 package skillbill.engine.work.timeline
 
 import skillbill.engine.work.timeline.model.WorkActivityGroup
+import skillbill.engine.work.timeline.model.WorkActivityGroupKind
 import skillbill.engine.work.timeline.model.WorkActivityResult
 import skillbill.engine.work.timeline.model.WorkActivityStatus
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
@@ -40,6 +41,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class WorkActivityServiceTest {
   @Test
@@ -91,7 +93,7 @@ class WorkActivityServiceTest {
             WorkActivityStop("goal", at(0), at(10), "BLOCKED", "The goal is blocked."),
             WorkActivityStop("goal:resumed", at(20), null, null),
           )
-        val group = requireNotNull(ActivityGoalFinishReads().group(goal, emptyList(), stops, unit))
+        val group = ActivityGoalFinishReads().groups(goal, emptyList(), stops, unit).single()
 
         assertEquals(1, group.blocks.size)
         assertEquals("plan_subtasks", group.blocks.single().phaseId)
@@ -101,7 +103,7 @@ class WorkActivityServiceTest {
   }
 
   @Test
-  fun `goal finish excludes stops from earlier child attempts and preserves later PR failures`() {
+  fun `unmatched goal stops stay in general blocks including later PR failures`() {
     establishTemporarySchemaReadiness("activity-finish").use { fixture ->
       val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
       database.read { unit ->
@@ -120,16 +122,27 @@ class WorkActivityServiceTest {
         val stops =
           listOf(
             WorkActivityStop("early", at(0), at(5), "BLOCKED"),
+            WorkActivityStop("decision", at(6), at(7), "AWAITING_OPERATOR_DECISION"),
             WorkActivityStop("pr", at(10), at(20), "PULL_REQUEST_FAILED"),
             WorkActivityStop("decision", at(21), at(30), "AWAITING_OPERATOR_DECISION", "The goal needs your decision."),
           )
-        val group = requireNotNull(ActivityGoalFinishReads().group(goal, listOf(child), stops, unit))
-        assertEquals(WorkActivityStatus.RUNNING, group.status)
-        assertEquals(listOf("pr", "decision"), group.blocks.map { it.id })
-        assertEquals("The goal needs your decision.", group.blocks.last().reason)
-        assertEquals(emptyList(), group.phases)
-        assertEquals(null, group.startedAt)
-        assertEquals(null, group.finishedAt)
+        val priorAttempt = child.copy(id = "prior", status = WorkActivityStatus.BLOCKED, finishedAt = at(3))
+        val groups =
+          ActivityGoalFinishReads().groups(
+            goal,
+            listOf(priorAttempt, child.copy(startedAt = at(4))),
+            stops,
+            unit,
+          )
+        val interruptions = groups.single { it.id == "goal-interruptions" }
+        assertEquals(listOf("pr", "decision"), interruptions.blocks.map { it.id })
+        assertEquals(WorkActivityGroupKind.GENERAL_BLOCKS, interruptions.kind)
+        assertTrue(interruptions.blocks.single { it.id == "decision" }.needsDecision)
+        assertEquals(WorkActivityStatus.INTERRUPTED, interruptions.status)
+        assertEquals(1, groups.size)
+        assertEquals(emptyList(), interruptions.phases)
+        assertEquals(null, interruptions.startedAt)
+        assertEquals(null, interruptions.finishedAt)
       }
     }
   }
@@ -183,9 +196,10 @@ class WorkActivityServiceTest {
       val service =
         WorkActivityService(database, ActivityPhaseReads(), ActivityGoalFinishReads(), NoopRuntimeDiagnostics)
 
-      val group = assertIs<WorkActivityResult.Listed>(service.timeline("goal")).groups.single()
+      val groups = assertIs<WorkActivityResult.Listed>(service.timeline("goal")).groups
+      val group = groups.single { it.id == "goal-interruptions" }
 
-      assertEquals(WorkActivityStatus.RUNNING, group.status)
+      assertEquals(WorkActivityStatus.INTERRUPTED, group.status)
       assertEquals("Usage limit reached.", group.blocks.single().reason)
     }
   }

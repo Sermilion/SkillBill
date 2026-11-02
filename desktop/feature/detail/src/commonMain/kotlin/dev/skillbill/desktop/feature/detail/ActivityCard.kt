@@ -87,7 +87,12 @@ internal fun ActivityCard(
       val entries = remember(group) { activityEntries(group) }
       group.before.forEach { ActivityFactRow(it, now) }
       entries.forEach { entry -> when (entry) {
-        is ActivityEntry.Block -> ActivityBlockRow(entry.block, now, onCopyReason = onCopyReason)
+        is ActivityEntry.Block -> ActivityBlockRow(
+          entry.block,
+          now,
+          current = group.status == ActivityStatus.BLOCKED && entry.block.id == group.blocks.maxByOrNull { it.at }?.id,
+          onCopyReason = onCopyReason,
+        )
         is ActivityEntry.Wait -> ActivityWait(entry.milliseconds)
         is ActivityEntry.Phases -> ActivityPhaseFold(entry.phases, group.status == ActivityStatus.RUNNING, now)
       } }
@@ -112,7 +117,7 @@ private fun ActivityPhaseFold(phases: List<ActivityPhase>, live: Boolean, now: I
     val counts = phases.groupingBy { it.phaseId }.eachCount().entries.joinToString(", ") { "${it.key} ×${it.value}" }
     val agents = phases.mapNotNull { it.agent }.distinct().joinToString(" + ")
     ActivityPhaseRow(last.copy(agent = agents, model = null, effort = null), false, now, loopLabel = "${activityLoopFamily(last.phaseId)} loop", loopDetail = counts,
-      duration = phases.sumOf { phase -> phase.startedAt?.let { start -> phase.finishedAt?.let { (it - start).inWholeMilliseconds } } ?: 0 }, onToggle = { expanded = !expanded })
+      duration = phases.sumOf { phase -> phase.startedAt?.let { start -> phase.finishedAt?.let { (it - start).inWholeMilliseconds } } ?: 0 }, expanded = expanded, onToggle = { expanded = !expanded })
     if (expanded) Column(Modifier.background(SkillBillTheme.colors.bgInset).padding(start = 18.dp)) {
       phases.forEach { ActivityPhaseRow(it, false, now) }
     }
@@ -127,11 +132,16 @@ private fun ActivityPhaseRow(
   loopLabel: String? = null,
   loopDetail: String? = null,
   duration: Long? = phase.startedAt?.let { start -> phase.finishedAt?.let { (it - start).inWholeMilliseconds } },
+  expanded: Boolean = false,
   onToggle: (() -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   val running = live && phase.finishedAt == null && phase.startedAt != null
-  Column(Modifier.fillMaxWidth().hairlineTop(colors.borderSubtle).then(if (onToggle != null) Modifier.clickable(role = Role.Button, onClick = onToggle) else Modifier).padding(horizontal = 12.dp, vertical = 7.dp)) {
+  val source = remember { MutableInteractionSource() }
+  val toggle = if (onToggle != null) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
+    .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
+    .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse loop" else "Expand loop", onClick = onToggle) else Modifier
+  Column(Modifier.fillMaxWidth().hairlineTop(colors.borderSubtle).then(toggle).padding(horizontal = 12.dp, vertical = 7.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(phase.finishedAt ?: phase.startedAt, now)
       ActivityDot(if (running) ActivityStatus.RUNNING else ActivityStatus.COMPLETE)
@@ -149,17 +159,25 @@ private fun ActivityPhaseRow(
         }.orEmpty()
         ActivityText(label, Modifier.width(164.dp))
       }
+      ActivityDisclosure(onToggle != null, expanded)
     }
     phase.summary?.takeIf { it.isNotBlank() }?.let { summary -> ActivityExpandable(summary, 2, Modifier.padding(start = 63.dp, top = 3.dp)) }
   }
 }
 
 @Composable
-internal fun ActivityBlockRow(block: ActivityBlock, now: Instant, onCopyReason: ((String) -> Unit)? = null) {
+internal fun ActivityBlockRow(
+  block: ActivityBlock,
+  now: Instant,
+  current: Boolean = false,
+  onCopyReason: ((String) -> Unit)? = null,
+) {
   val colors = SkillBillTheme.colors
   var expanded by rememberSaveable(block.id) { mutableStateOf(false) }
+  var truncated by remember(block.reason) { mutableStateOf(false) }
   val source = remember { MutableInteractionSource() }
-  val expand = if (block.reason != null) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
+  val expand = if (expanded || truncated) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
+    .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
     .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse block" else "Read full block") { expanded = !expanded } else Modifier
   Column(Modifier.fillMaxWidth().then(expand).background(colors.stBlocked.copy(alpha = .07f)).drawBehind { drawLine(colors.stBlocked, Offset.Zero, Offset(0f, size.height), 3.dp.toPx()) }.hairlineTop(colors.borderSubtle).padding(horizontal = 12.dp, vertical = 9.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -168,22 +186,39 @@ internal fun ActivityBlockRow(block: ActivityBlock, now: Instant, onCopyReason: 
       ActivityText(when (block.kind) {
         ActivityBlockKind.BLOCKED -> "Blocked"
         ActivityBlockKind.PULL_REQUEST_FAILED -> "Pull request failed"
-        ActivityBlockKind.AWAITING_DECISION -> "Waiting for your decision"
+        ActivityBlockKind.AWAITING_DECISION -> if (current && block.needsDecision) "Waiting for your decision" else "Decision requested"
       }, sans = true, size = 12f, weight = FontWeight.SemiBold, color = colors.stBlocked)
-      ActivityText(listOfNotNull(block.phaseId, block.attempt?.let { "attempt $it" }, "needs your decision".takeIf { block.needsDecision }).joinToString(" · "))
+      ActivityText(listOfNotNull(block.phaseId, block.attempt?.let { "attempt $it" }, "needs your decision".takeIf { current && block.needsDecision }).joinToString(" · "), Modifier.weight(1f))
+      ActivityDisclosure(expanded || truncated, expanded)
       block.reason?.takeIf { onCopyReason != null }?.let { reason ->
         SbIconButton(LucideIcons.copy, "Copy block reason", { onCopyReason?.invoke(reason) }, size = SbControlSize.Small)
       }
     }
-    block.reason?.let { ActivityText(it, Modifier.padding(start = 63.dp, top = 3.dp), size = 12f, sans = true, color = colors.fg2, maxLines = if (expanded) Int.MAX_VALUE else 3) }
+    block.reason?.let { ActivityText(it, Modifier.padding(start = 63.dp, top = 3.dp), size = 12f, sans = true, color = colors.fg2, maxLines = if (expanded) Int.MAX_VALUE else 3,
+      onTextLayout = { if (!expanded) truncated = it.hasVisualOverflow }) }
+  }
+}
+
+@Composable
+private fun ActivityDisclosure(visible: Boolean, expanded: Boolean) {
+  Box(Modifier.width(12.dp)) {
+    if (visible) SbIcon(if (expanded) LucideIcons.chevronDown else LucideIcons.chevronRight, 12.dp)
   }
 }
 
 @Composable
 private fun ActivityExpandable(text: String, lines: Int, modifier: Modifier) {
   var expanded by rememberSaveable(text) { mutableStateOf(false) }
-  ActivityText(text, modifier.clickable(role = Role.Button, onClickLabel = if (expanded) "Collapse text" else "Read full text") { expanded = !expanded },
-    size = 12f, sans = true, color = SkillBillTheme.colors.fgMuted, maxLines = if (expanded) Int.MAX_VALUE else lines)
+  var truncated by remember(text, lines) { mutableStateOf(false) }
+  val source = remember { MutableInteractionSource() }
+  val toggle = if (expanded || truncated) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
+    .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
+    .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse text" else "Read full text") { expanded = !expanded } else Modifier
+  Row(modifier.fillMaxWidth().then(toggle), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    ActivityText(text, Modifier.weight(1f), size = 12f, sans = true, color = SkillBillTheme.colors.fgMuted,
+      maxLines = if (expanded) Int.MAX_VALUE else lines, onTextLayout = { if (!expanded) truncated = it.hasVisualOverflow })
+    ActivityDisclosure(expanded || truncated, expanded)
+  }
 }
 
 @Composable

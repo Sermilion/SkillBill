@@ -1,3 +1,8 @@
+## [2026-11-01] Bind standalone review findings to independently verified source
+Context: Standalone review presented findings without independent verification, and HEAD or status text alone could miss changes to dirty file contents.
+Decision: Admit a complete finding census, verify it in a fresh read-only session, and compare content-sensitive source observations around review and verification. Block and retain unaccepted evidence when admission, verification or source identity fails.
+Reason: A reviewer summary can omit or misclassify findings, and unchanged status text can hide changed file contents. Independent dispositions and source checks prevent a stale or partial report from appearing settled while preserving report-only behavior.
+
 ## [2026-11-01] The gate finds nested Gradle projects when the root has no wrapper
 
 Context: Packs declare `./gradlew`, and `validation_gate.gradle_wrapper` names one wrapper. A repository with several Gradle projects under its root, such as this one with `desktop/` and `runtime-kotlin/`, had no setting that covered all of them, so the build gate could not run after `qa_fix`.

@@ -303,6 +303,7 @@ private fun writePhaseReviewResult(
     result,
     blocked,
     (phase as? PhaseRunResult.Completed)?.let { result.standaloneReportText() },
+    standaloneReview = true,
   )
 }
 
@@ -311,12 +312,14 @@ private fun writeParallelReviewResult(
   result: ParallelCodeReviewResult,
   blocked: String?,
   completedReport: String? = null,
+  standaloneReview: Boolean = false,
 ) {
   val parent = result.lane1
   val exitCode = if (parent.success && blocked == null) 0 else 1
   val reportText = completedReport?.takeIf(String::isNotBlank) ?: result.rawOutput.ifBlank { result.output }
   val output =
     buildString {
+      if (blocked != null && standaloneReview) appendLine("Unaccepted standalone review evidence:")
       append(laneStatusOutput(listOf(parent), reportText))
       blocked?.let { reason ->
         appendLine()
@@ -324,34 +327,42 @@ private fun writeParallelReviewResult(
       }
       if (blocked != null && result.output.isNotBlank() && result.output != reportText) {
         appendLine()
-        appendLine("Retained findings:")
+        appendLine(if (standaloneReview) "Unaccepted merged findings:" else "Retained findings:")
         append(result.output)
       }
       if (blocked != null && reportText.lineSequence().any { it.trim().startsWith("verdict:") }) {
         appendLine()
         appendLine("The verdict in the report output was not accepted.")
       }
-      result.reviewSessionId?.let { sessionId ->
-        appendLine()
-        appendLine("Review session ID: $sessionId")
-        append("Applied learnings: ${result.appliedLearnings.orEmpty()}")
-      }
-      laneDiagnosticsOutput(listOf(parent))?.let { diagnostics ->
-        appendLine()
-        append(diagnostics)
-      }
-      result.coverage?.let { coverage ->
-        appendLine()
-        append(coverage.render())
-      }
-      appendReviewDiagnostics(result, blocked)
-      result.accountingSummary?.let { summary ->
-        appendLine()
-        append("# Review accounting — ")
-        append(summary.toReviewAccountingBoundedJson())
-      }
+      appendParallelReviewDetails(result, parent, blocked)
     }
   state.completeText(output, emptyMap(), exitCode = exitCode)
+}
+
+private fun StringBuilder.appendParallelReviewDetails(
+  result: ParallelCodeReviewResult,
+  parent: ParallelReviewLaneStatus,
+  blocked: String?,
+) {
+  result.reviewSessionId?.let { sessionId ->
+    appendLine()
+    appendLine("Review session ID: $sessionId")
+    append("Applied learnings: ${result.appliedLearnings.orEmpty()}")
+  }
+  laneDiagnosticsOutput(listOf(parent))?.let { diagnostics ->
+    appendLine()
+    append(diagnostics)
+  }
+  result.coverage?.let { coverage ->
+    appendLine()
+    append(coverage.render())
+  }
+  appendReviewDiagnostics(result, blocked)
+  result.accountingSummary?.let { summary ->
+    appendLine()
+    append("# Review accounting — ")
+    append(summary.toReviewAccountingBoundedJson())
+  }
 }
 
 private fun laneStatusOutput(

@@ -399,6 +399,9 @@ class RecordingWorkflowGitOperations(
     mergeBaseWithHeadValue?.let { sha -> WorkflowGitOperationResult.Ok(value = sha) }
       ?: super.mergeBaseWithHead(repoRoot, baseRevision)
 
+  override fun standaloneReviewSourceFingerprint(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = repositoryFingerprintValue ?: "standalone-review-fingerprint")
+
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult {
     repositoryFingerprintCalls += 1
     return WorkflowGitOperationResult.Ok(

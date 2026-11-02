@@ -38,6 +38,7 @@ import dev.skillbill.desktop.core.ui.diff.diffRows
 import dev.skillbill.desktop.core.ui.diff.fileDiffNotice
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 
 /** Files below the viewport to read ahead, so scrolling into the next file rarely meets a placeholder. */
@@ -73,9 +74,14 @@ internal fun FileDiffStream(
     val index = currentFiles.indexOfFirst { it.path == currentSelected }
     if (index < 0) return@LaunchedEffect
     followedPath = currentSelected
+    // scrollToItem before the first layout can wait on it forever, which also blocks wheel scrolling.
+    snapshotFlow { listState.layoutInfo.totalItemsCount > 0 }.first { it }
     jumping = true
-    listState.scrollToItem(currentStarts[index])
-    jumping = false
+    try {
+      listState.scrollToItem(currentStarts[index])
+    } finally {
+      jumping = false
+    }
   }
   LaunchedEffect(listState) {
     snapshotFlow { listState.firstVisibleItemIndex to jumping }

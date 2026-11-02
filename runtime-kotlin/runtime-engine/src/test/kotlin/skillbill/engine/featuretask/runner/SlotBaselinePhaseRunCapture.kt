@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.slot.codereview.DELEGATED_REVIEWED_PATH
 import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
+import skillbill.engine.featuretask.slot.standaloneVerificationOutput
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -210,7 +211,9 @@ internal class SlotBaselinePhaseRunHarness private constructor(
   private fun fixLauncher(): RuntimeRecordingLauncher {
     var verifies = 0
     return RuntimeRecordingLauncher { request ->
-      when (val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+      val prompt = requireNotNull(request.skillRunRequest.promptOverride)
+      standaloneVerificationOutput(prompt)?.let { return@RuntimeRecordingLauncher facts(it) }
+      when (val phaseId = phaseIdFromPrompt(prompt)) {
         PHASE_VERIFY_FINDINGS -> {
           verifies += 1
           facts(verifyFindingsOutput(if (verifies == 1) listOf(REVIEW_FIX_BLOCKER_FINDING_ID) else emptyList()))

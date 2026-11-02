@@ -23,7 +23,7 @@ data class WorkUiState(
   val menu: WorkItem? = null,
   val renderedAt: Instant? = null,
 ) {
-  /** Every section when none is chosen, else only the chosen one, in the runtime's order. */
+  /** Every section when none is chosen, else only the chosen one, in display order. */
   val shownSections: List<BoardSection>
     get() = (board as? BoardState.Loaded)?.sections.orEmpty().filter { section == null || it.kind == section }
 

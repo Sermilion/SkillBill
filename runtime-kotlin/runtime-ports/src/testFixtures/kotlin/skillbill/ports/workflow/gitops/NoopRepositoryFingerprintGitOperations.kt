@@ -8,6 +8,9 @@ internal object NoopRepositoryFingerprintGitOperations : RepositoryFingerprintGi
     return WorkflowGitOperationResult.Ok(value = NOOP_REPOSITORY_FINGERPRINT)
   }
 
+  override fun standaloneReviewSourceFingerprint(repoRoot: Path): WorkflowGitOperationResult =
+    repositoryFingerprint(repoRoot)
+
   override fun scopedContentFingerprint(
     repoRoot: Path,
     paths: List<String>,

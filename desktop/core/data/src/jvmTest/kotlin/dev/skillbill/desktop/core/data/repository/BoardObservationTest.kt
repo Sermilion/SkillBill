@@ -5,9 +5,9 @@ import dev.skillbill.desktop.core.data.runtime.BoardPage
 import dev.skillbill.desktop.core.data.runtime.BoardReads
 import dev.skillbill.desktop.core.data.signal.ChangedIds
 import dev.skillbill.desktop.core.data.signal.SignalSnapshot
+import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardCounts
 import dev.skillbill.desktop.core.domain.model.BoardQuery
-import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import dev.skillbill.desktop.core.domain.model.WorkItem
