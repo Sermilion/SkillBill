@@ -83,6 +83,7 @@ class NewTaskViewModel(
       is NewTaskAction.ChooseRepository -> {
         pathCheck?.cancel()
         draft.repository = action.repository
+        draft.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
       is NewTaskAction.SubmitRepositoryPath -> submitPath(action.path)
@@ -96,6 +97,7 @@ class NewTaskViewModel(
       NewTaskAction.OpenRepositoryPicker -> mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
       NewTaskAction.CloseRepositoryPicker -> {
         pathCheck?.cancel()
+        draft.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
       NewTaskAction.Send -> send()
@@ -164,6 +166,7 @@ class NewTaskViewModel(
     if (draft.agentId != agentId) return
     draft.selectedAgent = agent
     mutableState.update { it.copy(agent = agent) }
+    draft.rebindChat()
   }
 
   private fun submitPath(path: String) {
@@ -173,6 +176,7 @@ class NewTaskViewModel(
       when (val project = specs.projectFor(path)) {
         is Outcome.Success -> {
           draft.repository = NewTaskRepository(project.value.repoRoot ?: path, project.value.displayName)
+          draft.rebindChat()
           mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
         }
         is Outcome.Failure -> mutableState.update { it.copy(repositoryError = readProblemText(project.error)) }

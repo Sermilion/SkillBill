@@ -3,10 +3,16 @@ package dev.skillbill.desktop.feature.chat.newtask
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChatEvent
@@ -98,5 +104,55 @@ class NewTaskComposerTest {
     send(ChatEvent.Completed)
     waitUntil { draft.chat.value?.thread?.busy?.value == false }
     onNodeWithText("Ready").assertExists()
+  }
+
+  @Test
+  fun `repository and agent chips stay clickable after the first reply`() = runComposeUiTest {
+    val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
+    val events = Channel<ChatEvent>(Channel.UNLIMITED)
+    chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
+    val repository = NewTaskRepository(
+      createTempDirectory("new-task-repo").also { it.toFile().deleteOnExit() }.toString(),
+      "repo",
+    )
+    val draft = NewTaskDraft(
+      chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+    ).apply {
+      chatDispatcher = Dispatchers.Unconfined
+      this.repository = repository
+      agentId = "claude"
+      selectedAgent = chat.agent
+      text = "Add a button"
+    }
+    val actions = mutableListOf<NewTaskAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(
+            NewTaskUiState(repositories = listOf(repository), agents = listOf("claude", "codex"), agent = chat.agent),
+            draft,
+          ) { actions += it }
+        }
+      }
+    }
+
+    runOnIdle { draft.send() }
+    waitForIdle()
+    onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled()
+    onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
+
+    events.trySend(ChatEvent.Completed)
+    waitUntil { draft.chat.value?.thread?.busy?.value == false }
+    waitForIdle()
+
+    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
+    assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
+    onNode(hasClickLabel("Change agent")).assertIsEnabled().performClick()
+    onNodeWithText("codex").assertExists()
+  }
+
+  private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {
+    it.config.getOrNull(SemanticsActions.OnClick)?.label == label
   }
 }

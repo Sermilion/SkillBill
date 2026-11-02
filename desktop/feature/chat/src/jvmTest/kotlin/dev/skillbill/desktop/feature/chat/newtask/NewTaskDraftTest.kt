@@ -270,4 +270,73 @@ class NewTaskDraftTest {
     assertFalse(thread.busy.value)
     draft.close()
   }
+
+  @Test
+  fun `choosing another repository rebinds the chat to that checkout and keeps the transcript`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val firstSession = chat.requests.single().sessionId
+    val otherRoot = createTempDirectory("other-repo").toString()
+
+    draft.repository = NewTaskRepository(otherRoot, "other")
+    draft.rebindChat()
+    runCurrent()
+
+    val rebound = checkNotNull(draft.chat.value)
+    assertNotEquals(firstSession, rebound.sessionId)
+    assertEquals(otherRoot, rebound.repositoryRoot)
+    assertEquals(listOf(firstSession), chat.ended)
+    assertFalse(firstSession in chat.saved)
+    assertEquals("add export", (rebound.thread.transcript.value.first() as ChatMessage.Operator).text)
+    assertTrue(rebound.thread.transcript.value.last() is ChatMessage.Notice)
+    assertEquals(otherRoot, chat.saved.getValue(rebound.sessionId).newTask?.repositoryRoot)
+
+    draft.say("continue")
+    runCurrent()
+    assertEquals(ChatScope.NewTask(otherRoot, "main"), chat.requests.last().scope)
+    assertTrue(chat.requests.last().firstTurn)
+    draft.close()
+  }
+
+  @Test
+  fun `choosing another agent rebinds the chat onto a new session of that agent`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val firstSession = chat.requests.single().sessionId
+    val codex = chat.agentFor("codex")
+
+    draft.agentId = "codex"
+    draft.selectedAgent = codex
+    draft.rebindChat()
+    runCurrent()
+
+    val rebound = checkNotNull(draft.chat.value)
+    assertNotEquals(firstSession, rebound.sessionId)
+    assertEquals("codex", rebound.agent.agentId)
+    draft.say("continue")
+    runCurrent()
+    assertEquals("codex", chat.requests.last().agent.agentId)
+    assertTrue(chat.requests.last().firstTurn)
+    draft.close()
+  }
+
+  @Test
+  fun `rebind is a no-op when the repository and agent did not change`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val sessionId = chat.requests.single().sessionId
+
+    draft.rebindChat()
+    runCurrent()
+
+    assertEquals(sessionId, draft.chat.value?.sessionId)
+    assertTrue(chat.ended.isEmpty())
+    draft.close()
+  }
 }

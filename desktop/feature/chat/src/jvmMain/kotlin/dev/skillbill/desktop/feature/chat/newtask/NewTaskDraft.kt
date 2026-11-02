@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.ChatMessage
+import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -178,6 +179,30 @@ class NewTaskDraft(
   }
 
   internal fun launch(block: suspend () -> Unit) = scope.launch { block() }
+
+  /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
+  internal fun rebindChat() {
+    val current = chatState.value ?: return
+    val agent = selectedAgent ?: return
+    val repo = repository ?: return
+    if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
+    val branch = baseBranch.ifBlank { null }
+    if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
+    val lines = current.thread.transcript.value
+    val firstEnded = current.firstTurnEnded.value
+    val previousId = current.sessionId
+    current.end()
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, firstTurnEnded = firstEnded)
+    next.thread.replaceTranscript(lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}."))
+    scope.launch {
+      current.job.join()
+      chats.deleteSavedChat(previousId)
+      if (!next.persist() && chatState.value === next) {
+        next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+      }
+      refreshSaved()
+    }
+  }
 
   /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
   internal suspend fun resume(entry: ChatHistoryEntry): Boolean {

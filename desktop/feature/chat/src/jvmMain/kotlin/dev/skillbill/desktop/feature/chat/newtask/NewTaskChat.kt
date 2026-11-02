@@ -38,9 +38,9 @@ internal class NewTaskChat(
   private val clock: Clock,
   val sessionId: String,
   var databaseSessionId: Long?,
-  private val repositoryRoot: String,
-  private val baseBranch: String?,
-  private val agent: ChatAgent,
+  val repositoryRoot: String,
+  val baseBranch: String?,
+  val agent: ChatAgent,
   initiallyStarted: Boolean = false,
   initiallyFirstTurnEnded: Boolean = initiallyStarted,
   initiallyPendingTurnLineIndex: Int? = null,
@@ -125,6 +125,8 @@ internal class NewTaskChat(
     job.cancel()
     chat.end(sessionId)
   }
+
+  internal suspend fun persist(): Boolean = save()
 
   private fun observeUnprompted() {
     unpromptedJob = scope.launch(job + dispatcher) { chat.unprompted(sessionId).collect { showUnprompted(it) } }

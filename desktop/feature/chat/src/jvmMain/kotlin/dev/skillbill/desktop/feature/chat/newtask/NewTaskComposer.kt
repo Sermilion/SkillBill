@@ -45,7 +45,7 @@ import kotlin.time.Instant
 
 internal val COMPOSER_MAX_WIDTH = 728.dp
 
-/** The task input with its repository, agent and Send controls. Enter and Send share one condition; a chat locks the pickers to its checkout. */
+/** The task input with its repository, agent and Send controls. Enter and Send share one condition. A busy turn locks the pickers; a change rebinds the open chat. */
 @Composable
 internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, now: () -> Instant = Clock.System::now, onAction: (NewTaskAction) -> Unit) {
   LaunchedEffect(focus) { focus.requestFocus() }
@@ -54,6 +54,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
   val offer by draft.offer.collectAsState()
   val ready = !busy && !offer.starting && draft.canSend()
+  val pickersEnabled = !busy && !offer.starting && chat?.repositoryMissing != true
   val saved by draft.saved.collectAsState()
   val submit = {
     val startsTurn = ready && draft.text.trim() != RESUME_COMMAND
@@ -76,8 +77,8 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
       }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      RepositoryPicker(state, draft, enabled = chat == null, onAction)
-      AgentPicker(state.agent, state.agents, enabled = chat == null) { onAction(NewTaskAction.ChooseAgent(it)) }
+      RepositoryPicker(state, draft, enabled = pickersEnabled, onAction)
+      AgentPicker(state.agent, state.agents, enabled = pickersEnabled) { onAction(NewTaskAction.ChooseAgent(it)) }
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
         SbButton("Send", submit, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
       }
@@ -94,7 +95,8 @@ private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, enabled
       mono = true,
       icon = LucideIcons.folder,
       maxWidth = 280.dp,
-      modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(enabled = enabled, onClickLabel = "Change repository or base branch") { onAction(NewTaskAction.OpenRepositoryPicker) },
+      modifier = Modifier.then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+        .clickable(enabled = enabled, onClickLabel = "Change repository or base branch") { onAction(NewTaskAction.OpenRepositoryPicker) },
     )
     if (enabled && state.repositoryPickerOpen) {
       ShellLayer(close)
