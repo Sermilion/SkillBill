@@ -1,12 +1,15 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ChatSystemPromptTest {
+  private val sharedStartWires = NewTaskActionKind.entries.map { it.wire }
+
   // An agent told to act on "this execution" hunts for one.
   @Test
   fun `the new-task prompt names the checkout and action rules without any execution guidance`() {
@@ -16,11 +19,16 @@ class ChatSystemPromptTest {
     assertTrue("Base branch: develop" in prompt)
     assertTrue("skillbill-actions" in prompt)
     assertTrue("\"mode\":\"act\",\"start\":\"goal\"" in prompt)
-    listOf("goal", "plan", "review", "validation", "qa", "pr").forEach {
-      assertTrue("\"$it\"" in prompt)
-    }
+    sharedStartWires.forEach { assertTrue("\"$it\"" in prompt) }
+    assertTrue(
+      """set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix"""" in prompt,
+    )
+    assertTrue("code review" in prompt)
+    assertTrue("Run phase:" in prompt)
+    assertTrue("Run operation:" in prompt)
+    assertTrue("Never set \"start\" to \"release\"" in prompt)
     assertTrue("without \"start\", the app sends its instruction as the next chat turn" in prompt)
-    assertTrue("only after the operator clicks it" in prompt)
+    assertTrue("only after the operator clicks" in prompt)
     assertTrue("Do not launch skill-bill yourself" in prompt)
     assertFalse("Starting a run from this chat is not available yet" in prompt)
     assertFalse("this execution" in prompt)
@@ -32,7 +40,7 @@ class ChatSystemPromptTest {
   fun `the new-task prompt permits goal and review start actions`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
 
-    assertTrue("set \"start\" to one of: \"goal\", \"plan\", \"review\", \"validation\", \"qa\" or \"pr\"" in prompt)
+    assertTrue("Run phase:goal" in prompt)
     assertTrue("the app starts the selected run when the operator clicks it" in prompt)
     assertFalse("Starting a run from this chat is not available yet" in prompt)
     assertFalse("Do not include a \"start\" field" in prompt)
@@ -45,5 +53,17 @@ class ChatSystemPromptTest {
     assertTrue("Execution id: wf-1" in prompt)
     assertTrue("skillbill-actions" in prompt)
     assertTrue("this execution" in prompt)
+    sharedStartWires.forEach { assertTrue("\"$it\"" in prompt) }
+    assertTrue(
+      """set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix"""" in prompt,
+    )
+    assertTrue("code review" in prompt)
+    assertTrue("Run phase:" in prompt)
+    assertTrue("Run operation:" in prompt)
+    assertTrue("Never set \"start\" to \"release\"" in prompt)
+    assertTrue("Verify findings" in prompt)
+    assertTrue("must not set \"start\":\"verify\"" in prompt)
+    assertTrue("may emit \"start\"" in prompt)
+    assertTrue("A start waits until this execution is not running" in prompt)
   }
 }

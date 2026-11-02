@@ -82,7 +82,14 @@ private fun decodeActions(source: String, diagnostics: Diagnostics): List<ChatSu
         return@mapNotNull null
       }
     }
-    ChatSuggestedAction(label, instruction, mode, start)
+    val target = when (action["target"]) {
+      null -> null
+      else -> {
+        val value = action.actionString("target") ?: return@mapNotNull null
+        value.trim().takeIf { it.isNotBlank() }
+      }
+    }
+    ChatSuggestedAction(label, instruction, mode, start, target)
   }
   return actions.takeIf { it.map(ChatSuggestedAction::label).distinct().size == it.size }
 }

@@ -90,6 +90,45 @@ class ChatStoreTest {
   }
 
   @Test
+  fun `suggested action target round-trips through the store`() {
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val action = ChatSuggestedAction(
+      "Run phase:monitor",
+      "Watch the PR.",
+      ChatPermissionMode.ReadOnly,
+      NewTaskActionKind.Monitor,
+      "https://github.com/org/repo/pull/9",
+    )
+    val saved = entry("target", 11).copy(
+      lines = listOf(
+        ChatHistoryLine(ChatHistoryRole.Operator, "watch this PR"),
+        ChatHistoryLine(ChatHistoryRole.Agent, "", actions = listOf(action)),
+      ),
+    )
+    assertTrue(store.saveChat(saved))
+    val reopened = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+    assertEquals(listOf(action), reopened.lines.single { it.role == ChatHistoryRole.Agent }.actions)
+    assertTrue(diagnostics.categories.isEmpty())
+  }
+
+  @Test
+  fun `legacy action lines without target load with null target`() {
+    val diagnostics = RecordingDiagnostics()
+    val file = File(host.userHome, "$CHAT_STORE_PATH/legacy-no-target.json")
+    file.parentFile.mkdirs()
+    file.writeText(
+      """{"session_id":"legacy-no-target","execution_id":"wf-1","agent_id":"codex","updated_at_ms":1,"lines":[{"role":"Operator","text":"review this branch"},{"role":"Agent","text":"done","actions":[{"label":"Run phase:review","instruction":"Review branch.","mode":"ReadOnly","start":"review"}]}]}""",
+    )
+    val entry = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+    assertEquals(
+      ChatSuggestedAction("Run phase:review", "Review branch.", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review),
+      entry.lines.single { it.role == ChatHistoryRole.Agent }.actions.single(),
+    )
+    assertTrue(diagnostics.categories.isEmpty())
+  }
+
+  @Test
   fun `old chat lines without actions restore empty action metadata and malformed actions are recorded`() {
     val diagnostics = RecordingDiagnostics()
     val file = File(host.userHome, "$CHAT_STORE_PATH/legacy.json")

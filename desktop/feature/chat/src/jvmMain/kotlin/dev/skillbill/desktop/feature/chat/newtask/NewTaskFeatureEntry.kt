@@ -41,7 +41,7 @@ class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, p
           NewTaskActionKind.Validation -> NewTaskKind.Validation
           NewTaskActionKind.Qa -> NewTaskKind.Qa
           NewTaskActionKind.Pr -> NewTaskKind.Pr
-          null -> null
+          NewTaskActionKind.Monitor, NewTaskActionKind.Verify, NewTaskActionKind.PrReviewFix, null -> null
         }
         kind?.let { viewModel.draft.start(it) }
       },

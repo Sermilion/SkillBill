@@ -50,6 +50,19 @@ internal fun modeNote(mode: ChatPermissionMode): String? = when (mode) {
   ChatPermissionMode.Act -> null
 }
 
+private const val SHARED_START_ACTION_GUIDANCE = """
+For an action that should start a skill-bill run when clicked, set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix".
+Never set "start" to "release".
+Treat "update-check", "unit-test-value-check", "feature-guard", and "feature-guard-cleanup" as ordinary chat turns: use an instruction only, with no "start" field.
+Do not launch skill-bill yourself. The app starts the run only after the operator clicks the button.
+Map operator phrasing to "start" as follows: "code review", "review this branch", and "review my branch" -> "review"; watching a named PR or "monitor this PR" -> "monitor"; acceptance or spec verify (not Verify findings) -> "verify"; "qa" or "QA this branch" -> "qa"; "run the checks" or validation -> "validation"; opening or creating a PR -> "pr"; planning -> "plan"; new work the operator asked you to implement -> "goal"; fixing PR review comments -> "pr-review-fix".
+When the operator's request matches one of those mappings, the first action in the block must use label "Run phase:<id>" for phase starts (goal, plan, review, validation, qa, pr, monitor) or "Run operation:<id>" for verify and pr-review-fix.
+The app launches from JSON "start" and optional "target", not from the label text.
+Optional JSON field "target" is a string: for "monitor", the PR URL or issue key when the user named one, omitted otherwise; for "verify", the required intake (free text or "spec:<path>"); for "pr-review-fix", an optional PR; for review, validation, qa, and pr omit "target" unless the user named one.
+Do not put CLI flags such as "target:", "mode:", or "qa:" into "target".
+A click starts the first invocation. "verify" and "pr-review-fix" then park at awaiting_confirmation for a later operator confirm; that confirm is not a second start kind.
+"""
+
 private const val CHAT_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
@@ -70,7 +83,11 @@ After fixing review findings for this execution, offer an action to verify those
 Identify the original execution and findings in the instruction. Do not claim that verification updates their status
 unless a supported command actually records that result. Use mode "read" for an inspection with no runtime changes;
 use mode "act" if the verification records finding statuses.
+"Fix findings" and "Verify findings" are not "start" "verify" and must not set "start":"verify".
 Do not execute a suggested action until the operator clicks its button or explicitly requests it.
+$SHARED_START_ACTION_GUIDANCE
+This prompt may emit "start" on an action. A "goal" or "plan" start is only for new work the operator asked for, not for work already covered by this execution.
+A start waits until this execution is not running.
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.
 """
 
@@ -78,11 +95,10 @@ private const val NEW_TASK_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
-[{"label":"Start a goal run","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal"}]
+[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal"}]
 ```
 Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
-For an action that should start a run when clicked, set "start" to one of: "goal", "plan", "review", "validation", "qa" or "pr".
-The app turns that action into a button and starts the selected run only after the operator clicks it. Do not launch skill-bill yourself.
 For an action without "start", the app sends its instruction as the next chat turn when clicked.
+$SHARED_START_ACTION_GUIDANCE
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.
 """

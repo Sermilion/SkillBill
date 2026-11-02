@@ -66,6 +66,7 @@ private object ChatStoreKeys {
   const val INSTRUCTION = "instruction"
   const val MODE = "mode"
   const val START = "start"
+  const val TARGET = "target"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -302,6 +303,7 @@ private fun ChatSuggestedAction.toJson(): JsonObject = buildJsonObject {
   put(ChatStoreKeys.INSTRUCTION, instruction)
   put(ChatStoreKeys.MODE, mode.name)
   start?.let { put(ChatStoreKeys.START, it.wire) }
+  target?.takeIf { it.isNotBlank() }?.let { put(ChatStoreKeys.TARGET, it) }
 }
 
 private fun JsonObject.actions(key: String, diagnostics: Diagnostics): List<ChatSuggestedAction> {
@@ -338,7 +340,8 @@ private fun JsonObject.toAction(diagnostics: Diagnostics): ChatSuggestedAction? 
     diagnostics.record("chat.store_malformed_action")
     return null
   }
-  return ChatSuggestedAction(label, instruction, mode, start)
+  val target = string(ChatStoreKeys.TARGET)?.trim()?.takeIf { it.isNotBlank() }
+  return ChatSuggestedAction(label, instruction, mode, start, target)
 }
 
 private fun JsonObject.objects(key: String): List<JsonObject> = (get(key) as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
