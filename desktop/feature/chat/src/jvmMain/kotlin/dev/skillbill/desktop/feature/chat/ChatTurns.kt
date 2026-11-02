@@ -2,7 +2,6 @@ package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
-import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -113,7 +112,7 @@ internal class ChatTurns(
     prompt: String,
     sent: ExecutionSnapshot,
   ) {
-    val scope = ChatScope(header.id, header.kind, header.issueKey, header.title, header.repositoryRoot)
+    val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, header.repositoryRoot)
     val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt)
     var delivered = false
     try {
@@ -123,7 +122,7 @@ internal class ChatTurns(
           session.delivered = sent
           session.started = true
         }
-        show(session, agent, event)
+        session.thread.show(agent, event)
       }
     } finally {
       session.endStreaming()
@@ -139,30 +138,10 @@ internal class ChatTurns(
     val ownTurn = session.turnJob == null
     if (ownTurn) session.busyState.value = true
     val agent = session.agentState.value
-    show(session, agent, event)
+    session.thread.show(agent, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
     if (ownTurn) session.busyState.value = false
     if (agent != null && session.started) save(session, agent)
-  }
-
-  private fun show(session: ChatSession, agent: ChatAgent?, event: ChatEvent) {
-    when (event) {
-      is ChatEvent.TextDelta -> session.appendDelta(event.text)
-      is ChatEvent.ToolUse -> session.appendTool(event.call)
-      is ChatEvent.ToolResult -> session.recordToolResult(event)
-      is ChatEvent.SuggestedActions -> session.suggestActions(event.actions)
-      ChatEvent.Completed -> session.endStreaming()
-      is ChatEvent.Failed -> {
-        session.endStreaming()
-        session.append(
-          if (event.failure == ChatFailure.AgentUnsupported) {
-            ChatMessage.Notice("Chat is not available for agent ${event.detail ?: agent?.agentId} yet.")
-          } else {
-            ChatMessage.Error(event.failure, event.detail ?: event.failure.name)
-          },
-        )
-      }
-    }
   }
 
   private suspend fun save(session: ChatSession, agent: ChatAgent) {

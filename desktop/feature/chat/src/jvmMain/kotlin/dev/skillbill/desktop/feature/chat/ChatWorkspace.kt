@@ -3,8 +3,6 @@ package dev.skillbill.desktop.feature.chat
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
-import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
-import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -20,6 +18,7 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -32,6 +31,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
@@ -76,8 +76,10 @@ class ChatWorkspace(
   private val clock: Clock,
   private val panes: ShellPanes,
   private val selection: SelectionHolder,
+  private val newTask: NewTaskDraft,
 ) : ChatCommands {
   private val scope = windowScope.scope
+  override val newTaskDraftOpen: StateFlow<Boolean> = newTask.chat.map { it != null }.stateIn(scope, SharingStarted.Eagerly, false)
   private val turns = ChatTurns(chat, details, clock)
   private val sessions = LinkedHashMap<String, ChatSession>()
   private val resumeJobs = LinkedHashSet<Job>()
@@ -127,7 +129,12 @@ class ChatWorkspace(
     pauseAndAct(id, instruction)
   }
 
-  override fun closeChats() = closeAll()
+  override fun closeChats() {
+    newTask.dispose()
+    closeExecutionChats()
+  }
+
+  override suspend fun closeChatsSafely(): Boolean = closeAll()
 
   /** Opens [item]'s chat, or only activates its first open chat; a new chat shows its state line, then streams the opening turn. */
   fun open(item: WorkItem) {
@@ -193,8 +200,14 @@ class ChatWorkspace(
     observeActive()
   }
 
-  /** Ends every chat. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
-  fun closeAll() {
+  /** Ends every chat, and the new-task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
+  suspend fun closeAll(): Boolean {
+    if (!newTask.close()) return false
+    closeExecutionChats()
+    return true
+  }
+
+  private fun closeExecutionChats() {
     resumeJobs.toList().forEach { it.cancel() }
     resumeJobs.clear()
     observer?.cancel()
@@ -479,9 +492,4 @@ class ChatWorkspace(
       }
     }
   }
-}
-
-private fun restored(line: ChatHistoryLine): ChatMessage = when (line.role) {
-  ChatHistoryRole.Operator -> ChatMessage.Operator(line.text)
-  ChatHistoryRole.Agent -> ChatMessage.Agent(line.text, streaming = false, tools = emptyList())
 }

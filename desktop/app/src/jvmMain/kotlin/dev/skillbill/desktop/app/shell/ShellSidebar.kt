@@ -38,6 +38,7 @@ fun ShellSidebar(
   sectionSizes: Map<BoardSectionKind, Int>?,
   specsOpen: Boolean,
   terminalOpen: Boolean,
+  newTaskDraft: Boolean,
   contributions: List<SidebarContribution>,
   onNavigate: (AppRoute) -> Unit,
   onOpenCommandMenu: () -> Unit,
@@ -59,7 +60,15 @@ fun ShellSidebar(
       SidebarItem("Keyboard shortcuts", onShowShortcuts, icon = LucideIcons.keyboard, tooltip = "Keyboard shortcuts", shortcut = "?")
     },
   ) {
-    SidebarItem("New task", { onNavigate(NewTaskRoute) }, icon = LucideIcons.pencil, on = topRoute == NewTaskRoute, tooltip = "New task (G N)", shortcut = "G N")
+    SidebarItem(
+      "New task",
+      { onNavigate(NewTaskRoute) },
+      icon = LucideIcons.pencil,
+      attention = if (newTaskDraft && topRoute != NewTaskRoute) 1 else null,
+      on = topRoute == NewTaskRoute,
+      tooltip = "New task (G N)",
+      shortcut = "G N",
+    )
     SidebarItem(
       "Work",
       { onNavigate(WorkRoute(null)) },

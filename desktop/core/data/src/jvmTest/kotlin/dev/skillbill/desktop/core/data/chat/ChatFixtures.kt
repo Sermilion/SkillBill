@@ -14,7 +14,7 @@ internal fun chatRequest(
   sessionId = "session-1",
   firstTurn = firstTurn,
   agent = agent,
-  scope = ChatScope("wf-1", WorkKind.Goal, "SKILL-1", "Title", "/work/skill-bill"),
+  scope = ChatScope.Execution("wf-1", WorkKind.Goal, "SKILL-1", "Title", "/work/skill-bill"),
   mode = mode,
   prompt = "operator prompt",
 )

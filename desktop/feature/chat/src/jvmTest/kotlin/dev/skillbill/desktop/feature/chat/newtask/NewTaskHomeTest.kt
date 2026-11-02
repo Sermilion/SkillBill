@@ -34,7 +34,7 @@ class NewTaskHomeTest {
   @Test
   fun `an empty board shows the examples and readiness without needs you or chips`() = runComposeUiTest {
     val state = NewTaskUiState(home = newTaskHome(loadedBoard()), detectedAgents = DetectedAgentsRead.Success(listOf(DetectedAgent("claude", "/bin/claude"), DetectedAgent("claude", "/opt/claude"))))
-    val draft = NewTaskDraft().apply { repository = NewTaskRepository("/work/app", "app") }
+    val draft = testNewTaskDraft().apply { repository = NewTaskRepository("/work/app", "app") }
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, draft, host) {} }
@@ -52,7 +52,7 @@ class NewTaskHomeTest {
     val state = NewTaskUiState(home = newTaskHome(BoardState.Loading))
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, NewTaskDraft(), host) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, testNewTaskDraft(), host) {} }
       }
     }
 
@@ -91,7 +91,7 @@ class NewTaskHomeTest {
     val twoHoursLater = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = { opened += it }, onShowAllWork = { showedAllWork = true })
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = newTaskHome(board)), NewTaskDraft(), twoHoursLater) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = newTaskHome(board)), testNewTaskDraft(), twoHoursLater) {} }
       }
     }
 
@@ -118,7 +118,7 @@ class NewTaskHomeTest {
     assertEquals(NewTaskHome.Returning(emptyList(), running = 2, finished = 0), home)
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = home), NewTaskDraft(), host) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = home), testNewTaskDraft(), host) {} }
       }
     }
 
@@ -131,7 +131,7 @@ class NewTaskHomeTest {
   fun `chips stay disabled until a repository and an agent are selected`() = runComposeUiTest {
     val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = {})
     val state = NewTaskUiState(home = newTaskHome(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(workItem("SKILL-1"))))))
-    val draft = NewTaskDraft()
+    val draft = testNewTaskDraft()
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, draft, startable) {} }
@@ -160,7 +160,7 @@ class NewTaskHomeTest {
   @Test
   fun `pressing an example fills the input and previews its route`() = runComposeUiTest {
     val fill = "Add CSV export to the history screen. Done when a user can download the rows they see."
-    val draft = NewTaskDraft()
+    val draft = testNewTaskDraft()
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {

@@ -5,7 +5,9 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
+import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,5 +46,21 @@ class ChatStoreTest {
     (1L..22L).forEach { store.saveChat(entry("s$it", it)) }
 
     assertEquals((22L downTo 3L).map { "s$it" }, store.savedChats("wf-1").map { it.sessionId })
+  }
+
+  // Sweeping a draft as an orphan silently loses the operator's conversation after a week away.
+  @Test
+  fun `a new-task draft outlives the orphan sweep, lists by repository and goes when deleted`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val draft = entry("draft", 1, execution = "unused").copy(executionId = null, newTask = ChatNewTaskContext("/work/app", "main"))
+    store.saveChat(draft)
+    File(host.userHome, "$CHAT_STORE_PATH/draft.json").setLastModified(1)
+
+    store.savedChats("wf-1")
+
+    assertEquals(listOf(draft), store.newTaskDrafts("/work/app"))
+    assertEquals(emptyList(), store.newTaskDrafts("/work/other"))
+    store.delete("draft")
+    assertEquals(emptyList(), store.newTaskDrafts("/work/app"))
   }
 }

@@ -9,6 +9,8 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
@@ -23,6 +25,7 @@ import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -64,7 +67,7 @@ class ChatWorkspaceTest {
 
   private fun TestScope.workspace(): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes, selection)
+    return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes, selection, NewTaskDraft(chat, WindowCoroutineScope(backgroundScope), clock))
   }
 
   @Test
@@ -181,7 +184,7 @@ class ChatWorkspaceTest {
     val phase = workItem("phase-1", kind = WorkKind.Phase)
     details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
     val cancelled = mutableListOf<String>()
-    chat.events = { request -> flow<ChatEvent> { try { awaitCancellation() } finally { cancelled += request.scope.executionId } } }
+    chat.events = { request -> flow<ChatEvent> { try { awaitCancellation() } finally { cancelled += request.executionId } } }
     val workspace = workspace()
 
     workspace.open(goal)
@@ -194,7 +197,7 @@ class ChatWorkspaceTest {
     val phaseSession = workspace.session(phase.id)!!
     assertIs<ChatMessage.StateLine>(goalSession.transcript.value.first())
     assertIs<ChatMessage.StateLine>(phaseSession.transcript.value.first())
-    assertEquals(listOf(goal.id, phase.id), chat.requests.map { it.scope.executionId })
+    assertEquals(listOf(goal.id, phase.id), chat.requests.map { it.executionId })
     assertTrue(goalSession.job.isActive && phaseSession.job.isActive)
 
     workspace.close(goal.id)
@@ -271,7 +274,7 @@ class ChatWorkspaceTest {
     val operation = workItem("op-1", kind = WorkKind.Operation)
     details.details = mapOf(phase.id to flowOf(loaded(phase)), operation.id to flowOf(loaded(operation)))
     val cancelled = mutableListOf<String>()
-    chat.events = { request -> flow<ChatEvent> { try { awaitCancellation() } finally { cancelled += request.scope.executionId } } }
+    chat.events = { request -> flow<ChatEvent> { try { awaitCancellation() } finally { cancelled += request.executionId } } }
     val workspace = workspace()
 
     workspace.open(phase)
@@ -750,3 +753,5 @@ class ChatWorkspaceTest {
     assertEquals(listOf(session.sessionId), chat.ended)
   }
 }
+
+private val ChatTurnRequest.executionId: String get() = (scope as ChatScope.Execution).executionId

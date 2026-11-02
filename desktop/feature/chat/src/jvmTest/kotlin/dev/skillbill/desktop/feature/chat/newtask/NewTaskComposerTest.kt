@@ -24,7 +24,7 @@ class NewTaskComposerTest {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides input) {
           focusManager = LocalFocusManager.current
-          NewTaskComposer(NewTaskUiState(), NewTaskDraft()) {}
+          NewTaskComposer(NewTaskUiState(), testNewTaskDraft()) {}
         }
       }
     }

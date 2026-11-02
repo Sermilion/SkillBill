@@ -58,13 +58,18 @@ import java.awt.datatransfer.StringSelection
 
 /** The chat's messages, oldest first; it follows the newest message, including a streaming answer as it grows. */
 @Composable
-internal fun ChatTranscript(session: ChatSession, modifier: Modifier = Modifier, onAction: (ChatMessage.Agent, ChatSuggestedAction) -> Unit) {
-  val busy by session.busy.collectAsState()
-  val supported by session.agentSupported.collectAsState()
-  val gone by session.gone.collectAsState()
-  val mode by session.mode.collectAsState()
-  val agent by session.agent.collectAsState()
-  val messages by session.transcript.collectAsState()
+internal fun ChatTranscript(
+  thread: ChatThread,
+  gone: Boolean,
+  mode: ChatPermissionMode,
+  modifier: Modifier = Modifier,
+  allowStartActions: Boolean = true,
+  onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
+) {
+  val busy by thread.busy.collectAsState()
+  val supported by thread.agentSupported.collectAsState()
+  val agent by thread.agent.collectAsState()
+  val messages by thread.transcript.collectAsState()
   val listState = rememberLazyListState()
   // Follows the bottom until the operator scrolls away from it; scrolling back to the end resumes following.
   var following by remember { mutableStateOf(true) }
@@ -88,7 +93,7 @@ internal fun ChatTranscript(session: ChatSession, modifier: Modifier = Modifier,
     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
   ) {
     items(messages) { message ->
-      ChatMessageRow(message, agent, !busy && supported && !gone && message === messages.lastOrNull(), mode, onAction)
+      ChatMessageRow(message, agent, !busy && supported && !gone && message === messages.lastOrNull(), mode, allowStartActions, onAction)
     }
   }
 }
@@ -112,14 +117,15 @@ private fun ChatMessageRow(
   agent: ChatAgent?,
   actionsEnabled: Boolean,
   mode: ChatPermissionMode,
-  onAction: (ChatMessage.Agent, ChatSuggestedAction) -> Unit,
+  allowStartActions: Boolean,
+  onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   when (message) {
     is ChatMessage.StateLine -> StateCard(message)
     is ChatMessage.Operator -> OperatorMessage(message)
-    is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode) { onAction(message, it) }
+    is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode, allowStartActions, onAction?.let { act -> { action: ChatSuggestedAction -> act(message, action) } })
     is ChatMessage.Notice -> Row(
       Modifier.semantics { liveRegion = LiveRegionMode.Polite },
       horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -199,7 +205,8 @@ private fun AgentTurn(
   agent: ChatAgent?,
   actionsEnabled: Boolean,
   mode: ChatPermissionMode,
-  onAction: (ChatSuggestedAction) -> Unit,
+  allowStartActions: Boolean,
+  onAction: ((ChatSuggestedAction) -> Unit)?,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
@@ -223,7 +230,8 @@ private fun AgentTurn(
     if (message.tools.isNotEmpty()) ChatToolGroup(message.tools, message.streaming)
     if (message.text.isNotEmpty()) ChatMarkdown(message.text, Modifier.fillMaxWidth())
     if (!message.streaming && message.text.isNotEmpty()) ReplyFooter(message.text)
-    if (!message.streaming && message.actions.isNotEmpty()) ChatActionButtons(message.actions, actionsEnabled, mode, onAction)
+    val actions = if (allowStartActions) message.actions else message.actions.filter { it.start == null }
+    if (onAction != null && !message.streaming && actions.isNotEmpty()) ChatActionButtons(actions, actionsEnabled, mode, onAction)
   }
 }
 

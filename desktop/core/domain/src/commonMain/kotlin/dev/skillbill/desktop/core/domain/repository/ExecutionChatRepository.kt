@@ -51,4 +51,16 @@ interface ExecutionChatRepository {
 
   /** Saves [entry] over any earlier save of its session. */
   suspend fun saveChat(entry: ChatHistoryEntry)
+
+  /** Saves a new-task draft and reports whether its durable record was written. */
+  suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean {
+    saveChat(entry)
+    return true
+  }
+
+  /** The saved new-task drafts of [repositoryRoot], newest first. */
+  suspend fun savedNewTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry>
+
+  /** Deletes the saved chat of [sessionId] with its resume state. */
+  suspend fun deleteSavedChat(sessionId: String)
 }

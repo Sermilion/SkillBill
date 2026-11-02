@@ -13,21 +13,29 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.hoverSpec
+import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.feature.chat.ChatTranscript
 import kotlin.time.Instant
 
 private val CONTENT_MAX_WIDTH = 680.dp
@@ -44,41 +52,39 @@ internal class NewTaskScreenHost(
 
 @Composable
 internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
-  val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  val reducedMotion = LocalReducedMotion.current
-  val preview = previewRoute(draft.text)
-  val progress = if (!reducedMotion && preview == null) rememberIdleProgress() else null
+  val chat = draft.chat.collectAsState().value
+  val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
-  val homeAlpha by animateFloatAsState(if (preview != null) DIMMED_ALPHA else 1f, hoverSpec())
+  LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
   Column(Modifier.fillMaxSize()) {
-    ViewHeader(crumbs = listOf(Crumb("New task")))
-    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-      Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-      ) {
-        Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(40.dp)) {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            BasicText("What should we ship?", Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
-            BasicText(
-              "Describe the work or paste an issue. Skill Bill plans it, builds it, audits it and opens the PR.",
-              style = type.tBase.copy(color = colors.fgMuted),
-            )
-          }
-          StepLine(progress, reducedMotion, preview)
-          when (val home = state.home) {
-            NewTaskHome.Pending -> Unit
-            is NewTaskHome.Returning -> NeedsYouSection(home, host.now, host.onOpenRun, host.onShowAllWork, Modifier.alpha(homeAlpha))
-            NewTaskHome.FirstRun -> ExamplesSection(
-              readinessLine(state.detectedAgents, draft.repository?.name),
-              onExample = {
-                onAction(NewTaskAction.TextChanged(it))
-                focus.requestFocus()
-              },
-              modifier = Modifier.alpha(homeAlpha),
-            )
+    ViewHeader(
+      crumbs = listOf(Crumb("New task")),
+      actions = {
+        if (chat != null) {
+          if (!chat.repositoryMissing) SbButton("New chat", { onAction(NewTaskAction.NewChat) }, size = SbControlSize.Small)
+          SbButton("Discard", { onAction(NewTaskAction.Discard) }, size = SbControlSize.Small)
+        }
+      },
+    )
+    if (chat == null) {
+      NewTaskHomeBody(state, draft, host, focus, onAction, Modifier.weight(1f))
+    } else {
+      key(chat) {
+        ChatTranscript(
+          chat.thread,
+          gone = false,
+          mode = ChatPermissionMode.Act,
+          modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
+          allowStartActions = host.onStart != null,
+        ) { _, action ->
+          val start = action.start
+          if (start == null) {
+            if (action.instruction.isNotBlank() && !chat.thread.busy.value && !chat.repositoryMissing) {
+              onAction(NewTaskAction.RunSuggestedAction(action))
+              focusManager.clearFocus()
+            }
+          } else {
+            host.onStart?.invoke(start.wire)
           }
         }
       }
@@ -88,11 +94,60 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
       verticalArrangement = Arrangement.spacedBy(8.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-      if (state.home is NewTaskHome.Returning) {
+      if (chat == null && state.home is NewTaskHome.Returning) {
         val startable = draft.repository != null && draft.agentId != null
         NewTaskChips(host.onStart.takeIf { startable }, Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth())
       }
-      NewTaskComposer(state, draft, focus, onAction)
+      NewTaskComposer(state, draft, focus, host.now, onAction)
+    }
+  }
+}
+
+@Composable
+private fun NewTaskHomeBody(
+  state: NewTaskUiState,
+  draft: NewTaskDraft,
+  host: NewTaskScreenHost,
+  focus: FocusRequester,
+  onAction: (NewTaskAction) -> Unit,
+  modifier: Modifier,
+) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  val reducedMotion = LocalReducedMotion.current
+  val preview = previewRoute(draft.text)
+  val progress = if (!reducedMotion && preview == null) rememberIdleProgress() else null
+  val homeAlpha by animateFloatAsState(if (preview != null) DIMMED_ALPHA else 1f, hoverSpec())
+  val saved by draft.saved.collectAsState()
+  BoxWithConstraints(modifier.fillMaxWidth()) {
+    Column(
+      Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(24.dp),
+      verticalArrangement = Arrangement.Center,
+      horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(40.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          BasicText("What should we ship?", Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
+          BasicText(
+            "Describe the work or paste an issue. Skill Bill plans it, builds it, audits it and opens the PR.",
+            style = type.tBase.copy(color = colors.fgMuted),
+          )
+        }
+        StepLine(progress, reducedMotion, preview)
+        saved.firstOrNull()?.let { latest -> ContinueRow(latest, host.now()) { onAction(NewTaskAction.ResumeDraft(latest)) } }
+        when (val home = state.home) {
+          NewTaskHome.Pending -> Unit
+          is NewTaskHome.Returning -> NeedsYouSection(home, host.now, host.onOpenRun, host.onShowAllWork, Modifier.alpha(homeAlpha))
+          NewTaskHome.FirstRun -> ExamplesSection(
+            readinessLine(state.detectedAgents, draft.repository?.name),
+            onExample = {
+              onAction(NewTaskAction.TextChanged(it))
+              focus.requestFocus()
+            },
+            modifier = Modifier.alpha(homeAlpha),
+          )
+        }
+      }
     }
   }
 }

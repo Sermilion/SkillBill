@@ -36,6 +36,7 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.core.ui.shell.FloatingPane
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -49,6 +50,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
+      NewTaskDraft(FakeExecutionChatRepository(), WindowCoroutineScope(backgroundScope), Clock.System),
     )
     val item = workItem("SKILL-1")
     workspace.open(item)

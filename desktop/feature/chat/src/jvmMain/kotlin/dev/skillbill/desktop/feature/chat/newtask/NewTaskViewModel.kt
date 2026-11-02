@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
@@ -12,6 +14,7 @@ import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
+import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +33,7 @@ data class NewTaskUiState(
   val agent: ChatAgent? = null,
   val home: NewTaskHome = NewTaskHome.Pending,
   val detectedAgents: DetectedAgentsRead? = null,
+  val resumePickerOpen: Boolean = false,
 )
 
 sealed interface NewTaskAction {
@@ -40,6 +44,12 @@ sealed interface NewTaskAction {
   data class ChooseAgent(val agentId: String) : NewTaskAction
   data object OpenRepositoryPicker : NewTaskAction
   data object CloseRepositoryPicker : NewTaskAction
+  data object Send : NewTaskAction
+  data object Discard : NewTaskAction
+  data object NewChat : NewTaskAction
+  data object DismissResume : NewTaskAction
+  data class ResumeDraft(val entry: ChatHistoryEntry) : NewTaskAction
+  data class RunSuggestedAction(val action: ChatSuggestedAction) : NewTaskAction
 }
 
 /** Reads the choices the composer offers and keeps the operator's values in [draft]. */
@@ -78,6 +88,9 @@ class NewTaskViewModel(
       is NewTaskAction.SubmitRepositoryPath -> submitPath(action.path)
       is NewTaskAction.ChooseAgent -> {
         agentRead?.cancel()
+        draft.agentId = action.agentId
+        draft.selectedAgent = null
+        mutableState.update { it.copy(agent = null) }
         agentRead = viewModelScope.launch { resolveAgent(action.agentId) }
       }
       NewTaskAction.OpenRepositoryPicker -> mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
@@ -85,7 +98,26 @@ class NewTaskViewModel(
         pathCheck?.cancel()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
+      NewTaskAction.Send -> send()
+      NewTaskAction.Discard -> draft.discard()
+      NewTaskAction.NewChat -> draft.launch { draft.close() }
+      NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
+      is NewTaskAction.ResumeDraft -> {
+        agentRead?.cancel()
+        draft.launch {
+          if (draft.resume(action.entry)) mutableState.update { it.copy(agent = action.entry.agent, resumePickerOpen = false) }
+        }
+      }
+      is NewTaskAction.RunSuggestedAction -> draft.chat.value?.send(action.action.instruction, action.action)
     }
+  }
+
+  private fun send() {
+    if (!draft.canSend()) return
+    if (draft.text.trim() != RESUME_COMMAND) return draft.send()
+    draft.text = ""
+    draft.refreshSaved()
+    mutableState.update { it.copy(resumePickerOpen = true) }
   }
 
   private suspend fun loadRepositories(): List<NewTaskRepository> {
@@ -129,6 +161,8 @@ class NewTaskViewModel(
     if (agentId == null) return
     draft.agentId = agentId
     val agent = chat.agentFor(agentId)
+    if (draft.agentId != agentId) return
+    draft.selectedAgent = agent
     mutableState.update { it.copy(agent = agent) }
   }
 

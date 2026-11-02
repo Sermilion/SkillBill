@@ -75,4 +75,11 @@ class FakeExecutionChatRepository(
   override suspend fun saveChat(entry: ChatHistoryEntry) {
     saved[entry.sessionId] = entry
   }
+
+  override suspend fun savedNewTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry> =
+    saved.values.filter { it.newTask?.repositoryRoot == repositoryRoot }.sortedByDescending { it.updatedAt }
+
+  override suspend fun deleteSavedChat(sessionId: String) {
+    saved.remove(sessionId)
+  }
 }

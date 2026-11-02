@@ -48,6 +48,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.status.statusKind
 import dev.skillbill.desktop.feature.chat.savedAgo
@@ -71,6 +72,20 @@ private val START_CHIPS = listOf(
   "QA my branch" to "qa",
   "Open a PR" to "pr",
 )
+
+/** Reopens the selected repository's latest saved draft, named by its first line. */
+@Composable
+internal fun ContinueRow(entry: ChatHistoryEntry, now: Instant, onClick: () -> Unit) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
+    SectionLabel("Continue")
+    HomeRow(onClick, Modifier.height(SkillBillSize.row)) {
+      BasicText(rememberRuntimeText(entry.title.lineSequence().first()), Modifier.weight(1f), style = type.tBase.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      BasicText(savedAgo(entry.updatedAt, now), style = type.tSm.copy(color = colors.fgFaint), maxLines = 1)
+    }
+  }
+}
 
 @Composable
 internal fun NeedsYouSection(home: NewTaskHome.Returning, now: () -> Instant, onOpenRun: (WorkItem) -> Unit, onShowAllWork: () -> Unit, modifier: Modifier = Modifier) {
