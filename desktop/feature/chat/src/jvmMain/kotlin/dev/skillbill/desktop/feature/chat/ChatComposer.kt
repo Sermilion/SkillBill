@@ -20,9 +20,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -54,8 +51,6 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
   val mode by session.mode.collectAsState()
   val choices by session.resumeChoices.collectAsState()
   val queued by session.queued.collectAsState()
-  val transcript by session.transcript.collectAsState()
-  val status = chatActivityStatus(busy, agent, gone, transcript)
   val focus = remember(session) { FocusRequester() }
   LaunchedEffect(session) { focus.requestFocus() }
   val id = session.id
@@ -77,7 +72,7 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
     focus.requestFocus()
   }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { ChatPill(status, dot = busy) }
+    ChatActivityPill(session.thread, gone)
     if (command == null && commandTokenLength(text) == text.length) {
       matchingCommands(text).forEach { CommandHint(it) { run(it) } }
     }

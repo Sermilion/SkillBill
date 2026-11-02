@@ -102,11 +102,21 @@ class NewTaskDraft(
     val agent = selectedAgent ?: return
     val root = repository?.root ?: return
     val requirements = current?.let { newTaskRequirements(it.thread.transcript.value) }.orEmpty()
+    val title = current?.let { newTaskTitle(it.thread.transcript.value) }
     val textAtStart = text
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
-    val startRequest = NewTaskStart(root, requirements, baseBranch.ifBlank { null }, agent.agentId, kind, keyChoice, expectedSessionId)
+    val startRequest = NewTaskStart(
+      root,
+      requirements,
+      baseBranch.ifBlank { null },
+      agent.agentId,
+      kind,
+      keyChoice,
+      expectedSessionId,
+      title = title,
+    )
     offerState.value = offerState.value.copy(starting = true, problem = null)
     scope.launch {
       try {
