@@ -23,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
@@ -34,6 +37,7 @@ private const val AMBER_UNTIL = 0.10f
 private const val GREY_FROM = 0.16f
 private const val CYCLE_MS = 6300
 private const val GLOW_ALPHA = .16f
+private const val GOAL_LINE_ALPHA = .5f
 private val DOT_DIAMETER = 7.dp
 private val GLOW_WIDTH = 3.dp
 private val MIN_LINE_WIDTH = 460.dp
@@ -69,27 +73,41 @@ internal fun rememberIdleProgress(): State<Float> =
 
 /** Reads [progress] only while drawing, so a frame redraws the dots and never recomposes the screen. */
 @Composable
-internal fun StepLine(progress: State<Float>?, reducedMotion: Boolean) {
-  BoxWithConstraints(Modifier.fillMaxWidth()) {
-    Row(Modifier.horizontalScroll(rememberScrollState()).width(max(MIN_LINE_WIDTH, maxWidth))) {
-      NEW_TASK_STEPS.forEachIndexed { step, label ->
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          StepDot(step, progress, reducedMotion)
-          BasicText(label, style = SkillBillTheme.type.monoSm.copy(fontSize = 11.5.sp, color = SkillBillTheme.colors.fgMuted))
+internal fun StepLine(progress: State<Float>?, reducedMotion: Boolean, preview: NewTaskRoutePreview?) {
+  val colors = SkillBillTheme.colors
+  Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+      Row(Modifier.horizontalScroll(rememberScrollState()).width(max(MIN_LINE_WIDTH, maxWidth))) {
+        NEW_TASK_STEPS.forEachIndexed { step, label ->
+          val lit = preview?.lights(label) == true
+          Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            StepDot(step, progress, reducedMotion, preview, lit)
+            BasicText(label, style = SkillBillTheme.type.monoSm.copy(fontSize = 11.5.sp, color = if (lit) colors.accentHover else colors.fgMuted))
+          }
         }
       }
     }
+    BasicText(
+      routeCaption(preview),
+      Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+      style = SkillBillTheme.type.tSm.copy(color = if (preview != null) colors.accentHover else colors.fgMuted),
+    )
   }
 }
 
 @Composable
-private fun StepDot(step: Int, progress: State<Float>?, reducedMotion: Boolean) {
+private fun StepDot(step: Int, progress: State<Float>?, reducedMotion: Boolean, preview: NewTaskRoutePreview?, lit: Boolean) {
   val colors = SkillBillTheme.colors
   Canvas(Modifier.fillMaxWidth().height(DOT_DIAMETER + GLOW_WIDTH * 2)) {
-    val frame = stepDotFrame(step, progress?.value, reducedMotion)
+    val frame = when {
+      preview == null -> stepDotFrame(step, progress?.value, reducedMotion)
+      lit -> DotFrame(1f, 1f)
+      else -> DotFrame(0f, 0f)
+    }
     val lineStart = if (step == 0) center.x else 0f
     val lineEnd = if (step == NEW_TASK_STEPS.lastIndex) center.x else size.width
-    drawLine(colors.border, Offset(lineStart, center.y), Offset(lineEnd, center.y), 1.dp.toPx())
+    val line = if (preview == NewTaskRoutePreview.Goal) colors.accent.copy(alpha = GOAL_LINE_ALPHA) else colors.border
+    drawLine(line, Offset(lineStart, center.y), Offset(lineEnd, center.y), 1.dp.toPx())
     val radius = DOT_DIAMETER.toPx() / 2
     if (frame.glow > 0f) drawCircle(colors.accent.copy(alpha = GLOW_ALPHA * frame.glow), radius + GLOW_WIDTH.toPx())
     drawCircle(lerp(colors.stripIdle, colors.accent, frame.amber), radius)

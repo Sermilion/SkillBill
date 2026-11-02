@@ -35,12 +35,11 @@ import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
 import dev.skillbill.desktop.feature.chat.ChatPill
 
-private val COMPOSER_MAX_WIDTH = 728.dp
+internal val COMPOSER_MAX_WIDTH = 728.dp
 
 /** The task input with its repository, agent and Send controls. Send stays disabled, so Enter is consumed and does nothing. */
 @Composable
-internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, onAction: (NewTaskAction) -> Unit) {
-  val focus = remember { FocusRequester() }
+internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, onAction: (NewTaskAction) -> Unit) {
   LaunchedEffect(focus) { focus.requestFocus() }
   Column(Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     SbInput(

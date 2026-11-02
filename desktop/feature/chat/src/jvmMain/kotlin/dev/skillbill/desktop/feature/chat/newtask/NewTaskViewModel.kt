@@ -16,10 +16,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 data class NewTaskUiState(
   val repositories: List<NewTaskRepository> = emptyList(),
@@ -27,6 +28,8 @@ data class NewTaskUiState(
   val repositoryPickerOpen: Boolean = false,
   val agents: List<String> = emptyList(),
   val agent: ChatAgent? = null,
+  val home: NewTaskHome = NewTaskHome.Pending,
+  val detectedAgents: DetectedAgentsRead? = null,
 )
 
 sealed interface NewTaskAction {
@@ -47,17 +50,21 @@ class NewTaskViewModel(
   private val specs: SpecRepository,
   private val chat: ExecutionChatRepository,
   private val config: RuntimeConfigRepository,
+  private val clock: Clock,
 ) : ViewModel() {
   private val mutableState = MutableStateFlow(NewTaskUiState(agents = chat.agents()))
   val state: StateFlow<NewTaskUiState> = mutableState.asStateFlow()
 
   private var pathCheck: Job? = null
   private var agentRead: Job? = null
+  private var readinessRequested = false
 
   init {
-    viewModelScope.launch { loadRepositories() }
+    viewModelScope.launch { observeBoard(loadRepositories()) }
     agentRead = viewModelScope.launch { resolveAgent(draft.agentId ?: defaultAgentId()) }
   }
+
+  fun now(): Instant = clock.now()
 
   fun onAction(action: NewTaskAction) {
     when (action) {
@@ -81,19 +88,33 @@ class NewTaskViewModel(
     }
   }
 
-  private suspend fun loadRepositories() {
+  private suspend fun loadRepositories(): List<NewTaskRepository> {
     val listed = when (val projects = specs.projects()) {
       is Outcome.Success -> projects.value.mapNotNull { project -> project.repoRoot?.let { NewTaskRepository(it, project.displayName) } }
       is Outcome.Failure -> emptyList()
     }
     mutableState.update { it.copy(repositories = listed) }
-    if (draft.repository != null) return
-    board.observe(ShellBoard.query).first { read ->
+    return listed
+  }
+
+  private suspend fun observeBoard(listed: List<NewTaskRepository>) {
+    board.observe(ShellBoard.query).collect { read ->
       if (read !is BoardState.Loading && draft.repository == null) {
         val row = (read as? BoardState.Loaded)?.items?.firstOrNull()
         draft.repository = row?.let { NewTaskRepository(it.repositoryRoot, it.repositoryName) } ?: listed.firstOrNull()
       }
-      draft.repository != null
+      val home = newTaskHome(read)
+      mutableState.update { it.copy(home = home) }
+      if (home == NewTaskHome.FirstRun) readReadinessOnce()
+    }
+  }
+
+  private fun readReadinessOnce() {
+    if (readinessRequested) return
+    readinessRequested = true
+    viewModelScope.launch {
+      val read = config.detectedAgentsRead()
+      mutableState.update { it.copy(detectedAgents = read) }
     }
   }
 

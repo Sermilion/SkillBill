@@ -4,9 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import dev.skillbill.desktop.core.ui.di.WindowScope
+import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
+import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
+import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.IntoSet
@@ -17,14 +20,19 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 /** Renders [NewTaskRoute]. */
 @Inject
 @SingleIn(WindowScope::class)
-class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel) : FeatureEntry {
+class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, private val navigator: AppNavigator) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = route == NewTaskRoute
 
   @Composable
   override fun Content(route: AppRoute) {
     val viewModel = rememberEntryViewModel("new-task") { createViewModel() }
     val state by viewModel.state.collectAsState()
-    NewTaskScreen(state, viewModel.draft, viewModel::onAction)
+    val host = NewTaskScreenHost(
+      now = viewModel::now,
+      onOpenRun = { navigator.navigate(DetailRoute(it)) },
+      onShowAllWork = { navigator.navigate(WorkRoute(null)) },
+    )
+    NewTaskScreen(state, viewModel.draft, host, viewModel::onAction)
   }
 }
 

@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat.newtask
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
+import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
@@ -34,6 +35,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewTaskViewModelTest {
@@ -41,7 +44,7 @@ class NewTaskViewModelTest {
   fun tearDown() = Dispatchers.resetMain()
 
   private fun viewModel(board: FakeWorkBoardRepository, draft: NewTaskDraft, specs: SpecRepository = FakeSpecs()) =
-    NewTaskViewModel(draft, board, specs, FakeExecutionChatRepository(), detecting())
+    NewTaskViewModel(draft, board, specs, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK)
 
   @Test
   fun `a failed path check keeps the selected repository and the picker open with the error`() = runTest {
@@ -118,11 +121,30 @@ class NewTaskViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val draft = NewTaskDraft()
     val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
-    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chat, detecting("Codex"))
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chat, detecting("Codex"), FIXED_CLOCK)
     advanceUntilIdle()
 
     assertEquals("codex", draft.agentId)
     assertEquals("codex", model.state.value.agent?.agentId)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `the home follows the board after the default repository is chosen`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val board = FakeWorkBoardRepository(BoardState.Loading)
+    val model = NewTaskViewModel(NewTaskDraft(), board, FakeSpecs(listed = listOf(SpecProject("p", "p", "/specs/p", "/work/p"))), FakeExecutionChatRepository(), detecting("claude"), FIXED_CLOCK)
+    advanceUntilIdle()
+    assertEquals(NewTaskHome.Pending, model.state.value.home)
+
+    board.state.value = loadedBoard()
+    advanceUntilIdle()
+    assertEquals(NewTaskHome.FirstRun, model.state.value.home)
+    assertEquals(DetectedAgentsRead.Success(listOf(DetectedAgent("claude", "/bin/claude"))), model.state.value.detectedAgents)
+
+    board.state.value = loadedBoard(mapOf(BoardSectionKind.Goals to listOf(workItem("SKILL-1"))))
+    advanceUntilIdle()
+    assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0), model.state.value.home)
     model.viewModelScope.cancel()
   }
 
@@ -133,6 +155,12 @@ class NewTaskViewModelTest {
     check(method.name == "detectedAgentsRead") { "unexpected ${method.name}" }
     DetectedAgentsRead.Success(names.map { DetectedAgent(it, "/bin/$it") })
   } as RuntimeConfigRepository
+
+  private companion object {
+    val FIXED_CLOCK = object : Clock {
+      override fun now() = Instant.fromEpochMilliseconds(0)
+    }
+  }
 
   private class FakeSpecs(
     private val listed: List<SpecProject> = emptyList(),
