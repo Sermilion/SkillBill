@@ -1,3 +1,9 @@
+## [2026-11-02] Admit desktop chat intake through the runtime before launch
+Context: New-task chat starts need goal intake and issue-key rules, while concurrent starts and database switches can invalidate a prepared launch.
+Decision: Runtime work control owns admission, allocation, re-admission and preflight. Desktop work control owns session fencing and launch reservations. Allocated-key collisions can retry; supplied-key collisions return a refusal.
+Reason: The runtime owns goal intake, while the desktop holds the session and board state needed to prevent duplicate or stale launches.
+Revisit when: Terminal and desktop allocation can share one runtime-owned implementation.
+
 ## [2026-11-01] Desktop Claude chat keeps one process per session
 Context: Each Claude chat turn ran as its own `claude -p` process. When the reply ended, the process exited and Claude Code killed the background commands it had started, so a promise like "I'll push once the checks pass" could never be kept, and the operator blamed hiding the chat pane.
 Decision: ClaudeChatTransport keeps one `claude -p --input-format stream-json --replay-user-messages` process per chat session and writes each turn to its stdin. Output after the replay of a turn's uuid, up to its `result`, belongs to that turn; output with no turn pending is a reply the agent started on its own and reaches the chat through `ExecutionChatRepository.unprompted`. Hiding the pane leaves the process alone. Closing the tab, `/clear`, `/resume`, an agent switch, closing the window, or cancelling a turn before its reply stops it with its descendants. The read-only mode note moved from the system prompt into each message because the process outlives a mode change.
