@@ -1,3 +1,8 @@
+## [2026-11-02] Queue New task messages while a turn runs
+Context: Execution chat queues Send while a reply streams. New task disabled Send because canAdmitTurn required the thread not to be busy, so follow-up messages were dropped until the turn ended.
+Decision: NewTaskChat enqueues on ChatThread.queuedState and drains like ChatWorkspace. The composer labels the button Queue, keeps the input focused, and shows the queued count. Discard, close and rebind drop the queue. Start goal run still waits until the chat is idle.
+Reason: The thread already had a queue. Disabling Send was a fork of ChatComposer, not a New task requirement.
+
 ## [2026-11-02] Keep New task repository and agent chips usable after the first message
 Context: After Send, the repository and agent chips still showed a hand cursor but ignored clicks, so the operator could not swap project or change the displayed model without Discard or New chat.
 Decision: The chips stay enabled until a turn is running, a start is in flight, or the draft's repository is gone. Choosing a different repository, base branch or agent ends the current agent process and opens a new session on that binding, keeping the transcript. A chip that cannot be used does not show a hand cursor.

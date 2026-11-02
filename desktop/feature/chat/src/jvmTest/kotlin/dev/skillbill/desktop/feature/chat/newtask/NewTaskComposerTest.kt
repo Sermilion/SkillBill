@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.takeWhile
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -150,6 +151,58 @@ class NewTaskComposerTest {
     assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
     onNode(hasClickLabel("Change agent")).assertIsEnabled().performClick()
     onNodeWithText("codex").assertExists()
+  }
+
+  @Test
+  fun `a follow-up during a reply queues until the turn ends`() = runComposeUiTest {
+    val chat = FakeExecutionChatRepository()
+    val events = Channel<ChatEvent>(Channel.UNLIMITED)
+    chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
+    val repository = NewTaskRepository(
+      createTempDirectory("new-task-repo").also { it.toFile().deleteOnExit() }.toString(),
+      "repo",
+    )
+    val draft = NewTaskDraft(
+      chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+    ).apply {
+      chatDispatcher = Dispatchers.Unconfined
+      this.repository = repository
+      agentId = "claude"
+      selectedAgent = chat.agent
+      text = "Add a button"
+    }
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(NewTaskUiState(agent = chat.agent, agents = listOf("claude")), draft) { action ->
+            when (action) {
+              NewTaskAction.Send -> draft.send()
+              is NewTaskAction.TextChanged -> draft.text = action.text
+              else -> Unit
+            }
+          }
+        }
+      }
+    }
+
+    runOnIdle { draft.send() }
+    waitForIdle()
+    onNodeWithText("Queue").assertExists()
+    runOnIdle { draft.text = "and a label" }
+    waitForIdle()
+    onNodeWithText("Queue").performClick()
+    onNodeWithText("1 message queued").assertExists()
+    runOnIdle {
+      assertEquals(listOf("and a label"), draft.chat.value?.thread?.queued?.value?.map { it.text })
+      assertEquals("", draft.text)
+    }
+
+    events.trySend(ChatEvent.Completed)
+    waitUntil { draft.chat.value?.thread?.busy?.value == false && draft.chat.value?.thread?.queued?.value?.isEmpty() == true }
+    waitForIdle()
+    onNodeWithText("Send").assertExists()
+    onNodeWithText("1 message queued").assertDoesNotExist()
   }
 
   private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {

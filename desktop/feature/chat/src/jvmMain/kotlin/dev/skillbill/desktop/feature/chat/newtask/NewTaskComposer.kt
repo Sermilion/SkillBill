@@ -29,6 +29,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbField
 import dev.skillbill.desktop.core.designsystem.component.SbInput
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
@@ -45,19 +46,20 @@ import kotlin.time.Instant
 
 internal val COMPOSER_MAX_WIDTH = 728.dp
 
-/** The task input with its repository, agent and Send controls. Enter and Send share one condition. A busy turn locks the pickers; a change rebinds the open chat. */
+/** The task input with its repository, agent and Send controls. Enter and Send share one condition. A busy turn queues the next message and locks the pickers; a change rebinds the open chat. */
 @Composable
 internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, now: () -> Instant = Clock.System::now, onAction: (NewTaskAction) -> Unit) {
   LaunchedEffect(focus) { focus.requestFocus() }
   val focusManager = LocalFocusManager.current
   val chat by draft.chat.collectAsState()
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
+  val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
   val offer by draft.offer.collectAsState()
-  val ready = !busy && !offer.starting && draft.canSend()
+  val ready = !offer.starting && draft.canSend()
   val pickersEnabled = !busy && !offer.starting && chat?.repositoryMissing != true
   val saved by draft.saved.collectAsState()
   val submit = {
-    val startsTurn = ready && draft.text.trim() != RESUME_COMMAND
+    val startsTurn = ready && !busy && draft.text.trim() != RESUME_COMMAND
     onAction(NewTaskAction.Send)
     if (startsTurn) focusManager.clearFocus()
   }
@@ -76,11 +78,12 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
         ResumePicker(saved, now(), { onAction(NewTaskAction.ResumeDraft(it)) }, { onAction(NewTaskAction.DismissResume) })
       }
     }
+    if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       RepositoryPicker(state, draft, enabled = pickersEnabled, onAction)
       AgentPicker(state.agent, state.agents, enabled = pickersEnabled) { onAction(NewTaskAction.ChooseAgent(it)) }
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-        SbButton("Send", submit, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
+        SbButton(if (busy) "Queue" else "Send", submit, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
       }
     }
   }

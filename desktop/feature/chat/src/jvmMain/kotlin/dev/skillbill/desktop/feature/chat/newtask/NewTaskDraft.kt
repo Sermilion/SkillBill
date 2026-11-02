@@ -76,7 +76,7 @@ class NewTaskDraft(
   private fun canAdmitTurn(message: String): Boolean {
     val current = chatState.value
     return !closing && message.isNotBlank() && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
-      current?.thread?.busy?.value != true && current?.repositoryMissing != true && !offerState.value.starting
+      current?.repositoryMissing != true && !offerState.value.starting
   }
 
   /** Sends the typed text, opening the chat on the first message, and clears it. It does nothing unless [canSend] holds. */
