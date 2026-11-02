@@ -2,6 +2,10 @@
 
 Drive the app on one iPhone or simulator, check the behavior the acceptance criteria describe, and write one prose report. QA reports what it finds and repairs nothing.
 
+## Choose target
+
+Map the acceptance criteria to iOS before checking prerequisites or devices. If no criterion asks for iOS behavior or an explicit cross-platform regression check, report `ios: skipped [reason: empty_scope]` and do not build or probe iOS. Shared code or an installed iOS app alone does not put iOS in scope. When a criterion does include iOS, exercise it using the steps below.
+
 ## Rules
 
 - Write generated scripts, screenshots, UI hierarchies, and log excerpts only under the invocation directory the briefing names, outside the QA checkout. Nothing goes in the working tree.

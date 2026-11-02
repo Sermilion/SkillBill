@@ -78,6 +78,37 @@ class QaPromptSectionsTest {
   }
 
   @Test
+  fun `desktop-only criteria do not require probing mobile targets while cross-platform criteria stay in scope`() {
+    val directory = Path.of("/tmp/qa-desktop")
+    val qa =
+      QaExecutionContext(
+        workspace = QaWorkspace("phr-qa-desktop", directory, directory.resolve("report.md"), "$directory/"),
+        expected = qaTestExpected(),
+        target =
+          QaExecutionTarget.Supported(
+            targets =
+              listOf(
+                QaDeclaredTarget(
+                  "kmp",
+                  setOf(QaTargetKind("android"), QaTargetKind("desktop")),
+                  FileLocation("/packs/kmp/qa/kmp-qa.md"),
+                ),
+                QaDeclaredTarget("ios", setOf(QaTargetKind("ios")), FileLocation("/packs/ios/qa/ios-qa.md")),
+              ),
+            checkout = Path.of("/tmp/qa-checkout"),
+          ),
+      )
+
+    val supplement = QaPromptSections.supplement(qa).replace(Regex("\\s+"), " ")
+
+    assertContains(supplement, "map each acceptance criterion to the target kinds it actually describes")
+    assertContains(supplement, "do not probe its tools or devices")
+    assertContains(supplement, "Shared code alone does not put every dependent app in scope")
+    assertContains(supplement, "Explicit cross-platform behavior or regression criteria do")
+    assertFalse("`empty_scope` has no other use" in supplement)
+  }
+
+  @Test
   fun `device QA can use staging or defaults without satisfying backend isolation`() {
     val directory = Path.of("/tmp/qa-device")
     val qa =

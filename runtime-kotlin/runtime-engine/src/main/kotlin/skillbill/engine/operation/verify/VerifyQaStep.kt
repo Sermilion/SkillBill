@@ -197,7 +197,7 @@ public class VerifyQaStep(
       QaVerdict.SKIPPED, QaVerdict.INCOMPLETE -> report.reason
       QaVerdict.PASSED, QaVerdict.FINDINGS_OPEN -> {
         val partial =
-          report.coverage.any { it.verdict == QaVerdict.SKIPPED || it.verdict == QaVerdict.INCOMPLETE } ||
+          report.coverage.any { it.isPartial } ||
             report.coverageWarnings.isNotEmpty()
         PARTIAL_COVERAGE.takeIf { partial }
       }

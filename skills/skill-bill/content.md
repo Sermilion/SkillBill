@@ -373,8 +373,10 @@ resolves to a local spec supplies its acceptance criteria, and a tracker URL or
 free text becomes the criterion the QA agent reads and tests. With no intake, QA
 tests what the current branch changes against its base. QA tests the checked-out
 tree as it is. It never inspects history, diffs, or source to decide whether a
-change is present; missing behavior is a finding. QA skips only when the tools
-to perform it are unavailable. Forward the
+change is present; missing behavior is a finding. The QA agent maps criteria to
+declared target kinds before probing tools. A kind with no applicable criterion is
+reported as out of scope. An in-scope flow is untested when its required tools
+are unavailable. Forward the
 intake verbatim; the dispatcher does not fetch the issue for this phase. The QA agent drives the app, service, browser,
 device, or simulator the guidance names and writes a prose `report.md` and its evidence under
 `qa/<repo-key>/<invocation>/` in the skill-bill state directory

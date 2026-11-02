@@ -19,7 +19,8 @@ internal object QaPromptSections {
 
   const val DIRECTIVE: String =
     "Run QA for the current repository state from the QA checkout named below. For each declared target, " +
-      "follow its pack QA guidance and drive the app, service, browser, device or simulator it names yourself. " +
+      "map the acceptance criteria to target kinds using its pack QA guidance, then drive each in-scope app, " +
+      "service, browser, device or simulator yourself. " +
       "Report what you find without repairing it, and settle by writing the QA report to the path the runtime names."
 
   const val VALUE_CONTENT: String =
@@ -140,11 +141,15 @@ internal object QaPromptSections {
     |- Build the QA checkout as it is and run every flow the acceptance criteria describe. Do not inspect git
     |  history, branches, diffs, or source code to decide whether the change is present or whether a flow is worth
     |  running. Behavior that is missing or wrong is a failed assertion and a finding, never a reason to skip a flow.
-    |- Skip a target or leave a flow untested only when the tools needed to perform QA are unavailable: no usable
-    |  device, simulator, browser driver, toolchain, or environment. Name the missing tool and how to provide it.
+    |- Before checking prerequisites or building, map each acceptance criterion to the target kinds it actually
+    |  describes. A declared kind is a capability, not a requirement to test it. Report a kind with no applicable
+    |  criterion as `skipped` with reason `empty_scope`; do not probe its tools or devices. Shared code alone does
+    |  not put every dependent app in scope. Explicit cross-platform behavior or regression criteria do.
+    |- For an in-scope target, leave a flow untested only when the tools needed to perform QA are unavailable: no
+    |  usable device, simulator, browser driver, toolchain, or environment. Name the missing tool and how to provide it.
     |- When an acceptance criterion is only an issue key or a tracker URL, read that issue through a connected tracker
     |  and test its requirements and acceptance criteria. If no tracker tool can read it, settle `skipped` with
-    |  reason `empty_scope` and name the reference you could not read. `empty_scope` has no other use.
+    |  reason `empty_scope` and name the reference you could not read.
     """.trimMargin()
 
   private val ENVIRONMENT_AND_ISOLATION_RULES: String =

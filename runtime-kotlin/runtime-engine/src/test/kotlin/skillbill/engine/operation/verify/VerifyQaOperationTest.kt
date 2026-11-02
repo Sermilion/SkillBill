@@ -163,6 +163,34 @@ class VerifyQaOperationTest {
   }
 
   @Test
+  fun `a desktop pass with out-of-scope mobile targets has no partial coverage reason`() {
+    VerifyOperationHarness().use { harness ->
+      harness.qaManifests =
+        listOf(
+          ANDROID_PACK.copy(
+            qaCapability =
+              QaCapabilityDeclaration(
+                setOf(QaTargetKind("android"), QaTargetKind("desktop"), QaTargetKind("ios")),
+                "qa/android-qa.md",
+              ),
+          ),
+        )
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on")).token
+      val written =
+        qaTestReport(QaVerdict.PASSED, expected()) +
+          "\n## Coverage\n- desktop: passed\n- android: skipped [reason: empty_scope]\n" +
+          "- ios: skipped [reason: empty_scope]\n"
+      harness.runner.sideEffects[VerifyPromptSections.QA_STEP] = { harness.qaWorkspaces.report = written }
+
+      val report = assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      assertFalse("partial_coverage" in report.text)
+      val finished = harness.telemetry.finished.single()
+      assertEquals("passed" to null, finished.qaOutcome to finished.qaReason)
+    }
+  }
+
+  @Test
   fun `a report naming no verdict is recorded incomplete with its text kept and verify still completes`() {
     VerifyOperationHarness().use { harness ->
       harness.qaManifests = listOf(ANDROID_PACK)

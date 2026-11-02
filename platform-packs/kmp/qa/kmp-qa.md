@@ -8,7 +8,7 @@ Map the acceptance criteria to the apps that show the behavior before building a
 
 - `android`: behavior of an Android app, built from an Android application module. Follow [Android target](#android-target).
 - `desktop`: behavior of a JVM desktop app, built from a module that applies `org.jetbrains.compose` with a `compose.desktop { application { ... } }` block. Follow [Desktop target](#desktop-target).
-- Behavior in shared `commonMain` code shows up in every app that depends on the module. Exercise each of those apps the repository builds.
+- Shared `commonMain` code alone does not put every dependent app in scope. Exercise another app when the criteria explicitly require its behavior or a cross-platform regression check. A desktop-only criterion stays desktop-only even when its implementation is shared. Record an out-of-scope kind as `skipped` with `reason: empty_scope` before probing devices or building it.
 
 Desktop UI is user-facing UI. Criteria that describe only a desktop app still have flows to exercise, so they never settle `empty_scope`. Give each declared kind a `## Coverage` line. A kind no criterion reaches gets `skipped` with `reason: empty_scope`. Settle the whole report `skipped` with `Reason: empty_scope` only when no criterion describes behavior on any declared kind, for example a build-script or documentation-only change.
 
@@ -139,12 +139,13 @@ This layer works without a display, so run it on every desktop QA run.
 
 Launch the real app as well when a display is available, because window size, menus, multiple windows, and startup wiring only show up there.
 
+- Discover display and input separately before deciding that live QA is unavailable. Check whether `DISPLAY` or `WAYLAND_DISPLAY` connects, and look for a private display server, screenshot tool, window inspection and resize tool, and input driver. Record the checks and their results under the invocation directory. A missing `xdotool` alone does not prove that input is unavailable; check other usable automation already installed.
+- Prefer a private X server such as `Xvfb :<n> -screen 0 1600x1000x24`, register its PID, and set `DISPLAY=:<n>` for the app. Verify that it accepts connections. If a private server is unavailable, an existing display may support launch and observation. Do not drive the operator's visible session without permission. Never report that no display exists merely because a private server is absent.
 - Start it detached from the QA checkout: `nohup ./gradlew :<app module>:run > <invocation dir>/app.log 2>&1 &`, with the data override from [Isolate local data](#isolate-local-data). Register it with `skill-bill qa resource register --invocation <invocation id> --kind process --identity <pid>`.
 - Wait in a bounded loop for the window to appear, for example `xdotool search --sync --name '<window title>'` under `timeout 120`, or a startup log line.
-- Display: use `DISPLAY` or `WAYLAND_DISPLAY` when set. Otherwise start a private X server with `Xvfb :<n> -screen 0 1600x1000x24 &`, register its PID, and set `DISPLAY=:<n>` for the app. Never drive the operator's visible desktop session when a private display can be created.
-- Screenshots: `import -window root <file>.png` on X11 or Xvfb, `grim <file>.png` on Wayland, `screencapture -x <file>.png` on macOS.
-- Input on X11 or Xvfb: `xdotool mousemove <x> <y> click 1`, `xdotool type`, and `xdotool key ctrl+k`. Read positions from screenshots.
-- When no display can be created, rely on the Compose UI test layer and list the running-app checks as untested with the reason. Do not settle the kind `skipped` while the UI test layer still ran.
+- Check each required capability independently: app launch, screenshots, window size and resize, pointer input, and keyboard input. Use available X11 or Wayland tools appropriate to the display. For X11, `import -window root`, `xprop`, and `xdotool` are examples, not mandatory dependencies. A private X server may also need a window manager for size and resize checks.
+- Launch the app when a usable display and isolated data are available even if an input driver is missing. Exercise only checks the available tools support; a launch alone does not prove a flow. Name each untested assertion, the missing capability, the attempted alternatives, and a concrete install or setup remedy. Mark the desktop target `incomplete` when a required live-app assertion remains untested, even if Compose UI tests pass.
+- When no display can be created or connected, rely on the Compose UI test layer and list the running-app checks as untested with the reason. Do not settle the kind `skipped` while the UI test layer still ran.
 - Stop the app and any display server this run started by PID before writing the report.
 
 Say in `## Assertions` which layer, UI test or running app, proved each assertion.

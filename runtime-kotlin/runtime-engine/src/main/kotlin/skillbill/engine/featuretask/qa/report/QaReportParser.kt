@@ -49,6 +49,9 @@ public object QaReportParser {
         }
         declaredKinds.sortedBy { it.wireValue }.filter { kind -> coverage.none { it.kind == kind } }
           .forEach { kind -> add("QA report has no coverage for target ${kind.wireValue}") }
+        if (verdict == QaVerdict.PASSED && allTargetsOutOfScope(declaredKinds, coverage)) {
+          add("QA report states passed but every declared target is out of scope")
+        }
         addAll(partialCoverageWarnings(verdict, coverage))
       }
     return QaReport(
@@ -64,6 +67,19 @@ public object QaReportParser {
     )
   }
 
+  private fun allTargetsOutOfScope(
+    declaredKinds: Set<QaTargetKind>,
+    coverage: List<QaTargetCoverage>,
+  ): Boolean =
+    declaredKinds.isNotEmpty() &&
+      declaredKinds.all { kind ->
+        val lines = coverage.filter { line -> line.kind == kind }
+        lines.isNotEmpty() &&
+          lines.all { line ->
+            line.verdict == QaVerdict.SKIPPED && line.reason == QaSkipReason.EMPTY_SCOPE.wireValue
+          }
+      }
+
   private fun partialCoverageWarnings(
     verdict: QaVerdict,
     coverage: List<QaTargetCoverage>,
@@ -71,7 +87,7 @@ public object QaReportParser {
     val overallRan = verdict == QaVerdict.PASSED || verdict == QaVerdict.FINDINGS_OPEN
     val partial =
       coverage
-        .filter { line -> overallRan && (line.verdict == QaVerdict.SKIPPED || line.verdict == QaVerdict.INCOMPLETE) }
+        .filter { line -> overallRan && line.isPartial }
         .map { line ->
           "QA covered target ${line.kind.wireValue} only partially: " +
             line.verdict.wireValue + line.reason?.let { " ($it)" }.orEmpty()

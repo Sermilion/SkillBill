@@ -11,6 +11,50 @@ class QaReportParserTest {
   private val prefix = qaTestEvidencePrefix("parser")
 
   @Test
+  fun `out-of-scope mobile targets do not turn a desktop pass into partial coverage`() {
+    val report =
+      QaReportParser.parse(
+        """
+        |Verdict: passed
+        |## Coverage
+        |- desktop: passed
+        |- android: skipped [reason: empty_scope]
+        |- ios: skipped [reason: empty_scope]
+        |## Assertions
+        |- Desktop window opened at the required size.
+        |## Isolation
+        |- Disposable app data.
+        """.trimMargin(),
+        prefix,
+        declaredKinds = setOf(QaTargetKind("desktop"), QaTargetKind("android"), QaTargetKind("ios")),
+      )
+
+    assertEquals(QaVerdict.PASSED, report.verdict)
+    assertTrue(report.coverageWarnings.isEmpty())
+    assertFalse(report.coverage.any { it.isPartial })
+  }
+
+  @Test
+  fun `a pass with every declared target out of scope remains unverified`() {
+    val report =
+      QaReportParser.parse(
+        """
+        |Verdict: passed
+        |## Coverage
+        |- android: skipped [reason: empty_scope]
+        |## Assertions
+        |- Desktop window opened.
+        |## Isolation
+        |- Disposable app data.
+        """.trimMargin(),
+        prefix,
+        declaredKinds = setOf(QaTargetKind("android")),
+      )
+
+    assertTrue(report.coverageWarnings.any { it.contains("every declared target is out of scope") })
+  }
+
+  @Test
   fun `an oversized report with a cleanup heading settles with its full text and no finding`() {
     val text =
       buildString {

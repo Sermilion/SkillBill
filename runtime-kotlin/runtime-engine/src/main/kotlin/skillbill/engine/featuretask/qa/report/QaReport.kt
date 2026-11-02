@@ -43,7 +43,12 @@ public data class QaTargetCoverage(
   val verdict: QaVerdict,
   val reason: String?,
   val backend: QaBackendAttribution?,
-)
+) {
+  internal val isPartial: Boolean
+    get() =
+      verdict == QaVerdict.INCOMPLETE ||
+        (verdict == QaVerdict.SKIPPED && reason != QaSkipReason.EMPTY_SCOPE.wireValue)
+}
 
 public data class QaReport(
   val text: String?,
