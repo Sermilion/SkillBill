@@ -25,6 +25,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -48,8 +49,18 @@ class GitMonitorResourcesLifecycleTest {
   @TempDir
   lateinit var temp: Path
 
+  private val stateDir: Path = Files.createTempDirectory("skillbill-monitor-state").toRealPath()
+  private val environment = monitorStateEnvironment(stateDir)
   private val inspector = FakeMonitorProcessInspector()
-  private val resources = GitMonitorResources(inspector, Clock.systemUTC())
+  private val resources = resourcesWith(inspector)
+
+  private fun resourcesWith(inspector: MonitorProcessInspector) =
+    GitMonitorResources(inspector, Clock.systemUTC(), environment)
+
+  @AfterTest
+  fun deleteStateDir() {
+    stateDir.toFile().deleteRecursively()
+  }
 
   private fun fixture(name: String = "case") =
     MonitorRepoFixture(Files.createDirectories(temp.toRealPath().resolve(name)))
@@ -78,6 +89,11 @@ class GitMonitorResourcesLifecycleTest {
     val fence = acquiredFence(acquireFor(resources, fixture))
     val worktree = prepare(fixture, fence)
 
+    assertTrue(worktree.path.startsWith(stateDir), "the owned worktree lives in the state dir, not ${worktree.path}")
+    assertFalse(
+      worktree.path.startsWith(fixture.context().commonDir),
+      "agents refuse edits under .git/, so the owned worktree must stay outside it",
+    )
     assertEquals(fixture.headSha, runGit(worktree.path, "rev-parse", "HEAD"))
     assertEquals(worktree.branch, runGit(worktree.path, "symbolic-ref", "--short", "HEAD"))
     assertEquals(FEATURE_BRANCH, runGit(fixture.caller, "symbolic-ref", "--short", "HEAD"))
@@ -280,7 +296,7 @@ class GitMonitorResourcesLifecycleTest {
     val nested = Files.createDirectories(linked.resolve("nested/deeper"))
     assertEquals(linkedContext, fixture.context(nested))
     assertEquals(fixture.context(), fixture.context(Files.createDirectories(fixture.caller.resolve("sub/dir"))))
-    val second = acquireFor(GitMonitorResources(inspector, Clock.systemUTC()), fixture, linkedContext)
+    val second = acquireFor(resourcesWith(inspector), fixture, linkedContext)
     val duplicate = assertIs<MonitorAcquisition.Blocked>(second)
 
     assertEquals(MonitorAdmissionBlock.LIVE_OWNER, duplicate.reason)
@@ -296,7 +312,7 @@ class GitMonitorResourcesLifecycleTest {
     val first = acquiredFence(acquireFor(resources, fixture))
     val lockFile = first.directory.resolve("admission.lock")
 
-    assertIs<MonitorAcquisition.Blocked>(acquireFor(GitMonitorResources(inspector, Clock.systemUTC()), fixture))
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(resourcesWith(inspector), fixture))
     assertRefusal(MonitorRecoveryRefusal.LIVE_OWNER, resources.recoverStale(staleRequest(fixture, first.ownerToken)))
 
     assertTrue(lockHeldByAnotherProcess(lockFile, temp))
@@ -369,10 +385,7 @@ class GitMonitorResourcesLifecycleTest {
     assertRefusal(MonitorRecoveryRefusal.UNKNOWN_OWNER, resources.recoverStale(request))
     assertRefusal(
       MonitorRecoveryRefusal.UNKNOWN_OWNER,
-      GitMonitorResources(
-        FakeMonitorProcessInspector(hostIdentity = "other-host"),
-        Clock.systemUTC(),
-      ).recoverStale(request),
+      resourcesWith(FakeMonitorProcessInspector(hostIdentity = "other-host")).recoverStale(request),
     )
     assertEquals(listOf(staleRef), fixture.refs("refs/skill-bill"))
 
@@ -414,7 +427,7 @@ class GitMonitorResourcesLifecycleTest {
           FeatureTaskRuntimeProcessInspection.NotRunning
       }
 
-    assertFailsWith<IllegalStateException> { acquireFor(GitMonitorResources(failing, Clock.systemUTC()), fixture) }
+    assertFailsWith<IllegalStateException> { acquireFor(resourcesWith(failing), fixture) }
 
     val fence = acquiredFence(acquireFor(resources, fixture))
     assertEquals(1, fence.generation)
@@ -424,7 +437,8 @@ class GitMonitorResourcesLifecycleTest {
   @Test
   fun `unreadable ownership blocks admission and recovery as corrupt without holding the lock`() {
     val fixture = fixture()
-    val directory = MonitorAdmissionFiles.directoryFor(fixture.context().commonDir, fixture.target().pullRequest)
+    val directory =
+      MonitorAdmissionFiles.directoryFor(stateDir, fixture.context().commonDir, fixture.target().pullRequest)
     Files.createDirectories(directory)
     Files.writeString(MonitorAdmissionFiles.recordFile(directory), """{"contract_version":"0.1"}""")
 
@@ -475,7 +489,7 @@ class GitMonitorResourcesLifecycleTest {
   ): Path {
     val context = fixture.context()
     val target = fixture.target().pullRequest
-    val directory = MonitorAdmissionFiles.directoryFor(context.commonDir, target)
+    val directory = MonitorAdmissionFiles.directoryFor(stateDir, context.commonDir, target)
     Files.createDirectories(directory)
     MonitorAdmissionFiles.write(
       directory,

@@ -28,6 +28,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.infrastructure.workflow.monitor.GitMonitorRepairPublisher
 import skillbill.infrastructure.workflow.monitor.GitMonitorResources
+import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.CheckBucket
@@ -51,6 +52,7 @@ import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -150,8 +152,12 @@ class PhaseStandaloneMonitorExecutionTest {
     assertEquals(baseSha, git(origin, "rev-parse", "main"))
     val cwd = repairCwds.single()
     assertTrue(
-      cwd.startsWith(caller.resolve(".git/skill-bill/standalone-monitor")),
+      cwd.startsWith(home.toRealPath().resolve("standalone-monitor")),
       "the repair must run in the owned worktree, not $cwd",
+    )
+    assertFalse(
+      cwd.startsWith(caller.resolve(".git")),
+      "agents refuse edits under .git/, so the repair runs outside it",
     )
     assertEquals(callerHead, git(caller, "rev-parse", "HEAD"), "the caller checkout is untouched")
     assertEquals("main", git(caller, "branch", "--show-current"))
@@ -481,7 +487,11 @@ class PhaseStandaloneMonitorExecutionTest {
     val preparer =
       StandaloneMonitorExecutionPreparer(
         MonitorTargetResolver(source),
-        GitMonitorResources(LiveProcessInspector, clock),
+        GitMonitorResources(
+          LiveProcessInspector,
+          clock,
+          EnvironmentContext(environment = mapOf(STATE_DIR_ENVIRONMENT_KEY to home.toString()), userHome = home),
+        ),
         NoopRuntimeDiagnostics,
         IgnoredShutdownHooks,
         AgentRunChildDrain { true },

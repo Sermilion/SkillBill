@@ -2,6 +2,8 @@ package skillbill.infrastructure.workflow.monitor
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.host.resolveTelemetryStateDir
+import skillbill.model.EnvironmentContext
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorAcquireRequest
@@ -48,9 +50,11 @@ private class HeldOwnership(
 class GitMonitorResources(
   private val inspector: MonitorProcessInspector,
   private val clock: Clock,
+  private val environment: EnvironmentContext,
 ) : StandaloneMonitorResources {
   private val held = ConcurrentHashMap<Path, HeldOwnership>()
   private val cleanup = MonitorOwnedCleanup(clock)
+  private val stateDir: Path = resolveTelemetryStateDir(environment.environment, environment.userHome)
 
   override fun resolveContext(callerRoot: Path): MonitorContextResolution {
     val probe = monitorGit(callerRoot, "rev-parse", "--show-toplevel", "--git-common-dir")
@@ -70,7 +74,7 @@ class GitMonitorResources(
   }
 
   override fun acquire(request: MonitorAcquireRequest): MonitorAcquisition {
-    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.target.pullRequest)
+    val directory = MonitorAdmissionFiles.directoryFor(stateDir, request.context.commonDir, request.target.pullRequest)
     return when (val attempt = MonitorAdmissionFiles.tryLock(directory)) {
       AdmissionAttempt.Contended ->
         MonitorAcquisition.Blocked(
@@ -318,7 +322,7 @@ class GitMonitorResources(
   }
 
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery {
-    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.target.pullRequest)
+    val directory = MonitorAdmissionFiles.directoryFor(stateDir, request.context.commonDir, request.target.pullRequest)
     if (!Files.exists(MonitorAdmissionFiles.recordFile(directory))) {
       return refusal(MonitorRecoveryRefusal.NO_OWNERSHIP, directory, "No ownership record exists.")
     }
