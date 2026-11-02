@@ -1,3 +1,13 @@
+## [2026-11-02] SKILL-467 new-task chip rebind and disabled why
+Areas: desktop/feature/chat
+- After a New task conversation has started, idle repository and agent chips stay openable. They stay disabled while a turn is running, Start goal run is in flight, or the draft's repository is missing. The SKILL-459 lock that disabled them whenever a chat existed is not restored.
+- Changing repository, base branch, or agent ends the current agent process and opens a new session on that binding, keeping the transcript. Later turns and Start goal run / Plan only use the new checkout and agent. Discard and New chat are not required.
+- Disabled chips drop the hand cursor and expose a chip-local why through SbTooltip and stateDescription, with busy then start-in-flight then missing-repository precedence. Shared AgentPicker gained optional disabledWhy; execution enablement stays unchanged. reusable
+- Choosing another agent keeps the previous ChatAgent visible until the new one resolves, so the chip and Goal run offer do not flash No agent. Same-agent model and effort stay in Settings.
+- Limits: base-branch rebind waits until the repository picker closes, even though the open popover writes the branch live. An enabled AgentPicker with an empty agent list is not a New task disabled-why.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-02] SKILL-459 new-task screen and chat
 Areas: desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/ui, desktop/app
 - NewTaskFeatureEntry in the newtask package claims NewTaskRoute through renders and is bound in WindowScope, as ChatFeatureEntry is. No Gradle module was added and AppNavHost did not change.
