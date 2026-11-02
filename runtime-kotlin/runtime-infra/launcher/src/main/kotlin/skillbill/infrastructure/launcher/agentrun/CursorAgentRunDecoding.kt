@@ -120,14 +120,16 @@ private fun pickCursorHarvest(
   longestAssistantText: String?,
 ): String {
   val last = lastAssistantText?.trim().orEmpty()
-  if (isStrictReviewRegister(last)) return last
+  if (isStrictReviewRegister(last) || isStrictAssessmentRegister(last)) return last
   val source = terminalText?.takeIf { it.isNotBlank() } ?: longestAssistantText.orEmpty()
   return harvestCursorRegister(source)
 }
 
 private fun harvestCursorRegister(text: String): String {
   val trimmed = text.trim()
-  if (trimmed.isEmpty() || isStrictReviewRegister(trimmed)) return trimmed
+  if (trimmed.isEmpty() || isStrictReviewRegister(trimmed) || isStrictAssessmentRegister(trimmed)) {
+    return trimmed
+  }
   peelTrailingNoFindings(trimmed)?.let { return it }
   val split = insertCursorRegisterBoundaries(trimmed)
   val findingLines =
@@ -138,13 +140,14 @@ private fun harvestCursorRegister(text: String): String {
   return when {
     findingLines.isNotEmpty() -> findingLines.joinToString("\n")
     split.lineSequence().any { it.trim() == NO_FINDINGS_TOKEN } -> NO_FINDINGS_TOKEN
-    else -> trimmed
+    else -> assessmentRegisterOf(split) ?: trimmed
   }
 }
 
 private fun insertCursorRegisterBoundaries(text: String): String {
   val withFindings = GLUED_FINDING_START.replace(text, "\n$1")
-  return GLUED_TRAILING_NO_FINDINGS.replace(withFindings, "\n$1")
+  val withNoFindings = GLUED_TRAILING_NO_FINDINGS.replace(withFindings, "\n$1")
+  return GLUED_ASSESSMENT_START.replace(withNoFindings, "\n$1")
 }
 
 private fun isStrictReviewRegister(text: String): Boolean {
@@ -153,6 +156,22 @@ private fun isStrictReviewRegister(text: String): Boolean {
   val lines = trimmed.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
   return lines.isNotEmpty() && lines.all { FINDING_LINE_START.containsMatchIn(it) }
 }
+
+private fun isStrictAssessmentRegister(text: String): Boolean {
+  val lines = assessmentLines(text)
+  return lines.isNotEmpty() && lines.all { ASSESSMENT_RECORD_LINE.containsMatchIn(it) }
+}
+
+private fun assessmentRegisterOf(text: String): String? {
+  val lines = assessmentLines(text).filter { ASSESSMENT_RECORD_LINE.containsMatchIn(it) }
+  return lines.takeIf { it.isNotEmpty() }?.joinToString("\n")
+}
+
+private fun assessmentLines(text: String): List<String> =
+  text.lineSequence()
+    .map { it.trim().trimStart('-', '*', '>', ' ', '`').trimEnd('`', ' ') }
+    .filter { it.isNotEmpty() }
+    .toList()
 
 private fun peelTrailingNoFindings(text: String): String? {
   val trimmed = text.trim()
@@ -200,3 +219,10 @@ private val GLUED_FINDING_START =
     "(?<![\\n\\r])(\\[F-\\d{${ParallelReviewFindingParser.PARALLEL_REVIEW_FINDING_ID_PAD_WIDTH}}])",
   )
 private val GLUED_TRAILING_NO_FINDINGS = Regex("(?<![\\n\\r])(NO_FINDINGS)\\s*$")
+private val ASSESSMENT_RECORD_LINE =
+  Regex("""^(Finding|Test value|Scenario|Regression|Verify)\b""", RegexOption.IGNORE_CASE)
+private val GLUED_ASSESSMENT_START =
+  Regex(
+    "(?<![\\n\\r])(Finding:|Test value:|Scenario IS-|Regression TR-|Verify GA-|Verify:)",
+    RegexOption.IGNORE_CASE,
+  )
