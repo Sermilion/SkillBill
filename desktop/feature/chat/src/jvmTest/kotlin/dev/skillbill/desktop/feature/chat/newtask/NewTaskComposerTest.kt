@@ -96,7 +96,7 @@ class NewTaskComposerTest {
     onNodeWithText("Responding...").assertExists()
 
     send(ChatEvent.Completed)
-    waitForIdle()
+    waitUntil { draft.chat.value?.thread?.busy?.value == false }
     onNodeWithText("Ready").assertExists()
   }
 }

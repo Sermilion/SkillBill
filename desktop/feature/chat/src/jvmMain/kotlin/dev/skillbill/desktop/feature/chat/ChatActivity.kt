@@ -12,11 +12,11 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 
 /** The pill above a chat's input that says what the agent is doing now. */
 @Composable
-internal fun ChatActivityPill(thread: ChatThread, gone: Boolean = false, modifier: Modifier = Modifier) {
+internal fun ChatActivityPill(thread: ChatThread, gone: Boolean = false) {
   val busy by thread.busy.collectAsState()
   val agent by thread.agent.collectAsState()
   val transcript by thread.transcript.collectAsState()
-  Box(modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+  Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
     ChatPill(chatActivityStatus(busy, agent, gone, transcript), dot = busy)
   }
 }
