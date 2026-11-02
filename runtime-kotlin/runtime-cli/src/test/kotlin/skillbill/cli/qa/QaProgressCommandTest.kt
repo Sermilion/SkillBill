@@ -3,6 +3,7 @@ package skillbill.cli.qa
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parsers.CommandLineParser
 import skillbill.cli.kernel.cli.CliRunState
+import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.qa.checklist.QaChecklistRecorder
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.infrastructure.workflow.qa.FileSystemQaChecklistPlanFile
@@ -14,8 +15,17 @@ import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistCase
 import skillbill.ports.idestatus.model.StandaloneQaChecklistStep
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.qa.QaDeviceLeasePort
+import skillbill.ports.qa.QaOwnedResourcePort
+import skillbill.ports.qa.model.QaDeviceLease
+import skillbill.ports.qa.model.QaLeaseReleaseOutcome
+import skillbill.ports.qa.model.QaLeaseResult
+import skillbill.ports.qa.model.QaOwnedResource
+import skillbill.ports.qa.model.QaResourceRegistration
+import skillbill.ports.qa.model.QaResourceReleaseOutcome
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
@@ -25,6 +35,27 @@ class QaProgressCommandTest {
   private val database =
     sqliteDatabaseSessionFactory(Files.createTempDirectory("qa-progress"), environment = mapOf("TEST" to "1"))
   private val recorder = QaChecklistRecorder(database, Clock.systemUTC(), NoopRuntimeDiagnostics)
+
+  @Test
+  fun `qa root exposes plan step and target progress commands`() {
+    val commands =
+      listOf(
+        listOf("plan", "--invocation", RUN, "--file", "/missing/qa-plan.json") to "failed",
+        listOf(
+          "step", "--invocation", RUN, "--case", "login", "--step", "1", "--status", "passed",
+        ) to "rejected",
+        listOf("target", "--invocation", RUN, "--name", "web", "--state", "ready") to "rejected",
+      )
+
+    commands.forEach { (arguments, expectedStatus) ->
+      val state = CliRunState(stdinText = null)
+      CommandLineParser.parseAndRun(commandTree(state), arguments) { parsed -> parsed.run() }
+
+      val result = checkNotNull(state.result)
+      assertEquals(0, result.exitCode)
+      assertEquals(expectedStatus, result.payload?.get("status"))
+    }
+  }
 
   @Test
   fun `a dropped evidence path reports it, exits 0, and the next step still records`() {
@@ -120,6 +151,25 @@ class QaProgressCommandTest {
     return state
   }
 
+  private fun commandTree(state: CliRunState): QaCommand {
+    val inputs =
+      CliRunInputs(
+        databasePath = null,
+        environment = emptyMap(),
+        userHome = Path.of("/tmp"),
+        repositoryRoot = Path.of("/tmp/repo"),
+        liveStdout = {},
+        liveStderr = {},
+      )
+    return QaCommand(
+      QaLeaseCommand(FakeLeasePort, state, inputs),
+      QaResourceCommand(FakeResourcePort, state, inputs),
+      QaPlanCommand(recorder, state, FileSystemQaChecklistPlanFile()),
+      QaStepCommand(recorder, state),
+      QaTargetCommand(recorder, state),
+    )
+  }
+
   private fun stored(): StandaloneQaChecklist =
     checkNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(RUN) }?.qaChecklist)
 
@@ -153,6 +203,45 @@ class QaProgressCommandTest {
 
   private class FailingDatabase(delegate: DatabaseSessionFactory) : DatabaseSessionFactory by delegate {
     override fun <T> transaction(block: (UnitOfWork) -> T): T = error("database is locked")
+  }
+
+  private object FakeLeasePort : QaDeviceLeasePort {
+    override fun acquire(
+      repoRoot: Path,
+      deviceFingerprint: String,
+      invocationId: String,
+    ): QaLeaseResult = QaLeaseResult.Acquired(QaDeviceLease(deviceFingerprint, invocationId))
+
+    override fun release(
+      repoRoot: Path,
+      lease: QaDeviceLease,
+    ): QaLeaseReleaseOutcome = QaLeaseReleaseOutcome.Released(lease.deviceFingerprint)
+
+    override fun releaseAllFor(
+      repoRoot: Path,
+      invocationId: String,
+    ): List<QaLeaseReleaseOutcome> = emptyList()
+  }
+
+  private object FakeResourcePort : QaOwnedResourcePort {
+    override fun register(
+      repoRoot: Path,
+      invocationId: String,
+      resource: QaOwnedResource,
+    ): QaResourceRegistration = QaResourceRegistration.Registered
+
+    override fun release(
+      repoRoot: Path,
+      invocationId: String,
+      resource: QaOwnedResource,
+    ): QaResourceReleaseOutcome = QaResourceReleaseOutcome.Released(resource)
+
+    override fun releaseAllFor(
+      repoRoot: Path,
+      invocationId: String,
+    ): List<QaResourceReleaseOutcome> = emptyList()
+
+    override fun reclaimAbandoned(repoRoot: Path): List<QaResourceReleaseOutcome> = emptyList()
   }
 
   private companion object {

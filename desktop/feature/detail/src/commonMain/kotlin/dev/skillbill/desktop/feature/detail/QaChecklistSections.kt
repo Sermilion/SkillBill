@@ -211,7 +211,7 @@ internal fun DetailSections.qaTargetsSection(view: QaChecklistView) {
 }
 
 @Composable
-private fun QaTargetChip(target: dev.skillbill.desktop.core.domain.model.QaChecklistTarget, live: Boolean) {
+internal fun QaTargetChip(target: dev.skillbill.desktop.core.domain.model.QaChecklistTarget, live: Boolean) {
   val colors = SkillBillTheme.colors
   val color = when (target.state) {
     QaTargetState.Running -> colors.stActive
@@ -226,7 +226,10 @@ private fun QaTargetChip(target: dev.skillbill.desktop.core.domain.model.QaCheck
       QaTargetState.Skipped -> StatusDescription("Skipped") { StatusIcon(StatusKind.Skipped, null) }
       QaTargetState.Pending -> StatusDescription("Pending") { StatusIcon(StatusKind.Pending, null) }
     }
-    BasicText(target.detail ?: target.name, style = SkillBillTheme.type.tSm.copy(color = colors.fg2))
+    BasicText(target.name, style = SkillBillTheme.type.tSm.copy(color = colors.fg2))
+    target.detail?.takeIf(String::isNotBlank)?.let { detail ->
+      BasicText(detail, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+    }
   }
 }
 

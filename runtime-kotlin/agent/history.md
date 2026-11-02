@@ -1,3 +1,12 @@
+## [2026-11-02] SKILL-457 standalone QA live checklist
+Areas: runtime-cli, runtime-contracts, runtime-engine, runtime-ports, runtime-infra, runtime-core, orchestration/contracts, skills/skill-bill, docs
+- Migration 97 adds `qa_checklist` to standalone phase status and reinstalls change triggers. Checklist writes leave status revision, timestamps and lease state intact while notifying desktop readers.
+- `QaChecklistRecorder` records bounded plans, steps, targets and findings transactionally. It preserves step results on plan replacement only when case ID, position and text match, and reports dropped invalid evidence. reusable
+- Standalone QA seeds progress before launch and supplies the database path to agent environments. `qa plan`, `qa step` and `qa target` record progress without settling the verdict.
+- Unreadable checklists degrade to no checklist with a diagnostic. Goal QA and verify do not use these progress commands.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-10-31] SKILL-448 architecture assessment work packages
 Areas: runtime-contracts, domain, ports, engine, goalrunner, application, infra (SQLite, workflow, host, launcher, skills), CLI, MCP, core architecture guards
 - Removed engine back-edges, extracted `runtime-goalrunner` with explicit API, and replaced distributed cycle checks with a catalog-driven exact-package SCC census.

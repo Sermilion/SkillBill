@@ -1,3 +1,13 @@
+## [2026-11-02] SKILL-457 QA live checklist in desktop detail
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, desktop/core/designsystem, runtime-engine, runtime-ports
+- Standalone QA detail shows recorded targets, plan, step progress, findings, activity and report, with a pager for earlier runs. Runs without a plan show no invented cases or steps.
+- Reusable projections derive run selection, progress, case state, activity and merged findings. Case overrides and selected runs survive live reads; ended runs do not display running steps.
+- Finding links expand and scroll to their rows. Report and evidence actions use the default application, with evidence paths guarded by invocation directory and parent-segment checks.
+- Shared activity feeds support newest-first folding, and the design system provides reduced-motion-aware spinner and pulse primitives. reusable
+- Limits: evidence containment is a string check and does not resolve symlinks. Settled QA runs with result text but no report no longer show the standalone Result section in QA document order.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-10-31] SKILL-454 desktop changes panel and diff view
 Areas: desktop/feature/detail, desktop/core/designsystem
 - Detail shows a Changes section after the pipeline section, fed by WorkChangesRepository. DetailViewModel keys observation on the loaded detail's change baseline and the header's running flag, so a baseline or running change re-observes and an idle item stops polling. Only the open item's worktree is read.

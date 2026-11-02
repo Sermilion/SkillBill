@@ -1,3 +1,8 @@
+## [2026-11-02] Keep standalone QA progress separate from verdict settlement
+Context: A running standalone QA agent needs durable progress while its prose report remains the source of the verdict.
+Decision: Store a bounded checklist on the active standalone status row, update it transactionally, and treat seed and progress failures as non-blocking. Keep prose report settlement unchanged.
+Reason: Concurrent progress commands must not lose updates, and a rejected or failed progress write must not discard QA evidence or alter the verdict. Reinstalled status triggers notify desktop readers of checklist-only updates.
+
 ## [2026-10-30] Keep desktop signal generation stable across commits
 Context: Readers use generation to detect a replaced or migrated store and request a full resync.
 Decision: Store the generation in SQLite and renew it when migrations apply. Publish revision changes and bounded changed-id lists after commits; activity-only writes stay off board topics.
