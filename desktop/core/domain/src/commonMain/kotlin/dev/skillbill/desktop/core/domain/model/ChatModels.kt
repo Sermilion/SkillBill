@@ -76,7 +76,13 @@ enum class ChatFailure { AgentUnsupported, BinaryMissing, ProcessFailed, StreamM
 
 enum class ChatHistoryRole { Operator, Agent, Notice, Error }
 
-data class ChatHistoryLine(val role: ChatHistoryRole, val text: String, val failure: ChatFailure? = null)
+data class ChatHistoryLine(
+  val role: ChatHistoryRole,
+  val text: String,
+  val failure: ChatFailure? = null,
+  val actions: List<ChatSuggestedAction> = emptyList(),
+  val selectedAction: ChatSuggestedAction? = null,
+)
 
 /** Where a saved new-task draft runs; it marks the save as a draft, which references no execution. */
 data class ChatNewTaskContext(

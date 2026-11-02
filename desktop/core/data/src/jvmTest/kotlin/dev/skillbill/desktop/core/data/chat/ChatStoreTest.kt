@@ -6,11 +6,15 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -62,5 +66,59 @@ class ChatStoreTest {
     assertEquals(emptyList(), store.newTaskDrafts("/work/other"))
     store.delete("draft")
     assertEquals(emptyList(), store.newTaskDrafts("/work/app"))
+  }
+
+  @Test
+  fun `saved chat lines retain suggested actions and selected operator actions`() {
+    val diagnostics = RecordingDiagnostics()
+    val store = ChatStore(host, diagnostics, Clock.System)
+    val actions = NewTaskActionKind.entries.mapIndexed { index, kind ->
+      ChatSuggestedAction("Start ${kind.wire}", "Run ${kind.wire}", if (index % 2 == 0) ChatPermissionMode.ReadOnly else ChatPermissionMode.Act, kind)
+    }
+    val selected = ChatSuggestedAction("Inspect", "Check the plan", ChatPermissionMode.Act)
+    val saved = entry("actions", 9).copy(lines = listOf(
+      ChatHistoryLine(ChatHistoryRole.Operator, selected.instruction, selectedAction = selected),
+      ChatHistoryLine(ChatHistoryRole.Agent, "", actions = actions),
+      ChatHistoryLine(ChatHistoryRole.Agent, "Finished reply", actions = actions.reversed()),
+    ))
+
+    assertTrue(store.saveChat(saved))
+
+    val reopened = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+    assertEquals(saved.lines, reopened.lines)
+    assertTrue(diagnostics.categories.isEmpty())
+  }
+
+  @Test
+  fun `old chat lines without actions restore empty action metadata and malformed actions are recorded`() {
+    val diagnostics = RecordingDiagnostics()
+    val file = File(host.userHome, "$CHAT_STORE_PATH/legacy.json")
+    file.parentFile.mkdirs()
+    file.writeText(
+      """{"session_id":"legacy","execution_id":"wf-1","agent_id":"codex","updated_at_ms":1,"lines":[{"role":"Operator","text":"continue"},{"role":"Agent","text":"done","actions":[{"label":"unsafe","instruction":"run","mode":"unknown","start":"made-up"}]}]}""",
+    )
+
+    val entry = ChatStore(host, diagnostics, Clock.System).savedChats("wf-1").single()
+
+    assertEquals(ChatHistoryLine(ChatHistoryRole.Operator, "continue"), entry.lines[0])
+    assertEquals(ChatHistoryLine(ChatHistoryRole.Agent, "done"), entry.lines[1])
+    assertEquals(listOf("chat.store_malformed_action"), diagnostics.categories)
+  }
+
+  @Test
+  fun `pending new-task turn index counts action-only replies`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val draft = entry("pending", 10).copy(
+      executionId = null,
+      newTask = ChatNewTaskContext("/work/app", "main", pendingTurnLineIndex = 2),
+      lines = listOf(
+        ChatHistoryLine(ChatHistoryRole.Operator, "make a plan"),
+        ChatHistoryLine(ChatHistoryRole.Agent, "", actions = listOf(ChatSuggestedAction("Review", "Review", ChatPermissionMode.ReadOnly))),
+        ChatHistoryLine(ChatHistoryRole.Operator, "continue"),
+      ),
+    )
+    store.saveChat(draft)
+
+    assertEquals(listOf(ChatExchange("make a plan", "")), store.newTaskHistory("pending"))
   }
 }

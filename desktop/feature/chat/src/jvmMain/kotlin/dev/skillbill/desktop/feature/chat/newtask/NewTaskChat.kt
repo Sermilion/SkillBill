@@ -168,8 +168,10 @@ internal class NewTaskChat(
 
   private fun snapshotLines(): List<ChatHistoryLine> = thread.transcript.value.mapNotNull { message ->
     when (message) {
-      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text)
-      is ChatMessage.Agent -> if (!message.streaming && message.text.isNotBlank()) ChatHistoryLine(ChatHistoryRole.Agent, message.text) else null
+      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text, selectedAction = message.action)
+      is ChatMessage.Agent -> if (!message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty())) {
+        ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
+      } else null
       is ChatMessage.Notice -> if (repositoryMissing && message.text.startsWith("This draft's repository no longer exists:")) null
         else ChatHistoryLine(ChatHistoryRole.Notice, message.text)
       is ChatMessage.Error -> ChatHistoryLine(ChatHistoryRole.Error, message.text, message.failure)

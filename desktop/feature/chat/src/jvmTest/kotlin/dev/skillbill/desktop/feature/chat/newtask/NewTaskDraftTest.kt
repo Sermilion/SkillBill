@@ -2,8 +2,11 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
@@ -143,6 +146,43 @@ class NewTaskDraftTest {
     runCurrent()
     assertFalse(sessionId in chat.saved)
     assertEquals(emptyList(), next.saved.value)
+  }
+
+  @Test
+  fun `a resumed draft keeps action-only replies and selected action metadata when saved again`() = runTest {
+    val suggestions = listOf(
+      ChatSuggestedAction("Review", "Review the plan", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review),
+      ChatSuggestedAction("Run goal", "Start the goal", ChatPermissionMode.Act, NewTaskActionKind.Goal),
+    )
+    val selected = ChatSuggestedAction("Inspect", "Check the plan", ChatPermissionMode.Act)
+    chat.events = { flowOf(ChatEvent.SuggestedActions(suggestions), ChatEvent.Completed) }
+    val first = draft()
+    first.say("make a plan")
+    runCurrent()
+    first.chat.value!!.send(selected.instruction, selected)
+    runCurrent()
+    val sessionId = chat.requests.first().sessionId
+    first.close()
+    runCurrent()
+    val saved = chat.saved.getValue(sessionId)
+
+    assertEquals(ChatHistoryRole.Agent, saved.lines[1].role)
+    assertEquals("", saved.lines[1].text)
+    assertEquals(suggestions, saved.lines[1].actions)
+    assertEquals(selected, saved.lines[2].selectedAction)
+
+    val next = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System)
+    next.chatDispatcher = StandardTestDispatcher(testScheduler)
+    next.repository = NewTaskRepository(root, "repo")
+    next.resume(saved)
+    runCurrent()
+    val transcript = next.chat.value!!.thread.transcript.value
+    assertEquals(suggestions, (transcript[1] as ChatMessage.Agent).actions)
+    assertEquals(selected, (transcript[2] as ChatMessage.Operator).action)
+
+    next.close()
+    runCurrent()
+    assertEquals(saved.lines, chat.saved.getValue(sessionId).lines)
   }
 
   @Test

@@ -38,11 +38,12 @@ internal class ChatThread(private val clock: Clock) {
     messages.value = transcript
   }
 
-  /** The latest [limit] operator messages and finished agent replies with text, as a resumed chat shows them again. */
+  /** The latest [limit] operator messages and finished agent replies, as a resumed chat shows them again. */
   fun historyLines(limit: Int = SAVED_LINES): List<ChatHistoryLine> = messages.value.mapNotNull { message ->
     when {
-      message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text)
-      message is ChatMessage.Agent && !message.streaming && message.text.isNotBlank() -> ChatHistoryLine(ChatHistoryRole.Agent, message.text)
+      message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text, selectedAction = message.action)
+      message is ChatMessage.Agent && !message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty()) ->
+        ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
       else -> null
     }
   }.takeLast(limit)
@@ -102,8 +103,8 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
 
 /** The message a saved line shows as when a chat resumes. */
 internal fun restored(line: ChatHistoryLine): ChatMessage = when (line.role) {
-  ChatHistoryRole.Operator -> ChatMessage.Operator(line.text)
-  ChatHistoryRole.Agent -> ChatMessage.Agent(line.text, streaming = false, tools = emptyList())
+  ChatHistoryRole.Operator -> ChatMessage.Operator(line.text, line.selectedAction)
+  ChatHistoryRole.Agent -> ChatMessage.Agent(line.text, streaming = false, tools = emptyList(), actions = line.actions)
   ChatHistoryRole.Notice -> ChatMessage.Notice(line.text)
   ChatHistoryRole.Error -> ChatMessage.Error(line.failure, line.text)
 }

@@ -9,6 +9,9 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -57,6 +60,12 @@ private object ChatStoreKeys {
   const val NEW_TASK_SESSION_ESTABLISHED = "new_task_session_established"
   const val NEW_TASK_PENDING_TURN_LINE_INDEX = "new_task_pending_turn_line_index"
   const val FAILURE = "failure"
+  const val ACTIONS = "actions"
+  const val SELECTED_ACTION = "selected_action"
+  const val LABEL = "label"
+  const val INSTRUCTION = "instruction"
+  const val MODE = "mode"
+  const val START = "start"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -176,7 +185,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
       diagnostics.record("chat.store_unreadable")
       return null
     }
-    return decode(root, file.name.removeSuffix(".json"))
+    return decode(root, file.name.removeSuffix(".json"), diagnostics)
   }
 }
 
@@ -227,6 +236,8 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
           put(ChatStoreKeys.ROLE, line.role.name)
           put(ChatStoreKeys.TEXT, line.text)
           line.failure?.let { put(ChatStoreKeys.FAILURE, it.name) }
+          if (line.actions.isNotEmpty()) put(ChatStoreKeys.ACTIONS, buildJsonArray { line.actions.forEach { add(it.toJson()) } })
+          line.selectedAction?.let { put(ChatStoreKeys.SELECTED_ACTION, it.toJson()) }
         })
       }
     },
@@ -251,7 +262,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
   )
 }
 
-private fun decode(root: JsonObject, fallbackSessionId: String): StoredChat {
+private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Diagnostics): StoredChat {
   val agentId = root.string(ChatStoreKeys.AGENT_ID)
   return StoredChat(
     sessionId = root.string(ChatStoreKeys.SESSION_ID) ?: fallbackSessionId,
@@ -261,7 +272,13 @@ private fun decode(root: JsonObject, fallbackSessionId: String): StoredChat {
     lines = root.objects(ChatStoreKeys.LINES).mapNotNull { line ->
       val role = ChatHistoryRole.entries.firstOrNull { it.name == line.string(ChatStoreKeys.ROLE) } ?: return@mapNotNull null
       line.string(ChatStoreKeys.TEXT)?.let { text ->
-        ChatHistoryLine(role, text, ChatFailure.entries.firstOrNull { it.name == line.string(ChatStoreKeys.FAILURE) })
+        ChatHistoryLine(
+          role,
+          text,
+          ChatFailure.entries.firstOrNull { it.name == line.string(ChatStoreKeys.FAILURE) },
+          line.actions(ChatStoreKeys.ACTIONS, diagnostics),
+          line.selectedAction(diagnostics),
+        )
       }
     },
     agentSession = root.string(ChatStoreKeys.AGENT_SESSION),
@@ -278,6 +295,50 @@ private fun decode(root: JsonObject, fallbackSessionId: String): StoredChat {
       )
     },
   )
+}
+
+private fun ChatSuggestedAction.toJson(): JsonObject = buildJsonObject {
+  put(ChatStoreKeys.LABEL, label)
+  put(ChatStoreKeys.INSTRUCTION, instruction)
+  put(ChatStoreKeys.MODE, mode.name)
+  start?.let { put(ChatStoreKeys.START, it.wire) }
+}
+
+private fun JsonObject.actions(key: String, diagnostics: Diagnostics): List<ChatSuggestedAction> {
+  val value = get(key) ?: return emptyList()
+  val array = value as? JsonArray
+  if (array == null) {
+    diagnostics.record("chat.store_malformed_action")
+    return emptyList()
+  }
+  return array.mapNotNull { value ->
+    val action = value as? JsonObject
+    if (action == null) diagnostics.record("chat.store_malformed_action")
+    action?.toAction(diagnostics)
+  }
+}
+
+private fun JsonObject.selectedAction(diagnostics: Diagnostics): ChatSuggestedAction? {
+  val value = get(ChatStoreKeys.SELECTED_ACTION) ?: return null
+  val action = value as? JsonObject
+  if (action == null) {
+    diagnostics.record("chat.store_malformed_action")
+    return null
+  }
+  return action.toAction(diagnostics)
+}
+
+private fun JsonObject.toAction(diagnostics: Diagnostics): ChatSuggestedAction? {
+  val label = string(ChatStoreKeys.LABEL)
+  val instruction = string(ChatStoreKeys.INSTRUCTION)
+  val mode = ChatPermissionMode.entries.firstOrNull { it.name == string(ChatStoreKeys.MODE) }
+  val startValue = get(ChatStoreKeys.START)
+  val start = if (startValue == null) null else NewTaskActionKind.entries.firstOrNull { it.wire == string(ChatStoreKeys.START) }
+  if (label == null || instruction == null || mode == null || (startValue != null && start == null)) {
+    diagnostics.record("chat.store_malformed_action")
+    return null
+  }
+  return ChatSuggestedAction(label, instruction, mode, start)
 }
 
 private fun JsonObject.objects(key: String): List<JsonObject> = (get(key) as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
