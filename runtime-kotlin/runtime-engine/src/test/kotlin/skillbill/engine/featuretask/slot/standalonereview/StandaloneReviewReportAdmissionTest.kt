@@ -251,6 +251,23 @@ class StandaloneReviewReportAdmissionTest {
   }
 
   @Test
+  fun `a summary paragraph before structured findings is admitted as context`() {
+    val rawOutput =
+      "lanes: kotlin-architecture, kotlin-testing\n\n" +
+        "I reviewed PR #3175 against `main`. The core change is sound and paging continues as before.\n\n" +
+        "- [F-001] Minor | High | src/Writer.kt:35 | the default argument lets the refresh path skip the contract\n" +
+        "- [F-002] Minor | High | src/WriterTest.kt:301 | the fixture is written out inline twice\n\n" +
+        "verdict: changes_requested"
+
+    val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
+    assertEquals(2, report.census.size)
+    assertTrue(report.census.none { "The core change is sound" in it.text })
+  }
+
+  @Test
   fun `a verdict line need not be last and repeated identical verdicts are one verdict`() {
     val outputs =
       listOf(

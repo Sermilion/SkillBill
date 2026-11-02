@@ -259,7 +259,7 @@ public abstract class StandaloneReviewStrategy(
         failure,
         report.rejectionReasons.takeIf { it.isNotEmpty() }?.joinToString("; "),
         (verification as? VerificationResult.Blocked)?.reason,
-      )
+      ).distinct()
     val diagnostics =
       report.diagnostics.take(MAX_FAILURE_DIAGNOSTICS).map { it.take(MAX_FAILURE_DIAGNOSTIC_CHARS) }
     val rejection = if (blockers.isEmpty()) "" else (blockers + diagnostics).joinToString("; ")

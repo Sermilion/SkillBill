@@ -94,7 +94,7 @@ internal object StandaloneReviewReportSourceCensusBuilder {
         isControl(trimmed) || isReviewContext(trimmed) -> skipControl(position)
         startsListItem(trimmed) || isFindingProse(trimmed) -> collectProse(position)
         strictContext -> rejectIntegrationText(position)
-        else -> rejectProse(position)
+        else -> skipProse(position)
       }
     }
 
@@ -182,10 +182,7 @@ internal object StandaloneReviewReportSourceCensusBuilder {
       return blockEnd(position)
     }
 
-    private fun rejectProse(position: Int): Int {
-      rejections += "line ${position + 1}: report contains unclassified prose"
-      return blockEnd(position)
-    }
+    private fun skipProse(position: Int): Int = blockEnd(position)
 
     private fun blockEnd(
       start: Int,
