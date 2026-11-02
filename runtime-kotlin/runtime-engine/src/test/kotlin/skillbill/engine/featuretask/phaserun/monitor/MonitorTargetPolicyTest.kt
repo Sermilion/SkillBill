@@ -33,6 +33,18 @@ class MonitorTargetPolicyTest {
   }
 
   @Test
+  fun `a branch token selects a safe branch and refuses a name that could reach git or gh argv`() {
+    assertEquals(
+      MonitorIntakeParse.Selected(MonitorTargetSelector.Branch("main")),
+      parseMonitorIntake("branch:main", "feat/x"),
+    )
+    listOf("branch:", "branch:../x", "branch:a@b").forEach { token ->
+      val refused = assertIs<MonitorIntakeParse.Refused>(parseMonitorIntake(token, "feat/x"), token)
+      assertEquals(MonitorTargetRefusal.MALFORMED_INTAKE, refused.reason)
+    }
+  }
+
+  @Test
   fun `only a plain https pull request url is accepted and keeps its own repository`() {
     val parsed = assertIs<MonitorUrlParse.Parsed>(parseMonitorPullRequestUrl("https://GitHub.com/Fork/Repo/pull/9"))
     assertEquals(9, parsed.identity.number)

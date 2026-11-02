@@ -373,6 +373,30 @@ class StandalonePhaseStatusStoreTest {
   }
 
   @Test
+  fun `a branch target round trips and a key and url mismatch is rejected`() {
+    val directory = Files.createTempDirectory("standalone-monitor-branch-target")
+    val started = Instant.parse("2026-11-02T08:41:00Z")
+    val target =
+      targetOf(7).copy(
+        pullRequestKey = "github.com/acme/repo@feat/x",
+        pullRequestUrl = "https://github.com/acme/repo/tree/feat/x",
+      )
+    val registration = targetRegistration("branch", 7, started, started.plusSeconds(3600)).copy(monitorTarget = target)
+    sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1")).transaction {
+      it.standalonePhaseStatuses.register(registration)
+    }
+    val saved =
+      sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+        .read { it.standalonePhaseStatuses.readByInvocation(registration.invocationId) }
+
+    assertEquals(target, saved?.monitorTarget)
+    assertEquals("feat/x", saved?.monitorTarget?.branchRef)
+    assertFailsWith<IllegalArgumentException> {
+      target.copy(pullRequestUrl = "https://github.com/acme/repo/pull/7")
+    }
+  }
+
+  @Test
   fun `monitors of different pull requests sharing a branch stay active and are found from any branch`() {
     val directory = Files.createTempDirectory("standalone-monitor-targets")
     val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))

@@ -170,7 +170,7 @@ class StandaloneMonitorExecutionPreparerTest {
     )
     assertEquals(resources.acquiredToken, prepared.context.ownerToken)
     assertEquals(3, prepared.context.generation)
-    assertEquals(identity(5), prepared.context.target.pullRequest)
+    assertEquals(identity(5), prepared.context.target.identity)
     assertEquals(Path.of("/wt"), prepared.context.worktree.path)
     assertEquals(CALLER_ROOT, prepared.context.callerRoot)
 
@@ -246,7 +246,7 @@ class StandaloneMonitorExecutionPreparerTest {
     val blocked = assertIs<MonitorPreparation.Blocked>(prepare())
 
     assertEquals(MonitorBlockKind.HEAD_MOVED, blocked.kind)
-    assertEquals(identity(5), blocked.pullRequest)
+    assertEquals(identity(5), blocked.identity)
     assertEquals(listOf("resolveContext", "acquire", "fetchPinned", "settle"), resources.calls)
   }
 
@@ -286,7 +286,7 @@ class StandaloneMonitorExecutionPreparerTest {
     source.lookup = { MonitorPullRequestLookup.Found(pullRequest(it, state = MonitorPullRequestState.CLOSED)) }
     val closed = assertIs<MonitorPreparation.Blocked>(prepare())
     assertEquals(MonitorBlockKind.CLOSED_UNMERGED, closed.kind)
-    assertEquals(identity(5), closed.pullRequest)
+    assertEquals(identity(5), closed.identity)
 
     assertEquals(MonitorPreparation.Completed(null), prepare(intake = null))
 

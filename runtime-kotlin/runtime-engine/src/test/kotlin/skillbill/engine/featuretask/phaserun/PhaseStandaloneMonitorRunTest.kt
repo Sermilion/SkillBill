@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.monitor.MonitorPullRequestSource
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
@@ -118,6 +119,11 @@ class PhaseStandaloneMonitorRunTest {
       headRepository: MonitorRepositoryIdentity,
       branch: String,
     ): MonitorPullRequestListing = untouched()
+
+    override fun branch(
+      repository: MonitorRepositoryIdentity,
+      ref: String,
+    ): MonitorBranchLookup = untouched()
 
     private fun untouched(): Nothing = error("goal monitoring must not resolve a standalone monitor target")
   }

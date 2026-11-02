@@ -2,6 +2,7 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.phaserun.monitor.MONITOR_BRANCH_PREFIX
 import skillbill.engine.goal.GoalPreflightGateBlock
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
@@ -245,7 +246,8 @@ public class WorkRunActions(
     agent: String,
   ): List<String>? {
     phase.monitorTarget?.let { target ->
-      return listOf("phase", phase.phaseId, target.pullRequestUrl, "--agent", agent)
+      val selector = target.branchRef?.let { "$MONITOR_BRANCH_PREFIX$it" } ?: target.pullRequestUrl
+      return listOf("phase", phase.phaseId, selector, "--agent", agent)
     }
     phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent) }
     return when {
@@ -324,8 +326,14 @@ public class WorkRunActions(
       appendLine("Work identity: ${item.snapshot.execution?.invocationId ?: item.snapshot.workflowId}")
       appendLine("Repository: ${item.repositoryRoot}")
       val monitored = phase.monitorTarget
+      val monitoredBranch = monitored?.branchRef
       if (monitored == null) {
         appendLine("Keep the recorded branch ${phase.branchCorrelation} and existing PR.")
+      } else if (monitoredBranch != null) {
+        appendLine(
+          "Monitor exactly $MONITOR_BRANCH_PREFIX$monitoredBranch; the runtime prepares its own worktree for it.",
+        )
+        appendLine("Do not check out the branch $monitoredBranch in this repository.")
       } else {
         appendLine("Monitor exactly ${monitored.pullRequestUrl}; the runtime prepares its own worktree for it.")
         appendLine("Do not check out the pull request branch ${monitored.headRef} in this repository.")

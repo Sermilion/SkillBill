@@ -78,7 +78,7 @@ public class StandaloneMonitorExecutionPreparer(
         return MonitorPreparation.Blocked(
           MonitorBlockKind.RECOVERY_REFUSED,
           "Stale recovery was refused (${recovery.reason}): ${recovery.detail}",
-          target.pullRequest,
+          target.identity,
           recovery.path,
           attempt = MonitorAttemptTarget(target, context.callerRoot, context.primaryRoot),
         )
@@ -90,7 +90,7 @@ public class StandaloneMonitorExecutionPreparer(
         MonitorPreparation.Blocked(
           blockKind(acquisition.reason),
           acquisition.detail,
-          target.pullRequest,
+          target.identity,
           acquisition.path,
           attempt = MonitorAttemptTarget(target, context.callerRoot, context.primaryRoot),
         )
@@ -139,7 +139,7 @@ public class StandaloneMonitorExecutionPreparer(
       )
     val settlement = cleanup.settle(primary)
     if (failure !is SkillBillRuntimeException) throw failure
-    return MonitorPreparation.Failed(primary.detail, target.pullRequest, settlement)
+    return MonitorPreparation.Failed(primary.detail, target.identity, settlement)
   }
 
   private fun settleCancellation(
@@ -197,7 +197,7 @@ public class StandaloneMonitorExecutionPreparer(
         val kind = fetchBlockKind(fetched.reason)
         val settlement =
           cleanup.settle(MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, "$kind: ${fetched.detail}"))
-        MonitorPreparation.Blocked(kind, fetched.detail, target.pullRequest, settlement = settlement)
+        MonitorPreparation.Blocked(kind, fetched.detail, target.identity, settlement = settlement)
       }
       is MonitorFetchResult.Fetched -> {
         val worktree =

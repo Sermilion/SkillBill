@@ -36,6 +36,7 @@ import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.monitor.MonitorCheckSource
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.monitor.MonitorPullRequestSource
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorFailureLog
@@ -160,6 +161,42 @@ class PhaseStandaloneMonitorExecutionTest {
     listOf(PULL_REQUEST_URL, headSha, baseSha, cwd.toString(), "build", "assertion failed in FeatureTest").forEach {
       assertTrue(it in prompt, "the repair brief must carry $it")
     }
+  }
+
+  @Test
+  fun `a failing report-only branch blocks with every check link and never repairs or pushes`() {
+    failingHeads += baseSha
+
+    val result = run(intake = "branch:main")
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue(CHECK_URL in blocked.reason, blocked.reason)
+    assertTrue("This branch is report-only, so no repair ran." in blocked.reason, blocked.reason)
+    assertEquals(emptyList(), repairCwds)
+    assertEquals(baseSha, git(origin, "rev-parse", "main"), "a report-only run never pushes")
+    assertOwnedWorktreeRemoved(blocked.targetReport)
+  }
+
+  @Test
+  fun `a branch run follows a moved tip and its report names the target and the followed commit`() {
+    var moved: String? = null
+    val checks: (String) -> PullRequestChecks = { sha ->
+      if (sha == baseSha) {
+        commit(caller, "Moved.kt", "class Moved\n")
+        git(caller, "push", "-q", "origin", "main")
+        moved = git(origin, "rev-parse", "main")
+        failing()
+      } else {
+        passing()
+      }
+    }
+
+    val result = run(checks, intake = "branch:main")
+
+    val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertTrue("Branch target: https://github.com/acme/repo/tree/main" in completed.targetReport, completed.toString())
+    assertTrue("Followed commits: ${assertNotNull(moved)}" in completed.targetReport, completed.toString())
+    assertOwnedWorktreeRemoved(completed.targetReport)
   }
 
   @Test
@@ -465,6 +502,7 @@ class PhaseStandaloneMonitorExecutionTest {
   private fun run(
     checks: (String) -> PullRequestChecks = ::scriptedChecks,
     runLoopEntry: FeatureTaskRuntimeRunLoopEntry? = null,
+    intake: String = PULL_REQUEST_URL,
   ): PhaseRunResult {
     val source = ForkPullRequestSource()
     val service =
@@ -500,7 +538,7 @@ class PhaseStandaloneMonitorExecutionTest {
         definitionId = SkeletonDefinition.MONITOR.id,
         repoRoot = caller,
         invokedAgentId = "claude",
-        intake = PULL_REQUEST_URL,
+        intake = intake,
       ),
     )
   }
@@ -550,7 +588,20 @@ class PhaseStandaloneMonitorExecutionTest {
       repository: MonitorRepositoryIdentity,
       headRepository: MonitorRepositoryIdentity,
       branch: String,
-    ) = MonitorPullRequestListing.Failed("listing is not scripted")
+    ) = MonitorPullRequestListing.Complete(emptyList())
+
+    override fun branch(
+      repository: MonitorRepositoryIdentity,
+      ref: String,
+    ): MonitorBranchLookup {
+      if (repository != ACME || ref != "main") return MonitorBranchLookup.Missing
+      val tip = MonitorBranchTip(ACME, "main", git(origin, "rev-parse", "main"))
+      return MonitorBranchLookup.Found(
+        MonitorPullRequestHead(tip, BASE_URL, BASE_URL, MonitorWriteEvidence(true, null)),
+        protected = true,
+        defaultBranch = tip,
+      )
+    }
   }
 
   private inner class ScriptedChecks(
@@ -561,6 +612,11 @@ class PhaseStandaloneMonitorExecutionTest {
       val found = source.pullRequest(pullRequest.repository, pullRequest.number)
       return bySha(requireNotNull((found as MonitorPullRequestLookup.Found).pullRequest.head).tip.sha)
     }
+
+    override fun commitChecks(
+      repository: MonitorRepositoryIdentity,
+      sha: String,
+    ): PullRequestChecks = bySha(sha)
 
     override fun failureLog(
       pullRequest: MonitorPullRequestIdentity,

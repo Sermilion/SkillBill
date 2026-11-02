@@ -5,6 +5,7 @@ import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorSettlement
+import skillbill.ports.monitor.model.MonitorTargetIdentity
 import java.nio.file.Path
 
 public data class MonitorPreparationRequest(
@@ -38,14 +39,16 @@ public sealed interface MonitorPreparation {
   public data class Prepared(
     public val context: MonitorExecutionContext,
     public val cleanup: MonitorCleanupOwnership,
-  ) : MonitorPreparation
+  ) : MonitorPreparation {
+    public val ledger: StandaloneMonitorLedger = StandaloneMonitorLedger(context, cleanup)
+  }
 
   public data class Completed(val pullRequest: MonitorPullRequestIdentity?) : MonitorPreparation
 
   public data class Blocked(
     public val kind: MonitorBlockKind,
     public val detail: String,
-    public val pullRequest: MonitorPullRequestIdentity?,
+    public val identity: MonitorTargetIdentity?,
     public val path: Path? = null,
     public val settlement: MonitorSettlement? = null,
     public val attempt: MonitorAttemptTarget? = null,
@@ -59,7 +62,7 @@ public sealed interface MonitorPreparation {
 
   public data class Failed(
     public val reason: String,
-    public val pullRequest: MonitorPullRequestIdentity? = null,
+    public val identity: MonitorTargetIdentity? = null,
     public val settlement: MonitorSettlement? = null,
     public val attempt: MonitorAttemptTarget? = null,
   ) : MonitorPreparation

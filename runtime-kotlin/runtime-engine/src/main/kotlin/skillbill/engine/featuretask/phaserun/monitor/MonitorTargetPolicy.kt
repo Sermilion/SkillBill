@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
+import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestHead
@@ -85,6 +87,32 @@ internal fun validatedOpenTarget(pullRequest: MonitorPullRequest): MonitorTarget
         "$label head ${head.tip.repository.slug}:${head.tip.ref} is not writable.",
       )
   }
+}
+
+internal fun validatedBranchTarget(
+  identity: MonitorBranchIdentity,
+  found: MonitorBranchLookup.Found,
+): MonitorTargetResolution {
+  val defect =
+    tipDefect("head", found.head.tip)
+      ?: tipDefect("default branch", found.defaultBranch)
+      ?: endpointDefect(found.head)
+  if (defect != null) {
+    return MonitorTargetResolution.Refused(
+      MonitorTargetRefusal.INCOMPLETE_TARGET,
+      "Branch ${identity.url} is not monitorable: $defect.",
+    )
+  }
+  val repository = identity.repository
+  return MonitorTargetResolution.Open(
+    MonitorResolvedTarget(
+      identity,
+      found.head,
+      found.defaultBranch,
+      "https://${repository.host}/${repository.slug}.git",
+      MonitorWritability.REPORT_ONLY,
+    ),
+  )
 }
 
 private fun targetDefect(pullRequest: MonitorPullRequest): String? {

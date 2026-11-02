@@ -20,6 +20,7 @@ import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.monitor.MonitorCheckSource
 import skillbill.ports.monitor.MonitorRepairPublisher
+import skillbill.ports.monitor.model.MonitorBranchIdentity
 import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorFailureLog
 import skillbill.ports.monitor.model.MonitorFence
@@ -29,6 +30,7 @@ import skillbill.ports.monitor.model.MonitorPublicationResult
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
+import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorWorktree
 import skillbill.ports.monitor.model.MonitorWritability
@@ -38,6 +40,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
@@ -75,6 +78,11 @@ class StandaloneMonitorServiceTest {
 
       override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks = PullRequestChecks.NoChecks
 
+      override fun commitChecks(
+        repository: MonitorRepositoryIdentity,
+        sha: String,
+      ): PullRequestChecks = PullRequestChecks.NoChecks
+
       override fun failureLog(
         pullRequest: MonitorPullRequestIdentity,
         check: PullRequestCheck,
@@ -98,7 +106,9 @@ class StandaloneMonitorServiceTest {
       "https://github.com/acme/repo.git",
       MonitorWritability.REPOSITORY_PUSH,
     )
-  private val ledger =
+  private val ledger = ledgerOf(target)
+
+  private fun ledgerOf(target: MonitorResolvedTarget) =
     StandaloneMonitorLedger(
       MonitorExecutionContext(
         target,
@@ -135,6 +145,22 @@ class StandaloneMonitorServiceTest {
     assertEquals(emptyList(), git.stagePathsCalls, "no staging")
     assertEquals(emptyList(), git.createCommitMessages, "no commit")
     assertEquals(emptyList(), publisherRequests, "no push")
+  }
+
+  @Test
+  fun `a completed repair on a report-only branch is refused before staging, committing or pushing`() {
+    val branch =
+      ledgerOf(
+        target.copy(identity = MonitorBranchIdentity(ACME, "main"), writability = MonitorWritability.REPORT_ONLY),
+      )
+    branch.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
+    branch.completePendingRepair()
+    git.ownedPathsValue = listOf("src/Fix.kt")
+
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(branch, repairWorktree))
+
+    assertContains(blocked.reason, "report-only")
+    assertNothingTouched()
   }
 
   @Test

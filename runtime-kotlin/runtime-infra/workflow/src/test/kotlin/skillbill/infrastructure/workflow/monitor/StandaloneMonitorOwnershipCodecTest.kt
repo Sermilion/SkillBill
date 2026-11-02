@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.StandaloneMonitorOwnershipSchemaPaths
+import skillbill.ports.monitor.model.MonitorBranchIdentity
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
@@ -70,12 +71,61 @@ class StandaloneMonitorOwnershipCodecTest {
     val properties = stream.use { YAMLMapper().readTree(it) }.path("properties")
 
     assertEquals(Keys.TOP_LEVEL, fieldsOf(properties))
-    assertEquals(Keys.TARGET_FIELDS, fieldsOf(properties.path(Keys.TARGET).path("properties")))
+    val targetShapes = properties.path(Keys.TARGET).path("oneOf")
+    assertEquals(Keys.TARGET_FIELDS, targetShapes.flatMap { fieldsOf(it.path("properties")) }.toSet())
     assertEquals(Keys.PROCESS_FIELDS, fieldsOf(properties.path(Keys.PROCESS).path("properties")))
     assertEquals(Keys.RETENTION_FIELDS, fieldsOf(properties.path(Keys.RETENTION).path("properties")))
   }
 
   private fun fieldsOf(node: JsonNode): Set<String> = node.fieldNames().asSequence().toSet()
+
+  @Test
+  fun `an existing pull request record decodes and re-encodes byte-identical`() {
+    val record =
+      """
+      {
+        "contract_version" : "1.0",
+        "target" : {
+          "host" : "github.com",
+          "repository" : "acme/repo",
+          "number" : 42,
+          "url" : "https://github.com/acme/repo/pull/42"
+        },
+        "invocation_id" : "invocation-1",
+        "owner_token" : "owner-token-0123456789",
+        "generation" : 3,
+        "process" : {
+          "host_identity" : "host",
+          "boot_identity" : "boot",
+          "pid" : 4242,
+          "process_birth_token" : "birth"
+        },
+        "caller_root" : "/work/repo",
+        "primary_root" : "/work/repo",
+        "common_dir" : "/work/repo/.git",
+        "state" : "released",
+        "acquired_at" : "2026-10-16T10:00:00Z",
+        "updated_at" : "2026-10-16T10:00:05Z"
+      }
+      """.trimIndent()
+
+    assertEquals(record, StandaloneMonitorOwnershipCodec.encode(StandaloneMonitorOwnershipCodec.decode(record, "t")))
+  }
+
+  @Test
+  fun `a branch target round trips and a target naming both or neither identity is rejected`() {
+    val branch = MonitorBranchIdentity(MonitorRepositoryIdentity.canonical("github.com", "acme", "repo"), "feat/x")
+    val record = sampleOwnershipRecord(MonitorOwnershipState.ACQUIRING).copy(target = branch)
+    val encoded = StandaloneMonitorOwnershipCodec.encode(record)
+    assertEquals(record, StandaloneMonitorOwnershipCodec.decode(encoded, "t"))
+
+    assertRejected(StandaloneMonitorFailureCode.INVALID_OWNERSHIP_SCHEMA) {
+      (it.path(Keys.TARGET) as ObjectNode).put(Keys.TARGET_REF, "main")
+    }
+    assertRejected(StandaloneMonitorFailureCode.INVALID_OWNERSHIP_SCHEMA) {
+      (it.path(Keys.TARGET) as ObjectNode).remove(Keys.TARGET_NUMBER)
+    }
+  }
 
   @Test
   fun `a document with an unknown key at any level is rejected`() {

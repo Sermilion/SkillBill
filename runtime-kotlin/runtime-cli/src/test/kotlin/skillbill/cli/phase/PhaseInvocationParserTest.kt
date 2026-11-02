@@ -135,7 +135,7 @@ class PhaseInvocationParserTest {
     }.message.orEmpty()
 
     assertContains(refusal("review", listOf("tighten"), token), "applies only to `phase monitor`")
-    assertContains(refusal("monitor", emptyList(), token), "explicit pull request target")
+    assertContains(refusal("monitor", emptyList(), token), "explicit target")
     assertContains(refusal("monitor", listOf(url), "short"), "owner token a blocked monitor reported")
     assertContains(refusal("monitor", listOf(url), "owner token with spaces"), "owner token a blocked monitor reported")
   }

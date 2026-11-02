@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.monitor
+package skillbill.infrastructure.workflow.process
 
 import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.monitor.MonitorProcessInspector

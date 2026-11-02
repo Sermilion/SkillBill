@@ -10,12 +10,15 @@ import skillbill.infrastructure.workflow.github.describeFailure
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorPullRequestSource
+import skillbill.ports.monitor.model.MonitorBranchLookup
+import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestSummary
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
+import skillbill.ports.monitor.model.MonitorWriteEvidence
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.io.IOException
 import java.nio.file.Path
@@ -26,6 +29,14 @@ private const val PAGE_SIZE = "100"
 private const val NOT_FOUND_MARKER = "HTTP 404"
 private val REMOTE_URL =
   Regex("^(?:https://(?:[^/@]+@)?|ssh://git@|git@)([^/:@]+)(?::\\d+)?[/:]([^/]+)/([^/]+?)(?:\\.git)?/?$")
+
+private sealed interface BranchRead {
+  data class Tip(val facts: MonitorBranchCommitFacts) : BranchRead
+
+  data object Missing : BranchRead
+
+  data class Failed(val reason: String) : BranchRead
+}
 
 class GhMonitorPullRequestSource internal constructor(
   private val gh: GhCommandRunner,
@@ -126,6 +137,72 @@ class GhMonitorPullRequestSource internal constructor(
     headRepository: MonitorRepositoryIdentity,
     branch: String,
   ): MonitorPullRequestListing = list(repository, listOf("-f", "head=${headRepository.owner}:$branch"))
+
+  override fun branch(
+    repository: MonitorRepositoryIdentity,
+    ref: String,
+  ): MonitorBranchLookup {
+    val read = gh.run(Path.of("."), getArgs(repository.host, "repos/${repository.slug}"))
+    if (read.exitCode != 0) return branchFailed(repository, ref, read.describeFailure())
+    val facts =
+      readTreeOrNull(read.stdout, "branch repository read")?.let(::parseMonitorBranchRepository)
+        ?: return branchFailed(repository, ref, "GitHub returned an unparsable or incomplete repository.")
+    return when (val tip = readBranch(repository, ref)) {
+      BranchRead.Missing -> MonitorBranchLookup.Missing
+      is BranchRead.Failed -> branchFailed(repository, ref, tip.reason)
+      is BranchRead.Tip -> foundBranch(repository, ref, facts, tip.facts)
+    }
+  }
+
+  private fun foundBranch(
+    repository: MonitorRepositoryIdentity,
+    ref: String,
+    repositoryFacts: MonitorBranchRepositoryFacts,
+    tip: MonitorBranchCommitFacts,
+  ): MonitorBranchLookup {
+    val default = repositoryFacts.defaultBranch
+    val defaultRead = if (ref == default) BranchRead.Tip(tip) else readBranch(repository, default)
+    if (defaultRead !is BranchRead.Tip) {
+      val reason = (defaultRead as? BranchRead.Failed)?.reason ?: "The default branch $default was not found."
+      return branchFailed(repository, ref, reason)
+    }
+    val cloneUrl = repositoryFacts.cloneUrl
+    return MonitorBranchLookup.Found(
+      MonitorPullRequestHead(
+        MonitorBranchTip(repository, ref, tip.sha),
+        cloneUrl,
+        cloneUrl,
+        MonitorWriteEvidence(repositoryFacts.push, maintainerCanModify = null),
+      ),
+      tip.protected,
+      MonitorBranchTip(repository, default, defaultRead.facts.sha),
+    )
+  }
+
+  private fun readBranch(
+    repository: MonitorRepositoryIdentity,
+    ref: String,
+  ): BranchRead {
+    val result = gh.run(Path.of("."), apiArgs(repository, "branches/$ref"))
+    return when {
+      result.exitCode != 0 && NOT_FOUND_MARKER in result.stdout -> BranchRead.Missing
+      result.exitCode != 0 -> BranchRead.Failed(result.describeFailure())
+      else ->
+        readTreeOrNull(result.stdout, "branch read")
+          ?.let(::parseMonitorBranchCommit)
+          ?.let(BranchRead::Tip)
+          ?: BranchRead.Failed("GitHub returned an unparsable or incomplete branch $ref.")
+    }
+  }
+
+  private fun branchFailed(
+    repository: MonitorRepositoryIdentity,
+    ref: String,
+    reason: String,
+  ): MonitorBranchLookup.Failed {
+    diagnostics.warning("monitor poll branch read failed for ${repository.slug}@$ref: $reason")
+    return MonitorBranchLookup.Failed(reason)
+  }
 
   private fun list(
     repository: MonitorRepositoryIdentity,

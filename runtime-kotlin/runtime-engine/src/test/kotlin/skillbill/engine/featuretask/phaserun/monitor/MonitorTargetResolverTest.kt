@@ -1,9 +1,13 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
+import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorBranchLookup
+import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
+import skillbill.ports.monitor.model.MonitorWritability
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,7 +27,7 @@ class MonitorTargetResolverTest {
   fun `an exact pull request url resolves that pull request in its own repository`() {
     val open = assertIs<MonitorTargetResolution.Open>(resolveUrl("https://github.com/acme/repo/pull/5"))
 
-    assertEquals(identity(5), open.target.pullRequest)
+    assertEquals(identity(5), open.target.identity)
     assertEquals(listOf(ACME to 5), source.lookups)
     assertTrue(source.branchQueries.isEmpty())
   }
@@ -85,7 +89,7 @@ class MonitorTargetResolverTest {
 
     val open = assertIs<MonitorTargetResolution.Open>(resolve(MonitorTargetSelector.IssueKey("SKILL-427")))
 
-    assertEquals(identity(7), open.target.pullRequest)
+    assertEquals(identity(7), open.target.identity)
     assertEquals(listOf(ACME to 7), source.lookups)
   }
 
@@ -115,6 +119,53 @@ class MonitorTargetResolverTest {
 
     source.branchListing = MonitorPullRequestListing.Complete(listOf(summary(3, headRepository = FORK), summary(4)))
     val open = assertIs<MonitorTargetResolution.Open>(resolve(branch))
-    assertEquals(identity(4), open.target.pullRequest)
+    assertEquals(identity(4), open.target.identity)
+  }
+
+  private fun foundBranch(ref: String) =
+    MonitorBranchLookup.Found(head(ref = ref), protected = null, MonitorBranchTip(ACME, "main", SHA))
+
+  @Test
+  fun `an omitted target with no pull request history watches its branch only when the branch exists`() {
+    val current = MonitorTargetSelector.CurrentBranch("feat/x")
+
+    assertEquals(MonitorTargetResolution.NoOpenPullRequest, resolve(current))
+
+    source.branchLookup = ::foundBranch
+    val open = assertIs<MonitorTargetResolution.Open>(resolve(current))
+    assertEquals(MonitorBranchIdentity(ACME, "feat/x"), open.target.identity)
+    assertEquals(MonitorWritability.REPORT_ONLY, open.target.writability)
+    assertEquals("https://github.com/acme/repo.git", open.target.baseFetchUrl)
+    assertEquals(MonitorBranchTip(ACME, "main", SHA), open.target.base)
+
+    source.branchLookup = { MonitorBranchLookup.Failed("rate limited") }
+    assertEquals(MonitorTargetResolution.Failed("rate limited"), resolve(current))
+  }
+
+  @Test
+  fun `an omitted target whose branch already merged never starts a branch watch`() {
+    source.branchLookup = ::foundBranch
+    source.branchListing =
+      MonitorPullRequestListing.Complete(listOf(summary(3).copy(state = MonitorPullRequestState.MERGED)))
+
+    assertEquals(MonitorTargetResolution.NoOpenPullRequest, resolve(MonitorTargetSelector.CurrentBranch("feat/x")))
+    assertTrue(source.branchReads.isEmpty())
+  }
+
+  @Test
+  fun `a named branch prefers its open pull request and refuses when several or no target exists`() {
+    val named = MonitorTargetSelector.Branch("feat/x")
+
+    val refused = assertIs<MonitorTargetResolution.Refused>(resolve(named))
+    assertEquals(MonitorTargetRefusal.TARGET_NOT_FOUND, refused.reason)
+    assertTrue("feat/x" in refused.detail && "acme/repo" in refused.detail, refused.detail)
+
+    source.branchListing = MonitorPullRequestListing.Complete(listOf(summary(4)))
+    assertEquals(identity(4), assertIs<MonitorTargetResolution.Open>(resolve(named)).target.identity)
+
+    source.branchListing = MonitorPullRequestListing.Complete(listOf(summary(4), summary(5)))
+    val ambiguous = assertIs<MonitorTargetResolution.Refused>(resolve(named))
+    assertEquals(MonitorTargetRefusal.AMBIGUOUS_TARGET, ambiguous.reason)
+    assertEquals(2, ambiguous.candidateUrls.size)
   }
 }

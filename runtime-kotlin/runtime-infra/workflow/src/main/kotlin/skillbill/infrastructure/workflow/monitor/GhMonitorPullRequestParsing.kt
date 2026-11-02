@@ -13,6 +13,26 @@ import skillbill.ports.monitor.model.MonitorWriteEvidence
 
 private const val REPOSITORY_SLUG_PARTS = 2
 
+internal data class MonitorBranchRepositoryFacts(
+  val defaultBranch: String,
+  val cloneUrl: String,
+  val push: Boolean?,
+)
+
+internal data class MonitorBranchCommitFacts(
+  val sha: String,
+  val protected: Boolean?,
+)
+
+internal fun parseMonitorBranchRepository(node: JsonNode): MonitorBranchRepositoryFacts? {
+  val defaultBranch = text(node, "default_branch") ?: return null
+  val cloneUrl = text(node, "clone_url") ?: return null
+  return MonitorBranchRepositoryFacts(defaultBranch, cloneUrl, flag(node.path("permissions"), "push"))
+}
+
+internal fun parseMonitorBranchCommit(node: JsonNode): MonitorBranchCommitFacts? =
+  text(node.path("commit"), "sha")?.let { MonitorBranchCommitFacts(it, flag(node, "protected")) }
+
 internal fun parseMonitorPullRequest(
   node: JsonNode,
   repository: MonitorRepositoryIdentity,

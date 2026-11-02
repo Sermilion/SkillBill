@@ -35,6 +35,8 @@ public class StandaloneMonitorLedger internal constructor(
 
   internal val acknowledgedHeadSha: String get() = heads.last()
 
+  public val followedHeadShas: List<String> get() = heads.drop(1)
+
   internal val supersededHeadShas: Set<String> get() = heads.dropLast(1).toSet()
 
   internal var pendingRepair: StandalonePendingRepair? = null

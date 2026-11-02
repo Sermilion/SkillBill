@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phaserun
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.contracts.issuekey.goalIntakeSpecBundleDirectory
 import skillbill.contracts.issuekey.issueAndFeature
+import skillbill.engine.featuretask.phaserun.monitor.MONITOR_BRANCH_PREFIX
 import java.nio.file.Path
 
 internal object IntakeIssueKeys {
@@ -13,7 +14,8 @@ internal object IntakeIssueKeys {
 
   fun tokens(intake: String?): List<String> = intake?.trim().orEmpty().split(WHITESPACE).filter(String::isNotBlank)
 
-  fun specPathToken(tokens: List<String>): String? = tokens.firstOrNull { it.endsWith(SPEC_EXTENSION) }
+  fun specPathToken(tokens: List<String>): String? =
+    tokens.firstOrNull { it.endsWith(SPEC_EXTENSION) && !it.startsWith(MONITOR_BRANCH_PREFIX) }
 
   fun ofIntake(intake: String?): String? {
     val tokens = tokens(intake)

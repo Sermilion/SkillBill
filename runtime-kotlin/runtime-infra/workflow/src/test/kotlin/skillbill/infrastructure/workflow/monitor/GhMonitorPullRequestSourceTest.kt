@@ -5,6 +5,7 @@ import skillbill.infrastructure.workflow.github.GhCommandResult
 import skillbill.infrastructure.workflow.github.GhCommandRunner
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
@@ -66,6 +67,57 @@ class GhMonitorPullRequestSourceTest {
       },
       NoopRuntimeDiagnostics,
     )
+
+  private val repositoryJson =
+    """{"default_branch":"main","clone_url":"https://github.com/acme/repo.git","permissions":{"push":true}}"""
+
+  private fun branchJson(sha: String = SHA) = """{"protected":true,"commit":{"sha":"$sha"}}"""
+
+  @Test
+  fun `a branch read returns the tip, its endpoints and the default branch tip`() {
+    val other = "fedcba9876543210fedcba9876543210fedcba98"
+    val found =
+      assertIs<MonitorBranchLookup.Found>(
+        routedSource(
+          "repos/acme/repo" to GhCommandResult(0, repositoryJson),
+          "repos/acme/repo/branches/feat/x" to GhCommandResult(0, branchJson()),
+          "repos/acme/repo/branches/main" to GhCommandResult(0, branchJson(other)),
+        ).branch(REPO, "feat/x"),
+      )
+
+    assertEquals(SHA, found.head.tip.sha)
+    assertEquals("https://github.com/acme/repo.git", found.head.pushUrl)
+    assertEquals(true, found.protected)
+    assertEquals(other, found.defaultBranch.sha)
+  }
+
+  @Test
+  fun `a missing branch is distinct from a failed read and absent optional facts stay null`() {
+    val repository = "repos/acme/repo" to GhCommandResult(0, repositoryJson)
+    val branch = "repos/acme/repo/branches/main"
+
+    assertEquals(
+      MonitorBranchLookup.Missing,
+      routedSource(repository, branch to GhCommandResult(1, "gh: Not Found (HTTP 404)")).branch(REPO, "main"),
+    )
+    assertIs<MonitorBranchLookup.Failed>(
+      routedSource("repos/acme/repo" to GhCommandResult(1, "gh: Not Found (HTTP 404)")).branch(REPO, "main"),
+    )
+    assertIs<MonitorBranchLookup.Failed>(
+      routedSource(repository, branch to GhCommandResult(0, """{"protected":true}""")).branch(REPO, "main"),
+    )
+    val found =
+      assertIs<MonitorBranchLookup.Found>(
+        routedSource(
+          "repos/acme/repo" to
+            GhCommandResult(0, """{"default_branch":"main","clone_url":"https://github.com/acme/repo.git"}"""),
+          branch to GhCommandResult(0, """{"commit":{"sha":"$SHA"}}"""),
+        ).branch(REPO, "main"),
+      )
+    assertNull(found.head.writeEvidence.repositoryPush)
+    assertNull(found.protected)
+    assertEquals(found.head.tip, found.defaultBranch)
+  }
 
   private fun foundPullRequest(json: String) =
     assertIs<MonitorPullRequestLookup.Found>(source(stdout = json).pullRequest(REPO, 1)).pullRequest
