@@ -42,7 +42,7 @@ internal fun NewTaskOfferCard(
   val type = SkillBillTheme.type
   var keyChoice by remember { mutableStateOf("") }
   val prefixKind = offer.prefixKind
-  val canStart = !busy && !offer.starting
+  val canStart = !busy && !offer.starting && offer.started == null
   Column(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)
       .border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md))
@@ -72,6 +72,7 @@ internal fun NewTaskOfferCard(
       )
       SbButton("Use issue prefix or key", { onStart(prefixKind, keyChoice.trim()) }, size = SbControlSize.Small, enabled = canStart && ISSUE_CHOICE.matches(keyChoice.trim()))
     }
+    offer.started?.let { Callout(tone = FeedbackTone.Success, body = "$it. Send another message to start again.") }
     offer.problem?.let { Callout(tone = FeedbackTone.Error, body = it) }
   }
 }

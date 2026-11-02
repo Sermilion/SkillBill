@@ -5,6 +5,7 @@ import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_CLEANUP_ASSIGNMENTS
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_PR_KEY_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_COLUMN_LIST
@@ -32,7 +33,6 @@ import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -613,7 +613,7 @@ internal class StandalonePhaseStatusStore(
     request: StandalonePhaseStatusUpdate,
     operatorCancellation: Boolean,
   ): Boolean {
-    if (operatorCancellation && current.lifecycleState !in setOf("terminal", "completed", "success", "canceled")) {
+    if (operatorCancellation && current.lifecycleState !in OPERATOR_CANCEL_CLOSED_STATES) {
       return true
     }
     if (current.lifecycleState == "paused" && current.currentStep == "runner_interrupted" &&
@@ -823,8 +823,26 @@ internal class StandalonePhaseStatusStore(
     const val MONITOR_PHASE_ID = "monitor"
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
     const val RELEASED_OWNER_ACTIVITY = "Owner stopped; released for block incident recovery."
-    val LIVE_STATES = setOf("active", "paused", "blocked")
-    val TERMINAL_STATES = setOf("terminal", "failed", "blocked", "canceled")
+    val LIVE_STATES =
+      setOf(
+        IdeStatusLifecycleState.ACTIVE.wireValue,
+        IdeStatusLifecycleState.PAUSED.wireValue,
+        IdeStatusLifecycleState.BLOCKED.wireValue,
+      )
+    val TERMINAL_STATES =
+      setOf(
+        IdeStatusLifecycleState.TERMINAL.wireValue,
+        IdeStatusLifecycleState.FAILED.wireValue,
+        IdeStatusLifecycleState.BLOCKED.wireValue,
+        IdeStatusLifecycleState.CANCELED.wireValue,
+      )
+    val OPERATOR_CANCEL_CLOSED_STATES =
+      setOf(
+        IdeStatusLifecycleState.TERMINAL.wireValue,
+        "completed",
+        "success",
+        IdeStatusLifecycleState.CANCELED.wireValue,
+      )
     const val AFTER_ANCHOR_SQL: String =
       "(length(run_sequence) < ? OR (length(run_sequence) = ? AND run_sequence < ?) " +
         "OR (length(run_sequence) = ? AND run_sequence = ? AND invocation_id < ?))"
