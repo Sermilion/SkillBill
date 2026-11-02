@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -223,5 +225,37 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     assertEquals("Add dark mode setting", controls.newTaskRequests.single().title)
+  }
+
+  @Test
+  fun `starting a goal after chip rebind posts the new repository and agent`() = runTest {
+    val chats = FakeExecutionChatRepository(supported = setOf("claude", "codex")).apply {
+      events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) }
+    }
+    val controls = FakeWorkControlRepository()
+    val firstRoot = createTempDirectory("first-repo").also { it.toFile().deleteOnExit() }.toString()
+    val secondRoot = createTempDirectory("second-repo").also { it.toFile().deleteOnExit() }.toString()
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository(firstRoot, "first")
+      agentId = "claude"
+      selectedAgent = chats.agent
+      text = "Add export"
+      send()
+    }
+    runCurrent()
+    draft.repository = NewTaskRepository(secondRoot, "second")
+    draft.agentId = "codex"
+    draft.selectedAgent = ChatAgent("codex", null, null)
+    draft.rebindChat()
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Refused("Add more requirements.")
+
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+
+    val request = controls.newTaskRequests.single()
+    assertEquals(secondRoot, request.repoRoot)
+    assertEquals("codex", request.agentId)
   }
 }

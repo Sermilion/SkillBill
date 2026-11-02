@@ -90,8 +90,6 @@ class NewTaskViewModel(
       is NewTaskAction.ChooseAgent -> {
         agentRead?.cancel()
         draft.agentId = action.agentId
-        draft.selectedAgent = null
-        mutableState.update { it.copy(agent = null) }
         agentRead = viewModelScope.launch { resolveAgent(action.agentId) }
       }
       NewTaskAction.OpenRepositoryPicker -> mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
