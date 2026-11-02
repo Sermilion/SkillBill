@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.feature.chat.ChatMessage
 
 internal fun newTaskRequirements(messages: List<ChatMessage>): String {
@@ -21,3 +22,12 @@ internal fun newTaskRequirements(messages: List<ChatMessage>): String {
   }
   return "$first\n\nChat context. Agent lines are questions, not requirements.\n${context.joinToString("\n\n")}"
 }
+
+internal fun newTaskTitle(messages: List<ChatMessage>): String? =
+  messages.asReversed()
+    .asSequence()
+    .filterIsInstance<ChatMessage.Agent>()
+    .filterNot { it.streaming }
+    .flatMap { it.actions }
+    .filter { it.start == NewTaskActionKind.Goal || it.start == NewTaskActionKind.Plan }
+    .firstNotNullOfOrNull { it.title }

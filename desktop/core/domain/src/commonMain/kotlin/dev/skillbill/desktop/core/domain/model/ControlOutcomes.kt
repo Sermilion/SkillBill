@@ -133,6 +133,7 @@ data class NewTaskStart(
   val kind: NewTaskKind,
   val keyChoice: String?,
   val expectedDatabaseSessionId: Long?,
+  val title: String? = null,
 )
 
 sealed interface NewTaskStartOutcome {

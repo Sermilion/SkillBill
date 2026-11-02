@@ -5,6 +5,7 @@ import skillbill.engine.goal.GoalRunnerPauseStatus
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.GoalRunnerStopStatus
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
@@ -84,11 +85,8 @@ public class WorkControlService(
 
   public fun prepareNewTask(
     repoRoot: Path,
-    requirements: String,
-    baseBranch: String?,
-    keyChoice: String?,
-    occupiedKeys: Set<String>,
-  ): NewTaskPreparation = newTaskStart.prepareNewTask(repoRoot, requirements, baseBranch, keyChoice, occupiedKeys)
+    request: NewTaskIntakeRequest,
+  ): NewTaskPreparation = newTaskStart.prepareNewTask(repoRoot, request)
 
   public fun startNewTask(
     repoRoot: Path,

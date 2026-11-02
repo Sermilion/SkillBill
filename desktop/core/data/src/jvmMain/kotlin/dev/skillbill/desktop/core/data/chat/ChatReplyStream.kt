@@ -82,9 +82,22 @@ private fun decodeActions(source: String, diagnostics: Diagnostics): List<ChatSu
         return@mapNotNull null
       }
     }
-    ChatSuggestedAction(label, instruction, mode, start)
+    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics))
   }
   return actions.takeIf { it.map(ChatSuggestedAction::label).distinct().size == it.size }
+}
+
+private fun actionTitle(action: JsonObject, diagnostics: Diagnostics): String? {
+  if ("title" !in action) return null
+  val title = action.actionString("title")?.trim()?.takeIf { title ->
+    title.isNotBlank() &&
+      title.length <= 60 &&
+      '\n' !in title &&
+      '\r' !in title &&
+      title.any { it.isLetterOrDigit() && it.code < 128 }
+  }
+  if (title == null) diagnostics.record("chat.action_title_invalid")
+  return title
 }
 
 private fun JsonObject.actionString(key: String): String? =

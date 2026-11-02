@@ -61,7 +61,10 @@ class NewTaskComposerTest {
       WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
     ).apply {
       chatDispatcher = Dispatchers.Unconfined
-      repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
+      repository = NewTaskRepository(
+        createTempDirectory("new-task-repo").also { it.toFile().deleteOnExit() }.toString(),
+        "repo",
+      )
       agentId = "claude"
       selectedAgent = chat.agent
       text = "Add a button"
