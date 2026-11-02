@@ -389,6 +389,12 @@ public sealed interface PhaseStepOutputCheck {
     val rule: String = OUTPUT_VERIFICATION_RULE,
   ) : PhaseStepOutputCheck
 
+  /** Rejects the output and starts a new attempt with [reason] as its correction, inside the retryable budget. */
+  public data class Retry(
+    val reason: String,
+    val rule: String = OUTPUT_VERIFICATION_RULE,
+  ) : PhaseStepOutputCheck
+
   public data class Redeliver(
     val reason: String,
   ) : PhaseStepOutputCheck
