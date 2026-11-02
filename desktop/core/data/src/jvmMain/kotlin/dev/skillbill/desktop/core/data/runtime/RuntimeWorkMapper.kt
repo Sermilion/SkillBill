@@ -62,11 +62,11 @@ internal fun WorkBoardItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWo
   ),
 )
 
-/** The detail read carries no running or membership verdicts; those stay on the board row. */
+/** The detail read carries no membership verdicts; those stay on the board row. */
 internal fun WorkDetailItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWorkItem(
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
-    running = false, recentlyFinishedPhase = false, doneWithinDay = false, freshnessDeadline, membershipDeadline = null,
+    running, recentlyFinishedPhase = false, doneWithinDay = false, freshnessDeadline, membershipDeadline = null,
     exactPauseReason, controlLease, observation, databaseFileObservation, sessionId, completionSource = finishedAtSource,
   ),
 )

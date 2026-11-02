@@ -48,6 +48,8 @@ import kotlin.time.Duration.Companion.minutes
 // How long pause-and-act waits for a running execution to stop, control call included.
 private val PAUSE_WAIT = 5.minutes
 
+internal const val CANNOT_PAUSE_NOTICE = "Not sent. The app can't pause this execution, so try again once it stops."
+
 // The pause request is already sent when the wait runs out, so the execution may still pause later.
 internal const val PAUSE_TIMEOUT_NOTICE =
   "The app asked the execution to pause, but it did not stop within 5 minutes, so this turn did not run. " +
@@ -254,7 +256,7 @@ class ChatWorkspace(
         header.pauseEligible -> controls.pauseNow(header)
         header.controlEligible -> controls.cancel(header)
         else -> {
-          session.append(ChatMessage.Notice("This execution can't be paused from the app."))
+          session.append(ChatMessage.Notice(CANNOT_PAUSE_NOTICE))
           return@launchTurn
         }
       }

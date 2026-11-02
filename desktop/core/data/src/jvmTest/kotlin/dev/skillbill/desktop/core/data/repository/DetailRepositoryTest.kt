@@ -94,16 +94,17 @@ class DetailRepositoryTest {
   }
 
   @Test
-  fun `refresh preserves the runtime running verdict from the board row`() = runTest {
+  fun `a refresh takes the running verdict from the read, so a run that stopped after the row was captured reads as stopped`() = runTest {
     val signals = MutableStateFlow(signal())
     val reads = FakeDetailReads()
     val details = DetailObservations(backgroundScope, signals, reads)
-    val row = ROW.copy(running = false)
     val states = mutableListOf<DetailState>()
-    backgroundScope.launch { details.observe(row).collect { states += it } }
+    backgroundScope.launch { details.observe(ROW.copy(running = true)).collect { states += it } }
     runCurrent()
+    assertTrue(states.last().header.running)
 
-    signals.value = signal(goals = 2, changed = mapOf("goals" to ChangedIds.Ids(base = 1, ids = listOf(row.id))))
+    reads.header = ROW.copy(lifecycle = Lifecycle.Blocked, running = false)
+    signals.value = signal(goals = 2, changed = mapOf("goals" to ChangedIds.Ids(base = 1, ids = listOf(ROW.id))))
     runCurrent()
 
     assertFalse(states.last().header.running)

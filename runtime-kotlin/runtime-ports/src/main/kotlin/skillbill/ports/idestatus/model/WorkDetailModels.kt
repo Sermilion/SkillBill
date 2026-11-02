@@ -79,6 +79,7 @@ data class WorkDetailItem(
   val exactPauseReason: String? = null,
   val databaseFileObservation: DatabaseFileObservation? = null,
   val pauseEligible: Boolean = false,
+  val running: Boolean = false,
   val listAnchors: Map<WorkDetailList, String> = emptyMap(),
   val controlLease: GoalRunnerExecutionLease? = null,
   val incident: WorkIncidentProjection? = null,

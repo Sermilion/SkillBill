@@ -496,6 +496,22 @@ class ChatWorkspaceTest {
   }
 
   @Test
+  fun `pause and act on a running execution the app cannot control says the message was not sent`() = runTest {
+    val item = workItem("SKILL-1").copy(controlEligible = false, pauseEligible = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+
+    workspace.pauseAndAct(item.id, "fix it")
+    runCurrent()
+
+    assertEquals(ChatMessage.Notice(CANNOT_PAUSE_NOTICE), workspace.session(item.id)!!.transcript.value.last())
+    assertEquals(1, chat.requests.size)
+    assertTrue(controls.calls.isEmpty())
+  }
+
+  @Test
   fun `a refused pause runs no turn and no launch`() = runTest {
     val item = workItem("SKILL-1")
     details.details = mapOf(item.id to flowOf(loaded(item)))

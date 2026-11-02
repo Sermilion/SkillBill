@@ -13,6 +13,7 @@ import skillbill.engine.work.eligibility.workDisplayPriority
 import skillbill.engine.work.eligibility.workLiveSection
 import skillbill.engine.work.eligibility.workPauseEligible
 import skillbill.engine.work.eligibility.workRequiresAttention
+import skillbill.engine.work.eligibility.workRunning
 import skillbill.engine.work.incident.WorkIncidentProjectionBuilder
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
@@ -372,9 +373,7 @@ public class IdeStatusService(
     val validationPage = validationRead?.page
     val goalStatus = goal?.let { work -> detailGoalStatus(work, validationPage, goalRead?.page, context) }
     val dependencies = detailDependencies(goal, context.unitOfWork.workList, request, position)
-    val runtimeWorkflowId =
-      goalStatus?.currentChildWorkflowId
-        ?: item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_TASK_RUNTIME }?.workflowId
+    val runtimeWorkflowId = goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId()
     val runtimeRead =
       runtimeWorkflowId?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
     val runtimeStatus = runtimeRead?.status
@@ -412,6 +411,7 @@ public class IdeStatusService(
         liveSection = workLiveSection(snapshot, completion.first),
         controlEligible = workControlEligible(snapshot),
         pauseEligible = workPauseEligible(snapshot),
+        running = workRunning(snapshot, completion.first),
         requiresAttention = workRequiresAttention(snapshot),
         displayGroup = workDisplayGroup(snapshot, completion.first),
         displayPriority = workDisplayPriority(snapshot, completion.first),
@@ -427,6 +427,9 @@ public class IdeStatusService(
       detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead),
     )
   }
+
+  private fun WorkItem.taskRuntimeWorkflowId(): String? =
+    workflowId.takeIf { workflowKind == WorkItemKind.FEATURE_TASK_RUNTIME }
 
   private fun detailChangeBaseline(
     standalone: StandalonePhaseStatusRecord?,

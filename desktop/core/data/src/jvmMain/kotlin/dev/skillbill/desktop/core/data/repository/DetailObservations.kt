@@ -219,9 +219,8 @@ private fun DetailState.refreshedBy(read: DetailRead): DetailState = when (read)
   }
 }
 
-/** The detail read carries no running or membership verdicts, so the loaded header keeps the ones the board row had. */
+/** The detail read carries no membership verdicts, so the loaded header keeps the ones the board row had. */
 private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
-  running = row.running,
   recentlyFinishedPhase = row.recentlyFinishedPhase,
   doneWithinDay = row.doneWithinDay,
   membershipDeadline = row.membershipDeadline,

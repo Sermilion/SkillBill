@@ -15,6 +15,11 @@ internal fun workControlEligible(snapshot: IdeStatusSnapshot): Boolean = policy(
 
 internal fun workPauseEligible(snapshot: IdeStatusSnapshot): Boolean = policy(snapshot, null).pauseEligible
 
+internal fun workRunning(
+  snapshot: IdeStatusSnapshot,
+  finishedAt: Instant?,
+): Boolean = policy(snapshot, finishedAt).running
+
 internal fun workLiveSection(
   snapshot: IdeStatusSnapshot,
   finishedAt: Instant?,

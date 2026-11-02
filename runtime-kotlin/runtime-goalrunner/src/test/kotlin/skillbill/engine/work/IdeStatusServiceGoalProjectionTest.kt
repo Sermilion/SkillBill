@@ -124,6 +124,7 @@ class IdeStatusServiceGoalProjectionTest {
 
       val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
       assertEquals(IdeStatusLifecycleState.ACTIVE, detail.snapshot.lifecycleState)
+      assertTrue(detail.running)
       assertNull(detail.finishedAt)
       assertNull(detail.finishedAtSource)
     }
@@ -357,6 +358,7 @@ class IdeStatusServiceGoalProjectionTest {
       )
     val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
     assertEquals(IdeStatusLifecycleState.BLOCKED, detail.snapshot.lifecycleState)
+    assertFalse(detail.running)
     assertEquals(reason, detail.exactPauseReason)
     assertTrue(requireNotNull(detail.snapshot.pauseReason?.label).length < reason.length)
     assertEquals("Goal SKILL-148 is blocked.", detail.snapshot.summary)
