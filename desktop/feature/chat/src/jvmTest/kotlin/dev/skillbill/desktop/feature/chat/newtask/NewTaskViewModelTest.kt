@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
+import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
@@ -62,7 +63,7 @@ class NewTaskViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val events = MutableSharedFlow<ChatEvent>()
     val chatRepository = FakeExecutionChatRepository().apply { this.events = { events } }
-    val draft = NewTaskDraft(chatRepository, WindowCoroutineScope(backgroundScope), FIXED_CLOCK).apply {
+    val draft = NewTaskDraft(chatRepository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/app", "app")
       agentId = "claude"

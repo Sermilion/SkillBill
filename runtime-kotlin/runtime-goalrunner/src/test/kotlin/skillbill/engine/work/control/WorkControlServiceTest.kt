@@ -2,7 +2,10 @@ package skillbill.engine.work.control
 
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
+import skillbill.application.testProjectStore
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
+import skillbill.engine.goal.GoalNewWorkAdmission
+import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.goalPreflightServiceForTests
@@ -46,6 +49,7 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import java.nio.file.Path
 import java.util.UUID
 import kotlin.test.Test
@@ -248,6 +252,15 @@ private class GoalControlsFixture : AutoCloseable {
       WorkCancellation(database, status, goals, supervisor, ideStatusClock, launcher),
       runs,
       WorkControlRecovery(status, recovery, runs),
+      WorkNewTaskStart(
+        database,
+        GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
+        NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
+        goalPreflightServiceForTests(database),
+        launcher,
+        EnvironmentContext(),
+        TestRepositoryEnclosingRoot,
+      ),
     )
 
   init {

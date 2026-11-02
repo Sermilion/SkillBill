@@ -64,6 +64,7 @@ internal fun ChatTranscript(
   mode: ChatPermissionMode,
   modifier: Modifier = Modifier,
   allowStartActions: Boolean = true,
+  footer: (@Composable () -> Unit)? = null,
   onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
 ) {
   val busy by thread.busy.collectAsState()
@@ -95,6 +96,7 @@ internal fun ChatTranscript(
     items(messages) { message ->
       ChatMessageRow(message, agent, !busy && supported && !gone && message === messages.lastOrNull(), mode, allowStartActions, onAction)
     }
+    if (footer != null) item(key = "chat-footer", contentType = "footer") { footer() }
   }
 }
 

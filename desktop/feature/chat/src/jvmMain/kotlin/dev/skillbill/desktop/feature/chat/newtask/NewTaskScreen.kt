@@ -36,6 +36,7 @@ import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.feature.chat.ChatTranscript
+import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
 
 private val CONTENT_MAX_WIDTH = 680.dp
@@ -53,6 +54,8 @@ internal class NewTaskScreenHost(
 @Composable
 internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
   val chat = draft.chat.collectAsState().value
+  val offer by draft.offer.collectAsState()
+  val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
   LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
@@ -70,12 +73,24 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
       NewTaskHomeBody(state, draft, host, focus, onAction, Modifier.weight(1f))
     } else {
       key(chat) {
+        val firstTurnEnded by chat.firstTurnEnded.collectAsState()
         ChatTranscript(
           chat.thread,
           gone = false,
           mode = ChatPermissionMode.Act,
           modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
           allowStartActions = host.onStart != null,
+          footer = if (firstTurnEnded) {
+            {
+              NewTaskOfferCard(
+                draft.baseBranch,
+                chipText(draft.selectedAgent),
+                chatBusy,
+                offer,
+                draft::start,
+              )
+            }
+          } else null,
         ) { _, action ->
           val start = action.start
           if (start == null) {

@@ -8,6 +8,8 @@ import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.NewTaskStart
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
@@ -125,6 +127,7 @@ class DetailControlsTest {
     override suspend fun cancel(item: WorkItem): ControlOutcome = error("unused")
     override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome = error("unused")
     override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome = error("unused")
+    override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome = error("unused")
     override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome = error("unused")
     override suspend fun recover(item: WorkItem, preview: RecoveryPreview): RecoveryOutcome = error("unused")
     override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome = error("unused")

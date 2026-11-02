@@ -4,10 +4,13 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
@@ -18,6 +21,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
@@ -32,14 +37,25 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 /** A draft for tests that never send. */
-internal fun testNewTaskDraft() = NewTaskDraft(FakeExecutionChatRepository(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+internal fun testDatabaseSessionController(sessionId: Long? = 1L): DatabaseSessionController = object : DatabaseSessionController {
+  override val state = MutableStateFlow<DatabaseSessionState>(
+    sessionId?.let { DatabaseSessionState.Open("/db", it) } ?: DatabaseSessionState.Opening(null),
+  ).asStateFlow()
+
+  override fun reopen() = Unit
+}
+
+internal fun testNewTaskDraft() = NewTaskDraft(
+  FakeExecutionChatRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
+  WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewTaskDraftTest {
   private val chat = FakeExecutionChatRepository()
   private val root = createTempDirectory("new-task-repo").toString()
 
-  private fun TestScope.draft() = NewTaskDraft(chat, WindowCoroutineScope(backgroundScope), Clock.System).apply {
+  private fun TestScope.draft() = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
     chatDispatcher = StandardTestDispatcher(testScheduler)
     repository = NewTaskRepository(root, "repo")
     baseBranch = "main"
@@ -110,7 +126,7 @@ class NewTaskDraftTest {
     val sessionId = chat.requests.single().sessionId
     assertTrue(sessionId in chat.saved)
 
-    val next = NewTaskDraft(chat, WindowCoroutineScope(backgroundScope), Clock.System)
+    val next = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System)
     next.chatDispatcher = StandardTestDispatcher(testScheduler)
     next.repository = NewTaskRepository(root, "repo")
     next.refreshSaved()

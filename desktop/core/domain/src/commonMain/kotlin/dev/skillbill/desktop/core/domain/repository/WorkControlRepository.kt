@@ -5,6 +5,8 @@ import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.NewTaskStart
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
@@ -25,6 +27,8 @@ interface WorkControlRepository {
   suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome
 
   suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome
+
+  suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome
 
   suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome
 

@@ -42,12 +42,13 @@ public class PhaseRunIntakeResolver(
     request: PhaseRunRequest,
     currentBranch: String?,
   ): PhaseRunIntake {
-    val intake = request.intake?.trim().orEmpty()
-    val tokens = IntakeIssueKeys.tokens(intake)
+    val intake = request.intake.orEmpty()
+    val normalizedIntake = intake.trim()
+    val tokens = IntakeIssueKeys.tokens(normalizedIntake)
     val store = projectStore.resolve(request.repoRoot)
     val specPath =
       IntakeIssueKeys.specPathToken(tokens)?.let { token -> store.resolveSpecPath(token, request.repoRoot) }
-    val issueKey = IntakeIssueKeys.ofIntake(intake)
+    val issueKey = IntakeIssueKeys.ofIntake(normalizedIntake)
     val reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT
     return when (definition.intake) {
       PhaseIntakeRequirement.OPTIONAL ->

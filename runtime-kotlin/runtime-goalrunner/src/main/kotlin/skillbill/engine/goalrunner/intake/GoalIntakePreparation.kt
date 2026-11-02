@@ -26,6 +26,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
 @Inject
@@ -175,7 +176,12 @@ public class GoalIntakePreparation(
     val firstToken = reference.substringBefore(' ').substringBefore('\n')
     val store = projectStore.resolve(repoRoot)
     return listOf(reference, firstToken).distinct().flatMap { token ->
-      val path = store.resolveSpecPath(token, repoRoot).toAbsolutePath().normalize()
+      val path =
+        try {
+          store.resolveSpecPath(token, repoRoot).toAbsolutePath().normalize()
+        } catch (_: InvalidPathException) {
+          return@flatMap emptyList()
+        }
       listOf(
         path,
         path.resolve(SPEC_FILE),

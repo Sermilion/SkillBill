@@ -11,6 +11,8 @@ import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.LoadMoreOutcome
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.NewTaskStart
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
@@ -71,6 +73,8 @@ data class ControlCall(val control: String, val item: WorkItem, val agentId: Str
 class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.IntentRecorded) : WorkControlRepository {
   override val reservations = MutableStateFlow<Set<String>>(emptySet())
   val calls = mutableListOf<ControlCall>()
+  val newTaskRequests = mutableListOf<NewTaskStart>()
+  var newTaskOutcome: NewTaskStartOutcome = NewTaskStartOutcome.Refused("unused")
 
   override suspend fun pauseAfterSubtask(item: WorkItem) = record(ControlCall("pauseAfterSubtask", item))
 
@@ -81,6 +85,11 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
   override suspend fun launch(item: WorkItem, agentId: String?) = record(ControlCall("launch", item, agentId))
 
   override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome = notFaked("startGoal")
+
+  override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome {
+    newTaskRequests += request
+    return newTaskOutcome
+  }
 
   override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome =
     notFaked("recoveryPreview")

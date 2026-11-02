@@ -275,6 +275,21 @@ runtime commit strategy and launches no agent. Details:
 [Authoring model-specific phase strategies](model-specific-phase-strategies.md).
 
 
+## Desktop new-task start
+
+Issue-key allocation has two owners. The dispatcher prose in
+`skills/skill-bill/content.md` handles terminal intake, and
+`NewTaskIssueKeyAllocator` handles desktop intake. Both inspect local spec
+bundles, ignore `LOCAL-` keys when choosing a project prefix, and increment the
+highest occupied issue number.
+
+The desktop first admits the chat text. If it has no issue key, the operator can
+choose a complete key or a prefix, or the runtime can allocate the next key. The
+runtime composes a keyed intake, admits it again, checks that an allocated key
+has not appeared in the inventory, runs preflight, then launches a goal or plan.
+Standalone review, validation, QA and PR starts run their phase directly. A
+refusal launches nothing. Intake is limited to 30,000 UTF-8 bytes.
+
 ## Phase and operation concepts
 
 Planning authors specs with one to five acceptance criteria each. A subtask needing more than
