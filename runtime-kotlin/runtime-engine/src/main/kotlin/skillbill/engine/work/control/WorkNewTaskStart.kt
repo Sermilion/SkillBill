@@ -167,7 +167,7 @@ public class WorkNewTaskStart(
         ),
       )
     goalStartRefusal(checked)?.let { return NewTaskStartResult.Refused(it) }
-    val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val identity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot)
     return database.transaction { unit ->
       when (
         val launched =

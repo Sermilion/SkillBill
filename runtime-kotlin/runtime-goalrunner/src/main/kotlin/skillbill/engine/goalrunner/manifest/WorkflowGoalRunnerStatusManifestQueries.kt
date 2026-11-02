@@ -4,8 +4,10 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.engine.goal.GoalIssueStartedReader
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goal.goalRepositoryIdentityFilters
 import skillbill.engine.goalrunner.model.GoalRunnerStatusManifestPage
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.decomposition.runtime.isActiveGoalRuntime
 import java.nio.file.Path
@@ -43,32 +45,40 @@ internal class WorkflowGoalRunnerStatusManifestQueries(
     repoRoot: Path?,
   ): String? =
     database.read { unit ->
-      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
-      var offset = 0
-      var newest: String? = null
-      var active: String? = null
-      do {
-        val page =
-          unit.workList.goalParentCandidatePage(
-            issueKey,
-            identity,
-            offset,
-            WorkPaginationLimits.MAX_PAGE_SIZE,
-          )
-        if (newest == null) newest = page.firstOrNull()?.workflowId
-        page.forEach { candidate ->
-          if (isActiveGoalRuntime(candidate.manifestStatus, candidate.hasUnsettledSubtasks)) {
-            check(active == null) {
-              "Ambiguous decomposed parent workflows for '$issueKey': " +
-                "$active, ${candidate.workflowId}."
-            }
-            active = candidate.workflowId
-          }
-        }
-        offset += page.size
-      } while (page.size == WorkPaginationLimits.MAX_PAGE_SIZE)
-      active ?: newest
+      goalRepositoryIdentityFilters(repoRoot, repositoryEnclosingRootPort)
+        .firstNotNullOfOrNull { identity -> statusParentWorkflowId(unit, issueKey, identity) }
     }
+
+  private fun statusParentWorkflowId(
+    unit: UnitOfWork,
+    issueKey: String,
+    identity: String?,
+  ): String? {
+    var offset = 0
+    var newest: String? = null
+    var active: String? = null
+    do {
+      val page =
+        unit.workList.goalParentCandidatePage(
+          issueKey,
+          identity,
+          offset,
+          WorkPaginationLimits.MAX_PAGE_SIZE,
+        )
+      if (newest == null) newest = page.firstOrNull()?.workflowId
+      page.forEach { candidate ->
+        if (isActiveGoalRuntime(candidate.manifestStatus, candidate.hasUnsettledSubtasks)) {
+          check(active == null) {
+            "Ambiguous decomposed parent workflows for '$issueKey': " +
+              "$active, ${candidate.workflowId}."
+          }
+          active = candidate.workflowId
+        }
+      }
+      offset += page.size
+    } while (page.size == WorkPaginationLimits.MAX_PAGE_SIZE)
+    return active ?: newest
+  }
 }
 
 @Inject

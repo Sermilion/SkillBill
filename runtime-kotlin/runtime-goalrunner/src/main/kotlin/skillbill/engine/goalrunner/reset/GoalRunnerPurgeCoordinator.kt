@@ -7,7 +7,6 @@ import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
-import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
@@ -359,7 +358,7 @@ public class GoalRunnerPurgeCoordinator(
     issueKey: String,
     repoRoot: Path,
   ): Boolean {
-    val repositoryIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot)
     return database.read { unitOfWork ->
       unitOfWork.workflowStates.findStandaloneFeatureTaskCandidates(issueKey, repositoryIdentity)
         .any { candidate -> !candidate.workflow.isPlanWorkflow() }

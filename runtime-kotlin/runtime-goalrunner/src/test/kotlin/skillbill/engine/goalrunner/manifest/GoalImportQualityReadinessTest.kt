@@ -114,7 +114,7 @@ class GoalImportQualityReadinessTest {
           testProjectStore,
           parentProjection = GoalParentProjectionWriter(testDecompositionManifestValidator),
         )
-      val imported = assertNotNull(loader.importFromManifestProjection(manifest, importIdentity))
+      val imported = assertNotNull(loader.importFromManifestProjection(manifest, listOf(importIdentity)))
       val parent =
         assertNotNull(
           database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, imported.parentWorkflowId) },

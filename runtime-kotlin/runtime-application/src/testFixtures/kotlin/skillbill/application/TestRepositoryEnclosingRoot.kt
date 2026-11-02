@@ -31,5 +31,7 @@ object TestRepositoryEnclosingRoot : RepositoryEnclosingRootPort {
     return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + gitRoot
   }
 
+  override fun primaryRepositoryIdentity(repoRoot: Path): String = repositoryIdentity(repoRoot)
+
   override fun primaryRepositoryRoot(repoRoot: Path): Path = canonicalPath(repoRoot)
 }

@@ -236,6 +236,7 @@ private class SnapshotFixture(
           NoopIdeStatusValidator,
           NoopFeatureTaskRuntimeWorkerSupervisor,
           NoopRuntimeDiagnostics,
+          CanonicalRepositoryRoot,
         ),
       diagnostics = NoopRuntimeDiagnostics,
       incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),

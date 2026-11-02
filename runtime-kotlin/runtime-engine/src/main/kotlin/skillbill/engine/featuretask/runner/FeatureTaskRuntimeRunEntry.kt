@@ -97,6 +97,7 @@ public class FeatureTaskRuntimeRunEntry(
       repoRoot = request.repoRoot,
       issueKey = request.issueKey,
       workflowId = workflowId,
+      goalScoped = scope == FeatureTaskRouteScope.GOAL_CHILD || request.definition == SkeletonDefinition.PLAN,
     )
     val specPath = Path.of(request.specPath)
     val effectiveInputs =
@@ -419,7 +420,7 @@ public class FeatureTaskRuntimeRunEntry(
           sessionId = "",
           currentStepId = null,
           issueKey = input.issueKey,
-          repositoryIdentity = identities.repositoryIdentity(input.repoRoot),
+          repositoryIdentity = identities.openingIdentity(input.repoRoot, scope, definition == SkeletonDefinition.PLAN),
           governedSpecPath = identities.governedSpecPath("unassigned", input.repoRoot, specPath),
           routeScope = scope,
           initialArtifacts = input.openArtifacts,

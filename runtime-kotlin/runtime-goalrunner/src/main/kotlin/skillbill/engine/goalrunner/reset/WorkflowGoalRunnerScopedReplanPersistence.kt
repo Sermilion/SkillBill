@@ -87,7 +87,10 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
     options: GoalRunnerScopedReplanOptions,
   ): PlannedDetailsDiscard {
     val planWorkflowId =
-      unitOfWork.workflowStates.findCompletedPlanWorkflowId(state.manifest.issueKey, options.repositoryIdentity)
+      (listOf(options.repositoryIdentity) + options.fallbackPlanIdentities).distinct()
+        .firstNotNullOfOrNull { identity ->
+          unitOfWork.workflowStates.findCompletedPlanWorkflowId(state.manifest.issueKey, identity)
+        }
         ?: return NO_BUNDLE
     val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, planWorkflowId) ?: return NO_BUNDLE
     val bundle =

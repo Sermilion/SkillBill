@@ -41,6 +41,10 @@ object CanonicalRepositoryRoot : RepositoryEnclosingRootPort {
     return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + gitRoot
   }
 
+  override fun primaryRepositoryIdentity(repoRoot: Path): String =
+    FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX +
+      primaryRepositoryRoot(enclosingRepositoryRoot(repoRoot))
+
   override fun primaryRepositoryRoot(repoRoot: Path): Path {
     val root = canonicalPath(repoRoot)
     val marker = root.resolve(GIT_MARKER)

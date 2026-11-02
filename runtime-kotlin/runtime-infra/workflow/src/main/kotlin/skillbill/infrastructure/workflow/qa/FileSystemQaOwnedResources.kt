@@ -8,8 +8,8 @@ import skillbill.error.featuretask.qa.isQaOwnedResourceFailure
 import skillbill.error.featuretask.qa.qaDeviceLeaseReason
 import skillbill.error.featuretask.qa.qaOwnedResourceFailed
 import skillbill.error.featuretask.qa.qaOwnedResourceReason
-import skillbill.infrastructure.workflow.monitor.RecordedProcessLiveness
-import skillbill.infrastructure.workflow.monitor.livenessOf
+import skillbill.infrastructure.workflow.process.RecordedProcessLiveness
+import skillbill.infrastructure.workflow.process.livenessOf
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector

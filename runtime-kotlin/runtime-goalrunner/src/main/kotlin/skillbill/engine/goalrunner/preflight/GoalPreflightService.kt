@@ -5,10 +5,11 @@ import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
+import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
-import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
@@ -60,10 +61,10 @@ public class GoalPreflightService(
       GoalPreflightInputValidation.requireManifestIssueKey(manifest.issueKey, normalizedIssueKey)
     }
     val lookup =
-      continuationLookup.lookupIfPresent(
-        issueKey = normalizedIssueKey,
-        repositoryIdentity = goalRepositoryIdentity(root, repositoryEnclosingRootPort),
-      )
+      goalRepositoryIdentityCandidates(root, repositoryEnclosingRootPort).firstNotNullOfOrNull { identity ->
+        continuationLookup.lookupIfPresent(normalizedIssueKey, identity)
+          .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
+      } ?: FeatureTaskContinuationLookupResult.NoMatch
     return lookupResolver.resolve(
       GoalPreflightLookupInput(
         lookup = lookup,

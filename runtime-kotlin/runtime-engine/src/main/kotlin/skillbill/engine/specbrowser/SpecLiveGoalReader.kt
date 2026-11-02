@@ -1,7 +1,7 @@
 package skillbill.engine.specbrowser
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
-import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.engine.work.control.model.WorkRunOptions
@@ -37,12 +37,12 @@ internal class SpecLiveGoalReader(
     candidates: LiveCandidates,
   ): Map<String, LiveGoal> {
     if (candidates.unfinished.isEmpty() && candidates.finished.isEmpty()) return emptyMap()
-    val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val identities = goalRepositoryIdentityCandidates(repoRoot, repositoryEnclosingRootPort)
     return database.readIfPresent { unit ->
       val finishedWithLiveWork =
         if (candidates.finished.isEmpty()) emptySet() else candidates.finished intersect readLiveIssueKeys(unit)
       (candidates.unfinished + finishedWithLiveWork).mapNotNull { key ->
-        liveGoal(unit, identity, key)?.let { key to it }
+        liveGoal(unit, identities, key)?.let { key to it }
       }.toMap()
     }.orEmpty()
   }
@@ -51,9 +51,9 @@ internal class SpecLiveGoalReader(
     repoRoot: Path,
     issueKey: String,
   ): ControlLive? {
-    val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val identities = goalRepositoryIdentityCandidates(repoRoot, repositoryEnclosingRootPort)
     return database.readIfPresent { unit ->
-      val workflowId = parentWorkflowId(unit, identity, issueKey) ?: return@readIfPresent null
+      val workflowId = parentWorkflowId(unit, identities, issueKey) ?: return@readIfPresent null
       val item = status.detail(WorkDetailRequest(workflowId)).item ?: return@readIfPresent null
       ControlLive(
         workflowId = workflowId,
@@ -70,27 +70,27 @@ internal class SpecLiveGoalReader(
     repoRoot: Path,
     issueKey: String,
   ): LiveGoal? {
-    val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
-    return database.readIfPresent { unit -> boardGoal(unit, identity, issueKey) }
+    val identities = goalRepositoryIdentityCandidates(repoRoot, repositoryEnclosingRootPort)
+    return database.readIfPresent { unit -> boardGoal(unit, identities, issueKey) }
   }
 
   private fun liveGoal(
     unit: UnitOfWork,
-    identity: String,
+    identities: List<String>,
     key: String,
   ): LiveGoal? =
     try {
-      boardGoal(unit, identity, key)
+      boardGoal(unit, identities, key)
     } catch (_: SkillBillRuntimeException) {
       null
     }
 
   private fun boardGoal(
     unit: UnitOfWork,
-    identity: String,
+    identities: List<String>,
     key: String,
   ): LiveGoal? {
-    val workflowId = parentWorkflowId(unit, identity, key) ?: return null
+    val workflowId = parentWorkflowId(unit, identities, key) ?: return null
     return status.projectBoardSelection(listOf(workflowId), WorkBoardRequest()).items.singleOrNull()?.snapshot?.let {
       LiveGoal(it.lifecycleState, it.pauseRequested == true)
     }
@@ -98,11 +98,12 @@ internal class SpecLiveGoalReader(
 
   private fun parentWorkflowId(
     unit: UnitOfWork,
-    identity: String,
+    identities: List<String>,
     issueKey: String,
-  ): String? {
-    val candidates = unit.workList.goalParentCandidatePage(issueKey, identity, 0, WorkPaginationLimits.MAX_PAGE_SIZE)
-    val chosen = candidates.firstOrNull { isActiveGoalRuntime(it.manifestStatus, it.hasUnsettledSubtasks) }
-    return (chosen ?: candidates.firstOrNull())?.workflowId
-  }
+  ): String? =
+    identities.firstNotNullOfOrNull { identity ->
+      val candidates = unit.workList.goalParentCandidatePage(issueKey, identity, 0, WorkPaginationLimits.MAX_PAGE_SIZE)
+      val chosen = candidates.firstOrNull { isActiveGoalRuntime(it.manifestStatus, it.hasUnsettledSubtasks) }
+      (chosen ?: candidates.firstOrNull())?.workflowId
+    }
 }

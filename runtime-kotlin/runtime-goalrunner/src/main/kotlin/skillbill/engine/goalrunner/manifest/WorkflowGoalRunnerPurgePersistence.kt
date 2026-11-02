@@ -4,6 +4,7 @@ import skillbill.application.workflow.decomposition.listDecomposedParentsForPurg
 import skillbill.application.workflow.decomposition.listPlanWorkflowsForPurge
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
@@ -25,10 +26,10 @@ internal class WorkflowGoalRunnerPurgePersistence(
     issueKey: String,
     repoRoot: Path,
   ): GoalPurgeOwnership {
-    val identity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot)
+    val identities = goalRepositoryIdentityCandidates(repoRoot, repositoryEnclosingRootPort)
     return database.read { unitOfWork ->
-      val discovered = unitOfWork.workflowStates.listDecomposedParentsForPurge(issueKey, identity)
-      val parents = discovered.parents
+      val discovered = identities.map { unitOfWork.workflowStates.listDecomposedParentsForPurge(issueKey, it) }
+      val parents = discovered.flatMap { it.parents }.distinctBy { it.record.workflowId }
       val ownedChildIds =
         parents.flatMapTo(hashSetOf()) { parent ->
           unitOfWork.workflowStates.listGoalChildWorkflowIdsByParent(parent.record.workflowId)
@@ -47,15 +48,17 @@ internal class WorkflowGoalRunnerPurgePersistence(
           },
         parentWorkflowIds = parents.mapTo(linkedSetOf()) { it.record.workflowId },
         planWorkflowIds =
-          unitOfWork.workflowStates.listPlanWorkflowsForPurge(issueKey, identity).mapTo(linkedSetOf()) {
-            it.workflowId
+          identities.flatMapTo(linkedSetOf()) { identity ->
+            unitOfWork.workflowStates.listPlanWorkflowsForPurge(issueKey, identity).map { it.workflowId }
           },
         unclassifiedWorkflows =
-          discovered.unclassifiedRows.filterNot { row -> row.workflowId in ownedChildIds }.map { row ->
+          discovered.flatMap { it.unclassifiedRows }.distinctBy { it.workflowId }.filterNot { row ->
+            row.workflowId in ownedChildIds
+          }.map { row ->
             "workflow ${row.workflowId} matches $issueKey but its state cannot be decoded (${row.reason}); " +
               "it was not purged"
           },
-        siblingWorktreeWorkflows = unitOfWork.siblingWorktreeWorkflows(issueKey, repoRoot, identity),
+        siblingWorktreeWorkflows = unitOfWork.siblingWorktreeWorkflows(issueKey, repoRoot, identities),
       )
     }
   }
@@ -63,7 +66,7 @@ internal class WorkflowGoalRunnerPurgePersistence(
   private fun UnitOfWork.siblingWorktreeWorkflows(
     issueKey: String,
     repoRoot: Path,
-    identity: String,
+    identities: List<String>,
   ): List<String> {
     val primaryRoot = repositoryEnclosingRootPort.primaryRepositoryRoot(repoRoot)
     return workflowStates
@@ -72,7 +75,7 @@ internal class WorkflowGoalRunnerPurgePersistence(
       .mapNotNull { (owner, workflowIds) ->
         val prefix = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX
         val worktree =
-          owner?.takeIf { it != identity && it.startsWith(prefix) }
+          owner?.takeIf { it !in identities && it.startsWith(prefix) }
             ?.removePrefix(prefix)
             ?.let(Path::of)
             ?.takeIf { repositoryEnclosingRootPort.optionalRealPath(it) != null }
@@ -95,7 +98,7 @@ internal class WorkflowGoalRunnerPurgePersistence(
   ): Set<String> {
     if (candidateIds.isEmpty()) return emptySet()
     val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
-    val identity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot)
+    val identities = goalRepositoryIdentityCandidates(repoRoot, repositoryEnclosingRootPort)
     return database.read { unitOfWork ->
       val goalChildIds =
         parentWorkflowIds.flatMapTo(hashSetOf()) { parentId ->
@@ -104,7 +107,7 @@ internal class WorkflowGoalRunnerPurgePersistence(
       candidateIds.filterTo(linkedSetOf()) { candidateId ->
         candidateId in goalChildIds ||
           unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(candidateId)?.let { owned ->
-            owned.normalizedIssueKey == normalizedIssueKey && owned.repositoryIdentity == identity
+            owned.normalizedIssueKey == normalizedIssueKey && owned.repositoryIdentity in identities
           } == true
       }
     }

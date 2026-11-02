@@ -64,9 +64,11 @@ internal fun WorkflowStateRepository.findImportedSubtaskPlanWorkflowIds(
 internal fun WorkflowStateRepository.findLinkedSubtaskPlanWorkflowId(
   identity: GoalPlanningIdentity,
   subtasks: List<DecompositionSubtask>,
+  fallbackPlanIdentities: List<String> = emptyList(),
   governsGoalSpec: (planWorkflowId: String) -> Boolean,
 ): String? =
   findImportedSubtaskPlanWorkflowIds(identity, subtasks).firstOrNull()
-    ?: findCompletedPlanWorkflowId(identity.normalizedIssueKey, identity.repositoryIdentity)?.takeIf(governsGoalSpec)
-    ?: findReopenedSubtaskPlanWorkflowId(identity.normalizedIssueKey, identity.repositoryIdentity)
-      ?.takeIf(governsGoalSpec)
+    ?: (listOf(identity.repositoryIdentity) + fallbackPlanIdentities).distinct().firstNotNullOfOrNull { planIdentity ->
+      findCompletedPlanWorkflowId(identity.normalizedIssueKey, planIdentity)?.takeIf(governsGoalSpec)
+        ?: findReopenedSubtaskPlanWorkflowId(identity.normalizedIssueKey, planIdentity)?.takeIf(governsGoalSpec)
+    }

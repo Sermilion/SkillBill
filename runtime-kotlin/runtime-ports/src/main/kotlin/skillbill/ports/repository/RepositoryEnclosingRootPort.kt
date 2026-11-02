@@ -12,6 +12,8 @@ interface RepositoryEnclosingRootPort {
 
   fun repositoryIdentity(repoRoot: Path): String
 
+  fun primaryRepositoryIdentity(repoRoot: Path): String
+
   fun primaryRepositoryRoot(repoRoot: Path): Path
 }
 

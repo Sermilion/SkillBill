@@ -11,7 +11,8 @@ class ProjectCheckout(
   private val repositories: RepositoryEnclosingRootPort,
   private val projectStore: ProjectStorePort,
 ) {
-  fun repositoryIdentity(repoRoot: Path): String = repositories.repositoryIdentity(repoRoot)
+  fun repositoryIdentityCandidates(repoRoot: Path): List<String> =
+    listOf(repositories.primaryRepositoryIdentity(repoRoot), repositories.repositoryIdentity(repoRoot)).distinct()
 
   fun store(repoRoot: Path): ProjectStoreLocation = projectStore.resolve(repoRoot)
 }

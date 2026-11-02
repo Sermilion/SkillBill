@@ -130,10 +130,9 @@ class DecompositionWorkflowContinuation(
     existing?.let { migrateLegacyGoalRunnerControls(unitOfWork, it) }
     val planWorkflowId =
       if (existing == null) {
-        unitOfWork.workflowStates.findCompletedPlanWorkflowId(
-          manifest.issueKey,
-          checkout.repositoryIdentity(repoRoot),
-        )
+        checkout.repositoryIdentityCandidates(repoRoot).firstNotNullOfOrNull { identity ->
+          unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, identity)
+        }
       } else {
         null
       }

@@ -179,6 +179,7 @@ public class GoalRunnerRunPreparation(
       request.issueKey,
       state.parentWorkflowId,
       state.manifest.goalWorkBranch(),
+      goalScoped = true,
     )
     val persistedControl =
       manifestStore.bindRepositoryIdentity(

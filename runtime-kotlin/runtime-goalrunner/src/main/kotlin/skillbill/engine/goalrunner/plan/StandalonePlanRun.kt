@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.featuretask.slot.intake.FeatureTaskRuntimePlanSeedRecorder
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusLaunchScope
@@ -107,8 +108,12 @@ public class StandalonePlanRun(
           planWorkflowId,
         )
       }
-      val identity = repositories.repositoryIdentity(repoRoot)
-      val found = planLookup.lookup(issueKey, identity, planWorkflowId)
+      val found =
+        planLookup.lookupSelected(
+          issueKey,
+          goalRepositoryIdentityCandidates(repoRoot, repositories),
+          planWorkflowId,
+        )
       if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
         return@catchingNonCancellation refused(
           publisher,
@@ -184,8 +189,13 @@ public class StandalonePlanRun(
         val normalized = supplied.trim()
         normalized.isNotEmpty() && !normalized.equals(issueKey, ignoreCase = true)
       }
-    val identity = repositories.repositoryIdentity(repoRoot)
-    val found = planLookup.lookupAfterCrashRecovery(issueKey, identity).forLaunchedSpec(issueKey, intake, repoRoot)
+    val found =
+      (
+        goalRepositoryIdentityCandidates(repoRoot, repositories).firstNotNullOfOrNull { identity ->
+          planLookup.lookupAfterCrashRecovery(issueKey, identity)
+            .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
+        } ?: FeatureTaskContinuationLookupResult.NoMatch
+      ).forLaunchedSpec(issueKey, intake, repoRoot)
     if (planReports.manifestExists(issueKey, repoRoot)) {
       if (found is FeatureTaskContinuationLookupResult.Resumable) {
         return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
@@ -219,7 +229,10 @@ public class StandalonePlanRun(
   ): StandalonePlanResult {
     val completed =
       database.read { unitOfWork ->
-        unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, repositories.repositoryIdentity(repoRoot))
+        goalRepositoryIdentityCandidates(repoRoot, repositories)
+          .firstNotNullOfOrNull { identity ->
+            unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, identity)
+          }
           ?.let { id ->
             unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
               ?.takeIf { it.hasPlanSubtasksStep() }

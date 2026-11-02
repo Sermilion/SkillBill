@@ -2,6 +2,8 @@ package skillbill.engine.goalrunner.status
 
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentityFilters
 import skillbill.engine.goal.releaseExecutionLease
 import skillbill.engine.goal.releaseExecutionLeaseIfExpired
 import skillbill.engine.goalrunner.manifest.SavedManifestProjection
@@ -264,7 +266,7 @@ internal fun GoalRunnerControlCoordinator.bindRepositoryIdentity(
     require(repositoryIdentity.isNotBlank()) { "repositoryIdentity is required." }
     val parent = requireParent(unitOfWork, parentWorkflowId)
     val existing = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
-    if (existing.repositoryIdentity == repositoryIdentity) {
+    if (existing.repositoryIdentity != null) {
       existing
     } else {
       unitOfWork.goalRunnerControls.persistControlState(
@@ -384,19 +386,15 @@ internal fun GoalRunnerControlCoordinator.requestPauseByIssueKey(
 ): GoalRunnerPausePersistenceResult? =
   database.transaction { unitOfWork ->
     val parent =
-      unitOfWork.workflowStates.findDecomposedParentWorkflow(
-        issueKey,
-        repositoryIdentity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity),
-      ) ?: return@transaction null
+      goalRepositoryIdentityFilters(repoRoot, repositoryEnclosingRootPort).firstNotNullOfOrNull { identity ->
+        unitOfWork.workflowStates.findDecomposedParentWorkflow(issueKey, repositoryIdentity = identity)
+      } ?: return@transaction null
     val existing = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
-    if (repoRoot != null) {
-      val identity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot)
-      if (existing.repositoryIdentity != identity) {
-        unitOfWork.goalRunnerControls.persistControlState(
-          parent.workflowId,
-          existing.copy(repositoryIdentity = identity),
-        )
-      }
+    if (repoRoot != null && existing.repositoryIdentity == null) {
+      unitOfWork.goalRunnerControls.persistControlState(
+        parent.workflowId,
+        existing.copy(repositoryIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)),
+      )
     }
     GoalRunnerPausePersistenceResult(parent.workflowId, persistPauseRequest(unitOfWork, parent.workflowId))
   }

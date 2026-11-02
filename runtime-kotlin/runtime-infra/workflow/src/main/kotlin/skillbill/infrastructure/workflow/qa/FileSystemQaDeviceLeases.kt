@@ -6,8 +6,8 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaDeviceLeaseFailure
 import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
 import skillbill.error.featuretask.qa.qaDeviceLeaseReason
-import skillbill.infrastructure.workflow.monitor.RecordedProcessLiveness
-import skillbill.infrastructure.workflow.monitor.livenessOf
+import skillbill.infrastructure.workflow.process.RecordedProcessLiveness
+import skillbill.infrastructure.workflow.process.livenessOf
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector

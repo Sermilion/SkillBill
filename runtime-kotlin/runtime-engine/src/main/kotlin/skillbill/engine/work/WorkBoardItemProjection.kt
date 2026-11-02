@@ -50,6 +50,7 @@ import skillbill.ports.idestatus.model.WorkBoardWindow
 import skillbill.ports.idestatus.model.WorkDetailProblem
 import skillbill.ports.idestatus.model.WorkDetailProblemCode
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
@@ -72,6 +73,7 @@ public class WorkBoardItemProjection(
   private val ideStatusValidator: IdeStatusValidator,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
   internal fun projectBoardCandidate(
     unitOfWork: UnitOfWork,
@@ -480,7 +482,8 @@ public class WorkBoardItemProjection(
     resolved: ResolvedWorkItem? = null,
   ): IdeStatusCandidate? {
     val repositoryIdentity = repository.identity
-    val repositoryCorrelation = IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity)
+    val repositoryCorrelation =
+      IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity, repository.monitorIdentity)
     val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork)
     val family = item.workflowKind.toIdeFamily()
     val lifecycle =
@@ -558,7 +561,11 @@ public class WorkBoardItemProjection(
       found.standalone?.takeIf { it.launchScope == IdeStatusLaunchScope.GOAL }
         ?.takeIf { found.work?.item?.workflowKind != WorkItemKind.FEATURE_GOAL }
     val issueKey = standalone?.issueKey?.takeIf(String::isNotBlank) ?: return false
-    return unitOfWork.workList.goalParentCandidatePage(issueKey, standalone.repositoryIdentity, 0, 1).isNotEmpty()
+    val exact = standalone.repositoryIdentity
+    val primary = decodeRepositoryRoot(exact)?.let(repositoryEnclosingRootPort::primaryRepositoryIdentity)
+    return setOfNotNull(exact, primary).any { identity ->
+      unitOfWork.workList.goalParentCandidatePage(issueKey, identity, 0, 1).isNotEmpty()
+    }
   }
 
   internal fun isExcludedGoalChild(

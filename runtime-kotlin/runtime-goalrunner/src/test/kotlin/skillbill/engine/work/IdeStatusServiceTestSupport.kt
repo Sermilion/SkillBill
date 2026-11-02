@@ -84,6 +84,7 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -292,12 +293,17 @@ internal fun goalManifestState(
 
 internal val ideStatusProjectStoreRoot: Path by lazy { Files.createTempDirectory("ide-status-project-store") }
 
+internal class IdeStatusServiceTestPorts(
+  val qaCapabilities: QaCapabilityResolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
+  val repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+)
+
 internal fun ideStatusService(
   database: DatabaseSessionFactory,
   manifestStore: GoalRunnerManifestStore = EmptyManifestStore,
   outcomeStore: GoalRunnerWorkflowOutcomeStore = EmptyOutcomeStore,
   snapshotValidator: WorkflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,
-  qaCapabilities: QaCapabilityResolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
+  ports: IdeStatusServiceTestPorts = IdeStatusServiceTestPorts(),
 ): IdeStatusService {
   val phaseRecorder =
     featureTaskRuntimePhaseRecorder(
@@ -344,7 +350,7 @@ internal fun ideStatusService(
       featureTaskRuntimeStatusService = runtimeStatusService,
       manifestStore = GoalRunnerManifestProjectionReader(manifestStore),
       diagnostics = NoopRuntimeDiagnostics,
-      qaCapabilities = qaCapabilities,
+      qaCapabilities = ports.qaCapabilities,
       planReports =
         StandalonePlanReportBuilder(
           manifestStore,
@@ -353,7 +359,7 @@ internal fun ideStatusService(
           NoopRuntimeDiagnostics,
         ),
     )
-  val boardProjection = testBoardProjection(projector)
+  val boardProjection = testBoardProjection(projector, ports.repositoryEnclosingRootPort)
   (database as? BoardProjectionCapture)?.accept(boardProjection)
   return IdeStatusService(
     database = database,
@@ -361,7 +367,7 @@ internal fun ideStatusService(
     ideStatusValidator = EmitShapeValidator,
     branchSource = CheckedOutBranchSource(::fixtureCheckedOutBranch),
     clock = ideStatusClock,
-    repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+    repositoryEnclosingRootPort = ports.repositoryEnclosingRootPort,
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
     workBoardItemProjection = boardProjection,
@@ -387,8 +393,17 @@ internal fun testWorkBoardItemProjection(database: DatabaseSessionFactory): Work
   return requireNotNull(capture.projection)
 }
 
-private fun testBoardProjection(projector: IdeStatusProjector): WorkBoardItemProjection =
-  WorkBoardItemProjection(projector, EmitShapeValidator, NoopFeatureTaskRuntimeWorkerSupervisor, NoopRuntimeDiagnostics)
+private fun testBoardProjection(
+  projector: IdeStatusProjector,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+): WorkBoardItemProjection =
+  WorkBoardItemProjection(
+    projector,
+    EmitShapeValidator,
+    NoopFeatureTaskRuntimeWorkerSupervisor,
+    NoopRuntimeDiagnostics,
+    repositoryEnclosingRootPort,
+  )
 
 internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =
   runCatching { Files.readString(repoRoot.resolve(".git").resolve("HEAD")) }.getOrNull()

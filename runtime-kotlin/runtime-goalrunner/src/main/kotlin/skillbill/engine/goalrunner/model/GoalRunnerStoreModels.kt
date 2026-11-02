@@ -34,6 +34,7 @@ public data class GoalRunnerScopedReplanWriteResult(
 
 public data class GoalRunnerScopedReplanOptions(
   public val repositoryIdentity: String,
+  public val fallbackPlanIdentities: List<String> = emptyList(),
 )
 
 public data class GoalRunnerPausePersistenceResult(

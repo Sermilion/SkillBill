@@ -5,6 +5,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneResetSubtaskCheckpointRefs
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
 import skillbill.engine.goalrunner.manifest.toResetSnapshot
@@ -175,6 +176,7 @@ public class GoalRunnerResetReplanCoordinator(
         manifest = loaded.manifest.copy(currentSubtaskIntent = replanIntent(selected)),
         repoRoot = request.repoRoot,
       )
+    val repoRoot = request.repoRoot ?: repositoryRoot.path
     val written =
       manifestStore.saveScopedReplan(
         state = retargeted,
@@ -182,12 +184,14 @@ public class GoalRunnerResetReplanCoordinator(
         options =
           GoalRunnerScopedReplanOptions(
             repositoryIdentity =
-              goalRepositoryIdentity(request.repoRoot ?: repositoryRoot.path, repositoryEnclosingRootPort),
+              loaded.controlState.repositoryIdentity
+                ?: goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort),
+            fallbackPlanIdentities = goalRepositoryIdentityCandidates(repoRoot, repositoryEnclosingRootPort),
           ),
       )
     pruneResetSubtaskCheckpointRefs(
       gitOperations = gitOperations,
-      repoRoot = request.repoRoot ?: repositoryRoot.path,
+      repoRoot = repoRoot,
       issueKey = written.state.manifest.issueKey,
       subtaskIds = written.clearedChildSubtaskIds,
       record = { message -> RuntimeDiagnosticsBestEffortWarning.record(diagnostics, message) },

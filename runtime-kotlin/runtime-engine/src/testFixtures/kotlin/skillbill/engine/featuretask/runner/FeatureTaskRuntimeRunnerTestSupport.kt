@@ -1499,7 +1499,7 @@ private fun runnerExecutionEntry(
       fixture.admission,
       resolver,
       repositories,
-      FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
+      FeatureTaskExecutionIdentityResolver(database, repositories, RUNNER_TEST_PROJECT_STORE),
     )
   }
   val facts = runnerSelectionFacts(config)
@@ -1531,7 +1531,7 @@ private fun runnerExecutionEntry(
     fixture.admission,
     resolver,
     repositories,
-    FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
+    FeatureTaskExecutionIdentityResolver(database, repositories, RUNNER_TEST_PROJECT_STORE),
   )
 }
 
@@ -2787,6 +2787,8 @@ private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosi
     override fun optionalRealPath(path: Path): Path? = null
 
     override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
+
+    override fun primaryRepositoryIdentity(repoRoot: Path): String = repositoryIdentity
 
     override fun primaryRepositoryRoot(repoRoot: Path): Path = canonicalPath(repoRoot)
   }

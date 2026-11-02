@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionP
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
@@ -28,7 +29,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningChildImportConflictBlockedReason
 import skillbill.engine.goalrunner.reset.reviewBaselineBlockedReason
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
@@ -237,7 +237,6 @@ public class GoalRunnerSubtaskLaunchPrepare(
     val firstRun = priorWorkflowId == null
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
-    val canonicalRepository = repositoryEnclosingRootPort.canonicalPath(request.repoRoot)
     val governedSpecPath = governedChildSpecPath(assignedWorkflowId, subtaskId, subtask.specPath, request.repoRoot)
     val attemptedManifest =
       state.manifest.withAttemptedSubtask(subtaskId)
@@ -255,7 +254,7 @@ public class GoalRunnerSubtaskLaunchPrepare(
             workflowId = assignedWorkflowId,
             goalBranch = branch,
             normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
-            repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(canonicalRepository),
+            repositoryIdentity = childRepositoryIdentity(state, request.repoRoot),
             governedSpecPath = governedSpecPath,
             reviewBaseline = reviewBaseline,
             reviewPolicy =
@@ -286,6 +285,13 @@ public class GoalRunnerSubtaskLaunchPrepare(
         )
     }
   }
+
+  private fun childRepositoryIdentity(
+    state: GoalRunnerManifestState,
+    repoRoot: Path,
+  ): String =
+    state.controlState.repositoryIdentity
+      ?: goalRepositoryIdentity(repositoryEnclosingRootPort.canonicalPath(repoRoot), repositoryEnclosingRootPort)
 
   private fun recordedChildQaSelection(priorWorkflowId: String?): FeatureTaskRuntimeQaSelection? =
     priorWorkflowId?.let { outcomeStore.childQaSelection(it, null) }

@@ -1387,9 +1387,9 @@ class WorkflowServiceGoalManifestStoreTest {
 
     val rebound = store.bindRepositoryIdentity(parentWorkflowId, "repo-root-realpath-v1:/checkouts/second")
 
-    assertEquals("repo-root-realpath-v1:/checkouts/second", rebound.repositoryIdentity)
+    assertEquals("repo-root-realpath-v1:/checkouts/first", rebound.repositoryIdentity)
     assertEquals(
-      "repo-root-realpath-v1:/checkouts/second",
+      "repo-root-realpath-v1:/checkouts/first",
       store.controlState(parentWorkflowId).repositoryIdentity,
     )
   }

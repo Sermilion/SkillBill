@@ -1,11 +1,13 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -114,10 +116,20 @@ public fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
 
 @Inject
 public class FeatureTaskExecutionIdentityResolver(
+  private val database: DatabaseSessionFactory,
   private val repositories: RepositoryEnclosingRootPort,
   private val projectStore: ProjectStorePort,
 ) {
-  internal fun repositoryIdentity(repoRoot: Path): String = repositories.repositoryIdentity(repoRoot)
+  internal fun openingIdentity(
+    repoRoot: Path,
+    routeScope: FeatureTaskRouteScope,
+    planWorkflow: Boolean = false,
+  ): String =
+    if (routeScope == FeatureTaskRouteScope.GOAL_CHILD || planWorkflow) {
+      repositories.primaryRepositoryIdentity(repoRoot)
+    } else {
+      repositories.repositoryIdentity(repoRoot)
+    }
 
   internal fun governedSpecPath(
     workflowId: String,
@@ -135,9 +147,26 @@ public class FeatureTaskExecutionIdentityResolver(
     FeatureTaskExecutionIdentity(
       workflowId,
       FeatureTaskExecutionIdentityPolicy.normalizeIssueKey(issueKey, workflowId),
-      repositoryIdentity(repoRoot),
+      expectedRepositoryIdentity(workflowId, repoRoot, routeScope),
       governedSpecPath(workflowId, repoRoot, specPath),
       FeatureTaskWorkflowMode.RUNTIME,
       routeScope,
     )
+
+  private fun expectedRepositoryIdentity(
+    workflowId: String,
+    repoRoot: Path,
+    routeScope: FeatureTaskRouteScope,
+  ): String {
+    val stored =
+      database.read { unit ->
+        unit.workflowStates.getFeatureTaskExecutionIdentity(workflowId)
+          ?.takeIf { identity ->
+            identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD ||
+              unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.isPlanWorkflow() == true
+          }?.repositoryIdentity
+      }
+    return stored?.takeIf { it in goalRepositoryIdentityCandidates(repoRoot, repositories) }
+      ?: openingIdentity(repoRoot, routeScope)
+  }
 }
