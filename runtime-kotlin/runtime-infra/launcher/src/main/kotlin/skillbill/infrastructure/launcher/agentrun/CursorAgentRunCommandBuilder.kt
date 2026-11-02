@@ -55,7 +55,9 @@ internal class CursorAgentRunCommandBuilder(
         },
       timeout = request.timeout,
       stdinText = launchPrompt(request),
-      environment = GoalContinuationEnvironment + goalContinuationEnvironment(request),
+      environment =
+        GoalContinuationEnvironment + goalContinuationEnvironment(request) +
+          runtimeDatabaseEnvironment(!isReviewLaunch, databasePath),
       inheritEnvironment = !isReviewLaunch,
       conversationIsolation = governedReviewConversationIsolation(request),
       idlePolicy =

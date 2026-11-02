@@ -6,6 +6,8 @@ const val QA_REPAIR_STATE_CONTRACT_VERSION: String = "0.2"
 const val QA_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION: String = "0.1"
 const val QA_DEVICE_LEASE_CONTRACT_VERSION: String = "0.1"
 const val QA_OWNED_RESOURCE_CONTRACT_VERSION: String = "0.1"
+const val QA_CHECKLIST_CONTRACT_VERSION: String = "0.1"
+const val QA_CHECKLIST_MAX_ENCODED_BYTES: Int = 512 * 1024
 
 object QaDeviceLeasePayloadKeys {
   const val CONTRACT_VERSION = SharedPayloadKeys.CONTRACT_VERSION
@@ -37,6 +39,46 @@ object QaOwnedResourcePayloadKeys {
   val RECORD_FIELDS: Set<String> =
     setOf(CONTRACT_VERSION, QaDeviceLeasePayloadKeys.INVOCATION_ID, KIND, IDENTITY, REGISTERED_AT)
   val PROCESS_RECORD_FIELDS: Set<String> = RECORD_FIELDS + PROCESS_STARTED_AT
+}
+
+object QaChecklistPayloadKeys {
+  const val CONTRACT_VERSION = SharedPayloadKeys.CONTRACT_VERSION
+  const val INVOCATION_DIRECTORY = "invocation_directory"
+  const val REPORT_PATH = "report_path"
+  const val TESTED_COMMIT = "tested_commit"
+  const val CRITERIA_SOURCE = "criteria_source"
+  const val TARGETS = "targets"
+  const val NAME = "name"
+  const val STATE = "state"
+  const val DETAIL = "detail"
+  const val UPDATED_AT = "updated_at"
+  const val PLAN_REGISTERED_AT = "plan_registered_at"
+  const val CASES = "cases"
+  const val ID = "id"
+  const val TITLE = "title"
+  const val STEPS = "steps"
+  const val TEXT = "text"
+  const val STATUS = SharedPayloadKeys.STATUS
+  const val NOTE = "note"
+  const val FINDING_ID = "finding_id"
+  const val EVIDENCE = "evidence"
+  const val FINDINGS = "findings"
+  const val RECORDED_AT = "recorded_at"
+  const val LAST_STEP_UPDATE_AT = "last_step_update_at"
+  const val REASON = "reason"
+  const val REJECTED_EVIDENCE = "rejected_evidence"
+
+  val CHECKLIST_FIELDS: Set<String> =
+    setOf(
+      CONTRACT_VERSION, INVOCATION_DIRECTORY, REPORT_PATH, TESTED_COMMIT, CRITERIA_SOURCE, TARGETS,
+      PLAN_REGISTERED_AT, CASES, FINDINGS, LAST_STEP_UPDATE_AT,
+    )
+  val TARGET_FIELDS: Set<String> = setOf(NAME, STATE, DETAIL, UPDATED_AT)
+  val CASE_FIELDS: Set<String> = setOf(ID, TITLE, STEPS)
+  val STEP_FIELDS: Set<String> = setOf(TEXT, STATUS, NOTE, FINDING_ID, EVIDENCE, UPDATED_AT)
+  val FINDING_FIELDS: Set<String> = setOf(ID, TITLE, RECORDED_AT)
+  val PLAN_FIELDS: Set<String> = setOf(CONTRACT_VERSION, CASES)
+  val PLAN_STEP_FIELDS: Set<String> = setOf(TEXT)
 }
 
 object QaOutcomePayloadKeys {

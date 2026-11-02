@@ -52,7 +52,9 @@ internal class JunieAgentRunCommandBuilder(
         },
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
-      environment = goalContinuationEnvironment(request),
+      environment =
+        goalContinuationEnvironment(request) +
+          runtimeDatabaseEnvironment(request.reviewEvidenceBroker == null, databasePath),
       inheritEnvironment = request.reviewEvidenceBroker == null,
       conversationIsolation = governedReviewConversationIsolation(request),
       idlePolicy = unstreamedLivenessPolicy(request),

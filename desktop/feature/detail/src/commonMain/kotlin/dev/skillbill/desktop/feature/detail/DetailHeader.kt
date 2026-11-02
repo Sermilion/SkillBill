@@ -1,8 +1,9 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,9 +18,13 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.detail.DocHeader
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
+
+internal data class QaHeaderFacts(val testedCommit: String?, val criteriaSource: String?)
 
 /**
  * The document header (HANDOFF 9.2 items 1 to 4): chips, title, repository location, then [actions] (the run actions), all in
@@ -32,16 +37,17 @@ internal fun DetailHeader(
   sectionsStale: Boolean,
   onRevealFolder: () -> Unit,
   onOpenBranch: () -> Unit,
+  qa: QaHeaderFacts? = null,
   actions: (@Composable () -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   DocHeader(
-    title = item.title,
+    title = if (qa != null) item.branch?.let { "QA on branch $it" } ?: item.title else item.title,
     eyebrow = {
       SbLabel(lifecycleLabel(item.lifecycle), SbLabelStyle.Tint(lifecycleColor(item.lifecycle)))
       if (item.stalledSince != null) SbLabel("Stalled", SbLabelStyle.Tint(colors.stBlocked))
       IdTag(rowKey(item))
-      if (item.kind != WorkKind.Goal) item.issueKey?.let { IdTag(it) }
+      if (item.kind != WorkKind.Goal && qa == null) item.issueKey?.let { IdTag(it) }
       SbLabel(kindWord(item.kind), SbLabelStyle.Plain)
       // Freshness only means something while the run can still change; a completed item drops the pill.
       if (item.lifecycle != Lifecycle.Terminal) {
@@ -61,9 +67,16 @@ internal fun DetailHeader(
         }
         val branch = item.branch
         if (branch != null) {
-          SbButton(branch, onOpenBranch, variant = SbButtonVariant.Ghost, size = SbControlSize.Small, icon = LucideIcons.branch)
+          val label = branch + (qa?.testedCommit?.let { " · ${it.take(7)}" } ?: "")
+          SbButton(label, onOpenBranch, variant = SbButtonVariant.Ghost, size = SbControlSize.Small, icon = LucideIcons.branch)
         } else {
           BasicText("no branch", style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
+        }
+        if (qa != null) (qa.criteriaSource ?: item.issueKey)?.let { source ->
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            SbIcon(LucideIcons.checkCircle, SbIconSize.Xs)
+            BasicText("Criteria from $source", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+          }
         }
       }
     },

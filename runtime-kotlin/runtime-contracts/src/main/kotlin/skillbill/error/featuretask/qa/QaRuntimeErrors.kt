@@ -5,12 +5,14 @@ import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 
 private const val DEVICE_LEASE_FAILED_PREFIX = "QA device lease failed: "
 private const val OWNED_RESOURCE_FAILED_PREFIX = "QA owned resource failed: "
+private const val PROGRESS_FAILED_PREFIX = "QA progress failed: "
 
 private val QA_FAILURE_CODES =
   setOf(
     FeatureTaskRuntimeFailureCode.INCOMPATIBLE_QA_CAPABILITY,
     FeatureTaskRuntimeFailureCode.QA_DEVICE_LEASE_FAILED,
     FeatureTaskRuntimeFailureCode.QA_OWNED_RESOURCE_FAILED,
+    FeatureTaskRuntimeFailureCode.QA_PROGRESS_FAILED,
     FeatureTaskRuntimeFailureCode.QA_WORKTREE_CHANGED,
     FeatureTaskRuntimeFailureCode.QA_REPOSITORY_UNREADABLE,
   )
@@ -29,6 +31,12 @@ val SkillBillRuntimeException.isQaOwnedResourceFailure: Boolean
 
 val SkillBillRuntimeException.qaOwnedResourceReason: String
   get() = message.orEmpty().removePrefix(OWNED_RESOURCE_FAILED_PREFIX)
+
+val SkillBillRuntimeException.isQaProgressFailure: Boolean
+  get() = code == FeatureTaskRuntimeFailureCode.QA_PROGRESS_FAILED
+
+val SkillBillRuntimeException.qaProgressReason: String
+  get() = message.orEmpty().removePrefix(PROGRESS_FAILED_PREFIX)
 
 fun incompatibleQaCapability(reason: String): SkillBillRuntimeException =
   SkillBillRuntimeException(
@@ -53,6 +61,16 @@ fun qaOwnedResourceFailed(
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.QA_OWNED_RESOURCE_FAILED,
     "$OWNED_RESOURCE_FAILED_PREFIX$reason",
+    cause,
+  )
+
+fun qaProgressFailed(
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.QA_PROGRESS_FAILED,
+    "$PROGRESS_FAILED_PREFIX$reason",
     cause,
   )
 

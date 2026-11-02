@@ -22,6 +22,8 @@ internal object IntakeIssueKeys {
       ?: specPathToken(tokens)?.let { ofSpecPath(Path.of(it)) }
   }
 
+  fun ofLeadingToken(intake: String?): String? = tokens(intake).firstOrNull()?.takeIf(ISSUE_KEY::matches)?.uppercase()
+
   fun ofSpecPath(specPath: Path): String? =
     goalIntakeSpecBundleDirectory(specPath.normalize().toString())
       ?.let { directory -> issueAndFeature(directory).first.takeIf(ISSUE_KEY::matches) }

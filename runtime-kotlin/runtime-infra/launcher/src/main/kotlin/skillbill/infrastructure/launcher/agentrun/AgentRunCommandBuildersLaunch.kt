@@ -6,6 +6,7 @@ import skillbill.contracts.agentaddon.AGENT_ADDON_SELECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.error.shellcontent.governedReviewLaunchCapability
+import skillbill.infrastructure.launcher.mcp.runtimeMcpServerEnvironment
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -61,10 +62,15 @@ internal fun goalContinuationCommand(
     command = goalContinuationArguments(request, agent, databasePath),
     workingDirectory = request.repoRoot,
     timeout = request.timeout,
-    environment = goalContinuationEnvironment(request),
+    environment = goalContinuationEnvironment(request) + runtimeDatabaseEnvironment(true, databasePath),
     idlePolicy = unstreamedLivenessPolicy(request),
   )
 }
+
+internal fun runtimeDatabaseEnvironment(
+  inheritEnvironment: Boolean,
+  databasePath: Path?,
+): Map<String, String> = if (inheritEnvironment) runtimeMcpServerEnvironment(databasePath) else emptyMap()
 
 internal fun goalContinuationArguments(
   request: SkillRunRequest,

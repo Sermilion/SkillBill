@@ -303,6 +303,7 @@ public class PhaseRunEntry(
       )
     if (SkeletonDefinition.runHarnessOf(publicPhaseId) == PhaseRunHarness.DEVICE_QA) {
       publisher.recordQaOutcome(StandaloneQaOutcome.ATTEMPTED)
+      publisher.publishActivity(publicPhaseId, "QA started")
     }
     monitor?.cleanup?.onSettled { settlement ->
       catchingNonCancellation { publisher.recordMonitorCleanup(settlement.toStatusCleanup()) }

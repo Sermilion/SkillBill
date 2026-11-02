@@ -176,6 +176,7 @@ data class StandalonePhaseStatusRecord(
   val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
   val reviewRunId: String? = null,
+  val qaChecklist: StandaloneQaChecklist? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500

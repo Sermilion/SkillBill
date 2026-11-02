@@ -153,6 +153,11 @@ governedResources {
     "SKILL-419: canonical QA device lease schema",
   )
   copy(
+    "copyQaChecklistSchema",
+    "qa-checklist-schema.yaml",
+    "SKILL-457: canonical QA checklist schema",
+  )
+  copy(
     "copyFeatureTaskExecutionIdentitySchema",
     "feature-task-execution-identity-schema.yaml",
     "SKILL-120: canonical feature-task execution-identity schema",

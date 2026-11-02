@@ -258,6 +258,8 @@ data class ExecutionInstance(
   val qaReportText: String?,
   val planReport: PlanRunReport?,
   val reviewReport: ReviewReport? = null,
+  val qaChecklist: QaChecklist? = null,
+  val qaFindings: List<QaChecklistFinding> = emptyList(),
 )
 
 /**
