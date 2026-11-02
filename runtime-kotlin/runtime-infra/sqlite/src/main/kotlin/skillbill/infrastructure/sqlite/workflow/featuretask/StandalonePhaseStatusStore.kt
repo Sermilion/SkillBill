@@ -616,13 +616,21 @@ internal class StandalonePhaseStatusStore(
     if (operatorCancellation && current.lifecycleState !in OPERATOR_CANCEL_CLOSED_STATES) {
       return true
     }
-    if (current.lifecycleState == "paused" && current.currentStep == "runner_interrupted" &&
-      request.lifecycleState !in setOf("paused", "failed")
+    if (current.lifecycleState == IdeStatusLifecycleState.PAUSED.wireValue &&
+      current.currentStep == "runner_interrupted" &&
+      request.lifecycleState !in
+      setOf(
+        IdeStatusLifecycleState.PAUSED.wireValue,
+        IdeStatusLifecycleState.FAILED.wireValue,
+      )
     ) {
       return false
     }
     if (current.lifecycleState !in TERMINAL_STATES) {
-      return !(current.lifecycleState == "paused" && request.lifecycleState == "terminal")
+      return !(
+        current.lifecycleState == IdeStatusLifecycleState.PAUSED.wireValue &&
+          request.lifecycleState == IdeStatusLifecycleState.TERMINAL.wireValue
+      )
     }
     return current.lifecycleState == request.lifecycleState && current.terminalResult == request.terminalResult
   }

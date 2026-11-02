@@ -23,6 +23,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
@@ -33,6 +35,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
+import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
@@ -46,6 +49,10 @@ import kotlin.time.Instant
 
 internal val COMPOSER_MAX_WIDTH = 728.dp
 
+private const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
+private const val PICKERS_DISABLED_STARTING = "Wait for Start goal run to finish"
+private const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
+
 /** The task input with its repository, agent and Send controls. Enter and Send share one condition. A busy turn queues the next message and locks the pickers; a change rebinds the open chat. */
 @Composable
 internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, now: () -> Instant = Clock.System::now, onAction: (NewTaskAction) -> Unit) {
@@ -56,7 +63,13 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
   val offer by draft.offer.collectAsState()
   val ready = !offer.starting && draft.canSend()
-  val pickersEnabled = !busy && !offer.starting && chat?.repositoryMissing != true
+  val pickersDisabledWhy = when {
+    busy -> PICKERS_DISABLED_BUSY
+    offer.starting -> PICKERS_DISABLED_STARTING
+    chat?.repositoryMissing == true -> PICKERS_DISABLED_MISSING_REPO
+    else -> null
+  }
+  val pickersEnabled = pickersDisabledWhy == null
   val saved by draft.saved.collectAsState()
   val submit = {
     val startsTurn = ready && !busy && draft.text.trim() != RESUME_COMMAND
@@ -80,8 +93,8 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      RepositoryPicker(state, draft, enabled = pickersEnabled, onAction)
-      AgentPicker(state.agent, state.agents, enabled = pickersEnabled) { onAction(NewTaskAction.ChooseAgent(it)) }
+      RepositoryPicker(state, draft, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy, onAction)
+      AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
         SbButton(if (busy) "Queue" else "Send", submit, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
       }
@@ -90,17 +103,23 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
 }
 
 @Composable
-private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, enabled: Boolean, onAction: (NewTaskAction) -> Unit) {
+private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, enabled: Boolean, disabledWhy: String?, onAction: (NewTaskAction) -> Unit) {
   val close = { onAction(NewTaskAction.CloseRepositoryPicker) }
+  val why = disabledWhy.takeIf { !enabled }
   Box {
-    ChatPill(
-      draft.repository?.let { "${it.name} · ${draft.baseBranch.ifBlank { "default branch" }}" } ?: "Choose repository",
-      mono = true,
-      icon = LucideIcons.folder,
-      maxWidth = 280.dp,
-      modifier = Modifier.then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-        .clickable(enabled = enabled, onClickLabel = "Change repository or base branch") { onAction(NewTaskAction.OpenRepositoryPicker) },
-    )
+    val pillModifier = Modifier.then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+      .clickable(enabled = enabled, onClickLabel = "Change repository or base branch") { onAction(NewTaskAction.OpenRepositoryPicker) }
+      .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
+    val pill = @Composable {
+      ChatPill(
+        draft.repository?.let { "${it.name} · ${draft.baseBranch.ifBlank { "default branch" }}" } ?: "Choose repository",
+        mono = true,
+        icon = LucideIcons.folder,
+        maxWidth = 280.dp,
+        modifier = pillModifier,
+      )
+    }
+    if (why != null) SbTooltip(why) { pill() } else pill()
     if (enabled && state.repositoryPickerOpen) {
       ShellLayer(close)
       SbPopover(expanded = true, onDismissRequest = close) { RepositoryPickerContent(state, draft, onAction) }

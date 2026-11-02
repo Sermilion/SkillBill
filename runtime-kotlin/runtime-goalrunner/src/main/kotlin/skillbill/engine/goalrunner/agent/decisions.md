@@ -17,7 +17,7 @@ Decision: When no clause on any line holds a non-path token, use today's slug of
 Reason: That is a naming rule rather than a failure. A path-only line must not become a new DESCRIPTION refusal.
 
 ## [2026-11-02] Do not add a fallback when a selected clause slugs to null
-Context: A path followed by non-ASCII with no agent title, such as /home/u/s.png then Russian text, used to be admitted with a path slug. Criterion 1's selected-clause rule now yields a null name and the existing DESCRIPTION refusal.
+Context: A path followed by non-ASCII with no agent title, such as a home-directory screenshot path then Russian text, used to be admitted with a path slug. Criterion 1's selected-clause rule now yields a null name and the existing DESCRIPTION refusal.
 Decision: Implement the criterion as written. Do not fall back to the first line's path slug when the selected clause has no ASCII letters or digits.
 Reason: IS-004 covers only intakes with no non-path token at all. The smallest admission amendment would be: when the selected clause slugs to null and the first content line holds a path-like token, use today's first-clause slug.
 Revisit when: The owner prefers those intakes to stay admitted.

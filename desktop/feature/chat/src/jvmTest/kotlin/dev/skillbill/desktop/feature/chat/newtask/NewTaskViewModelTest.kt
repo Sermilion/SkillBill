@@ -20,13 +20,14 @@ import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
+import dev.skillbill.desktop.core.testing.loadedBoard
+import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
-import dev.skillbill.desktop.core.testing.loadedBoard
-import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.feature.chat.chipText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -213,10 +214,14 @@ class NewTaskViewModelTest {
     val firstSession = chatRepo.requests.single().sessionId
 
     model.onAction(NewTaskAction.ChooseAgent("codex"))
+    assertEquals(chatRepo.agent, draft.selectedAgent)
+    assertEquals(chipText(chatRepo.agent), chipText(model.state.value.agent))
     advanceUntilIdle()
 
     assertEquals("codex", draft.agentId)
     assertEquals("codex", model.state.value.agent?.agentId)
+    assertEquals(chipText(chatRepo.agentFor("codex")), chipText(model.state.value.agent))
+    assertEquals(chipText(chatRepo.agentFor("codex")), chipText(draft.selectedAgent))
     assertNotEquals(firstSession, draft.chat.value?.sessionId)
     assertEquals("codex", draft.chat.value?.agent?.agentId)
     model.viewModelScope.cancel()
