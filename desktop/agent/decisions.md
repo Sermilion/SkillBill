@@ -1,7 +1,7 @@
 ## [2026-11-02] Reset the window to New task instead of Work
 Context: New task is the default route when the app opens.
 Decision: The initial stack and the root rebuilt after a database switch use NewTaskRoute. Links labelled Work continue to open Work.
-Reason: The default applies wherever the window builds its root, while Work links retain their meaning. The route content-key decision remains in effect.
+Reason: The default applies wherever the window builds its root, while Work links retain their meaning. This replaces only the reset target in "Put the session id in every route's content key"; its content-key decision stands, but its "resets the stack to Work" no longer describes the code.
 
 ## [2026-11-02] Keep new-task drafts and chat in the window scope
 Context: A conversation has no execution and must survive navigation and database-session changes. Saved drafts must also resume after restart.

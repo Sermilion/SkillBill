@@ -1,6 +1,6 @@
 ## [2026-11-02] Admit desktop chat intake through the runtime before launch
 Context: New-task chat starts need goal intake and issue-key rules, while concurrent starts and database switches can invalidate a prepared launch.
-Decision: Runtime work control owns admission, allocation, re-admission and preflight. Desktop work control owns session fencing and launch reservations. Allocated-key collisions can retry; supplied-key collisions return a refusal.
+Decision: Runtime work control owns admission, allocation, re-admission and preflight. Desktop work control owns session fencing and launch reservations. Allocated-key collisions can retry; supplied-key collisions return a refusal. Terminal dispatcher prose and NewTaskIssueKeyAllocator remain separate allocation owners.
 Reason: The runtime owns goal intake, while the desktop holds the session and board state needed to prevent duplicate or stale launches.
 Revisit when: Terminal and desktop allocation can share one runtime-owned implementation.
 

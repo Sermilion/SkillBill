@@ -12,6 +12,34 @@ import kotlin.test.assertEquals
 
 class NewTaskIssueKeyAllocatorTest {
   @Test
+  fun `allocates above each bundle identity in each inventory root`() {
+    for (root in listOf("project-specs", ".feature-specs", ".feature-specs/done")) {
+      for (identity in listOf("directory", "heading", "manifest")) {
+        val repoRoot = Files.createTempDirectory("new-task-key-inventory")
+        val storeRoot = repoRoot.resolve("project-specs")
+        bundle(
+          repoRoot.resolve(root),
+          if (identity == "directory") "NEWS-42-task" else "unidentified-task",
+          if (identity == "heading") "# NEWS-42 Parent" else "",
+          if (identity == "manifest") "issue_key: NEWS-42\n" else "",
+        )
+        val allocator =
+          NewTaskIssueKeyAllocator(
+            projectStore(repoRoot, storeRoot),
+            TestDecompositionManifestStore,
+            NoopRuntimeDiagnostics,
+          )
+
+        assertEquals(
+          NewTaskKeyAllocation.Allocated("NEWS-43"),
+          allocator.allocate(repoRoot, "NEWS", emptySet()),
+          "identity=$identity root=$root",
+        )
+      }
+    }
+  }
+
+  @Test
   fun `allocates above all local bundle identities and occupied decimal keys`() {
     val repoRoot = Files.createTempDirectory("new-task-key-allocation")
     val storeRoot = repoRoot.resolve("project-specs")

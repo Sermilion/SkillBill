@@ -29,6 +29,16 @@ class ChatSystemPromptTest {
   }
 
   @Test
+  fun `the new-task prompt permits goal and review start actions`() {
+    val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
+
+    assertTrue("set \"start\" to one of: \"goal\", \"plan\", \"review\", \"validation\", \"qa\" or \"pr\"" in prompt)
+    assertTrue("the app starts the selected run when the operator clicks it" in prompt)
+    assertFalse("Starting a run from this chat is not available yet" in prompt)
+    assertFalse("Do not include a \"start\" field" in prompt)
+  }
+
+  @Test
   fun `the execution prompt keeps its execution guidance`() {
     val prompt = scopeSystemPrompt(ChatScope.Execution("wf-1", WorkKind.Goal, "SKILL-1", "Title", "/work/app"))
 

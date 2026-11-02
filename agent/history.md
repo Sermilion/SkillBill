@@ -4,7 +4,8 @@ Areas: desktop/app, desktop/core, desktop/feature/chat, runtime-kotlin/runtime-e
 - Execution-free chat shares ChatThread with execution chat. Window-scoped drafts survive navigation and database switches; saved transcripts and session context support restart and resume. reusable
 - Goal and plan offers and standalone action chips launch through runtime work control. Successful goal and plan starts clear the draft; refusals retain it.
 - Runtime admission allocates or accepts an issue key, rechecks intake and preflight, and limits intake to 30,000 UTF-8 bytes. Desktop reservations and session fencing guard concurrent or stale launches.
-- Readiness reports only detected agents and the selected repository. The branch control reads default branch until the operator enters one.
+- Readiness reports only detected agents and the selected repository. The branch control reads default branch until the operator enters one. Desktop details and open questions are in desktop/feature/chat/agent/history.md.
+- Validation: subtask runs passed the runtime and Linux desktop suites, including packaged data smoke. macOS and Windows packaging and smoke checks did not run, and opt-in runtime fixture tests stayed skipped. QA reported capability_absent, and the repository changed after the tree it tested.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
 
