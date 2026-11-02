@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -16,27 +17,27 @@ import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
 /**
- * One back-stack entry. Work, History and Detail are made under the open session, so a new session gives every one of them a new
+ * One back-stack entry. New task, Work, History and Detail are made under the open session, so a new session gives every one of them a new
  * content key and clears the old entries' ViewModels; Settings is made under none and survives a switch.
  */
 data class RouteEntry(val route: AppRoute, val sessionId: Long?) {
   val contentKey: String get() = "${route.entryKey}#$sessionId"
 }
 
-/** The window's back stack. Work and History are roots; a detail sits on one of them, and Settings sits on top of either. */
+/** The window's back stack. New task, Work and History are roots; a detail sits on one of them, and Settings sits on top of any of them. */
 @Inject
 @SingleIn(WindowScope::class)
 class WindowNavigator(private val session: DatabaseSessionController, private val selection: SelectionHolder) : AppNavigator {
   private var sessionId: Long? = (session.state.value as? DatabaseSessionState.Open)?.sessionId
 
-  val backStack: SnapshotStateList<RouteEntry> = mutableStateListOf(RouteEntry(WorkRoute(null), sessionId))
+  val backStack: SnapshotStateList<RouteEntry> = mutableStateListOf(RouteEntry(NewTaskRoute, sessionId))
 
   val top: RouteEntry get() = backStack.last()
 
   override fun navigate(route: AppRoute) {
     val entry = RouteEntry(route, if (route is SettingsRoute) null else sessionId)
     when (route) {
-      is WorkRoute, HistoryRoute -> {
+      is WorkRoute, HistoryRoute, NewTaskRoute -> {
         backStack.clear()
         backStack += entry
       }
@@ -58,7 +59,7 @@ class WindowNavigator(private val session: DatabaseSessionController, private va
     return true
   }
 
-  /** A database switch returns the window to its board and keeps Settings open when it initiated the switch. */
+  /** A database switch returns the window to New task and keeps Settings open when it initiated the switch. */
   suspend fun followSession() {
     session.state.collect { state ->
       val next = (state as? DatabaseSessionState.Open)?.sessionId
@@ -66,7 +67,7 @@ class WindowNavigator(private val session: DatabaseSessionController, private va
       sessionId = next
       val settings = backStack.lastOrNull()?.takeIf { it.route is SettingsRoute }
       backStack.clear()
-      backStack += RouteEntry(WorkRoute(null), next)
+      backStack += RouteEntry(NewTaskRoute, next)
       if (settings != null) backStack += settings
       selection.select(null)
     }

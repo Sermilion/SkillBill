@@ -10,7 +10,7 @@ import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
-import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -42,7 +42,7 @@ class ShellKeyboardEscapeTest {
 
     input.removeLayer(menu)
     assertTrue(keyboard.onKey(KeyPress(ShellKey.Escape)))
-    assertEquals(WorkRoute(null), navigator.top.route)
+    assertEquals(NewTaskRoute, navigator.top.route)
   }
 
   private object NoTerminal : PaneCommands {

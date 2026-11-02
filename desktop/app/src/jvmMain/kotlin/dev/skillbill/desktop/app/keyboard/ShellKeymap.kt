@@ -3,6 +3,7 @@ package dev.skillbill.desktop.app.keyboard
 import dev.skillbill.desktop.core.ui.input.ScreenKey
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
@@ -95,6 +96,7 @@ class ShellKeymap(private val timeSource: TimeSource = TimeSource.Monotonic) {
     chord = null
     if (armed != null && armed.elapsedNow() <= CHORD_TIMEOUT) {
       return when (char) {
+        'n' -> ShellCommand.Navigate(NewTaskRoute)
         'w' -> ShellCommand.Navigate(WorkRoute(null))
         'h' -> ShellCommand.Navigate(HistoryRoute)
         's' -> ShellCommand.ToggleSpecs

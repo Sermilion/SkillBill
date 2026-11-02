@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.app.keyboard
 
 import dev.skillbill.desktop.core.ui.input.ScreenKey
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -25,6 +26,13 @@ class ShellKeymapTest {
     assertEquals(ShellCommand.Consumed, keymap.resolve(key('g'), KeyContext()))
     time += 1300.milliseconds
     assertNull(keymap.resolve(key('h'), KeyContext()))
+  }
+
+  @Test
+  fun `G then N goes to New task`() {
+    val keymap = ShellKeymap()
+    assertEquals(ShellCommand.Consumed, keymap.resolve(key('g'), KeyContext()))
+    assertEquals(ShellCommand.Navigate(NewTaskRoute), keymap.resolve(key('n'), KeyContext()))
   }
 
   @Test

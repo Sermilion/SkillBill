@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.ui.navigation.CommandSection
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.navigation.ShellCommand
@@ -49,7 +50,10 @@ class ShellCommandsEntry(
   override fun Content(route: AppRoute) = Unit
 
   override fun commands(context: CommandContext): List<CommandSection> {
-    val navigation = listOf(go("nav:work", "Go to Work", LucideIcons.target, "G W", WorkRoute(null))) +
+    val navigation = listOf(
+      go("nav:new-task", "Go to New task", LucideIcons.pencil, "G N", NewTaskRoute),
+      go("nav:work", "Go to Work", LucideIcons.target, "G W", WorkRoute(null)),
+    ) +
       BoardSectionKind.entries.map { kind ->
         ShellCommand(CommandItem("section:${kind.name}", "Go to ${sectionLabel(kind)}", lead = { StatusIcon(boardSectionLead(kind), boardSectionLeadFill(kind)) })) { navigator.navigate(WorkRoute(kind)) }
       } +
