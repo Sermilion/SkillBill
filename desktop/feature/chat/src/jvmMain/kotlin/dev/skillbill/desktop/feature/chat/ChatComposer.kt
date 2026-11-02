@@ -115,7 +115,7 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
 
 /** The agent chip; clicking it lists the agents the chat can switch to. */
 @Composable
-private fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
+internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
   var open by remember { mutableStateOf(false) }
   val close = { open = false }
   Box {

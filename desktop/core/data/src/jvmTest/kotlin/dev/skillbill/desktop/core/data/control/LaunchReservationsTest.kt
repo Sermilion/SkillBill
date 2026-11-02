@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.data.session.ReservationAdmission
 import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -107,5 +108,25 @@ class LaunchReservationsTest {
     val launches = reservations()
     reserve(launches)
     assertIs<ReservationAdmission.AlreadyReserved>(reserve(launches))
+  }
+
+  @Test
+  fun `a plan only reservation releases when its plan phase row starts`() = runTest {
+    val plan = paused.copy(
+      kind = WorkKind.Phase,
+      lifecycle = Lifecycle.Idle,
+      running = false,
+      control = paused.control.copy(phaseId = "plan"),
+    )
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(
+      launches.reserve(KEY, SESSION, LaunchBoardTarget.PlanPhase(KEY, plan.control.repositoryIdentity), null, page(plan)),
+    ).handle
+    launches.settle(handle, succeeded = true)
+    launches.onBoard(SESSION, page(plan))
+
+    launches.onBoard(SESSION, page(plan.copy(lifecycle = Lifecycle.Active, running = true)))
+
+    assertEquals(emptySet(), launches.keys.value)
   }
 }

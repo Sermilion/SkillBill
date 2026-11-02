@@ -65,5 +65,14 @@ class AgentExecutionChatRepository(
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = withContext(Dispatchers.IO) { catalog.open(entry) }
 
-  override suspend fun saveChat(entry: ChatHistoryEntry) = withContext(Dispatchers.IO) { store.saveChat(entry) }
+  override suspend fun saveChat(entry: ChatHistoryEntry) {
+    withContext(Dispatchers.IO) { store.saveChat(entry) }
+  }
+
+  override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean = withContext(Dispatchers.IO) { store.saveChat(entry) }
+
+  override suspend fun savedNewTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry> =
+    withContext(Dispatchers.IO) { store.newTaskDrafts(repositoryRoot) }
+
+  override suspend fun deleteSavedChat(sessionId: String) = withContext(Dispatchers.IO) { store.delete(sessionId) }
 }

@@ -12,6 +12,21 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import java.nio.file.Path
 
+public fun interface GoalNewWorkAdmissionPort {
+  public fun admit(
+    intake: String,
+    repoRoot: Path,
+  ): GoalNewWorkAdmission
+}
+
+public sealed interface GoalNewWorkAdmission {
+  public data class Admitted(public val issueKey: String) : GoalNewWorkAdmission
+
+  public data object NoIssueKey : GoalNewWorkAdmission
+
+  public data class Refused(public val issueKey: String?, public val reason: String) : GoalNewWorkAdmission
+}
+
 public interface GoalRunnerStatusPort {
   public fun status(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection?
 

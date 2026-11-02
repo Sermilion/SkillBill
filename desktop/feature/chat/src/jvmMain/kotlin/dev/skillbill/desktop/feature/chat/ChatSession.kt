@@ -4,7 +4,6 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
-import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -13,10 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
-
-internal const val SAVED_LINES = 10
 
 internal data class QueuedChatMessage(val text: String, val action: ChatSuggestedAction?, val pauseAndAct: Boolean)
 
@@ -29,7 +25,7 @@ class ChatSession internal constructor(
   initial: WorkItem,
   sessionId: String,
   internal val job: Job,
-  private val clock: Clock = Clock.System,
+  clock: Clock = Clock.System,
   val id: String = initial.id,
 ) {
   private val headerState = MutableStateFlow(initial)
@@ -69,20 +65,21 @@ class ChatSession internal constructor(
     started = true
   }
 
-  private val messages = MutableStateFlow<List<ChatMessage>>(emptyList())
-  val transcript: StateFlow<List<ChatMessage>> = messages.asStateFlow()
+  internal val thread = ChatThread(clock)
 
-  internal val agentState = MutableStateFlow<ChatAgent?>(null)
-  val agent: StateFlow<ChatAgent?> = agentState.asStateFlow()
+  val transcript: StateFlow<List<ChatMessage>> get() = thread.transcript
 
-  internal val agentSupportedState = MutableStateFlow(true)
-  val agentSupported: StateFlow<Boolean> = agentSupportedState.asStateFlow()
+  internal val agentState get() = thread.agentState
+  val agent: StateFlow<ChatAgent?> get() = thread.agent
 
-  internal val busyState = MutableStateFlow(false)
-  val busy: StateFlow<Boolean> = busyState.asStateFlow()
+  internal val agentSupportedState get() = thread.agentSupportedState
+  val agentSupported: StateFlow<Boolean> get() = thread.agentSupported
 
-  internal val queuedState = MutableStateFlow<List<QueuedChatMessage>>(emptyList())
-  internal val queued: StateFlow<List<QueuedChatMessage>> = queuedState.asStateFlow()
+  internal val busyState get() = thread.busyState
+  val busy: StateFlow<Boolean> get() = thread.busy
+
+  internal val queuedState get() = thread.queuedState
+  internal val queued: StateFlow<List<QueuedChatMessage>> get() = thread.queued
 
   internal val modeState = MutableStateFlow(modeFor(item))
   val mode: StateFlow<ChatPermissionMode> = modeState.asStateFlow()
@@ -94,50 +91,19 @@ class ChatSession internal constructor(
   internal val resumeChoicesState = MutableStateFlow<List<ChatHistoryEntry>?>(null)
   val resumeChoices: StateFlow<List<ChatHistoryEntry>?> = resumeChoicesState.asStateFlow()
 
-  internal fun append(message: ChatMessage) = messages.update { it + message }
+  internal fun append(message: ChatMessage) = thread.append(message)
 
-  internal fun replaceTranscript(transcript: List<ChatMessage>) {
-    messages.value = transcript
-  }
+  internal fun replaceTranscript(transcript: List<ChatMessage>) = thread.replaceTranscript(transcript)
 
-  /** The latest operator messages and finished agent replies with text, as a resumed chat shows them again. */
-  internal fun historyLines(): List<ChatHistoryLine> = messages.value.mapNotNull { message ->
-    when {
-      message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text)
-      message is ChatMessage.Agent && !message.streaming && message.text.isNotBlank() -> ChatHistoryLine(ChatHistoryRole.Agent, message.text)
-      else -> null
-    }
-  }.takeLast(SAVED_LINES)
+  internal fun historyLines(): List<ChatHistoryLine> = thread.historyLines()
 
-  internal fun appendDelta(text: String) = updateStreaming { it.copy(text = it.text + text) }
+  internal fun appendDelta(text: String) = thread.appendDelta(text)
 
-  internal fun appendTool(call: ChatToolCall) = updateStreaming { message ->
-    val exists = message.tools.any { it.call.id == call.id }
-    message.copy(tools = if (exists) message.tools.map { if (it.call.id == call.id) it.copy(call = call) else it }
-      else message.tools + ChatToolEntry(call, startedAt = clock.now()))
-  }
+  internal fun appendTool(call: ChatToolCall) = thread.appendTool(call)
 
-  internal fun recordToolResult(result: ChatEvent.ToolResult) = messages.update { list ->
-    list.map { message ->
-      if (message is ChatMessage.Agent) message.copy(tools = message.tools.map {
-        if (it.call.id == result.callId) it.copy(result = result, finishedAt = clock.now()) else it
-      }) else message
-    }
-  }
+  internal fun recordToolResult(result: ChatEvent.ToolResult) = thread.recordToolResult(result)
 
-  internal fun suggestActions(actions: List<ChatSuggestedAction>) = updateStreaming { it.copy(actions = actions) }
+  internal fun suggestActions(actions: List<ChatSuggestedAction>) = thread.suggestActions(actions)
 
-  internal fun endStreaming() = messages.update { list ->
-    val last = list.lastOrNull()
-    if (last is ChatMessage.Agent && last.streaming) list.dropLast(1) + last.copy(streaming = false, finishedAt = clock.now()) else list
-  }
-
-  private fun updateStreaming(change: (ChatMessage.Agent) -> ChatMessage.Agent) = messages.update { list ->
-    val last = list.lastOrNull()
-    if (last is ChatMessage.Agent && last.streaming) {
-      list.dropLast(1) + change(last)
-    } else {
-      list + change(ChatMessage.Agent("", streaming = true, tools = emptyList(), startedAt = clock.now()))
-    }
-  }
+  internal fun endStreaming() = thread.endStreaming()
 }

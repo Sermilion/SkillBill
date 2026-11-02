@@ -1,8 +1,10 @@
 package skillbill.di.core
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalRunnerStatusPort
+import skillbill.engine.goalrunner.intake.GoalIntakeAdmissionService
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.work.control.WorkControlService
@@ -17,6 +19,9 @@ internal interface RuntimeWorkControlProvides {
 
   @Provides
   fun goalPreflightPort(service: GoalPreflightService): GoalPreflightPort = service
+
+  @Provides
+  fun goalNewWorkAdmissionPort(service: GoalIntakeAdmissionService): GoalNewWorkAdmissionPort = service
 
   @Provides
   fun workIncidentRecoveryCommands(controls: WorkControlService): WorkIncidentRecoveryCommands = controls

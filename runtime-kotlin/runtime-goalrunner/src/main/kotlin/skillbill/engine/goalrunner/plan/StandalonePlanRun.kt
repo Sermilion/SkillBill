@@ -179,7 +179,11 @@ public class StandalonePlanRun(
     statusPublisher: StandalonePhaseStatusEventSink,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
-    val intake = suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) }
+    val intake =
+      suppliedIntake?.takeIf { supplied ->
+        val normalized = supplied.trim()
+        normalized.isNotEmpty() && !normalized.equals(issueKey, ignoreCase = true)
+      }
     val identity = repositories.repositoryIdentity(repoRoot)
     val found = planLookup.lookupAfterCrashRecovery(issueKey, identity).forLaunchedSpec(issueKey, intake, repoRoot)
     if (planReports.manifestExists(issueKey, repoRoot)) {

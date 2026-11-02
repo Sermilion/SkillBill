@@ -11,14 +11,20 @@ data class ChatAgent(val agentId: String, val model: String?, val effort: String
 /** [ReadOnly] while the execution runs; [Act] once the operator paused it to act. */
 enum class ChatPermissionMode { ReadOnly, Act }
 
-/** The one execution a chat is about; [repositoryRoot] is the worktree the agent runs in. */
-data class ChatScope(
-  val executionId: String,
-  val kind: WorkKind?,
-  val issueKey: String?,
-  val title: String,
-  val repositoryRoot: String,
-)
+/** What a chat is about: one [Execution], or [NewTask] work with no execution yet. [repositoryRoot] is where the agent runs. */
+sealed interface ChatScope {
+  val repositoryRoot: String
+
+  data class Execution(
+    val executionId: String,
+    val kind: WorkKind?,
+    val issueKey: String?,
+    val title: String,
+    override val repositoryRoot: String,
+  ) : ChatScope
+
+  data class NewTask(override val repositoryRoot: String, val baseBranch: String?) : ChatScope
+}
 
 /** One operator message; [firstTurn] opens [sessionId], later turns resume it. */
 data class ChatTurnRequest(
@@ -30,7 +36,23 @@ data class ChatTurnRequest(
   val prompt: String,
 )
 
-data class ChatSuggestedAction(val label: String, val instruction: String, val mode: ChatPermissionMode)
+/** The run a new-task action starts when clicked; [wire] is its value in the action block and on the start chips. */
+enum class NewTaskActionKind(val wire: String) {
+  Goal("goal"),
+  Plan("plan"),
+  Review("review"),
+  Validation("validation"),
+  Qa("qa"),
+  Pr("pr"),
+}
+
+/** A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. */
+data class ChatSuggestedAction(
+  val label: String,
+  val instruction: String,
+  val mode: ChatPermissionMode,
+  val start: NewTaskActionKind? = null,
+)
 
 data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?)
 
@@ -52,9 +74,23 @@ sealed interface ChatEvent {
 /** Why a turn ended without an answer. */
 enum class ChatFailure { AgentUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
 
-enum class ChatHistoryRole { Operator, Agent }
+enum class ChatHistoryRole { Operator, Agent, Notice, Error }
 
-data class ChatHistoryLine(val role: ChatHistoryRole, val text: String)
+data class ChatHistoryLine(
+  val role: ChatHistoryRole,
+  val text: String,
+  val failure: ChatFailure? = null,
+  val actions: List<ChatSuggestedAction> = emptyList(),
+  val selectedAction: ChatSuggestedAction? = null,
+)
+
+/** Where a saved new-task draft runs; it marks the save as a draft, which references no execution. */
+data class ChatNewTaskContext(
+  val repositoryRoot: String,
+  val baseBranch: String?,
+  val sessionEstablished: Boolean = true,
+  val pendingTurnLineIndex: Int? = null,
+)
 
 /**
  * A chat `/resume` can continue: [sessionId] names the agent session to resume. [executionId] is set on chats the app saved
@@ -68,4 +104,5 @@ data class ChatHistoryEntry(
   val updatedAt: Instant,
   val title: String,
   val lines: List<ChatHistoryLine>,
+  val newTask: ChatNewTaskContext? = null,
 )

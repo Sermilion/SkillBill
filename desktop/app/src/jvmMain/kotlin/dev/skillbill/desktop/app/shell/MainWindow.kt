@@ -12,6 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ import dev.skillbill.desktop.core.ui.shell.ShellLayout
 import dev.skillbill.desktop.feature.changes.ChangesWindowKeys
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.awt.GraphicsEnvironment
 
 private const val MIN_WINDOW_WIDTH = 560
@@ -98,8 +100,9 @@ fun ApplicationScope.MainWindow(
   val keyboard = window.keyboard
   val changesEntry by changes.current.collectAsState()
   val changesKeys = remember { ChangesWindowKeys() }
+  val closeScope = rememberCoroutineScope()
   Window(
-    onCloseRequest = onCloseRequest,
+    onCloseRequest = { closeScope.launch { if (window.chat.closeChatsSafely()) onCloseRequest() } },
     visible = visible,
     title = "Skill Bill",
     icon = skillBillIcon(),
@@ -179,6 +182,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val panes = window.panes
   val session by window.session.state.collectAsState()
   val board by window.board.view.collectAsState()
+  val newTaskDraft by window.chat.newTaskDraftOpen.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
   val chat = contributions.firstOrNull { it.slot == PaneSlot.Chat }?.content
@@ -195,6 +199,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         sectionSizes = board.lastLoaded?.sections?.associate { it.kind to it.items.size },
         specsOpen = panes.specsOpen,
         terminalOpen = panes.terminalOpen,
+        newTaskDraft = newTaskDraft,
         contributions = window.entries.flatMap { it.sidebarItems },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,

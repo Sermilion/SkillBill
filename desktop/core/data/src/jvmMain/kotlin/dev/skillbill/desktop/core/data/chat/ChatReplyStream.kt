@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -23,7 +24,7 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
       if (actions == null) {
         if (pending.isNotEmpty()) add(ChatEvent.TextDelta(pending))
       } else {
-        val decoded = decodeActions(actions.toString())
+        val decoded = decodeActions(actions.toString(), diagnostics)
         if (decoded == null) diagnostics.record("chat.actions_invalid")
         else if (decoded.isNotEmpty()) add(ChatEvent.SuggestedActions(decoded))
       }
@@ -56,7 +57,7 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
   }
 }
 
-private fun decodeActions(source: String): List<ChatSuggestedAction>? {
+private fun decodeActions(source: String, diagnostics: Diagnostics): List<ChatSuggestedAction>? {
   val trimmed = source.trim()
   if (!trimmed.endsWith("```") || trimmed.length > 16000) return null
   val array = try {
@@ -65,7 +66,7 @@ private fun decodeActions(source: String): List<ChatSuggestedAction>? {
     null
   } ?: return null
   if (array.size > 3) return null
-  val actions = array.map { element ->
+  val actions = array.mapNotNull { element ->
     val action = element as? JsonObject ?: return null
     val label = action.actionString("label")?.trim()?.takeIf { it.isNotBlank() && it.length <= 60 && '\n' !in it && '\r' !in it } ?: return null
     val instruction = action.actionString("instruction")?.trim()?.takeIf { it.isNotBlank() && it.length <= 2000 } ?: return null
@@ -74,7 +75,14 @@ private fun decodeActions(source: String): List<ChatSuggestedAction>? {
       "act" -> ChatPermissionMode.Act
       else -> return null
     }
-    ChatSuggestedAction(label, instruction, mode)
+    val start = action["start"]?.let {
+      val wire = action.actionString("start")
+      NewTaskActionKind.entries.firstOrNull { it.wire == wire } ?: run {
+        diagnostics.record("chat.action_start_unknown")
+        return@mapNotNull null
+      }
+    }
+    ChatSuggestedAction(label, instruction, mode, start)
   }
   return actions.takeIf { it.map(ChatSuggestedAction::label).distinct().size == it.size }
 }

@@ -9,6 +9,10 @@ sealed interface AppRoute {
   val entryKey: String
 }
 
+data object NewTaskRoute : AppRoute {
+  override val entryKey: String get() = "new-task"
+}
+
 /** Work, scrolled to [section] when set. Every section shares the `work` entry, so changing it keeps the screen's filter. */
 data class WorkRoute(val section: BoardSectionKind?) : AppRoute {
   override val entryKey: String get() = "work"

@@ -28,7 +28,9 @@ class JunieChatTransport(
   override val agentId = "junie"
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
-    val history = if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
+    val history = if (request.scope is dev.skillbill.desktop.core.domain.model.ChatScope.NewTask) {
+      store.newTaskHistory(request.sessionId)
+    } else if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
     val prompt = juniePrompt(scopeSystemPrompt(request.scope, request.mode), history, request.prompt)
     val command = ChatCommand(
       argv = agentCommand("junie", junieArguments(request, prompt), host.variables["SHELL"]),

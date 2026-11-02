@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 
 private val SHORTCUTS = listOf(
   ShortcutEntry("Command menu", "$MOD_KEY K"),
+  ShortcutEntry("Go to New task", "G N"),
   ShortcutEntry("Go to Work", "G W"),
   ShortcutEntry("Go to History", "G H"),
   ShortcutEntry("Toggle specs pane", "G S"),

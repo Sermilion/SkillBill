@@ -15,6 +15,9 @@ interface ChatCommands {
   /** The execution id whose chat the pane shows, or null when the pane is hidden or has no tab. */
   val shownChatId: StateFlow<String?>
 
+  /** True while a new-task chat exists. */
+  val newTaskDraftOpen: StateFlow<Boolean>
+
   /** Hides the pane when it shows [item]'s chat, or any chat when [item] is null; otherwise opens [item]'s chat, or only shows the pane. */
   fun toggleChat(item: WorkItem?)
 
@@ -24,4 +27,10 @@ interface ChatCommands {
 
   /** Ends every chat of the window; the window calls it when it is disposed. */
   fun closeChats()
+
+  /** Closes chats before the window exits, or returns false when its new-task draft could not be saved. */
+  suspend fun closeChatsSafely(): Boolean {
+    closeChats()
+    return true
+  }
 }

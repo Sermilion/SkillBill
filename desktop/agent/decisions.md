@@ -1,3 +1,24 @@
+## [2026-11-02] Reset the window to New task instead of Work
+Context: New task is the default route when the app opens.
+Decision: The initial stack and the root rebuilt after a database switch use NewTaskRoute. Links labelled Work continue to open Work.
+Reason: The default applies wherever the window builds its root, while Work links retain their meaning. This replaces only the reset target in "Put the session id in every route's content key"; its content-key decision stands, but its "resets the stack to Work" no longer describes the code.
+
+## [2026-11-02] Keep new-task drafts and chat in the window scope
+Context: A conversation has no execution and must survive navigation and database-session changes. Saved drafts must also resume after restart.
+Decision: NewTaskDraft holds the draft and chat in the window scope, independently of the screen view model. Saved drafts retain repository and agent session context.
+Reason: Screen or database-session ownership would end the conversation on navigation or a session change. Snapshot state also avoids driving text input through an asynchronously collected flow, which can lose characters or move the caret.
+
+## [2026-11-02] Limit the new-task readiness line to observable facts
+Context: The design sample claims a loaded pack and a configured validation gate.
+Decision: Readiness reports detected agents and the selected repository. A failed agent detection reports unknown readiness.
+Reason: The desktop and SystemService.doctor() have no read for the loaded pack or validation gate, so those claims would be unverified.
+Revisit when: The desktop gains a read for the loaded pack or validation gate.
+
+## [2026-11-02] Hold the plan dot amber under reduced motion
+Context: The design CSS leaves every step dot grey under reduced motion, while the intake asks for a stationary amber dot.
+Decision: Stop the transition and hold the plan dot amber without a glow.
+Reason: The intake takes precedence over the design CSS.
+
 ## [2026-10-31] Share one git lock and an immutable committed-change cache across change scopes
 Context: Several change scopes can be open for one execution, and multiple windows can request the same committed ranges.
 Decision: `GitReadLock` owns the AppScope mutex shared by `RuntimeWorkChangesRepository` and `RuntimeWorkChangeScopesRepository`. Each port call holds the mutex only for that call. `CommittedChangeCache` uses separate 512-entry LRUs for committed lists and patches and stores only listed, shown, binary, and too-large results. Outside lists stay out of the app cache because they depend on HEAD. Within the session, a single-slot memo keyed by worktree, target branch and subtask ranges serves them. They are re-read when the ranges change or when a non-running execution is opened. Within the session, `WorkingTreeReads` shares working-tree list reads per baseline: a caller waits for a read already in flight and reuses a non-failed result younger than the 3 second refresh interval, so one baseline costs at most one git read per interval no matter how many screens or windows observe it.

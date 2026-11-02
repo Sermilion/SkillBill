@@ -5,6 +5,9 @@ import skillbill.engine.goal.GoalRunnerPauseStatus
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.GoalRunnerStopStatus
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.control.model.NewTaskPreparation
+import skillbill.engine.work.control.model.NewTaskRunKind
+import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -32,6 +35,7 @@ public class WorkControlService(
   private val cancellation: WorkCancellation,
   private val runs: WorkRunActions,
   private val recovery: WorkControlRecovery,
+  private val newTaskStart: WorkNewTaskStart,
 ) : WorkIncidentRecoveryCommands {
   override fun preview(
     workId: String,
@@ -77,6 +81,27 @@ public class WorkControlService(
     issueKey: String,
     agentId: String?,
   ): WorkControlResult = runs.startGoal(repoRoot, issueKey, agentId)
+
+  public fun prepareNewTask(
+    repoRoot: Path,
+    requirements: String,
+    baseBranch: String?,
+    keyChoice: String?,
+    occupiedKeys: Set<String>,
+  ): NewTaskPreparation = newTaskStart.prepareNewTask(repoRoot, requirements, baseBranch, keyChoice, occupiedKeys)
+
+  public fun startNewTask(
+    repoRoot: Path,
+    prepared: NewTaskPreparation.Ready,
+    kind: NewTaskRunKind,
+    agentId: String,
+  ): NewTaskStartResult = newTaskStart.startNewTask(repoRoot, prepared, kind, agentId)
+
+  public fun startStandalone(
+    repoRoot: Path,
+    phaseId: String,
+    agentId: String,
+  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId)
 
   public fun recoveryPreview(
     target: WorkRunTarget,

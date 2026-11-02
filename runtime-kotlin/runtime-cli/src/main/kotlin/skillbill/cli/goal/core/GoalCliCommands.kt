@@ -213,7 +213,7 @@ class GoalRunCommand(
     }
     val effectiveRepoRoot = resolveCliRepositoryRoot(repoRoot, inputs)
     val qaSelection = resolveRequestedQaSelection(qaSelections, inputs.environment)
-    val intake = intakeTokens.joinToString(" ").trim()
+    val intake = intakeTokens.joinToString(" ")
     val runIssueKey = admittedIssueKey(intake, effectiveRepoRoot) ?: return
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
     inputPreparation.validate(

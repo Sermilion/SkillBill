@@ -18,6 +18,10 @@ internal sealed interface LaunchBoardTarget {
   data class Item(val id: String, val kind: WorkKind?, val repositoryIdentity: String, val relaunch: StandaloneRelaunch? = null) : LaunchBoardTarget
 
   data class Goal(val issueKey: String, val repositoryIdentity: String, val workId: String? = null) : LaunchBoardTarget
+
+  data class PlanPhase(val issueKey: String, val repositoryIdentity: String) : LaunchBoardTarget
+
+  data class StandalonePhase(val phaseId: String, val repositoryIdentity: String, val baselineIds: Set<String> = emptySet()) : LaunchBoardTarget
 }
 
 internal sealed interface ReservationAdmission {
@@ -35,12 +39,15 @@ internal class LaunchReservationHandle internal constructor(val key: String, val
 class LaunchReservations {
   private enum class Phase { InFlight, AwaitingBoard }
 
+  private data class PlanPhaseBaseline(val lifecycle: Lifecycle, val executionId: String?, val runSequence: String?)
+
   private data class Reservation(
     val handle: LaunchReservationHandle,
     val target: LaunchBoardTarget,
     val baseline: Lifecycle?,
     val baselineExecutionId: String?,
     val baselineRunSequence: String?,
+    val baselinePlanRows: Map<String, PlanPhaseBaseline>,
     val baselineObservedAt: kotlin.time.Instant?,
     val phase: Phase,
   )
@@ -66,16 +73,28 @@ class LaunchReservations {
     val handle = LaunchReservationHandle(key, sessionId)
     val snapshot = newest(latest[sessionId], Snapshot(page, sessionId))
     latest[sessionId] = snapshot
-    val selected = target.select(snapshot.page.items)
+    val reservationTarget = if (target is LaunchBoardTarget.StandalonePhase) {
+      target.copy(
+        baselineIds = snapshot.page.items.filter {
+          it.kind == WorkKind.Phase && it.control.phaseId == target.phaseId && it.control.repositoryIdentity == target.repositoryIdentity
+        }.mapTo(HashSet()) { it.id },
+      )
+    } else target
+    val selected = reservationTarget.select(snapshot.page.items)
     val boundTarget = when {
-      target is LaunchBoardTarget.Goal && selected != null -> target.copy(workId = selected.id)
-      target is LaunchBoardTarget.Item && selected?.standaloneExecution == true ->
-        target.copy(relaunch = StandaloneRelaunch(selected, snapshot.page.items.mapTo(HashSet()) { it.id }))
-      else -> target
+      reservationTarget is LaunchBoardTarget.Goal && selected != null -> reservationTarget.copy(workId = selected.id)
+      reservationTarget is LaunchBoardTarget.Item && selected?.standaloneExecution == true ->
+        reservationTarget.copy(relaunch = StandaloneRelaunch(selected, snapshot.page.items.mapTo(HashSet()) { it.id }))
+      else -> reservationTarget
     }
-    val selectedBaseline = if (target is LaunchBoardTarget.Goal) selected?.lifecycle else baseline
+    val selectedBaseline = if (reservationTarget is LaunchBoardTarget.Goal || reservationTarget is LaunchBoardTarget.StandalonePhase) selected?.lifecycle else baseline
+    val planRows = if (reservationTarget is LaunchBoardTarget.PlanPhase) {
+      snapshot.page.items.filter { reservationTarget.matches(it) }.associate { item ->
+        item.id to PlanPhaseBaseline(item.lifecycle, item.control.executionId, item.control.runSequence)
+      }
+    } else emptyMap()
     held[key] = Reservation(
-      handle, boundTarget, selectedBaseline, selected?.control?.executionId, selected?.control?.runSequence,
+      handle, boundTarget, selectedBaseline, selected?.control?.executionId, selected?.control?.runSequence, planRows,
       snapshot.page.observedAt, Phase.InFlight,
     )
     publish()
@@ -117,6 +136,17 @@ class LaunchReservations {
   private fun settleFromBoard(key: String, reservation: Reservation?, snapshot: Snapshot) {
     if (reservation == null || reservation.phase != Phase.AwaitingBoard || reservation.handle.sessionId != snapshot.sessionId) return
     if (reservation.baselineObservedAt != null && snapshot.page.observedAt < reservation.baselineObservedAt) return
+    if (reservation.target is LaunchBoardTarget.PlanPhase) {
+      if (snapshot.page.items.any { item ->
+          if (!reservation.target.matches(item)) return@any false
+          val baseline = reservation.baselinePlanRows[item.id] ?: return@any true
+          item.lifecycle != baseline.lifecycle ||
+            (item.control.executionId != null && item.control.executionId != baseline.executionId) ||
+            (item.control.runSequence != null && item.control.runSequence != baseline.runSequence)
+        }
+      ) held.remove(key)
+      return
+    }
     val item = reservation.target.select(snapshot.page.items)
     if (item == null) return
     if (reservation.target is LaunchBoardTarget.Goal && reservation.target.workId == null) {
@@ -135,7 +165,15 @@ class LaunchReservations {
       it.kind == WorkKind.Goal && it.issueKey == issueKey && it.control.repositoryIdentity == repositoryIdentity &&
         (workId == null || it.id == workId)
     }
+    is LaunchBoardTarget.PlanPhase -> null
+    is LaunchBoardTarget.StandalonePhase -> items.firstOrNull {
+      it.kind == WorkKind.Phase && it.control.phaseId == phaseId && it.control.repositoryIdentity == repositoryIdentity && it.id !in baselineIds
+    }
   }
+
+  private fun LaunchBoardTarget.PlanPhase.matches(item: WorkItem): Boolean =
+    item.kind == WorkKind.Phase && item.control.phaseId == "plan" && item.issueKey == issueKey &&
+      item.control.repositoryIdentity == repositoryIdentity
 
   private fun newest(first: Snapshot?, second: Snapshot): Snapshot =
     if (first == null || second.page.observedAt >= first.page.observedAt) second else first

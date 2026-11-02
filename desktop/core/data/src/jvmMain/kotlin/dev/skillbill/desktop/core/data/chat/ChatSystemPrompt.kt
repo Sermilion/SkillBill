@@ -5,12 +5,17 @@ import dev.skillbill.desktop.core.domain.model.ChatScope
 
 internal const val SKILL_BILL_REPOSITORY = "Sermilion/SkillBill"
 
-/** Every agent runs a chat turn with the same access it has in an execution; this prompt only names the execution. */
+/** Every agent runs a chat turn with the same access it has in an execution; this prompt names what the chat is about. */
 internal fun scopeSystemPrompt(scope: ChatScope, mode: ChatPermissionMode): String =
   listOfNotNull(scopeSystemPrompt(scope), modeNote(mode)).joinToString("\n\n")
 
 /** The prompt without the turn's mode, for an agent process that outlives a mode change. */
-internal fun scopeSystemPrompt(scope: ChatScope): String = buildString {
+internal fun scopeSystemPrompt(scope: ChatScope): String = when (scope) {
+  is ChatScope.Execution -> executionSystemPrompt(scope)
+  is ChatScope.NewTask -> newTaskSystemPrompt(scope)
+}
+
+private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildString {
   appendLine("You are chatting with the operator about one skill-bill execution.")
   appendLine("Execution id: ${scope.executionId}")
   appendLine("Kind: ${scope.kind?.name ?: "unknown"}")
@@ -23,6 +28,18 @@ internal fun scopeSystemPrompt(scope: ChatScope): String = buildString {
   )
   appendLine()
   append(CHAT_ACTION_GUIDANCE.trimEnd())
+}
+
+private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString {
+  appendLine("You are chatting with the operator about new work. No skill-bill execution exists yet.")
+  appendLine("Repository: ${scope.repositoryRoot}")
+  scope.baseBranch?.let { appendLine("Base branch: $it") }
+  appendLine("The operator is describing work to start in this repository. When the request does not say what done means or what is out of scope, ask.")
+  appendLine(
+    "You have the same access as any chat: any shell command, git, gh and file edits. Do not launch skill-bill yourself. " +
+      "A start action becomes a button; the app starts the selected run when the operator clicks it.",
+  )
+  append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
 }
 
 /** What the agent must know about the execution's state this turn; null when it may act. */
@@ -54,5 +71,18 @@ Identify the original execution and findings in the instruction. Do not claim th
 unless a supported command actually records that result. Use mode "read" for an inspection with no runtime changes;
 use mode "act" if the verification records finding statuses.
 Do not execute a suggested action until the operator clicks its button or explicitly requests it.
+Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.
+"""
+
+private const val NEW_TASK_ACTION_GUIDANCE = """
+When you propose concrete next actions, append a structured action block at the very end of your reply.
+Use this exact fenced block format, with a JSON array containing up to 3 actions:
+```skillbill-actions
+[{"label":"Start a goal run","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal"}]
+```
+Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
+For an action that should start a run when clicked, set "start" to one of: "goal", "plan", "review", "validation", "qa" or "pr".
+The app turns that action into a button and starts the selected run only after the operator clicks it. Do not launch skill-bill yourself.
+For an action without "start", the app sends its instruction as the next chat turn when clicked.
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.
 """

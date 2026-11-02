@@ -1,3 +1,14 @@
+## [2026-11-02] SKILL-459 new-task home screen
+Areas: desktop/app, desktop/core, desktop/feature/chat, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-goalrunner, docs
+- New task is the default desktop route, with a composer, route preview, board-based home content, and a stationary amber dot under reduced motion. The preview never selects the launch path.
+- Execution-free chat shares ChatThread with execution chat. Window-scoped drafts survive navigation and database switches; saved transcripts and session context support restart and resume. reusable
+- Goal and plan offers and standalone action chips launch through runtime work control. Successful goal and plan starts clear the draft; refusals retain it.
+- Runtime admission allocates or accepts an issue key, rechecks intake and preflight, and limits intake to 30,000 UTF-8 bytes. Desktop reservations and session fencing guard concurrent or stale launches.
+- Readiness reports only detected agents and the selected repository. The branch control reads default branch until the operator enters one. Desktop details and open questions are in desktop/feature/chat/agent/history.md.
+- Validation: subtask runs passed the runtime and Linux desktop suites, including packaged data smoke. macOS and Windows packaging and smoke checks did not run, and opt-in runtime fixture tests stayed skipped. QA reported capability_absent, and the repository changed after the tree it tested.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-30] SKILL-447 desktop app and configuration coordination
 Areas: desktop, runtime-kotlin, desktop-tray, installer and uninstall
 - Added a standalone desktop app alongside the shipped tray, with runtime read and control services, configuration editing, packaging and CI.

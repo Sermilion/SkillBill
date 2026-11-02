@@ -15,12 +15,10 @@ import skillbill.engine.goalrunner.execution.core.captureForTeardown
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerValidationQualityPendingState
-import skillbill.engine.goalrunner.intake.GoalIntake
-import skillbill.engine.goalrunner.intake.GoalIntakePreparation
+import skillbill.engine.goalrunner.intake.GoalIntakeAdmissionService
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
-import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
@@ -56,41 +54,16 @@ public class GoalRunner(
   private val runPreparation: GoalRunnerRunPreparation,
   private val perRunLoopAssembler: GoalRunnerPerRunLoopAssembler,
   private val pauseBoundary: GoalRunnerPauseBoundary,
-  private val intakePreparation: GoalIntakePreparation,
+  private val intakeAdmission: GoalIntakeAdmissionService,
 ) {
   public fun admitIntake(
     intake: String,
     repoRoot: Path,
-  ): GoalIntakeAdmission {
-    val trimmed = intake.trim()
-    existingSpecAdmission(trimmed, repoRoot)?.let { return it }
-    if (trimmed.isNotBlank() && trimmed.none(Char::isWhitespace) && !trimmed.contains('/')) {
-      manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let {
-        return GoalIntakeAdmission.Admitted(it.manifest.issueKey)
-      }
-    }
-    val parsed =
-      GoalIntake.parseOrNull(trimmed)
-        ?: return GoalIntakeAdmission.NeedsInput(GoalIntakeMissingInput.ISSUE_KEY, issueKey = null)
-    val missing =
-      if (manifestStore.readByIssueKeyIfPresent(parsed.issueKey, repoRoot) == null) {
-        intakePreparation.missingNewWorkInput(parsed, repoRoot)
-      } else {
-        null
-      }
-    return missing?.let { GoalIntakeAdmission.NeedsInput(it, parsed.issueKey) }
-      ?: GoalIntakeAdmission.Admitted(parsed.issueKey)
-  }
-
-  private fun existingSpecAdmission(
-    intake: String,
-    repoRoot: Path,
-  ): GoalIntakeAdmission? =
-    intakePreparation.issueKeyForExistingSpec(intake, repoRoot)?.let(GoalIntakeAdmission::Admitted)
+  ): GoalIntakeAdmission = intakeAdmission.admission(intake, repoRoot)
 
   public fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
     manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&
-      intakePreparation.prepare(request) == null
+      intakeAdmission.intakePreparation.prepare(request) == null
 
   public fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
     runPreparation.guardEntry({
@@ -105,7 +78,7 @@ public class GoalRunner(
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
     val admittedState =
       durableState
-        ?: intakePreparation.prepare(request)
+        ?: intakeAdmission.intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
     alreadyCompleteReport(admittedState)?.let { return it }
     val loadedState =

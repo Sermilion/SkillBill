@@ -28,6 +28,9 @@ import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.NewTaskStart
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -46,6 +49,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.work.control.model.WorkControlAction
+import skillbill.engine.work.control.model.NewTaskPreparation
+import skillbill.engine.work.control.model.NewTaskRunKind
+import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
@@ -191,6 +197,159 @@ class RuntimeWorkControlRepository(
         }
       }
     }
+  }
+
+  override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome {
+    val session = request.expectedDatabaseSessionId?.let(sessions::currentComponent)
+      ?: return NewTaskStartOutcome.Refused("The database changed. Try again.")
+    if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
+    if (request.kind in setOf(NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr)) {
+      return startStandaloneTask(request, session)
+    }
+    val identity = callInSession(
+      session,
+      "control_new_task_identity",
+      { Outcome.Failure(it) },
+      stale = { Outcome.Failure(NO_SESSION) },
+    ) { runtime -> Outcome.Success(runtime.repositoryEnclosingRootPort.repositoryIdentity(Path.of(request.repoRoot))) }
+    val repositoryIdentity = when (identity) {
+      is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.")
+        else NewTaskStartOutcome.Failed(identity.error)
+      is Outcome.Success -> identity.value
+    }
+    val snapshot = when (val result = session.board.completeSnapshot(RESERVATION_BOARD)) {
+      is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.")
+        else NewTaskStartOutcome.Failed(result.error)
+      is Outcome.Success -> result.value
+    }
+    if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
+    val kind = if (request.kind == NewTaskKind.GoalRun) NewTaskRunKind.GOAL else NewTaskRunKind.PLAN
+    val triedKeys = mutableSetOf<String>()
+    repeat(3) { attempt ->
+      val preparedResult = callInSession(session, "control_prepare_new_task", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
+        Outcome.Success(runtime.workControlService.prepareNewTask(
+          Path.of(request.repoRoot), request.requirements, request.baseBranch, request.keyChoice, launches.keys.value + triedKeys,
+        ))
+      }
+      val prepared = when (preparedResult) {
+        is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.") else NewTaskStartOutcome.Failed(preparedResult.error)
+        is Outcome.Success -> preparedResult.value
+      }
+      when (prepared) {
+        is NewTaskPreparation.NeedsPrefix -> return NewTaskStartOutcome.NeedsPrefix(prepared.choices)
+        is NewTaskPreparation.Refused -> return NewTaskStartOutcome.Refused(prepared.reason)
+        is NewTaskPreparation.Ready -> {
+          triedKeys += prepared.key
+          val target = if (kind == NewTaskRunKind.GOAL) LaunchBoardTarget.Goal(prepared.key, repositoryIdentity)
+            else LaunchBoardTarget.PlanPhase(prepared.key, repositoryIdentity)
+          val admission = sessions.admitReservation(session, prepared.key, target, null, snapshot)
+          val handle = when (admission) {
+            ReservationAdmission.ChangedSession -> return NewTaskStartOutcome.Refused("The database changed. Try again.")
+            ReservationAdmission.AlreadyReserved -> {
+              if (prepared.allocated && attempt < 2) return@repeat
+              if (prepared.allocated) return NewTaskStartOutcome.Refused("Couldn't assign a free issue key. Try again.")
+              return NewTaskStartOutcome.Refused("${prepared.key} is already in use. Choose another key.")
+            }
+            is ReservationAdmission.Reserved -> admission.handle
+          }
+          val outcome = try {
+            var keyWasTaken = false
+            callInSession(
+              session,
+              "control_start_new_task",
+              NewTaskStartOutcome::Failed,
+              stale = { NewTaskStartOutcome.Refused("The database changed. Try again.") },
+            ) { runtime ->
+              if (!sessionIsCurrent(session)) return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
+              val observation = session.purgeIdentity.observation
+                ?: return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
+              when (val result = runtime.databaseSession.transactionFenced(observation) {
+                if (!sessionIsCurrent(session)) null
+                else runtime.workControlService.startNewTask(Path.of(request.repoRoot), prepared, kind, request.agentId)
+              }) {
+                FencedTransactionResult.ChangedTarget -> NewTaskStartOutcome.Refused("The database changed. Try again.")
+                is FencedTransactionResult.Committed -> when (val started = result.value) {
+                  null -> NewTaskStartOutcome.Refused("The database changed. Try again.")
+                  NewTaskStartResult.KeyTaken -> {
+                    keyWasTaken = true
+                    NewTaskStartOutcome.Refused("${prepared.key} is already in use. Choose another key.")
+                  }
+                  is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
+                  NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, request.kind)
+                }
+              }
+            }.let { it to keyWasTaken }
+          } catch (failure: Throwable) {
+            launches.release(handle)
+            throw failure
+          }
+          val (startOutcome, keyWasTaken) = outcome
+          if (startOutcome is NewTaskStartOutcome.Started) launches.settle(handle, true) else launches.release(handle)
+          if (keyWasTaken && prepared.allocated) {
+            if (attempt < 2) return@repeat
+            return NewTaskStartOutcome.Refused("Couldn't assign a free issue key. Try again.")
+          }
+          return startOutcome
+        }
+      }
+    }
+    return NewTaskStartOutcome.Refused("Couldn't assign a free issue key. Try again.")
+  }
+
+  private suspend fun startStandaloneTask(request: NewTaskStart, session: DatabaseSessionComponent): NewTaskStartOutcome {
+    val phaseId = when (request.kind) {
+      NewTaskKind.Review -> "review"
+      NewTaskKind.Validation -> "validation"
+      NewTaskKind.Qa -> "qa"
+      NewTaskKind.Pr -> "pr"
+      else -> return NewTaskStartOutcome.Refused("Choose a standalone phase.")
+    }
+    if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
+    val identity = callInSession(session, "control_standalone_identity", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
+      Outcome.Success(runtime.repositoryEnclosingRootPort.repositoryIdentity(Path.of(request.repoRoot)))
+    }
+    val repositoryIdentity = when (identity) {
+      is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.") else NewTaskStartOutcome.Failed(identity.error)
+      is Outcome.Success -> identity.value
+    }
+    val snapshot = when (val result = session.board.completeSnapshot(RESERVATION_BOARD)) {
+      is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.") else NewTaskStartOutcome.Failed(result.error)
+      is Outcome.Success -> result.value
+    }
+    val key = "$repositoryIdentity:$phaseId:standalone"
+    val admission = sessions.admitReservation(session, key, LaunchBoardTarget.StandalonePhase(phaseId, repositoryIdentity), null, snapshot)
+    val handle = when (admission) {
+      ReservationAdmission.AlreadyReserved -> return NewTaskStartOutcome.Refused("$phaseId is already starting in this repository.")
+      ReservationAdmission.ChangedSession -> return NewTaskStartOutcome.Refused("The database changed. Try again.")
+      is ReservationAdmission.Reserved -> admission.handle
+    }
+    val outcome = try {
+      callInSession(
+        session,
+        "control_start_standalone",
+        NewTaskStartOutcome::Failed,
+        stale = { NewTaskStartOutcome.Refused("The database changed. Try again.") },
+      ) { runtime ->
+        if (!sessionIsCurrent(session)) return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
+        val observation = session.purgeIdentity.observation
+          ?: return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
+        when (val result = runtime.databaseSession.transactionFenced(observation) {
+          if (!sessionIsCurrent(session)) null else runtime.workControlService.startStandalone(Path.of(request.repoRoot), phaseId, request.agentId)
+        }) {
+          FencedTransactionResult.ChangedTarget -> NewTaskStartOutcome.Refused("The database changed. Try again.")
+          is FencedTransactionResult.Committed -> when (val started = result.value) {
+            null -> NewTaskStartOutcome.Refused("The database changed. Try again.")
+            is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
+            else -> NewTaskStartOutcome.Started(phaseId, request.kind)
+          }
+        }
+      }
+    } catch (failure: Throwable) {
+      launches.release(handle)
+      throw failure
+    }
+    if (outcome is NewTaskStartOutcome.Started) launches.settle(handle, true) else launches.release(handle)
+    return outcome
   }
 
   override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome {

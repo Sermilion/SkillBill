@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
+import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.navigation.SidebarContribution
@@ -37,6 +38,7 @@ fun ShellSidebar(
   sectionSizes: Map<BoardSectionKind, Int>?,
   specsOpen: Boolean,
   terminalOpen: Boolean,
+  newTaskDraft: Boolean,
   contributions: List<SidebarContribution>,
   onNavigate: (AppRoute) -> Unit,
   onOpenCommandMenu: () -> Unit,
@@ -58,6 +60,15 @@ fun ShellSidebar(
       SidebarItem("Keyboard shortcuts", onShowShortcuts, icon = LucideIcons.keyboard, tooltip = "Keyboard shortcuts", shortcut = "?")
     },
   ) {
+    SidebarItem(
+      "New task",
+      { onNavigate(NewTaskRoute) },
+      icon = LucideIcons.pencil,
+      attention = if (newTaskDraft && topRoute != NewTaskRoute) 1 else null,
+      on = topRoute == NewTaskRoute,
+      tooltip = "New task (G N)",
+      shortcut = "G N",
+    )
     SidebarItem(
       "Work",
       { onNavigate(WorkRoute(null)) },

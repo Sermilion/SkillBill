@@ -44,9 +44,11 @@ fun ChatPane(workspace: ChatWorkspace) {
         EmptyState(title = "No chats", icon = LucideIcons.bot, body = "Open an execution and press $CHAT_SHORTCUT or + to chat about it.")
       } else {
         key(session) {
+          val gone by session.gone.collectAsState()
+          val mode by session.mode.collectAsState()
           Column(Modifier.fillMaxSize()) {
             ChatHeader(session)
-            ChatTranscript(session, Modifier.weight(1f)) { reply, action -> workspace.executeAction(session.id, reply, action) }
+            ChatTranscript(session.thread, gone, mode, Modifier.weight(1f)) { reply, action -> workspace.executeAction(session.id, reply, action) }
             ChatComposer(session, workspace)
           }
         }

@@ -32,6 +32,7 @@ import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.completion.GoalCompletionRecorder
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
+import skillbill.engine.goalrunner.intake.GoalIntakeAdmissionService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
@@ -268,6 +269,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       ),
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
+  val intakePreparation = goalRunnerIntakePreparation(wiring)
   val perRunLoopAssembler =
     testGoalRunnerLoopAssembler(wiring, executionPlans, progressReader, finalization, pauseBoundary)
   return GoalRunner(
@@ -306,7 +308,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
-    intakePreparation = goalRunnerIntakePreparation(wiring),
+    intakeAdmission = GoalIntakeAdmissionService(wiring.manifestStore, intakePreparation),
   )
 }
 

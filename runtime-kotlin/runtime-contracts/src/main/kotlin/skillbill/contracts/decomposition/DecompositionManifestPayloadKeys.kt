@@ -1,6 +1,9 @@
 package skillbill.contracts.decomposition
 
+import skillbill.contracts.SharedPayloadKeys
+
 object DecompositionManifestPayloadKeys {
+  const val ISSUE_KEY: String = SharedPayloadKeys.ISSUE_KEY
   const val FEATURE_NAME: String = "feature_name"
   const val FEATURE_BRANCH: String = "feature_branch"
   const val CURRENT_SUBTASK_INTENT: String = "current_subtask_intent"
