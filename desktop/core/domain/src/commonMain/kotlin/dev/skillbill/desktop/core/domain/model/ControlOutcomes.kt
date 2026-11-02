@@ -149,7 +149,12 @@ fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {
 }
 
 sealed interface NewTaskStartOutcome {
-  data class Started(val issueKey: String, val kind: NewTaskKind) : NewTaskStartOutcome
+  /** [awaitFailure] suspends until a standalone run exits, and returns why it failed, or null after a clean exit. */
+  data class Started(
+    val issueKey: String,
+    val kind: NewTaskKind,
+    val awaitFailure: (suspend () -> String?)? = null,
+  ) : NewTaskStartOutcome
 
   data class NeedsPrefix(val choices: List<String>) : NewTaskStartOutcome
 

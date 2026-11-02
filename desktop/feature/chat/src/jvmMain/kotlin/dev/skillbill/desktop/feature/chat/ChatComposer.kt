@@ -35,6 +35,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
+import dev.skillbill.desktop.feature.chat.newtask.IssuePrefixPicker
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
@@ -51,6 +52,7 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
   val mode by session.mode.collectAsState()
   val choices by session.resumeChoices.collectAsState()
   val queued by session.queued.collectAsState()
+  val prefixChoice by session.prefixChoice.collectAsState()
   val focus = remember(session) { FocusRequester() }
   LaunchedEffect(session) { focus.requestFocus() }
   val id = session.id
@@ -73,6 +75,9 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
   }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     ChatActivityPill(session.thread, gone)
+    prefixChoice?.takeIf { !gone }?.let { pending ->
+      IssuePrefixPicker(pending.choices, enabled = !busy) { workspace.choosePrefix(id, it) }
+    }
     if (command == null && commandTokenLength(text) == text.length) {
       matchingCommands(text).forEach { CommandHint(it) { run(it) } }
     }

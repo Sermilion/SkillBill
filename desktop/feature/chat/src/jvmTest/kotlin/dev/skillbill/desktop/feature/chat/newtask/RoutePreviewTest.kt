@@ -17,8 +17,18 @@ class RoutePreviewTest {
       "QA my current branch" to NewTaskRoutePreview.Qa,
       "Open a PR" to NewTaskRoutePreview.Pr,
       "open pr" to NewTaskRoutePreview.Pr,
+      "lets do code review on this branch" to NewTaskRoutePreview.Review,
+      "let's run a code review" to NewTaskRoutePreview.Review,
+      "please qa this branch" to NewTaskRoutePreview.Qa,
       "Add a review screen" to NewTaskRoutePreview.Goal,
+      "Add a code review screen" to NewTaskRoutePreview.Goal,
       "planning poker timer" to NewTaskRoutePreview.Goal,
+      "publish a minor release" to NewTaskRoutePreview.Release,
+      "let's cut a release" to NewTaskRoutePreview.Release,
+      "release v1.2.0" to NewTaskRoutePreview.Release,
+      "operation:release bump:minor" to NewTaskRoutePreview.Release,
+      "Add a release button" to NewTaskRoutePreview.Goal,
+      "publish release notes" to NewTaskRoutePreview.Goal,
       "  " to null,
     )
     table.forEach { (text, expected) -> assertEquals(expected, previewRoute(text), text) }
@@ -41,6 +51,7 @@ class RoutePreviewTest {
       NewTaskRoutePreview.Validate to "Looks like a standalone validate, just this step",
       NewTaskRoutePreview.Qa to "Looks like a standalone qa, just this step",
       NewTaskRoutePreview.Pr to "Looks like a standalone pr, just this step",
+      NewTaskRoutePreview.Release to "Looks like a release, which no button starts",
     )
     table.forEach { (preview, caption) -> assertEquals(caption, routeCaption(preview)) }
   }

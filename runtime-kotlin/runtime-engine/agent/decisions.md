@@ -1,3 +1,13 @@
+## [2026-11-02] Read run failure logs in the launcher, not the engine
+Context: Exit reporting first had WorkNewTaskStart read the run log. Three architecture tests in :runtime-core:repoTest failed on its java.nio.file.Files import, runCatching call and // comment.
+Decision: The engine no longer reads files. WorkRunLaunchResult.Started carries an optional exit stage with the exit code and failure log lines, and DetachedWorkRunLauncher reads the log only after a non-zero exit.
+Reason: This satisfies the architecture rules and replaces a swallowed read failure with a failure_log_unreadable diagnostic. Undecodable log bytes decode leniently, so they do not hide the stop reason.
+
+## [2026-11-02] Refuse a dash-prefixed target before launch
+Context: A target starting with "-" would be parsed as a CLI option if it were appended as a positional.
+Decision: launchStandaloneCommand refuses a trimmed target that starts with "-" before preflight or launch, with a reason that names the target.
+Reason: startStandalone and startOperation both go through this function, so monitor, verify, pr-review-fix and the other standalone phases are covered.
+
 ## [2026-11-01] A rejected plan bundle gets bounded repair turns before it blocks
 Context: The plan phase settled a full spec bundle whose scenarios lacked list bullets, and the readiness check blocked the run for the operator on attempt 1, after 15 minutes of planning. The plan policy's output-gate budget is 1, and the check reported one spec at a time.
 Decision: `InvalidFeatureSpecPreparationRequestError` from bundle verification becomes `AttemptResult.PlanBundleRejected`, which relaunches plan with the rejection in the prompt, up to `MAX_PLAN_BUNDLE_REPAIR_TURNS` (2) per run of the phase, then blocks as before. Authorization violations, a changed protected spec, IO failures, and snapshot write failures still block at once. Verification reports the first scenario issue plus every other spec that fails, so one repair turn can fix them all.

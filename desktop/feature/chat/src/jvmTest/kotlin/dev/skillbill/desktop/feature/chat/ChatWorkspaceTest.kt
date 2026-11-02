@@ -829,6 +829,37 @@ class ChatWorkspaceTest {
   }
 
   @Test
+  fun `start action that needs a prefix offers the choices and retries with the chosen one`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsPrefix(listOf("SKILL", "OPS"))
+    val action = ChatSuggestedAction("Run phase:goal", "Build the thing.", ChatPermissionMode.Act, NewTaskActionKind.Goal)
+    chat.events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val reply = assertIs<ChatMessage.Agent>(session.transcript.value.last())
+
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+
+    assertEquals(listOf("SKILL", "OPS"), session.prefixChoice.value?.choices)
+    assertEquals(null, controls.newTaskRequests.single().keyChoice)
+
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("OPS-1", NewTaskKind.GoalRun)
+    workspace.choosePrefix(item.id, "OPS")
+    runCurrent()
+
+    assertEquals(null, session.prefixChoice.value)
+    with(controls.newTaskRequests.last()) {
+      assertEquals("OPS", keyChoice)
+      assertEquals(NewTaskKind.GoalRun, kind)
+      assertEquals("Build the thing.", requirements)
+    }
+  }
+
+  @Test
   fun `start action refuses when database session is not open`() = runTest {
     val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
     details.details = mapOf(item.id to flowOf(loaded(item)))

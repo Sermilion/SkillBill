@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import java.util.concurrent.CompletionStage
 
 internal val WorkItem.launchKey: String get() = issueKey ?: id
 
@@ -125,6 +126,11 @@ class LaunchReservations {
       held.remove(handle.key)
       publish()
     }
+  }
+
+  /** A run that exits before registering a board row never settles from the board, so its exit ends the reservation. */
+  internal fun releaseOnExit(handle: LaunchReservationHandle, exit: CompletionStage<*>) {
+    exit.whenComplete { _, _ -> release(handle) }
   }
 
   internal fun releaseSession(sessionId: Long) = synchronized(lock) {

@@ -52,6 +52,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
+import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -280,7 +281,7 @@ class RuntimeWorkControlRepository(
                     NewTaskStartOutcome.Refused("${prepared.key} is already in use. Choose another key.")
                   }
                   is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
-                  NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, request.kind)
+                  NewTaskStartResult.Started, is NewTaskStartResult.Running -> NewTaskStartOutcome.Started(prepared.key, request.kind)
                 }
               }
             }.let { it to keyWasTaken }
@@ -369,6 +370,10 @@ class RuntimeWorkControlRepository(
           is FencedTransactionResult.Committed -> when (val started = result.value) {
             null -> NewTaskStartOutcome.Refused("The database changed. Try again.")
             is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
+            is NewTaskStartResult.Running -> {
+              launches.releaseOnExit(handle, started.failure)
+              NewTaskStartOutcome.Started(id, request.kind) { started.failure.await() }
+            }
             else -> NewTaskStartOutcome.Started(id, request.kind)
           }
         }

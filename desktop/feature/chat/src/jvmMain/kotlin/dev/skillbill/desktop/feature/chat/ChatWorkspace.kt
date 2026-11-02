@@ -245,7 +245,16 @@ class ChatWorkspace(
     }
   }
 
-  private fun executeStartAction(session: ChatSession, action: ChatSuggestedAction, start: NewTaskActionKind) {
+  /** Retries the start waiting on an issue prefix with [choice]. */
+  fun choosePrefix(id: String, choice: String) {
+    val session = sessions[id] ?: return
+    val pending = session.prefixChoiceState.value ?: return
+    if (session.agentState.value == null) return
+    executeStartAction(session, pending.action, pending.start, choice)
+  }
+
+  private fun executeStartAction(session: ChatSession, action: ChatSuggestedAction, start: NewTaskActionKind, keyChoice: String? = null) {
+    session.prefixChoiceState.value = null
     if (modeFor(session.item) == ChatPermissionMode.ReadOnly) {
       val name = session.item.issueKey ?: session.item.id
       session.append(ChatMessage.Notice("Start for $name waits until this execution is not running."))
@@ -266,16 +275,22 @@ class ChatWorkspace(
           baseBranch = null,
           agentId = agentId,
           kind = kind,
-          keyChoice = null,
+          keyChoice = keyChoice,
           expectedDatabaseSessionId = open.sessionId,
           target = action.target,
         ),
       )
       when (outcome) {
-        is NewTaskStartOutcome.Started -> session.append(ChatMessage.Notice("Started ${start.wire}."))
+        is NewTaskStartOutcome.Started -> {
+          session.append(ChatMessage.Notice("Started ${start.wire}."))
+          outcome.awaitFailure?.invoke()?.let { session.append(ChatMessage.Notice("${start.wire} stopped. $it")) }
+        }
         is NewTaskStartOutcome.Refused -> session.append(ChatMessage.Notice(outcome.message))
         is NewTaskStartOutcome.Failed -> session.append(ChatMessage.Error(null, readProblemText(outcome.problem)))
-        is NewTaskStartOutcome.NeedsPrefix -> session.append(ChatMessage.Notice("Choose an issue prefix to start this run."))
+        is NewTaskStartOutcome.NeedsPrefix -> {
+          session.append(ChatMessage.Notice("Choose an issue prefix to start this run."))
+          session.prefixChoiceState.value = PendingPrefixChoice(action, start, outcome.choices)
+        }
       }
     }
   }
@@ -367,6 +382,7 @@ class ChatWorkspace(
   fun clear(id: String) {
     val session = sessions[id] ?: return
     session.resumeChoicesState.value = null
+    session.prefixChoiceState.value = null
     if (session.goneState.value) return
     session.queuedState.value = emptyList()
     val running = session.turnJob
@@ -399,6 +415,7 @@ class ChatWorkspace(
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
     session.resumeChoicesState.value = null
+    session.prefixChoiceState.value = null
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
     session.queuedState.value = emptyList()
     val running = session.turnJob
@@ -422,6 +439,7 @@ class ChatWorkspace(
   private fun enqueue(id: String, message: QueuedChatMessage) {
     val session = sessions[id] ?: return
     if (session.goneState.value || message.text.isBlank()) return
+    session.prefixChoiceState.value = null
     session.queuedState.value += message
     drainQueue(session)
   }

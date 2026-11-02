@@ -8,14 +8,21 @@ internal enum class NewTaskRoutePreview(val step: String?) {
   Validate("validate"),
   Qa("qa"),
   Pr("pr"),
+  Release("release"),
 }
 
+// Conversational openers only, so "Add a review screen" stays a goal.
+private const val LEAD_IN = """^(?:(?:let'?s|please|can you|could you|do|run|start)\s+)*(?:(?:a|an|the)\s+)?"""
+
 private val STANDALONE_ROUTES = listOf(
-  Regex("""^plan\b""") to NewTaskRoutePreview.Plan,
-  Regex("""^review\b""") to NewTaskRoutePreview.Review,
-  Regex("""^(validate|run (the )?checks)\b""") to NewTaskRoutePreview.Validate,
-  Regex("""^qa\b""") to NewTaskRoutePreview.Qa,
-  Regex("""^open (a )?pr\b""") to NewTaskRoutePreview.Pr,
+  Regex("""${LEAD_IN}plan\b""") to NewTaskRoutePreview.Plan,
+  Regex("""${LEAD_IN}(code\s+)?review\b""") to NewTaskRoutePreview.Review,
+  Regex("""${LEAD_IN}(validate|validation|checks)\b""") to NewTaskRoutePreview.Validate,
+  Regex("""${LEAD_IN}qa\b""") to NewTaskRoutePreview.Qa,
+  Regex("""${LEAD_IN}open (a )?pr\b""") to NewTaskRoutePreview.Pr,
+  // Anchored at the end, so "Add a release button" and "publish release notes" stay goals.
+  Regex("""${LEAD_IN}(?:(?:publish|cut|ship)\s+)?(?:(?:a|an|the|new)\s+)*(?:(?:patch|minor|major)\s+)?release(?:\s+(?:now|please|it|this|v?\d\S*))?[.!?]*$""") to NewTaskRoutePreview.Release,
+  Regex("""${LEAD_IN}operation:release\b""") to NewTaskRoutePreview.Release,
 )
 
 internal fun previewRoute(text: String): NewTaskRoutePreview? {
@@ -29,5 +36,6 @@ internal fun NewTaskRoutePreview.lights(step: String): Boolean = this == NewTask
 internal fun routeCaption(preview: NewTaskRoutePreview?): String = when (preview) {
   null -> "Every goal runs this path"
   NewTaskRoutePreview.Goal -> "Looks like a goal run, all 7 steps"
+  NewTaskRoutePreview.Release -> "Looks like a release, which no button starts"
   else -> "Looks like a standalone ${preview.step}, just this step"
 }

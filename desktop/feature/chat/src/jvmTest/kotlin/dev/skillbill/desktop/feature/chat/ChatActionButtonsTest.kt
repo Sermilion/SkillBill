@@ -9,6 +9,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -34,5 +35,19 @@ class ChatActionButtonsTest {
     assertEquals(listOf(push), chosen)
     onNodeWithText("File an issue").assertIsNotEnabled()
     onNodeWithText("Pause and push with lease").assertIsNotEnabled()
+  }
+
+  @Test
+  fun `start action on a running execution never promises a pause`() = runComposeUiTest {
+    val review = ChatSuggestedAction("Run phase:review", "Review this branch.", ChatPermissionMode.Act, NewTaskActionKind.Review)
+    val chosen = mutableListOf<ChatSuggestedAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ChatActionButtons(listOf(review), true, ChatPermissionMode.ReadOnly) { chosen += it }
+      }
+    }
+
+    onNodeWithText("Run phase:review").performClick()
+    assertEquals(listOf(review), chosen)
   }
 }
