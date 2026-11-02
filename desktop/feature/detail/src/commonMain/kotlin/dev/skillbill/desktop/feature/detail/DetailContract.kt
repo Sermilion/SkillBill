@@ -32,6 +32,8 @@ data class DetailUiState(
   /** The previous detail was left by J or K while its Subtasks list had focus, so this one's list takes focus once it shows. */
   val focusSubtaskList: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
+  val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
+  val selectedQaRun: String? = null,
   val activity: ActivityResult = ActivityResult.Loading,
 )
 
@@ -87,7 +89,14 @@ sealed interface ListLoad {
 /** Where the open item sits in the board's order, for J, K and the pager. */
 data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?, val next: WorkItem?)
 
+data class QaCaseKey(val invocationId: String, val caseId: String)
+
 sealed interface DetailAction {
+  data class ToggleQaCase(val key: QaCaseKey) : DetailAction
+  data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction
+  data class SelectQaRun(val invocationId: String?) : DetailAction
+  data class OpenQaReport(val path: String) : DetailAction
+  data class OpenQaEvidence(val path: String, val invocationDirectory: String) : DetailAction
   data class ReviewFindings(val action: ReviewFindingsAction) : DetailAction
   data class LoadMore(val list: DetailList) : DetailAction
   data object Next : DetailAction

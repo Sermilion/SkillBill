@@ -23,9 +23,9 @@ internal fun currentExecution(item: WorkItem, detail: Detail) =
   detail.executionHistory.firstOrNull { it.invocationId == item.control.invocationId }
 
 /** HANDOFF 9.2 item 17: a standalone QA run's report, present when this run's own execution recorded report text. */
-internal fun DetailSections.qaReportSection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit) {
+internal fun DetailSections.qaReportSection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit, run: dev.skillbill.desktop.core.domain.model.ExecutionInstance? = currentExecution(item, detail)) {
   if (item.kind == WorkKind.Goal) return
-  val text = currentExecution(item, detail)?.qaReportText ?: return
+  val text = run?.qaReportText ?: return
   item(key = "qa-report") {
     Column(Modifier.padding(top = DocBlockGap)) {
       ReasonBlock(label = "QA report", text = text, onCopy = { onAction(DetailAction.Copy(it)) }, color = SkillBillTheme.colors.stDone)

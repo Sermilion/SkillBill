@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.slot.qa
 
+import skillbill.contracts.qa.QA_CHECKLIST_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
+import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.ports.qa.model.qaEnvironmentName
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
@@ -129,7 +131,8 @@ internal object QaPromptSections {
     |  stayed and how the user can stop it.
     |- Write the report last, then exit promptly. Nothing this run started may keep running in your foreground
     |  after the report is written.
-      """.trimMargin()
+      """.trimMargin() +
+      progressRules(qa)
   }
 
   private val SCOPE_RULES: String =
@@ -228,6 +231,31 @@ internal object QaPromptSections {
     |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
     |  the flows the change made possible. Write `None.` when you changed nothing.
     """.trimMargin()
+
+  private fun progressRules(qa: QaExecutionContext): String {
+    if (qa.policy != QaPolicy.STANDALONE) return ""
+    val invocationId = qa.workspace.invocationId
+    return "\n\n" +
+      """
+    |Live progress:
+    |
+    |- Write a plan file in the invocation directory with this shape, then register it before the first flow with
+    |  `skill-bill qa plan --invocation $invocationId --file <path>`:
+    |  `{"contract_version": "$QA_CHECKLIST_CONTRACT_VERSION", "cases": [{"id": "<case id>", "title": "<title>",
+    |  "steps": [{"text": "<step>"}]}]}`.
+    |- Report each target kind listed in the QA run section with
+    |  `skill-bill qa target --invocation $invocationId --name <kind> --state running|ready|skipped
+    |  [--detail <text>]`.
+    |- Mark each step `running` and then `passed` or `failed` with
+    |  `skill-bill qa step --invocation $invocationId --case <case id> --step <number> --status <status>
+    |  [--note <text>] [--finding <finding id> [--finding-title <title>]] [--evidence <path>]...`. Steps count
+    |  from 1 within their case. Pass the finding id you use in the report, and evidence paths that start with
+    |  `${qa.expected.evidencePrefix}`.
+    |- Progress commands never decide the verdict; the report does. A non-zero exit or a printed `rejected` or
+    |  `failed` means nothing changed: continue QA without retrying the same command.
+    |- The redaction rules for the report also apply to notes and target details.
+      """.trimMargin()
+  }
 
   private fun deviceLeaseLines(invocationId: String): String =
     """

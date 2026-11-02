@@ -386,7 +386,10 @@ tree under test, created by the runtime under the invocation directory with the
 repository's ignored local configuration files, and it may edit any file there
 to reach a state the criteria need, such as an injected fault. The runtime
 deletes that worktree afterwards; QA never edits the working tree, commits,
-pushes, or opens a PR. QA never blocks and always exits 0. The runtime reads the report with
+pushes, or opens a PR. A standalone QA agent reports live progress with `skill-bill qa plan`,
+`skill-bill qa step`, and `skill-bill qa target`. These commands exit 0 for `recorded`, `rejected`,
+and `failed`, and they cannot change the verdict. A usage error exits non-zero, and QA continues.
+QA never blocks and always exits 0. The runtime reads the report with
 no schema check: the first line naming `passed`, `findings_open`, `incomplete`, or
 `skipped` is the verdict, and a report with none settles `incomplete`. Each
 `### <finding-id> <title>` section is a finding. The runtime never rewrites the

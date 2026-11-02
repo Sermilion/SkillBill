@@ -105,6 +105,11 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val view = runActionsView(state)
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
+  val qaRow = isStandaloneQa(item)
+  val loaded = state.sections as? SectionsUi.Loaded
+  val qaView = if (qaRow && loaded != null) qaChecklistView(item, loaded.detail, state.selectedQaRun, state.qaCaseOverrides) else null
+  val keys = remember { LazyKeyIndex() }
+  val scrollToFinding = rememberQaFindingScroller(listState, collapse, keys)
   val peekState = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -114,14 +119,21 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         Crumb(rowKey(item)),
       ),
       actions = {
-        state.boardPosition?.let { position ->
+        if (qaRow) {
+          loaded?.let { loadedDetail ->
+            qaRunPager(item, loadedDetail.detail, state.selectedQaRun)?.let { pager ->
+              Pager(pager.index, pager.total, onPrevious = { onAction(qaRunPreviousAction(pager, loadedDetail.moreLists)) }, onNext = { onAction(qaRunNextAction(pager)) }, showShortcuts = false)
+            }
+          }
+        } else state.boardPosition?.let { position ->
           Pager(position.index, position.total, onPrevious = { onAction(DetailAction.Previous) }, onNext = { onAction(DetailAction.Next) })
         }
         if (state.stale) StaleIndicator()
         // paneToggles(st), then the details toggle.
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(DetailAction.Retry) })
+        qaView?.reportPath?.let { path -> SbIconButton(LucideIcons.file, "Open report", { onAction(DetailAction.OpenQaReport(path)) }) }
         SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
-        SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
+        SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else if (qaRow) "Open terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
         SbIconButton(LucideIcons.bot, if (host.chatOpen) "Close chat" else "Chat", host.onToggleChat, shortcut = host.chatShortcut, selected = host.chatOpen)
         SbIconButton(LucideIcons.panelRight, "Toggle details", host.onToggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)
       },
@@ -138,9 +150,9 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           state = listState,
           contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
         ) {
-          val sections = DetailSections(this, collapse, listState, assessmentOrder)
+          val sections = DetailSections(this, collapse, listState, assessmentOrder, keys)
           sections.item(key = "header") {
-            DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }) {
+            DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
                 RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
@@ -154,7 +166,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, onAction)
+          sections.document(state, view, onAction, qaView, scrollToFinding)
         }
       }
       DetailPeek(
@@ -201,7 +213,7 @@ private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, 
 }
 
 /** Detail sections with Activity last; placeholders hold their place until the first read lands. */
-private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -211,6 +223,10 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
     }
     is SectionsUi.Loaded -> {
       val detail = sections.detail
+      if (qaView != null) {
+        qaDocument(state, view, detail, qaView, onAction, onOpenFinding)
+        return
+      }
       // HANDOFF 9.2 order: the incident (item 7) comes before the metrics (item 8).
       incident(state, view, onAction)
       item(key = "metrics") {
@@ -246,6 +262,33 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       }
     }
   }
+}
+
+private fun DetailSections.qaDocument(
+  state: DetailUiState,
+  view: RunActionsView,
+  detail: dev.skillbill.desktop.core.domain.model.Detail,
+  qaView: QaChecklistView,
+  onAction: (DetailAction) -> Unit,
+  onOpenFinding: (String) -> Unit,
+) {
+  val item = state.header
+  val run = qaDisplayedRun(item, detail, state.selectedQaRun)
+  val findings = run?.let(::qaFindings).orEmpty()
+  incident(state, view, onAction)
+  qaStatusStrip(item, run, qaView)
+  qaTargetsSection(qaView)
+  qaTestPlanSection(qaView, { id -> if (findings.any { it.id == id }) onOpenFinding(id) }, onAction)
+  changesSection(state.changes, onAction)
+  qaActivitySection(item, detail, state, onAction)
+  qaFindingsSection(findings)
+  qaReportSection(item, detail, onAction, run)
+  briefingSection(item, detail, onAction)
+  dependencySection(item, detail, state, onAction)
+  validationSection(item, detail)
+  phaseResultsSection(item, detail)
+  pageFooter(DetailList.Validation, state, onAction)
+  specBundleSection(item, detail, onAction)
 }
 
 private fun DetailSections.placeholder(key: String, height: Dp) {

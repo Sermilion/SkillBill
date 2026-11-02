@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.qa
 import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
+import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.qa.report.qaTestExpected
 import skillbill.model.FileLocation
 import skillbill.ports.qa.model.QaWorkspace
@@ -13,6 +14,34 @@ import kotlin.test.assertContains
 import kotlin.test.assertFalse
 
 class QaPromptSectionsTest {
+  @Test
+  fun `only standalone QA gets the progress block, and existing rules keep their wording`() {
+    val directory = Path.of("/tmp/qa-progress")
+
+    fun context(policy: QaPolicy) =
+      QaExecutionContext(
+        workspace = QaWorkspace("phr-qa-progress", directory, directory.resolve("report.md"), "$directory/"),
+        expected = qaTestExpected(),
+        target =
+          QaExecutionTarget.Supported(
+            targets =
+              listOf(QaDeclaredTarget("web", setOf(QaTargetKind("web")), FileLocation("/packs/web/qa/guide.md"))),
+            checkout = Path.of("/tmp/qa-checkout"),
+          ),
+        policy = policy,
+      )
+
+    val standalone = QaPromptSections.supplement(context(QaPolicy.STANDALONE))
+
+    assertContains(standalone, "skill-bill qa plan --invocation phr-qa-progress --file <path>")
+    assertContains(standalone, "\"contract_version\": \"0.1\"")
+    assertContains(standalone, "Progress commands never decide the verdict")
+    assertContains(standalone, "Edit nothing outside the QA checkout and the invocation directory")
+    listOf(QaPolicy.AUTO, QaPolicy.ON).forEach { policy ->
+      assertFalse("skill-bill qa plan" in QaPromptSections.supplement(context(policy)))
+    }
+  }
+
   @Test
   fun `the QA supplement names the guidance path and kinds of every declared target`() {
     val directory = Path.of("/tmp/qa-invocation")

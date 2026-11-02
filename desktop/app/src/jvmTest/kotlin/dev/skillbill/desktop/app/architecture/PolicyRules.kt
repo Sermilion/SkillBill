@@ -25,6 +25,8 @@ internal object PolicyRules {
       ("sortedWith" to "Orders a spec bundle's file names for display (manifest, spec.md, then by name); no work items."),
     "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/ActivitySection.kt" to
       ("sortedBy" to "Orders one item's recorded activity facts oldest first for the feed; no work items."),
+    "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/QaChecklistActivity.kt" to
+      ("sortedBy" to "Orders one QA run's recorded activity facts chronologically for the checklist feed; no work items."),
     "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/ActivityProjection.kt" to
       ("sortedBy" to "Merges one workflow's phase and block events by time and lays its activity bar out by time; no work items."),
     "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/ActivitySummary.kt" to

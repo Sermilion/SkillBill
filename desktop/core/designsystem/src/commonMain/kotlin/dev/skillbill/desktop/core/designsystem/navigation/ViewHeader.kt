@@ -123,10 +123,10 @@ private fun Modifier.negativeHorizontalMargin(margin: androidx.compose.ui.unit.D
 }
 
 @Composable
-fun Pager(index: Int, total: Int, onPrevious: () -> Unit, onNext: () -> Unit, modifier: Modifier = Modifier) {
+fun Pager(index: Int, total: Int, onPrevious: () -> Unit, onNext: () -> Unit, modifier: Modifier = Modifier, showShortcuts: Boolean = true) {
   Row(modifier.padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
     BasicText("${index + 1} / $total", style = SkillBillTheme.type.tSm.tabular().copy(color = SkillBillTheme.colors.fgFaint))
-    SbIconButton(LucideIcons.chevronUp, "Previous", onPrevious, size = SbControlSize.Small, shortcut = "K")
-    SbIconButton(LucideIcons.chevronDown, "Next", onNext, size = SbControlSize.Small, shortcut = "J")
+    SbIconButton(LucideIcons.chevronUp, "Previous", onPrevious, size = SbControlSize.Small, shortcut = if (showShortcuts) "K" else null)
+    SbIconButton(LucideIcons.chevronDown, "Next", onNext, size = SbControlSize.Small, shortcut = if (showShortcuts) "J" else null)
   }
 }

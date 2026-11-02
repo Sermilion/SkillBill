@@ -39,6 +39,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.loadedBoard
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
+import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -253,6 +254,39 @@ class DetailViewModelTest {
   }
 
   @Test
+  fun `QA case overrides and selected run survive a refreshed detail`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val source = item.copy(kind = WorkKind.Phase, control = item.control.copy(invocationId = "run-1"))
+    val checklist = dev.skillbill.desktop.core.domain.model.QaChecklist(
+      null, null, null, null, emptyList(), null,
+      listOf(dev.skillbill.desktop.core.domain.model.QaChecklistCase("C1", "Case", listOf(
+        dev.skillbill.desktop.core.domain.model.QaChecklistStep("run", dev.skillbill.desktop.core.domain.model.QaStepState.Running, null, null, emptyList(), epoch),
+      ))), emptyList(), epoch,
+    )
+    val execution = dev.skillbill.desktop.core.domain.model.ExecutionInstance(
+      "run-1", "run-1", "active", epoch, epoch, null, null, null, null, null, null, null, checklist,
+    )
+    val read = DetailState(source, DetailSections.Loaded(emptyDetail.copy(executionHistory = listOf(execution)), null, emptyMap(), emptySet(), stale = false))
+    val viewModel = viewModel(source = source)
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    details.flow.emit(read)
+    advanceUntilIdle()
+    val key = QaCaseKey("run-1", "C1")
+    viewModel.onAction(DetailAction.ToggleQaCase(key))
+    viewModel.onAction(DetailAction.SelectQaRun("run-1"))
+    viewModel.onAction(DetailAction.SelectQaRun(null))
+    viewModel.onAction(DetailAction.OpenQaEvidence("/repo/run-1/evidence.png", "/repo/run-1"))
+    details.flow.emit(read)
+    advanceUntilIdle()
+
+    assertEquals(false, viewModel.state.value.qaCaseOverrides[key])
+    assertEquals("run-1", viewModel.state.value.selectedQaRun)
+    assertEquals(listOf(ToastTone.Problem), effects.filterIsInstance<DetailEffect.ShowToast>().map { it.message.tone })
+  }
+
+  @Test
   fun `a phase item that goes idle keeps changes hidden and never reads subtask scopes`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = item.copy(kind = WorkKind.Phase)
@@ -329,6 +363,7 @@ class DetailViewModelTest {
     override fun control(bundle: SpecBundleRef): Flow<SpecControlState> = emptyFlow()
     override suspend fun openFile(path: String) = OpenOutcome.Opened
     override suspend fun openFileInDefaultApp(path: String) = OpenOutcome.NotOpened
+    override suspend fun openFileUnder(path: String, directory: String) = OpenOutcome.NotOpened
     override suspend fun revealFolder(path: String) = OpenOutcome.Opened
     override suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome = error("unused")
   }

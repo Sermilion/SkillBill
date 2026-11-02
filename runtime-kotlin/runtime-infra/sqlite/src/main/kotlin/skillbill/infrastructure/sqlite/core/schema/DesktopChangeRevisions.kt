@@ -330,6 +330,15 @@ internal fun installWorkBoardChangeTriggers(connection: Connection) {
   }
 }
 
+internal fun reinstallStandalonePhaseStatusChangeTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    listOf("insert", "update", "delete").forEach { suffix ->
+      statement.execute("DROP TRIGGER IF EXISTS desktop_change_standalone_phase_status_$suffix")
+    }
+    installTableTriggers(statement, "standalone_phase_status")
+  }
+}
+
 private fun installTableTriggers(
   statement: Statement,
   table: String,

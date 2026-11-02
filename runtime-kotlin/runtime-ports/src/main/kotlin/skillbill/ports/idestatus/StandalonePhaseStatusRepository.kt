@@ -9,6 +9,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandaloneQaChecklist
+import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import java.time.Instant
 
 interface StandalonePhaseStatusRepository : StandalonePhaseCancellationRepository {
@@ -43,12 +45,12 @@ interface StandalonePhaseStatusRepository : StandalonePhaseCancellationRepositor
   fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult
 
   /**
-   * Settles a non-terminal execution as blocked after the caller proved its lease expired and its owner process is
-   * gone. Guarded on the exact revision, lease owner and generation of [record]: a changed revision is
-   * STALE_REVISION, a changed or renewed lease is STALE_LEASE, and an already terminal execution is IDEMPOTENT.
+   * Stores [checklist] for a live execution: `finished_at` is null and the lifecycle is active or paused. Any other
+   * row returns FINISHED and stays unchanged. The status revision, `updated_at` and the lease columns never change,
+   * so the compare-and-set [update] path is unaffected, and [update] never writes this value.
    */
-  fun releaseExpiredLease(
-    record: StandalonePhaseStatusRecord,
-    at: Instant,
-  ): StandalonePhaseStatusUpdateResult
+  fun writeQaChecklist(
+    invocationId: String,
+    checklist: StandaloneQaChecklist,
+  ): StandaloneQaChecklistWriteResult
 }

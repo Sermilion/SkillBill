@@ -37,9 +37,15 @@ import java.security.MessageDigest
 class QaCommand(
   lease: QaLeaseCommand,
   resource: QaResourceCommand,
-) : DocumentedNoOpCliCommand("qa", "Device and environment helpers for a running `skill-bill phase qa` agent.") {
+  plan: QaPlanCommand,
+  step: QaStepCommand,
+  target: QaTargetCommand,
+) : DocumentedNoOpCliCommand(
+    "qa",
+    "Device, environment and progress helpers for a running `skill-bill phase qa` agent.",
+  ) {
   init {
-    subcommands(lease, resource)
+    subcommands(lease, resource, plan, step, target)
   }
 }
 

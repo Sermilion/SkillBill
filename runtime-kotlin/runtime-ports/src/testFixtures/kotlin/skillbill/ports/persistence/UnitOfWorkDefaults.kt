@@ -32,6 +32,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandaloneQaChecklist
+import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
@@ -96,6 +98,11 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         record: StandalonePhaseStatusRecord,
         at: Instant,
       ): StandalonePhaseStatusUpdateResult = StandalonePhaseStatusUpdateResult.MISSING
+
+      override fun writeQaChecklist(
+        invocationId: String,
+        checklist: StandaloneQaChecklist,
+      ): StandaloneQaChecklistWriteResult = StandaloneQaChecklistWriteResult.MISSING
     }
   open override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =
     UnavailableRejectedOutputDiagnosticRepository

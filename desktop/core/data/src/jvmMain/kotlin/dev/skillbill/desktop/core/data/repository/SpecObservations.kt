@@ -128,7 +128,7 @@ class SpecObservations internal constructor(
 
   suspend fun openFileInDefaultApp(path: String): OpenOutcome = withContext(Dispatchers.IO) {
     val outcome = if (path.isBlank()) OpenOutcome.NotOpened else openOnIo(path, host.variables - EDITOR_VARIABLES)
-    if (outcome == OpenOutcome.NotOpened) diagnostics.record("desktop_phase_instruction_default_open_failed")
+    if (outcome == OpenOutcome.NotOpened) diagnostics.record("desktop_default_open_failed")
     outcome
   }
 

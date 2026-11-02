@@ -3,6 +3,7 @@ package skillbill.engine.work
 import skillbill.application.review.service.StandaloneReviewReportReader
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.qa.report.QaReportParser
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
@@ -14,6 +15,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.WorkExecutionInstance
+import skillbill.ports.idestatus.model.WorkQaFinding
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.time.Instant
@@ -122,6 +124,8 @@ internal fun workExecutionHistory(
             } else {
               null
             },
+          qaChecklist = it.qaChecklist,
+          qaFindings = qaFindingsOf(it.qaReportText),
         )
       }
   } else {
@@ -141,6 +145,14 @@ internal fun workExecutionHistory(
       }
   }
 }
+
+private fun qaFindingsOf(text: String?): List<WorkQaFinding> =
+  text?.let {
+    QaReportParser.parse(it, "").findings.map {
+        finding ->
+      WorkQaFinding(finding.id, finding.title)
+    }
+  }.orEmpty()
 
 public fun reviewReport(
   record: StandalonePhaseStatusRecord,

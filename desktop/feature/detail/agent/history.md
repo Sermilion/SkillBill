@@ -1,3 +1,13 @@
+## [2026-11-02] SKILL-457 QA live checklist in desktop detail
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, desktop/core/designsystem, runtime-engine, runtime-ports
+- Standalone QA detail shows recorded targets, plan, step progress, findings, activity and report, with a pager for earlier runs. Runs without a plan show no invented cases or steps.
+- Reusable projections derive run selection, progress, case state, activity and merged findings. Case overrides and selected runs survive live reads; ended runs do not display running steps.
+- Finding links expand and scroll to their rows. Report and evidence actions use the default application, with evidence paths guarded by invocation directory and parent-segment checks.
+- ActivityFeed, removed by SKILL-455, returns in the design system for QA run events and supports newest-first folding. The design system also adds reduced-motion-aware spinner and pulse primitives. reusable
+- Limits: evidence containment is a string check and does not resolve symlinks. Settled QA runs with result text but no report no longer show the standalone Result section in QA document order.
+- Goal QA warning: the gate reported capability_absent and that repository contents changed after final quality settled, so the tree QA tested is not the final tree.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
 ## [2026-11-01] SKILL-456 subtask inspector review and audit sections
 Areas: desktop/feature/detail, desktop/core/data, desktop/core/domain, desktop/core/designsystem, runtime-domain, runtime-engine, runtime-goalrunner
 - The selected subtask inspector shows review passes, findings, running lane dispositions, audit criteria and attempts, and execution and run counts scoped to its workflow.

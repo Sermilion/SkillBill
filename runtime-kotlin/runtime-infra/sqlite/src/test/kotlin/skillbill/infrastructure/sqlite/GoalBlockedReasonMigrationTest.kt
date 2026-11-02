@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.persistence.DesktopReadSchema
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +23,7 @@ class GoalBlockedReasonMigrationTest {
     }
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      assertEquals(98, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
       assertEquals(1, scalarInt(connection, "SELECT count(*) FROM goal_run_sessions WHERE workflow_id = 'wfl-legacy'"))
       connection.createStatement().use { statement ->
         statement.executeQuery("SELECT blocked_reason FROM goal_run_sessions WHERE workflow_id = 'wfl-legacy'").use {
