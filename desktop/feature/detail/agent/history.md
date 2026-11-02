@@ -3,7 +3,7 @@ Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, desktop/c
 - Standalone QA detail shows recorded targets, plan, step progress, findings, activity and report, with a pager for earlier runs. Runs without a plan show no invented cases or steps.
 - Reusable projections derive run selection, progress, case state, activity and merged findings. Case overrides and selected runs survive live reads; ended runs do not display running steps.
 - Finding links expand and scroll to their rows. Report and evidence actions use the default application, with evidence paths guarded by invocation directory and parent-segment checks.
-- Shared activity feeds support newest-first folding, and the design system provides reduced-motion-aware spinner and pulse primitives. reusable
+- ActivityFeed, removed by SKILL-455, returns in the design system for QA run events and supports newest-first folding. The design system also adds reduced-motion-aware spinner and pulse primitives. reusable
 - Limits: evidence containment is a string check and does not resolve symlinks. Settled QA runs with result text but no report no longer show the standalone Result section in QA document order.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented across runtime and desktop
@@ -25,7 +25,7 @@ Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data
 - Cards preserve expansion choices. Blocks opens matching cards. Loop rows and long text expand independently, and timeline segments scroll to their card.
 - Goals observe a session-owned runtime timeline while running and read once when stopped. Standalone execution rows use recorded run times and results.
 - Goal finish shows untimed assessment facts and the latest update separately from phase totals. Card metadata lists agents. Model labels appear only where recorded for the attempt.
-- The detail Activity section uses the recorded timeline. The QA checklist retains ActivityFeed for its run-specific events.
+- Removed the unused ActivityFeed component and replaced its block-line regression test with timeline coverage.
 - Idle totals use phase spans. Block notices alone never imply idle time. Interaction coverage checks Blocks filtering, card collapse, and timeline navigation.
 
 ## [2026-10-31] SKILL-454 desktop changes panel and diff view
