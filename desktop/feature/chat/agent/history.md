@@ -8,6 +8,16 @@ Areas: desktop/feature/chat
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented
 
+## [2026-11-02] SKILL-465 keep New task chat after start
+Areas: desktop/feature/chat
+- A successful Goal run or Plan only start no longer discards the chat, reversing the SKILL-459 start path. The same NewTaskChat stays open with its agent process, typed text and saved draft. Discard is the only production path that deletes a saved draft.
+- NewTaskOffer.started holds the confirmation on the chat that requested the start. Repeat Goal run and Plan only starts return before startNewTask while it is set. Review, Validation, QA and PR starts still go through and do not clear it.
+- The offer card disables Start goal run, Plan only and prefix controls while started is set, and shows a success callout that says to send another message to start again. An admitted turn, New chat, Discard and dispose clear the guard.
+- Limits: the guard is memory-only, so a resumed draft can start again. keyChoice is not cleared, so a later prefix panel can show the old key. Chat turns during a run are not gated. Sidebar attention is unchanged because the chat stays open.
+- Unresolved: the chat stays in Act mode while a goal runs, and the spec left unverified whether a goal isolates its work in a worktree, so a chat turn may edit the same checkout during a run. A QA or validation warning recorded environment_unavailable, so this entry claims no proof from that step.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-02] SKILL-459 new-task screen and chat
 Areas: desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/ui, desktop/app
 - NewTaskFeatureEntry in the newtask package claims NewTaskRoute through renders and is bound in WindowScope, as ChatFeatureEntry is. No Gradle module was added and AppNavHost did not change.

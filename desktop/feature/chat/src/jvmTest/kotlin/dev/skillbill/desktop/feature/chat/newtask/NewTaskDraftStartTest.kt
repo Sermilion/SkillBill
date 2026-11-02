@@ -20,6 +20,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.io.path.createTempDirectory
@@ -34,7 +35,7 @@ import kotlin.time.Clock
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewTaskDraftStartTest {
   @Test
-  fun `refusal keeps the conversation and success ends it and clears typed text`() = runTest {
+  fun `refusal and success both keep the conversation`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
     val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
@@ -46,7 +47,7 @@ class NewTaskDraftStartTest {
       send()
     }
     runCurrent()
-    val sessionId = assertNotNull(draft.chat.value).sessionId
+    val chat = assertNotNull(draft.chat.value)
     controls.newTaskOutcome = NewTaskStartOutcome.Refused("Add more requirements.")
 
     draft.start(NewTaskKind.GoalRun)
@@ -59,9 +60,9 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
 
-    assertNull(draft.chat.value)
-    assertEquals("", draft.text)
-    assertEquals(listOf(sessionId), chats.ended)
+    assertEquals(chat, draft.chat.value)
+    assertEquals("unsent text", draft.text)
+    assertEquals(emptyList(), chats.ended)
   }
   @Test
   fun `database change keeps the chat and retry uses the new session`() = runTest {
@@ -95,7 +96,7 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     assertEquals(2L, controls.newTaskRequests.last().expectedDatabaseSessionId)
-    assertNull(draft.chat.value)
+    assertEquals(chat, draft.chat.value)
   }
 
   @Test
@@ -185,7 +186,7 @@ class NewTaskDraftStartTest {
     result.complete(NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun))
     runCurrent()
 
-    assertNull(draft.chat.value)
+    assertNotNull(draft.chat.value)
     assertEquals("Start another task", draft.text)
   }
 
@@ -257,5 +258,144 @@ class NewTaskDraftStartTest {
     val request = controls.newTaskRequests.single()
     assertEquals(secondRoot, request.repoRoot)
     assertEquals("codex", request.agentId)
+  }
+
+  @Test
+  fun `started goal run keeps saved draft`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    val sessionId = assertNotNull(draft.chat.value).sessionId
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertTrue(chats.saved.contains(sessionId))
+    assertEquals(emptyList(), chats.ended)
+    assertEquals("Started goal run APP-1", draft.offer.value.started)
+  }
+
+  @Test
+  fun `started plan only keeps saved draft`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    val sessionId = assertNotNull(draft.chat.value).sessionId
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.PlanOnly)
+    draft.start(NewTaskKind.PlanOnly)
+    runCurrent()
+    assertTrue(chats.saved.contains(sessionId))
+    assertEquals(emptyList(), chats.ended)
+    assertEquals("Started plan APP-1", draft.offer.value.started)
+  }
+
+  @Test
+  fun `prefix start clears prefix panel on success`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsPrefix(listOf("APP"))
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertEquals(NewTaskKind.GoalRun, draft.offer.value.prefixKind)
+    assertEquals(listOf("APP"), draft.offer.value.choices)
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun, "APP")
+    runCurrent()
+    assertNull(draft.offer.value.prefixKind)
+    assertEquals(emptyList(), draft.offer.value.choices)
+  }
+
+  @Test
+  fun `started guard blocks repeat run starts until a turn is admitted`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertEquals(1, controls.newTaskRequests.size)
+    draft.start(NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.PlanOnly)
+    runCurrent()
+    assertEquals(1, controls.newTaskRequests.size)
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("review", NewTaskKind.Review)
+    draft.start(NewTaskKind.Review)
+    runCurrent()
+    assertEquals(2, controls.newTaskRequests.size)
+    assertEquals("Started goal run APP-1", draft.offer.value.started)
+    draft.text = "Continue planning"
+    draft.send()
+    runCurrent()
+    assertNull(draft.offer.value.started)
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertEquals(3, controls.newTaskRequests.size)
+  }
+
+  @Test
+  fun `discard after start ends session and clears guard`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    val sessionId = assertNotNull(draft.chat.value).sessionId
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    draft.discard()
+    runCurrent()
+    assertEquals(listOf(sessionId), chats.ended)
+    assertFalse(chats.saved.contains(sessionId))
+    assertNull(draft.offer.value.started)
+    draft.text = "New work"
+    draft.send()
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertEquals(2, controls.newTaskRequests.size)
+  }
+
+  @Test
+  fun `pending start on discarded chat leaves guard null on next chat`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val result = CompletableDeferred<NewTaskStartOutcome>()
+    val workControls = object : WorkControlRepository by controls {
+      override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome {
+        controls.newTaskRequests += request
+        return result.await()
+      }
+    }
+    val draft = draftWithFinishedTurn(chats, workControls)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    draft.discard()
+    runCurrent()
+    result.complete(NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun))
+    runCurrent()
+    assertNull(draft.offer.value.started)
+    assertFalse(draft.offer.value.starting)
+    draft.text = "Fresh chat"
+    draft.send()
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertEquals(2, controls.newTaskRequests.size)
+  }
+
+  private fun TestScope.draftWithFinishedTurn(
+    chats: FakeExecutionChatRepository,
+    controls: WorkControlRepository,
+  ): NewTaskDraft {
+    return NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+      text = "Add export"
+      send()
+    }.also { runCurrent() }
   }
 }

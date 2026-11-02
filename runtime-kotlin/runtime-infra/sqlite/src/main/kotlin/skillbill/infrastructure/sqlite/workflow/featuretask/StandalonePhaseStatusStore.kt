@@ -613,14 +613,7 @@ internal class StandalonePhaseStatusStore(
     request: StandalonePhaseStatusUpdate,
     operatorCancellation: Boolean,
   ): Boolean {
-    if (operatorCancellation && current.lifecycleState !in
-      setOf(
-        IdeStatusLifecycleState.TERMINAL.wireValue,
-        "completed",
-        "success",
-        IdeStatusLifecycleState.CANCELED.wireValue,
-      )
-    ) {
+    if (operatorCancellation && current.lifecycleState !in OPERATOR_CANCEL_CLOSED_STATES) {
       return true
     }
     if (current.lifecycleState == IdeStatusLifecycleState.PAUSED.wireValue &&
@@ -849,6 +842,13 @@ internal class StandalonePhaseStatusStore(
         IdeStatusLifecycleState.TERMINAL.wireValue,
         IdeStatusLifecycleState.FAILED.wireValue,
         IdeStatusLifecycleState.BLOCKED.wireValue,
+        IdeStatusLifecycleState.CANCELED.wireValue,
+      )
+    val OPERATOR_CANCEL_CLOSED_STATES =
+      setOf(
+        IdeStatusLifecycleState.TERMINAL.wireValue,
+        "completed",
+        "success",
         IdeStatusLifecycleState.CANCELED.wireValue,
       )
     const val AFTER_ANCHOR_SQL: String =
