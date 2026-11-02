@@ -113,15 +113,17 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
 internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
   var open by remember { mutableStateOf(false) }
   val close = { open = false }
+  val canOpen = enabled && agents.isNotEmpty()
   Box {
     ChatPill(
       chipText(agent),
       mono = true,
       icon = LucideIcons.cpu,
       maxWidth = 220.dp,
-      modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(enabled = enabled && agents.isNotEmpty(), onClickLabel = "Change agent") { open = true },
+      modifier = Modifier.then(if (canOpen) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+        .clickable(enabled = canOpen, onClickLabel = "Change agent") { open = true },
     )
-    if (open) {
+    if (open && canOpen) {
       ShellLayer(close)
       SbPopover(expanded = true, onDismissRequest = close) {
         SbMenu(

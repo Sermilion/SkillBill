@@ -68,6 +68,33 @@ class CursorAgentRunTransportTest {
   }
 
   @Test
+  fun `last assistant Finding none wins over concatenated progress`() {
+    val progress =
+      "I'll assess the head-commit code and tests against the subtask spec, without editing files or running builds."
+    val jsonl =
+      """
+      {"type":"assistant","message":{"content":[{"type":"text","text":"$progress"}]}}
+      {"type":"assistant","message":{"content":[{"type":"text","text":"Finding: none"}]}}
+      {"type":"result","result":"${progress}Finding: none","usage":{"inputTokens":10,"outputTokens":4}}
+      """.trimIndent()
+
+    assertEquals("Finding: none", AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(jsonl).text)
+  }
+
+  @Test
+  fun `buffered result with progress glued onto Finding none harvests the assessment line`() {
+    val glued =
+      "I'll assess the head-commit code and tests against the subtask spec, without editing files or running builds." +
+        "Finding: none"
+    val decoded =
+      AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(
+        """{"type":"result","subtype":"success","is_error":false,"result":"$glued"}""",
+      )
+
+    assertEquals("Finding: none", decoded.text)
+  }
+
+  @Test
   fun `glued finding lines are harvested and trailing NO_FINDINGS is dropped`() {
     val glued = "progress[F-001] Major | High | path.kt:1 | bugNO_FINDINGS"
     val decoded =

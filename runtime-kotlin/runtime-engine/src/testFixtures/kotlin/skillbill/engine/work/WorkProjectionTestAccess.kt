@@ -9,6 +9,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.persistence.UnitOfWork
 import java.nio.file.Path
+import java.time.Instant
 
 val GOAL_FINISH_PIPELINE_FOR_TEST: List<String> get() = GOAL_FINISH_PIPELINE
 
@@ -26,6 +27,12 @@ fun goalStartRefusalForTest(result: GoalPreflightResult): String? = goalStartRef
 
 fun latestPhaseExecutionsForTest(records: List<StandalonePhaseStatusRecord>): List<StandalonePhaseStatusRecord> =
   latestPhaseExecutions(records)
+
+fun supersededPhaseForTest(
+  record: StandalonePhaseStatusRecord?,
+  unit: UnitOfWork,
+  observedAt: Instant,
+): Boolean = supersededPhase(record, unit, observedAt)
 
 fun resolveExecutionReasonTextForTest(
   record: StandalonePhaseStatusRecord,

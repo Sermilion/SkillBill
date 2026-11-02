@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat.newtask
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
@@ -185,6 +186,44 @@ class NewTaskDraftStartTest {
 
     assertNotNull(draft.chat.value)
     assertEquals("Start another task", draft.text)
+  }
+
+  @Test
+  fun `starting a goal from the offer card after a titled reply passes the title`() = runTest {
+    val chats = FakeExecutionChatRepository().apply {
+      events = {
+        kotlinx.coroutines.flow.flowOf(
+          ChatEvent.SuggestedActions(
+            listOf(
+              ChatSuggestedAction(
+                "Start a goal run",
+                "Implement the requested change in this repository.",
+                ChatPermissionMode.Act,
+                NewTaskActionKind.Goal,
+                title = "Add dark mode setting",
+              ),
+            ),
+          ),
+          ChatEvent.Completed,
+        )
+      }
+    }
+    val controls = FakeWorkControlRepository()
+    val draft = NewTaskDraft(
+      chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System,
+    ).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+      text = "Add export"
+      send()
+    }
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertEquals("Add dark mode setting", controls.newTaskRequests.single().title)
   }
 
   @Test

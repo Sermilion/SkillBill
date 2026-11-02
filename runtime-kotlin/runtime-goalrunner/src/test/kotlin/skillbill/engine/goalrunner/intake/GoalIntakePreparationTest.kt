@@ -100,6 +100,49 @@ class GoalIntakePreparationTest {
     }
   }
 
+  @Test
+  fun `a path-led sentence names the bundle from the descriptive words`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-path-sentence")
+
+    val planned =
+      preparation.resolvePlanSpec(
+        "SKILL-80",
+        "SKILL-80 /home/u/s.png starting a goal from New task chat creates bad title",
+        repoRoot,
+      ).specPath
+
+    assertEquals(specsRoot.resolve("SKILL-80-starting-a-goal-from-new-task/spec.md"), planned)
+  }
+
+  @Test
+  fun `a slash inside a word stays in the slugged name`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-slash-word")
+
+    val planned =
+      preparation.resolvePlanSpec("SKILL-81", "SKILL-81 Fix goal/phase title: more detail", repoRoot).specPath
+
+    assertEquals(specsRoot.resolve("SKILL-81-fix-goal-phase-title/spec.md"), planned)
+  }
+
+  @Test
+  fun `a later descriptive line names the bundle when the first line is a path`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-later-line")
+
+    val planned =
+      preparation.resolvePlanSpec("SKILL-82", "SKILL-82 /home/u/s.png\nAdd dark mode", repoRoot).specPath
+
+    assertEquals(specsRoot.resolve("SKILL-82-add-dark-mode/spec.md"), planned)
+  }
+
+  @Test
+  fun `a path-only intake stays admitted under today's path slug`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-path-only")
+
+    val planned = preparation.resolvePlanSpec("SKILL-83", "SKILL-83 /home/u/s.png", repoRoot).specPath
+
+    assertEquals(specsRoot.resolve("SKILL-83-home-u-s-png/spec.md"), planned)
+  }
+
   private fun intakePlanSpec(
     issueKey: String,
     intake: String,
