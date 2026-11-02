@@ -1,13 +1,15 @@
 package dev.skillbill.desktop.feature.detail
 
+import dev.skillbill.desktop.core.domain.model.ActivityResult
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
-import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
-import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
@@ -30,26 +32,20 @@ data class DetailUiState(
   /** The previous detail was left by J or K while its Subtasks list had focus, so this one's list takes focus once it shows. */
   val focusSubtaskList: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
-  /** The read-only diff shown in place of the document; null shows the document. */
-  val diff: DiffUi? = null,
   val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
   val selectedQaRun: String? = null,
+  val activity: ActivityResult = ActivityResult.Loading,
 )
 
-/** The open item's changed files against [baseline]; the section only shows once the detail has loaded. */
-data class ChangesUi(val baseline: ChangeBaseline? = null, val state: ChangesState = ChangesState.Loading)
-
-/** The diff of [file] read against [baseSha] in [worktreeRoot]. */
-data class DiffUi(val file: ChangedFile, val baseSha: String, val worktreeRoot: String, val content: DiffContent)
-
-sealed interface DiffContent {
-  data object Loading : DiffContent
-
-  data class Read(val state: FileDiffState) : DiffContent
-
-  /** A later list no longer names the file. */
-  data object NoLongerChanged : DiffContent
-}
+/**
+ * The open item's changes; the section only shows once the detail has loaded. A goal carries its [subtasks] for the strip; any other
+ * item carries its change summary in [state] against [baseline].
+ */
+data class ChangesUi(
+  val baseline: ChangeBaseline? = null,
+  val state: ChangesState = ChangesState.Loading,
+  val subtasks: SubtaskScopesState? = null,
+)
 
 /** A row of the Subtasks index: one subtask by its runtime id, or the final Goal finish row. */
 sealed interface SubtaskKey {
@@ -101,6 +97,7 @@ sealed interface DetailAction {
   data class SelectQaRun(val invocationId: String?) : DetailAction
   data class OpenQaReport(val path: String) : DetailAction
   data class OpenQaEvidence(val path: String, val invocationDirectory: String) : DetailAction
+  data class ReviewFindings(val action: ReviewFindingsAction) : DetailAction
   data class LoadMore(val list: DetailList) : DetailAction
   data object Next : DetailAction
   data object Previous : DetailAction
@@ -123,19 +120,15 @@ sealed interface DetailAction {
   /** The Subtasks index took focus, which spends [DetailUiState.focusSubtaskList]. */
   data object SubtaskListFocused : DetailAction
 
-  /** A single click on a Changes row shows that file's diff. */
-  data class SelectChangedFile(val file: ChangedFile) : DetailAction
-
-  /** A double click on a Changes row opens the file in the system default application; deleted files are never opened. */
-  data class OpenChangedFile(val file: ChangedFile) : DetailAction
-
-  /** The diff view's back button or Escape returns to the document. */
-  data object CloseDiff : DetailAction
+  /** Opens the Changes window on [scope]; a subtask scope opens only for a subtask that can be selected. */
+  data class OpenChangesWindow(val scope: ChangeScope = ChangeScope.All) : DetailAction
 }
 
 sealed interface DetailEffect {
+  data class ReviewFindings(val item: WorkItem, val action: ReviewFindingsAction) : DetailEffect
   data class OpenItem(val item: WorkItem) : DetailEffect
   data class OpenRoute(val route: AppRoute) : DetailEffect
   data class CopyToClipboard(val text: String) : DetailEffect
   data class ShowToast(val message: ToastMessage) : DetailEffect
+  data class OpenChangesWindow(val item: WorkItem, val scope: ChangeScope = ChangeScope.All) : DetailEffect
 }

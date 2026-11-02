@@ -146,6 +146,7 @@ public class GoalRunnerTelemetryEmitter(
         mode = "runtime",
         stopReason = stopReason,
         noChangeReason = noChangeReasonOf(report),
+        blockedReason = (report as? GoalRunnerRunReport.Stopped)?.stop?.blockedReason,
         parentWorkflowId = state.parentWorkflowId,
         assessmentCounts = assessmentCounts(),
       ),

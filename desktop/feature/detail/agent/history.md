@@ -7,6 +7,26 @@ Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, desktop/c
 - Limits: evidence containment is a string check and does not resolve symlinks. Settled QA runs with result text but no report no longer show the standalone Result section in QA document order.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented across runtime and desktop
+## [2026-11-01] SKILL-456 subtask inspector review and audit sections
+Areas: desktop/feature/detail, desktop/core/data, desktop/core/domain, desktop/core/designsystem, runtime-domain, runtime-engine, runtime-goalrunner
+- The selected subtask inspector shows review passes, findings, running lane dispositions, audit criteria and attempts, and execution and run counts scoped to its workflow.
+- Read-only status projections load durable results and report the actual degraded source. Page merges retain the latest result per subtask; missing goal status shows an unreadable state.
+- Audit attempt projection derives settled attempts from repair state. The dashed label border supports unfinished review lanes. reusable
+- Running review progress comes from persisted dispositions, so a first attempt can show zero completed lanes until the batch is stored. Live lane progress is outside this change.
+- Panels omit empty execution rows and sections. Liveness appears only for the current subtask. Goal finish and standalone runs keep goal-level values.
+- Live goal reviews run pass 1 only. The projection accepts later pass numbers from stored records, and this change does not alter review execution.
+- A non-current started subtask with a blank workflow id can remain loading; a raw review decode failure can prevent pass recovery. Audit attempt copy can name audit_plan_fix before a focused re-audit.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-01] SKILL-455 recorded Activity timeline
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data
+- Replaced ActivityFeed with subtask attempt cards, day labels, a phase-time summary, and a timeline that compresses idle gaps.
+- Cards preserve expansion choices. Blocks opens matching cards. Loop rows and long text expand independently, and timeline segments scroll to their card.
+- Goals observe a session-owned runtime timeline while running and read once when stopped. Standalone execution rows use recorded run times and results.
+- Goal finish shows untimed assessment facts and the latest update separately from phase totals. Card metadata lists agents. Model labels appear only where recorded for the attempt.
+- The detail Activity section uses the recorded timeline. The QA checklist retains ActivityFeed for its run-specific events.
+- Idle totals use phase spans. Block notices alone never imply idle time. Interaction coverage checks Blocks filtering, card collapse, and timeline navigation.
 
 ## [2026-10-31] SKILL-454 desktop changes panel and diff view
 Areas: desktop/feature/detail, desktop/core/designsystem

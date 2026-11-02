@@ -27,7 +27,7 @@ class DetailSectionsTest {
         collapse = rememberSectionCollapse()
         listState = rememberLazyListState()
         LazyColumn(state = listState) {
-          val sections = DetailSections(this, collapse, keys = keys)
+          val sections = DetailSections(this, collapse, listState, keys = keys)
           sections.item(key = "top") { androidx.compose.foundation.text.BasicText("top") }
           sections.section("nested-section", "Nested section", spaceBefore = 0.dp) {
             item(key = "nested-item") { androidx.compose.foundation.text.BasicText("nested item") }

@@ -374,6 +374,19 @@ internal interface BoardProjectionCapture {
   fun accept(projection: WorkBoardItemProjection)
 }
 
+internal fun testWorkBoardItemProjection(database: DatabaseSessionFactory): WorkBoardItemProjection {
+  val capture =
+    object : DatabaseSessionFactory by database, BoardProjectionCapture {
+      var projection: WorkBoardItemProjection? = null
+
+      override fun accept(projection: WorkBoardItemProjection) {
+        this.projection = projection
+      }
+    }
+  ideStatusService(capture)
+  return requireNotNull(capture.projection)
+}
+
 private fun testBoardProjection(projector: IdeStatusProjector): WorkBoardItemProjection =
   WorkBoardItemProjection(projector, EmitShapeValidator, NoopFeatureTaskRuntimeWorkerSupervisor, NoopRuntimeDiagnostics)
 
@@ -563,6 +576,7 @@ internal class TrackingDatabase(
   internal val controls: GoalRunnerControlRepository = EmptyGoalRunnerControlRepository,
   internal val statusRepository: StandalonePhaseStatusRepository? = null,
   internal val goalPage: WorkGoalSubtaskPage? = null,
+  internal val goalPages: ((afterSubtaskId: Int?, limit: Int) -> WorkGoalSubtaskPage?)? = null,
   internal val qaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository(),
 ) : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection() =
@@ -655,7 +669,7 @@ internal class TrackingDatabase(
             limit: Int,
             completedOnly: Boolean,
             afterSubtaskId: Int?,
-          ): WorkGoalSubtaskPage? = goalPage
+          ): WorkGoalSubtaskPage? = goalPages?.invoke(afterSubtaskId, limit) ?: goalPage
         }
       override val standalonePhaseStatuses = statusRepository ?: super.standalonePhaseStatuses
       override val goalRunnerControls = controls

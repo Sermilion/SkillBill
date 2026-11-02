@@ -37,6 +37,7 @@ fun ChatPane(workspace: ChatWorkspace) {
       noun = "chat",
       newTabShortcut = null,
       closeShortcut = CHAT_SHORTCUT,
+      equalWidthTabs = true,
     ) {
       val session = state.activeId?.let(workspace::session)
       if (session == null) {

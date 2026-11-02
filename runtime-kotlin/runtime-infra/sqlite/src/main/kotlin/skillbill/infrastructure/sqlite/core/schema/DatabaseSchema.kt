@@ -9,6 +9,7 @@ internal object DatabaseSchema {
     setOf(
       "schema_migrations",
       "review_runs",
+      "review_finding_actions",
       "review_run_lanes",
       "review_run_finding_lanes",
       "findings",
@@ -51,6 +52,7 @@ internal object DatabaseSchema {
   val indexNames: Set<String> =
     setOf(
       "idx_feedback_events_run",
+      "review_finding_actions_run",
       "idx_learnings_scope",
       "idx_telemetry_outbox_pending",
       "idx_feature_task_workflows_updated",

@@ -2,12 +2,12 @@ package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
+import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
-import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.DetailList
-import dev.skillbill.desktop.core.domain.model.FileDiff
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
@@ -18,6 +18,10 @@ import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.ScopeChangesState
+import dev.skillbill.desktop.core.domain.model.ScopeSubtask
+import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
+import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
@@ -25,6 +29,7 @@ import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -58,9 +63,14 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModelTest {
+  private val activity = object : dev.skillbill.desktop.core.domain.repository.WorkActivityRepository {
+    override fun observe(goalWorkflowId: String, running: Boolean) = kotlinx.coroutines.flow.flowOf<dev.skillbill.desktop.core.domain.model.ActivityResult>(dev.skillbill.desktop.core.domain.model.ActivityResult.NotFound)
+  }
+
   private val item = workItem("SKILL-1")
   private val details = RecordingDetailRepository()
   private val changes = RecordingChangesRepository()
+  private val scopes = RecordingScopesRepository()
   private val baseline = ChangeBaseline.SubtaskStart("/repo", "base", emptyList())
   private val clock = object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) }
 
@@ -76,7 +86,7 @@ class DetailViewModelTest {
     board: FakeWorkBoardRepository = FakeWorkBoardRepository(),
     source: WorkItem = item,
     workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
-  ) = DetailViewModel(source, session, details, changes, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {
@@ -86,6 +96,58 @@ class DetailViewModelTest {
 
     assertEquals(item, state.header)
     assertEquals(SectionsUi.Pending, state.sections)
+  }
+
+  @Test
+  fun `a report-only standalone review never reads or opens a branch-wide changes summary`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val review = item.copy(
+      kind = WorkKind.Phase, standaloneExecution = true,
+      control = item.control.copy(invocationId = "review-1", phaseId = "review"),
+    )
+    val viewModel = viewModel(source = review)
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    details.flow.emit(DetailState(review, DetailSections.Loaded(emptyDetail.copy(changeBaseline = baseline), null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    viewModel.onAction(DetailAction.OpenChangesWindow())
+    runCurrent()
+    assertEquals(emptyList(), changes.observed)
+    assertEquals(emptyList(), effects)
+    assertTrue(!viewModel.state.value.header.showsChanges)
+    assertTrue(!review.copy(control = review.control.copy(phaseId = "plan")).showsChanges)
+    assertTrue(!review.copy(control = review.control.copy(phaseId = "implement")).showsChanges)
+    assertTrue(review.copy(kind = WorkKind.Goal, standaloneExecution = false).showsChanges)
+  }
+
+  @Test
+  fun `a goal with no running subtask shows its strip and opens the window on all changes or a selectable subtask`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val viewModel = viewModel()
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    details.flow.emit(loaded("a"))
+    advanceUntilIdle()
+    val done = ScopeSubtask(12, "Twelve", ScopeSubtaskState.DONE, "s12", "e12", emptyList())
+    val notStarted = ScopeSubtask(13, "Thirteen", ScopeSubtaskState.NOT_STARTED, null, null, emptyList())
+    val listed = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = listOf(done, notStarted), stats = emptyMap())
+    scopes.flow.value = listed
+    advanceUntilIdle()
+    assertEquals(listed, viewModel.state.value.changes.subtasks)
+
+    viewModel.onAction(DetailAction.OpenChangesWindow())
+    viewModel.onAction(DetailAction.OpenChangesWindow(ChangeScope.Subtasks(12, 12)))
+    viewModel.onAction(DetailAction.OpenChangesWindow(ChangeScope.Subtasks(13, 13)))
+    runCurrent()
+
+    val expected = listOf<DetailEffect>(
+      DetailEffect.OpenChangesWindow(item, ChangeScope.All),
+      DetailEffect.OpenChangesWindow(item, ChangeScope.Subtasks(12, 12)),
+    )
+    assertEquals(expected, effects)
+    assertEquals(emptyList(), changes.observed)
   }
 
   @Test
@@ -225,61 +287,22 @@ class DetailViewModelTest {
   }
 
   @Test
-  fun `an open diff follows the refreshed list and only a listed file still on disk is opened`() = runTest {
+  fun `a phase item that goes idle keeps changes hidden and never reads subtask scopes`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    val viewModel = viewModel()
-    val effects = mutableListOf<DetailEffect>()
-    backgroundScope.launch { viewModel.effects.collect { effects += it } }
-    advanceUntilIdle()
-    details.flow.emit(DetailState(item, DetailSections.Loaded(emptyDetail.copy(changeBaseline = baseline), null, emptyMap(), emptySet(), stale = false)))
-    advanceUntilIdle()
-    val modified = ChangedFile("src/A.kt", null, ChangeStatus.Modified, 4, 2)
-    val deleted = ChangedFile("src/B.kt", null, ChangeStatus.Deleted, 0, 9)
-    changes.flow.emit(ChangesState.Listed(ChangeSet("base", listOf(modified, deleted), 4, 11)))
-    advanceUntilIdle()
-
-    changes.diffs += FileDiffState.Shown(FileDiff(emptyList(), 4, 2))
-    viewModel.onAction(DetailAction.SelectChangedFile(modified))
-    advanceUntilIdle()
-    assertEquals(DiffContent.Read(FileDiffState.Shown(FileDiff(emptyList(), 4, 2))), viewModel.state.value.diff?.content)
-
-    val grown = modified.copy(insertions = 6)
-    val recreated = ChangedFile(deleted.path, null, ChangeStatus.Untracked, 3, 0)
-    changes.diffs += FileDiffState.Shown(FileDiff(emptyList(), 6, 2))
-    changes.flow.emit(ChangesState.Listed(ChangeSet("base", listOf(grown, deleted, recreated), 9, 11)))
-    advanceUntilIdle()
-    assertEquals(listOf(modified, grown), changes.diffReads)
-    assertEquals(DiffContent.Read(FileDiffState.Shown(FileDiff(emptyList(), 6, 2))), viewModel.state.value.diff?.content)
-
-    viewModel.onAction(DetailAction.OpenChangedFile(deleted))
-    viewModel.onAction(DetailAction.OpenChangedFile(recreated))
-    viewModel.onAction(DetailAction.OpenChangedFile(grown))
-    advanceUntilIdle()
-    runCurrent()
-    assertEquals(listOf(recreated, grown), changes.opens)
-    val toasts = effects.filterIsInstance<DetailEffect.ShowToast>()
-    assertEquals(listOf(ToastTone.Problem, ToastTone.Problem), toasts.map { it.message.tone })
-  }
-
-  @Test
-  fun `an item that goes idle is observed again without polling`() = runTest {
-    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = item.copy(kind = WorkKind.Phase)
     val board = FakeWorkBoardRepository()
-    val viewModel = viewModel(board)
+    val viewModel = viewModel(board, phase)
     advanceUntilIdle()
     val loaded = DetailSections.Loaded(emptyDetail.copy(changeBaseline = baseline), null, emptyMap(), emptySet(), stale = false)
-    board.state.value = loadedBoard(items = listOf(item.copy(running = true)))
-    details.flow.emit(DetailState(item, loaded))
+    board.state.value = loadedBoard(items = listOf(phase.copy(running = true)))
+    details.flow.emit(DetailState(phase, loaded))
     advanceUntilIdle()
 
-    board.state.value = loadedBoard(items = listOf(item.copy(running = false)))
+    board.state.value = loadedBoard(items = listOf(phase.copy(running = false)))
     advanceUntilIdle()
-    val listed = ChangesState.Listed(ChangeSet("base", emptyList(), 0, 0))
-    changes.flow.emit(listed)
-    advanceUntilIdle()
-
-    assertEquals(listOf<Pair<ChangeBaseline?, Boolean>>(baseline to true, baseline to false), changes.observed)
-    assertEquals(listed, viewModel.state.value.changes.state)
+    assertEquals(emptyList(), changes.observed)
+    assertTrue(!viewModel.state.value.header.showsChanges)
+    assertEquals(0, scopes.subtaskReads)
   }
 
   private fun loaded(anchor: String) = DetailState(
@@ -307,24 +330,29 @@ class DetailViewModelTest {
   private class RecordingChangesRepository : WorkChangesRepository {
     val flow = MutableSharedFlow<ChangesState>()
     val observed = mutableListOf<Pair<ChangeBaseline?, Boolean>>()
-    val diffs = ArrayDeque<FileDiffState>()
-    val diffReads = mutableListOf<ChangedFile>()
-    val opens = mutableListOf<ChangedFile>()
 
     override fun observe(baseline: ChangeBaseline?, running: Boolean): Flow<ChangesState> {
       observed += baseline to running
       return flow
     }
 
-    override suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState {
-      diffReads += file
-      return diffs.removeFirst()
+    override suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState = error("unused")
+
+    override suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome = error("unused")
+  }
+
+  private class RecordingScopesRepository : WorkChangeScopesRepository {
+    val flow = MutableStateFlow<SubtaskScopesState>(SubtaskScopesState.Loading)
+    var subtaskReads = 0
+
+    override fun observeSubtasks(goalWorkflowId: String, running: Boolean): Flow<SubtaskScopesState> {
+      subtaskReads++
+      return flow
     }
 
-    override suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome {
-      opens += file
-      return OpenOutcome.NotOpened
-    }
+    override fun observeScope(target: ChangeScopeTarget, scope: ChangeScope, running: Boolean): Flow<ScopeChangesState> = emptyFlow()
+
+    override suspend fun fileDiff(target: ChangeScopeTarget, scope: ChangeScope, file: ChangedFile): FileDiffState = error("unused")
   }
 
   private object NoSpecs : SpecRepository {

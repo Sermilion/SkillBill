@@ -3,7 +3,9 @@ package dev.skillbill.desktop.feature.detail
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasClickAction
@@ -31,6 +33,39 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPeekTest {
+  @Test
+  fun `phase pipeline appears only on the current subtask`() = runComposeUiTest {
+    val detail = emptyDetail.copy(
+      stepPipeline = listOf("implement", "review"),
+      goalFinishPipeline = listOf("qa", "qa_fix"),
+      currentPhase = "review",
+      subtasks = listOf(
+        WorkSubtask(1, "First subtask", "completed", null, null, emptyList()),
+        WorkSubtask(2, "Second subtask", "completed", null, null, emptyList()),
+        WorkSubtask(3, "Current subtask", "in_progress", null, null, emptyList()),
+      ),
+    )
+    val state = DetailUiState(
+      workItem("goal").copy(currentSubtaskId = "3"),
+      SectionsUi.Loaded(detail, null, emptyMap(), emptySet()),
+      false,
+      epoch,
+    )
+    val open = mutableStateOf(false)
+    val input = ShellInput()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides input) {
+          DetailScreen(state, DetailScreenHost(open.value, "Ctrl I", { open.value = !open.value })) {}
+        }
+      }
+    }
+
+    onAllNodesWithContentDescription("implement, done").assertCountEquals(1)
+    onAllNodesWithContentDescription("review, current").assertCountEquals(1)
+    onAllNodesWithContentDescription("qa, pending").assertCountEquals(0)
+  }
+
   @Test
   fun `goal finish findings open in the peek and keep their ordering when reopened`() = runComposeUiTest {
     val detail = emptyDetail.copy(

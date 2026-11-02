@@ -32,6 +32,7 @@ public data class FeatureTaskRuntimePhasePromptComposeInputs(
   public val reviewDecidingRule: String? = null,
   public val priorTerminalFailure: String? = null,
   internal val priorFindingCoverage: String? = null,
+  internal val priorPlanBundleRejection: String? = null,
   internal val priorAcceptanceAudit: String? = null,
   public val currentAcceptanceCriterion: String? = null,
   public val priorAcceptanceRepairFailures: String? = null,

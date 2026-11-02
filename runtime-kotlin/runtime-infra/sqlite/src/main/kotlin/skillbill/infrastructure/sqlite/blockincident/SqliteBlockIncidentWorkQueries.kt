@@ -12,6 +12,7 @@ internal class SqliteBlockIncidentWorkQueries(
     workflowId: String?,
     invocationId: String?,
     limit: Int,
+    offset: Int = 0,
   ): List<String> {
     if (workflowId == null && invocationId == null) return emptyList()
     val predicates =
@@ -44,11 +45,12 @@ internal class SqliteBlockIncidentWorkQueries(
           add(prefix)
         }
         add(limit)
+        add(offset)
       }
     return connection.prepareStatement(
       "SELECT DISTINCT i.occurrence_token FROM block_incidents i " +
         "WHERE (${predicates.joinToString(") OR (")}) " +
-        "ORDER BY i.observed_at DESC, i.occurrence_token DESC LIMIT ?",
+        "ORDER BY i.observed_at DESC, i.occurrence_token DESC LIMIT ? OFFSET ?",
     ).use { statement ->
       statement.bindAll(arguments)
       statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }

@@ -14,11 +14,15 @@ import skillbill.workflow.taskruntime.phaseartifacts.decomposeTerminalFrom
 import skillbill.workflow.taskruntime.phaseartifacts.goalContinuationFieldAdoptionFrom
 import skillbill.workflow.taskruntime.phaseartifacts.operatorBlockRetryFrom
 import skillbill.workflow.taskruntime.phaseartifacts.phaseLedgerFrom
+import skillbill.workflow.taskruntime.phaseartifacts.phaseRecordFrom
 import skillbill.workflow.taskruntime.phaseartifacts.phaseRecordsFrom
 import skillbill.workflow.taskruntime.phaseartifacts.resolvedBranchFrom
 import skillbill.workflow.taskruntime.phaseartifacts.reviewGenerationFrom
 
 fun DurableWorkflowArtifacts.phaseRecords(): Map<String, FeatureTaskRuntimePhaseRecord> = phaseRecordsFrom(this)
+
+fun DurableWorkflowArtifacts.phaseRecord(phaseId: String): FeatureTaskRuntimePhaseRecord? =
+  phaseRecordFrom(this, phaseId)
 
 fun DurableWorkflowArtifacts.phaseLedger(): List<FeatureTaskRuntimePhaseLedgerEntry> = phaseLedgerFrom(this)
 

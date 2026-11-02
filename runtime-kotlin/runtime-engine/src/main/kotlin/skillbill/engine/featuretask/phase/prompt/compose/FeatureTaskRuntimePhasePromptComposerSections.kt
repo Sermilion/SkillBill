@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.phase.prompt.directives.nonBuildPhaseBuildOw
 import skillbill.engine.featuretask.phase.prompt.directives.nonValidatePhaseValidationOwnershipDirective
 import skillbill.engine.featuretask.phase.prompt.directives.operatorBlockRetryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.phasePromptHeader
+import skillbill.engine.featuretask.phase.prompt.directives.planBundleRepairDirective
 import skillbill.engine.featuretask.phase.prompt.directives.terminalRetryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.testValueDisciplineDirective
 
@@ -61,6 +62,7 @@ internal fun phasePromptTrailingSections(
     sections.continuation,
     terminalRetryDirective(inputs.priorTerminalFailure),
     findingCoverageDirective(inputs.priorFindingCoverage),
+    planBundleRepairDirective(inputs.priorPlanBundleRejection),
     sections.outputContract
       ?: minimalSettlementContract(
         inputs.briefing.phaseId,

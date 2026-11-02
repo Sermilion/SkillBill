@@ -130,7 +130,8 @@ class CliGoalRepairRuntimeTest {
   fun `goal repair apply clears missing validation_depth and records evidence`() {
     val fixture = goalFixture(subtaskCount = 1)
     val launcher = GoalFixtureAgentRunLauncher(fixture)
-    CliRuntime.run(fixture.goalCommand(), fixture.context(launcher = launcher))
+    val goalRun = CliRuntime.run(fixture.goalCommand(), fixture.context(launcher = launcher))
+    assertEquals(0, goalRun.exitCode, "stdout=${goalRun.stdout} stderr=${goalRun.stderr}")
     val childWorkflowId = resolveCompletedChildWorkflowId(fixture)
     stripValidationDepth(fixture, childWorkflowId)
 

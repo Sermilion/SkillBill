@@ -1,5 +1,7 @@
 package skillbill.infrastructure.sqlite.core.ops
 
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
@@ -13,6 +15,8 @@ import java.sql.SQLException
 import java.sql.Types
 
 private const val ROLLBACK_FAILURE_DETAIL_LIMIT = 240
+private const val WRITE_BEGIN_ATTEMPTS = 3
+private const val SQLITE_PRIMARY_CODE_MASK = 0xFF
 
 internal enum class DatabaseTransactionBeginMode(val sql: String) {
   IMMEDIATE("BEGIN IMMEDIATE"),
@@ -69,10 +73,21 @@ internal inline fun <T> Connection.inDatabaseTransaction(
 }
 
 private fun Connection.beginTransaction(spec: DatabaseTransactionSpec) {
-  try {
-    executeTransactionStatement(spec.beginMode.sql)
-  } catch (failure: SQLException) {
-    throw mappedTransactionFailure(spec, failure)
+  val attempts = if (spec.beginMode == DatabaseTransactionBeginMode.IMMEDIATE) WRITE_BEGIN_ATTEMPTS else 1
+  repeat(attempts) { attempt ->
+    try {
+      executeTransactionStatement(spec.beginMode.sql)
+      return
+    } catch (failure: SQLiteException) {
+      val busy = (failure.resultCode.code and SQLITE_PRIMARY_CODE_MASK) == SQLiteErrorCode.SQLITE_BUSY.code
+      if (!busy || attempt == attempts - 1) throw mappedTransactionFailure(spec, failure)
+      spec.diagnostics.warning(
+        "skillbill sqlite: write transaction begin busy; retrying attempt ${attempt + 2} of $attempts",
+        failure,
+      )
+    } catch (failure: SQLException) {
+      throw mappedTransactionFailure(spec, failure)
+    }
   }
 }
 

@@ -39,7 +39,7 @@ enum class DiffLineKind { Context, Added, Removed, NoNewlineMarker }
 /** One diff body line; context lines carry both numbers, added lines only the new one, removed lines only the old one. */
 data class DiffLine(val kind: DiffLineKind, val oldNumber: Int?, val newNumber: Int?, val text: String)
 
-data class DiffHunk(val header: String, val lines: List<DiffLine>)
+data class DiffHunk(val header: String, val lines: List<DiffLine>, val source: String? = null)
 
 data class FileDiff(val hunks: List<DiffHunk>, val insertions: Int, val deletions: Int)
 

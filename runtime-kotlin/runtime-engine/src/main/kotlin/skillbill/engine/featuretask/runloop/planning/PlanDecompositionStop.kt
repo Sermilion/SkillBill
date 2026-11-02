@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalRuntimeContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -36,8 +37,13 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
 
+internal data class PlanBundleRejection(
+  val reason: String,
+  val repairable: Boolean = false,
+)
+
 internal object PlanDecompositionStop {
-  private const val DETAIL_MAX_CHARS = 500
+  private const val DETAIL_MAX_CHARS = 1000
 
   fun withAuthoredParentSpecPath(
     context: PhaseOutputSettlementContext,
@@ -84,7 +90,7 @@ internal object PlanDecompositionStop {
   fun recordAuthoredBundleOrRejection(
     context: PhaseOutputSettlementContext,
     capture: ValidatedOutputCapture,
-  ): String? {
+  ): PlanBundleRejection? {
     val request = context.request
     val planner = context.decompositionPlanner
     val target = PlanBundleStagingPromotion.targetFor(planner, capture.run)
@@ -99,7 +105,7 @@ internal object PlanDecompositionStop {
       )
     if (target is PlanBundleTarget.Staged) {
       PlanBundleAuthorization.violation(request.issueKey, target, introduced, listing)
-        ?.let { violation -> return notReadyReason(violation) }
+        ?.let { violation -> return PlanBundleRejection(notReadyReason(violation)) }
       PlanBundleStagingPromotion.promote(
         planner,
         context.diagnostics,
@@ -111,23 +117,23 @@ internal object PlanDecompositionStop {
         ),
       )
     }
-    protectedSpecRejection(context)?.let { return it }
+    protectedSpecRejection(context)?.let { return PlanBundleRejection(it) }
     val authorized = if (target is PlanBundleTarget.Staged) PlanBundleTarget.Store(target.storeDirectory) else target
     PlanBundleAuthorization.violation(request.issueKey, authorized, introduced, listing)
-      ?.let { violation -> return notReadyReason(violation) }
+      ?.let { violation -> return PlanBundleRejection(notReadyReason(violation)) }
     return recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.AUTHORED, keptUnitStepId = null)
   }
 
   fun recordExistingBundleOrRejection(
     context: PhaseOutputSettlementContext,
     unitStepId: String,
-  ): String? = recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.EXISTING, unitStepId)
+  ): String? = recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.EXISTING, unitStepId)?.reason
 
   private fun recordBundle(
     context: PhaseOutputSettlementContext,
     origin: FeatureTaskRuntimePlanBundleOrigin,
     keptUnitStepId: String?,
-  ): String? {
+  ): PlanBundleRejection? {
     val request = context.request
     return try {
       val written =
@@ -152,13 +158,15 @@ internal object PlanDecompositionStop {
       if (context.recorder.recordPlanBundleWithUnits(request.workflowId, bundle, keptUnits)) {
         null
       } else {
-        notReadyReason("The plan bundle snapshot could not be recorded.")
+        PlanBundleRejection(notReadyReason("The plan bundle snapshot could not be recorded."))
       }
+    } catch (error: InvalidFeatureSpecPreparationRequestError) {
+      PlanBundleRejection(notReadyReason(error.message), repairable = true)
     } catch (error: SkillBillRuntimeException) {
       error.rethrowIfDatabaseFailure()
-      notReadyReason(error.message)
+      PlanBundleRejection(notReadyReason(error.message))
     } catch (error: IOException) {
-      notReadyReason(error.message)
+      PlanBundleRejection(notReadyReason(error.message))
     }
   }
 

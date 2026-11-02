@@ -90,6 +90,7 @@ internal class PhaseAttemptLoopState(
   private var carryForward: PhaseAttemptLoopCarryForward = PhaseAttemptLoopCarryForward(),
 ) {
   var priorOwedFindings: Set<String>? = null
+  var planBundleRepairTurns: Int = 0
 
   var priorCorrection: PriorAttemptCorrection?
     get() = carryForward.priorCorrection

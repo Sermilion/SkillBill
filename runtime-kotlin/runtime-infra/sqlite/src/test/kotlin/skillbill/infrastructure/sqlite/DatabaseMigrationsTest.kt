@@ -2489,7 +2489,9 @@ private val expectedMigrationDefinitions =
     94 to "add-goal-continuation-columns",
     95 to "rebuild-work-board-readable-phase-titles",
     96 to "record-standalone-review-run-id",
-    97 to "record-standalone-qa-checklist",
+    97 to "record-review-finding-actions",
+    98 to "record-goal-blocked-reason",
+    99 to "record-standalone-qa-checklist",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

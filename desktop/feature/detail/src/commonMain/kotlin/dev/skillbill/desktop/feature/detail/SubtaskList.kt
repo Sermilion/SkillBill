@@ -192,6 +192,9 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
             }
             if (status == StatusKind.CompletedNoChange) SbLabel("no change")
           },
+          body = if (detail.stepPipeline.isEmpty() || !isCurrent) null else {
+            { PhasePipeline(subtaskSteps(item, detail, status, isCurrent)) }
+          },
         )
       }
       PageFooter(DetailList.Subtasks, state, onAction, Modifier.fillMaxWidth().bottomRule(colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp))
@@ -204,8 +207,8 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
         selected = selected == SubtaskKey.GoalFinish,
         onClick = { selectVisibleRow(SubtaskKey.GoalFinish) },
         divider = false,
-        body = {
-          PhasePipeline(goalFinishSteps(item, detail))
+        body = if (finishedAt(item) != null || detail.currentPhase !in detail.goalFinishPipeline) null else {
+          { PhasePipeline(goalFinishSteps(item, detail)) }
         },
       )
     }
@@ -229,13 +232,9 @@ private fun BackgroundPages(state: DetailUiState, onAction: (DetailAction) -> Un
   }
 }
 
-/** HANDOFF 9.2 item 10, per screens.js: goals past planning, and any other run with more than one step. */
+/** A standalone run with more than one step; a goal shows its pipeline on each subtask and on Goal finish. */
 internal fun DetailSections.pipelineSection(item: WorkItem, detail: Detail) {
-  val show = when (item.kind) {
-    WorkKind.Goal -> item.statusKind() != StatusKind.Planning
-    WorkKind.Operation, WorkKind.Phase, null -> detail.stepPipeline.size > 1
-  }
-  if (!show || detail.stepPipeline.isEmpty()) return
+  if (item.kind == WorkKind.Goal || detail.stepPipeline.size <= 1) return
   section("pipeline", "Phase pipeline") {
     item(key = "pipeline-steps") { PhasePipeline(pipelineSteps(item, detail, detail.stepPipeline)) }
   }

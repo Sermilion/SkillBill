@@ -479,6 +479,7 @@ internal object PhaseLaunchPreparation {
       priorReviewContext = null,
       priorTerminalFailure = args.priorCorrection?.retryableTerminalReason,
       priorFindingCoverage = args.priorCorrection?.findingCoverageReason,
+      priorPlanBundleRejection = args.priorCorrection?.planBundleRejectionReason,
       priorAcceptanceAudit = priorAcceptanceAudit(),
       currentAcceptanceCriterion = acceptanceCriterionContext(run),
       priorAcceptanceRepairFailures = acceptanceRepair?.priorRepairFailures,

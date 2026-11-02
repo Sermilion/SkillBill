@@ -140,6 +140,11 @@ case "$cmd" in
     fi
     ;;
 
+  "telemetry status")
+    printf 'config_path: %s\n' "${home_dir:-$HOME}/.config/skill-bill/config.json"
+    printf 'telemetry_level: %s\n' "${SKILL_BILL_TEST_CURRENT_TELEMETRY:-anonymous}"
+    ;;
+
   "install apply")
     if [[ "$(flag_value --platform-mode "${cmd_parts[@]}")" != "all" ]] ||
       has_flag "--platform" "${cmd_parts[@]}"; then

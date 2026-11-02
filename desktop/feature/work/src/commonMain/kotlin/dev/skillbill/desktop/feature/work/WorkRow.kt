@@ -58,7 +58,7 @@ internal fun WorkRow(item: WorkItem, focused: Boolean, renderedAt: Instant?, nar
       if (item.pauseRequested) SbLabel("Pause requested", SbLabelStyle.Dot(SkillBillTheme.colors.stPaused))
       if (item.lifecycle != Lifecycle.Terminal) {
         val step = if (planning && planned != null) "${planned.done}/${planned.total} plans saved"
-        else item.stepLabel + item.phaseExecutionLabel?.let { " · $it" }.orEmpty()
+        else item.stepLabel
         SbLabel(step, SbLabelStyle.Mono, tooltip = if (item.kind == WorkKind.Goal) "Current phase" else "Current step")
       }
       if (!narrow) SbLabel(item.repositoryName, SbLabelStyle.Dot(SkillBillTheme.colors.dataColorFor(item.repositoryName)))

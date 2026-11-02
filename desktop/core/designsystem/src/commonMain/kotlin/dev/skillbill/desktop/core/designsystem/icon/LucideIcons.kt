@@ -83,6 +83,13 @@ object LucideIcons {
       path("M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z")
     }
   }
+  val openWindow: ImageVector by lazy {
+    imageVector("openWindow") {
+      path("M4.5 5.25h10.5a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25H4.5a2.25 2.25 0 0 1-2.25-2.25V7.5a2.25 2.25 0 0 1 2.25-2.25z")
+      path("M12 2.25h9.75V12")
+      path("M21.75 2.25 10.5 13.5")
+    }
+  }
   val chevronDown: ImageVector by lazy {
     imageVector("chevronDown") {
       path("m6 9 6 6 6-6")

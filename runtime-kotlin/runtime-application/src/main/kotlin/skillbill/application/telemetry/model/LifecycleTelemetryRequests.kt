@@ -153,6 +153,7 @@ data class GoalFinishedRequest(
   val noChangeReason: String? = null,
   val parentWorkflowId: String? = null,
   val assessmentCounts: GoalAssessmentTelemetryCounts = GoalAssessmentTelemetryCounts(),
+  val blockedReason: String? = null,
 )
 
 data class GoalIssueFinishedRequest(

@@ -114,7 +114,7 @@ public class DefaultGoalRunnerQaGate(
         failure,
       )
     }
-    requireResolvedActiveGateOutcome(state.parentWorkflowId, quality?.execution)
+    requireResolvedActiveGateOutcome(state.parentWorkflowId, quality?.execution, failure)
     if (invocationId != null &&
       !outcomeStore.recordGoalFinalRepairWarning(
         state.parentWorkflowId,
@@ -938,6 +938,7 @@ public class DefaultGoalRunnerQaGate(
     invocationId: String,
     definition: SkeletonDefinition,
     acceptedPlan: String,
+    failure: Exception? = null,
   ) {
     val progress =
       outcomeStore.goalQualityPhaseProgress(
@@ -954,9 +955,8 @@ public class DefaultGoalRunnerQaGate(
     if (pending != null) {
       throw SkillBillRuntimeException(
         WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-        "The '${pending.first}' outcome is unknown after interruption at checkpoint '${pending.second}'. " +
-          "Inspect authoritative command or agent evidence, or explicitly retire " +
-          "this quality execution and accept new cycles.",
+        unresolvedGateOutcomeReason(pending.first, pending.second, failure),
+        failure,
       )
     }
   }
@@ -964,6 +964,7 @@ public class DefaultGoalRunnerQaGate(
   private fun requireResolvedActiveGateOutcome(
     parentWorkflowId: String,
     execution: GoalQualityExecution?,
+    failure: Exception,
   ) {
     if (execution == null) return
     val definition =
@@ -978,6 +979,7 @@ public class DefaultGoalRunnerQaGate(
       execution.invocationId,
       definition,
       if (definition == SkeletonDefinition.GOAL_QA) plans.qa else plans.validation,
+      failure,
     )
   }
 

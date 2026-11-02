@@ -5,10 +5,13 @@ import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.di.DatabaseSessionScope
+import dev.skillbill.desktop.core.data.repository.ActivityObservations
 import dev.skillbill.desktop.core.data.repository.BoardObservations
 import dev.skillbill.desktop.core.data.repository.ChangeObservations
+import dev.skillbill.desktop.core.data.repository.ChangeScopeObservations
 import dev.skillbill.desktop.core.data.repository.DetailObservations
 import dev.skillbill.desktop.core.data.repository.SpecObservations
+import dev.skillbill.desktop.core.data.repository.WorkingTreeReads
 import dev.skillbill.desktop.core.data.runtime.RuntimeBoardReads
 import dev.skillbill.desktop.core.data.runtime.RuntimeDetailReads
 import dev.skillbill.desktop.core.data.runtime.RuntimeReads
@@ -49,6 +52,8 @@ interface DatabaseSessionComponent {
   val details: DetailObservations
   val specs: SpecObservations
   val changes: ChangeObservations
+  val changeScopes: ChangeScopeObservations
+  val activity: ActivityObservations
 
   @ContributesSubcomponent.Factory(AppScope::class)
   interface Factory {
@@ -132,8 +137,35 @@ interface RuntimeSessionProviders {
 
   @Provides
   @SingleIn(DatabaseSessionScope::class)
-  fun changeObservations(runtime: RuntimeComponent, diagnostics: Diagnostics, host: HostEnvironment): ChangeObservations =
-    ChangeObservations(runtime, diagnostics, host.variables)
+  fun activityObservations(reads: RuntimeReads, runtime: RuntimeComponent, diagnostics: Diagnostics): ActivityObservations =
+    ActivityObservations(runtime, diagnostics) { id -> reads.read("work_activity") { it.workActivityService.timeline(id) } }
+
+  @Provides
+  @SingleIn(DatabaseSessionScope::class)
+  fun workingTreeReads(): WorkingTreeReads = WorkingTreeReads()
+
+  @Provides
+  @SingleIn(DatabaseSessionScope::class)
+  fun changeObservations(
+    runtime: RuntimeComponent,
+    diagnostics: Diagnostics,
+    host: HostEnvironment,
+    workingTree: WorkingTreeReads,
+  ): ChangeObservations = ChangeObservations(runtime, diagnostics, host.variables, workingTree = workingTree)
+
+  @Provides
+  @SingleIn(DatabaseSessionScope::class)
+  fun changeScopeObservations(
+    reads: RuntimeReads,
+    runtime: RuntimeComponent,
+    diagnostics: Diagnostics,
+    workingTree: WorkingTreeReads,
+  ): ChangeScopeObservations = ChangeScopeObservations(
+    runtime,
+    diagnostics,
+    readSubtasks = { id -> reads.read("work_change_scopes") { it.workChangeScopesService.goalSubtaskScopes(id) } },
+    workingTree = workingTree,
+  )
 }
 
 /** A session graph over a [DatabaseSessionComponent]. */

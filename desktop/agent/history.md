@@ -1,3 +1,16 @@
+## [2026-10-31] SKILL-455 desktop change scope data
+Areas: desktop/core/domain, desktop/core/data
+- ChangeScope models and pure rules resolve All, subtask ranges, Outside and Uncommitted reads, selectable ranges, file touch counts and conservative hunk attribution. reusable
+- WorkChangeScopesRepository exposes session-following subtask and scope observations and file diffs. RuntimeReads supplies subtask metadata; git reads go through WorkChangesPort. reusable
+- Running working-tree scopes refresh at the shared 3-second interval. WorkingTreeReads shares in-flight and recent working-tree list reads per baseline, so screens and windows observing one baseline cost at most one git read per interval.
+- Completed commit ranges use app-wide bounded list and patch caches (CommittedChangeCache). Outside lists use a session single-slot memo keyed by worktree, target branch and ranges; a non-running execution reads Outside fresh. Subtask stats prioritize the running subtask.
+- Outside diffs concatenate matching commit patches in order and label hunks with short SHAs. Multi-subtask ranges label hunks only when the contributing patches support attribution.
+- Stacked-branch goals expose All and Uncommitted only. Outside reads can report TooManyCommits; failed scope reads record desktop_work_change_scopes_read_failed.
+- GitReadLock shares one app-wide mutex between the existing changes repository and change scopes. See the decision on shared git reads and committed-change caching.
+- The Changes window and detail strip that consume this live in desktop/feature/changes (see its history).
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-31] SKILL-454 desktop changes domain and data layer
 Areas: desktop/core/domain, desktop/core/data
 - ChangeModels.kt adds ChangeBaseline (SubtaskStart, RunStart, TargetMergeBase), ChangedFile with a derived binary flag, ChangeSet, ChangesState, FileDiffState and the diff hunk and line models. Detail gains changeBaseline as its last, defaulted parameter, and RuntimeDetailMapper maps it. reusable

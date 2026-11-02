@@ -12,21 +12,71 @@ Reason: A sibling path or parent traversal must not pass the directory check. Th
 Context: A finding link can target a row in a collapsed section, where the row has no lazy list index until expansion.
 Decision: Rebuild a key-to-index map as detail sections are declared, expand the findings section, and wait up to five frames for the row before scrolling.
 Reason: Collapsing sections changes later row positions, and expansion requires recomposition before the target index exists.
+## [2026-11-01] Exempt skipped subtasks from results loading
+Context: Skipped subtasks have no phase-results entry, while a missing entry for a started subtask can mean its page is loading.
+Decision: Omit the empty Review section for skipped subtasks and show loading for started subtasks with no result. Degraded goal status takes precedence for non-pending subtasks.
+Reason: Treating every non-pending subtask with no entry as loading would leave skipped subtasks loading indefinitely.
+
+## [2026-11-01] Read running review progress from stored dispositions
+Context: The inspector needs review progress, but the review path writes lane dispositions in a batch after lanes return.
+Decision: Project progress from stored dispositions and show a lane read failure as degraded status.
+Reason: This preserves stored progress on relaunch without adding live writes to review execution. A first attempt can show zero completed lanes until the batch is stored.
+
+## [2026-11-01] Hide audit results during a running review
+Context: Audit runs before review and may have a settled result when a review pass starts. The supplied design calls for "Runs after review" during review.
+Decision: Show the supplied placeholder during a running review, even when a settled audit exists.
+Reason: The plan keeps the supplied design copy. The trade-off is that it hides the stored result and describes the runtime order inaccurately.
+
+## [2026-11-01] Omit settled audit summary while an audit is running
+Context: A running audit can retain an output artifact from an earlier settled run.
+Decision: The subtask audit section omits that summary while the audit is running.
+Reason: Showing the stored text under the active audit could present a stale pass as the current result.
+
+## [2026-11-01] Scope selected subtask runs to phase records
+Context: The goal-level ledger summary does not consistently scope counts to the selected subtask.
+Decision: Show selected-subtask runs from phase attempt counts and omit fixes, relaunches, findings, and kills. Retain goal-level totals for Goal finish and standalone runs.
+Reason: Reusing goal-level counts could attribute another subtask's activity to the selected subtask, and this feature adds no ledger read.
+
+## [2026-11-01] Render the recorded workflow timeline in Activity
+Context: The approved Activity mockup groups attempts by subtask and keeps Goal finish separate. The old detail feed could not show child phase attempts or blocks outside its retained incident page.
+Decision: Observe the runtime timeline for goals. Render one card per recorded child attempt, pending subtask cards, and untimed Goal finish facts. Standalone executions remain one row per run. Keep phase time separate from idle gaps. Show the agent when an attempt has no recorded compatible model, and omit token figures.
+Reason: Phase ledger starts and ends establish durations. Goal finish records establish assessment results and the latest running-step update, without supplying step durations. Blocks and long idle gaps split folded loops. The Blocks filter opens its matching cards; users can still collapse them.
+
+## [2026-11-01] List every recorded block in Activity
+Context: Activity showed run starts and ends, so a run that blocked and resumed looked like it had gone smoothly. The detail read already carried every block in `incident` and `incidentHistory`, and only the live incident was shown.
+Decision: Activity adds a "Blocked" line per incident at its `observedAt`, with its summary, and the cause and resume state in the tooltip.
+Reason: These are recorded facts with their own times, so no new read is needed. The runtime keeps the latest 10 past incidents for a run's detail read, so an older block drops off the feed. Resume has no recorded time, so it has no line of its own.
+
+Superseded by: Render the recorded workflow timeline in Activity, 2026-11-01.
+
+## [2026-11-01] Show the step pipeline on each subtask row
+Context: A goal showed one "Phase pipeline" section apart from its subtasks, so the reader had to work out which subtask it described. Goal finish already shows its steps on its own row.
+Decision: Every subtask row carries the step pipeline. The current subtask uses its live position, a completed subtask shows every step done, and any other shows them pending. The separate section stays only for standalone phases and operations, which have no subtask rows.
+Reason: The runtime records the current step for the run, not a step history per subtask, so a blocked or interrupted subtask that is not current cannot show where it stopped.
+Revisit when: The runtime exposes per-subtask step state.
+
+## [2026-11-01] The detail screen no longer hosts a diff
+Context: SKILL-454 showed changed files and a unified diff inside the detail screen. SKILL-455 moves file lists and diffs into the Changes window.
+Decision: The detail Changes section shows only the subtask strip or a change summary plus Open changes. DetailDiff, DiffView and their actions are deleted.
+Reason: One diff surface avoids keeping two file lists and two diff readers in sync. Path-and-status row matching now applies in the Changes window.
 
 ## [2026-10-31] Match changed-file rows by path and status
 Context: git can list one path twice, once as a deleted index entry and once as an untracked file still on disk.
 Decision: Change actions carry the ChangedFile, and DetailViewModel and DetailDiff resolve rows by path and status. Changes row keys include the status.
 Reason: Matching by path alone could diff or open the deleted entry when the operator picked the untracked one, and a path-only LazyColumn key would repeat.
+Superseded by: The detail screen no longer hosts a diff (2026-11-01)
 
 ## [2026-10-31] Close the diff view through ShellEdit
 Context: The shell owns Esc, and the diff view must close on Esc while J/K keep paging items.
 Decision: DiffView composes ShellEdit, whose cancel dispatches CloseDiff, only while the diff is shown.
 Reason: The shell cancels the top edit before it pops the detail route, so Esc closes the diff first. ShellLayer would also catch Esc but blocks J/K and Ctrl+I.
+Superseded by: The detail screen no longer hosts a diff (2026-11-01)
 
 ## [2026-10-31] Use combinedClickable on Changes rows
 Context: TerminalPaneChrome avoids combinedClickable because it holds a single click back for the double-click timeout.
 Decision: Changes rows use combinedClickable: a single click selects the diff and a double click opens the file.
 Reason: A single click replaces the document with the diff view, so without the wait the second click of a double click would land on the diff view instead of the row.
+Superseded by: The detail screen no longer hosts a diff (2026-11-01)
 
 ## [2026-10-30] Use the goal pause reason for operator decisions
 Context: A goal can await a decision without an incident, while recovery eligibility describes a different condition.

@@ -18,6 +18,7 @@ public data class GoalRunnerStatusRequest(
   public val selectedDiffMaxHunks: Int = DEFAULT_SELECTED_DIFF_MAX_HUNKS,
   public val selectedDiffMaxLines: Int = DEFAULT_SELECTED_DIFF_MAX_LINES,
   public val selectedDiffMaxBytes: Int = DEFAULT_SELECTED_DIFF_MAX_BYTES,
+  public val phaseResultSubtaskIds: Set<Int>? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

@@ -45,6 +45,14 @@ Use mode "read" for actions that only inspect, discuss or file issues.
 Use mode "act" for file edits, pushes or runtime changes.
 The app pauses a running execution before an act action, then resumes it when the turn ends.
 Do not suggest actions to pause, resume or relaunch the execution through this mechanism.
+When execution context includes detail.review.action.fix or detail.review.action.verify, use those exact scoped
+instructions for the suggested actions "Fix findings" and "Verify findings", with mode "act" for both.
+Fix findings repairs code. Verify findings checks existing code without editing source and records confirmed fixes.
+The preparation command binds feedback to the original review. Never substitute a new review or a different database.
+After fixing review findings for this execution, offer an action to verify those findings against the current worktree.
+Identify the original execution and findings in the instruction. Do not claim that verification updates their status
+unless a supported command actually records that result. Use mode "read" for an inspection with no runtime changes;
+use mode "act" if the verification records finding statuses.
 Do not execute a suggested action until the operator clicks its button or explicitly requests it.
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.
 """

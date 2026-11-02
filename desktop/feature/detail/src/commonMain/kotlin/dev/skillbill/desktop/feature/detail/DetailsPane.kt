@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Composable
 import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
@@ -51,6 +52,7 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
   var resultTab by rememberSaveable(item.id) { mutableStateOf("assessment") }
   val selected = detail?.let { selectedSubtask(item, it, state.subtaskChoice.key) }
     ?: SubtaskKey.GoalFinish.takeIf { item.kind == WorkKind.Goal }
+  val selectedSubtaskId = (selected as? SubtaskKey.Subtask)?.id
   val scrollStates = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     if (selected == SubtaskKey.GoalFinish) {
@@ -61,8 +63,9 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
       ) { resultTab = it }
     }
     scrollStates.SaveableStateProvider(if (selected == SubtaskKey.GoalFinish) resultTab else "subtask") {
-      LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp)) {
-        val sections = DetailSections(this, collapse, assessmentOrder)
+      val listState = rememberLazyListState()
+      LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(24.dp)) {
+        val sections = DetailSections(this, collapse, listState, assessmentOrder)
         if (detail != null) {
           sections.item(key = "inspector") { InspectorSection(item, detail, selected, onAction) }
           if (selected == SubtaskKey.GoalFinish) {
@@ -79,9 +82,15 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
         }
         sections.item(key = "execution") {
           Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            ExecutionSection(item, detail) { onAction(DetailAction.Copy(it)) }
+            ExecutionSection(item, detail, selectedSubtaskId) { onAction(DetailAction.Copy(it)) }
             if (detail != null) {
-              RunsSection(item.id, detail.attempts)
+              val attempts =
+                selectedSubtaskId?.let { subtaskId ->
+                  val execution = detail.phaseResults.firstOrNull { it.subtaskId == subtaskId }?.execution
+                  val counts = execution?.phaseAttemptCounts.orEmpty()
+                  DetailAttempts(counts, emptyMap(), emptyMap(), null, 0)
+                } ?: detail.attempts
+              RunsSection(item.id, attempts)
               if (item.kind == WorkKind.Goal) SpecFilesSection(detail, onAction)
             }
           }
@@ -100,23 +109,73 @@ private fun MissingResult(title: String, message: String) {
   }
 }
 
+private data class ExecutionFacts(
+  val workflowId: String?,
+  val invocationId: String?,
+  val agent: String?,
+  val model: String?,
+  val effort: String?,
+  val liveness: String?,
+  val startedAt: kotlin.time.Instant?,
+  val updatedAt: kotlin.time.Instant?,
+)
+
+private fun executionFacts(item: WorkItem, detail: Detail?, subtaskId: Int?): ExecutionFacts {
+  fun String?.present() = this?.takeIf(String::isNotBlank)
+  if (subtaskId != null) {
+    val execution = detail?.phaseResults?.firstOrNull { it.subtaskId == subtaskId }?.execution
+    val liveness = if (subtaskId == detail?.currentSubtaskId) detail?.executionLiveness.present() else null
+    return ExecutionFacts(
+      workflowId = execution?.workflowId.present(),
+      invocationId = null,
+      agent = execution?.agentId.present(),
+      model = execution?.model.present(),
+      effort = execution?.effort.present(),
+      liveness = liveness,
+      startedAt = execution?.startedAt,
+      updatedAt = execution?.updatedAt,
+    )
+  }
+  return ExecutionFacts(
+    workflowId = item.control.workflowId.present(),
+    invocationId = item.control.invocationId.present(),
+    agent = (detail?.activeAgent ?: item.agentId).present(),
+    model = item.model.present(),
+    effort = item.effort.present(),
+    liveness = detail?.executionLiveness.present(),
+    startedAt = item.startedAt,
+    updatedAt = item.control.updatedAt,
+  )
+}
+
 @Composable
-private fun ExecutionSection(item: WorkItem, detail: Detail?, onCopy: (String) -> Unit) {
-  val agent = detail?.activeAgent ?: item.agentId
+private fun ExecutionSection(item: WorkItem, detail: Detail?, subtaskId: Int?, onCopy: (String) -> Unit) {
+  val facts = executionFacts(item, detail, subtaskId)
+  val rowsPresent =
+    listOf(
+      facts.workflowId,
+      facts.invocationId,
+      facts.agent,
+      facts.model,
+      facts.liveness,
+      facts.startedAt,
+      facts.updatedAt,
+    ).any { it != null }
+  if (!rowsPresent) return
   PaneSection(title = "Execution") {
     PropertyList {
-      item.control.workflowId?.let { PropertyRow("Workflow") { ShortId(it, onCopy, label = "workflow id") } }
-      item.control.invocationId?.let { PropertyRow("Invocation") { ShortId(it, onCopy, label = "invocation id") } }
-      agent?.takeIf { it.isNotBlank() }?.let {
+      facts.workflowId?.let { PropertyRow("Workflow") { ShortId(it, onCopy, label = "workflow id") } }
+      facts.invocationId?.let { PropertyRow("Invocation") { ShortId(it, onCopy, label = "invocation id") } }
+      facts.agent?.let {
         PropertyRow("Agent") {
-          Avatar(it, small = true, tooltip = listOfNotNull(it, item.model, item.effort).joinToString(" · "))
+          Avatar(it, small = true, tooltip = listOfNotNull(it, facts.model, facts.effort).joinToString(" · "))
           PropertyText(it)
         }
       }
-      item.model?.takeIf { it.isNotBlank() }?.let { model -> PropertyRow("Model") { PropertyText(model + item.effort?.let { " · $it" }.orEmpty()) } }
-      detail?.executionLiveness?.takeIf { it.isNotBlank() }?.let { PropertyRow("Liveness") { PropertyText(it) } }
-      item.startedAt?.let { PropertyRow("Started") { PropertyText(formatInstant(it, "d MMM HH:mm")) } }
-      PropertyRow("Updated") { PropertyText(formatInstant(item.control.updatedAt, "HH:mm:ss")) }
+      facts.model?.let { model -> PropertyRow("Model") { PropertyText(model + facts.effort?.let { " · $it" }.orEmpty()) } }
+      facts.liveness?.let { PropertyRow("Liveness") { PropertyText(it) } }
+      facts.startedAt?.let { PropertyRow("Started") { PropertyText(formatInstant(it, "d MMM HH:mm")) } }
+      facts.updatedAt?.let { PropertyRow("Updated") { PropertyText(formatInstant(it, "HH:mm:ss")) } }
     }
   }
 }
@@ -160,7 +219,7 @@ private fun InspectorSection(item: WorkItem, detail: Detail, chosen: SubtaskKey?
     SubtaskKey.GoalFinish -> PaneSection(title = "Goal finish", status = status) { PhasePipeline(goalFinishSteps(item, detail)) }
     is SubtaskKey.Subtask -> {
       val subtask = detail.subtasks.firstOrNull { it.id == key.id } ?: return
-      PaneSection(title = "Subtask ${subtaskNumber(subtask.id)}", status = status) { SubtaskInspector(detail, subtask, inline = false, onAction) }
+      PaneSection(title = "Subtask ${subtaskNumber(subtask.id)}", status = status) { SubtaskInspector(detail, subtask, onAction) }
     }
   }
 }

@@ -1,11 +1,13 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
@@ -34,6 +36,7 @@ internal class LazyKeyIndex {
 internal class DetailSections(
   private val scope: LazyListScope,
   val collapse: SectionCollapse,
+  val scrollState: LazyListState,
   val assessmentOrder: MutableState<AssessmentOrder> = mutableStateOf(AssessmentOrder.Default),
   private val keys: LazyKeyIndex = LazyKeyIndex(),
 ) : LazyListScope by scope {
@@ -61,6 +64,7 @@ internal class DetailSections(
     actions: (@Composable RowScope.() -> Unit)? = null,
     spaceBefore: Dp = DocBlockGap,
     collapsedByDefault: Boolean = false,
+    countStyle: (@Composable () -> TextStyle)? = null,
     content: LazyListScope.() -> Unit,
-  ) = lazySection(key, title, count, lead, actions, spaceBefore, collapse, collapsedByDefault, content)
+  ) = lazySection(key, title, count, lead, actions, spaceBefore, collapse, collapsedByDefault, countStyle, content)
 }

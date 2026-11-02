@@ -1,6 +1,8 @@
 package skillbill.infrastructure.workflow.validation
 
 import skillbill.contracts.time.JvmSystemClock
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmEnvironmentKeys
 import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
@@ -639,6 +641,91 @@ class FileSystemValidationGateRunnerTest {
   }
 
   @Test
+  fun `a gate command missing from the repository reports a quality gate configuration failure`() {
+    val repo = Files.createTempDirectory("gate-missing-command")
+    try {
+      val failure =
+        assertFailsWith<SkillBillRuntimeException> {
+          FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+            request(
+              repo,
+              argv = listOf("./gradlew", "compileKotlin"),
+              parseMode = ValidationGateFindingParseMode.COLLECT_ALL,
+            ),
+          )
+        }
+      assertEquals(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION, failure.code)
+      assertTrue(failure.message.orEmpty().contains("Failed to launch process"), failure.message)
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `without a root wrapper the gate runs in every nested Gradle project and fails if any of them fails`() {
+    val repo = Files.createTempDirectory("gate-nested-projects")
+    try {
+      val calls = repo.resolve("calls.log")
+      writeWrapper(repo.resolve("desktop"), calls, "echo 'e: file:///repo/Foo.kt:3:1 Unresolved reference: missing'", 1)
+      writeWrapper(repo.resolve("runtime"), calls)
+      writeWrapper(repo.resolve(".hidden"), calls)
+
+      val result =
+        FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+          request(
+            repo,
+            argv = listOf("./gradlew", "compileKotlin"),
+            parseMode = ValidationGateFindingParseMode.COLLECT_ALL,
+          ),
+        )
+
+      assertEquals(
+        listOf("desktop -p desktop compileKotlin", "runtime -p runtime compileKotlin"),
+        Files.readAllLines(calls),
+      )
+      assertEquals("./gradlew compileKotlin", result.command)
+      assertEquals(1, result.exitCode)
+      assertEquals(ValidationGateRunOutcome.FAILED, result.outcome)
+      assertEquals(listOf("Unresolved reference: missing"), result.findings.map { it.message })
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `a root or configured wrapper runs alone even when nested Gradle projects exist`() {
+    val repo = Files.createTempDirectory("gate-root-wrapper")
+    try {
+      val calls = repo.resolve("calls.log")
+      writeWrapper(repo.resolve("desktop"), calls)
+      writeWrapper(repo.resolve("runtime"), calls)
+      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver())
+
+      runner.run(
+        request(
+          repo,
+          argv = listOf("runtime/gradlew", "-p", "runtime", "compileKotlin"),
+          parseMode = ValidationGateFindingParseMode.COLLECT_ALL,
+        ),
+      )
+      assertEquals(listOf("runtime -p runtime compileKotlin"), Files.readAllLines(calls))
+
+      Files.delete(calls)
+      writeWrapper(repo, calls)
+      runner.run(
+        request(
+          repo,
+          argv = listOf("./gradlew", "compileKotlin"),
+          parseMode = ValidationGateFindingParseMode.COLLECT_ALL,
+        ),
+      )
+      assertEquals(listOf("${repo.fileName} compileKotlin"), Files.readAllLines(calls))
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `an unresolvable gate JVM notes the missing Java on an unrecognized gate failure`() {
     val repo = Files.createTempDirectory("gate-unresolved-jvm-npm-failure")
     try {
@@ -729,6 +816,26 @@ class FileSystemValidationGateRunnerTest {
     ),
     GateJvmDisposition.Unresolved(rejectedCandidate = "/opt/skill-bill/runtime", requiredMajor = "21"),
   )
+
+  private fun writeWrapper(
+    project: Path,
+    calls: Path,
+    output: String = "true",
+    exitCode: Int = 0,
+  ) {
+    Files.createDirectories(project)
+    val wrapper = project.resolve("gradlew")
+    Files.writeString(
+      wrapper,
+      """
+      #!/bin/sh
+      echo "${project.fileName} ${'$'}*" >> "$calls"
+      $output
+      exit $exitCode
+      """.trimIndent(),
+    )
+    assertTrue(wrapper.toFile().setExecutable(true))
+  }
 
   private fun writeScript(
     repo: Path,

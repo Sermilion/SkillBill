@@ -1,6 +1,8 @@
 package skillbill.infrastructure.workflow.validation
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
@@ -38,6 +40,17 @@ class FileSystemValidationGateRunner(
     baselineEnvironment: MutableMap<String, String>,
     gateJvm: GateJvmDisposition,
   ): ValidationGateRunResult {
+    val projectRequests = nestedProjectRequests(request)
+    if (projectRequests.isEmpty()) return runCommand(request, baselineEnvironment, gateJvm)
+    val runs = projectRequests.map { projectRequest -> runCommand(projectRequest, baselineEnvironment, gateJvm) }
+    return mergeNestedProjectRuns(request, runs)
+  }
+
+  private fun runCommand(
+    request: ValidationGateRunRequest,
+    baselineEnvironment: MutableMap<String, String>,
+    gateJvm: GateJvmDisposition,
+  ): ValidationGateRunResult {
     val started = System.nanoTime()
     val artifactFloor = clock.instant().truncatedTo(ChronoUnit.SECONDS)
     val outputFile = Files.createTempFile("skillbill-validation-gate", ".out")
@@ -60,7 +73,10 @@ class FileSystemValidationGateRunner(
         )
       }
       if (processResult.launchFailure) {
-        throw ValidationGateProcessException(processResult.output)
+        throw SkillBillRuntimeException(
+          FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION,
+          processResult.output,
+        )
       }
       val stdout = processResult.output
       val durationMs = ((System.nanoTime() - started) / NANOS_PER_MILLIS).coerceAtLeast(0L)

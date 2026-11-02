@@ -63,6 +63,7 @@ import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewRepositoryStatsSnapshot
 import skillbill.ports.review.preparation.ReviewAttributionPort
 import skillbill.ports.review.preparation.ReviewInputSource
+import skillbill.ports.review.repository.ReviewFindingActionRepository
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.review.repository.ReviewRunCompletenessRepository
 import skillbill.ports.review.repository.UnavailableReviewRunCompletenessRepository
@@ -410,7 +411,9 @@ internal class FakeGoalStatsRepository(
 
 internal class FakeGoalStatsReviewRepository(
   private val stats: GoalWorkflowStats,
-) : ReviewRepository, ReviewRunCompletenessRepository by UnavailableReviewRunCompletenessRepository {
+) : ReviewRepository,
+  ReviewFindingActionRepository by noopPort(ReviewFindingActionRepository::class.java),
+  ReviewRunCompletenessRepository by UnavailableReviewRunCompletenessRepository {
   override fun fetchFindingStatuses(runId: String) = error("Unexpected fetchFindingStatuses")
 
   override fun saveImportedReview(
@@ -529,7 +532,9 @@ internal class FakeReviewRepository(
   private val numberedFindings: List<NumberedFinding> = emptyList(),
   private val sourceFindingExists: Boolean = false,
   private val rejectedLearningSourceOutcome: RejectedLearningSourceOutcome? = null,
-) : ReviewRepository, ReviewRunCompletenessRepository by UnavailableReviewRunCompletenessRepository {
+) : ReviewRepository,
+  ReviewFindingActionRepository by noopPort(ReviewFindingActionRepository::class.java),
+  ReviewRunCompletenessRepository by UnavailableReviewRunCompletenessRepository {
   val feedbackRequests = mutableListOf<FeedbackRequest>()
   val learningSourceLookups = mutableListOf<String>()
   val savedReviews = mutableListOf<ImportedReview>()

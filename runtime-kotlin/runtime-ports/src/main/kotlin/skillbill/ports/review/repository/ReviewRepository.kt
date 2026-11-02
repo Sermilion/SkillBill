@@ -13,7 +13,8 @@ import skillbill.review.model.ReviewFinishedTelemetry
 interface ReviewRepository :
   WorkflowStatsRepository,
   ReviewRunCompletenessRepository,
-  ReviewFindingStatusRepository {
+  ReviewFindingStatusRepository,
+  ReviewFindingActionRepository {
   /** Stores only the schema-bounded accounting projection; content-bearing review objects cannot cross this seam. */
   fun saveAccounting(record: ReviewAccountingRecord)
 

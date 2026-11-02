@@ -54,6 +54,40 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## Standalone review finding actions
+
+The desktop review detail has an Actions section with "Fix findings" and "Verify
+findings". Both open a scoped agent chat turn for the selected invocation. Fix
+findings repairs open findings. Verify findings checks the current code without
+editing source files. Both record confirmed fixes against the original review.
+
+`skill-bill prepare-review --invocation-id <id> --format json` registers findings
+from that finished review's saved report for feedback. It returns the existing
+import-review payload, including `review_run_id`. It never creates a new review
+run ID. Repeated preparation preserves existing findings and feedback. Missing
+review identities, unfinished executions, truncated legacy reports, or conflicting
+stored finding IDs refuse preparation with exit code 1.
+
+Use that run ID with `triage --run-id <id> --list`, then record each confirmed fix
+with `record-feedback --run-id <id> --event fix_applied --finding <finding-id>
+--note <evidence>`. Use the selected database with `--db` on every command. Findings
+that remain unresolved keep their existing status. These actions do not launch the
+goal's `verify_findings` or `implement_fix` phases, commit, push, or rerun the review.
+
+Before checking or repairing findings, the scoped agent calls
+`start-review-action --run-id <id> --action <fix|verify> --format json` and retains
+the returned `action_id`. At completion it calls `finish-review-action --run-id
+<id> --action-id <action-id> --format json`, adding `--failed` when work could not
+finish. These commands persist activity on the original review. Completion counts
+come from stored finding statuses and survive reopening the detail. An unfinished
+action records its start without claiming completion. Both detail buttons disable
+when every finding is fixed.
+
+Standalone plan details hide branch changes and show "Implement" beside the run controls. It stays
+disabled until that plan has finished with a saved report. It starts the goal for
+the plan's repository and issue key using the existing goal launch controls.
+Goals continue to show changes.
+
 ## Blocked-phase operator decisions
 
 To resolve a blocked child phase, use

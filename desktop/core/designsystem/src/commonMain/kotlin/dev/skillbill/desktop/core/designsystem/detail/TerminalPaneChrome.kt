@@ -89,7 +89,7 @@ class TerminalTabChrome(val id: String, val title: String)
  * field, for exactly as long as the field is composed, with the field's own cancel and commit. It returns the modifier
  * that gates the window's shortcuts while the field has focus. Another pane reuses the chrome by passing its own [icon] and
  * [noun], which name every control; a null [onNewTab], [onResizeBy] or [onStartRename] drops that control, the grip or the
- * double-click rename.
+ * double-click rename. [equalWidthTabs] divides the available strip width equally and truncates titles inside each tab.
  */
 @Composable
 fun TerminalPaneChrome(
@@ -111,6 +111,7 @@ fun TerminalPaneChrome(
   noun: String = "terminal",
   newTabShortcut: String? = "⌃ ⇧ `",
   closeShortcut: String? = "⌃ `",
+  equalWidthTabs: Boolean = false,
   content: @Composable BoxScope.() -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -126,17 +127,17 @@ fun TerminalPaneChrome(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
-          // `.sb-term-tabs` keeps its content width and only shrinks (then scrolls) when the bar runs out of room; `.l-grow`
-          // takes the rest. A second weight would cap the strip at half the free space, so the left group fills the row
-          // instead, and its 6 px end padding stands for the gap on the far side of the empty `.l-grow`.
           Row(Modifier.weight(1f).padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             SbIcon(icon, SbIconSize.Sm)
-            Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            val tabStripModifier = if (equalWidthTabs) Modifier.weight(1f) else Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState())
+            Row(tabStripModifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
               tabs.forEach { tab ->
                 TerminalTab(
                   tab, active = tab.id == activeId, renaming = tab.id == renamingId,
                   onSelect = { onSelectTab(tab.id) }, onStartRename = onStartRename?.let { start -> { start(tab.id) } },
                   onRename = { onRename(tab.id, it) }, onCancelRename = onCancelRename, renameFieldGate = renameFieldGate, onClose = { onCloseTab(tab.id) },
+                  modifier = if (equalWidthTabs) Modifier.weight(1f) else Modifier,
+                  equalWidth = equalWidthTabs,
                 )
               }
             }
@@ -172,6 +173,8 @@ private fun TerminalTab(
   onCancelRename: () -> Unit,
   renameFieldGate: @Composable (cancel: () -> Unit, commit: () -> Unit) -> Modifier,
   onClose: () -> Unit,
+  modifier: Modifier = Modifier,
+  equalWidth: Boolean = false,
 ) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
@@ -185,7 +188,7 @@ private fun TerminalTab(
   val doubleTapMillis = LocalViewConfiguration.current.doubleTapTimeoutMillis
   var lastClick by remember { mutableStateOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
   Row(
-    Modifier.height(24.dp).background(fill, shape).hoverable(interaction)
+    modifier.height(24.dp).background(fill, shape).hoverable(interaction)
       .clickable(interaction, indication = null, role = Role.Button) {
         onSelect()
         val previous = lastClick
@@ -205,7 +208,11 @@ private fun TerminalTab(
     if (renaming) {
       RenameField(tab.title, onRename, onCancelRename, renameFieldGate)
     } else {
-      BasicText(tab.title, style = SkillBillTheme.type.tSmMedium.copy(color = textColor), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      BasicText(
+        tab.title,
+        modifier = if (equalWidth) Modifier.weight(1f) else Modifier,
+        style = SkillBillTheme.type.tSmMedium.copy(color = textColor), maxLines = 1, overflow = TextOverflow.Ellipsis,
+      )
     }
     SbIconButton(
       LucideIcons.x, "Close ${tab.title} tab", onClose,

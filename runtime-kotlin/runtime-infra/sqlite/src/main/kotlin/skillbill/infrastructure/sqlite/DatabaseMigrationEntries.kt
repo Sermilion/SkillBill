@@ -23,6 +23,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDep
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
+import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
@@ -44,6 +45,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalAssessmentCounts
+import skillbill.infrastructure.sqlite.core.migration.area.recordGoalBlockedReason
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalSubtaskTraceProbeCounts
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.diagnosticevidence.rekeyDiagnosticEvidenceByRepairTurn
@@ -946,6 +948,16 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 97,
+      name = "record-review-finding-actions",
+      operation = ::addReviewFindingActions,
+    ) +
+    DatabaseMigration(
+      version = 98,
+      name = "record-goal-blocked-reason",
+      operation = ::recordGoalBlockedReason,
+    ) +
+    DatabaseMigration(
+      version = 99,
       name = "record-standalone-qa-checklist",
       operation = ::recordStandaloneQaChecklist,
     )

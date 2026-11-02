@@ -43,7 +43,7 @@ internal fun reviewReportCaption(report: ReviewReport): String =
   listOfNotNull(report.verdict?.let(::reviewVerdictLabel), reviewFindingsTally(report.findings)).joinToString(" · ")
 
 /**
- * Right after Activity, a standalone run's result: a review's findings as one boxed table under its verdict, with the rest of
+ * A standalone run's result: a review's findings as one boxed table under its verdict, with the rest of
  * the report folded below it; any other finished phase its result report. QA keeps its own report section.
  */
 internal fun DetailSections.standaloneResultSection(item: WorkItem, detail: Detail) {

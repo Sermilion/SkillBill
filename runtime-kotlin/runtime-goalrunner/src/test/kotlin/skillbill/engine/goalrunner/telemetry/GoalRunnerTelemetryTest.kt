@@ -339,6 +339,7 @@ class GoalRunnerTelemetryTest {
     val finished = telemetry.finished.single()
     assertEquals("blocked", finished.status)
     assertEquals("FAILED", finished.stopReason)
+    assertContains(requireNotNull(finished.blockedReason), "review failed")
     assertEquals(1, finished.subtasksComplete)
     assertEquals(1, finished.subtasksBlocked)
     assertEquals(0, finished.subtasksSkipped)

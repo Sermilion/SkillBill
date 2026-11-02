@@ -28,6 +28,16 @@ object GoalSubtaskReviewArtifactDecoder {
   fun decodeReviewStateOnly(artifacts: Any): GoalSubtaskReviewState? =
     decodeReviewStateOnlyWire(artifacts.asGoalWorkflowArtifactMap("goal subtask review state artifacts"))
 
+  fun decodeReviewStateForStatus(artifacts: Any): GoalSubtaskReviewState? {
+    val artifactMap = artifacts.asGoalWorkflowArtifactMap("goal subtask review status artifacts")
+    if (GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY !in artifactMap) return null
+    return GoalSubtaskReviewState.fromArtifactMap(
+      artifactMap.getValue(GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY).toReviewStateMap(
+        GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY,
+      ),
+    )
+  }
+
   internal fun decodeWire(artifacts: Map<String, Any?>): GoalSubtaskReviewArtifacts? {
     val hasContinuation = FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY in artifacts
     val hasState = GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY in artifacts

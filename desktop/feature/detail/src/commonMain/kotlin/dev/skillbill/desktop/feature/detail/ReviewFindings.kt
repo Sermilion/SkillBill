@@ -39,7 +39,16 @@ internal fun ReviewFindingStatus.color(): Color {
   }
 }
 
-/** "8 findings · 6 fixed · 2 open": the count, then each status present, in [ReviewFindingStatus] order. */
+private val TALLY_ORDER = listOf(
+  ReviewFindingStatus.Fixed,
+  ReviewFindingStatus.Open,
+  ReviewFindingStatus.Accepted,
+  ReviewFindingStatus.Declined,
+  ReviewFindingStatus.FalsePositive,
+  ReviewFindingStatus.Rejected,
+)
+
+/** "8 findings · 6 fixed · 2 open": the count, then each status present, in [TALLY_ORDER]. */
 internal fun reviewFindingsTally(findings: List<ReviewReportFinding>): String {
   val count = when (findings.size) {
     0 -> "no findings"
@@ -47,7 +56,7 @@ internal fun reviewFindingsTally(findings: List<ReviewReportFinding>): String {
     else -> "${findings.size} findings"
   }
   val byStatus = findings.groupingBy { it.status }.eachCount()
-  val statuses = ReviewFindingStatus.entries.mapNotNull { status -> byStatus[status]?.let { "$it ${status.label().lowercase()}" } }
+  val statuses = TALLY_ORDER.mapNotNull { status -> byStatus[status]?.let { "$it ${status.label().lowercase()}" } }
   return (listOf(count) + statuses).joinToString(" · ")
 }
 

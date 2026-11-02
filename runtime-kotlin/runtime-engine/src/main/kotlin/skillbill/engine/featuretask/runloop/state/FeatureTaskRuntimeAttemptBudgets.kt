@@ -6,6 +6,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 internal object FeatureTaskRuntimeAttemptBudgets {
   const val MAX_OUTPUT_GATE_RETRY_ATTEMPTS: Int = 1
   const val MAX_PROCESS_FAILURE_ATTEMPTS: Int = 3
+  const val MAX_PLAN_BUNDLE_REPAIR_TURNS: Int = 2
   val ATTEMPT_BUDGET_FAILURE_CODE: String = FeatureTaskRuntimeFailureCode.PHASE_ATTEMPT_BUDGET_EXHAUSTED.label()
   val LOOP_EDGE_CAP_FAILURE_CODE: String = FeatureTaskRuntimeFailureCode.LOOP_EDGE_CAP_EXHAUSTED.label()
   val ATTEMPT_LIMIT_FAILURE_CODES: Set<String> = setOf(ATTEMPT_BUDGET_FAILURE_CODE, LOOP_EDGE_CAP_FAILURE_CODE)

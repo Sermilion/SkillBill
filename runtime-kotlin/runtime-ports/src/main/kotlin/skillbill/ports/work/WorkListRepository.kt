@@ -10,7 +10,7 @@ import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.work.model.WorkStoreObservation
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 
-interface WorkListRepository : WorkCandidateRepository {
+interface WorkListRepository : WorkCandidateRepository, WorkActivityReads {
   fun observation(): WorkStoreObservation
 
   fun goalSubtaskPage(
