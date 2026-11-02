@@ -78,10 +78,12 @@ private const val NEW_TASK_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
-[{"label":"Start a goal run","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal"}]
+[{"label":"Start a goal run","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
 Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
 For an action that should start a run when clicked, set "start" to one of: "goal", "plan", "review", "validation", "qa" or "pr".
+Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
+Offer a start action once the request is clear.
 The app turns that action into a button and starts the selected run only after the operator clicks it. Do not launch skill-bill yourself.
 For an action without "start", the app sends its instruction as the next chat turn when clicked.
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.

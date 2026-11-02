@@ -70,13 +70,13 @@ class GitMonitorResources(
   }
 
   override fun acquire(request: MonitorAcquireRequest): MonitorAcquisition {
-    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.target.pullRequest)
+    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.target.identity)
     return when (val attempt = MonitorAdmissionFiles.tryLock(directory)) {
       AdmissionAttempt.Contended ->
         MonitorAcquisition.Blocked(
           MonitorAdmissionBlock.LIVE_OWNER,
           directory,
-          "Another invocation holds the admission lock for ${request.target.pullRequest.url}.",
+          "Another invocation holds the admission lock for ${request.target.identity.url}.",
           readAdmissionRecord(directory)?.let(::summaryOf),
         )
       is AdmissionAttempt.Held -> admit(attempt.admission, request)
@@ -318,7 +318,7 @@ class GitMonitorResources(
   }
 
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery {
-    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.target.pullRequest)
+    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.target.identity)
     if (!Files.exists(MonitorAdmissionFiles.recordFile(directory))) {
       return refusal(MonitorRecoveryRefusal.NO_OWNERSHIP, directory, "No ownership record exists.")
     }
@@ -446,7 +446,7 @@ class GitMonitorResources(
   ): MonitorOwnershipRecord {
     val now = clock.instant()
     return MonitorOwnershipRecord(
-      target = request.target.pullRequest,
+      target = request.target.identity,
       invocationId = request.invocationId,
       ownerToken = request.ownerToken,
       generation = generation,

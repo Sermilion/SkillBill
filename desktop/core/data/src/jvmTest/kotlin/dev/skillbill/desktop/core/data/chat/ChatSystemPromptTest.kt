@@ -16,6 +16,7 @@ class ChatSystemPromptTest {
     assertTrue("Base branch: develop" in prompt)
     assertTrue("skillbill-actions" in prompt)
     assertTrue("\"mode\":\"act\",\"start\":\"goal\"" in prompt)
+    assertTrue("\"start\":\"goal\",\"title\":\"" in prompt)
     listOf("goal", "plan", "review", "validation", "qa", "pr").forEach {
       assertTrue("\"$it\"" in prompt)
     }

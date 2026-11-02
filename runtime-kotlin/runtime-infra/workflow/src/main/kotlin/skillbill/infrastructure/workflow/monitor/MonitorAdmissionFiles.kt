@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.monitor
 
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.ports.monitor.model.MonitorPullRequestIdentity
+import skillbill.ports.monitor.model.MonitorTargetIdentity
 import java.io.IOException
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
@@ -44,7 +44,7 @@ internal object MonitorAdmissionFiles {
 
   fun directoryFor(
     commonDir: Path,
-    target: MonitorPullRequestIdentity,
+    target: MonitorTargetIdentity,
   ): Path = commonDir.resolve("skill-bill").resolve("standalone-monitor").resolve(hashOf(target.targetKey))
 
   fun recordFile(directory: Path): Path = directory.resolve("ownership.json")

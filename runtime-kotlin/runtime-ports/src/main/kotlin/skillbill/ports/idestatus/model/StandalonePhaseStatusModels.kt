@@ -42,12 +42,16 @@ data class StandaloneMonitorTarget(
   val worktreePath: String?,
 ) {
   init {
-    val match =
-      requireNotNull(PULL_REQUEST_KEY.matchEntire(pullRequestKey)) {
-        "Monitor pull request key '$pullRequestKey' is not host/owner/name#number."
+    val expectedUrl =
+      PULL_REQUEST_KEY.matchEntire(pullRequestKey)?.destructured?.let { (location, number) ->
+        "https://$location/pull/$number"
+      } ?: BRANCH_KEY.matchEntire(pullRequestKey)?.destructured?.let { (location, ref) ->
+        "https://$location/tree/$ref"
       }
-    val (location, number) = match.destructured
-    require(pullRequestUrl == "https://$location/pull/$number") {
+    requireNotNull(expectedUrl) {
+      "Monitor pull request key '$pullRequestKey' is not host/owner/name#number or host/owner/name@ref."
+    }
+    require(pullRequestUrl == expectedUrl) {
       "Monitor pull request URL '$pullRequestUrl' does not match key '$pullRequestKey'."
     }
     require(
@@ -58,8 +62,11 @@ data class StandaloneMonitorTarget(
     }
   }
 
+  val branchRef: String? get() = BRANCH_KEY.matchEntire(pullRequestKey)?.groupValues?.get(2)
+
   private companion object {
     val PULL_REQUEST_KEY = Regex("([^/#\\s]+/[^/#\\s]+/[^/#\\s]+)#([1-9][0-9]*)")
+    val BRANCH_KEY = Regex("([^/#@\\s]+/[^/#@\\s]+/[^/#@\\s]+)@([^#@\\s]+)")
   }
 }
 

@@ -17,6 +17,9 @@ import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorOperations
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
 import skillbill.engine.featuretask.slot.state.StandalonePublication
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorTargetIdentity
+import skillbill.ports.monitor.model.MonitorWritability
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
@@ -34,7 +37,7 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
       FeatureTaskRuntimePhaseStartReentry.FIRST_VISIT,
     )
     val ledger = standaloneLedger() ?: return block(run, iteration, MISSING_LEDGER)
-    val target = ledger.execution.target.pullRequest
+    val target = ledger.execution.target.identity
     return when (
       val outcome =
         operations.observe(
@@ -51,17 +54,7 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
             "${target.targetKey} was merged, so monitoring is complete.",
           ),
         )
-      is PullRequestCiOutcome.Passed ->
-        complete(
-          run,
-          iteration,
-          monitorOutput(
-            run,
-            "CI passed for the pull request.",
-            "CI passed on ${target.targetKey} at ${outcome.headSha}: every check passed, was skipped, " +
-              "or was cancelled.",
-          ),
-        )
+      is PullRequestCiOutcome.Passed -> passed(run, iteration, target, outcome)
       PullRequestCiOutcome.NoCiConfigured ->
         complete(
           run,
@@ -111,13 +104,13 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
       when (val publication = operations.publish(ledger, repairWorktree(ledger))) {
         StandalonePublication.NothingPending ->
           "No repair is pending; nothing was staged, committed, fetched, or pushed." to
-            "No repair was published for ${ledger.execution.target.pullRequest.targetKey}."
+            "No repair was published for ${ledger.execution.target.identity.targetKey}."
         is StandalonePublication.Published ->
           "The repair was published." to
             "The remote acknowledged repair commit ${publication.commitSha} on ${ledger.execution.target.head.tip.ref}."
         is StandalonePublication.PullRequestEdited ->
           "The pull request edit was recorded." to
-            "The repair edited ${ledger.execution.target.pullRequest.targetKey} without changing its head " +
+            "The repair edited ${ledger.execution.target.identity.targetKey} without changing its head " +
             "${publication.headSha}."
         is StandalonePublication.Blocked -> return block(run, iteration, publication.reason)
       }
@@ -142,6 +135,29 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
   private fun PhaseRuntimeFinalizationContext.repairWorktree(ledger: StandaloneMonitorLedger) =
     StandaloneRepairCommit(gitOperations, ledger.execution.worktree.path)
 
+  private fun PhaseRuntimeFinalizationContext.passed(
+    run: PhaseRun,
+    iteration: Int,
+    target: MonitorTargetIdentity,
+    outcome: PullRequestCiOutcome.Passed,
+  ): PhaseOutcome {
+    val noun = if (target is MonitorBranchIdentity) "branch" else "pull request"
+    val cancelled =
+      outcome.cancelled.takeIf(List<String>::isNotEmpty)
+        ?.let { names -> " Cancelled checks: ${names.joinToString(", ")}." }
+        .orEmpty()
+    return complete(
+      run,
+      iteration,
+      monitorOutput(
+        run,
+        "CI passed for the $noun.",
+        "CI passed on ${target.targetKey} at ${outcome.headSha}: every check passed, was skipped, " +
+          "or was cancelled.$cancelled",
+      ),
+    )
+  }
+
   private fun PhaseRuntimeFinalizationContext.failed(
     run: PhaseRun,
     iteration: Int,
@@ -149,7 +165,7 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
     ledger: StandaloneMonitorLedger,
     outcome: PullRequestCiOutcome.Failed,
   ): PhaseOutcome {
-    val target = ledger.execution.target.pullRequest
+    val target = ledger.execution.target.identity
     val head = ledger.acknowledgedHeadSha
     if (outcome.headSha != head) {
       return block(
@@ -160,6 +176,13 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
       )
     }
     val checks = failingChecksProse(outcome.failingChecks)
+    if (ledger.execution.target.writability == MonitorWritability.REPORT_ONLY) {
+      return block(
+        run,
+        iteration,
+        "CI is failing on ${target.targetKey} at $head. $checks This branch is report-only, so no repair ran.",
+      )
+    }
     val confirmed =
       ledger.publishedRepairs.lastOrNull { it.commitSha == head }
         ?.takeIf { it.repairKey !in progress.monitorFailedRepairCommitShas }

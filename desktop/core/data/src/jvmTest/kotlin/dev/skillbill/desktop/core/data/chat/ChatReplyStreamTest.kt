@@ -28,6 +28,24 @@ class ChatReplyStreamTest {
   }
 
   @Test
+  fun `a valid title decodes and an invalid one keeps the action without it`() {
+    val decode = { title: String, diagnostics: RecordingDiagnostics ->
+      val stream = ChatReplyStream(diagnostics)
+      stream.accept(ChatEvent.TextDelta("```skillbill-actions\n[{\"label\":\"Start\",\"instruction\":\"Go\",\"mode\":\"act\",\"title\":\"$title\"}]\n```"))
+      stream.accept(ChatEvent.Completed).first()
+    }
+    val untitled = ChatSuggestedAction("Start", "Go", ChatPermissionMode.Act)
+
+    val valid = RecordingDiagnostics()
+    assertEquals(ChatEvent.SuggestedActions(listOf(untitled.copy(title = "Add dark mode"))), decode(" Add dark mode ", valid))
+    assertTrue(valid.categories.isEmpty())
+
+    val invalid = RecordingDiagnostics()
+    assertEquals(ChatEvent.SuggestedActions(listOf(untitled)), decode("!!!", invalid))
+    assertEquals(listOf("chat.action_title_invalid"), invalid.categories)
+  }
+
+  @Test
   fun `invalid or failed action metadata never creates an executable suggestion`() {
     val diagnostics = RecordingDiagnostics()
     val stream = ChatReplyStream(diagnostics)

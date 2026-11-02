@@ -15,6 +15,8 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.StubGoalManifestStore
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
+import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -35,6 +37,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.WorkBoardRequest
@@ -55,11 +58,57 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class WorkControlServiceTest {
+  @Test
+  fun `a usable title leads the composed intake with requirements verbatim below it`() {
+    assertEquals("SKILL-500\nAdd dark mode setting\n\nFix the board", newTaskIntake("Fix the board", TITLE))
+  }
+
+  @Test
+  fun `a multi-line title falls back to the first line and records a warning`() {
+    val warnings = mutableListOf<String>()
+
+    assertEquals("SKILL-500\nFix the board\n\nFix the board", newTaskIntake("Fix the board", "one\ntwo", warnings))
+
+    assertEquals(listOf("seam=new-task.title outcome=ignored"), warnings)
+  }
+
+  @Test
+  fun `a keyed intake gets the title line and a url-led intake stays unchanged`() {
+    val url = "https://linear.app/acme/issue/SKILL-500/slug details"
+
+    assertEquals(
+      "SKILL-500\nAdd dark mode setting\n\nSKILL-500 Add export",
+      newTaskIntake("SKILL-500 Add export", TITLE),
+    )
+    assertEquals(url, newTaskIntake(url, TITLE))
+  }
+
+  private fun newTaskIntake(
+    requirements: String,
+    title: String,
+    warnings: MutableList<String> = mutableListOf(),
+  ): String =
+    GoalControlsFixture(
+      newWorkAdmission =
+        GoalNewWorkAdmissionPort { intake, _ ->
+          if ("SKILL-500" in intake) GoalNewWorkAdmission.Admitted("SKILL-500") else GoalNewWorkAdmission.NoIssueKey
+        },
+      newTaskDiagnostics = RecordingWarnings(warnings),
+    ).use { fixture ->
+      val prepared =
+        fixture.service.prepareNewTask(
+          fixture.root,
+          NewTaskIntakeRequest(requirements, title, null, "SKILL-500", emptySet()),
+        )
+      assertIs<NewTaskPreparation.Ready>(prepared).intake
+    }
+
   @Test
   fun `stop accepts progress since rendering and terminates only the selected runner`() {
     GoalControlsFixture().use { fixture ->
@@ -141,7 +190,10 @@ class WorkControlServiceTest {
   }
 }
 
-private class GoalControlsFixture : AutoCloseable {
+private class GoalControlsFixture(
+  newWorkAdmission: GoalNewWorkAdmissionPort = GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
+  newTaskDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+) : AutoCloseable {
   private val schema = establishTemporarySchemaReadiness("goal-controls-progress")
   val root: Path = schema.tempDir.toRealPath()
   private val database = sqliteSessionFactoryForTests(root, schema.dbPath.toString(), emptyMap())
@@ -254,12 +306,13 @@ private class GoalControlsFixture : AutoCloseable {
       WorkControlRecovery(status, recovery, runs),
       WorkNewTaskStart(
         database,
-        GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
+        newWorkAdmission,
         NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
         goalPreflightServiceForTests(database),
         launcher,
         EnvironmentContext(),
         TestRepositoryEnclosingRoot,
+        newTaskDiagnostics,
       ),
     )
 
@@ -336,4 +389,22 @@ private class GoalControlsFixture : AutoCloseable {
     }
 
   override fun close() = schema.close()
+}
+
+private const val TITLE = "Add dark mode setting"
+
+private class RecordingWarnings(private val warnings: MutableList<String>) : RuntimeDiagnostics {
+  override fun warning(
+    message: String,
+    error: Throwable?,
+  ) {
+    warnings += message
+  }
+
+  override fun error(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+
+  override fun info(message: String) = Unit
 }

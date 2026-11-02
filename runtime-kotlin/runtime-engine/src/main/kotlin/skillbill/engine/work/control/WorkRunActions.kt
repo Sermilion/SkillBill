@@ -245,7 +245,8 @@ public class WorkRunActions(
     agent: String,
   ): List<String>? {
     phase.monitorTarget?.let { target ->
-      return listOf("phase", phase.phaseId, target.pullRequestUrl, "--agent", agent)
+      val selector = target.branchRef?.let { "branch:$it" } ?: target.pullRequestUrl
+      return listOf("phase", phase.phaseId, selector, "--agent", agent)
     }
     phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent) }
     return when {
@@ -324,8 +325,12 @@ public class WorkRunActions(
       appendLine("Work identity: ${item.snapshot.execution?.invocationId ?: item.snapshot.workflowId}")
       appendLine("Repository: ${item.repositoryRoot}")
       val monitored = phase.monitorTarget
+      val monitoredBranch = monitored?.branchRef
       if (monitored == null) {
         appendLine("Keep the recorded branch ${phase.branchCorrelation} and existing PR.")
+      } else if (monitoredBranch != null) {
+        appendLine("Monitor exactly branch:$monitoredBranch; the runtime prepares its own worktree for it.")
+        appendLine("Do not check out the branch $monitoredBranch in this repository.")
       } else {
         appendLine("Monitor exactly ${monitored.pullRequestUrl}; the runtime prepares its own worktree for it.")
         appendLine("Do not check out the pull request branch ${monitored.headRef} in this repository.")

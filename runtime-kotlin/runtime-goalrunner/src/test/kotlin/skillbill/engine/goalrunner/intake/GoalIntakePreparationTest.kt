@@ -100,6 +100,33 @@ class GoalIntakePreparationTest {
     }
   }
 
+  @Test
+  fun `the bundle name skips path tokens and keeps slashed words`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-paths")
+    val named =
+      mapOf(
+        "SKILL-80 /home/u/s.png starting a goal from New task chat creates bad title" to
+          "SKILL-80-starting-a-goal-from-new-task",
+        "SKILL-81 Fix goal/phase title: more detail" to "SKILL-81-fix-goal-phase-title",
+      )
+
+    named.forEach { (intake, directory) ->
+      val planned = preparation.resolvePlanSpec(intake.substringBefore(' '), intake, repoRoot).specPath
+      assertEquals(specsRoot.resolve("$directory/spec.md"), planned)
+    }
+  }
+
+  @Test
+  fun `a path-only first line names the bundle from the next line and a path-only intake stays admitted`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-path-only")
+
+    val nextLine = preparation.resolvePlanSpec("SKILL-82", "SKILL-82 /home/u/s.png\nAdd dark mode", repoRoot).specPath
+    val pathOnly = preparation.resolvePlanSpec("SKILL-83", "SKILL-83 /home/u/s.png", repoRoot).specPath
+
+    assertEquals(specsRoot.resolve("SKILL-82-add-dark-mode/spec.md"), nextLine)
+    assertEquals(specsRoot.resolve("SKILL-83-home-u-s-png/spec.md"), pathOnly)
+  }
+
   private fun intakePlanSpec(
     issueKey: String,
     intake: String,

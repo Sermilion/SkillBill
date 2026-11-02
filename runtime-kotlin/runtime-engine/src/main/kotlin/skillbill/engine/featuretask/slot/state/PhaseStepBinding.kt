@@ -263,7 +263,10 @@ public data class ExpectedCiHead(
 )
 
 public sealed interface PullRequestCiOutcome {
-  public data class Passed(val headSha: String) : PullRequestCiOutcome
+  public data class Passed(
+    val headSha: String,
+    val cancelled: List<String> = emptyList(),
+  ) : PullRequestCiOutcome
 
   public data object Merged : PullRequestCiOutcome
 

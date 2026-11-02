@@ -12,6 +12,8 @@ public sealed interface MonitorTargetSelector {
   public data class IssueKey(val key: String) : MonitorTargetSelector
 
   public data class CurrentBranch(val branch: String) : MonitorTargetSelector
+
+  public data class Branch(val name: String) : MonitorTargetSelector
 }
 
 public sealed interface MonitorIntakeParse {
@@ -28,6 +30,8 @@ public val WHITESPACE: Regex = Regex("\\s+")
 private const val URL_SCHEME_SEPARATOR = "://"
 private const val PULL_SEGMENT = "pull"
 private const val PULL_URL_SEGMENTS = 4
+internal const val MONITOR_BRANCH_PREFIX = "branch:"
+private const val ACCEPTED_INTAKE_FORMS = "a pull request URL, an issue key, or branch:<name>"
 
 public fun parseMonitorIntake(
   intake: String?,
@@ -47,6 +51,8 @@ public fun parseMonitorIntake(
         MonitorTargetRefusal.AMBIGUOUS_INTAKE,
         "Monitor intake names more than one target: ${tokens.joinToString(" ")}.",
       )
+    tokens.single().startsWith(MONITOR_BRANCH_PREFIX) ->
+      parseBranchToken(tokens.single().removePrefix(MONITOR_BRANCH_PREFIX))
     URL_SCHEME_SEPARATOR in tokens.single() ->
       MonitorIntakeParse.Selected(MonitorTargetSelector.Url(tokens.single()))
     ISSUE_KEY_TOKEN.matches(tokens.single()) ->
@@ -54,10 +60,20 @@ public fun parseMonitorIntake(
     else ->
       MonitorIntakeParse.Refused(
         MonitorTargetRefusal.MALFORMED_INTAKE,
-        "Monitor intake '${tokens.single()}' is neither a pull request URL nor an issue key.",
+        "Monitor intake '${tokens.single()}' is not $ACCEPTED_INTAKE_FORMS.",
       )
   }
 }
+
+private fun parseBranchToken(name: String): MonitorIntakeParse =
+  if (isSafeRefName(name)) {
+    MonitorIntakeParse.Selected(MonitorTargetSelector.Branch(name))
+  } else {
+    MonitorIntakeParse.Refused(
+      MonitorTargetRefusal.MALFORMED_INTAKE,
+      "Monitor intake '$MONITOR_BRANCH_PREFIX$name' does not name a safe branch. Use $ACCEPTED_INTAKE_FORMS.",
+    )
+  }
 
 public sealed interface MonitorUrlParse {
   public data class Parsed(val identity: MonitorPullRequestIdentity) : MonitorUrlParse

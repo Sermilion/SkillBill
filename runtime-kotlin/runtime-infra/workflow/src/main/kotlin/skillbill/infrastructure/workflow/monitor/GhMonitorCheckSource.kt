@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.monitor
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import me.tatarka.inject.annotations.Inject
 import skillbill.infrastructure.workflow.github.GhCommandRunner
 import skillbill.infrastructure.workflow.github.ProcessGhCommandRunner
@@ -11,6 +12,7 @@ import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.monitor.MonitorCheckSource
 import skillbill.ports.monitor.model.MonitorFailureLog
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
+import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import java.net.URI
 import java.net.URISyntaxException
 import java.nio.file.Path
@@ -29,6 +31,8 @@ class GhMonitorCheckSource internal constructor(
     ProcessGhCommandRunner(maxOutputBytes = LOG_OUTPUT_BYTES, deadlineSeconds = LOG_DEADLINE_SECONDS),
     diagnostics,
   )
+
+  private val mapper: ObjectMapper by lazy { ObjectMapper() }
 
   override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks {
     val result =
@@ -53,6 +57,43 @@ class GhMonitorCheckSource internal constructor(
     }
     return result
   }
+
+  override fun commitChecks(
+    repository: MonitorRepositoryIdentity,
+    sha: String,
+  ): PullRequestChecks {
+    val checkRuns = gh.run(Path.of("."), commitArgs(repository, sha, "check-runs"))
+    val statuses = if (checkRuns.exitCode == 0) gh.run(Path.of("."), commitArgs(repository, sha, "status")) else checkRuns
+    val result =
+      when {
+        checkRuns.exitCode != 0 -> PullRequestChecks.Unavailable(checkRuns.describeFailure())
+        statuses.exitCode != 0 -> PullRequestChecks.Unavailable(statuses.describeFailure())
+        else -> parseMonitorCommitChecks(mapper, checkRuns.stdout, statuses.stdout)
+      }
+    if (result is PullRequestChecks.Unavailable) {
+      diagnostics.warning("monitor poll commit checks unavailable for ${repository.slug}@$sha: ${result.reason}")
+    }
+    return result
+  }
+
+  private fun commitArgs(
+    repository: MonitorRepositoryIdentity,
+    sha: String,
+    resource: String,
+  ): List<String> =
+    listOf(
+      "api",
+      "--hostname",
+      repository.host,
+      "--method",
+      "GET",
+      "--paginate",
+      "-f",
+      "filter=latest",
+      "-f",
+      "per_page=100",
+      "repos/${repository.slug}/commits/$sha/$resource",
+    )
 
   override fun failureLog(
     pullRequest: MonitorPullRequestIdentity,

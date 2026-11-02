@@ -8,7 +8,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
-import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
@@ -74,7 +73,7 @@ public class PhaseRunEntry(
       return monitorBlocked(
         request,
         invocationId,
-        "Stale owner recovery needs an explicit pull request target.",
+        "Stale owner recovery needs an explicit target.",
         listOf("Selector: $selector"),
       )
     }
@@ -104,7 +103,7 @@ public class PhaseRunEntry(
           request,
           invocationId,
           listOfNotNull(preparation.detail, preparation.path?.let { "Path: $it." }).joinToString(" "),
-          earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
+          earlySetupReport(selector, preparation.identity, preparation.settlement),
           preparation.attempt,
         )
       is MonitorPreparation.Refused ->
@@ -120,7 +119,7 @@ public class PhaseRunEntry(
           request,
           invocationId,
           preparation.reason,
-          earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
+          earlySetupReport(selector, preparation.identity, preparation.settlement),
           preparation.attempt,
         )
     }
@@ -326,12 +325,12 @@ public class PhaseRunEntry(
       }
     val settlement = monitor?.cleanup?.settle(primaryOutcomeOf(outcome))
     return outcome
-      .map { result -> if (monitor == null) result else result.withTargetReport(monitor.context, settlement) }
+      .map { result -> if (monitor == null) result else result.withTargetReport(monitor.context, settlement, monitor.ledger.followedHeadShas) }
       .onSuccess(publisher::settle)
       .onFailure(publisher::settleFailure)
       .getOrElse { failure ->
         if (failure.isCooperativeCancellation()) throw failure
-        throw monitor?.let { monitorRunFailure(failure, it.context, settlement) } ?: failure
+        throw monitor?.let { monitorRunFailure(failure, it.context, settlement, it.ledger.followedHeadShas) } ?: failure
       }
   }
 
@@ -441,7 +440,7 @@ public class PhaseRunEntry(
     InMemoryPhaseRunRecords(
       clock,
       branch,
-      standalone?.let { StandaloneMonitorLedger(it.context, it.cleanup) },
+      standalone?.ledger,
       request.recordedGoalQaOutcome?.let { recorded ->
         QaRepairState.resumedAfter(
           workflowId,

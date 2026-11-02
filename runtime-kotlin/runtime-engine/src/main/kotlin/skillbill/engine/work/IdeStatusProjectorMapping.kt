@@ -333,7 +333,9 @@ internal object IdeStatusTitles {
       ?: nameWithTarget(
         displayName(record.phaseId),
         record.issueKey.nonBlank()?.let { "for $it" }
-          ?: record.monitorTarget?.pullRequestKey?.let { "on PR #${it.substringAfterLast('#')}" }
+          ?: record.monitorTarget?.let { target ->
+            target.branchRef?.let { "on branch $it" } ?: "on PR #${target.pullRequestKey.substringAfterLast('#')}"
+          }
           ?: branchTarget(record.branchCorrelation),
       )
 

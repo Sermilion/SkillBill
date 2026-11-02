@@ -1,5 +1,6 @@
 package skillbill.ports.monitor
 
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
@@ -27,4 +28,10 @@ interface MonitorPullRequestSource {
     headRepository: MonitorRepositoryIdentity,
     branch: String,
   ): MonitorPullRequestListing
+
+  /** Reads [ref] of [repository] with its protection, the repository's push permission, and the default branch tip. */
+  fun branch(
+    repository: MonitorRepositoryIdentity,
+    ref: String,
+  ): MonitorBranchLookup
 }

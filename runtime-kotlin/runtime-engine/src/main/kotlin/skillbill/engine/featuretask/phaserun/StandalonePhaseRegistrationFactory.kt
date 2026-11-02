@@ -85,8 +85,8 @@ public class StandalonePhaseRegistrationFactory(
       branchCorrelation = head.ref,
       monitorTarget =
         StandaloneMonitorTarget(
-          pullRequestKey = attempt.target.pullRequest.targetKey,
-          pullRequestUrl = attempt.target.pullRequest.url,
+          pullRequestKey = attempt.target.identity.targetKey,
+          pullRequestUrl = attempt.target.identity.url,
           headRepository = "${head.repository.host}/${head.repository.slug}",
           headRef = head.ref,
           callerRoot = repositories.canonicalPath(attempt.callerRoot).toString(),

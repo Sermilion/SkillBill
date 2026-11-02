@@ -2,11 +2,14 @@ package skillbill.engine.featuretask.phaserun.monitor
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.monitor.MonitorPullRequestSource
+import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
+import skillbill.ports.monitor.model.MonitorPullRequestSummary
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import java.nio.file.Path
 
@@ -25,7 +28,8 @@ public class MonitorTargetResolver(
         when (selector) {
           is MonitorTargetSelector.Url -> resolveUrl(caller.repository, selector.url)
           is MonitorTargetSelector.IssueKey -> resolveIssueKey(caller.repository, selector.key)
-          is MonitorTargetSelector.CurrentBranch -> resolveBranch(caller.repository, selector.branch)
+          is MonitorTargetSelector.CurrentBranch -> resolveCurrentBranch(caller.repository, selector.branch)
+          is MonitorTargetSelector.Branch -> resolveNamedBranch(caller.repository, selector.name)
         }
     }
 
@@ -71,9 +75,48 @@ public class MonitorTargetResolver(
         }
     }
 
+  private fun resolveCurrentBranch(
+    caller: MonitorRepositoryIdentity,
+    branch: String,
+  ): MonitorTargetResolution =
+    resolveBranch(caller, branch) { pullRequests ->
+      if (pullRequests.none { it.headRepository == caller && it.headRef == branch }) {
+        branchTarget(caller, branch, MonitorTargetResolution.NoOpenPullRequest)
+      } else {
+        MonitorTargetResolution.NoOpenPullRequest
+      }
+    }
+
+  private fun resolveNamedBranch(
+    caller: MonitorRepositoryIdentity,
+    branch: String,
+  ): MonitorTargetResolution =
+    resolveBranch(caller, branch) {
+      branchTarget(
+        caller,
+        branch,
+        MonitorTargetResolution.Refused(
+          MonitorTargetRefusal.TARGET_NOT_FOUND,
+          "Branch $branch does not exist on ${caller.host}/${caller.slug}.",
+        ),
+      )
+    }
+
+  private fun branchTarget(
+    caller: MonitorRepositoryIdentity,
+    branch: String,
+    whenMissing: MonitorTargetResolution,
+  ): MonitorTargetResolution =
+    when (val lookup = source.branch(caller, branch)) {
+      MonitorBranchLookup.Missing -> whenMissing
+      is MonitorBranchLookup.Failed -> MonitorTargetResolution.Failed(lookup.reason)
+      is MonitorBranchLookup.Found -> validatedBranchTarget(MonitorBranchIdentity(caller, branch), lookup)
+    }
+
   private fun resolveBranch(
     caller: MonitorRepositoryIdentity,
     branch: String,
+    whenNoneOpen: (List<MonitorPullRequestSummary>) -> MonitorTargetResolution,
   ): MonitorTargetResolution =
     when (val listing = source.pullRequestsForBranch(caller, caller, branch)) {
       is MonitorPullRequestListing.Failed -> MonitorTargetResolution.Failed(listing.reason)
@@ -86,7 +129,7 @@ public class MonitorTargetResolver(
               "Branch $branch has more than one open pull request.",
               selection.candidateUrls,
             )
-          MonitorCandidateSelection.Absent -> MonitorTargetResolution.NoOpenPullRequest
+          MonitorCandidateSelection.Absent -> whenNoneOpen(listing.pullRequests)
         }
     }
 

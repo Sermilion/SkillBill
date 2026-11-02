@@ -36,7 +36,13 @@ import kotlin.time.Clock
 
 data class NewTaskRepository(val root: String, val name: String)
 
-data class NewTaskOffer(val starting: Boolean = false, val prefixKind: NewTaskKind? = null, val choices: List<String> = emptyList(), val problem: String? = null)
+data class NewTaskOffer(
+  val starting: Boolean = false,
+  val prefixKind: NewTaskKind? = null,
+  val choices: List<String> = emptyList(),
+  val problem: String? = null,
+  val started: String? = null,
+)
 
 /** What the operator set up on New task, with its chat. It lives with the window, so navigation and session switches keep it. */
 @Inject
@@ -92,21 +98,22 @@ class NewTaskDraft(
 
   private fun sendTurn(submitted: String, action: ChatSuggestedAction?) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
+    offerState.value = offerState.value.copy(started = null)
     current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
   internal fun start(kind: NewTaskKind, keyChoice: String? = null) {
     val current = chatState.value
     if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
-    if (current == null && kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) return
+    if (kind in RUN_KINDS && (current == null || offerState.value.started != null)) return
     val agent = selectedAgent ?: return
     val root = repository?.root ?: return
     val requirements = current?.let { newTaskRequirements(it.thread.transcript.value) }.orEmpty()
-    val textAtStart = text
+    val title = current?.let { newTaskTitle(it.thread.transcript.value) }
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
-    val startRequest = NewTaskStart(root, requirements, baseBranch.ifBlank { null }, agent.agentId, kind, keyChoice, expectedSessionId)
+    val startRequest = NewTaskStart(root, requirements, baseBranch.ifBlank { null }, agent.agentId, kind, keyChoice, expectedSessionId, title)
     offerState.value = offerState.value.copy(starting = true, problem = null)
     scope.launch {
       try {
@@ -119,9 +126,8 @@ class NewTaskDraft(
               else -> "Started ${outcome.kind.name.lowercase()}"
             }
             toasts.show(ToastMessage(ToastTone.Confirmation, message))
-            if (kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly) && current != null && chatState.value === current) {
-              if (text == textAtStart) text = ""
-              discard()
+            if (kind in RUN_KINDS && ownsChat(current)) {
+              offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null, started = message)
             }
           }
           is NewTaskStartOutcome.NeedsPrefix -> {
@@ -260,6 +266,8 @@ class NewTaskDraft(
   }
 
   private fun clearChatFeedback() {
-    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null)
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null, started = null)
   }
 }
+
+private val RUN_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)

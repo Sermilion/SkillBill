@@ -49,6 +49,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.work.control.model.WorkControlAction
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
@@ -228,7 +229,8 @@ class RuntimeWorkControlRepository(
     repeat(3) { attempt ->
       val preparedResult = callInSession(session, "control_prepare_new_task", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
         Outcome.Success(runtime.workControlService.prepareNewTask(
-          Path.of(request.repoRoot), request.requirements, request.baseBranch, request.keyChoice, launches.keys.value + triedKeys,
+          Path.of(request.repoRoot),
+          NewTaskIntakeRequest(request.requirements, request.title, request.baseBranch, request.keyChoice, launches.keys.value + triedKeys),
         ))
       }
       val prepared = when (preparedResult) {
