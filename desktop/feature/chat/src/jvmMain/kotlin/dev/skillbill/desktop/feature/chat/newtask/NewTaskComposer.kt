@@ -36,6 +36,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
+import dev.skillbill.desktop.feature.chat.ChatActivityPill
 import dev.skillbill.desktop.feature.chat.ChatPill
 import dev.skillbill.desktop.feature.chat.ResumePicker
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
@@ -60,6 +61,8 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
     if (startsTurn) focusManager.clearFocus()
   }
   Column(Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // A draft whose repository is gone refuses every turn, so it has no activity to report and is not "Ready".
+    chat?.takeUnless { it.repositoryMissing }?.let { key(it) { ChatActivityPill(it.thread) } }
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },
