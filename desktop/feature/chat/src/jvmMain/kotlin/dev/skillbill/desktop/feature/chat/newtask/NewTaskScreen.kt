@@ -80,6 +80,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
           mode = ChatPermissionMode.Act,
           modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
           allowStartActions = host.onStart != null,
+          allowSuggestedActions = !offer.starting,
           footer = if (firstTurnEnded) {
             {
               NewTaskOfferCard(
@@ -94,8 +95,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
         ) { _, action ->
           val start = action.start
           if (start == null) {
-            if (action.instruction.isNotBlank() && !chat.thread.busy.value && !chat.repositoryMissing) {
-              onAction(NewTaskAction.RunSuggestedAction(action))
+            if (draft.sendSuggestedAction(action)) {
               focusManager.clearFocus()
             }
           } else {

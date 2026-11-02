@@ -108,7 +108,7 @@ class NewTaskViewModel(
           if (draft.resume(action.entry)) mutableState.update { it.copy(agent = action.entry.agent, resumePickerOpen = false) }
         }
       }
-      is NewTaskAction.RunSuggestedAction -> draft.chat.value?.send(action.action.instruction, action.action)
+      is NewTaskAction.RunSuggestedAction -> draft.sendSuggestedAction(action.action)
     }
   }
 

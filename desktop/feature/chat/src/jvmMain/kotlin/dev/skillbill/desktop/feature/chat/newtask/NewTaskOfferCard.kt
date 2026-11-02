@@ -42,6 +42,7 @@ internal fun NewTaskOfferCard(
   val type = SkillBillTheme.type
   var keyChoice by remember { mutableStateOf("") }
   val prefixKind = offer.prefixKind
+  val canStart = !busy && !offer.starting
   Column(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)
       .border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md))
@@ -52,12 +53,12 @@ internal fun NewTaskOfferCard(
     BasicText("base ${branch.ifBlank { "default branch" }} · $agent", style = type.monoSm.copy(color = colors.fgMuted))
     BasicText("plan › implement › audit › review › validate › qa › pr", style = type.monoSm.copy(color = colors.fgMuted))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      SbButton("Start goal run", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun, null) }, variant = SbButtonVariant.Primary, enabled = !busy && !offer.starting)
-      SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly, null) }, enabled = !busy && !offer.starting)
+      SbButton("Start goal run", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun, null) }, variant = SbButtonVariant.Primary, enabled = canStart)
+      SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly, null) }, enabled = canStart)
     }
     if (offer.choices.isNotEmpty() && prefixKind != null) {
       BasicText("Issue prefix or key", style = type.tXs.copy(color = colors.fgMuted))
-      SbMenu(offer.choices.map { choice -> SbMenuEntry.Item(choice, { onStart(prefixKind, choice) }, mono = true) })
+      SbMenu(offer.choices.map { choice -> SbMenuEntry.Item(choice, { onStart(prefixKind, choice) }, mono = true, enabled = canStart) })
     } else if (prefixKind != null) {
       BasicText("Issue prefix or key", style = type.tXs.copy(color = colors.fgMuted))
       SbInput(
@@ -66,9 +67,10 @@ internal fun NewTaskOfferCard(
         modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
         placeholder = "Issue prefix or key",
         isError = keyChoice.isNotBlank() && !ISSUE_CHOICE.matches(keyChoice.trim()),
-        onSubmit = { if (ISSUE_CHOICE.matches(keyChoice.trim())) onStart(prefixKind, keyChoice.trim()) },
+        enabled = canStart,
+        onSubmit = { if (canStart && ISSUE_CHOICE.matches(keyChoice.trim())) onStart(prefixKind, keyChoice.trim()) },
       )
-      SbButton("Use issue prefix or key", { onStart(prefixKind, keyChoice.trim()) }, size = SbControlSize.Small, enabled = ISSUE_CHOICE.matches(keyChoice.trim()))
+      SbButton("Use issue prefix or key", { onStart(prefixKind, keyChoice.trim()) }, size = SbControlSize.Small, enabled = canStart && ISSUE_CHOICE.matches(keyChoice.trim()))
     }
     offer.problem?.let { Callout(tone = FeedbackTone.Error, body = it) }
   }

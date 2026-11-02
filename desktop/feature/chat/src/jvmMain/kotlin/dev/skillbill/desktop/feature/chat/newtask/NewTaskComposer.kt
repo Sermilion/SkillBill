@@ -51,7 +51,8 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
   val focusManager = LocalFocusManager.current
   val chat by draft.chat.collectAsState()
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
-  val ready = !busy && draft.canSend()
+  val offer by draft.offer.collectAsState()
+  val ready = !busy && !offer.starting && draft.canSend()
   val saved by draft.saved.collectAsState()
   val submit = {
     val startsTurn = ready && draft.text.trim() != RESUME_COMMAND

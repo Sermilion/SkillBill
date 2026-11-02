@@ -64,6 +64,7 @@ internal fun ChatTranscript(
   mode: ChatPermissionMode,
   modifier: Modifier = Modifier,
   allowStartActions: Boolean = true,
+  allowSuggestedActions: Boolean = true,
   footer: (@Composable () -> Unit)? = null,
   onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
 ) {
@@ -94,7 +95,7 @@ internal fun ChatTranscript(
     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
   ) {
     items(messages) { message ->
-      ChatMessageRow(message, agent, !busy && supported && !gone && message === messages.lastOrNull(), mode, allowStartActions, onAction)
+      ChatMessageRow(message, agent, !busy && supported && !gone && allowSuggestedActions && message === messages.lastOrNull(), mode, allowStartActions, onAction)
     }
     if (footer != null) item(key = "chat-footer", contentType = "footer") { footer() }
   }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
@@ -69,32 +70,44 @@ class NewTaskDraft(
   /** The selected repository's saved drafts, newest first, as of the latest [refreshSaved]. */
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
 
-  internal fun canSend(): Boolean {
+  internal fun canSend(): Boolean = canAdmitTurn(text)
+
+  private fun canAdmitTurn(message: String): Boolean {
     val current = chatState.value
-    return !closing && text.isNotBlank() && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
+    return !closing && message.isNotBlank() && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
       current?.thread?.busy?.value != true && current?.repositoryMissing != true && !offerState.value.starting
   }
 
   /** Sends the typed text, opening the chat on the first message, and clears it. It does nothing unless [canSend] holds. */
   internal fun send() {
     if (!canSend()) return
+    sendTurn(text, null)
+  }
+
+  internal fun sendSuggestedAction(action: ChatSuggestedAction): Boolean {
+    if (!canAdmitTurn(action.instruction) || chatState.value == null) return false
+    sendTurn(action.instruction, action)
+    return true
+  }
+
+  private fun sendTurn(submitted: String, action: ChatSuggestedAction?) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
-    val submitted = text
-    current.send(submitted, onAccepted = { if (text == submitted) text = "" })
+    current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
   internal fun start(kind: NewTaskKind, keyChoice: String? = null) {
-    if (offerState.value.starting) return
     val current = chatState.value
+    if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) return
     val agent = selectedAgent ?: return
     val root = repository?.root ?: return
     val requirements = current?.let { newTaskRequirements(it.thread.transcript.value) }.orEmpty()
+    val textAtStart = text
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
     val startRequest = NewTaskStart(root, requirements, baseBranch.ifBlank { null }, agent.agentId, kind, keyChoice, expectedSessionId)
-    offerState.value = NewTaskOffer(starting = true)
+    offerState.value = offerState.value.copy(starting = true, problem = null)
     scope.launch {
       try {
         val outcome = workControls.startNewTask(startRequest)
@@ -107,7 +120,7 @@ class NewTaskDraft(
             }
             toasts.show(ToastMessage(ToastTone.Confirmation, message))
             if (kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly) && current != null && chatState.value === current) {
-              text = ""
+              if (text == textAtStart) text = ""
               discard()
             }
           }
@@ -240,7 +253,7 @@ class NewTaskDraft(
 
   private fun showStartProblem(current: NewTaskChat?, message: String) {
     if (ownsChat(current)) {
-      offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = message)
+      offerState.value = offerState.value.copy(problem = message)
     } else {
       toasts.show(ToastMessage(ToastTone.Problem, message))
     }
