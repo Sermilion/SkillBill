@@ -37,7 +37,7 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("The operator is describing work to start in this repository. When the request does not say what done means or what is out of scope, ask.")
   appendLine(
     "You have the same access as any chat: any shell command, git, gh and file edits. Do not launch skill-bill yourself. " +
-      "Starting a run from this chat is not available yet.",
+      "A start action becomes a button; the app starts the selected run when the operator clicks it.",
   )
   append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
 }
@@ -78,9 +78,11 @@ private const val NEW_TASK_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
-[{"label":"Explore the code","instruction":"Inspect the relevant code and summarize what needs to change.","mode":"read"}]
+[{"label":"Start a goal run","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal"}]
 ```
-Each action has a label of at most 60 characters, an instruction of at most 2000 characters, and a mode of "read" or "act".
-Each action sends its instruction to you as the next turn. Do not include a start field or promise a run button.
+Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
+For an action that should start a run when clicked, set "start" to one of: "goal", "plan", "review", "validation", "qa" or "pr".
+The app turns that action into a button and starts the selected run only after the operator clicks it. Do not launch skill-bill yourself.
+For an action without "start", the app sends its instruction as the next chat turn when clicked.
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.
 """

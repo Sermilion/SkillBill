@@ -15,7 +15,14 @@ class ChatSystemPromptTest {
     assertTrue("/work/app" in prompt)
     assertTrue("Base branch: develop" in prompt)
     assertTrue("skillbill-actions" in prompt)
-    assertTrue("Starting a run from this chat is not available yet" in prompt)
+    assertTrue("\"mode\":\"act\",\"start\":\"goal\"" in prompt)
+    listOf("goal", "plan", "review", "validation", "qa", "pr").forEach {
+      assertTrue("\"$it\"" in prompt)
+    }
+    assertTrue("without \"start\", the app sends its instruction as the next chat turn" in prompt)
+    assertTrue("only after the operator clicks it" in prompt)
+    assertTrue("Do not launch skill-bill yourself" in prompt)
+    assertFalse("Starting a run from this chat is not available yet" in prompt)
     assertFalse("this execution" in prompt)
     assertFalse("Do not edit files" in prompt)
     assertFalse("Base branch" in scopeSystemPrompt(ChatScope.NewTask("/work/app", null)))
