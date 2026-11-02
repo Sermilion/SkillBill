@@ -5,6 +5,7 @@ Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, desktop/c
 - Finding links expand and scroll to their rows. Report and evidence actions use the default application, with evidence paths guarded by invocation directory and parent-segment checks.
 - ActivityFeed, removed by SKILL-455, returns in the design system for QA run events and supports newest-first folding. The design system also adds reduced-motion-aware spinner and pulse primitives. reusable
 - Limits: evidence containment is a string check and does not resolve symlinks. Settled QA runs with result text but no report no longer show the standalone Result section in QA document order.
+- Goal QA warning: the gate reported capability_absent and that repository contents changed after final quality settled, so the tree QA tested is not the final tree.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented across runtime and desktop
 ## [2026-11-01] SKILL-456 subtask inspector review and audit sections

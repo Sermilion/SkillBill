@@ -1,3 +1,9 @@
+## [2026-11-02] SKILL-457 removed flaky FileDiffStreamTest
+Areas: desktop/feature/changes
+- Deleted the wheel-scroll test FileDiffStreamTest because it failed intermittently on Ubuntu and Windows CI and its failures were not tied to changes in the code it covers. No production code changed, and no test in this module covers wheel scrolling now.
+Feature flag: N/A
+Acceptance criteria: N/A, no SKILL-457 criterion covers this removal
+
 ## [2026-11-01] SKILL-455 Changes panel matched to the design
 - Rebuilt the toolbar, strip, scope bar, file list, diff, picker and footer to the values in design/App/Changes Window.html, and painted the surface that was missing, which had left dark-theme text on a light default background.
 - Changes is now a fixed 94% in-app panel (ChangesOverlay, ChangesWindowFrame) instead of an OS window. See decisions.
