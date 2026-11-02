@@ -1,5 +1,7 @@
 package skillbill.engine.work.control.model
 
+import java.util.concurrent.CompletionStage
+
 public sealed interface NewTaskKeyAllocation {
   public data class Allocated(public val key: String) : NewTaskKeyAllocation
 
@@ -30,6 +32,9 @@ public enum class NewTaskRunKind { GOAL, PLAN }
 
 public sealed interface NewTaskStartResult {
   public data object Started : NewTaskStartResult
+
+  /** Started, and [failure] completes when the run exits: with why it failed, or null after a clean exit. */
+  public data class Running(public val failure: CompletionStage<String?>) : NewTaskStartResult
 
   public data object KeyTaken : NewTaskStartResult
 

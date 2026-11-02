@@ -48,7 +48,7 @@ internal class NewTaskScreenHost(
   val now: () -> Instant,
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
-  val onStart: ((String) -> Unit)? = null,
+  val onStart: ((String, String?) -> Unit)? = null,
 )
 
 @Composable
@@ -74,6 +74,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
     } else {
       key(chat) {
         val firstTurnEnded by chat.firstTurnEnded.collectAsState()
+        val transcript by chat.thread.transcript.collectAsState()
         ChatTranscript(
           chat.thread,
           gone = false,
@@ -81,7 +82,8 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
           modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
           allowStartActions = host.onStart != null,
           allowSuggestedActions = !offer.starting,
-          footer = if (firstTurnEnded) {
+          // A pending prefix choice or goal problem keeps the card, because only the card shows them.
+          footer = if (firstTurnEnded && (!goalOfferStandsAside(transcript) || offer.prefixKind != null || offer.problem != null)) {
             {
               NewTaskOfferCard(
                 draft.baseBranch,
@@ -99,7 +101,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
               focusManager.clearFocus()
             }
           } else {
-            host.onStart?.invoke(start.wire)
+            host.onStart?.invoke(start.wire, action.target)
           }
         }
       }

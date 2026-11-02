@@ -20,10 +20,12 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import java.nio.file.Path
+import java.util.concurrent.CompletionStage
 
 @Inject
 public class WorkNewTaskStart(
@@ -151,8 +153,40 @@ public class WorkNewTaskStart(
     repoRoot: Path,
     phaseId: String,
     agentId: String,
+    target: String? = null,
   ): NewTaskStartResult {
     if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
+    return launchStandaloneCommand(repoRoot, "phase", phaseId, target, agentId)
+  }
+
+  public fun startOperation(
+    repoRoot: Path,
+    operationId: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult {
+    if (operationId !in STANDALONE_OPERATIONS) {
+      return NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
+    }
+    if (operationId == "verify" && target.isNullOrBlank()) {
+      return NewTaskStartResult.Refused("Verify needs an intake before it can start.")
+    }
+    return launchStandaloneCommand(repoRoot, "operation", operationId, target, agentId)
+  }
+
+  private fun launchStandaloneCommand(
+    repoRoot: Path,
+    verb: String,
+    id: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult {
+    val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
+    if (launchTarget?.startsWith("-") == true) {
+      return NewTaskStartResult.Refused(
+        "The target '$launchTarget' starts with a dash, so the CLI would parse it as an option.",
+      )
+    }
     if (agentId !in SupportedAgent.supportedIds) {
       return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
     }
@@ -168,6 +202,14 @@ public class WorkNewTaskStart(
       )
     goalStartRefusal(checked)?.let { return NewTaskStartResult.Refused(it) }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val args =
+      buildList {
+        add(verb)
+        add(id)
+        launchTarget?.let(::add)
+        add("--agent")
+        add(agentId)
+      }
     return database.transaction { unit ->
       when (
         val launched =
@@ -175,16 +217,39 @@ public class WorkNewTaskStart(
             WorkRunLaunchRequest(
               repoRoot,
               unit.dbPath,
-              "$identity:$phaseId:standalone",
-              WorkRunLaunchKind.RuntimeCommand(listOf("phase", phaseId, "--agent", agentId)),
+              "$identity:$id:standalone",
+              WorkRunLaunchKind.RuntimeCommand(args),
               emptyMap(),
             ),
           )
       ) {
         is WorkRunLaunchResult.Refused -> NewTaskStartResult.Refused(launched.reason)
-        is WorkRunLaunchResult.Started -> NewTaskStartResult.Started
+        is WorkRunLaunchResult.Started ->
+          launched.exit?.let { NewTaskStartResult.Running(runFailure(it, launched.logPath)) }
+            ?: NewTaskStartResult.Started
       }
     }
+  }
+
+  private fun runFailure(
+    exit: CompletionStage<WorkRunExit>,
+    log: Path,
+  ): CompletionStage<String?> =
+    exit.handle { finished, failure ->
+      if (failure == null && finished.code == 0) {
+        null
+      } else {
+        "${stopReason(finished?.failureLogLines.orEmpty())} Full log: $log"
+      }
+    }
+
+  private fun stopReason(logLines: List<String>): String {
+    val lines =
+      logLines
+        .map(String::trim)
+        .filter { it.isNotEmpty() && !it.startsWith("Picked up ") }
+    return (lines.lastOrNull(STOP_LINE::containsMatchIn) ?: lines.lastOrNull())?.take(MAX_REASON_CHARS)
+      ?: "The run exited without a reason."
   }
 
   private fun readyOrRefused(
@@ -235,7 +300,10 @@ public class WorkNewTaskStart(
   private companion object {
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
     val ASCII_WORD = Regex("[A-Za-z0-9]")
+    val STOP_LINE = Regex("^(?:Phase '[^']+' blocked at |Operation '[^']+' (?:blocked|failed): )")
     const val MAX_INTAKE_BYTES = 30_000
-    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr")
+    const val MAX_REASON_CHARS = 500
+    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", "monitor")
+    val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
   }
 }

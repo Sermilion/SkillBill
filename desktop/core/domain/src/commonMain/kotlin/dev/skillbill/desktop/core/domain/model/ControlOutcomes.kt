@@ -123,7 +123,7 @@ sealed interface PurgeOutcome {
   data class Failed(val problem: ReadProblem) : PurgeOutcome
 }
 
-enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr }
+enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr, Monitor, Verify, PrReviewFix }
 
 data class NewTaskStart(
   val repoRoot: String,
@@ -134,10 +134,28 @@ data class NewTaskStart(
   val keyChoice: String?,
   val expectedDatabaseSessionId: Long?,
   val title: String? = null,
+  val target: String? = null,
 )
 
+fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {
+  NewTaskActionKind.Goal -> NewTaskKind.GoalRun
+  NewTaskActionKind.Plan -> NewTaskKind.PlanOnly
+  NewTaskActionKind.Review -> NewTaskKind.Review
+  NewTaskActionKind.Validation -> NewTaskKind.Validation
+  NewTaskActionKind.Qa -> NewTaskKind.Qa
+  NewTaskActionKind.Pr -> NewTaskKind.Pr
+  NewTaskActionKind.Monitor -> NewTaskKind.Monitor
+  NewTaskActionKind.Verify -> NewTaskKind.Verify
+  NewTaskActionKind.PrReviewFix -> NewTaskKind.PrReviewFix
+}
+
 sealed interface NewTaskStartOutcome {
-  data class Started(val issueKey: String, val kind: NewTaskKind) : NewTaskStartOutcome
+  /** [awaitFailure] suspends until a standalone run exits, and returns why it failed, or null after a clean exit. */
+  data class Started(
+    val issueKey: String,
+    val kind: NewTaskKind,
+    val awaitFailure: (suspend () -> String?)? = null,
+  ) : NewTaskStartOutcome
 
   data class NeedsPrefix(val choices: List<String>) : NewTaskStartOutcome
 

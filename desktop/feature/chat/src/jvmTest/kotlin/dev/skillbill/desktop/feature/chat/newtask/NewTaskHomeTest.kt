@@ -129,7 +129,7 @@ class NewTaskHomeTest {
 
   @Test
   fun `chips stay disabled until a repository and an agent are selected`() = runComposeUiTest {
-    val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = {})
+    val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = { _, _ -> })
     val state = NewTaskUiState(home = newTaskHome(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(workItem("SKILL-1"))))))
     val draft = testNewTaskDraft()
     setContent {
@@ -149,7 +149,7 @@ class NewTaskHomeTest {
   fun `a chip press reports its start kind`() = runComposeUiTest {
     val started = mutableListOf<String>()
     setContent {
-      SkillBillTheme(reducedMotion = true) { NewTaskChips({ started += it }) }
+      SkillBillTheme(reducedMotion = true) { NewTaskChips({ kind, _ -> started += kind }) }
     }
 
     listOf("Review my branch", "Run the checks", "QA my branch", "Open a PR").forEach { onNodeWithText(it).performClick() }

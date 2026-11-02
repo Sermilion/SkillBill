@@ -5,6 +5,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.system.HostAgentHomesPort
+import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -15,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DetachedWorkRunLauncherTest {
@@ -40,6 +42,31 @@ class DetachedWorkRunLauncherTest {
     val refused = assertIs<WorkRunLaunchResult.Refused>(launcher(home).start(request))
     assertTrue(refused.reason.contains("skill-bill runtime is not installed"), refused.reason)
     assertFalse(Files.exists(home.resolve("harness-was-started")))
+  }
+
+  @Test
+  fun `a runner that fails after startup hands back its log lines despite undecodable output`() {
+    val home = Files.createTempDirectory("failed-run-log")
+    executable(home, FAIL_WHEN_RELEASED, "skill-bill")
+    val started =
+      assertIs<WorkRunLaunchResult.Started>(launcherWithoutStartupGrace(home).start(runtimeRequest(home)))
+    Files.createFile(home.resolve("release"))
+    val finished = assertNotNull(started.exit).toCompletableFuture().get()
+    assertEquals(3, finished.code)
+    assertTrue(
+      "Phase 'monitor' blocked at 'monitor': no origin." in finished.failureLogLines,
+      "${finished.failureLogLines}",
+    )
+  }
+
+  @Test
+  fun `a runner that exits cleanly hands back no log lines`() {
+    val home = Files.createTempDirectory("clean-run-log")
+    executable(home, "#!/bin/sh\necho noise\nuntil [ -e release ]; do :; done", "skill-bill")
+    val started =
+      assertIs<WorkRunLaunchResult.Started>(launcherWithoutStartupGrace(home).start(runtimeRequest(home)))
+    Files.createFile(home.resolve("release"))
+    assertEquals(WorkRunExit(0, emptyList()), assertNotNull(started.exit).toCompletableFuture().get())
   }
 
   @Test
@@ -129,10 +156,22 @@ class DetachedWorkRunLauncherTest {
     agentHomes,
   )
 
+  private fun launcherWithoutStartupGrace(home: Path) =
+    DetachedWorkRunLauncher(
+      EnvironmentContext(environment = TRAY_ENVIRONMENT, userHome = home),
+      NoopRuntimeDiagnostics,
+      Duration.ZERO,
+      FixedProjectStorePort(home.resolve("project-store")),
+      HostAgentHomesPort { emptyMap() },
+    )
+
   private companion object {
     val TRAY_ENVIRONMENT = mapOf("PATH" to "/usr/bin:/bin")
     val RECORD_TIMEOUT: Duration = Duration.ofSeconds(10)
     const val POLL_MILLIS = 20L
+    const val FAIL_WHEN_RELEASED =
+      "#!/bin/sh\nprintf '\\377\\n'\necho \"Phase 'monitor' blocked at 'monitor': no origin.\"\n" +
+        "until [ -e release ]; do :; done\nexit 3"
     const val RECORD_AGENT_HOME =
       "#!/bin/sh\nprintf '%s' \"\$CLAUDE_CONFIG_DIR\" > agent-home.tmp && mv agent-home.tmp agent-home"
   }

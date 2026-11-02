@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -52,6 +53,44 @@ class LaunchReservationsTest {
     val target = StandaloneRelaunch(source, setOf(source.id))
 
     assertEquals(null, target.successor(listOf(source.copy(id = "new-a"), source.copy(id = "new-b"))))
+  }
+
+  @Test
+  fun `a run that exits before showing on the board releases its reservation`() = runTest {
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(reserve(launches)).handle
+    val exit = CompletableFuture<String?>()
+    launches.releaseOnExit(handle, exit)
+    launches.settle(handle, succeeded = true)
+    assertEquals(setOf(KEY), launches.keys.value)
+
+    exit.complete("blocked")
+
+    assertEquals(emptySet(), launches.keys.value)
+    assertIs<ReservationAdmission.Reserved>(reserve(launches))
+  }
+
+  @Test
+  fun `a run that exits before settling stays released`() = runTest {
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(reserve(launches)).handle
+    launches.releaseOnExit(handle, CompletableFuture.completedFuture("blocked"))
+    launches.settle(handle, succeeded = true)
+    assertEquals(emptySet(), launches.keys.value)
+  }
+
+  @Test
+  fun `an old run's exit leaves a newer reservation alone`() = runTest {
+    val launches = reservations()
+    val old = assertIs<ReservationAdmission.Reserved>(reserve(launches)).handle
+    val exit = CompletableFuture<String?>()
+    launches.releaseOnExit(old, exit)
+    launches.release(old)
+    assertIs<ReservationAdmission.Reserved>(reserve(launches))
+
+    exit.complete(null)
+
+    assertEquals(setOf(KEY), launches.keys.value)
   }
 
   @Test

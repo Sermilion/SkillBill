@@ -99,7 +99,15 @@ public class WorkControlService(
     repoRoot: Path,
     phaseId: String,
     agentId: String,
-  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId)
+    target: String? = null,
+  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId, target)
+
+  public fun startOperation(
+    repoRoot: Path,
+    operationId: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult = newTaskStart.startOperation(repoRoot, operationId, target, agentId)
 
   public fun recoveryPreview(
     target: WorkRunTarget,

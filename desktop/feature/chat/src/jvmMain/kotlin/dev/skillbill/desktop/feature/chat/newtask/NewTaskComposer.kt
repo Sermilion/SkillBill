@@ -83,7 +83,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },
         modifier = Modifier.fillMaxWidth().focusRequester(focus).gatesShortcutsWhileFocused(),
-        placeholder = if (chat != null) "Reply, or press Start goal run" else "Describe the work, or paste an issue key or spec path",
+        placeholder = if (chat != null) "Reply to the agent" else "Describe the work, or paste an issue key or spec path",
         multiline = true,
         onSubmit = { if (ready) submit() },
       )
