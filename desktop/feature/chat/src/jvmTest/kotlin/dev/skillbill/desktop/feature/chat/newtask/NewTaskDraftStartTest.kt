@@ -186,4 +186,31 @@ class NewTaskDraftStartTest {
     assertEquals("Start another task", draft.text)
   }
 
+  @Test
+  fun `start without open chat records monitor and verify kind and target`() = runTest {
+    val chats = FakeExecutionChatRepository()
+    val controls = FakeWorkControlRepository()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+    }
+    draft.start(NewTaskKind.Monitor, target = "https://github.com/org/repo/pull/1")
+    runCurrent()
+    with(controls.newTaskRequests.single()) {
+      assertEquals(NewTaskKind.Monitor, kind)
+      assertEquals("https://github.com/org/repo/pull/1", target)
+    }
+
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("verify", NewTaskKind.Verify)
+    draft.start(NewTaskKind.Verify, target = "check the review on this branch")
+    runCurrent()
+    with(controls.newTaskRequests.last()) {
+      assertEquals(NewTaskKind.Verify, kind)
+      assertEquals("check the review on this branch", target)
+    }
+  }
+
 }

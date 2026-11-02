@@ -142,8 +142,34 @@ public class WorkNewTaskStart(
     repoRoot: Path,
     phaseId: String,
     agentId: String,
+    target: String? = null,
   ): NewTaskStartResult {
     if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
+    return launchStandaloneCommand(repoRoot, "phase", phaseId, target, agentId)
+  }
+
+  public fun startOperation(
+    repoRoot: Path,
+    operationId: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult {
+    if (operationId !in STANDALONE_OPERATIONS) {
+      return NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
+    }
+    if (operationId == "verify" && target.isNullOrBlank()) {
+      return NewTaskStartResult.Refused("Verify needs an intake before it can start.")
+    }
+    return launchStandaloneCommand(repoRoot, "operation", operationId, target, agentId)
+  }
+
+  private fun launchStandaloneCommand(
+    repoRoot: Path,
+    verb: String,
+    id: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult {
     if (agentId !in SupportedAgent.supportedIds) {
       return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
     }
@@ -159,6 +185,14 @@ public class WorkNewTaskStart(
       )
     goalStartRefusal(checked)?.let { return NewTaskStartResult.Refused(it) }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val args =
+      buildList {
+        add(verb)
+        add(id)
+        target?.trim()?.takeIf(String::isNotBlank)?.let(::add)
+        add("--agent")
+        add(agentId)
+      }
     return database.transaction { unit ->
       when (
         val launched =
@@ -166,8 +200,8 @@ public class WorkNewTaskStart(
             WorkRunLaunchRequest(
               repoRoot,
               unit.dbPath,
-              "$identity:$phaseId:standalone",
-              WorkRunLaunchKind.RuntimeCommand(listOf("phase", phaseId, "--agent", agentId)),
+              "$identity:$id:standalone",
+              WorkRunLaunchKind.RuntimeCommand(args),
               emptyMap(),
             ),
           )
@@ -210,6 +244,7 @@ public class WorkNewTaskStart(
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
     val ASCII_WORD = Regex("[A-Za-z0-9]")
     const val MAX_INTAKE_BYTES = 30_000
-    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr")
+    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", "monitor")
+    val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
   }
 }

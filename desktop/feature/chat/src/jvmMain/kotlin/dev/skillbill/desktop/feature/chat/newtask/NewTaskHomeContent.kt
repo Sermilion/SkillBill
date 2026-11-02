@@ -156,9 +156,9 @@ private fun ReadinessRow(line: ReadinessLine) {
 /** Pressing a chip reports its start kind and leaves the input text alone. A null [onStart] renders every chip disabled. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun NewTaskChips(onStart: ((String) -> Unit)?, modifier: Modifier = Modifier) {
+internal fun NewTaskChips(onStart: ((String, String?) -> Unit)?, modifier: Modifier = Modifier) {
   FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    START_CHIPS.forEach { (label, kind) -> StartChip(label, enabled = onStart != null) { onStart?.invoke(kind) } }
+    START_CHIPS.forEach { (label, kind) -> StartChip(label, enabled = onStart != null) { onStart?.invoke(kind, null) } }
   }
 }
 

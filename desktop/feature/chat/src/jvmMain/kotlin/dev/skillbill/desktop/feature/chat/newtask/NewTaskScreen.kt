@@ -48,7 +48,7 @@ internal class NewTaskScreenHost(
   val now: () -> Instant,
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
-  val onStart: ((String) -> Unit)? = null,
+  val onStart: ((String, String?) -> Unit)? = null,
 )
 
 @Composable
@@ -99,7 +99,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
               focusManager.clearFocus()
             }
           } else {
-            host.onStart?.invoke(start.wire)
+            host.onStart?.invoke(start.wire, action.target)
           }
         }
       }

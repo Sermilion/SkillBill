@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
-import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
@@ -33,17 +33,8 @@ class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, p
       now = viewModel::now,
       onOpenRun = { navigator.navigate(DetailRoute(it)) },
       onShowAllWork = { navigator.navigate(WorkRoute(null)) },
-      onStart = { wire ->
-        val kind = when (NewTaskActionKind.entries.firstOrNull { it.wire == wire }) {
-          NewTaskActionKind.Goal -> NewTaskKind.GoalRun
-          NewTaskActionKind.Plan -> NewTaskKind.PlanOnly
-          NewTaskActionKind.Review -> NewTaskKind.Review
-          NewTaskActionKind.Validation -> NewTaskKind.Validation
-          NewTaskActionKind.Qa -> NewTaskKind.Qa
-          NewTaskActionKind.Pr -> NewTaskKind.Pr
-          NewTaskActionKind.Monitor, NewTaskActionKind.Verify, NewTaskActionKind.PrReviewFix, null -> null
-        }
-        kind?.let { viewModel.draft.start(it) }
+      onStart = { wire, target ->
+        NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { viewModel.draft.start(it, target = target) }
       },
     )
     NewTaskScreen(state, viewModel.draft, host, viewModel::onAction)

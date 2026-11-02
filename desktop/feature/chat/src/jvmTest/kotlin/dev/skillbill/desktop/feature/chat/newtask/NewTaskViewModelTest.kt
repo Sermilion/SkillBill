@@ -69,7 +69,7 @@ class NewTaskViewModelTest {
       agentId = "claude"
       text = "add export"
     }
-    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), draft)
+    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), draft)
     val first = viewModel(FakeWorkBoardRepository(loadedBoard()), draft)
     advanceUntilIdle()
     first.onAction(NewTaskAction.Send)

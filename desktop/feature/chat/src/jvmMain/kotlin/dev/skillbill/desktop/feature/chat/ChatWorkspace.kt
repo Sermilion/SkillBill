@@ -10,10 +10,18 @@ import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.NewTaskStart
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.di.WindowScope
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -72,6 +80,7 @@ class ChatWorkspace(
   private val chat: ExecutionChatRepository,
   private val details: WorkDetailRepository,
   private val controls: WorkControlRepository,
+  private val databaseSession: DatabaseSessionController,
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
   private val panes: ShellPanes,
@@ -225,9 +234,49 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (session.transcript.value.lastOrNull() !== reply) return
     if (reply.streaming || action !in reply.actions || !session.agentSupportedState.value || session.agentState.value == null) return
+    val start = action.start
+    if (start != null) {
+      executeStartAction(session, action, start)
+      return
+    }
     when (action.mode) {
       ChatPermissionMode.ReadOnly -> send(id, action.instruction, action)
       ChatPermissionMode.Act -> pauseAndAct(id, action.instruction, action)
+    }
+  }
+
+  private fun executeStartAction(session: ChatSession, action: ChatSuggestedAction, start: NewTaskActionKind) {
+    if (modeFor(session.item) == ChatPermissionMode.ReadOnly) {
+      val name = session.item.issueKey ?: session.item.id
+      session.append(ChatMessage.Notice("Start for $name waits until this execution is not running."))
+      return
+    }
+    val open = databaseSession.state.value as? DatabaseSessionState.Open
+    if (open == null) {
+      session.append(ChatMessage.Notice("The database session is not open."))
+      return
+    }
+    val agentId = session.agentState.value?.agentId ?: return
+    val kind = start.toNewTaskKind()
+    scope.launch {
+      val outcome = controls.startNewTask(
+        NewTaskStart(
+          repoRoot = session.item.repositoryRoot,
+          requirements = if (kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) action.instruction else "",
+          baseBranch = null,
+          agentId = agentId,
+          kind = kind,
+          keyChoice = null,
+          expectedDatabaseSessionId = open.sessionId,
+          target = action.target,
+        ),
+      )
+      when (outcome) {
+        is NewTaskStartOutcome.Started -> session.append(ChatMessage.Notice("Started ${start.wire}."))
+        is NewTaskStartOutcome.Refused -> session.append(ChatMessage.Notice(outcome.message))
+        is NewTaskStartOutcome.Failed -> session.append(ChatMessage.Error(null, readProblemText(outcome.problem)))
+        is NewTaskStartOutcome.NeedsPrefix -> session.append(ChatMessage.Notice("Choose an issue prefix to start this run."))
+      }
     }
   }
 

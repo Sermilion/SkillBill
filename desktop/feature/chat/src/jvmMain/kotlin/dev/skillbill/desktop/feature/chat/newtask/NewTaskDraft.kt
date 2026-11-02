@@ -95,7 +95,7 @@ class NewTaskDraft(
     current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
-  internal fun start(kind: NewTaskKind, keyChoice: String? = null) {
+  internal fun start(kind: NewTaskKind, keyChoice: String? = null, target: String? = null) {
     val current = chatState.value
     if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) return
@@ -106,7 +106,7 @@ class NewTaskDraft(
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
-    val startRequest = NewTaskStart(root, requirements, baseBranch.ifBlank { null }, agent.agentId, kind, keyChoice, expectedSessionId)
+    val startRequest = NewTaskStart(root, requirements, baseBranch.ifBlank { null }, agent.agentId, kind, keyChoice, expectedSessionId, target)
     offerState.value = offerState.value.copy(starting = true, problem = null)
     scope.launch {
       try {
