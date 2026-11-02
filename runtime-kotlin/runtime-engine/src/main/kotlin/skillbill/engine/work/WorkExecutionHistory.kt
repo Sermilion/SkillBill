@@ -7,6 +7,8 @@ import skillbill.engine.featuretask.qa.report.QaReportParser
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
@@ -53,10 +55,18 @@ private fun StandaloneMonitorCleanup.describe(): String =
 internal fun latestPhaseExecutions(records: List<StandalonePhaseStatusRecord>): List<StandalonePhaseStatusRecord> =
   records.groupBy(::phaseGroupIdentity).values.map { instances ->
     instances.maxWith(
-      compareBy<StandalonePhaseStatusRecord> { it.runSequence.length }
-        .thenBy { it.runSequence }.thenBy { it.invocationId },
+      compareBy<StandalonePhaseStatusRecord> { if (it.displayedLive()) 1 else 0 }
+        .thenBy { it.runSequence.length }
+        .thenBy { it.runSequence }
+        .thenBy { it.invocationId },
     )
   }
+
+private fun StandalonePhaseStatusRecord.displayedLive(): Boolean =
+  IdeStatusPolicy.standaloneLifecycle(lifecycleState) in LIVE_DISPLAYED_STANDALONE
+
+private val LIVE_DISPLAYED_STANDALONE =
+  setOf(IdeStatusLifecycleState.ACTIVE, IdeStatusLifecycleState.PAUSED)
 
 internal fun supersededPhase(
   record: StandalonePhaseStatusRecord?,
@@ -64,19 +74,23 @@ internal fun supersededPhase(
   observedAt: Instant,
 ): Boolean {
   if (record == null) return false
-  val latest =
-    unit.standalonePhaseStatuses.readPhaseExecutions(
-      StandalonePhaseExecutionQuery(
-        record.repositoryIdentity,
-        record.phaseId,
-        phaseGroupIdentity(record).third,
-        observedAt,
-        0,
-        1,
+  val displayed =
+    latestPhaseExecutions(
+      unit.standalonePhaseStatuses.readPhaseExecutions(
+        StandalonePhaseExecutionQuery(
+          record.repositoryIdentity,
+          record.phaseId,
+          phaseGroupIdentity(record).third,
+          observedAt,
+          0,
+          DISPLAYED_PHASE_SCAN,
+        ),
       ),
-    ).firstOrNull()
-  return latest != null && latest.invocationId != record.invocationId
+    ).singleOrNull()
+  return displayed != null && displayed.invocationId != record.invocationId
 }
+
+private const val DISPLAYED_PHASE_SCAN = 100
 
 internal fun workExecutionHistory(
   unitOfWork: UnitOfWork,

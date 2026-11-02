@@ -32,6 +32,7 @@ import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -257,10 +258,20 @@ internal class StandalonePhaseStatusStore(
 
   override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? =
     connection.prepareStatement(
-      "SELECT * FROM standalone_phase_status WHERE workflow_id = ? " +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC LIMIT 1",
+      """
+      SELECT * FROM standalone_phase_status WHERE workflow_id = ?
+      ORDER BY CASE WHEN lifecycle_state IN (?, ?) THEN 0 ELSE 1 END,
+        length(run_sequence) DESC, run_sequence DESC
+      LIMIT 1
+      """.trimIndent(),
     ).use { statement ->
-      statement.setString(1, workflowId)
+      statement.bindAll(
+        listOf(
+          workflowId,
+          IdeStatusLifecycleState.ACTIVE.wireValue,
+          IdeStatusLifecycleState.PAUSED.wireValue,
+        ),
+      )
       statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
     }
 
