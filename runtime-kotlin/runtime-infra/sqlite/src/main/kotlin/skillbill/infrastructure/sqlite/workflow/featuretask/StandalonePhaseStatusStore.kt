@@ -5,6 +5,7 @@ import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_CLEANUP_ASSIGNMENTS
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_PR_KEY_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_COLUMN_LIST
@@ -257,10 +258,20 @@ internal class StandalonePhaseStatusStore(
 
   override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? =
     connection.prepareStatement(
-      "SELECT * FROM standalone_phase_status WHERE workflow_id = ? " +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC LIMIT 1",
+      """
+      SELECT * FROM standalone_phase_status WHERE workflow_id = ?
+      ORDER BY CASE WHEN lifecycle_state IN (?, ?) THEN 0 ELSE 1 END,
+        length(run_sequence) DESC, run_sequence DESC
+      LIMIT 1
+      """.trimIndent(),
     ).use { statement ->
-      statement.setString(1, workflowId)
+      statement.bindAll(
+        listOf(
+          workflowId,
+          IdeStatusLifecycleState.ACTIVE.wireValue,
+          IdeStatusLifecycleState.PAUSED.wireValue,
+        ),
+      )
       statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
     }
 
@@ -602,16 +613,31 @@ internal class StandalonePhaseStatusStore(
     request: StandalonePhaseStatusUpdate,
     operatorCancellation: Boolean,
   ): Boolean {
-    if (operatorCancellation && current.lifecycleState !in setOf("terminal", "completed", "success", "canceled")) {
+    if (operatorCancellation && current.lifecycleState !in
+      setOf(
+        IdeStatusLifecycleState.TERMINAL.wireValue,
+        "completed",
+        "success",
+        IdeStatusLifecycleState.CANCELED.wireValue,
+      )
+    ) {
       return true
     }
-    if (current.lifecycleState == "paused" && current.currentStep == "runner_interrupted" &&
-      request.lifecycleState !in setOf("paused", "failed")
+    if (current.lifecycleState == IdeStatusLifecycleState.PAUSED.wireValue &&
+      current.currentStep == "runner_interrupted" &&
+      request.lifecycleState !in
+      setOf(
+        IdeStatusLifecycleState.PAUSED.wireValue,
+        IdeStatusLifecycleState.FAILED.wireValue,
+      )
     ) {
       return false
     }
     if (current.lifecycleState !in TERMINAL_STATES) {
-      return !(current.lifecycleState == "paused" && request.lifecycleState == "terminal")
+      return !(
+        current.lifecycleState == IdeStatusLifecycleState.PAUSED.wireValue &&
+          request.lifecycleState == IdeStatusLifecycleState.TERMINAL.wireValue
+      )
     }
     return current.lifecycleState == request.lifecycleState && current.terminalResult == request.terminalResult
   }
@@ -812,8 +838,19 @@ internal class StandalonePhaseStatusStore(
     const val MONITOR_PHASE_ID = "monitor"
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
     const val RELEASED_OWNER_ACTIVITY = "Owner stopped; released for block incident recovery."
-    val LIVE_STATES = setOf("active", "paused", "blocked")
-    val TERMINAL_STATES = setOf("terminal", "failed", "blocked", "canceled")
+    val LIVE_STATES =
+      setOf(
+        IdeStatusLifecycleState.ACTIVE.wireValue,
+        IdeStatusLifecycleState.PAUSED.wireValue,
+        IdeStatusLifecycleState.BLOCKED.wireValue,
+      )
+    val TERMINAL_STATES =
+      setOf(
+        IdeStatusLifecycleState.TERMINAL.wireValue,
+        IdeStatusLifecycleState.FAILED.wireValue,
+        IdeStatusLifecycleState.BLOCKED.wireValue,
+        IdeStatusLifecycleState.CANCELED.wireValue,
+      )
     const val AFTER_ANCHOR_SQL: String =
       "(length(run_sequence) < ? OR (length(run_sequence) = ? AND run_sequence < ?) " +
         "OR (length(run_sequence) = ? AND run_sequence = ? AND invocation_id < ?))"
