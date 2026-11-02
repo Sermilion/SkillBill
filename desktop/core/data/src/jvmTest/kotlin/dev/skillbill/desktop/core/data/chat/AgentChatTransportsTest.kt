@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.asFlow
@@ -92,6 +93,55 @@ class AgentChatTransportsTest {
     transport.run(chatRequest(agent = ChatAgent("cursor", null, null), firstTurn = false)).toList()
 
     assertEquals(listOf("--resume", "c-1"), launcher.commands[1].argv.takeLast(2))
+    assertEquals("operator prompt", launcher.commands[1].stdin)
+  }
+
+  @Test
+  fun `resumed codex new-task turns receive current start-action guidance`() = runTest {
+    val launcher = ScriptedLauncher(
+      listOf(
+        lines(
+          """{"type":"thread.started","thread_id":"new-task-thread"}""",
+          """{"type":"turn.completed"}""",
+        ),
+        lines("""{"type":"turn.completed"}"""),
+      ),
+    )
+    val transport = CodexChatTransport(host, launcher, store, RecordingDiagnostics())
+    val request = chatRequest(agent = ChatAgent("codex", null, null)).copy(
+      scope = ChatScope.NewTask("/work/app", "main"),
+    )
+
+    transport.run(request).toList()
+    transport.run(request.copy(firstTurn = false)).toList()
+
+    assertTrue("\"review\"" in launcher.commands[0].stdin)
+    assertTrue("\"review\"" in launcher.commands[1].stdin)
+    assertTrue(launcher.commands[1].stdin.endsWith("operator prompt"))
+  }
+
+  @Test
+  fun `resumed cursor new-task turns receive current start-action guidance`() = runTest {
+    val launcher = ScriptedLauncher(
+      listOf(
+        lines(
+          """{"type":"system","session_id":"new-task-chat"}""",
+          """{"type":"result","subtype":"success","is_error":false}""",
+        ),
+        lines("""{"type":"result","subtype":"success","is_error":false}"""),
+      ),
+    )
+    val transport = CursorChatTransport(host, launcher, store, RecordingDiagnostics())
+    val request = chatRequest(agent = ChatAgent("cursor", null, null)).copy(
+      scope = ChatScope.NewTask("/work/app", "main"),
+    )
+
+    transport.run(request).toList()
+    transport.run(request.copy(firstTurn = false)).toList()
+
+    assertTrue("\"review\"" in launcher.commands[0].stdin)
+    assertTrue("\"review\"" in launcher.commands[1].stdin)
+    assertTrue(launcher.commands[1].stdin.endsWith("operator prompt"))
   }
 
   // Junie text output has no session id, so the earlier exchange must travel in the next prompt, even after a restart.

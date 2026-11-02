@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import kotlinx.coroutines.flow.Flow
@@ -31,7 +32,11 @@ class CodexChatTransport(
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
     val thread = if (request.firstTurn) null else store.agentSession(request.sessionId)
     if (!request.firstTurn && thread == null) diagnostics.record("chat.codex_thread_missing")
-    val prompt = if (thread == null) withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt) else request.prompt
+    val prompt = if (thread == null || request.scope is ChatScope.NewTask) {
+      withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt)
+    } else {
+      request.prompt
+    }
     val command = ChatCommand(
       argv = agentCommand("codex", codexArguments(request, thread), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
