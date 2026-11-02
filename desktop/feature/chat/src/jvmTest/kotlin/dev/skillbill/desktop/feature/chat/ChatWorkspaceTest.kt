@@ -801,7 +801,7 @@ class ChatWorkspaceTest {
       "Run monitor.",
       ChatPermissionMode.Act,
       NewTaskActionKind.Monitor,
-      "https://github.com/org/repo/pull/2",
+      target = "https://github.com/org/repo/pull/2",
     )
     chat.events = {
       flowOf(ChatEvent.TextDelta("Ready."), ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed)

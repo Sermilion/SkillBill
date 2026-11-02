@@ -41,7 +41,7 @@ internal fun NewTaskOfferCard(
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val prefixKind = offer.prefixKind
-  val canStart = !busy && !offer.starting
+  val canStart = !busy && !offer.starting && offer.started == null
   Column(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)
       .border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md))
@@ -56,6 +56,7 @@ internal fun NewTaskOfferCard(
       SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly, null) }, enabled = canStart)
     }
     if (prefixKind != null) IssuePrefixPicker(offer.choices, canStart) { onStart(prefixKind, it) }
+    offer.started?.let { Callout(tone = FeedbackTone.Success, body = "$it. Send another message to start again.") }
     offer.problem?.let { Callout(tone = FeedbackTone.Error, body = it) }
   }
 }

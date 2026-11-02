@@ -73,7 +73,13 @@ class ChatStoreTest {
     val diagnostics = RecordingDiagnostics()
     val store = ChatStore(host, diagnostics, Clock.System)
     val actions = NewTaskActionKind.entries.mapIndexed { index, kind ->
-      ChatSuggestedAction("Start ${kind.wire}", "Run ${kind.wire}", if (index % 2 == 0) ChatPermissionMode.ReadOnly else ChatPermissionMode.Act, kind)
+      ChatSuggestedAction(
+        "Start ${kind.wire}",
+        "Run ${kind.wire}",
+        if (index % 2 == 0) ChatPermissionMode.ReadOnly else ChatPermissionMode.Act,
+        kind,
+        title = "Add dark mode setting".takeIf { kind == NewTaskActionKind.Goal },
+      )
     }
     val selected = ChatSuggestedAction("Inspect", "Check the plan", ChatPermissionMode.Act)
     val saved = entry("actions", 9).copy(lines = listOf(
@@ -98,7 +104,7 @@ class ChatStoreTest {
       "Watch the PR.",
       ChatPermissionMode.ReadOnly,
       NewTaskActionKind.Monitor,
-      "https://github.com/org/repo/pull/9",
+      target = "https://github.com/org/repo/pull/9",
     )
     val saved = entry("target", 11).copy(
       lines = listOf(

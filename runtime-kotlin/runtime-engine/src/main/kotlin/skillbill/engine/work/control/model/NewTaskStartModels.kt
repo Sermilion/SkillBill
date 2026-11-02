@@ -8,6 +8,14 @@ public sealed interface NewTaskKeyAllocation {
   public data class NeedsPrefix(public val choices: List<String>) : NewTaskKeyAllocation
 }
 
+public data class NewTaskIntakeRequest(
+  public val requirements: String,
+  public val title: String?,
+  public val baseBranch: String?,
+  public val keyChoice: String?,
+  public val occupiedKeys: Set<String>,
+)
+
 public sealed interface NewTaskPreparation {
   public data class Ready(
     public val key: String,

@@ -66,6 +66,7 @@ private object ChatStoreKeys {
   const val INSTRUCTION = "instruction"
   const val MODE = "mode"
   const val START = "start"
+  const val TITLE = "title"
   const val TARGET = "target"
 }
 
@@ -303,6 +304,7 @@ private fun ChatSuggestedAction.toJson(): JsonObject = buildJsonObject {
   put(ChatStoreKeys.INSTRUCTION, instruction)
   put(ChatStoreKeys.MODE, mode.name)
   start?.let { put(ChatStoreKeys.START, it.wire) }
+  title?.let { put(ChatStoreKeys.TITLE, it) }
   target?.takeIf { it.isNotBlank() }?.let { put(ChatStoreKeys.TARGET, it) }
 }
 
@@ -340,8 +342,10 @@ private fun JsonObject.toAction(diagnostics: Diagnostics): ChatSuggestedAction? 
     diagnostics.record("chat.store_malformed_action")
     return null
   }
+  val title = string(ChatStoreKeys.TITLE)
+  if (ChatStoreKeys.TITLE in this && title == null) diagnostics.record("chat.store_malformed_action")
   val target = string(ChatStoreKeys.TARGET)?.trim()?.takeIf { it.isNotBlank() }
-  return ChatSuggestedAction(label, instruction, mode, start, target)
+  return ChatSuggestedAction(label, instruction, mode, start, title, target)
 }
 
 private fun JsonObject.objects(key: String): List<JsonObject> = (get(key) as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }

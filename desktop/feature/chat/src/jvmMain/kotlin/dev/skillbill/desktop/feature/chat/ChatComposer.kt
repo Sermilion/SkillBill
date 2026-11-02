@@ -20,6 +20,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -29,6 +31,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
+import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChatAgent
@@ -115,18 +118,20 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
 
 /** The agent chip; clicking it lists the agents the chat can switch to. */
 @Composable
-internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
+internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, disabledWhy: String? = null, onChoose: (String) -> Unit) {
   var open by remember { mutableStateOf(false) }
   val close = { open = false }
+  val canOpen = enabled && agents.isNotEmpty()
+  val why = disabledWhy.takeIf { !canOpen }
   Box {
-    ChatPill(
-      chipText(agent),
-      mono = true,
-      icon = LucideIcons.cpu,
-      maxWidth = 220.dp,
-      modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(enabled = enabled && agents.isNotEmpty(), onClickLabel = "Change agent") { open = true },
-    )
-    if (open) {
+    val chipModifier = Modifier.then(if (canOpen) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+      .clickable(enabled = canOpen, onClickLabel = "Change agent") { open = true }
+      .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
+    val chip = @Composable {
+      ChatPill(chipText(agent), mono = true, icon = LucideIcons.cpu, maxWidth = 220.dp, modifier = chipModifier)
+    }
+    if (why != null) SbTooltip(why) { chip() } else chip()
+    if (open && canOpen) {
       ShellLayer(close)
       SbPopover(expanded = true, onDismissRequest = close) {
         SbMenu(

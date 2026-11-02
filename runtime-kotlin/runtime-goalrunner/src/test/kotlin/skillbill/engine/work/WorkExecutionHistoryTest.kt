@@ -5,8 +5,10 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
+import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandaloneMonitorTarget
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.persistence.UnitOfWork
@@ -76,6 +78,34 @@ class WorkExecutionHistoryTest {
     assertEquals("Phase output reported status 'blocked'. $reason", resolveExecutionReasonTextForTest(record, unit))
     assertEquals(stored, record.terminalResult)
     assertEquals(0, database.writeCalls)
+  }
+
+  @Test
+  fun `a later blocked plan launch does not hide an active execution for the same issue`() {
+    val running = planRecord("5", "active")
+    val refused = planRecord("6", "blocked")
+
+    val latest = latestPhaseExecutionsForTest(listOf(running, refused))
+
+    assertEquals(listOf("invocation-plan-5"), latest.map { it.invocationId })
+  }
+
+  @Test
+  fun `a later blocked plan launch does not supersede an active execution for the same issue`() {
+    val running = planRecord("5", "active")
+    val refused = planRecord("6", "blocked")
+    val database =
+      TrackingDatabase(
+        work = emptyList(),
+        workflows = IdeStatusWorkflowStates(),
+        statusRepository =
+          object : StandalonePhaseStatusRepository by unexercised() {
+            override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery) = listOf(refused, running)
+          },
+      )
+
+    assertEquals(false, supersededPhaseForTest(running, database.unitOfWork(), Instant.EPOCH))
+    assertEquals(true, supersededPhaseForTest(refused, database.unitOfWork(), Instant.EPOCH))
   }
 
   @Test
@@ -180,6 +210,34 @@ class WorkExecutionHistoryTest {
     Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, method, _ ->
       error("${method.name} is not exercised by WorkExecutionHistoryTest.")
     } as T
+
+  private fun planRecord(
+    runSequence: String,
+    lifecycleState: String,
+  ) = StandalonePhaseStatusRecord(
+    repositoryIdentity = "repo",
+    branchCorrelation = "main",
+    issueKey = "SKILL-467",
+    workflowId = "wftr-plan",
+    invocationId = "invocation-plan-$runSequence",
+    phaseId = "plan",
+    executionId = "execution-plan-$runSequence",
+    statusStoreId = "store",
+    runSequence = runSequence,
+    statusRevision = "1",
+    lifecycleState = lifecycleState,
+    currentStep = "plan",
+    currentActivity = null,
+    startedAt = Instant.EPOCH,
+    updatedAt = Instant.EPOCH,
+    finishedAt = null,
+    activeDurationMs = null,
+    activeDurationAsOf = null,
+    leaseOwner = "owner",
+    leaseGeneration = 1,
+    leaseExpiresAt = Instant.EPOCH.plusSeconds(30),
+    terminalResult = null,
+  )
 
   private fun monitorRecord(
     number: Int,

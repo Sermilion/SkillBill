@@ -19,6 +19,7 @@ class ChatSystemPromptTest {
     assertTrue("Base branch: develop" in prompt)
     assertTrue("skillbill-actions" in prompt)
     assertTrue("\"mode\":\"act\",\"start\":\"goal\"" in prompt)
+    assertTrue("\"start\":\"goal\",\"title\":\"" in prompt)
     sharedStartWires.forEach { assertTrue("\"$it\"" in prompt) }
     assertTrue(
       """set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix"""" in prompt,

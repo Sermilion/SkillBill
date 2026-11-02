@@ -29,11 +29,11 @@ data class GoalChildHistoryDraft(
           !boundary.isNullOrBlank() &&
             !history.isNullOrBlank() &&
             skipReason == null,
-        )
+        ) { "A goal-child history draft needs non-blank boundary and history text and no skip reason" }
       GoalChildHistoryDraftDisposition.SKIP ->
         require(
           !skipReason.isNullOrBlank() && boundary == null && history == null && decisions == null,
-        )
+        ) { "A goal-child history skip needs a non-blank reason and no draft fields" }
     }
   }
 }

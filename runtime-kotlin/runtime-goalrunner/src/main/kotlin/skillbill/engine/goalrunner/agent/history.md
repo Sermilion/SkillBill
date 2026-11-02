@@ -1,5 +1,16 @@
 # goalrunner boundary history
 
+## [2026-11-02] SKILL-464 descriptive titles from New task starts
+Areas: runtime-goalrunner intake, runtime-engine work control, desktop core/domain, desktop core/data, desktop feature/chat
+- New-task goal and plan starts carry an agent title on the start action. WorkNewTaskStart composes it as the intake title line so GoalIntake.shortName, the spec directory, branch, PR and goal titles all use it. Review, validation, QA and PR starts stay on startStandaloneTask and ignore the title.
+- GoalIntake.shortName walks content-line clauses, drops path-like tokens, and slugs the first descriptive clause. A path-only intake still uses today's first-clause slug and records nothing, so it stays admitted.
+- prepareNewTask takes NewTaskIntakeRequest. An unusable title is ignored with seam=new-task.title outcome=ignored and never refuses. A keyed first token plus a usable title inserts the title line. URL-led and spec-path-led intakes stay unchanged.
+- ChatSuggestedAction and NewTaskStart gain a trailing title. Decode and store keep a bad title's action. newTaskTitle reads the newest completed goal or plan title for both suggested-action and offer-card starts.
+- reusable: NewTaskIntakeRequest; GoalIntake path-token filter; newTaskTitle beside newTaskRequirements.
+- Limit: a path followed by non-ASCII with no agent title now hits the existing DESCRIPTION refusal. Today those intakes were admitted with a path slug. Display, offer-card title, and renaming existing bundles stay out of scope. The five-parameter prepareNewTask form is gone.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-27] SKILL-446 subtask 2: publish goal history after final checks
 Areas: runtime-engine goalrunner and featuretask, runtime-domain, runtime-application workflow, runtime-contracts, runtime-core goal wiring, runtime-infra contracts, orchestration/contracts
 - MEDIUM feature. Goal finalization runs the existing boundary writer after goal QA, repairs and already-required validation, before the remaining-worktree commit and PR. No-change and already-published exits remain.

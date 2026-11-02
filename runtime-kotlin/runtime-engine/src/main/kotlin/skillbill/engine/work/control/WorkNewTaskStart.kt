@@ -2,12 +2,14 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskKeyAllocation
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
@@ -15,6 +17,7 @@ import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunExit
@@ -33,27 +36,33 @@ public class WorkNewTaskStart(
   private val launcher: WorkRunLauncher,
   private val environment: EnvironmentContext,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   public fun prepareNewTask(
     repoRoot: Path,
-    requirements: String,
-    baseBranch: String?,
-    keyChoice: String?,
-    occupiedKeys: Set<String>,
+    request: NewTaskIntakeRequest,
   ): NewTaskPreparation {
+    val requirements = request.requirements
+    val agentTitle = usableTitle(request.title)
     val parsingText = requirements.trim()
     when (val first = admission.admit(requirements, repoRoot)) {
       is GoalNewWorkAdmission.Admitted -> {
-        val intake = if (requirements.any(Char::isWhitespace)) appendBase(requirements, baseBranch) else requirements
+        val intake =
+          if (requirements.any(Char::isWhitespace)) {
+            appendBase(keyedIntake(first.issueKey, requirements, agentTitle), request.baseBranch)
+          } else {
+            requirements
+          }
         return readyOrRefused(repoRoot, first.issueKey, intake, allocated = false)
       }
       is GoalNewWorkAdmission.Refused -> return NewTaskPreparation.Refused(first.reason)
       GoalNewWorkAdmission.NoIssueKey -> Unit
     }
 
-    val normalizedChoice = keyChoice?.trim()?.uppercase()
+    val normalizedChoice = request.keyChoice?.trim()?.uppercase()
     val chosenKey = normalizedChoice?.takeIf(ISSUE_KEY::matches)
-    val allocation = if (chosenKey == null) allocator.allocate(repoRoot, normalizedChoice, occupiedKeys) else null
+    val allocation =
+      if (chosenKey == null) allocator.allocate(repoRoot, normalizedChoice, request.occupiedKeys) else null
     val key =
       chosenKey ?: when (allocation) {
         is NewTaskKeyAllocation.Allocated -> allocation.key
@@ -61,8 +70,8 @@ public class WorkNewTaskStart(
         null -> error("Allocation should be resolved when no complete key was supplied.")
       }
     val titleLine = parsingText.lineSequence().firstOrNull(String::isNotBlank).orEmpty()
-    val title = titleLine.takeIf(ASCII_WORD::containsMatchIn) ?: "New task from desktop"
-    val intake = appendBase("$key\n$title\n\n$requirements", baseBranch)
+    val title = agentTitle ?: titleLine.takeIf(ASCII_WORD::containsMatchIn) ?: "New task from desktop"
+    val intake = appendBase("$key\n$title\n\n$requirements", request.baseBranch)
     return readyOrRefused(repoRoot, key, intake, allocated = chosenKey == null)
   }
 
@@ -264,6 +273,23 @@ public class WorkNewTaskStart(
       GoalNewWorkAdmission.NoIssueKey -> NewTaskPreparation.Refused("The composed intake needs an issue key.")
       is GoalNewWorkAdmission.Refused -> NewTaskPreparation.Refused(checked.reason)
     }
+  }
+
+  private fun usableTitle(raw: String?): String? {
+    if (raw == null) return null
+    val title = raw.trim()
+    val usable = title.isNotBlank() && '\n' !in title && '\r' !in title && ASCII_WORD.containsMatchIn(title)
+    if (!usable) RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "seam=new-task.title outcome=ignored")
+    return title.takeIf { usable }
+  }
+
+  private fun keyedIntake(
+    issueKey: String,
+    requirements: String,
+    title: String?,
+  ): String {
+    val leadsWithKey = ISSUE_KEY.matches(requirements.trim().split(Regex("\\s+")).first())
+    return if (title != null && leadsWithKey) "$issueKey\n$title\n\n$requirements" else requirements
   }
 
   private fun appendBase(

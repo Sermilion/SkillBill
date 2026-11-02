@@ -316,6 +316,38 @@ class StandalonePhaseStatusStoreTest {
   }
 
   @Test
+  fun `latest standalone execution prefers an active row over a later blocked launch`() {
+    val directory = Files.createTempDirectory("standalone-latest-live")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-11-02T17:47:23Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo", branchCorrelation = "main", issueKey = "SKILL-467",
+          workflowId = "wftr-plan", invocationId = "run-live", phaseId = "plan",
+          executionId = "execution-live", lifecycleState = "active", currentStep = "plan",
+          startedAt = started, leaseOwner = "owner-live", leaseGeneration = 1,
+          leaseExpiresAt = started.plusSeconds(30),
+        ),
+      )
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo", branchCorrelation = "main", issueKey = "SKILL-467",
+          workflowId = "wftr-plan", invocationId = "run-refused", phaseId = "plan",
+          executionId = "execution-refused", lifecycleState = "blocked", currentStep = "plan",
+          startedAt = started.plusSeconds(120), leaseOwner = "owner-refused", leaseGeneration = 1,
+          leaseExpiresAt = started.plusSeconds(150),
+        ),
+      )
+    }
+
+    val latest = database.read { it.standalonePhaseStatuses.latestStandaloneExecution("wftr-plan") }
+
+    assertEquals("run-live", latest?.invocationId)
+    assertEquals("active", latest?.lifecycleState)
+  }
+
+  @Test
   fun `recorded agent environment survives the phase and workflow round trip and stays empty when absent`() {
     val directory = Files.createTempDirectory("standalone-agent-environment")
     val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))

@@ -23,6 +23,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.ChatMessage
+import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,7 +39,13 @@ import kotlin.time.Clock
 
 data class NewTaskRepository(val root: String, val name: String)
 
-data class NewTaskOffer(val starting: Boolean = false, val prefixKind: NewTaskKind? = null, val choices: List<String> = emptyList(), val problem: String? = null)
+data class NewTaskOffer(
+  val starting: Boolean = false,
+  val prefixKind: NewTaskKind? = null,
+  val choices: List<String> = emptyList(),
+  val problem: String? = null,
+  val started: String? = null,
+)
 
 private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
 
@@ -82,7 +89,7 @@ class NewTaskDraft(
   private fun canAdmitTurn(message: String): Boolean {
     val current = chatState.value
     return !closing && message.isNotBlank() && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
-      current?.thread?.busy?.value != true && current?.repositoryMissing != true && !offerState.value.starting
+      current?.repositoryMissing != true && !offerState.value.starting
   }
 
   /** Sends the typed text, opening the chat on the first message, and clears it. It does nothing unless [canSend] holds. */
@@ -99,21 +106,33 @@ class NewTaskDraft(
 
   private fun sendTurn(submitted: String, action: ChatSuggestedAction?) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
+    offerState.value = offerState.value.copy(started = null)
     current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
   internal fun start(kind: NewTaskKind, keyChoice: String? = null, target: String? = null) {
     val current = chatState.value
     if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
-    if (current == null && kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) return
+    if (current == null && kind in RUN_KINDS) return
+    if (kind in RUN_KINDS && offerState.value.started != null) return
     val agent = selectedAgent ?: return
     val root = repository?.root ?: return
     val requirements = current?.let { newTaskRequirements(it.thread.transcript.value) }.orEmpty()
-    val textAtStart = text
+    val title = current?.let { newTaskTitle(it.thread.transcript.value) }
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
-    val startRequest = NewTaskStart(root, requirements, baseBranch.ifBlank { null }, agent.agentId, kind, keyChoice, expectedSessionId, target)
+    val startRequest = NewTaskStart(
+      root,
+      requirements,
+      baseBranch.ifBlank { null },
+      agent.agentId,
+      kind,
+      keyChoice,
+      expectedSessionId,
+      title = title,
+      target = target,
+    )
     offerState.value = offerState.value.copy(starting = true, problem = null)
     scope.launch {
       try {
@@ -121,11 +140,14 @@ class NewTaskDraft(
         when (outcome) {
           is NewTaskStartOutcome.Started -> {
             if (kind in GOAL_KINDS) {
-              val run = if (kind == NewTaskKind.GoalRun) "goal run" else "plan"
-              toasts.show(ToastMessage(ToastTone.Confirmation, "Started $run ${outcome.issueKey}"))
-              if (current != null && chatState.value === current) {
-                if (text == textAtStart) text = ""
-                discard()
+              val message = when (outcome.kind) {
+                NewTaskKind.GoalRun -> "Started goal run ${outcome.issueKey}"
+                NewTaskKind.PlanOnly -> "Started plan ${outcome.issueKey}"
+                else -> "Started ${outcome.kind.name.lowercase()}"
+              }
+              toasts.show(ToastMessage(ToastTone.Confirmation, message))
+              if (kind in RUN_KINDS && ownsChat(current)) {
+                offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null, started = message)
               }
             } else {
               reportStandalone(current, kind, outcome)
@@ -175,6 +197,30 @@ class NewTaskDraft(
   }
 
   internal fun launch(block: suspend () -> Unit) = scope.launch { block() }
+
+  /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
+  internal fun rebindChat() {
+    val current = chatState.value ?: return
+    val agent = selectedAgent ?: return
+    val repo = repository ?: return
+    if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
+    val branch = baseBranch.ifBlank { null }
+    if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
+    val lines = current.thread.transcript.value
+    val firstEnded = current.firstTurnEnded.value
+    val previousId = current.sessionId
+    current.end()
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, firstTurnEnded = firstEnded)
+    next.thread.replaceTranscript(lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}."))
+    scope.launch {
+      current.job.join()
+      chats.deleteSavedChat(previousId)
+      if (!next.persist() && chatState.value === next) {
+        next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+      }
+      refreshSaved()
+    }
+  }
 
   /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
   internal suspend fun resume(entry: ChatHistoryEntry): Boolean {
@@ -282,6 +328,8 @@ class NewTaskDraft(
   }
 
   private fun clearChatFeedback() {
-    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null)
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null, started = null)
   }
 }
+
+private val RUN_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)

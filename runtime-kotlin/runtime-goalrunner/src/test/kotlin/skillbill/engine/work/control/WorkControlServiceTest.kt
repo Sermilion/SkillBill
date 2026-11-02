@@ -15,6 +15,8 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.StubGoalManifestStore
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
+import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -35,6 +37,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.WorkBoardRequest
@@ -55,6 +58,7 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -139,9 +143,85 @@ class WorkControlServiceTest {
       assertTrue(fixture.terminated.isEmpty())
     }
   }
+
+  @Test
+  fun `a usable title becomes the first line of a new-task intake`() {
+    val diagnostics = RecordingNewTaskDiagnostics()
+    GoalControlsFixture(newWorkAdmission = skill500Admission(), newTaskDiagnostics = diagnostics).use { fixture ->
+      val ready = prepareReady(fixture, "Fix the board", "Add dark mode setting")
+      assertEquals("SKILL-500\nAdd dark mode setting\n\nFix the board", ready.intake)
+      assertTrue(diagnostics.warnings.isEmpty())
+    }
+  }
+
+  @Test
+  fun `an unusable title is ignored and recorded without refusing`() {
+    val diagnostics = RecordingNewTaskDiagnostics()
+    GoalControlsFixture(newWorkAdmission = skill500Admission(), newTaskDiagnostics = diagnostics).use { fixture ->
+      val ready = prepareReady(fixture, "Fix the board", "one\ntwo")
+      assertEquals("SKILL-500\nFix the board\n\nFix the board", ready.intake)
+      assertEquals(1, diagnostics.warnings.size)
+      assertTrue(diagnostics.warnings.single().startsWith("seam=new-task.title outcome=ignored"))
+    }
+  }
+
+  @Test
+  fun `a keyed intake with a usable title keeps the requirements verbatim below it`() {
+    GoalControlsFixture(newWorkAdmission = skill500Admission()).use { fixture ->
+      val ready = prepareReady(fixture, "SKILL-500 Add export", "Add dark mode setting")
+      assertEquals("SKILL-500\nAdd dark mode setting\n\nSKILL-500 Add export", ready.intake)
+    }
+  }
+
+  @Test
+  fun `a url-led intake keeps today's requirements when a title is present`() {
+    val requirements = "https://linear.app/acme/issue/SKILL-500/slug details"
+    GoalControlsFixture(newWorkAdmission = skill500Admission()).use { fixture ->
+      val ready = prepareReady(fixture, requirements, "Add dark mode setting")
+      assertEquals(requirements, ready.intake)
+    }
+  }
 }
 
-private class GoalControlsFixture : AutoCloseable {
+private fun skill500Admission(): GoalNewWorkAdmissionPort =
+  GoalNewWorkAdmissionPort { intake, _ ->
+    if ("SKILL-500" in intake) GoalNewWorkAdmission.Admitted("SKILL-500") else GoalNewWorkAdmission.NoIssueKey
+  }
+
+private fun prepareReady(
+  fixture: GoalControlsFixture,
+  requirements: String,
+  title: String?,
+): NewTaskPreparation.Ready =
+  assertIs<NewTaskPreparation.Ready>(
+    fixture.service.prepareNewTask(
+      fixture.root,
+      NewTaskIntakeRequest(requirements, title, null, "SKILL-500", emptySet()),
+    ),
+  )
+
+private class RecordingNewTaskDiagnostics : RuntimeDiagnostics {
+  val warnings = mutableListOf<String>()
+
+  override fun warning(
+    message: String,
+    error: Throwable?,
+  ) {
+    warnings += message
+  }
+
+  override fun error(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+
+  override fun info(message: String) = Unit
+}
+
+private class GoalControlsFixture(
+  newWorkAdmission: GoalNewWorkAdmissionPort = GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
+  newTaskDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+) : AutoCloseable {
   private val schema = establishTemporarySchemaReadiness("goal-controls-progress")
   val root: Path = schema.tempDir.toRealPath()
   private val database = sqliteSessionFactoryForTests(root, schema.dbPath.toString(), emptyMap())
@@ -254,12 +334,13 @@ private class GoalControlsFixture : AutoCloseable {
       WorkControlRecovery(status, recovery, runs),
       WorkNewTaskStart(
         database,
-        GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
+        newWorkAdmission,
         NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
         goalPreflightServiceForTests(database),
         launcher,
         EnvironmentContext(),
         TestRepositoryEnclosingRoot,
+        newTaskDiagnostics,
       ),
     )
 

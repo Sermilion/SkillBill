@@ -34,3 +34,12 @@ internal fun offersStandaloneStart(messages: List<ChatMessage>): Boolean =
     val start = it.start
     start != null && start != NewTaskActionKind.Goal && start != NewTaskActionKind.Plan
   }
+
+internal fun newTaskTitle(messages: List<ChatMessage>): String? =
+  messages.asReversed()
+    .asSequence()
+    .filterIsInstance<ChatMessage.Agent>()
+    .filterNot { it.streaming }
+    .flatMap { it.actions }
+    .filter { it.start == NewTaskActionKind.Goal || it.start == NewTaskActionKind.Plan }
+    .firstNotNullOfOrNull { it.title }

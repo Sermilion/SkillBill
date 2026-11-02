@@ -46,7 +46,7 @@ class ChatReplyStreamTest {
         "Watch the PR.",
         ChatPermissionMode.ReadOnly,
         NewTaskActionKind.Monitor,
-        "https://github.com/org/repo/pull/9",
+        target = "https://github.com/org/repo/pull/9",
       ),
       actions.single(),
     )
@@ -102,5 +102,62 @@ class ChatReplyStreamTest {
     failed.accept(ChatEvent.TextDelta("Answer\n```skillbill-actions\n[]\n```"))
     val error = ChatEvent.Failed(ChatFailure.ProcessFailed, "failed")
     assertEquals(listOf(error), failed.accept(error))
+  }
+
+  @Test
+  fun `a valid title decodes and an invalid title keeps the action`() {
+    val validDiagnostics = RecordingDiagnostics()
+    val valid = ChatReplyStream(validDiagnostics)
+    valid.accept(
+      ChatEvent.TextDelta(
+        "Answer\n```skillbill-actions\n" +
+          "[{\"label\":\"Start a goal run\",\"instruction\":\"Implement the change.\",\"mode\":\"act\",\"start\":\"goal\",\"title\":\"Add dark mode setting\"}]\n```",
+      ),
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.SuggestedActions(
+          listOf(
+            ChatSuggestedAction(
+              "Start a goal run",
+              "Implement the change.",
+              ChatPermissionMode.Act,
+              NewTaskActionKind.Goal,
+              "Add dark mode setting",
+            ),
+          ),
+        ),
+        ChatEvent.Completed,
+      ),
+      valid.accept(ChatEvent.Completed),
+    )
+    assertTrue(validDiagnostics.categories.isEmpty())
+
+    val invalidDiagnostics = RecordingDiagnostics()
+    val invalid = ChatReplyStream(invalidDiagnostics)
+    invalid.accept(
+      ChatEvent.TextDelta(
+        "Answer\n```skillbill-actions\n" +
+          "[{\"label\":\"Start a goal run\",\"instruction\":\"Implement the change.\",\"mode\":\"act\",\"start\":\"goal\",\"title\":\"!!!\"}]\n```",
+      ),
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.SuggestedActions(
+          listOf(
+            ChatSuggestedAction(
+              "Start a goal run",
+              "Implement the change.",
+              ChatPermissionMode.Act,
+              NewTaskActionKind.Goal,
+            ),
+          ),
+        ),
+        ChatEvent.Completed,
+      ),
+      invalid.accept(ChatEvent.Completed),
+    )
+    assertEquals(listOf("chat.action_title_invalid"), invalidDiagnostics.categories)
+    assertTrue("chat.actions_invalid" !in invalidDiagnostics.categories)
   }
 }

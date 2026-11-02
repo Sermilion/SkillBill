@@ -95,9 +95,11 @@ private const val NEW_TASK_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
-[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal"}]
+[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
 Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
+Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
+Offer a start action once the request is clear.
 For an action without "start", the app sends its instruction as the next chat turn when clicked.
 $SHARED_START_ACTION_GUIDANCE
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.
