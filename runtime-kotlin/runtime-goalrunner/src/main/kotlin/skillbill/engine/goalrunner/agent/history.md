@@ -1,5 +1,13 @@
 # goalrunner boundary history
 
+## [2026-11-03] Goal pull request description follows the repo template
+Areas: runtime-goalrunner finalization, runtime-domain skeleton, runtime-engine slot bindings, runtime-core goal wiring
+- Goal finalization writes the pull request through the pr-description step, the same strategy phase:pr uses, run as the in-memory `goal-pr` skeleton (pull_request slot only) via `GoalRunnerPullRequestWriter`. The step resolves the repo-native template, fills every section from the goal diff and spec, and opens the draft PR.
+- The runtime still owns the goal facts: goal and subtask QA, goal assessment, and untraced interaction scenarios. They reach the step as phase instructions and go in the template's testing section.
+- The step runs only when the head branch has no PR; an existing, merged, or unreadable PR identity goes to `GoalPullRequestPort` as before. When the step fails, blocks, or leaves no PR on the branch, the port opens it with the composed body, now the fallback only.
+- reusable: `pullRequestFacts` and `pullRequestRequestOf` build the facts once for both the instructions and the fallback body.
+Feature flag: N/A
+
 ## [2026-11-02] SKILL-464 descriptive titles from New task starts
 Areas: runtime-goalrunner intake, runtime-engine work control, desktop core/domain, desktop core/data, desktop feature/chat
 - New-task goal and plan starts carry an agent title on the start action. WorkNewTaskStart composes it as the intake title line so GoalIntake.shortName, the spec directory, branch, PR and goal titles all use it. Review, validation, QA and PR starts stay on startStandaloneTask and ignore the title.

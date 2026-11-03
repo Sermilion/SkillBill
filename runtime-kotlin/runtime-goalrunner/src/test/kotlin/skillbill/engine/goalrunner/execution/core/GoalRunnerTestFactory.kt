@@ -142,6 +142,7 @@ internal data class GoalRunnerTestWiring(
     },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
+  val pullRequestWriter: GoalRunnerPullRequestWriter = NoPullRequestWriter,
 )
 
 internal data class GoalRunnerTestWiringParams(
@@ -204,6 +205,7 @@ internal data class GoalRunnerTestInputs(
     },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
+  val pullRequestWriter: GoalRunnerPullRequestWriter = NoPullRequestWriter,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -227,6 +229,7 @@ internal data class GoalRunnerTestInputs(
       pullRequestIdentityLookup = pullRequestIdentityLookup,
       finalHistoryWriter = finalHistoryWriter,
       assessmentGate = assessmentGate,
+      pullRequestWriter = pullRequestWriter,
     )
 }
 
@@ -266,6 +269,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
         wiring.unaddressedFindingsLedgerService,
         wiring.diagnostics,
+        wiring.pullRequestWriter,
       ),
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
@@ -567,3 +571,8 @@ private fun finalizationTestOutcomes(delegate: GoalRunnerWorkflowOutcomeStore): 
       }
   }
 }
+
+internal val NoPullRequestWriter =
+  GoalRunnerPullRequestWriter { _, _, _ ->
+    PhaseRunResult.Completed("test-pr", listOf("pr"), null, "no pull request written")
+  }

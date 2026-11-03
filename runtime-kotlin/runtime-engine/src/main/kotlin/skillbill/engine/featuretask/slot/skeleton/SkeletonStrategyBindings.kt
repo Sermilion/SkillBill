@@ -86,6 +86,8 @@ public object SkeletonStrategyBindings {
         mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentFixStrategy.ID)),
       SkeletonDefinition.GOAL_HISTORY to
         mapOf(PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID)),
+      SkeletonDefinition.GOAL_PR to
+        mapOf(PhaseSlot.PULL_REQUEST to PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID)),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),

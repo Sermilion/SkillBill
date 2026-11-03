@@ -141,6 +141,8 @@ data class SkeletonDefinition(
       )
     val GOAL_HISTORY: SkeletonDefinition =
       SkeletonDefinition("goal-history", listOf(PhaseSlot.WRITE_HISTORY), runStateKind = SkeletonRunStateKind.IN_MEMORY)
+    val GOAL_PR: SkeletonDefinition =
+      SkeletonDefinition("goal-pr", listOf(PhaseSlot.PULL_REQUEST), runStateKind = SkeletonRunStateKind.IN_MEMORY)
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
@@ -188,6 +190,7 @@ data class SkeletonDefinition(
           GOAL_ASSESSMENT,
           GOAL_ASSESSMENT_FIX,
           GOAL_HISTORY,
+          GOAL_PR,
           PLAN,
           PR,
           MONITOR,
