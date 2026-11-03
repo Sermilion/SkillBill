@@ -237,6 +237,20 @@ class GitMonitorResourcesLifecycleTest {
   }
 
   @Test
+  fun `a prepared published monitor worktree that holds only ignored files is released`() {
+    val fixture = fixture("ignored-only")
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile(".gitignore", "build/\n", worktree.path)
+    runGit(worktree.path, "push", fixture.remote.toString(), "HEAD:refs/heads/$FEATURE_BRANCH")
+    Files.createDirectories(worktree.path.resolve("build"))
+    Files.writeString(worktree.path.resolve("build/out.txt"), "artifact\n")
+
+    assertEquals(MonitorSettlement.Released, resources.settle(fence))
+    assertFalse(Files.exists(worktree.path))
+  }
+
+  @Test
   fun `a head pushed by someone else moves the clean owned worktree and is released as published`() {
     val fixture = fixture()
     val fence = acquiredFence(acquireFor(resources, fixture))

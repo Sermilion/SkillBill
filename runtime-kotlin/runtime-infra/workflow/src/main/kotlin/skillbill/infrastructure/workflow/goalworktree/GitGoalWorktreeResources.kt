@@ -138,24 +138,48 @@ class GitGoalWorktreeResources(
 
   private fun publicationRetention(path: Path): GoalWorktreeSettlement.Retained? {
     val published = worktreeGit(path, "rev-list", "--count", "HEAD", "--not", "--remotes")
-    if (!published.ok) {
-      return retained(MonitorRetentionReason.PUBLICATION_UNKNOWN, path, "git rev-list failed: ${published.output}")
-    }
-    val count =
-      published.output.trim().toLongOrNull()
-        ?: return retained(
+    val count = published.output.trim().toLongOrNull()
+    return when {
+      !published.ok ->
+        retained(MonitorRetentionReason.PUBLICATION_UNKNOWN, path, "git rev-list failed: ${published.output}")
+      count == null ->
+        retained(
           MonitorRetentionReason.PUBLICATION_UNKNOWN,
           path,
           "git rev-list returned an invalid count: ${published.output}",
         )
-    return if (count > 0) {
-      retained(
-        MonitorRetentionReason.UNPUBLISHED_COMMITS,
+      count == 0L -> null
+      else -> unpublishedRemoteRetention(path, count)
+    }
+  }
+
+  private fun unpublishedRemoteRetention(
+    path: Path,
+    count: Long,
+  ): GoalWorktreeSettlement.Retained? {
+    val contained =
+      worktreeGit(
         path,
-        "the worktree has $count commit(s) missing from remote-tracking refs",
+        "for-each-ref",
+        "--contains",
+        "HEAD",
+        "--format=%(refname)",
+        "refs/remotes",
       )
-    } else {
-      null
+    return when {
+      !contained.ok ->
+        retained(
+          MonitorRetentionReason.PUBLICATION_UNKNOWN,
+          path,
+          "git for-each-ref failed: ${contained.output}",
+        )
+      contained.output.trim().isNotEmpty() -> null
+      else ->
+        retained(
+          MonitorRetentionReason.UNPUBLISHED_COMMITS,
+          path,
+          "the worktree has $count commit(s) missing from remote-tracking refs",
+        )
     }
   }
 

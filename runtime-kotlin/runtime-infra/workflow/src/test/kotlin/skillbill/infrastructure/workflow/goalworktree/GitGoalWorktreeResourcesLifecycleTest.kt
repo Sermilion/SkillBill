@@ -219,6 +219,27 @@ class GitGoalWorktreeResourcesLifecycleTest {
   }
 
   @Test
+  fun `settlement removes a published feature branch worktree and keeps the branch ref`() {
+    val remote = temp.toRealPath().resolve("remote-feature-branch.git")
+    Files.createDirectories(remote)
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
+    val worktree = created("SKILL-published-branch")
+    runGit(worktree, "checkout", "-b", "feat/skill-468")
+    Files.writeString(worktree.resolve("feature.txt"), "shipped\n")
+    runGit(worktree, "add", "feature.txt")
+    runGit(worktree, "commit", "-m", "feature work")
+    runGit(worktree, "push", "--set-upstream", "origin", "feat/skill-468")
+    runGit(worktree, "checkout", "--detach", "HEAD")
+    val branchTip = runGit(repo, "rev-parse", "refs/heads/feat/skill-468")
+
+    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+    assertTrue(Files.notExists(worktree))
+    assertEquals(branchTip, runGit(repo, "rev-parse", "refs/heads/feat/skill-468"))
+  }
+
+  @Test
   fun `settlement retains a clean commit that has no remote tracking ref`() {
     val worktree = created("SKILL-5")
     Files.writeString(worktree.resolve("private-commit.txt"), "keep this commit\n")
