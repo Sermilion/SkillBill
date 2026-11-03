@@ -207,7 +207,7 @@ internal class MonitorOwnedCleanup(
     return if ("branch refs/heads/${record.executionBranch}" !in fields) {
       "the worktree registration no longer names the owned branch"
     } else {
-      val removal = monitorGit(primaryRoot, "worktree", "remove", path)
+      val removal = monitorGit(primaryRoot, "worktree", "remove", "--force", path)
       if (removal.ok) null else "git worktree remove failed: ${removal.output}"
     }
   }

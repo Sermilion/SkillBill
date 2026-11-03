@@ -167,7 +167,7 @@ class GitGoalWorktreeResources(
       return GoalWorktreeSettlement.Absent
     }
     retentionVerdict(request)?.let { return it }
-    val removal = worktreeGit(request.primaryRoot, "worktree", "remove", path.toString())
+    val removal = worktreeGit(request.primaryRoot, "worktree", "remove", "--force", path.toString())
     if (!removal.ok) {
       return retained(MonitorRetentionReason.CLEANUP_FAILED, path, "git worktree remove failed: ${removal.output}")
     }
