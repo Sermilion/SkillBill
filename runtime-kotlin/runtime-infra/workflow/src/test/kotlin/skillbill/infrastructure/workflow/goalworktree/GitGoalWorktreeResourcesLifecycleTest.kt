@@ -176,18 +176,46 @@ class GitGoalWorktreeResourcesLifecycleTest {
   }
 
   @Test
-  fun `settlement retains ignored files that git worktree remove would delete`() {
-    Files.writeString(repo.resolve(".gitignore"), "private.txt\n")
+  fun `settlement removes a published worktree that holds only ignored files`() {
+    Files.writeString(repo.resolve(".gitignore"), "build/\nlocal.properties\n")
     runGit(repo, "add", ".gitignore")
-    runGit(repo, "commit", "-m", "ignore private file")
+    runGit(repo, "commit", "-m", "ignore build and local properties")
+    val remote = temp.toRealPath().resolve("remote-ignored-only.git")
+    Files.createDirectories(remote)
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
+    runGit(repo, "fetch", "origin", "main")
     val worktree = created("SKILL-ignored")
-    Files.writeString(worktree.resolve("private.txt"), "keep this file\n")
+    Files.createDirectories(worktree.resolve("runtime-kotlin/build"))
+    Files.writeString(worktree.resolve("runtime-kotlin/build/out.txt"), "gradle\n")
+    Files.writeString(worktree.resolve("local.properties"), "sdk.dir=/fake\n")
+
+    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+    assertTrue(Files.notExists(worktree))
+  }
+
+  @Test
+  fun `settlement retains non-ignored untracked files when ignored files are also present`() {
+    Files.writeString(repo.resolve(".gitignore"), "build/\n")
+    runGit(repo, "add", ".gitignore")
+    runGit(repo, "commit", "-m", "ignore build")
+    val remote = temp.toRealPath().resolve("remote-ignored-untracked.git")
+    Files.createDirectories(remote)
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
+    runGit(repo, "fetch", "origin", "main")
+    val worktree = created("SKILL-mixed")
+    Files.createDirectories(worktree.resolve("build"))
+    Files.writeString(worktree.resolve("build/out.txt"), "ignored\n")
+    Files.writeString(worktree.resolve("real-untracked.txt"), "keep this file\n")
 
     val retained =
       assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
 
     assertEquals(MonitorRetentionReason.UNTRACKED_FILES, retained.reason)
-    assertEquals("keep this file\n", Files.readString(worktree.resolve("private.txt")))
+    assertEquals("keep this file\n", Files.readString(worktree.resolve("real-untracked.txt")))
   }
 
   @Test

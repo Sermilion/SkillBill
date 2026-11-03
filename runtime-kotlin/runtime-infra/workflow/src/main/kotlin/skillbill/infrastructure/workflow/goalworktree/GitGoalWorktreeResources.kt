@@ -88,7 +88,7 @@ class GitGoalWorktreeResources(
     val path = request.worktreePath
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null
     return ownershipRetention(request) ?: worktreeDirtyRetention(path)?.let { retained(it.reason, path, it.detail) }
-      ?: ignoredRetention(path) ?: publicationRetention(path)
+      ?: publicationRetention(path)
   }
 
   private fun ownershipRetention(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
@@ -132,21 +132,6 @@ class GitGoalWorktreeResources(
       }
     if (!listed) {
       return retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, "the worktree is missing from git worktree list")
-    }
-    return null
-  }
-
-  private fun ignoredRetention(path: Path): GoalWorktreeSettlement.Retained? {
-    val ignored = worktreeGit(path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory")
-    if (!ignored.ok) {
-      return retained(
-        MonitorRetentionReason.PUBLICATION_UNKNOWN,
-        path,
-        "git ignored-file inspection failed: ${ignored.output}",
-      )
-    }
-    if (ignored.output.isNotBlank()) {
-      return retained(MonitorRetentionReason.UNTRACKED_FILES, path, "the worktree contains ignored files")
     }
     return null
   }
