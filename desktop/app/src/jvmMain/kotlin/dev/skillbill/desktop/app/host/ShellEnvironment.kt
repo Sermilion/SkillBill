@@ -8,40 +8,49 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 private const val PATH = "PATH"
-private const val MARKER = "__SKILL_BILL_SHELL_PATH__"
+private const val MARKER = "__SKILL_BILL_SHELL_ENV__"
 private const val TIMEOUT_SECONDS = 3L
 private const val READER_JOIN_MS = 500L
-private const val MAX_OUTPUT_BYTES = 256 * 1024
+private const val MAX_OUTPUT_BYTES = 1024 * 1024
+
+/** Variables that describe the reporting shell itself, not the user's setup. */
+private val shellSessionKeys = setOf("PWD", "OLDPWD", "SHLVL", "_", "TERM")
 
 /**
- * An app started from the Dock, Finder or a desktop launcher inherits the session's bare PATH, not the one the user's shell
- * builds in its rc files, so agents installed under `~/.local/bin`, nvm or Homebrew are missing from every process the app
- * starts. A start from a terminal already carries that PATH, and Windows keeps PATH in the registry; both are left as they are.
- * Otherwise the user's interactive login shell reports its PATH once, and its entries go ahead of the inherited ones. A shell
- * that fails or times out leaves the environment unchanged.
+ * An app started from the Dock, Finder or a desktop launcher inherits the session's bare environment, not the one the user's
+ * shell builds in its rc files: agents installed under `~/.local/bin`, nvm or Homebrew are missing from PATH, and variables
+ * such as `CLAUDE_CODE_USE_BEDROCK`, `AWS_PROFILE` or API keys exported in `.zshrc` are unset, in every process the app starts.
+ * A start from a terminal already carries that environment, and Windows keeps it in the registry; both are left as they are.
+ * Otherwise the user's interactive login shell reports its environment once: its variables replace the inherited ones, and its
+ * PATH entries go ahead of the inherited ones. A shell that fails or times out leaves the environment unchanged.
  */
-fun withShellPath(
+fun withShellEnvironment(
   environment: Map<String, String>,
   osName: String,
   readShell: (List<String>) -> String? = ::readShellOutput,
 ): Map<String, String> {
   if (osName.startsWith("Windows") || !environment["TERM"].isNullOrBlank()) return environment
-  val shellPath = readShell(shellPathCommand(loginShell(environment, osName)))?.let(::parseShellPath) ?: return environment
-  return environment + (PATH to mergedPath(shellPath, environment[PATH]))
+  val shell = readShell(shellEnvironmentCommand(loginShell(environment, osName)))?.let(::parseShellEnvironment) ?: return environment
+  val merged = environment + (shell - shellSessionKeys)
+  val shellPath = shell[PATH] ?: return merged
+  return merged + (PATH to mergedPath(shellPath, environment[PATH]))
 }
 
 internal fun loginShell(environment: Map<String, String>, osName: String): String =
   environment["SHELL"]?.takeIf(String::isNotBlank) ?: if (osName.startsWith("Mac")) "/bin/zsh" else "/bin/bash"
 
-/** Interactive so `.zshrc` and `.bashrc` run; `echo`, `;` and the external `printenv` read the same in POSIX shells and fish. */
-internal fun shellPathCommand(shell: String): List<String> = listOf(shell, "-i", "-l", "-c", "echo $MARKER; printenv $PATH")
+/** Interactive so `.zshrc` and `.bashrc` run; `echo`, `;` and the external `env` read the same in POSIX shells and fish. */
+internal fun shellEnvironmentCommand(shell: String): List<String> = listOf(shell, "-i", "-l", "-c", "echo $MARKER; /usr/bin/env -0")
 
-/** rc files can print before the marker; the line after the last marker is the PATH. */
-internal fun parseShellPath(output: String): String? {
-  val lines = output.lines()
-  val marker = lines.indexOfLast { it.trim() == MARKER }
+/** rc files can print before the marker; after the last marker come NUL-terminated `KEY=value` entries, so values may span lines. */
+internal fun parseShellEnvironment(output: String): Map<String, String>? {
+  val marker = output.lastIndexOf("$MARKER\n")
   if (marker < 0) return null
-  return lines.getOrNull(marker + 1)?.trim()?.takeIf { '/' in it }
+  val entries = output.substring(marker + MARKER.length + 1).split('\u0000').mapNotNull { entry ->
+    val separator = entry.indexOf('=')
+    if (separator <= 0) null else entry.substring(0, separator) to entry.substring(separator + 1)
+  }
+  return entries.toMap().takeIf { it.isNotEmpty() }
 }
 
 /** The shell's entries first, then inherited ones the shell does not list. */
@@ -64,7 +73,7 @@ private fun readShellOutput(command: List<String>): String? {
   }
   val output = ByteArrayOutputStream()
   // A daemon an rc file starts can keep stdout open after the shell exits, so the read runs beside the wait.
-  val reader = thread(isDaemon = true, name = "shell-path") {
+  val reader = thread(isDaemon = true, name = "shell-environment") {
     try {
       process.inputStream.use { stream ->
         val buffer = ByteArray(8192)
@@ -80,7 +89,7 @@ private fun readShellOutput(command: List<String>): String? {
   }
   return try {
     if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-      warn("${command.first()} did not report its PATH within $TIMEOUT_SECONDS seconds")
+      warn("${command.first()} did not report its environment within $TIMEOUT_SECONDS seconds")
       null
     } else {
       reader.join(READER_JOIN_MS)
@@ -95,6 +104,7 @@ private fun readShellOutput(command: List<String>): String? {
   }
 }
 
+/** Names the shell only; the environment it reports can hold secrets and is never logged. */
 private fun warn(message: String) {
-  System.getLogger("dev.skillbill.desktop").log(System.Logger.Level.WARNING, "desktop:shell-path-unavailable $message")
+  System.getLogger("dev.skillbill.desktop").log(System.Logger.Level.WARNING, "desktop:shell-environment-unavailable $message")
 }
