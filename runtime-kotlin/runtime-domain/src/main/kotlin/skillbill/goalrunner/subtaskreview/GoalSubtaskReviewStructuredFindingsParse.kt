@@ -9,6 +9,7 @@ import skillbill.goalrunner.subtaskreview.model.StructuredGoalReviewFindingsPars
 import skillbill.review.model.RecordedVerdictFields
 import skillbill.review.model.ReviewFindingCitation
 import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.model.repositoryRelativePathViolation
 import skillbill.review.parsing.ReviewFindingActionability
@@ -18,7 +19,11 @@ object GoalSubtaskReviewStructuredFindingsParse {
   fun structuredFindings(
     output: Any,
     recordedVerdicts: List<ReviewFindingVerdict> = emptyList(),
-  ): List<StructuredGoalReviewFinding> = parseStructuredFindings(output, recordedVerdicts).findings
+  ): List<StructuredGoalReviewFinding> =
+    parseStructuredFindings(output, recordedVerdicts).findings.filter { it.settlement == null }
+
+  fun settledFindings(output: Any): List<StructuredGoalReviewFinding> =
+    parseStructuredFindings(output).findings.filter { it.settlement != null }
 
   fun parseStructuredFindings(
     output: Any,
@@ -84,6 +89,7 @@ object GoalSubtaskReviewStructuredFindingsParse {
           scopeDisposition = overlay.scopeDisposition,
           citations = overlay.citations,
           severityAdjustment = overlay.severityAdjustment,
+          settlement = ReviewFindingSettlement.fromWire(finding[ReviewFindingPayloadKeys.SETTLEMENT]),
         )
       }
     return StructuredGoalReviewFindingsParse(parsed, citationDiagnostics)

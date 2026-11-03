@@ -22,10 +22,10 @@ Context: The inspector needs review progress, but the review path writes lane di
 Decision: Project progress from stored dispositions and show a lane read failure as degraded status.
 Reason: This preserves stored progress on relaunch without adding live writes to review execution. A first attempt can show zero completed lanes until the batch is stored.
 
-## [2026-11-01] Hide audit results during a running review
-Context: Audit runs before review and may have a settled result when a review pass starts. The supplied design calls for "Runs after review" during review.
-Decision: Show the supplied placeholder during a running review, even when a settled audit exists.
-Reason: The plan keeps the supplied design copy. The trade-off is that it hides the stored result and describes the runtime order inaccurately.
+## [2026-11-03] Show the settled audit during a running review
+Context: Audit runs before review, but the inspector hid a settled audit during review and said "Runs after review", contradicting the phase chips. This reverses the 2026-11-01 decision that kept that supplied design copy.
+Decision: Show the stored audit result whenever one exists. The placeholders follow runtime order: Review reads "Runs after audit" and Audit reads "Runs after implementation". Omit the Audit section when review has started and no audit record exists.
+Reason: The stored result is true during review and the old copy was not. A placeholder after review starts would describe a step already past.
 
 ## [2026-11-01] Omit settled audit summary while an audit is running
 Context: A running audit can retain an output artifact from an earlier settled run.

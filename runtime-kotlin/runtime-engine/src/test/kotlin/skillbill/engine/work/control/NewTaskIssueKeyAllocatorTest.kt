@@ -95,37 +95,53 @@ class NewTaskIssueKeyAllocatorTest {
     assertEquals(NewTaskKeyAllocation.NeedsPrefix(emptyList()), allocator.allocate(repoRoot, null, emptySet()))
   }
 
-  private fun bundle(
-    root: Path,
-    name: String,
-    spec: String,
-    manifest: String,
-  ) {
-    val directory = root.resolve(name)
-    Files.createDirectories(directory)
-    Files.writeString(directory.resolve("spec.md"), spec)
-    Files.writeString(directory.resolve("decomposition-manifest.yaml"), manifest)
+  @Test
+  fun `a single prefix is never selected without the operator`() {
+    val repoRoot = Files.createTempDirectory("new-task-single-prefix")
+    val storeRoot = repoRoot.resolve("project-specs")
+    bundle(storeRoot, "NEWS-2-task", "", "")
+    val allocator =
+      NewTaskIssueKeyAllocator(
+        projectStore(repoRoot, storeRoot),
+        TestDecompositionManifestStore,
+        NoopRuntimeDiagnostics,
+      )
+
+    assertEquals(NewTaskKeyAllocation.NeedsPrefix(listOf("NEWS")), allocator.allocate(repoRoot, null, emptySet()))
   }
-
-  private fun projectStore(
-    repoRoot: Path,
-    specsRoot: Path,
-  ): ProjectStorePort =
-    object : ProjectStorePort {
-      override fun resolve(workingDirectory: Path) =
-        ProjectStoreLocation(
-          "test-project",
-          repoRoot,
-          specsRoot,
-          repoRoot.resolve("config.yaml"),
-          repoRoot.resolve("evidence"),
-          repoRoot.resolve("tracking"),
-          repoRoot.resolve("acceptance"),
-        )
-
-      override fun link(
-        workingDirectory: Path,
-        projectId: String,
-      ): ProjectStoreLocation = error("unused")
-    }
 }
+
+internal fun bundle(
+  root: Path,
+  name: String,
+  spec: String,
+  manifest: String,
+) {
+  val directory = root.resolve(name)
+  Files.createDirectories(directory)
+  Files.writeString(directory.resolve("spec.md"), spec)
+  Files.writeString(directory.resolve("decomposition-manifest.yaml"), manifest)
+}
+
+internal fun projectStore(
+  repoRoot: Path,
+  specsRoot: Path,
+): ProjectStorePort =
+  object : ProjectStorePort {
+    override fun resolve(workingDirectory: Path) =
+      ProjectStoreLocation(
+        "test-project",
+        repoRoot,
+        specsRoot,
+        repoRoot.resolve("config.yaml"),
+        repoRoot.resolve("evidence"),
+        repoRoot.resolve("tracking"),
+        repoRoot.resolve("acceptance"),
+        repoRoot.resolve("phases"),
+      )
+
+    override fun link(
+      workingDirectory: Path,
+      projectId: String,
+    ): ProjectStoreLocation = error("unused")
+  }

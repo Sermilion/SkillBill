@@ -8,11 +8,14 @@ import skillbill.engine.featuretask.slot.PhaseAcceptedOutputPersistence
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -76,6 +79,13 @@ public class GoalChildHistoryDraftStrategy : PhaseStrategy() {
   }
 
   private object DraftHooks : PhaseStepHooks<PhaseAcceptedStepExecution>, PhaseAcceptedOutputPersistence {
+    override fun settleCompletedOutput(
+      run: PhaseRun,
+      context: PhaseStepOutputContext,
+      state: PhaseAcceptedStepExecution,
+      outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+    ): PhaseStepOutputCheck = GoalChildHistoryDraftOutputPersistence.completedOutputCheck(run, outputMap)
+
     override fun persistAcceptedOutput(
       recorder: PhaseRunGoal,
       run: PhaseRun,

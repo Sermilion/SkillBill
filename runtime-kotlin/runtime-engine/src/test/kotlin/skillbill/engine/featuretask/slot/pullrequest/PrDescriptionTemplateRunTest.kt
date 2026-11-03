@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
+import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -36,6 +37,21 @@ class PrDescriptionTemplateRunTest {
 
     assertIs<PhaseRunResult.Completed>(run.result, run.result.toString())
     assertTemplatePrompt(run.prPrompts.single())
+  }
+
+  @Test
+  fun `the goal pr prompt carries the found template and the goal facts in one pr step`() {
+    val repository = featureRepository()
+    writeTemplate(repository.repoRoot, TEMPLATE_PATH, TEMPLATE)
+    val goal = GoalPrRun("wfl-goal-parent", PhaseInstructions(GOAL_FACTS, setOf(PR_STEP)))
+
+    val run = phasePrRun(repository.repoRoot, database, absent, clock, goal)
+
+    val result = assertIs<PhaseRunResult.Completed>(run.result, run.result.toString())
+    assertEquals(listOf(PR_STEP), result.completedStepIds)
+    val prompt = run.prPrompts.single()
+    assertTemplatePrompt(prompt)
+    assertTrue(GOAL_FACTS in prompt, prompt)
   }
 
   @Test
@@ -78,7 +94,7 @@ class PrDescriptionTemplateRunTest {
 
   private fun assertFallbackPrompt(prompt: String) {
     assertRuntimeOwnedRules(prompt)
-    listOf("# Summary", "# Feature Flags", "# Media", "# How Has This Been Tested?").forEach { heading ->
+    listOf("## Summary", "## Changes", "## Testing").forEach { heading ->
       assertTrue(heading in prompt, "the fallback template must carry '$heading': $prompt")
     }
     assertTrue("found no repo-native template. Use the built-in fallback template." in prompt, prompt)
@@ -112,6 +128,7 @@ class PrDescriptionTemplateRunTest {
 
   private companion object {
     const val TEMPLATE_PATH = ".github/pull_request_template.md"
+    const val GOAL_FACTS = "- Goal: skipped (environment_unavailable)"
     val TEMPLATE =
       """
       ## What

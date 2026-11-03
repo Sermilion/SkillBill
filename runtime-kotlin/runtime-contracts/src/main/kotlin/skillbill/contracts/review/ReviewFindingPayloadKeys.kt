@@ -9,5 +9,6 @@ object ReviewFindingPayloadKeys {
   const val CLAIM_VERDICT = "claim_verdict"
   const val SCOPE_DISPOSITION = "scope_disposition"
   const val CITATIONS = "citations"
+  const val SETTLEMENT = "settlement"
   const val SEVERITY_ADJUSTMENT = "severity_adjustment"
 }

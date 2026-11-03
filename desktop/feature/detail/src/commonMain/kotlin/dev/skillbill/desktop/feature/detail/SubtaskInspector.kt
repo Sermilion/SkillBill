@@ -171,7 +171,7 @@ private fun SubtaskResults(detail: Detail, subtask: WorkSubtask) {
       is SubtaskResultsState.Shown -> {
         when (val review = state.review) {
           is SubtaskReviewState.Passes -> SubtaskReviewSection(review.passes, review.runningReviewPass)
-          SubtaskReviewState.RunsAfterImplementation -> ResultsPlaceholder("Review", "Runs after implementation")
+          SubtaskReviewState.RunsAfterAudit -> ResultsPlaceholder("Review", "Runs after audit")
           SubtaskReviewState.Omitted -> Unit
         }
         SubtaskAuditSection(results, subtaskStatusKind(subtask.status), subtask.id)

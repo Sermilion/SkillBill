@@ -236,7 +236,7 @@ class NewTaskDraftTest {
     chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
     val draft = draft()
     val workspace = ChatWorkspace(
-      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), draft,
+      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), draft,
     )
     draft.say("add export")
     runCurrent()

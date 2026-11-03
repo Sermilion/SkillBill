@@ -12,14 +12,19 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
@@ -27,7 +32,7 @@ import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
-import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
 import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +40,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -70,7 +76,7 @@ class ChatWorkspaceTest {
 
   private fun TestScope.workspace(): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft())
+    return ChatWorkspace(chat, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft())
   }
 
   @Test
@@ -784,6 +790,133 @@ class ChatWorkspaceTest {
     workspace.close(item.id)
 
     assertEquals(listOf(session.sessionId), chat.ended)
+  }
+
+  @Test
+  fun `start action on running execution refuses without pause send or startNewTask`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val action = ChatSuggestedAction(
+      "Monitor",
+      "Run monitor on this PR.",
+      ChatPermissionMode.Act,
+      NewTaskActionKind.Monitor,
+      "https://github.com/org/repo/pull/1",
+    )
+    chat.events = {
+      flowOf(ChatEvent.TextDelta("Ready."), ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed)
+    }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val reply = assertIs<ChatMessage.Agent>(session.transcript.value.last())
+
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+
+    assertTrue(controls.calls.isEmpty())
+    assertTrue(controls.newTaskRequests.isEmpty())
+    assertTrue(session.transcript.value.filterIsInstance<ChatMessage.Operator>().isEmpty())
+    val notice = assertIs<ChatMessage.Notice>(session.transcript.value.last())
+    assertTrue(notice.text.contains("SKILL-1"))
+    assertTrue(notice.text.contains("not running"))
+  }
+
+  @Test
+  fun `start action on stopped execution calls startNewTask in that worktree`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false, repositoryRoot = "/work/execution-tree")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
+    val action = ChatSuggestedAction(
+      "Monitor",
+      "Run monitor.",
+      ChatPermissionMode.Act,
+      NewTaskActionKind.Monitor,
+      target = "https://github.com/org/repo/pull/2",
+    )
+    chat.events = {
+      flowOf(ChatEvent.TextDelta("Ready."), ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed)
+    }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val reply = assertIs<ChatMessage.Agent>(session.transcript.value.last())
+
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+
+    assertTrue(controls.calls.isEmpty())
+    assertTrue(session.transcript.value.filterIsInstance<ChatMessage.Operator>().isEmpty())
+    assertIs<ChatMessage.Notice>(session.transcript.value.last())
+    assertEquals(1, controls.newTaskRequests.size)
+    with(controls.newTaskRequests.single()) {
+      assertEquals("/work/execution-tree", repoRoot)
+      assertEquals(NewTaskKind.Monitor, kind)
+      assertEquals("https://github.com/org/repo/pull/2", target)
+      assertEquals("claude", agentId)
+      assertEquals(1L, expectedDatabaseSessionId)
+    }
+  }
+
+  @Test
+  fun `start action that needs a prefix offers the choices and retries with the chosen one`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("SKILL", "OPS"))
+    val action = ChatSuggestedAction("Run phase:goal", "Build the thing.", ChatPermissionMode.Act, NewTaskActionKind.Goal)
+    chat.events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val reply = assertIs<ChatMessage.Agent>(session.transcript.value.last())
+
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+
+    assertEquals(listOf("SKILL", "OPS"), session.prefixChoice.value?.choices)
+    assertEquals(null, controls.newTaskRequests.single().keyChoice)
+
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("OPS-1", NewTaskKind.GoalRun)
+    workspace.choosePrefix(item.id, "OPS")
+    runCurrent()
+
+    assertEquals(null, session.prefixChoice.value)
+    with(controls.newTaskRequests.last()) {
+      assertEquals("OPS", keyChoice)
+      assertEquals(NewTaskKind.GoalRun, kind)
+      assertEquals("Build the thing.", requirements)
+    }
+  }
+
+  @Test
+  fun `start action refuses when database session is not open`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val action = ChatSuggestedAction("Monitor", "Run monitor.", ChatPermissionMode.Act, NewTaskActionKind.Monitor, null)
+    chat.events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
+    val closedDb = object : DatabaseSessionController {
+      override val state = MutableStateFlow<DatabaseSessionState>(DatabaseSessionState.Opening(null)).asStateFlow()
+      override fun reopen() = Unit
+    }
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val workspace = ChatWorkspace(
+      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft(),
+    )
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val reply = assertIs<ChatMessage.Agent>(session.transcript.value.last())
+
+    workspace.executeAction(item.id, reply, action)
+    runCurrent()
+
+    assertTrue(controls.calls.isEmpty())
+    assertTrue(controls.newTaskRequests.isEmpty())
+    assertTrue(session.transcript.value.filterIsInstance<ChatMessage.Operator>().isEmpty())
+    assertIs<ChatMessage.Notice>(session.transcript.value.last())
   }
 }
 

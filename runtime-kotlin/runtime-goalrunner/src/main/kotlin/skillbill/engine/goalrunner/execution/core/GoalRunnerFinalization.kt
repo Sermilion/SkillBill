@@ -3,20 +3,25 @@ package skillbill.engine.goalrunner.execution.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneCompletedSubtaskCheckpointRefs
 import skillbill.engine.featuretask.lifecycle.subtask.parseGitPorcelainPaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
+import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.execution.support.GoalPullRequestFactSection
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.execution.support.goalRunnerRepositoryContentIdentity
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
-import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
+import skillbill.engine.goalrunner.execution.support.pullRequestDescriptionInstructions
+import skillbill.engine.goalrunner.execution.support.pullRequestFacts
+import skillbill.engine.goalrunner.execution.support.pullRequestRequestOf
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
@@ -36,6 +41,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
@@ -51,6 +57,7 @@ import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestResult
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -694,15 +701,15 @@ public class GoalRunnerPullRequests(
   private val specScratchCleanup: GoalSpecScratchCleanup,
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
   private val diagnostics: RuntimeDiagnostics,
+  private val pullRequestWriter: GoalRunnerPullRequestWriter,
 ) {
   internal fun openPullRequest(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     qaResult: GoalQaGateResult,
-  ): GoalPullRequestResult =
-    pullRequestPort.open(
-      state.manifest.toPullRequestRequest(
-        request.repoRoot,
+  ): GoalPullRequestResult {
+    val facts =
+      state.manifest.pullRequestFacts(
         goalQaSummary = goalQaSummary(state, qaResult),
         goalAssessment = goalAssessment(state),
         qaSummary = { subtask ->
@@ -710,8 +717,59 @@ public class GoalRunnerPullRequests(
             ?: GoalSubtaskQaSummary.NotRecorded
         },
         unknownScenarios = { subtask -> unknownScenariosFor(state, subtask) },
-      ),
+      )
+    val fallback = state.manifest.pullRequestRequestOf(request.repoRoot, facts)
+    return writtenPullRequest(state, request, fallback, facts) ?: pullRequestPort.open(fallback)
+  }
+
+  private fun writtenPullRequest(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    fallback: GoalPullRequestRequest,
+    facts: List<GoalPullRequestFactSection>,
+  ): GoalPullRequestResult? {
+    val head = fallback.headBranch.takeIf(String::isNotBlank) ?: return null
+    if (pullRequestIdentityLookup.lookup(request.repoRoot, head) != PullRequestIdentity.Absent) return null
+    val instructions = state.manifest.pullRequestDescriptionInstructions(fallback, facts)
+    catchingNonCancellation {
+      pullRequestWriter.run(goalPullRequestPhaseRequest(request, instructions), state.parentWorkflowId, head)
+    }.onSuccess { result ->
+      if (result is PhaseRunResult.Blocked) warnPullRequestWriter("stopped at '${result.stepId}': ${result.reason}")
+    }.onFailure { failure ->
+      val contained = containableFailure(failure)
+      warnPullRequestWriter("failed: ${contained.javaClass.simpleName}: ${contained.message}")
+    }
+    return when (val written = pullRequestIdentityLookup.lookup(request.repoRoot, head)) {
+      is PullRequestIdentity.Found -> GoalPullRequestResult.Opened(written.url)
+      is PullRequestIdentity.Merged -> GoalPullRequestResult.Existing(written.url)
+      else -> {
+        warnPullRequestWriter("left no pull request on '$head'; opening it with the runtime-composed description.")
+        null
+      }
+    }
+  }
+
+  private fun goalPullRequestPhaseRequest(
+    request: GoalRunnerRunRequest,
+    instructions: String,
+  ): PhaseRunRequest =
+    PhaseRunRequest(
+      definitionId = SkeletonDefinition.GOAL_PR.id,
+      repoRoot = request.repoRoot,
+      invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+      intake = request.issueKey,
+      instructions = PhaseInstructions(instructions, setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR)),
+      timeout = request.timeout,
+      agentAddonSelection = request.agentAddonSelection,
+      modelAssignment = request.modelAssignment,
     )
+
+  private fun warnPullRequestWriter(message: String) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=goal_pull_request_description ${message.take(MAX_WARNING_REASON)}",
+    )
+  }
 
   private fun goalAssessment(state: GoalRunnerManifestState): GoalAssessmentRecordRead =
     try {
@@ -828,6 +886,25 @@ public fun interface GoalRunnerFinalHistoryWriter {
 public class PhaseRunGoalFinalHistoryWriter(
   private val phaseRunEntry: PhaseRunEntry,
 ) : GoalRunnerFinalHistoryWriter {
+  override fun run(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    branch: String,
+  ): PhaseRunResult = phaseRunEntry.runForGoal(request, parentWorkflowId, branch)
+}
+
+public fun interface GoalRunnerPullRequestWriter {
+  public fun run(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    branch: String,
+  ): PhaseRunResult
+}
+
+@Inject
+public class PhaseRunGoalPullRequestWriter(
+  private val phaseRunEntry: PhaseRunEntry,
+) : GoalRunnerPullRequestWriter {
   override fun run(
     request: PhaseRunRequest,
     parentWorkflowId: String,

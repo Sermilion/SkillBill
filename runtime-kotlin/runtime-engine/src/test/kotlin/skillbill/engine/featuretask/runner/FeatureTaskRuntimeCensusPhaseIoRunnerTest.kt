@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.featuretask.slot.harnessPendingVerifyFindingIds
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
 import skillbill.engine.featuretask.slot.validJsonOutput
+import skillbill.goalrunner.model.ReviewFindingOutcome
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -213,6 +214,13 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
     assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     val rejected = harness.ledgerRows.single { it.findingId == refutedId }
     assertEquals(UNADDRESSED_FINDING_REJECTED_DISPOSITION, rejected.verificationDisposition)
+    assertEquals(
+      mapOf<String?, ReviewFindingOutcome>(
+        REVIEW_FIX_BLOCKER_FINDING_ID to ReviewFindingOutcome.ADDRESSED,
+        refutedId to ReviewFindingOutcome.REJECTED,
+      ),
+      harness.outcomeRows.associate { it.findingId to it.outcome },
+    )
     val fixPrompt = harness.launchedPrompts("implement_fix").single()
     assertContains(fixPrompt, "- $REVIEW_FIX_BLOCKER_FINDING_ID [blocker]")
     assertContains(fixPrompt, "Verification refuted $refutedId")

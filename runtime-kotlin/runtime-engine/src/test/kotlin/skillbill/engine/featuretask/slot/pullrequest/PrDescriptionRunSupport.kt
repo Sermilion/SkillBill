@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
+import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
@@ -27,11 +28,17 @@ internal data class PhasePrRun(
   val prPrompts: List<String> get() = launcher.promptsFor(PR_STEP)
 }
 
+internal data class GoalPrRun(
+  val parentWorkflowId: String,
+  val instructions: PhaseInstructions,
+)
+
 internal fun phasePrRun(
   repoRoot: Path,
   database: DatabaseSessionFactory,
   lookup: PullRequestIdentityLookup,
   clock: Clock,
+  goal: GoalPrRun? = null,
 ): PhasePrRun {
   val launcher =
     RuntimeRecordingLauncher { request ->
@@ -49,11 +56,25 @@ internal fun phasePrRun(
       runtimeConfig = config,
       databaseFactory = { database },
     )
-  val request = PhaseRunRequest(definitionId = SkeletonDefinition.PR.id, repoRoot = repoRoot, invokedAgentId = "claude")
-  return PhasePrRun(
-    phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry).run(request),
-    launcher,
-  )
+  val entry = phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry)
+  val result =
+    if (goal == null) {
+      entry.run(
+        PhaseRunRequest(definitionId = SkeletonDefinition.PR.id, repoRoot = repoRoot, invokedAgentId = "claude"),
+      )
+    } else {
+      entry.runForGoal(
+        PhaseRunRequest(
+          definitionId = SkeletonDefinition.GOAL_PR.id,
+          repoRoot = repoRoot,
+          invokedAgentId = "claude",
+          instructions = goal.instructions,
+        ),
+        goal.parentWorkflowId,
+        PR_FEATURE_BRANCH,
+      )
+    }
+  return PhasePrRun(result, launcher)
 }
 
 internal class PrRunRepository(private val root: Path) {

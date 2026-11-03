@@ -108,6 +108,16 @@ data class NumberedFinding(
   val laneSkillName: String? = null,
 )
 
+enum class ReviewFindingSettlement(val wireValue: String) {
+  FIXED("fixed"),
+  REFUTED("refuted"),
+  ;
+
+  companion object {
+    fun fromWire(value: Any?): ReviewFindingSettlement? = entries.firstOrNull { it.wireValue == value }
+  }
+}
+
 enum class ReviewFindingStatus {
   OPEN,
   FIXED,

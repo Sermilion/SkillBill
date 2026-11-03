@@ -299,11 +299,10 @@ internal object PhaseLaunchPreparation {
       val assembledBriefing = (assembly as FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted).briefing
       val projectInstructions = resolveProjectInstructions(context, run, assembledBriefing.phaseId)
       val briefing =
-        projectInstructions?.let {
-          assembledBriefing.copy(
-            projectInstructions = FeatureTaskRuntimePhaseProjectInstructionsRecord(it.relativePath, it.sha256),
-          )
-        } ?: assembledBriefing
+        assembledBriefing.copy(
+          projectInstructions =
+            projectInstructions.map { FeatureTaskRuntimePhaseProjectInstructionsRecord(it.path, it.sha256) },
+        )
       recordLaunchBriefing(context, args, briefing, sharedEvidence)?.let { return it }
       PhaseLaunchPreparation.seedStagedPlanBundle(context, run)
       val inputs =
@@ -327,18 +326,18 @@ internal object PhaseLaunchPreparation {
     context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
     phaseId: String,
-  ): PhaseProjectInstructionsResolution.Injected? {
+  ): List<PhaseProjectInstructionsResolution.Injected> {
     val outcome = PhaseProjectInstructions.resolve(context.phaseInstructionSource, run.request.repoRoot, phaseId)
     outcome.skipped.forEach { skipped ->
       RuntimeDiagnosticsBestEffortWarning.record(
         context.diagnostics,
-        "Warning: project phase instructions '${skipped.relativePath}' skipped: ${skipped.reason}; " +
+        "Warning: project phase instructions '${skipped.path}' skipped: ${skipped.reason}; " +
           "the run continues.",
       )
     }
-    outcome.injected?.let { injected ->
+    outcome.injected.forEach { injected ->
       context.diagnostics.info(
-        "Project phase instructions injected: ${injected.relativePath} sha256=${injected.sha256}",
+        "Project phase instructions injected: ${injected.path} sha256=${injected.sha256}",
       )
     }
     return outcome.injected

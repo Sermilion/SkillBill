@@ -24,7 +24,7 @@ internal fun ReviewFindingStatus.label(): String = when (this) {
   ReviewFindingStatus.Accepted -> "Accepted"
   ReviewFindingStatus.Declined -> "Declined"
   ReviewFindingStatus.FalsePositive -> "False positive"
-  ReviewFindingStatus.Rejected -> "Rejected"
+  ReviewFindingStatus.Rejected -> "Refuted"
 }
 
 /** Amber while it still asks for work, green once fixed, blue when accepted, faint once dismissed. */

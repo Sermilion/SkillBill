@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.feature.chat.ChatMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -191,6 +192,33 @@ class NewTaskDraftStartTest {
   }
 
   @Test
+  fun `start without open chat records monitor and verify kind and target`() = runTest {
+    val chats = FakeExecutionChatRepository()
+    val controls = FakeWorkControlRepository()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+    }
+    draft.start(NewTaskKind.Monitor, target = "https://github.com/org/repo/pull/1")
+    runCurrent()
+    with(controls.newTaskRequests.single()) {
+      assertEquals(NewTaskKind.Monitor, kind)
+      assertEquals("https://github.com/org/repo/pull/1", target)
+    }
+
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("verify", NewTaskKind.Verify)
+    draft.start(NewTaskKind.Verify, target = "check the review on this branch")
+    runCurrent()
+    with(controls.newTaskRequests.last()) {
+      assertEquals(NewTaskKind.Verify, kind)
+      assertEquals("check the review on this branch", target)
+    }
+  }
+
+  @Test
   fun `starting a goal from the offer card after a titled reply passes the title`() = runTest {
     val chats = FakeExecutionChatRepository().apply {
       events = {
@@ -227,6 +255,107 @@ class NewTaskDraftStartTest {
     runCurrent()
     assertEquals("Add dark mode setting", controls.newTaskRequests.single().title)
   }
+
+  @Test
+  fun `a clicked goal action leads the requirements and survives a key choice`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    val section = ChatSuggestedAction("Section 1", "Implement section 1 only.", ChatPermissionMode.Act, NewTaskActionKind.Goal, title = "Mobile operations")
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP-2"))
+    draft.start(NewTaskKind.GoalRun, action = section)
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun, "APP-2")
+    runCurrent()
+
+    controls.newTaskRequests.forEach { request ->
+      assertTrue(request.requirements.startsWith("Implement section 1 only."))
+      assertEquals("Mobile operations", request.title)
+    }
+    assertEquals("APP-2", controls.newTaskRequests.last().keyChoice)
+  }
+
+  @Test
+  fun `standalone start reports in the chat and a later failure explains itself`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val failure = CompletableDeferred<String?>()
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+      text = "watch the pr"
+      send()
+    }
+    runCurrent()
+    val chat = assertNotNull(draft.chat.value)
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor) { failure.await() }
+
+    draft.start(NewTaskKind.Monitor, target = "https://github.com/acme/app/pull/42")
+    runCurrent()
+
+    assertEquals(chat, draft.chat.value)
+    assertTrue(notices(chat).any { it.startsWith("Started monitor") }, notices(chat).toString())
+
+    failure.complete("Monitor target refused.")
+    runCurrent()
+    assertTrue("monitor stopped. Monitor target refused." in notices(chat), notices(chat).toString())
+    assertNull(draft.offer.value.problem)
+  }
+
+  @Test
+  fun `standalone refusal goes to the chat and goal refusal to the offer card`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+      text = "review this"
+      send()
+    }
+    runCurrent()
+    val chat = assertNotNull(draft.chat.value)
+    controls.newTaskOutcome = NewTaskStartOutcome.Refused("No.")
+
+    draft.start(NewTaskKind.Review)
+    runCurrent()
+    assertEquals(listOf("No."), notices(chat))
+    assertNull(draft.offer.value.problem)
+
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    assertEquals(listOf("No."), notices(chat))
+    assertEquals("No.", draft.offer.value.problem)
+  }
+
+  @Test
+  fun `only a latest reply with a standalone start hides the goal offer`() {
+    fun reply(start: NewTaskActionKind?) = ChatMessage.Agent(
+      "ok", false, emptyList(), listOf(ChatSuggestedAction("Go", "Go", ChatPermissionMode.Act, start = start)),
+    )
+    assertTrue(offersStandaloneStart(listOf(reply(NewTaskActionKind.Review))))
+    assertFalse(offersStandaloneStart(listOf(reply(NewTaskActionKind.Goal))))
+    assertFalse(offersStandaloneStart(listOf(reply(null))))
+    assertFalse(offersStandaloneStart(listOf(reply(NewTaskActionKind.Review), ChatMessage.Operator("no", null), reply(null))))
+    assertTrue(offersStandaloneStart(listOf(reply(NewTaskActionKind.Review), ChatMessage.Notice("Started review."))))
+  }
+
+  @Test
+  fun `a release request hides the goal offer and a later feature description does not bring it back`() {
+    val idle = NewTaskOffer()
+    val release = ChatMessage.Operator("publish a minor release", null)
+    assertFalse(showGoalOfferCard(true, listOf(release), idle))
+    assertFalse(showGoalOfferCard(true, listOf(ChatMessage.Operator("Add a release button", null)), idle))
+    assertFalse(showGoalOfferCard(true, listOf(release, ChatMessage.Operator("add dark mode instead", null)), idle))
+    assertTrue(showGoalOfferCard(true, listOf(release, ChatMessage.Operator("start a goal run instead", null)), idle))
+  }
+
+  private fun notices(chat: NewTaskChat): List<String> =
+    chat.thread.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
 
   @Test
   fun `starting a goal after chip rebind posts the new repository and agent`() = runTest {
@@ -293,7 +422,7 @@ class NewTaskDraftStartTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
     val draft = draftWithFinishedTurn(chats, controls)
-    controls.newTaskOutcome = NewTaskStartOutcome.NeedsPrefix(listOf("APP"))
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP"))
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     assertEquals(NewTaskKind.GoalRun, draft.offer.value.prefixKind)

@@ -425,9 +425,9 @@ candidates or the defect. Resolution only reads PR data. It never checks out the
 target in the caller checkout, and the caller's branch, index, and uncommitted work
 stay untouched, so monitors for different PRs that share a head branch name run
 concurrently without colliding. The runtime fetches the PR head and base at pinned
-commits and creates an owned temporary worktree and branch under the caller's
-`.git/skill-bill/standalone-monitor` directory. All repair work runs in that
-worktree. The phase starts by watching CI and publishes nothing unless a repair
+commits and creates an owned temporary worktree and branch under
+`<state dir>/standalone-monitor/<repo-key>/`, outside `.git/`, because agents
+refuse edits under `.git/`. All repair work runs in that worktree. The phase starts by watching CI and publishes nothing unless a repair
 is needed. It does not commit or push pending caller changes. A repair that settles
 completed is committed and pushed to the PR's head repository and branch only if
 the remote head is still the pinned commit, never to the base repository. A

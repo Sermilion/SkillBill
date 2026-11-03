@@ -44,7 +44,10 @@ class FeatureTaskRuntimePhaseLaunchBriefingSerializationTest {
     val withInstructions =
       briefing().copy(
         projectInstructions =
-          FeatureTaskRuntimePhaseProjectInstructionsRecord(".skill-bill/phases/implement.md", "ab12"),
+          listOf(
+            FeatureTaskRuntimePhaseProjectInstructionsRecord(".skill-bill/phases/implement.md", "ab12"),
+            FeatureTaskRuntimePhaseProjectInstructionsRecord("/state/projects/p-1/phases/implement.md", "cd34"),
+          ),
       )
     val wire = withInstructions.briefingArtifactWireMap()
 
@@ -53,6 +56,18 @@ class FeatureTaskRuntimePhaseLaunchBriefingSerializationTest {
     assertEquals(
       briefing(),
       FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(wire - "project_instructions"),
+    )
+  }
+
+  @Test
+  fun `a row recording a single project instructions object decodes as one file`() {
+    val legacyRow =
+      briefing().briefingArtifactWireMap() +
+        ("project_instructions" to mapOf("path" to ".skill-bill/phases/implement.md", "sha256" to "ab12"))
+
+    assertEquals(
+      listOf(FeatureTaskRuntimePhaseProjectInstructionsRecord(".skill-bill/phases/implement.md", "ab12")),
+      FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(legacyRow).projectInstructions,
     )
   }
 

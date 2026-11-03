@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -95,6 +96,10 @@ class ChatSession internal constructor(
   internal val resumeChoicesState = MutableStateFlow<List<ChatHistoryEntry>?>(null)
   val resumeChoices: StateFlow<List<ChatHistoryEntry>?> = resumeChoicesState.asStateFlow()
 
+  /** The start waiting for an issue prefix; null when no start needs one. */
+  internal val prefixChoiceState = MutableStateFlow<PendingPrefixChoice?>(null)
+  val prefixChoice: StateFlow<PendingPrefixChoice?> = prefixChoiceState.asStateFlow()
+
   internal fun append(message: ChatMessage) = thread.append(message)
 
   internal fun replaceTranscript(transcript: List<ChatMessage>) = thread.replaceTranscript(transcript)
@@ -111,3 +116,6 @@ class ChatSession internal constructor(
 
   internal fun endStreaming() = thread.endStreaming()
 }
+
+/** A goal or plan start the runtime sent back for an issue prefix; choosing one retries [action]. */
+data class PendingPrefixChoice(val action: ChatSuggestedAction, val start: NewTaskActionKind, val choices: List<String>)

@@ -4,6 +4,7 @@ import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingCitation
 import skillbill.review.model.ReviewFindingCitationDiagnostic
 import skillbill.review.model.ReviewFindingCitationsDecode
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.model.ReviewSeverityAdjustment
 import skillbill.review.model.ReviewSeverityAdjustmentDirection
@@ -15,7 +16,12 @@ internal data class ParallelReviewTrailingStructuredFields(
   val citations: List<ReviewFindingCitation> = emptyList(),
   val citationDiagnostics: List<ReviewFindingCitationDiagnostic> = emptyList(),
   val severityAdjustment: ReviewSeverityAdjustment? = null,
+  val settlement: ReviewFindingSettlement? = null,
 )
+
+private const val STATUS_TOKEN_PREFIX = "status="
+
+private const val OPEN_STATUS = "open"
 
 private const val JSON_UNICODE_ESCAPE_HEX_LENGTH = 4
 
@@ -100,6 +106,14 @@ private fun applyTrailingStructuredToken(
     token.startsWith("severity_adjustment=") -> {
       val parsed = parseSeverityAdjustmentToken(token.removePrefix("severity_adjustment=")) ?: return null
       current.copy(severityAdjustment = parsed)
+    }
+    token.startsWith(STATUS_TOKEN_PREFIX) -> {
+      val status = token.removePrefix(STATUS_TOKEN_PREFIX).trim()
+      if (status == OPEN_STATUS) {
+        current
+      } else {
+        current.copy(settlement = ReviewFindingSettlement.fromWire(status) ?: return null)
+      }
     }
     else -> null
   }

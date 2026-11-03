@@ -35,6 +35,7 @@ import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
@@ -48,7 +49,7 @@ internal class NewTaskScreenHost(
   val now: () -> Instant,
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
-  val onStart: ((String) -> Unit)? = null,
+  val onStart: ((String, String?) -> Unit)? = null,
 )
 
 @Composable
@@ -74,6 +75,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
     } else {
       key(chat) {
         val firstTurnEnded by chat.firstTurnEnded.collectAsState()
+        val transcript by chat.thread.transcript.collectAsState()
         ChatTranscript(
           chat.thread,
           gone = false,
@@ -81,7 +83,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
           modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
           allowStartActions = host.onStart != null,
           allowSuggestedActions = !offer.starting,
-          footer = if (firstTurnEnded) {
+          footer = if (showGoalOfferCard(firstTurnEnded, transcript, offer)) {
             {
               NewTaskOfferCard(
                 draft.baseBranch,
@@ -98,8 +100,8 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
             if (draft.sendSuggestedAction(action)) {
               focusManager.clearFocus()
             }
-          } else {
-            host.onStart?.invoke(start.wire)
+          } else if (host.onStart != null) {
+            start.toNewTaskKind()?.let { draft.start(it, action = action) }
           }
         }
       }

@@ -157,7 +157,7 @@ internal class GoalAssessmentGateFixture(
       testPhaseStrategies(
         launcher = launcher,
         gitOperations = git,
-        phaseInstructionSource = FileSystemPhaseInstructionFileSource(),
+        phaseInstructionSource = FileSystemPhaseInstructionFileSource(testProjectStore),
       )
     val phaseEntry = phaseRunEntry(strategies, git, database, clock, TestFeatureTaskRuntimeRunLoopEntry(git))
     return DefaultGoalRunnerAssessmentGate(

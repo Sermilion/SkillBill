@@ -10,4 +10,5 @@ data class ProjectStoreLocation(
   val runEvidenceRoot: Path,
   val trackingRoot: Path,
   val acceptanceRepairRoot: Path,
+  val phasesRoot: Path,
 )

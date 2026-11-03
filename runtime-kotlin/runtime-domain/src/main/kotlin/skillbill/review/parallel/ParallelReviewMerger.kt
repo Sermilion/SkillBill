@@ -9,6 +9,7 @@ import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingCitation
 import skillbill.review.model.ReviewFindingRegisterOutcome
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.model.ReviewLaneFindingVerdict
 import skillbill.review.model.ReviewScopeDisposition
@@ -56,6 +57,7 @@ object ParallelReviewMerger {
           severityAdjustment = candidate.severityAdjustment,
           sourceVerdicts = candidate.sourceVerdicts,
           sourceFindingRefs = candidate.sourceFindingRefs,
+          settlement = candidate.settlement,
         )
       }
 
@@ -225,6 +227,7 @@ object ParallelReviewMerger {
       finding.severityAdjustment?.let { adjustment ->
         add("severity_adjustment=${adjustment.direction.wireValue}: ${adjustment.justification}")
       }
+      finding.settlement?.let { add("status=${it.wireValue}") }
     }
 
   private fun codeQualityAttribution(finding: ParallelReviewMergedFinding): String {
@@ -309,6 +312,7 @@ object ParallelReviewMerger {
       severityAdjustment = sourceVerdicts.mapNotNull { it.severityAdjustment }.firstOrNull(),
       sourceVerdicts = sourceVerdicts,
       sourceFindingRefs = entries.mapNotNull { it.finding.sourceFindingRef }.distinct(),
+      settlement = entries.map { it.finding.settlement }.distinct().singleOrNull(),
     )
   }
 
@@ -372,5 +376,6 @@ object ParallelReviewMerger {
     val severityAdjustment: ReviewSeverityAdjustment?,
     val sourceVerdicts: List<ReviewLaneFindingVerdict>,
     val sourceFindingRefs: List<String>,
+    val settlement: ReviewFindingSettlement?,
   )
 }

@@ -39,13 +39,12 @@ import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 @Composable
 internal fun SubtaskAuditSection(results: SubtaskPhaseResults?, kind: StatusKind, subtaskId: Int) {
   val audit = results?.auditResult
-  val running = results?.runningReviewPass != null
-  val upcoming = kind == StatusKind.Pending || kind == StatusKind.Active || kind == StatusKind.Blocked
-  if (!running && audit == null && !upcoming) return
+  val reviewStarted = results?.runningReviewPass != null || !results?.reviewPasses.isNullOrEmpty()
+  val upcoming = !reviewStarted && (kind == StatusKind.Pending || kind == StatusKind.Active || kind == StatusKind.Blocked)
+  if (audit == null && !upcoming) return
 
   val attemptTotal = audit?.attemptTotal
   val end = when {
-    running -> null
     audit?.outcome == AuditOutcome.Running -> "attempt ${audit.attempts.size + 1} running"
     attemptTotal != null && attemptTotal > 0 -> if (attemptTotal == 1) "1 attempt" else "$attemptTotal attempts"
     else -> null
@@ -56,12 +55,13 @@ internal fun SubtaskAuditSection(results: SubtaskPhaseResults?, kind: StatusKind
       { BasicText(label, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted)) }
     },
   ) {
-    when {
-      running || audit == null -> BasicText(
-        "Runs after review",
+    if (audit == null) {
+      BasicText(
+        "Runs after implementation",
         style = SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted),
       )
-      else -> AuditResult(audit, results.audit?.verdict, results.audit?.summary ?: results.audit?.detail, subtaskId)
+    } else {
+      AuditResult(audit, results.audit?.verdict, results.audit?.summary ?: results.audit?.detail, subtaskId)
     }
   }
 }

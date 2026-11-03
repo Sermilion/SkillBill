@@ -9,9 +9,16 @@ import kotlin.test.assertTrue
 class FeatureTaskRuntimePhasePromptComposerProjectInstructionsTest {
   private val instructions =
     PhaseProjectInstructionsResolution.Injected(
-      relativePath = ".skill-bill/phases/implement.md",
+      path = ".skill-bill/phases/implement.md",
       content = "Always run the lint wrapper before finishing.\n\n",
       sha256 = "0".repeat(SHA256_HEX_LENGTH),
+    )
+
+  private val projectStoreInstructions =
+    PhaseProjectInstructionsResolution.Injected(
+      path = "/home/operator/.skill-bill/projects/p-1/phases/implement.md",
+      content = "Use the local emulator profile.\n",
+      sha256 = "1".repeat(SHA256_HEX_LENGTH),
     )
 
   @Test
@@ -19,7 +26,7 @@ class FeatureTaskRuntimePhasePromptComposerProjectInstructionsTest {
     val briefing = promptComposerBriefingFor("implement")
 
     val prompt =
-      composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, briefing) { copy(projectInstructions = instructions) }
+      composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, briefing) { copy(projectInstructions = listOf(instructions)) }
 
     val briefingAt = prompt.indexOf(briefing.briefingText)
     val sectionAt = prompt.indexOf("## Project instructions for this phase")
@@ -30,10 +37,27 @@ class FeatureTaskRuntimePhasePromptComposerProjectInstructionsTest {
   }
 
   @Test
+  fun `both instruction files appear under their own paths with the repository file first`() {
+    val prompt =
+      composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("implement")) {
+        copy(projectInstructions = listOf(instructions, projectStoreInstructions))
+      }
+
+    val repoAt = prompt.indexOf(instructions.path)
+    val repoContentAt = prompt.indexOf("Always run the lint wrapper before finishing.")
+    val storeAt = prompt.indexOf(projectStoreInstructions.path)
+    val storeContentAt = prompt.indexOf("Use the local emulator profile.")
+    assertEquals(1, Regex("## Project instructions for this phase").findAll(prompt).count())
+    assertTrue(repoAt in 0 until repoContentAt, "repository path labels its content")
+    assertTrue(repoContentAt < storeAt, "project store file follows the repository file")
+    assertTrue(storeAt < storeContentAt, "project store path labels its content")
+  }
+
+  @Test
   fun `project instructions survive a terminal-failure retry composition`() {
     val prompt =
       composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("implement")) {
-        copy(projectInstructions = instructions, priorTerminalFailure = "previous attempt failed")
+        copy(projectInstructions = listOf(instructions), priorTerminalFailure = "previous attempt failed")
       }
 
     val sectionAt = prompt.indexOf("## Project instructions for this phase")
@@ -46,10 +70,11 @@ class FeatureTaskRuntimePhasePromptComposerProjectInstructionsTest {
     val briefing = promptComposerBriefingFor("implement")
 
     val without = composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, briefing)
-    val explicitNull = composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, briefing) { copy(projectInstructions = null) }
+    val explicitEmpty =
+      composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, briefing) { copy(projectInstructions = emptyList()) }
 
     assertFalse(without.contains("Project instructions for this phase"))
-    assertEquals(without, explicitNull)
+    assertEquals(without, explicitEmpty)
   }
 
   private companion object {

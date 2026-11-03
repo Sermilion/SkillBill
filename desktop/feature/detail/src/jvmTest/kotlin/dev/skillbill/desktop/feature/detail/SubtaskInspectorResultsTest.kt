@@ -75,8 +75,8 @@ class SubtaskInspectorResultsTest {
   fun `a pending subtask says when review and audit run`() = runComposeUiTest {
     show("pending", emptyDetail)
 
+    onNodeWithText("Runs after audit").assertExists()
     onNodeWithText("Runs after implementation").assertExists()
-    onNodeWithText("Runs after review").assertExists()
   }
 
   @Test
@@ -156,7 +156,7 @@ class SubtaskInspectorResultsTest {
   }
 
   @Test
-  fun `a running review pass owns the audit placeholder`() = runComposeUiTest {
+  fun `a running review pass keeps the settled audit visible`() = runComposeUiTest {
     val passed = SubtaskAuditResult(AuditOutcome.Passed, 1, 1, emptyList(), emptyList(), 1)
     val running = SubtaskPhaseResults(
       1,
@@ -167,8 +167,17 @@ class SubtaskInspectorResultsTest {
       auditResult = passed,
     )
     show("active", emptyDetail.copy(phaseResults = listOf(running)))
-    onNodeWithText("Runs after review").assertExists()
-    onNodeWithText("Passed", substring = true).assertDoesNotExist()
+    onNodeWithText("Passed · 1 of 1 criteria met").assertExists()
+    onNodeWithText("1 attempt").assertExists()
+    onNodeWithText("Runs after", substring = true).assertDoesNotExist()
+  }
+
+  @Test
+  fun `a started review with no audit record omits the audit section`() = runComposeUiTest {
+    val running = SubtaskPhaseResults(1, emptyList(), null, null, runningReviewPass = RunningReviewPass(1, emptyList()))
+    show("active", emptyDetail.copy(phaseResults = listOf(running)))
+    onNodeWithText("Audit").assertDoesNotExist()
+    onNodeWithText("Runs after", substring = true).assertDoesNotExist()
   }
 
   @Test

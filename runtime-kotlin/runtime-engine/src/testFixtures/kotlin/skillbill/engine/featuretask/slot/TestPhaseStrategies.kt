@@ -302,6 +302,7 @@ fun testPhaseStrategyBindings(
       SkeletonDefinition.GOAL_ASSESSMENT_FIX to
         SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_ASSESSMENT_FIX),
       SkeletonDefinition.GOAL_HISTORY to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_HISTORY),
+      SkeletonDefinition.GOAL_PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_PR),
       SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
       SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
       SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),

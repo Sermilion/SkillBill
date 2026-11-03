@@ -2,11 +2,16 @@ package skillbill.infrastructure.workflow.featuretask
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.featuretask.PhaseInstructionFileSource
+import skillbill.ports.projectstore.ProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 
 @Inject
-class FileSystemPhaseInstructionFileSource : PhaseInstructionFileSource {
+class FileSystemPhaseInstructionFileSource(
+  private val projectStore: ProjectStorePort,
+) : PhaseInstructionFileSource {
+  override fun projectPhasesDirectory(repoRoot: Path): Path = projectStore.resolve(repoRoot).phasesRoot
+
   override fun markdownFileNames(directory: Path): List<String>? =
     if (Files.isDirectory(directory)) {
       Files.newDirectoryStream(directory, "*$MARKDOWN_SUFFIX").use { entries ->

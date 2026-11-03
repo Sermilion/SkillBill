@@ -27,15 +27,18 @@ public class NewTaskIssueKeyAllocator(
     occupiedKeys: Set<String>,
   ): NewTaskKeyAllocation {
     val bundleKeys = inventory(repoRoot)
-    val prefixes = bundleKeys.map(::prefixOf).filterNot { it == LOCAL_PREFIX }.toSet().sorted()
-    val suppliedPrefix = prefix?.trim()?.uppercase()
-    if (suppliedPrefix != null && !PREFIX.matches(suppliedPrefix)) return NewTaskKeyAllocation.NeedsPrefix(prefixes)
-    val selected = suppliedPrefix ?: prefixes.singleOrNull()
-    if (selected == null) return NewTaskKeyAllocation.NeedsPrefix(prefixes)
+    val selected =
+      prefix?.trim()?.uppercase()?.takeIf(PREFIX::matches)
+        ?: return NewTaskKeyAllocation.NeedsPrefix(prefixesOf(bundleKeys))
     val keys = bundleKeys + occupiedKeys.mapNotNull(::issueKey)
     val highest = keys.mapNotNull { numberFor(it, selected) }.maxOrNull() ?: BigInteger.ZERO
     return NewTaskKeyAllocation.Allocated("$selected-${highest + BigInteger.ONE}")
   }
+
+  public fun prefixes(repoRoot: Path): List<String> = prefixesOf(inventory(repoRoot))
+
+  private fun prefixesOf(keys: Set<String>): List<String> =
+    keys.map(::prefixOf).filterNot { it == LOCAL_PREFIX }.toSet().sorted()
 
   public fun holds(
     repoRoot: Path,

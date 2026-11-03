@@ -8,8 +8,8 @@ import skillbill.contracts.qa.QA_DEVICE_LEASE_CONTRACT_VERSION
 import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.resolveTelemetryStateDir
-import skillbill.infrastructure.workflow.process.RepositoryStateKeyResult
-import skillbill.infrastructure.workflow.process.repositoryStateKey
+import skillbill.infrastructure.workflow.process.runGitProcess
+import skillbill.infrastructure.workflow.repositoryStateKey
 import skillbill.model.EnvironmentContext
 import skillbill.ports.qa.model.QaOwnedResource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
@@ -49,19 +49,22 @@ internal object QaPaths {
   ): Path =
     resolveTelemetryStateDir(environment.environment, environment.userHome)
       .resolve(QA_DIRECTORY)
-      .resolve(qaRepositoryKey(repoRoot))
+      .resolve(repositoryStateKey(gitCommonDir(repoRoot)))
 
-  private fun qaRepositoryKey(repoRoot: Path): String =
-    when (val key = repositoryStateKey(repoRoot)) {
-      is RepositoryStateKeyResult.Resolved -> key.key
-      is RepositoryStateKeyResult.NotAWorkingTree ->
-        throw qaDeviceLeaseFailed("$repoRoot is not a Git working tree: ${key.detail}")
-      is RepositoryStateKeyResult.CommonDirectoryUnresolved ->
-        throw qaDeviceLeaseFailed(
-          "could not resolve the Git common directory ${key.commonDirectory}: ${key.failure.message}",
-          key.failure,
-        )
+  private fun gitCommonDir(repoRoot: Path): Path {
+    val probe = runGitProcess(repoRoot, listOf("rev-parse", "--git-common-dir"))
+    val output = probe.output.trim()
+    val probeFailed = probe.timedOut || probe.readFailure != null || probe.exitCode != 0
+    if (probeFailed || output.isEmpty()) {
+      throw qaDeviceLeaseFailed("$repoRoot is not a Git working tree: ${probe.readFailure?.message ?: output}")
     }
+    val commonDir = repoRoot.toAbsolutePath().resolve(output).normalize()
+    return try {
+      commonDir.toRealPath()
+    } catch (failure: IOException) {
+      throw qaDeviceLeaseFailed("could not resolve the Git common directory $commonDir: ${failure.message}", failure)
+    }
+  }
 
   fun invocationDirectory(
     qaRoot: Path,

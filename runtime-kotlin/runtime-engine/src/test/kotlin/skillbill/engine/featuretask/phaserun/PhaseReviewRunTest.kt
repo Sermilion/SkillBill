@@ -166,6 +166,34 @@ class PhaseReviewRunTest {
   }
 
   @Test
+  fun `a verifier that answers no finding blocks the review but keeps the original findings`() {
+    val unhelpfulVerifier =
+      object : PhaseRunner {
+        override fun run(
+          input: PhaseStepInput,
+          state: PhaseLaunchState,
+        ): PhaseStepOutput =
+          reviewStepOutput(
+            if (input.directive.startsWith("Independently verify")) {
+              "I looked at the change and have no opinion."
+            } else {
+              BLOCKER_REVIEW
+            },
+          )
+      }
+    val result =
+      inlineEntryOver(fixLauncher(), unhelpfulVerifier)
+        .run(reviewRequest(CodeReviewExecutionMode.INLINE, reviewRunId = REVIEW_RUN_ID))
+
+    assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue(result.reason.startsWith("Standalone verifier returned"), result.reason)
+    assertTrue(BLOCKER_REVIEW.substringBefore("\nverdict:") in result.reason, result.reason)
+    assertTrue("verdict:" !in result.reason, result.reason)
+    assertTrue(SlotBaselineSqlite.rows(database.resolveDbPath(), "review_run_pass_claims").isNotEmpty())
+    assertEquals(LEAKY_SOURCE, Files.readString(source))
+  }
+
+  @Test
   fun `an omitted, inline, or auto mode runs the inline review strategy even with the delegated runner bound`() {
     listOf(null, CodeReviewExecutionMode.INLINE, CodeReviewExecutionMode.AUTO).forEach { mode ->
       var reviews = 0
@@ -288,7 +316,7 @@ class PhaseReviewRunTest {
 
     durable.withRunLoopEntry(RecordingRunLoopEntry()).run(durable.request)
 
-    val reviews = directives.filter { "Fix every Blocker and Major finding" in it }
+    val reviews = directives.filter { "Fix every finding" in it }
     assertTrue(reviews.isNotEmpty(), "the full-run review must still launch")
     assertTrue(reviews.none { InlineReviewLanesSection.HEADING in it })
     assertTrue(diagnostics.warnings.any { RUBRIC_FAILURE in it }, diagnostics.warnings.toString())
