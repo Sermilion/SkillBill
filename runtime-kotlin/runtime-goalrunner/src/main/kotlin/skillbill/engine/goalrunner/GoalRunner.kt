@@ -62,7 +62,7 @@ public class GoalRunner(
   ): GoalIntakeAdmission = intakeAdmission.admission(intake, repoRoot)
 
   public fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
-    manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&
+    manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot) == null &&
       intakeAdmission.intakePreparation.prepare(request) == null
 
   public fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
@@ -75,7 +75,9 @@ public class GoalRunner(
 
   private fun runAfterReconciliation(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val durableState =
-      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
+      manifestStore.loadOccupyingByIssueKey(request.issueKey, request.repoRoot)
+        ?.state
+        ?.copy(repoRoot = request.repoRoot)
     val admittedState =
       durableState
         ?: intakeAdmission.intakePreparation.prepare(request)

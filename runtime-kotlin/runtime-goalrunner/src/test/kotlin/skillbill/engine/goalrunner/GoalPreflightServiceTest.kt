@@ -18,10 +18,15 @@ import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
+import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.goal.GoalPreflightRequest
+import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
+import skillbill.engine.goalrunner.preflight.adjustGoalPreflightContinuationLookup
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -41,12 +46,15 @@ import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class GoalPreflightServiceTest {
@@ -283,12 +291,136 @@ class GoalPreflightServiceTest {
     assertEquals(null, result.gateBlock?.expectedFirstRunnableSubtask)
   }
 
+  @Test
+  fun `failed occupying parent without standalone history is terminal only`() {
+    val occupying = GoalRunnerManifestState("parent-failed", "/fake/metrics.db", manifest())
+    val result =
+      service(
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        manifestStore =
+          TestManifestStore(
+            occupying,
+            occupyingState = occupying,
+            occupyingStatus = WorkflowStatus.FAILED,
+          ),
+      ).preflight(request(Files.createTempDirectory("goal-preflight-failed-occupy")))
+
+    assertEquals(GoalPreflightVerdict.TERMINAL_ONLY, result.verdict)
+  }
+
+  @Test
+  fun `running occupying parent without standalone history is already running`() {
+    val occupying = GoalRunnerManifestState("parent-running", "/fake/metrics.db", manifest())
+    val result =
+      service(
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        manifestStore =
+          TestManifestStore(
+            occupying,
+            occupyingState = occupying,
+            occupyingStatus = WorkflowStatus.RUNNING,
+          ),
+      ).preflight(request(Files.createTempDirectory("goal-preflight-running-occupy")))
+
+    assertEquals(GoalPreflightVerdict.ALREADY_RUNNING, result.verdict)
+  }
+
+  @Test
+  fun `paused occupying parent without standalone history is resumable`() {
+    val occupying = GoalRunnerManifestState("parent-paused", "/fake/metrics.db", manifest())
+    val result =
+      service(
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        manifestStore =
+          TestManifestStore(
+            occupying,
+            occupyingState = occupying,
+            occupyingStatus = WorkflowStatus.PAUSED,
+          ),
+      ).preflight(request(Files.createTempDirectory("goal-preflight-paused-occupy")))
+
+    assertEquals(GoalPreflightVerdict.RESUMABLE, result.verdict)
+  }
+
+  @Test
+  fun `completed standalone terminal history without occupying parent is new work`() {
+    val occupying = GoalRunnerManifestState("parent-complete", "/fake/metrics.db", manifest())
+    val lookup =
+      FeatureTaskContinuationLookupResult.TerminalOnly(listOf(terminalCandidate(WorkflowStatus.COMPLETED)))
+    val adjusted = adjustGoalPreflightContinuationLookup(lookup, occupying = null, occupyingWorkflowStatus = null)
+    assertEquals(FeatureTaskContinuationLookupResult.NoMatch, adjusted)
+    val result =
+      service(
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        manifestStore = TestManifestStore(occupying, occupyingState = null),
+      ).preflight(request(Files.createTempDirectory("goal-preflight-complete-reuse")))
+    assertEquals(GoalPreflightVerdict.NEW_WORK, result.verdict)
+  }
+
+  @Test
+  fun `terminal history latest completed is reusable even when an earlier candidate failed`() {
+    val lookup =
+      FeatureTaskContinuationLookupResult.TerminalOnly(
+        listOf(
+          terminalCandidate(WorkflowStatus.FAILED, "wfl-failed"),
+          terminalCandidate(WorkflowStatus.COMPLETED, "wfl-complete"),
+        ),
+      )
+    val adjusted = adjustGoalPreflightContinuationLookup(lookup, occupying = null, occupyingWorkflowStatus = null)
+    assertEquals(FeatureTaskContinuationLookupResult.NoMatch, adjusted)
+  }
+
+  @Test
+  fun `reusable standalone history does not hide a running occupying parent`() {
+    val occupying = GoalRunnerManifestState("parent-running", "/fake/metrics.db", manifest())
+    val lookup =
+      FeatureTaskContinuationLookupResult.TerminalOnly(listOf(terminalCandidate(WorkflowStatus.COMPLETED)))
+    val adjusted =
+      adjustGoalPreflightContinuationLookup(lookup, occupying, WorkflowStatus.RUNNING)
+    assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(adjusted)
+  }
+
+  private fun terminalCandidate(
+    status: WorkflowStatus,
+    workflowId: String = "wfl-standalone",
+  ): FeatureTaskContinuationCandidate =
+    FeatureTaskContinuationCandidate(
+      executionIdentity =
+        FeatureTaskExecutionIdentity(
+          workflowId = workflowId,
+          normalizedIssueKey = "SKILL-901",
+          repositoryIdentity = "repo",
+          governedSpecPath = ".feature-specs/SKILL-901-goal/spec.md",
+          mode = FeatureTaskWorkflowMode.RUNTIME,
+        ),
+      workflowId = workflowId,
+      mode = FeatureTaskWorkflowMode.RUNTIME,
+      status = status.wireValue,
+      currentStep = "plan",
+      governedSpecPath = ".feature-specs/SKILL-901-goal/spec.md",
+      updatedAt = null,
+      liveness = null,
+      summary = "terminal",
+    )
+
   private fun service(
     database: FakeDatabaseSessionFactory,
     manifestState: GoalRunnerManifestState?,
     externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort =
       EmptyExternalAgentAddonSourceConfigPort,
     persistedReviewPolicy: GoalRunnerReviewPolicy? = null,
+  ): GoalPreflightService =
+    service(
+      database,
+      TestManifestStore(manifestState, persistedReviewPolicy),
+      externalAgentAddonSourceConfigPort,
+    )
+
+  private fun service(
+    database: FakeDatabaseSessionFactory,
+    manifestStore: TestManifestStore,
+    externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort =
+      EmptyExternalAgentAddonSourceConfigPort,
   ): GoalPreflightService {
     val fileStore: DecompositionManifestStore = TestDecompositionManifestStore
     return GoalPreflightService(
@@ -299,7 +431,7 @@ class GoalPreflightServiceTest {
           ExecutionPlanAdmissionFixture().compatibility,
           NoopRuntimeDiagnostics,
         ),
-      manifestStore = TestManifestStore(manifestState, persistedReviewPolicy),
+      manifestStore = manifestStore,
       agentAddonSelectionPort = TestAgentAddonSelectionPort,
       externalAgentAddonSourceConfigPort = externalAgentAddonSourceConfigPort,
       manifestFileStore = fileStore,
@@ -358,7 +490,14 @@ class GoalPreflightServiceTest {
 internal class TestManifestStore(
   private val state: GoalRunnerManifestState?,
   private val persistedReviewPolicy: GoalRunnerReviewPolicy? = null,
+  private val occupyingState: GoalRunnerManifestState? = null,
+  private val occupyingStatus: WorkflowStatus? = null,
 ) : GoalRunnerManifestStoreDefaults() {
+  override fun loadOccupyingByIssueKey(
+    issueKey: String,
+    repoRoot: Path?,
+  ): OccupyingGoalParent? = occupyingState?.let { OccupyingGoalParent(it, occupyingStatus ?: WorkflowStatus.PAUSED) }
+
   override fun loadByIssueKey(
     issueKey: String,
     repoRoot: Path?,

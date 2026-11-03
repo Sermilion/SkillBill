@@ -44,6 +44,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion5
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
+import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalSharedPreplansDropIssueKeyUnique
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalAssessmentCounts
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalBlockedReason
 import skillbill.infrastructure.sqlite.core.migration.area.recordGoalSubtaskTraceProbeCounts
@@ -960,4 +961,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 99,
       name = "record-standalone-qa-checklist",
       operation = ::recordStandaloneQaChecklist,
+    ) +
+    DatabaseMigration(
+      version = 100,
+      name = "drop-goal-shared-preplans-issue-key-unique",
+      operation = ::rebuildGoalSharedPreplansDropIssueKeyUnique,
     )

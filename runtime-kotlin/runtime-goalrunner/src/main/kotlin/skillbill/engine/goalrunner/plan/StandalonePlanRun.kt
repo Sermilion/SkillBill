@@ -2,6 +2,8 @@ package skillbill.engine.goalrunner.plan
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
+import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
+import skillbill.application.workflow.decomposition.findOccupyingDecomposedParentWorkflow
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
@@ -196,6 +198,9 @@ public class StandalonePlanRun(
             .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
         } ?: FeatureTaskContinuationLookupResult.NoMatch
       ).forLaunchedSpec(issueKey, intake, repoRoot)
+    if (hasReusableDecomposedParent(issueKey, repoRoot)) {
+      return open(issueKey, intake, repoRoot, inputFor, statusPublisher)
+    }
     if (planReports.manifestExists(issueKey, repoRoot)) {
       if (found is FeatureTaskContinuationLookupResult.Resumable) {
         return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
@@ -219,6 +224,18 @@ public class StandalonePlanRun(
       -> open(issueKey, intake, repoRoot, inputFor, statusPublisher)
     }
   }
+
+  private fun hasReusableDecomposedParent(
+    issueKey: String,
+    repoRoot: Path,
+  ): Boolean =
+    database.read { unitOfWork ->
+      goalRepositoryIdentityCandidates(repoRoot, repositories).any { identity ->
+        unitOfWork.workflowStates.findDecomposedParentWorkflow(issueKey, repositoryIdentity = identity) != null &&
+          unitOfWork.workflowStates.findOccupyingDecomposedParentWorkflow(issueKey, repositoryIdentity = identity) ==
+          null
+      }
+    }
 
   private fun settleExistingManifest(
     issueKey: String,

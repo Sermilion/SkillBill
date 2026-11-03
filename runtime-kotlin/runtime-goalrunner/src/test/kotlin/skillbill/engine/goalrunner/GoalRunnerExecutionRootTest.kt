@@ -32,7 +32,7 @@ class GoalRunnerExecutionRootTest {
   private fun request() = GoalRunnerRunRequest("SKILL-56", launchingRoot, "claude")
 
   @Test
-  fun `already complete goal retries retained worktree cleanup`() {
+  fun `already complete goal is reusable by issue key and does not bind as the run target`() {
     val worktree = Files.createTempDirectory("goal-completion-retry").toRealPath()
     val store =
       InMemoryGoalManifestStore(
@@ -65,9 +65,10 @@ class GoalRunnerExecutionRootTest {
 
     val report = runner.run(request())
 
-    assertIs<GoalRunnerRunReport.AlreadyComplete>(report)
-    assertEquals(1, worktrees.settlements)
-    assertEquals("unpublished_commits", store.controlState.executionWorktreeRetentionReason)
+    assertIs<GoalRunnerRunReport.Stopped>(report)
+    assertEquals(GoalRunnerStopReason.BLOCKED, report.stop.reason)
+    assertTrue(runner.requiresPlanning(request()))
+    assertEquals(0, worktrees.settlements)
   }
 
   @Test

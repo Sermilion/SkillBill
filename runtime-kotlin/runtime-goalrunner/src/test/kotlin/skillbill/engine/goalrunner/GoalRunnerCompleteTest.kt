@@ -23,6 +23,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -60,8 +61,12 @@ class GoalRunnerCompleteTest {
   }
 
   @Test
-  fun `complete accepts unfinished subtasks and a later run reports the goal already complete`() {
-    val store = InMemoryGoalManifestStore(manifest = partlyFinishedManifest())
+  fun `complete accepts unfinished subtasks and a later run starts an independent parent`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = partlyFinishedManifest(),
+        reuseTemplate = manifest(subtaskCount = 2),
+      )
     val service =
       testGoalRunnerStatusService(
         manifestStore = store,
@@ -80,32 +85,35 @@ class GoalRunnerCompleteTest {
     assertEquals(setOf(2), store.acceptances.keys)
     assertNotNull(store.controlState.goalCompletedAt)
 
-    val outcomes =
-      object : TestGoalQualityOutcomeStore(settled = true) {
-        override fun hasRequiredGoalChildHistoryDraft(
-          parentWorkflowId: String,
-          subtaskId: Int,
-          childWorkflowId: String,
-        ): Boolean = childWorkflowId == "wfl-1"
-      }
+    val firstParent = store.parentWorkflowId
+    val outcomes = RecordingOutcomeStore()
     val runner =
       testGoalRunner(
         goalRunnerDeps(
           manifestStore = store,
-          subtaskLauncher = RecordingSubtaskLauncher { error("A completed goal must not launch subtasks.") },
+          subtaskLauncher =
+            RecordingSubtaskLauncher { request ->
+              val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+              val childId = "wfl-reuse-$subtaskId"
+              store.mutate { current -> current.withWorkflowId(subtaskId, childId) }
+              outcomes[childId] = completeOutcome(subtaskId)
+              launchFacts()
+            },
           outcomeStore = outcomes,
           pullRequestPort = RecordingPullRequestPort(),
         ),
       )
-    assertIs<GoalRunnerRunReport.AlreadyComplete>(
-      runner.run(
-        GoalRunnerRunRequest(
-          issueKey = "SKILL-56",
-          repoRoot = Files.createTempDirectory("goal-complete"),
-          invokedAgentId = "claude",
-        ),
-      ),
-    )
+    val request =
+      GoalRunnerRunRequest(
+        issueKey = "SKILL-56",
+        repoRoot = Files.createTempDirectory("goal-complete"),
+        invokedAgentId = "claude",
+      )
+    assertTrue(runner.requiresPlanning(request))
+    store.installReplacementProjection()
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(request))
+    assertNotEquals(firstParent, store.parentWorkflowId)
+    assertEquals(listOf(firstParent), store.preservedParentWorkflowIds)
   }
 
   @Test

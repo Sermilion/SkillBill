@@ -48,6 +48,7 @@ import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.TestNoopGoalRunnerSubtaskLauncher
 import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.manifest.projectionStillReusableParentHistory
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
@@ -70,6 +71,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
@@ -241,6 +243,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertIsNot
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -1844,24 +1847,36 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
-  fun `rerunning a finalized goal reports already complete without committing or opening a PR`() {
-    val repoRoot = Files.createTempDirectory("goal-already-complete")
+  fun `reusable completed key starts an independent parent instead of reporting already complete`() {
+    val repoRoot = Files.createTempDirectory("goal-reuse-complete")
     val git =
       CommitAllRecordingGitOperations(
         dirtyPorcelain = " M .gitignore",
         currentBranch = "feat/SKILL-56-goal",
       )
     val pullRequests = RecordingPullRequestPort()
+    val reuseTemplate = manifest(subtaskCount = 1)
     val store =
       InMemoryGoalManifestStore(
-        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+        manifest = reuseTemplate.withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+        reuseTemplate = reuseTemplate,
       )
+    var launchCount = 0
+    val outcomes = RecordingOutcomeStore()
     val runner =
       testGoalRunner(
         goalRunnerDeps(
           manifestStore = store,
-          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
-          outcomeStore = RecordingOutcomeStore(),
+          subtaskLauncher =
+            RecordingSubtaskLauncher { request ->
+              launchCount += 1
+              val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+              val childId = "wfl-reuse-$subtaskId"
+              store.mutate { current -> current.withWorkflowId(subtaskId, childId) }
+              outcomes[childId] = completeOutcome(subtaskId)
+              launchFacts()
+            },
+          outcomeStore = outcomes,
           pullRequestPort = pullRequests,
         ).copy(
           specScratchStore = RecordingSpecScratchStore(),
@@ -1869,13 +1884,63 @@ class GoalRunnerLinearScratchFinalizeTest {
         ),
       )
 
-    val first = assertIs<GoalRunnerRunReport.Completed>(runner.run(linearRunRequest(repoRoot)))
+    val firstParent = store.parentWorkflowId
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(linearRunRequest(repoRoot)))
     val commitsAfterFirstRun = git.commitMessages.toList()
+    assertIs<GoalRunnerRunReport.Stopped>(runner.run(linearRunRequest(repoRoot)))
+    assertTrue(runner.requiresPlanning(linearRunRequest(repoRoot)))
+    store.installReplacementProjection()
 
-    val second = assertIs<GoalRunnerRunReport.AlreadyComplete>(runner.run(linearRunRequest(repoRoot)))
-    assertEquals(first.pullRequestUrl, second.pullRequestUrl)
-    assertEquals(commitsAfterFirstRun, git.commitMessages)
-    assertEquals(1, pullRequests.openCount)
+    val second = runner.run(linearRunRequest(repoRoot))
+    assertIs<GoalRunnerRunReport.Completed>(second)
+    assertNotEquals(firstParent, store.parentWorkflowId)
+    assertEquals(listOf(firstParent), store.preservedParentWorkflowIds)
+    assertEquals(1, launchCount)
+    assertEquals(commitsAfterFirstRun, git.commitMessages.take(commitsAfterFirstRun.size))
+    assertEquals(2, pullRequests.openCount)
+  }
+
+  @Test
+  fun `reusable abandoned key starts an independent parent instead of resuming`() {
+    val repoRoot = Files.createTempDirectory("goal-reuse-abandoned")
+    val reuseTemplate = manifest(subtaskCount = 1)
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = reuseTemplate.withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+        reuseTemplate = reuseTemplate,
+      )
+    store.markAbandoned()
+    val firstParent = store.parentWorkflowId
+    val outcomes = RecordingOutcomeStore()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher =
+            RecordingSubtaskLauncher { request ->
+              val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+              val childId = "wfl-reuse-$subtaskId"
+              store.mutate { current -> current.withWorkflowId(subtaskId, childId) }
+              outcomes[childId] = completeOutcome(subtaskId)
+              launchFacts()
+            },
+          outcomeStore = outcomes,
+          pullRequestPort = RecordingPullRequestPort(),
+        ).copy(
+          specScratchStore = RecordingSpecScratchStore(),
+          gitOperations =
+            CommitAllRecordingGitOperations(
+              dirtyPorcelain = " M .gitignore",
+              currentBranch = "feat/SKILL-56-goal",
+            ),
+        ),
+      )
+
+    assertTrue(runner.requiresPlanning(linearRunRequest(repoRoot)))
+    store.installReplacementProjection()
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(linearRunRequest(repoRoot)))
+    assertNotEquals(firstParent, store.parentWorkflowId)
+    assertEquals(listOf(firstParent), store.preservedParentWorkflowIds)
   }
 
   @Test
@@ -2052,7 +2117,8 @@ class GoalRunnerLinearScratchFinalizeTest {
     assertEquals(1, monitorAttempts)
     assertEquals(emptyList(), git.commitMessages)
     assertEquals(emptyList(), git.pushedBranches)
-    assertIs<GoalRunnerRunReport.AlreadyComplete>(runner.run(request))
+    assertIs<GoalRunnerRunReport.Stopped>(runner.run(request))
+    assertTrue(runner.requiresPlanning(request))
     assertEquals(1, pullRequests.openCount)
   }
 
@@ -4583,12 +4649,18 @@ class GoalRunnerManifestReconciliationTest {
 
 internal class InMemoryGoalManifestStore(
   manifest: DecompositionManifest,
+  reuseTemplate: DecompositionManifest = manifest,
   private val hardReset: ((GoalRunnerManifestState) -> Unit)? = null,
   private val projectionSaved: (() -> Unit)? = null,
   initialControlState: GoalRunnerControlState = GoalRunnerControlState(),
 ) : GoalRunnerManifestStoreDefaults() {
-  var manifest: DecompositionManifest = manifest
+  var parentWorkflowId: String = "wfl-parent"
     private set
+  private val baseManifest: DecompositionManifest = reuseTemplate
+  private var reuseGeneration: Int = 0
+  private var historyManifest: DecompositionManifest? = null
+  private var abandoned: Boolean = false
+  val preservedParentWorkflowIds: MutableList<String> = mutableListOf()
   var saveCount: Int = 0
     private set
   var runtimeStateSaveCount: Int = 0
@@ -4608,12 +4680,50 @@ internal class InMemoryGoalManifestStore(
   var acceptances: Map<Int, GoalRunnerOutOfBandAcceptance> = emptyMap()
     private set
 
+  var manifest: DecompositionManifest = manifest
+    private set
+
+  override fun loadDurableByIssueKey(
+    issueKey: String,
+    repoRoot: Path?,
+  ): GoalRunnerManifestState? = loadByIssueKey(issueKey, repoRoot)
+
+  override fun loadOccupyingByIssueKey(
+    issueKey: String,
+    repoRoot: Path?,
+  ): OccupyingGoalParent? {
+    if (isReusableHistory()) return null
+    return loadByIssueKey(issueKey, repoRoot)?.let { OccupyingGoalParent(it, WorkflowStatus.RUNNING) }
+  }
+
+  override fun importIndependentParentFromProjection(
+    issueKey: String,
+    repoRoot: Path,
+  ): GoalRunnerManifestState? {
+    if (!isReusableHistory()) return null
+    val stored =
+      GoalRunnerManifestState(
+        parentWorkflowId = parentWorkflowId,
+        dbPath = "/tmp/skillbill-goal-runner/metrics.db",
+        manifest = historyManifest ?: manifest,
+        controlState = controlState,
+      )
+    if (projectionStillReusableParentHistory(manifest, stored)) return null
+    preservedParentWorkflowIds += parentWorkflowId
+    reuseGeneration += 1
+    parentWorkflowId = "wfl-parent-reuse-$reuseGeneration"
+    controlState = GoalRunnerControlState()
+    abandoned = false
+    historyManifest = null
+    return loadByIssueKey(issueKey, repoRoot)
+  }
+
   override fun loadByIssueKey(
     issueKey: String,
     repoRoot: Path?,
   ): GoalRunnerManifestState? =
     GoalRunnerManifestState(
-      parentWorkflowId = "wfl-parent",
+      parentWorkflowId = parentWorkflowId,
       dbPath = "/tmp/skillbill-goal-runner/metrics.db",
       manifest = manifest,
       controlState = controlState,
@@ -4639,6 +4749,7 @@ internal class InMemoryGoalManifestStore(
     state: GoalRunnerControlState,
   ): GoalRunnerControlState {
     controlState = state
+    rememberReusableHistory()
     return controlState
   }
 
@@ -4953,11 +5064,29 @@ internal class InMemoryGoalManifestStore(
     }
     manifest = manifest.withOperatorCompletedSubtasks(unfinished.toSet(), commitSha)
     controlState = controlState.copy(goalCompletedAt = completedAt)
+    rememberReusableHistory()
     return state.copy(manifest = manifest, controlState = controlState)
   }
 
   fun mutate(block: (DecompositionManifest) -> DecompositionManifest) {
     manifest = block(manifest)
+  }
+
+  fun markAbandoned() {
+    abandoned = true
+    rememberReusableHistory()
+  }
+
+  fun installReplacementProjection(replacement: DecompositionManifest = baseManifest) {
+    manifest = replacement
+  }
+
+  private fun isReusableHistory(): Boolean = controlState.goalCompletedAt != null || abandoned
+
+  private fun rememberReusableHistory() {
+    if (historyManifest == null && isReusableHistory()) {
+      historyManifest = manifest
+    }
   }
 }
 

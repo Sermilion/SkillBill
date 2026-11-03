@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.model.GoalRunnerStatusManifestPage
+import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusSummary
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -58,6 +59,15 @@ public interface GoalRunnerManifestQueries {
     issueKey: String,
     repoRoot: Path? = null,
   ): GoalRunnerManifestState?
+
+  /**
+   * Returns durable goal state for an issue key only when a decomposed parent still occupies fresh starts
+   * (workflow status is not completed or abandoned).
+   */
+  public fun loadOccupyingByIssueKey(
+    issueKey: String,
+    repoRoot: Path? = null,
+  ): OccupyingGoalParent?
 
   public fun controlState(parentWorkflowId: String): GoalRunnerControlState
 
@@ -244,6 +254,13 @@ public interface GoalRunnerManifestStateWrites {
   ): GoalRunnerChildWorkflowSaveResult
 }
 
+public interface GoalRunnerManifestIndependentParentWrites {
+  public fun importIndependentParentFromProjection(
+    issueKey: String,
+    repoRoot: Path,
+  ): GoalRunnerManifestState?
+}
+
 public interface GoalRunnerManifestCompletionWrites {
   /**
    * Accepts every unfinished subtask against [commitSha], retires any active quality execution and
@@ -288,5 +305,6 @@ public interface GoalRunnerManifestStore :
   GoalRunnerManifestExecutionCommands,
   GoalRunnerManifestControlWrites,
   GoalRunnerManifestStateWrites,
+  GoalRunnerManifestIndependentParentWrites,
   GoalRunnerManifestCompletionWrites,
   GoalRunnerManifestPurgeCommands

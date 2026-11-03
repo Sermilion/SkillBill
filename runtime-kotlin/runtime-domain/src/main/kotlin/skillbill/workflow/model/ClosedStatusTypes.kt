@@ -91,6 +91,9 @@ enum class WorkflowContinueStatus(val wireValue: String) {
 val WorkflowStatus.isTerminal: Boolean
   get() = this == WorkflowStatus.COMPLETED || this == WorkflowStatus.FAILED || this == WorkflowStatus.ABANDONED
 
+fun WorkflowStatus?.occupiesGoalIssueKey(): Boolean =
+  this != WorkflowStatus.COMPLETED && this != WorkflowStatus.ABANDONED
+
 fun String?.decompositionStatus(): DecompositionStatus? = this?.let(DecompositionStatus::fromWire)
 
 fun String?.workflowStatus(): WorkflowStatus? = this?.let(WorkflowStatus::fromWire)

@@ -15,6 +15,11 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.time.Instant
 
+public data class OccupyingGoalParent(
+  public val state: GoalRunnerManifestState,
+  public val workflowStatus: WorkflowStatus,
+)
+
 public data class GoalRunnerCompletionPersistenceResult(
   public val state: GoalRunnerManifestState,
   public val paused: Boolean,

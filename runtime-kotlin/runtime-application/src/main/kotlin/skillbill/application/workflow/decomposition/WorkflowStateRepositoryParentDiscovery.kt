@@ -20,6 +20,7 @@ import skillbill.workflow.decomposition.runtime.isGoalContinuationChildWorkflow
 import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.occupiesGoalIssueKey
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -190,21 +191,44 @@ fun WorkflowStateRepository.findDecomposedParentWorkflow(
   repositoryIdentity: String? = null,
 ): WorkflowStateRecord? {
   val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
-  val candidates =
-    listFeatureTaskWorkflowsForParentDiscovery(normalizedIssueKey, repositoryIdentity).mapNotNull { row ->
-      val snapshot = row.toSnapshot()
-      if (snapshot.isGoalContinuationChildWorkflow()) return@mapNotNull null
-      val manifest = snapshot.artifacts.decompositionRuntime() ?: return@mapNotNull null
-      if (
-        (snapshot.hasDecompositionPlan() || row.issueKey?.trim() == normalizedIssueKey) &&
-        manifest.issueKey == normalizedIssueKey
-      ) {
-        DecomposedParentCandidate(row, manifest)
-      } else {
-        null
-      }
-    }.filterNot { candidate -> candidate.isStaleAbandonedLineage(currentProjectedManifest) }
-  val activeCandidates = candidates.filter { candidate -> candidate.manifest.isActiveGoalRuntime() }
+  return decomposedParentCandidates(normalizedIssueKey, currentProjectedManifest, repositoryIdentity)
+    .preferredDecomposedParent(normalizedIssueKey)
+}
+
+fun WorkflowStateRepository.findOccupyingDecomposedParentWorkflow(
+  issueKey: String,
+  currentProjectedManifest: DecompositionManifest? = null,
+  repositoryIdentity: String? = null,
+): WorkflowStateRecord? {
+  val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
+  return decomposedParentCandidates(normalizedIssueKey, currentProjectedManifest, repositoryIdentity)
+    .filter { candidate -> candidate.record.workflowStatus.workflowStatus().occupiesGoalIssueKey() }
+    .preferredDecomposedParent(normalizedIssueKey)
+}
+
+private fun WorkflowStateRepository.decomposedParentCandidates(
+  normalizedIssueKey: String,
+  currentProjectedManifest: DecompositionManifest?,
+  repositoryIdentity: String?,
+): List<DecomposedParentCandidate> =
+  listFeatureTaskWorkflowsForParentDiscovery(normalizedIssueKey, repositoryIdentity).mapNotNull { row ->
+    val snapshot = row.toSnapshot()
+    if (snapshot.isGoalContinuationChildWorkflow()) return@mapNotNull null
+    val manifest = snapshot.artifacts.decompositionRuntime() ?: return@mapNotNull null
+    if (
+      (snapshot.hasDecompositionPlan() || row.issueKey?.trim() == normalizedIssueKey) &&
+      manifest.issueKey == normalizedIssueKey
+    ) {
+      DecomposedParentCandidate(row, manifest)
+    } else {
+      null
+    }
+  }.filterNot { candidate -> candidate.isStaleAbandonedLineage(currentProjectedManifest) }
+
+private fun List<DecomposedParentCandidate>.preferredDecomposedParent(
+  normalizedIssueKey: String,
+): WorkflowStateRecord? {
+  val activeCandidates = filter { candidate -> candidate.manifest.isActiveGoalRuntime() }
   if (activeCandidates.size > 1) {
     error(
       "Ambiguous decomposed parent workflows for '$normalizedIssueKey': " +
@@ -212,7 +236,7 @@ fun WorkflowStateRepository.findDecomposedParentWorkflow(
         ". Pass an explicit workflow or manifest selector before continuing.",
     )
   }
-  return activeCandidates.firstOrNull()?.record ?: candidates.firstOrNull()?.record
+  return activeCandidates.firstOrNull()?.record ?: firstOrNull()?.record
 }
 
 private sealed interface ParentDiscoveryCandidate {

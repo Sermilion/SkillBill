@@ -65,9 +65,16 @@ public class GoalPreflightService(
         continuationLookup.lookupIfPresent(normalizedIssueKey, identity)
           .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
       } ?: FeatureTaskContinuationLookupResult.NoMatch
+    val occupyingParent = manifestStore.loadOccupyingByIssueKey(normalizedIssueKey, root)
+    val effectiveLookup =
+      adjustGoalPreflightContinuationLookup(
+        lookup,
+        occupyingParent?.state,
+        occupyingParent?.workflowStatus,
+      )
     return lookupResolver.resolve(
       GoalPreflightLookupInput(
-        lookup = lookup,
+        lookup = effectiveLookup,
         normalizedIssueKey = normalizedIssueKey,
         manifest = manifest,
         manifestState = manifestState,
