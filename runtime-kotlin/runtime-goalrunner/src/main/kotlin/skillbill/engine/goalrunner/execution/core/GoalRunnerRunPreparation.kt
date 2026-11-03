@@ -11,7 +11,6 @@ import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.GoalRunnerWedgeClass
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
-import skillbill.engine.goalrunner.execution.support.goalWorkBranch
 import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
 import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -27,6 +26,7 @@ import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.goalrunner.goalWorkBranch
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerSelection

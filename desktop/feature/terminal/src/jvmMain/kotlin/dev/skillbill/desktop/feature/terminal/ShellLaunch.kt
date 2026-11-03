@@ -5,15 +5,24 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /** What to start in a tab: a login shell in [workingDirectory] with [environment]. */
-data class TerminalLaunch(val command: List<String>, val workingDirectory: Path, val environment: Map<String, String>)
+data class TerminalLaunch(val command: List<String>, val workingDirectory: Path, val environment: Map<String, String>, val notice: String? = null)
+
+data class TabStart(val directory: Path, val notice: String?)
+
+fun tabStart(directory: Path, fallbackRoot: Path?, notice: String?, isDirectory: (Path) -> Boolean): TabStart =
+  if (!isDirectory(directory) && fallbackRoot != null && isDirectory(fallbackRoot)) {
+    TabStart(fallbackRoot, notice ?: "This goal's worktree was removed. This terminal is in $fallbackRoot.")
+  } else {
+    TabStart(directory, notice)
+  }
 
 /**
  * The launch rules, free of I/O. The shell is the user's `SHELL`, else `/bin/zsh` on macOS and `/bin/bash` elsewhere, run as a
  * login shell so its PATH matches a normal terminal.
  */
-fun terminalLaunch(environment: Map<String, String>, osName: String, workingDirectory: Path): TerminalLaunch {
+fun terminalLaunch(environment: Map<String, String>, osName: String, workingDirectory: Path, notice: String? = null): TerminalLaunch {
   val shell = environment["SHELL"]?.takeIf { it.isNotBlank() } ?: if (osName.startsWith("Mac")) "/bin/zsh" else "/bin/bash"
-  return TerminalLaunch(listOf(shell, "-l"), workingDirectory, environment + ("TERM" to "xterm-256color"))
+  return TerminalLaunch(listOf(shell, "-l"), workingDirectory, environment + ("TERM" to "xterm-256color"), notice)
 }
 
 /** A requested directory is kept even when it is gone, so its start fails visibly; no request means home. */

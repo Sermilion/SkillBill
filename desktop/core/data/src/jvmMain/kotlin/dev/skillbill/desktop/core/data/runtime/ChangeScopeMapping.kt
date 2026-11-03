@@ -29,7 +29,7 @@ internal fun WorkScopeSubtask.toDomain(): ScopeSubtask = ScopeSubtask(
 
 internal fun WorkGoalScopesResult.toState(): SubtaskScopesState = when (this) {
   is WorkGoalScopesResult.Listed -> SubtaskScopesState.Listed(
-    worktreeRoot, targetBranch, rangesSupported, subtasks.map { it.toDomain() }, emptyMap(),
+    worktreeRoot, targetBranch, rangesSupported, subtasks.map { it.toDomain() }, emptyMap(), committedHeadBranch,
   )
   is WorkGoalScopesResult.NotAGoal -> SubtaskScopesState.NotAGoal
   is WorkGoalScopesResult.Unavailable -> SubtaskScopesState.Unavailable(ReadProblem.Runtime(reason))

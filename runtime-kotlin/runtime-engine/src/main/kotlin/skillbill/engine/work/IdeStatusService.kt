@@ -48,6 +48,7 @@ import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
@@ -372,6 +373,7 @@ public class IdeStatusService(
     val validationRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = true)
     val validationPage = validationRead?.page
     val goalStatus = goal?.let { work -> detailGoalStatus(work, validationPage, goalRead?.page, context) }
+    val goalWorktree = goal?.let { workBoardItemProjection.goalWorktreeView(candidate.workflowId, context.unitOfWork) }
     val dependencies = detailDependencies(goal, context.unitOfWork.workList, request, position)
     val runtimeWorkflowId = goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId()
     val runtimeRead =
@@ -420,12 +422,11 @@ public class IdeStatusService(
         controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
         incident = incidentSet.incident,
         incidentHistory = incidentSet.incidentHistory,
-        changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, context),
+        changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, goalWorktree, context),
+        goalWorktree = goalWorktree,
       )
-    return ProjectedDetailItem(
-      detailItem,
-      detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead),
-    )
+    val nextAnchors = detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead)
+    return ProjectedDetailItem(detailItem, nextAnchors)
   }
 
   private fun WorkItem.taskRuntimeWorkflowId(): String? =
@@ -435,12 +436,18 @@ public class IdeStatusService(
     standalone: StandalonePhaseStatusRecord?,
     manifest: DecompositionManifest?,
     item: WorkItem?,
+    goalWorktree: GoalWorktreeView?,
     context: IdeStatusProjectionContext,
   ) = workChangeBaseline(
     standalone,
     manifest,
     item,
-    WorkChangeBaselineEnvironment(context.repoRoot, context.unitOfWork.workflowStates, diagnostics),
+    WorkChangeBaselineEnvironment(
+      context.repoRoot,
+      context.unitOfWork.workflowStates,
+      diagnostics,
+      goalWorktree,
+    ),
   )
 
   private fun detailCompletion(

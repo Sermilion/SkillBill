@@ -76,7 +76,7 @@ class WorkFeatureEntry(
       onToggleSpecs = { shellPanes.specsOpen = !shellPanes.specsOpen },
       onToggleTerminal = paneCommands::toggleTerminal,
       onShowAllWork = { navigator.navigate(WorkRoute(null)) },
-      onOpenTerminal = { paneCommands.openTerminal(Path.of(it.repositoryRoot)) },
+      onOpenTerminal = paneCommands::openTerminal,
       onCopyReason = ::copyReason,
     )
     WorkScreen(state, filterFocus, host, viewModel::onAction)

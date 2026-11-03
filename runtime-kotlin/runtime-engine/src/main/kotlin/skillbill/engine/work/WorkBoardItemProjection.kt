@@ -38,6 +38,8 @@ import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
+import skillbill.ports.idestatus.model.GoalWorktreeState
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
@@ -59,6 +61,7 @@ import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -74,6 +77,7 @@ public class WorkBoardItemProjection(
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val goalRuntimeStateFiles: GoalRuntimeStateFileStore,
 ) {
   internal fun projectBoardCandidate(
     unitOfWork: UnitOfWork,
@@ -198,6 +202,30 @@ public class WorkBoardItemProjection(
       doneWithinDay = windowed.doneWithinDay,
       membershipDeadline = windowed.membershipDeadline,
       executingAgentId = projection.executingAgentId,
+      goalWorktree =
+        work.firstOrNull()?.item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
+          ?.let { goalWorktreeView(candidate.workflowId, context.unitOfWork) },
+    )
+  }
+
+  internal fun goalWorktreeView(
+    workflowId: String,
+    unitOfWork: UnitOfWork,
+  ): GoalWorktreeView? {
+    val control = unitOfWork.goalRunnerControls.controlState(workflowId)
+    val path = control.executionWorktreePath ?: return null
+    val state =
+      when {
+        control.executionWorktreeRemovedAt != null || !goalRuntimeStateFiles.directoryExists(Path.of(path)) ->
+          GoalWorktreeState.REMOVED
+        control.executionWorktreeRetentionReason != null -> GoalWorktreeState.RETAINED
+        else -> GoalWorktreeState.ACTIVE
+      }
+    return GoalWorktreeView(
+      path,
+      state,
+      control.executionWorktreeRetentionReason,
+      control.executionWorktreeRetentionDetail,
     )
   }
 

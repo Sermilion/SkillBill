@@ -9,6 +9,14 @@ sealed interface ChangeBaseline {
   data class RunStart(override val worktreeRoot: String, val baseSha: String, val excludedUntrackedPaths: List<String>) : ChangeBaseline
 
   data class TargetMergeBase(override val worktreeRoot: String, val targetBranch: String?) : ChangeBaseline
+
+  data class CommittedBranchRange(
+    override val worktreeRoot: String,
+    val targetBranch: String,
+    val headBranch: String,
+  ) : ChangeBaseline {
+    val headRef: String get() = "refs/heads/$headBranch"
+  }
 }
 
 enum class ChangeStatus { Added, Modified, Deleted, Renamed, Untracked }

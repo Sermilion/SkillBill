@@ -62,6 +62,19 @@ class ChangeScopeRulesTest {
   }
 
   @Test
+  fun `removed worktree offers committed scopes and refuses a range without an end commit`() {
+    val committed = target.copy(
+      allBaseline = ChangeBaseline.CommittedBranchRange("/repo", "main", "goal"),
+      committedOnly = true,
+    )
+
+    assertEquals(setOf(ScopeKind.All, ScopeKind.Subtasks), availableScopes(committed))
+    assertEquals(ScopeRead.Committed("s1", "e2"), resolveScope(committed, ChangeScope.Subtasks(1, 2)))
+    assertEquals(ScopeRead.Unavailable("no end commit"), resolveScope(committed, ChangeScope.Subtasks(1, 3)))
+    assertEquals(ScopeRead.Unavailable("scope not available"), resolveScope(committed, ChangeScope.Uncommitted))
+  }
+
+  @Test
   fun `hunk attribution requires exclusive added and removed lines`() {
     val range = FileDiff(
       listOf(

@@ -55,7 +55,11 @@ internal class ChangeScopeDiffs(
       is ScopeRead.Baseline -> {
         when (val base = baselineFileBase(target.worktreeRoot, resolved, lock)) {
           is Outcome.Failure -> base.error
-          is Outcome.Success -> readWorkingPatch(target.worktreeRoot, base.value, file, lock)
+          is Outcome.Success ->
+            when (val baseline = resolved.baseline) {
+              is ChangeBaseline.CommittedBranchRange -> readBranchRangePatch(target.worktreeRoot, base.value, baseline, file, lock)
+              else -> readWorkingPatch(target.worktreeRoot, base.value, file, lock)
+            }
         }
       }
       ScopeRead.Uncommitted -> {
@@ -79,6 +83,11 @@ internal class ChangeScopeDiffs(
       is ChangeBaseline.SubtaskStart -> return Outcome.Success(baseline.baseSha)
       is ChangeBaseline.RunStart -> return Outcome.Success(baseline.baseSha)
       is ChangeBaseline.TargetMergeBase -> Unit
+      is ChangeBaseline.CommittedBranchRange ->
+        return when (val result = readChanges(scope.baseline, lock)) {
+          is Outcome.Failure -> Outcome.Failure(FileDiffState.Unavailable(result.error)).also { diagnostics.record(SCOPES_READ_FAILED) }
+          is Outcome.Success -> result.value.toFileDiffBase()
+        }
     }
     val key = ListedBaseKey(worktreeRoot, scope)
     baseShas[key]?.let { return Outcome.Success(it) }
@@ -117,6 +126,22 @@ internal class ChangeScopeDiffs(
 
   private suspend fun readWorkingPatch(worktreeRoot: String, baseSha: String, file: ChangedFile, lock: Mutex): FileDiffState =
     when (val result = git(lock) { port.fileDiff(worktreeRoot, baseSha, file.toPort()).toFileDiffState() }) {
+      is Outcome.Failure -> FileDiffState.Unavailable(result.error).also { diagnostics.record(SCOPES_READ_FAILED) }
+      is Outcome.Success -> result.value.also { state ->
+        if (state is FileDiffState.Unavailable) diagnostics.record(SCOPES_READ_FAILED)
+      }
+    }
+
+  private suspend fun readBranchRangePatch(
+    worktreeRoot: String,
+    baseSha: String,
+    baseline: ChangeBaseline.CommittedBranchRange,
+    file: ChangedFile,
+    lock: Mutex,
+  ): FileDiffState =
+    when (val result = git(lock) {
+      port.committedFileDiff(worktreeRoot, baseSha, baseline.headRef, file.toPort()).toFileDiffState()
+    }) {
       is Outcome.Failure -> FileDiffState.Unavailable(result.error).also { diagnostics.record(SCOPES_READ_FAILED) }
       is Outcome.Success -> result.value.also { state ->
         if (state is FileDiffState.Unavailable) diagnostics.record(SCOPES_READ_FAILED)
@@ -245,8 +270,9 @@ internal class ChangeScopeDiffs(
       val subtask = target.subtasks.firstOrNull { it.id == scope.from }
       val subtaskRead = resolveScope(target, scope)
       val workingSubtask = subtask?.takeIf {
-        it.state == ScopeSubtaskState.RUNNING ||
+        !target.committedOnly && (it.state == ScopeSubtaskState.RUNNING ||
           (it.state == ScopeSubtaskState.INTERRUPTED && subtaskRead !is ScopeRead.Committed)
+        )
       }
       if (workingSubtask != null) {
         val startSha = workingSubtask.startSha ?: return FileDiffState.Unavailable(ReadProblem.Runtime("no end commit"))
@@ -262,7 +288,11 @@ internal class ChangeScopeDiffs(
       is ScopeRead.Committed -> readCommittedPatch(target.worktreeRoot, read.fromSha, read.toSha, file, lock, cache)
       is ScopeRead.Baseline -> when (val base = baselineFileBase(target.worktreeRoot, read, lock)) {
         is Outcome.Failure -> base.error
-        is Outcome.Success -> readWorkingPatch(target.worktreeRoot, base.value, file, lock)
+        is Outcome.Success ->
+          when (val baseline = read.baseline) {
+            is ChangeBaseline.CommittedBranchRange -> readBranchRangePatch(target.worktreeRoot, base.value, baseline, file, lock)
+            else -> readWorkingPatch(target.worktreeRoot, base.value, file, lock)
+          }
       }
       else -> FileDiffState.Unavailable(ReadProblem.Runtime("scope not available"))
     }

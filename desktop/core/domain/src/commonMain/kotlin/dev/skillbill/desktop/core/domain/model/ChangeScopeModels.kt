@@ -36,6 +36,7 @@ data class ChangeScopeTarget(
   val allBaseline: ChangeBaseline,
   val subtasks: List<ScopeSubtask>,
   val rangesSupported: Boolean,
+  val committedOnly: Boolean = false,
 )
 
 data class CommitRange(val fromSha: String, val toSha: String?)
@@ -60,6 +61,7 @@ sealed interface SubtaskScopesState {
     val rangesSupported: Boolean,
     val subtasks: List<ScopeSubtask>,
     val stats: Map<Int, SubtaskStats>,
+    val committedHeadBranch: String? = null,
   ) : SubtaskScopesState
   data object NotAGoal : SubtaskScopesState
   data class Unavailable(val problem: ReadProblem) : SubtaskScopesState

@@ -4,6 +4,7 @@ import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.engine.featuretask.phaserun.StandalonePhaseRegistrationFactory
 import skillbill.engine.featuretask.phaserun.workflowRegistrationForTest
 import skillbill.engine.goalrunner.manifest
+import skillbill.goalrunner.goalWorkBranch
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.system.CheckedOutBranchSource

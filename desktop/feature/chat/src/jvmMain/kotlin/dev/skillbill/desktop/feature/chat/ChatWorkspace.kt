@@ -334,7 +334,7 @@ class ChatWorkspace(
   fun showResumable(id: String) {
     val session = sessions[id] ?: return
     scope.launch(session.job) {
-      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.repositoryRoot, session.sessionId)
+      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.checkoutRoot, session.sessionId)
     }
   }
 
@@ -358,7 +358,7 @@ class ChatWorkspace(
       running?.cancelAndJoin()
       val lines = chat.openSavedChat(entry)
       endAgent(session)
-      session.resumeFrom(entry.sessionId)
+      session.resumeFrom(entry.sessionId, session.item.checkoutRoot)
       session.agentState.value = entry.agent
       session.agentSupportedState.value = chat.supports(entry.agent.agentId)
       val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
@@ -484,6 +484,7 @@ class ChatWorkspace(
             turns.markGone(it)
           } else if (state.sections !is DetailSections.Pending) {
             it.item = state.header
+            turns.followWorktree(it)
             val title = state.header.issueKey ?: state.header.title
             tabState.update { s -> s.copy(tabs = s.tabs.map { t -> if (t.executionId == it.item.id) t.copy(title = title) else t }) }
             it.modeState.value = modeFor(state.header)

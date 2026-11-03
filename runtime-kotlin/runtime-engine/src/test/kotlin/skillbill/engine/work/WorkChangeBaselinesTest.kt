@@ -3,6 +3,8 @@ package skillbill.engine.work
 import skillbill.engine.work.changes.WorkChangeBaselineEnvironment
 import skillbill.engine.work.changes.workChangeBaseline
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.GoalWorktreeState
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkChangeBaseline
@@ -56,6 +58,28 @@ class WorkChangeBaselinesTest {
   fun `goal without a manifest base branch has no baseline`() {
     assertNull(resolveGoal(goalBaseBranch = null))
     assertNull(resolveGoal(goalBaseBranch = " "))
+  }
+
+  @Test
+  fun `active and retained goals use the worktree while removed goals use the committed branch range`() {
+    val goal = workItem("goal-1", WorkItemKind.FEATURE_GOAL)
+    val manifest = manifest()
+    val active = GoalWorktreeView("/goal-worktree", GoalWorktreeState.ACTIVE)
+    val retained = GoalWorktreeView("/goal-worktree", GoalWorktreeState.RETAINED, "unpublished_commits", "keep edits")
+    val removed = GoalWorktreeView("/goal-worktree", GoalWorktreeState.REMOVED)
+
+    assertEquals(
+      WorkChangeBaseline.TargetMergeBase("/goal-worktree", "main"),
+      workChangeBaseline(null, manifest, goal, environment(emptyWorkflowStates(), active)),
+    )
+    assertEquals(
+      WorkChangeBaseline.TargetMergeBase("/goal-worktree", "main"),
+      workChangeBaseline(null, manifest, goal, environment(emptyWorkflowStates(), retained)),
+    )
+    assertEquals(
+      WorkChangeBaseline.CommittedBranchRange("/repo", "main", "feat/SKILL-455"),
+      workChangeBaseline(null, manifest, goal, environment(emptyWorkflowStates(), removed)),
+    )
   }
 
   @Test
@@ -130,8 +154,21 @@ class WorkChangeBaselinesTest {
 
   private fun emptyWorkflowStates(): WorkflowStateRepository = workflowStates { _, _ -> null }
 
-  private fun environment(workflows: WorkflowStateRepository) =
-    WorkChangeBaselineEnvironment(repoRoot, workflows, diagnostics)
+  private fun environment(
+    workflows: WorkflowStateRepository,
+    goalWorktree: GoalWorktreeView? = null,
+  ) = WorkChangeBaselineEnvironment(repoRoot, workflows, diagnostics, goalWorktree)
+
+  private fun manifest() =
+    DecompositionManifest(
+      issueKey = "SKILL-455",
+      featureName = "changes",
+      parentSpecPath = "spec.md",
+      baseBranch = "main",
+      featureBranch = "feat/SKILL-455",
+      currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "start"),
+      subtasks = emptyList(),
+    )
 
   private fun workflowStates(handler: (String, Array<out Any?>) -> Any?): WorkflowStateRepository =
     Proxy.newProxyInstance(

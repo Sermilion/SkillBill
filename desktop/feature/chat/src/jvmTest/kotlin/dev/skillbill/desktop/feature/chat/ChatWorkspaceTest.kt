@@ -18,6 +18,8 @@ import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.GoalWorktree
+import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
@@ -69,6 +71,36 @@ class ChatWorkspaceTest {
   private fun TestScope.workspace(): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     return ChatWorkspace(chat, details, controls, WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft())
+  }
+
+  @Test
+  fun `removed worktree ends the old agent session and starts the next turn at the primary root`() = runTest {
+    val active = workItem("SKILL-468").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree("/repo/.skill-bill/worktrees/SKILL-468", GoalWorktreeState.Active, null, null),
+    )
+    val detail = MutableStateFlow(loaded(active))
+    details.details = mapOf(active.id to detail)
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+    val firstSessionId = session.sessionId
+    assertEquals("/repo/.skill-bill/worktrees/SKILL-468", (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
+
+    val removed = active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed))
+    detail.value = loaded(removed)
+    runCurrent()
+    workspace.send(active.id, "continue")
+    runCurrent()
+
+    assertEquals(listOf(firstSessionId), chat.ended)
+    assertEquals("/repo", (chat.requests.last().scope as ChatScope.Execution).repositoryRoot)
+    assertTrue(chat.requests.last().firstTurn)
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
+      it.text == "$REMOVED_WORKTREE_CHAT_NOTICE /repo."
+    })
+    workspace.closeAll()
   }
 
   @Test

@@ -3,9 +3,15 @@ package dev.skillbill.desktop.core.domain.model
 fun goalScopeTarget(workId: String, listed: SubtaskScopesState.Listed): ChangeScopeTarget = ChangeScopeTarget(
   workId = workId,
   worktreeRoot = listed.worktreeRoot,
-  allBaseline = ChangeBaseline.TargetMergeBase(listed.worktreeRoot, listed.targetBranch),
+  allBaseline =
+    if (listed.committedHeadBranch != null && listed.targetBranch != null) {
+      ChangeBaseline.CommittedBranchRange(listed.worktreeRoot, listed.targetBranch, listed.committedHeadBranch)
+    } else {
+      ChangeBaseline.TargetMergeBase(listed.worktreeRoot, listed.targetBranch)
+    },
   subtasks = listed.subtasks,
   rangesSupported = listed.rangesSupported,
+  committedOnly = listed.committedHeadBranch != null,
 )
 
 fun executionScopeTarget(workId: String, baseline: ChangeBaseline): ChangeScopeTarget = ChangeScopeTarget(
@@ -17,8 +23,12 @@ fun executionScopeTarget(workId: String, baseline: ChangeBaseline): ChangeScopeT
 )
 
 fun availableScopes(target: ChangeScopeTarget): Set<ScopeKind> =
-  if (target.subtasks.isNotEmpty() && target.rangesSupported) ScopeKind.entries.toSet()
-  else setOf(ScopeKind.All, ScopeKind.Uncommitted)
+  when {
+    target.committedOnly ->
+      if (target.rangesSupported) setOf(ScopeKind.All, ScopeKind.Subtasks) else setOf(ScopeKind.All)
+    target.subtasks.isNotEmpty() && target.rangesSupported -> ScopeKind.entries.toSet()
+    else -> setOf(ScopeKind.All, ScopeKind.Uncommitted)
+  }
 
 fun normalizeRange(target: ChangeScopeTarget, a: Int, b: Int): ChangeScope.Subtasks? {
   if (ScopeKind.Subtasks !in availableScopes(target)) return null
@@ -45,7 +55,8 @@ private fun resolveSubtasks(target: ChangeScopeTarget, scope: ChangeScope.Subtas
   val fromSha = start.startSha ?: return ScopeRead.Unavailable("no end commit")
   end.endSha?.let { return ScopeRead.Committed(fromSha, it) }
   return if (end.isLastStarted(target.subtasks)) {
-    ScopeRead.Baseline(ChangeBaseline.SubtaskStart(target.worktreeRoot, fromSha, start.baselineUntrackedPaths))
+    if (target.committedOnly) ScopeRead.Unavailable("no end commit")
+    else ScopeRead.Baseline(ChangeBaseline.SubtaskStart(target.worktreeRoot, fromSha, start.baselineUntrackedPaths))
   } else {
     ScopeRead.Unavailable("no end commit")
   }

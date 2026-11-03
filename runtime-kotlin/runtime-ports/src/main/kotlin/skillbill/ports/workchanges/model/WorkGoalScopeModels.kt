@@ -18,6 +18,7 @@ sealed interface WorkGoalScopesResult {
     val targetBranch: String?,
     val rangesSupported: Boolean,
     val subtasks: List<WorkScopeSubtask>,
+    val committedHeadBranch: String? = null,
   ) : WorkGoalScopesResult
 
   data class NotAGoal(val workflowId: String) : WorkGoalScopesResult

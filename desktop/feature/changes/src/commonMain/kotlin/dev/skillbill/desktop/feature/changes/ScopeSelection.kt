@@ -5,11 +5,13 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.OutsideCommit
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
+import dev.skillbill.desktop.core.domain.model.ScopeKind
 import dev.skillbill.desktop.core.domain.model.ScopeRead
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.normalizeRange
 import dev.skillbill.desktop.core.domain.model.resolveScope
+import dev.skillbill.desktop.core.domain.model.availableScopes
 import kotlin.math.abs
 
 /**
@@ -43,6 +45,7 @@ internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope, outs
     is ChangeBaseline.TargetMergeBase -> "${baseline.targetBranch ?: "default branch"}...HEAD"
     is ChangeBaseline.RunStart -> "${baseline.baseSha.take(7)}..HEAD"
     is ChangeBaseline.SubtaskStart -> "${baseline.baseSha.take(7)}..HEAD"
+    is ChangeBaseline.CommittedBranchRange -> "${baseline.targetBranch}...${baseline.headBranch}"
   }
   ChangeScope.Uncommitted -> ""
   ChangeScope.Outside -> outsideCommits.joinToString(", ") { it.sha.take(7) }.ifEmpty { "none" }
@@ -74,6 +77,7 @@ internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
   val buttons = mutableListOf(
     QuickButtonUi(QuickScope.All, "All", allCount, enabled = state.allRead == null || (allCount ?: 0) > 0, pressed = scope == ChangeScope.All),
   )
+  val scopes = state.target?.let(::availableScopes).orEmpty()
   if (state.subtasksAvailable) {
     val running = state.subtasks.firstOrNull { it.state == ScopeSubtaskState.RUNNING }
     val runningCount = running?.let { state.stats[it.id]?.files?.size }
@@ -85,9 +89,13 @@ internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
       pressed = running != null && scope == ChangeScope.Subtasks(running.id, running.id),
       running = running != null,
     )
-    buttons += readButton(QuickScope.Outside, "Outside subtasks", state.outsideRead, scope == ChangeScope.Outside)
+    if (ScopeKind.Outside in scopes) {
+      buttons += readButton(QuickScope.Outside, "Outside subtasks", state.outsideRead, scope == ChangeScope.Outside)
+    }
   }
-  buttons += readButton(QuickScope.Uncommitted, "Uncommitted", state.uncommittedRead, scope == ChangeScope.Uncommitted)
+  if (ScopeKind.Uncommitted in scopes) {
+    buttons += readButton(QuickScope.Uncommitted, "Uncommitted", state.uncommittedRead, scope == ChangeScope.Uncommitted)
+  }
   return buttons
 }
 

@@ -73,7 +73,7 @@ class CommandCatalog(
         })
       }
       add(ShellCommand(CommandItem("terminal-here", "Open terminal in ${item.repositoryName}", LucideIcons.terminal)) {
-        terminal.openIn(item.repositoryRoot)
+        terminal.openIn(item)
       })
     }
     return CommandSection(key, commands)

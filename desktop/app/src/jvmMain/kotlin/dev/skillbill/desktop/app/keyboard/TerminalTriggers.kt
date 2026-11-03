@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
+import dev.skillbill.desktop.core.domain.model.WorkItem
 
 /** Every terminal trigger in the shell: the sidebar toggle, Ctrl+Backquote, Ctrl+Shift+Backquote and the menu's terminal commands. */
 @Inject
@@ -17,6 +18,8 @@ class TerminalTriggers(private val commands: PaneCommands) {
   fun newTab() = commands.newTerminalTab()
 
   fun openIn(repositoryRoot: String) = commands.openTerminal(Path.of(repositoryRoot))
+
+  fun openIn(item: WorkItem) = commands.openTerminal(item)
 
   /** Ends the window's shells; the window calls it on disposal. */
   fun close() = commands.closeTerminals()

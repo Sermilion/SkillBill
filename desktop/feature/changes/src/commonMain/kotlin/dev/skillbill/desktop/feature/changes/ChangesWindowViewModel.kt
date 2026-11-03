@@ -102,7 +102,7 @@ class ChangesWindowViewModel(
         is DetailSections.Loaded -> {
           currentLoadedDetail = observed
           if (observed.header.kind == WorkKind.Goal) {
-            val key = GoalObservationKey(observed.header.id, observed.header.running)
+            val key = GoalObservationKey(observed.header.id, observed.header.running, observed.header.goalWorktree)
             if (notGoalKey == key) setExecutionTarget(observed) else observeGoal(key)
           } else {
             notGoalKey = null
@@ -156,7 +156,8 @@ class ChangesWindowViewModel(
   private fun isCurrentGoal(key: GoalObservationKey, version: Int): Boolean {
     val current = currentLoadedDetail ?: return false
     return goalObservationVersion == version && observedGoal == key &&
-      current.header.kind == WorkKind.Goal && current.header.id == key.id && current.header.running == key.running
+      current.header.kind == WorkKind.Goal && current.header.id == key.id && current.header.running == key.running &&
+      current.header.goalWorktree == key.goalWorktree
   }
 
   private fun DetailState.detailOrNull(): Detail? = (sections as? DetailSections.Loaded)?.detail
@@ -274,7 +275,11 @@ class ChangesWindowViewModel(
   private fun observeQuickReads() {
     state.map { ui -> ui.target?.let { QuickKey(it, ui.item.running) } }.distinctUntilChanged().flatMapLatest { key ->
       if (key == null) return@flatMapLatest flowOf<QuickReads?>(null)
-      val uncommitted = scopes.observeScope(key.target, ChangeScope.Uncommitted, key.running)
+      val uncommitted = if (ScopeKind.Uncommitted in availableScopes(key.target)) {
+        scopes.observeScope(key.target, ChangeScope.Uncommitted, key.running).map { it as ScopeChangesState? }
+      } else {
+        flowOf(null)
+      }
       val outside = if (ScopeKind.Outside in availableScopes(key.target)) {
         scopes.observeScope(key.target, ChangeScope.Outside, key.running)
       } else {
@@ -285,7 +290,7 @@ class ChangesWindowViewModel(
       val previous = quickReads.value?.takeIf { it.key == reads?.key }
       // A re-read of the same target keeps the last settled list until the new one lands, like the shown list.
       val settled = reads?.copy(
-        uncommitted = reads.uncommitted.settledOver(previous?.uncommitted),
+        uncommitted = reads.uncommitted?.settledOver(previous?.uncommitted),
         outside = reads.outside?.settledOver(previous?.outside),
       )
       quickReads.value = settled
@@ -526,11 +531,12 @@ class ChangesWindowViewModel(
   private fun openSelectedFile() {
     val current = state.value
     val file = current.selectedFile ?: return
-    if (file.status == ChangeStatus.Deleted) return
     val target = current.target ?: return
+    if (file.status == ChangeStatus.Deleted && !target.committedOnly) return
     viewModelScope.launch {
-      if (changes.open(target.worktreeRoot, file) == OpenOutcome.NotOpened) {
-        mutableState.update { if (it.selectedPath == file.path) it.copy(openProblem = FILE_NOT_OPENED) else it }
+      if (changes.open(target.allBaseline, file) == OpenOutcome.NotOpened) {
+        val message = if (target.committedOnly) REMOVED_WORKTREE_FILE_NOT_OPENED else FILE_NOT_OPENED
+        mutableState.update { if (it.selectedPath == file.path) it.copy(openProblem = message) else it }
       }
     }
   }
@@ -557,13 +563,14 @@ private fun ChangesWindowUiState.withLoadedDiff(file: ChangedFile, result: FileD
   return copy(fileDiffs = fileDiffs + (file.path to loaded))
 }
 
-private data class GoalObservationKey(val id: String, val running: Boolean)
+private data class GoalObservationKey(val id: String, val running: Boolean, val goalWorktree: dev.skillbill.desktop.core.domain.model.GoalWorktree?)
 
 internal const val FILE_NOT_OPENED = "Could not open the file. Check that it still exists."
+internal const val REMOVED_WORKTREE_FILE_NOT_OPENED = "The goal's worktree was removed, so this file cannot be opened."
 
 private data class QuickKey(val target: ChangeScopeTarget, val running: Boolean)
 
-private data class QuickReads(val key: QuickKey, val uncommitted: ScopeChangesState, val outside: ScopeChangesState?) {
+private data class QuickReads(val key: QuickKey, val uncommitted: ScopeChangesState?, val outside: ScopeChangesState?) {
   operator fun get(scope: ChangeScope): ScopeChangesState? = if (scope == ChangeScope.Outside) outside else uncommitted
 }
 

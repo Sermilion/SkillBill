@@ -6,6 +6,8 @@ import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.designsystem.component.ToastLead
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.settings.AppSettings
+import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
@@ -38,6 +40,7 @@ import java.awt.KeyboardFocusManager
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.nio.file.Path
+import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
@@ -52,7 +55,7 @@ data class TerminalUiState(
   val renamingId: Long? = null,
 )
 
-data class TerminalTabUi(val id: Long, val label: String, val directory: Path)
+data class TerminalTabUi(val id: Long, val label: String, val directory: Path, val fallbackRoot: Path? = null, val notice: String? = null)
 
 // A drag reports many deltas; the height is written once it has been still this long.
 private val HEIGHT_WRITE_DELAY = 300.milliseconds
@@ -104,7 +107,7 @@ class TerminalWorkspace(
   val state: StateFlow<TerminalUiState> = combine(tabs, renaming, storedHeight, draggedHeight) { current, renamingId, stored, dragged ->
     val labels = terminalTabLabels(current.tabs)
     TerminalUiState(
-      tabs = current.tabs.map { TerminalTabUi(it.id, labels.getValue(it.id), Path.of(it.directory)) },
+      tabs = current.tabs.map { TerminalTabUi(it.id, labels.getValue(it.id), Path.of(it.directory), it.fallbackRoot?.let(Path::of), it.notice) },
       activeId = current.activeId,
       paneOpen = current.paneOpen,
       heightDp = dragged ?: stored.toFloat(),
@@ -141,7 +144,7 @@ class TerminalWorkspace(
     scope.launch {
       selection.item.collect { item ->
         if (item != null) {
-          selected = SelectedRoot.Work(Path.of(item.repositoryRoot))
+          selected = item.toSelectedRoot()
         } else if (selected is SelectedRoot.Work) {
           selected = SelectedRoot.None
         }
@@ -155,14 +158,16 @@ class TerminalWorkspace(
   override fun toggleTerminal() {
     val current = tabs.value
     when {
-      current.tabs.isEmpty() -> addTab(selected.directory)
+      current.tabs.isEmpty() -> addTab(selected)
       else -> update(current.copy(paneOpen = !current.paneOpen))
     }
   }
 
-  override fun newTerminalTab() = addTab(selected.directory)
+  override fun newTerminalTab() = addTab(selected)
 
   override fun openTerminal(directory: Path?) = addTab(directory)
+
+  override fun openTerminal(item: WorkItem) = addTab(item.toSelectedRoot())
 
   override fun specProjectSelected(checkout: Path?) {
     selected = SelectedRoot.Spec(checkout)
@@ -225,7 +230,10 @@ class TerminalWorkspace(
     closeTab(id)
   }
 
-  fun launch(tab: TerminalTabUi): TerminalLaunch = terminalLaunch(environment, System.getProperty("os.name").orEmpty(), tab.directory)
+  fun launch(tab: TerminalTabUi): TerminalLaunch {
+    val start = tabStart(tab.directory, tab.fallbackRoot, tab.notice) { Files.isDirectory(it) }
+    return terminalLaunch(environment, System.getProperty("os.name").orEmpty(), start.directory, start.notice)
+  }
 
   /** The tab's session, created on first use; a tab that is no longer listed gets a closed one. */
   fun session(id: Long): TerminalSession {
@@ -252,6 +260,19 @@ class TerminalWorkspace(
     update(tabs.value.withTab(TerminalTab(nextId++, directory.toString(), tabName(directory, userHome))))
   }
 
+  private fun addTab(root: SelectedRoot) {
+    val directory = tabDirectory(root.directory, userHome)
+    update(tabs.value.withTab(TerminalTab(nextId++, directory.toString(), tabName(directory, userHome), fallbackRoot = root.fallbackRoot?.toString(), notice = root.notice)))
+  }
+
+  private fun WorkItem.toSelectedRoot(): SelectedRoot.Work {
+    val worktree = goalWorktree
+    val notice = if (worktree?.state == GoalWorktreeState.Removed) {
+      "This goal's worktree was removed. This terminal is in $repositoryRoot."
+    } else null
+    return SelectedRoot.Work(Path.of(checkoutRoot), goalWorktree?.let { Path.of(repositoryRoot) }, notice)
+  }
+
   private fun update(next: TerminalTabsState) {
     tabs.value = next
     if (!next.paneOpen || next.tabs.none { it.id == renaming.value }) renaming.value = null
@@ -275,13 +296,16 @@ class TerminalWorkspace(
   // The window's current selection: a work item's repository root, or the selected spec project's checkout.
   private sealed interface SelectedRoot {
     val directory: Path?
+    val fallbackRoot: Path?
+    val notice: String? get() = null
 
-    data class Work(override val directory: Path) : SelectedRoot
+    data class Work(override val directory: Path, override val fallbackRoot: Path? = null, override val notice: String? = null) : SelectedRoot
 
-    data class Spec(override val directory: Path?) : SelectedRoot
+    data class Spec(override val directory: Path?) : SelectedRoot { override val fallbackRoot: Path? = null }
 
     data object None : SelectedRoot {
       override val directory: Path? = null
+      override val fallbackRoot: Path? = null
     }
   }
 

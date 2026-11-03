@@ -108,6 +108,7 @@ import skillbill.ports.work.model.WorkStatusCandidateQuery
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
+import skillbill.ports.workflow.goalstate.LocalGoalRuntimeStateFileStore
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -403,6 +404,7 @@ private fun testBoardProjection(
     NoopFeatureTaskRuntimeWorkerSupervisor,
     NoopRuntimeDiagnostics,
     repositoryEnclosingRootPort,
+    LocalGoalRuntimeStateFileStore(),
   )
 
 internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =

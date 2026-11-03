@@ -9,8 +9,11 @@ import skillbill.engine.work.WorkBoardItemProjection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
+import skillbill.goalrunner.goalWorkBranch
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.GoalWorktreeState
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItemKind
@@ -55,20 +58,35 @@ public class WorkChangeScopesService(
       workBoardItemProjection.resolvedWorkItems(listOf(goal), unit).single().repositoryIdentity
         ?.let(workBoardItemProjection::decodeRepositoryRoot)
         ?: return unavailable(goalWorkflowId, "goal $goalWorkflowId has no usable repository identity")
-    return listScopes(goalWorkflowId, goal.issueKey, root.toString(), unit)
+    val goalWorktree = workBoardItemProjection.goalWorktreeView(goalWorkflowId, unit)
+    val worktreeRoot =
+      goalWorktree?.takeIf { it.state != GoalWorktreeState.REMOVED }?.path ?: root.toString()
+    return listScopes(goalWorkflowId, goal.issueKey, worktreeRoot, goalWorktree, unit)
   }
 
   private fun listScopes(
     goalWorkflowId: String,
     issueKey: String?,
     worktreeRoot: String,
+    goalWorktree: GoalWorktreeView?,
     unit: UnitOfWork,
   ): WorkGoalScopesResult {
     val key = issueKey ?: return unavailable(goalWorkflowId, "goal $goalWorkflowId has no issue key")
     val pages = readPages(goalWorkflowId, key, unit) ?: return WorkGoalScopesResult.NotAGoal(goalWorkflowId)
+    val targetBranch = pages.manifest.baseBranch.takeIf(String::isNotBlank)
+    val committedHeadBranch =
+      if (goalWorktree?.state == GoalWorktreeState.REMOVED) {
+        pages.manifest.goalWorkBranch() ?: pages.manifest.stackBranches.lastOrNull()?.branch
+      } else {
+        null
+      }
+    if (goalWorktree?.state == GoalWorktreeState.REMOVED && (targetBranch == null || committedHeadBranch == null)) {
+      return unavailable(goalWorkflowId, "removed goal has no resolvable target and head branch")
+    }
     return WorkGoalScopesResult.Listed(
       worktreeRoot = worktreeRoot,
-      targetBranch = pages.manifest.baseBranch.takeIf(String::isNotBlank),
+      targetBranch = targetBranch,
+      committedHeadBranch = committedHeadBranch,
       rangesSupported = pages.manifest.executionModel == DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK,
       subtasks = scopeSubtasks(goalWorkflowId, pages, unit),
     )
