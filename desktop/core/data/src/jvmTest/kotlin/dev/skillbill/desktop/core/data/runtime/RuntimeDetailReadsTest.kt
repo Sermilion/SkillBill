@@ -50,10 +50,11 @@ class RuntimeDetailReadsTest {
       )
       try {
         val now = Instant.now()
+        val repositoryIdentity = runtime.repositoryEnclosingRootPort.repositoryIdentity(root)
         val registered = runtime.databaseSession.transaction { unit ->
           unit.standalonePhaseStatuses.register(
             StandalonePhaseStatusRegistration(
-              "repo-root-realpath-v1:${root.toRealPath()}", "smoke", "SKILL-447", null, "detail-read", "review",
+              repositoryIdentity, "smoke", "SKILL-447", null, "detail-read", "review",
               "detail-read-execution", "active", "review", now, "detail-read-owner", 1, now.plusSeconds(300),
             ),
           )
