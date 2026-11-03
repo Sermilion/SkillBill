@@ -1,3 +1,10 @@
+## [2026-11-03] SKILL-521 Goal run card is contextual
+Areas: desktop/feature/chat
+- showGoalOfferCard replaces first-turn-plus-stands-aside. A finished first turn is not enough. The card appears when the operator asks to run a goal or plan, the latest reply offers start:goal or start:plan, or a prefix choice, start problem or started confirmation is pending.
+- A question about an issue, a feature description, and a review, validate, qa, pr or release request keep it hidden. An earlier goal-run ask stays through clarification until one of those standalone routes takes over.
+- asksToRunGoal matches "goal run", start/run … goal, plan-only preview phrasing, and "implement/ship/build this". It does not treat every Goal preview as a start, so "Add a release button" stays hidden.
+Feature flag: N/A
+
 ## [2026-11-02] SKILL-466 chats know skill-bill vocabulary and launch from actions
 Areas: desktop/feature/chat, desktop/core/data chat, control and session, desktop/core/domain, runtime-engine work/control, runtime-ports, runtime-infra launcher
 - Both prompts share SHARED_START_ACTION_GUIDANCE: start wires goal, plan, review, validation, qa, pr, monitor, verify and pr-review-fix, with phrase mapping and Run phase:/Run operation: labels. Release has no start button. update-check, unit-test-value-check and the feature-guard operations stay ordinary chat turns.

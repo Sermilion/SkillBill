@@ -83,8 +83,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
           modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
           allowStartActions = host.onStart != null,
           allowSuggestedActions = !offer.starting,
-          // A pending prefix choice or goal problem keeps the card, because only the card shows them.
-          footer = if (firstTurnEnded && (!goalOfferStandsAside(transcript) || offer.prefixKind != null || offer.problem != null)) {
+          footer = if (showGoalOfferCard(firstTurnEnded, transcript, offer)) {
             {
               NewTaskOfferCard(
                 draft.baseBranch,

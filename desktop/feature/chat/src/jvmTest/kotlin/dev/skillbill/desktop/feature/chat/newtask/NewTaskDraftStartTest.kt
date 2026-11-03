@@ -345,11 +345,13 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `a release request hides the goal offer until the operator asks for something else`() {
+  fun `a release request hides the goal offer and a later feature description does not bring it back`() {
+    val idle = NewTaskOffer()
     val release = ChatMessage.Operator("publish a minor release", null)
-    assertTrue(goalOfferStandsAside(listOf(release)))
-    assertFalse(goalOfferStandsAside(listOf(ChatMessage.Operator("Add a release button", null))))
-    assertFalse(goalOfferStandsAside(listOf(release, ChatMessage.Operator("add dark mode instead", null))))
+    assertFalse(showGoalOfferCard(true, listOf(release), idle))
+    assertFalse(showGoalOfferCard(true, listOf(ChatMessage.Operator("Add a release button", null)), idle))
+    assertFalse(showGoalOfferCard(true, listOf(release, ChatMessage.Operator("add dark mode instead", null)), idle))
+    assertTrue(showGoalOfferCard(true, listOf(release, ChatMessage.Operator("start a goal run instead", null)), idle))
   }
 
   private fun notices(chat: NewTaskChat): List<String> =

@@ -1,3 +1,9 @@
+## [2026-11-03] Show the Goal run card only when the operator is asking to run a goal
+Context: After the first turn the card appeared on every New task chat, including questions about an issue that were not a request to start a run.
+Decision: showGoalOfferCard is the only visibility gate. It stays hidden until the operator asks to run a goal or plan, or the latest reply offers a goal or plan start. A later review, validate, qa, pr or release request, or a later standalone start, hides it again. A pending prefix choice, start problem or started confirmation still keeps it, because only the card shows those.
+Reason: The card starts a goal run. Showing it on a Q&A turn offered the wrong action. Agent start:goal already marks a clear implement request, and an explicit "start a goal run" should not wait for that button.
+Supersedes: Hide the Goal run card for standalone starts and release, which only listed the hide cases and still showed the card after any other first turn.
+
 ## [2026-11-02] Hide the Goal run card for standalone starts and release
 Context: Standalone starts and release requests still showed Start goal run, which would launch the wrong kind of work.
 Decision: goalOfferStandsAside hides the card when the latest reply offers a standalone start or the latest operator message matches the Release preview. Keep it when a prefix choice or goal problem is pending.
