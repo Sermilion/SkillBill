@@ -15,10 +15,12 @@ import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import kotlinx.coroutines.flow.firstOrNull
 import kotlin.time.Clock
+import java.util.UUID
 
 internal const val GONE_NOTICE = "This execution is no longer in the open database."
 internal const val UNREADABLE_NOTICE = "Execution detail could not be read; the agent sees the summary only."
@@ -28,6 +30,7 @@ internal const val ACT_PREFIX =
     "do not resume, relaunch or continue it yourself. Wait for every command you start to finish before you end this turn."
 
 internal const val ALREADY_RUNNING_NOTICE = "The execution is already running again; the app did not relaunch it."
+internal const val REMOVED_WORKTREE_CHAT_NOTICE = "This goal's worktree was removed, so its earlier agent sessions cannot continue. New turns run in"
 
 /** The one mode rule: a running or active execution is only read; anything else may be acted on. */
 internal fun modeFor(header: WorkItem): ChatPermissionMode =
@@ -63,10 +66,21 @@ internal class ChatTurns(
     }
     val header = state?.header ?: session.item
     session.item = header
+    followWorktree(session)
+    if (header.goalWorktree != null && session.started && session.startedRoot != header.checkoutRoot) {
+      chat.end(session.sessionId)
+      session.restart(UUID.randomUUID().toString())
+    }
     session.modeState.value = modeFor(header)
     if (sections is DetailSections.Loaded) return ExecutionRead(header, sections.detail, sections.runOptions)
     session.append(ChatMessage.Notice(UNREADABLE_NOTICE))
     return ExecutionRead(header, null, null)
+  }
+
+  fun followWorktree(session: ChatSession) {
+    if (session.item.goalWorktree?.state != GoalWorktreeState.Removed || session.worktreeRemovedNoticed) return
+    session.worktreeRemovedNoticed = true
+    session.append(ChatMessage.Notice("$REMOVED_WORKTREE_CHAT_NOTICE ${session.item.repositoryRoot}."))
   }
 
   fun markGone(session: ChatSession) {
@@ -112,7 +126,7 @@ internal class ChatTurns(
     prompt: String,
     sent: ExecutionSnapshot,
   ) {
-    val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, header.repositoryRoot)
+    val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, header.checkoutRoot)
     val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt)
     var delivered = false
     try {
@@ -121,6 +135,7 @@ internal class ChatTurns(
           delivered = true
           session.delivered = sent
           session.started = true
+          session.startedRoot = header.checkoutRoot
         }
         session.thread.show(agent, event)
       }

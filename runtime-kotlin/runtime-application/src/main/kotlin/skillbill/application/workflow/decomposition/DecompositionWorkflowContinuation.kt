@@ -7,6 +7,8 @@ import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.AdvanceCompletedSubtasksRequest
 import skillbill.application.workflow.model.CheckoutAndValidateBranchRequest
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
+import skillbill.application.workflow.model.GoalExecutionRootAccess
+import skillbill.application.workflow.model.GoalExecutionRootOptions
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.application.workflow.persist.migrateLegacyGoalRunnerControls
@@ -18,6 +20,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.commitPushResultArtifact
+import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -27,6 +30,7 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.DecompositionContinuationSelector
+import skillbill.workflow.decomposition.executionRootSubtaskId
 import skillbill.workflow.decomposition.model.DecompositionContinuationSelection
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -59,8 +63,8 @@ class DecompositionWorkflowContinuation(
   private val workflowIdRandom: Random,
   private val checkout: ProjectCheckout,
 ) {
-  private fun repositoryCheckpointIdentity(): String {
-    val resolved = gitOperations.repositoryFingerprint(repoRoot)
+  private fun repositoryCheckpointIdentity(root: Path = repoRoot): String {
+    val resolved = gitOperations.repositoryFingerprint(root)
     check(resolved is WorkflowGitOperationResult.Ok) { resolved.error }
     return resolved.value.orEmpty()
   }
@@ -130,10 +134,9 @@ class DecompositionWorkflowContinuation(
     existing?.let { migrateLegacyGoalRunnerControls(unitOfWork, it) }
     val planWorkflowId =
       if (existing == null) {
-        unitOfWork.workflowStates.findCompletedPlanWorkflowId(
-          manifest.issueKey,
-          checkout.repositoryIdentity(repoRoot),
-        )
+        checkout.repositoryIdentityCandidates(repoRoot).firstNotNullOfOrNull { identity ->
+          unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, identity)
+        }
       } else {
         null
       }
@@ -174,6 +177,35 @@ class DecompositionWorkflowContinuation(
     requestedSubtaskId: Int?,
   ): ContinuationStepResult {
     val reconciledManifest = reconcileCompletedSubtasks(manifest, unitOfWork)
+    val controlState = unitOfWork.goalRunnerControls.controlState(parentRecord.workflowId)
+    val executionRoot =
+      when (
+        val access =
+          checkout.ensureGoalExecutionRoot(
+            controlState,
+            reconciledManifest,
+            repoRoot,
+            options =
+              GoalExecutionRootOptions(
+                recreateCompleted = true,
+                revisionSubtaskId = requestedSubtaskId ?: reconciledManifest.executionRootSubtaskId(),
+              ),
+          )
+      ) {
+        is GoalExecutionRootAccess.Failed ->
+          return ContinuationStepResult(
+            blockedGitResult(
+              parentRecord.workflowId,
+              manifest.issueKey,
+              unitOfWork.dbPath.toString(),
+              access.reason,
+            ),
+          )
+        is GoalExecutionRootAccess.Ready -> {
+          persistRecreatedWorktree(access, controlState, parentRecord.workflowId, unitOfWork)
+          access.path
+        }
+      }
     val advancement =
       if (requestedSubtaskId == null) {
         engine.advanceCompletedSubtasks(
@@ -183,7 +215,7 @@ class DecompositionWorkflowContinuation(
             unitOfWork = unitOfWork,
             validator = validator,
             gitOperations = gitOperations,
-            repoRootProvider = { repoRoot },
+            repoRootProvider = { executionRoot },
           ),
         )
       } else {
@@ -201,7 +233,7 @@ class DecompositionWorkflowContinuation(
     val advancedManifest = advancement.manifest
     val projectionArtifacts =
       if (advancedManifest != manifest) decompositionRuntimeArtifacts(advancedManifest, validator) else null
-    return selectedContinuation(parentRecord, advancedManifest, unitOfWork, requestedSubtaskId)
+    return selectedContinuation(parentRecord, advancedManifest, unitOfWork, requestedSubtaskId, executionRoot)
       .withProjectionArtifactsIfMissing(projectionArtifacts)
       .let { step ->
         if (step.projectionOwnerWorkflowId == null && step.projectionArtifacts != null) {
@@ -210,6 +242,25 @@ class DecompositionWorkflowContinuation(
           step
         }
       }
+  }
+
+  private fun persistRecreatedWorktree(
+    access: GoalExecutionRootAccess.Ready,
+    controlState: GoalRunnerControlState,
+    workflowId: String,
+    unitOfWork: UnitOfWork,
+  ) {
+    if (access.recreated) {
+      unitOfWork.goalRunnerControls.persistControlState(
+        workflowId,
+        controlState.copy(
+          executionWorktreePath = access.path.toString(),
+          executionWorktreeRemovedAt = null,
+          executionWorktreeRetentionReason = null,
+          executionWorktreeRetentionDetail = null,
+        ),
+      )
+    }
   }
 
   private fun reconcileCompletedSubtasks(
@@ -279,12 +330,15 @@ class DecompositionWorkflowContinuation(
     manifest: DecompositionManifest,
     unitOfWork: UnitOfWork,
     requestedSubtaskId: Int?,
+    executionRoot: Path,
   ): ContinuationStepResult =
     when (
       val selection = DecompositionContinuationSelector.select(manifest, requestedSubtaskId)
     ) {
-      is DecompositionContinuationSelection.Resume -> continueSelectedSubtask(manifest, selection, unitOfWork)
-      is DecompositionContinuationSelection.Start -> startSelectedSubtask(parentRecord, manifest, selection, unitOfWork)
+      is DecompositionContinuationSelection.Resume ->
+        continueSelectedSubtask(manifest, selection, unitOfWork, executionRoot)
+      is DecompositionContinuationSelection.Start ->
+        startSelectedSubtask(parentRecord, manifest, selection, unitOfWork, executionRoot)
       is DecompositionContinuationSelection.Blocked ->
         ContinuationStepResult(blockedSubtaskResult(parentRecord, manifest, selection, unitOfWork.dbPath.toString()))
       is DecompositionContinuationSelection.TerminalSubtask ->
@@ -297,6 +351,7 @@ class DecompositionWorkflowContinuation(
     manifest: DecompositionManifest,
     selection: DecompositionContinuationSelection.Resume,
     unitOfWork: UnitOfWork,
+    executionRoot: Path,
   ): ContinuationStepResult {
     val record =
       selection.workflowId
@@ -313,9 +368,9 @@ class DecompositionWorkflowContinuation(
         ContinueExistingWorkflowArgs(
           validator = validator,
           fileStore = fileStore,
-          repoRoot = repoRoot,
+          repoRoot = executionRoot,
           manifestWriter = manifestWriter,
-          repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,
+          repositoryCheckpointIdentity = { repositoryCheckpointIdentity(executionRoot) },
         ),
       ).withDecompositionFields(
         issueKey = manifest.issueKey,
@@ -331,8 +386,8 @@ class DecompositionWorkflowContinuation(
     manifest: DecompositionManifest,
     selection: DecompositionContinuationSelection.Start,
     unitOfWork: UnitOfWork,
+    executionRoot: Path,
   ): ContinuationStepResult {
-    val issueKey = normalizeRequiredIssueKey(manifest.issueKey)
     val branchError =
       engine.checkoutAndValidateBranch(
         CheckoutAndValidateBranchRequest(
@@ -342,13 +397,13 @@ class DecompositionWorkflowContinuation(
           unitOfWork = unitOfWork,
           validator = validator,
           gitOperations = gitOperations,
-          repoRootProvider = { repoRoot },
+          repoRootProvider = { executionRoot },
         ),
       )
     return if (branchError != null) {
       ContinuationStepResult(branchError)
     } else {
-      openSubtaskWorkflow(parentRecord, manifest, selection, issueKey, unitOfWork)
+      openSubtaskWorkflow(parentRecord, manifest, selection, unitOfWork, executionRoot)
     }
   }
 
@@ -356,9 +411,10 @@ class DecompositionWorkflowContinuation(
     parentRecord: WorkflowStateSnapshot,
     manifest: DecompositionManifest,
     selection: DecompositionContinuationSelection.Start,
-    issueKey: String,
     unitOfWork: UnitOfWork,
+    executionRoot: Path,
   ): ContinuationStepResult {
+    val issueKey = normalizeRequiredIssueKey(manifest.issueKey)
     val workflowId =
       generateWorkflowId(WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix, clock, workflowIdRandom)
     val updatedManifest = manifest.withStartedSubtask(selection.subtask.id, workflowId, selection.branchPlan.branch)
@@ -403,9 +459,9 @@ class DecompositionWorkflowContinuation(
       ContinueExistingWorkflowArgs(
         validator = validator,
         fileStore = fileStore,
-        repoRoot = repoRoot,
+        repoRoot = executionRoot,
         manifestWriter = manifestWriter,
-        repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,
+        repositoryCheckpointIdentity = { repositoryCheckpointIdentity(executionRoot) },
       ),
     )
       .withProjection(updatedManifest, validator, parentRecord.workflowId)

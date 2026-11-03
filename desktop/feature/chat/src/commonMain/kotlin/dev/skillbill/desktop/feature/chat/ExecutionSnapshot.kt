@@ -33,7 +33,7 @@ fun snapshot(item: WorkItem, detail: Detail?): ExecutionSnapshot {
   entries.put("execution.phaseExecution", item.phaseExecutionLabel)
   entries.put("execution.progress", item.progress?.let { "${it.done}/${it.total}" })
   entries.put("execution.branch", item.branch)
-  entries.put("execution.worktree", item.repositoryRoot)
+  entries.put("execution.worktree", item.checkoutRoot)
   entries.put("execution.agent", item.agentId)
   entries.put("execution.model", item.model)
   entries.put("execution.effort", item.effort)

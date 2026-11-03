@@ -14,6 +14,15 @@ enum class WorkKind { Goal, Phase, Operation }
 /** The runtime's live section verdict; null for finished work. */
 enum class WorkLiveSection { NeedsYou, Goals, Phases, Operations }
 
+enum class GoalWorktreeState { Active, Retained, Removed }
+
+data class GoalWorktree(
+  val path: String,
+  val state: GoalWorktreeState,
+  val retentionReason: String?,
+  val retentionDetail: String?,
+)
+
 data class WorkProgress(val done: Int, val total: Int)
 
 enum class CompletionSource { StandaloneFinishedAt, WorkflowCompletion, GoalCompletion, GoalStateEntry, EstimatedGoalStateEntry }
@@ -95,4 +104,8 @@ data class WorkItem(
   val qaVerdict: QaVerdict? = null,
   val workflowQaOutcome: WorkQaOutcome? = null,
   val standaloneExecution: Boolean = false,
-)
+  val goalWorktree: GoalWorktree? = null,
+  val launchWarning: String? = null,
+) {
+  val checkoutRoot: String get() = goalWorktree?.takeIf { it.state != GoalWorktreeState.Removed }?.path ?: repositoryRoot
+}

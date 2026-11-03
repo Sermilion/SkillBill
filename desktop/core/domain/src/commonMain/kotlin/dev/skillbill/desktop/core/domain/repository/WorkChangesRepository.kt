@@ -13,8 +13,8 @@ interface WorkChangesRepository {
   fun observe(baseline: ChangeBaseline?, running: Boolean): Flow<ChangesState>
 
   /** Git's own patch for [file] against [baseSha], parsed into hunks. */
-  suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState
+  suspend fun fileDiff(baseline: ChangeBaseline, baseSha: String, file: ChangedFile): FileDiffState
 
   /** Opens [file] in the system default application; a deleted file is never opened. */
-  suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome
+  suspend fun open(baseline: ChangeBaseline, file: ChangedFile): OpenOutcome
 }

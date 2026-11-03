@@ -11,12 +11,14 @@ internal fun WorkChangeBaseline.toDomain(): ChangeBaseline = when (this) {
   is WorkChangeBaseline.SubtaskStart -> ChangeBaseline.SubtaskStart(worktreeRoot, baseSha, excludedUntrackedPaths)
   is WorkChangeBaseline.RunStart -> ChangeBaseline.RunStart(worktreeRoot, baseSha, excludedUntrackedPaths)
   is WorkChangeBaseline.TargetMergeBase -> ChangeBaseline.TargetMergeBase(worktreeRoot, targetBranch)
+  is WorkChangeBaseline.CommittedBranchRange -> ChangeBaseline.CommittedBranchRange(worktreeRoot, targetBranch, headBranch)
 }
 
 internal fun ChangeBaseline.toPort(): WorkChangeBaseline = when (this) {
   is ChangeBaseline.SubtaskStart -> WorkChangeBaseline.SubtaskStart(worktreeRoot, baseSha, excludedUntrackedPaths)
   is ChangeBaseline.RunStart -> WorkChangeBaseline.RunStart(worktreeRoot, baseSha, excludedUntrackedPaths)
   is ChangeBaseline.TargetMergeBase -> WorkChangeBaseline.TargetMergeBase(worktreeRoot, targetBranch)
+  is ChangeBaseline.CommittedBranchRange -> WorkChangeBaseline.CommittedBranchRange(worktreeRoot, targetBranch, headBranch)
 }
 
 internal fun WorkChangedFile.toDomain(): ChangedFile = ChangedFile(path, oldPath, status.toDomain(), insertions, deletions)

@@ -4,8 +4,6 @@ import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
-import skillbill.goalrunner.GoalRunnerPlanner
-import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.workflow.decomposition.branchForFinalPullRequest
@@ -131,18 +129,6 @@ private fun String.toPullRequestTitle(): String =
     .joinToString(" ") { word ->
       word.replaceFirstChar { character -> character.uppercase() }
     }
-
-internal fun DecompositionManifest.goalWorkBranch(): String? {
-  val branch =
-    when (executionModel) {
-      DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK -> featureBranch
-      DecompositionExecutionModel.STACKED_BRANCHES -> {
-        val selected = (GoalRunnerPlanner.selectNext(this) as? GoalRunnerSelection.Run)?.decision?.subtask?.id
-        stackBranches.firstOrNull { it.subtaskId == selected }?.branch ?: featureBranch
-      }
-    }
-  return branch?.trim()?.takeIf(String::isNotBlank)
-}
 
 internal fun DecompositionManifest.branchPlanFor(subtaskId: Int): GoalRunnerBranchPlan =
   when (executionModel) {

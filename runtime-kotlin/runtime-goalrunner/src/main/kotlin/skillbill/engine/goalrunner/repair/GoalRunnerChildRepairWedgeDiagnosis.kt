@@ -75,10 +75,11 @@ internal class GoalRunnerChildRepairWedgeDiagnosis(
     repoRoot: Path,
     sha: String,
     goalBranch: String?,
-  ): Boolean {
-    val tip = goalBranchTip(repoRoot, goalBranch) ?: return false
+  ): Boolean? {
+    val tip = goalBranchTip(repoRoot, goalBranch)
+    if (tip == null) return null
     val ancestry = gitOperations.isCommitAncestor(repoRoot, sha, tip)
-    return ancestry is WorkflowGitOperationResult.Ok && ancestry.value != "true"
+    return if (ancestry is WorkflowGitOperationResult.Ok) ancestry.value != "true" else null
   }
 
   private fun goalBranchTip(
@@ -87,11 +88,22 @@ internal class GoalRunnerChildRepairWedgeDiagnosis(
   ): String? {
     val branch = goalBranch?.trim().orEmpty()
     if (branch.isNotEmpty()) {
-      val resolved = gitOperations.resolveCommit(repoRoot, branch)
-      if (resolved is WorkflowGitOperationResult.Ok && resolved.value.isNotBlank()) return resolved.value.trim()
+      when (val exists = gitOperations.branchExists(repoRoot, branch)) {
+        is WorkflowGitOperationResult.Ok ->
+          if (exists.value.trim() == "true") {
+            val resolved = gitOperations.resolveCommit(repoRoot, branch)
+            if (resolved is WorkflowGitOperationResult.Ok && resolved.value.isNotBlank()) return resolved.value.trim()
+            return null
+          }
+        is WorkflowGitOperationResult.Failed -> return null
+      }
     }
     val head = gitOperations.headCommitSha(repoRoot)
-    return if (head is WorkflowGitOperationResult.Ok && head.value.isNotBlank()) head.value.trim() else null
+    return if (head is WorkflowGitOperationResult.Ok && head.value.isNotBlank()) {
+      head.value.trim()
+    } else {
+      null
+    }
   }
 
   private fun healthyDiagnosis(
@@ -234,27 +246,32 @@ internal class GoalRunnerChildRepairWedgeDiagnosis(
       return
     }
     val goalBranch = continuationArtifact(artifacts)?.goalBranch
-    if (isUnreachable(repoRoot, review.reviewBaseSha, goalBranch)) {
-      wedges +=
-        GoalRunnerWedgeFinding(
-          wedgeClass = GoalRunnerWedgeClass.UNREACHABLE_REVIEW_BASE,
-          field = GoalRunnerWedgeClass.UNREACHABLE_REVIEW_BASE.durableField,
-          currentValue = review.reviewBaseSha,
-        )
-    } else {
-      passed += PASSED_REVIEW_BASE
+    when (isUnreachable(repoRoot, review.reviewBaseSha, goalBranch)) {
+      true ->
+        wedges +=
+          GoalRunnerWedgeFinding(
+            wedgeClass = GoalRunnerWedgeClass.UNREACHABLE_REVIEW_BASE,
+            field = GoalRunnerWedgeClass.UNREACHABLE_REVIEW_BASE.durableField,
+            currentValue = review.reviewBaseSha,
+          )
+      false -> passed += PASSED_REVIEW_BASE
+      null -> Unit
     }
     val remediation = review.remediationBaseSha
     when {
       remediation == null -> passed += PASSED_REMEDIATION_BASE
-      isUnreachable(repoRoot, remediation, goalBranch) ->
-        wedges +=
-          GoalRunnerWedgeFinding(
-            wedgeClass = GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE,
-            field = GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE.durableField,
-            currentValue = remediation,
-          )
-      else -> passed += PASSED_REMEDIATION_BASE
+      else ->
+        when (isUnreachable(repoRoot, remediation, goalBranch)) {
+          true ->
+            wedges +=
+              GoalRunnerWedgeFinding(
+                wedgeClass = GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE,
+                field = GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE.durableField,
+                currentValue = remediation,
+              )
+          false -> passed += PASSED_REMEDIATION_BASE
+          null -> Unit
+        }
     }
   }
 

@@ -323,6 +323,38 @@ class PlanSubtasksReopeningTest {
     }
   }
 
+  @Test
+  fun `a primary bound goal links an exact checkout plan only through its fallback identities`() {
+    val home = Files.createTempDirectory("exact-keyed-plan-link")
+    try {
+      val database = phaseRunDatabase(home, testHarnessClock)
+      val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN, database = database)
+      val planId = "wftr-exact-keyed-plan"
+      seedPlans(database, execution, planId, "wftr-older-plan", acceptedRecords())
+      val exact = execution.identity(planId)
+      val fallback = listOf(exact.repositoryIdentity)
+      val primaryBound =
+        GoalPlanningIdentity("wftr-parent", exact.normalizedIssueKey, "repo-root-realpath-v1:/primary")
+
+      database.read { unit ->
+        val states = unit.workflowStates
+        assertNull(states.findLinkedSubtaskPlanWorkflowId(primaryBound, emptyList()) { true })
+        assertEquals(planId, states.findLinkedSubtaskPlanWorkflowId(primaryBound, emptyList(), fallback) { true })
+        assertNull(states.findLinkedSubtaskPlanWorkflowId(primaryBound, emptyList(), fallback) { false })
+      }
+
+      assertTrue(reopening(database).reopenAtPlanSubtasks(planId))
+
+      database.read { unit ->
+        val states = unit.workflowStates
+        assertNull(states.findLinkedSubtaskPlanWorkflowId(primaryBound, emptyList()) { true })
+        assertEquals(planId, states.findLinkedSubtaskPlanWorkflowId(primaryBound, emptyList(), fallback) { true })
+      }
+    } finally {
+      home.toFile().deleteRecursively()
+    }
+  }
+
   private fun seedImportedChild(
     database: DatabaseSessionFactory,
     execution: ExecutionPlanAdmissionFixture,

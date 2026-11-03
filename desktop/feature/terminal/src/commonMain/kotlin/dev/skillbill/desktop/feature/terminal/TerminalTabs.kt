@@ -1,7 +1,14 @@
 package dev.skillbill.desktop.feature.terminal
 
 /** One tab: the [directory] its shell starts in, its default [name] (the project, or `~`) and the user's [customName], if any. */
-data class TerminalTab(val id: Long, val directory: String, val name: String, val customName: String? = null)
+data class TerminalTab(
+  val id: Long,
+  val directory: String,
+  val name: String,
+  val customName: String? = null,
+  val fallbackRoot: String? = null,
+  val notice: String? = null,
+)
 
 /** The window's tabs in creation order. It lives in memory only; no tab survives the window. */
 data class TerminalTabsState(val tabs: List<TerminalTab> = emptyList(), val activeId: Long? = null, val paneOpen: Boolean = false)

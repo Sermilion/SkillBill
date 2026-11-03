@@ -17,6 +17,7 @@ import skillbill.engine.goal.GOAL_PLANNING_OPERATION_KIND
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.GoalRunnerStatusRequest
 import skillbill.engine.goal.executionLivenessBlocksIdleSafeRefresh
+import skillbill.engine.goalrunner.launch.existingGoalExecutionRoot
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
@@ -45,6 +46,7 @@ import skillbill.goalrunner.model.GoalRunnerStatusProjectionRuntimeInputs
 import skillbill.goalrunner.model.GoalRunnerStatusProjector
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
+import skillbill.goalrunner.model.GoalRunnerWorktreeStatus
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.idestatus.model.summary
@@ -396,8 +398,8 @@ public class GoalRunnerStatusProjectionAssembler(
       currentWorkflowStatus = assembly.progress?.workflowStatus,
       latestLivenessSignal = assembly.progress?.latestLivenessSignal,
       latestObservabilityEvent = assembly.progress?.latestGoalObservabilityEvent?.toObservabilityEvent(),
-      requestedDiffStat = requestedDiffStat(assembly.request),
-      selectedDiffHunks = requestedSelectedDiffHunks(assembly.request),
+      requestedDiffStat = requestedDiffStat(assembly.request, assembly.loadedState),
+      selectedDiffHunks = requestedSelectedDiffHunks(assembly.request, assembly.loadedState),
       blockedAttemptCount = assembly.ledgerSummary?.blockedAttemptCount ?: 0,
       supervisorKillCount = assembly.ledgerSummary?.supervisorKillCount ?: 0,
       phaseAttemptCounts = assembly.ledgerSummary?.phaseAttemptCounts ?: emptyMap(),
@@ -423,6 +425,21 @@ public class GoalRunnerStatusProjectionAssembler(
       auditAcRetryCount = assembly.auditAcRetryCount,
       noChangeStatus = assembly.noChangeStatus,
       goalCompletedAt = goalCompletedAt,
+      goalWorktree =
+        assembly.loadedState.controlState.executionWorktreePath?.let { path ->
+          val control = assembly.loadedState.controlState
+          if (control.executionWorktreeRemovedAt != null || control.executionWorktreeRetentionReason != null) {
+            GoalRunnerWorktreeStatus(
+              path,
+              control.executionWorktreeRemovedAt,
+              control.executionWorktreeRetentionReason,
+              control.executionWorktreeRetentionDetail,
+            )
+          } else {
+            null
+          }
+        },
+      launchWarning = assembly.loadedState.controlState.launchWarning,
     )
   }
 
@@ -989,35 +1006,40 @@ public class GoalRunnerStatusProjectionAssembler(
       ?: currentSubtask.participatingAgentIds.firstOrNull()?.takeIf(String::isNotBlank)
   }
 
-  private fun requestedDiffStat(request: GoalRunnerStatusRequest) =
-    if (request.includeDiffStat) {
-      request.repoRoot
-        ?.let(gitOperations::worktreeActivity)
-        ?.takeIf { result -> result.status == WorkflowGitOperationStatus.OK }
-        ?.diffStat
-    } else {
-      null
-    }
+  private fun requestedDiffStat(
+    request: GoalRunnerStatusRequest,
+    state: GoalRunnerManifestState,
+  ) = if (request.includeDiffStat) {
+    request.repoRoot?.let { existingGoalExecutionRoot(state, it) }
+      ?.let(gitOperations::worktreeActivity)
+      ?.takeIf { result -> result.status == WorkflowGitOperationStatus.OK }
+      ?.diffStat
+  } else {
+    null
+  }
 
-  private fun requestedSelectedDiffHunks(request: GoalRunnerStatusRequest) =
-    if (request.selectedDiffHunkPaths.isNotEmpty()) {
-      request.repoRoot
-        ?.let { root ->
-          gitOperations.selectedDiffHunks(
-            root,
-            WorkflowSelectedDiffHunksRequest(
-              paths = request.selectedDiffHunkPaths,
-              maxHunks = request.selectedDiffMaxHunks,
-              maxLines = request.selectedDiffMaxLines,
-              maxBytes = request.selectedDiffMaxBytes,
-            ),
-          )
-        }
-        ?.takeIf { result -> result.status == WorkflowGitOperationStatus.OK }
-        ?.selectedDiffHunks
-    } else {
-      null
-    }
+  private fun requestedSelectedDiffHunks(
+    request: GoalRunnerStatusRequest,
+    state: GoalRunnerManifestState,
+  ) = if (request.selectedDiffHunkPaths.isNotEmpty()) {
+    request.repoRoot
+      ?.let { existingGoalExecutionRoot(state, it) }
+      ?.let { root ->
+        gitOperations.selectedDiffHunks(
+          root,
+          WorkflowSelectedDiffHunksRequest(
+            paths = request.selectedDiffHunkPaths,
+            maxHunks = request.selectedDiffMaxHunks,
+            maxLines = request.selectedDiffMaxLines,
+            maxBytes = request.selectedDiffMaxBytes,
+          ),
+        )
+      }
+      ?.takeIf { result -> result.status == WorkflowGitOperationStatus.OK }
+      ?.selectedDiffHunks
+  } else {
+    null
+  }
 }
 
 internal fun storedReviewPassFindings(

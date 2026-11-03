@@ -9,6 +9,7 @@ import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
 import skillbill.application.testRepositoryRoot
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.config.model.RepoLocalConfig
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -18,8 +19,10 @@ import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValida
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.assessment.GoalAssessmentRoundResult
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.NoopGoalRunnerAttemptLedgerStore
@@ -62,6 +65,8 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.goalstate.UnavailableGoalRuntimeStateFileStore
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.scaffold.model.PlatformManifest
 import java.time.Clock
 import kotlin.io.path.createTempDirectory
@@ -106,6 +111,7 @@ data class GoalRunnerStatusTestPorts(
   val attemptLedgerStore: GoalRunnerAttemptLedgerStore = NoopGoalRunnerAttemptLedgerStore,
   val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   val goalStateFiles: GoalRuntimeStateFileStore = UnavailableGoalRuntimeStateFileStore,
+  val goalWorktrees: GoalWorktreeResources = InPlaceGoalWorktreeResources,
   val projectStore: ProjectStorePort = FixedProjectStorePort(createTempDirectory("goal-runner-project-store")),
   val runtimeStatusService: FeatureTaskRuntimeStatusService? = null,
   val validationGatePlatformManifests: List<PlatformManifest> = emptyList(),
@@ -153,7 +159,27 @@ fun testGoalRunnerStatusService(
         outcomeStore,
       ),
     repairCoordinator = repairCoordinator,
-    acceptanceCoordinator = GoalRunnerAcceptanceCoordinator(manifestStore, ports.gitOperations, clock),
+    acceptanceCoordinator =
+      GoalRunnerAcceptanceCoordinator(
+        manifestStore,
+        ports.gitOperations,
+        clock,
+        GoalExecutionRootResolver(
+          manifestStore,
+          ports.goalWorktrees,
+          ports.gitOperations,
+          TestRepositoryEnclosingRoot,
+          ports.diagnostics,
+          ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+        ),
+        GoalWorktreeCompletionSettlement(
+          manifestStore,
+          ports.goalWorktrees,
+          TestRepositoryEnclosingRoot,
+          ports.diagnostics,
+          clock,
+        ),
+      ),
     repositoryRoot = testRepositoryRoot,
     projectionAssembler = projectionAssembler,
     resetReplanCoordinator =
@@ -165,6 +191,15 @@ fun testGoalRunnerStatusService(
         projectionAssembler = projectionAssembler,
         repositoryRoot = testRepositoryRoot,
         repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        executionRoots =
+          GoalExecutionRootResolver(
+            manifestStore,
+            ports.goalWorktrees,
+            ports.gitOperations,
+            TestRepositoryEnclosingRoot,
+            ports.diagnostics,
+            ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+          ),
       ),
     purgeCoordinator =
       GoalRunnerPurgeCoordinator(
@@ -178,6 +213,7 @@ fun testGoalRunnerStatusService(
         goalStateFiles = ports.goalStateFiles,
         projectStore = ports.projectStore,
         diagnostics = ports.diagnostics,
+        worktrees = ports.goalWorktrees,
       ),
     freshQualityCoordinator =
       GoalRunnerFreshQualityCoordinator(
@@ -205,6 +241,14 @@ fun testGoalRunnerRepairCoordinator(
     TestRepositoryEnclosingRoot,
     clock,
     ports.diagnostics,
+    GoalExecutionRootResolver(
+      manifestStore,
+      ports.goalWorktrees,
+      ports.gitOperations,
+      TestRepositoryEnclosingRoot,
+      ports.diagnostics,
+      ProjectCheckout(TestRepositoryEnclosingRoot, ports.projectStore, ports.goalWorktrees, ports.gitOperations),
+    ),
   )
 
 private val testGoalChildPlanningHydratorPort = GoalChildPlanningHydratorPortAdapter(testHarnessClock)

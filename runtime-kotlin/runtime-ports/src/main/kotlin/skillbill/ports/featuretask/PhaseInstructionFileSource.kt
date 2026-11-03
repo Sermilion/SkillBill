@@ -9,7 +9,7 @@ import java.nio.file.Path
  */
 interface PhaseInstructionFileSource {
   /** The project store's `phases` directory for the checkout at [repoRoot], or null when there is none. */
-  fun projectPhasesDirectory(repoRoot: Path): Path? = null
+  fun projectPhasesDirectory(repoRoot: Path): Path?
 
   /** The names of the `.md` entries directly inside [directory], or null when [directory] is not a directory. */
   fun markdownFileNames(directory: Path): List<String>?

@@ -5,6 +5,7 @@ import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionSubtaskAction
 import java.nio.file.Path
@@ -57,7 +58,7 @@ internal fun inspectHardResetOrphanTrap(
   }
 }
 
-private fun activeHardResetSubtaskId(manifest: DecompositionManifest): Int? {
+internal fun activeHardResetSubtaskId(manifest: DecompositionManifest): Int? {
   val requested =
     manifest.currentSubtaskIntent.subtaskId
       .takeIf { it > 0 }
@@ -80,8 +81,12 @@ private fun hardResetFeatureBranch(
   manifest: DecompositionManifest,
   activeSubtaskId: Int,
 ): String? =
-  manifest.featureBranch?.trim()?.takeIf(String::isNotBlank)
-    ?: manifest.branchPlanFor(activeSubtaskId).branch.trim().takeIf(String::isNotBlank)
+  when (manifest.executionModel) {
+    DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK ->
+      manifest.featureBranch?.trim()?.takeIf(String::isNotBlank)
+    DecompositionExecutionModel.STACKED_BRANCHES ->
+      manifest.branchPlanFor(activeSubtaskId).branch.trim().takeIf(String::isNotBlank)
+  }
 
 private fun inspectHardResetFeatureBranch(
   manifest: DecompositionManifest,
@@ -107,10 +112,16 @@ private fun ensureHardResetFeatureBranch(
   gitOperations: WorkflowGitOperations,
 ): String? {
   val onBranch = gitOperations.currentBranch(repoRoot)
-  return when {
-    onBranch !is WorkflowGitOperationResult.Ok -> onBranch.error
-    onBranch.value.trim() == featureBranch -> null
-    else -> checkoutHardResetFeatureBranch(featureBranch, repoRoot, gitOperations)
+  if (onBranch !is WorkflowGitOperationResult.Ok) return onBranch.error
+  if (onBranch.value.trim() == featureBranch) return null
+  return when (val exists = gitOperations.branchExists(repoRoot, featureBranch)) {
+    is WorkflowGitOperationResult.Failed -> exists.error
+    is WorkflowGitOperationResult.Ok ->
+      if (exists.value.trim() == "true") {
+        checkoutHardResetFeatureBranch(featureBranch, repoRoot, gitOperations)
+      } else {
+        "goal branch '$featureBranch' is missing"
+      }
   }
 }
 

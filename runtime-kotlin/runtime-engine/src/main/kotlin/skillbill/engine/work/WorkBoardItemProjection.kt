@@ -2,6 +2,7 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.work.eligibility.workControlEligible
 import skillbill.engine.work.eligibility.workDisplayGroup
 import skillbill.engine.work.eligibility.workDisplayPriority
@@ -37,6 +38,8 @@ import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
+import skillbill.ports.idestatus.model.GoalWorktreeState
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
@@ -50,6 +53,7 @@ import skillbill.ports.idestatus.model.WorkBoardWindow
 import skillbill.ports.idestatus.model.WorkDetailProblem
 import skillbill.ports.idestatus.model.WorkDetailProblemCode
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
@@ -57,11 +61,11 @@ import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.time.parsePersistedInstantOrNull
-import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.time.Instant
 import java.util.Locale
@@ -72,6 +76,8 @@ public class WorkBoardItemProjection(
   private val ideStatusValidator: IdeStatusValidator,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val goalRuntimeStateFiles: GoalRuntimeStateFileStore,
 ) {
   internal fun projectBoardCandidate(
     unitOfWork: UnitOfWork,
@@ -196,6 +202,30 @@ public class WorkBoardItemProjection(
       doneWithinDay = windowed.doneWithinDay,
       membershipDeadline = windowed.membershipDeadline,
       executingAgentId = projection.executingAgentId,
+      goalWorktree =
+        work.firstOrNull()?.item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
+          ?.let { goalWorktreeView(candidate.workflowId, context.unitOfWork) },
+    )
+  }
+
+  internal fun goalWorktreeView(
+    workflowId: String,
+    unitOfWork: UnitOfWork,
+  ): GoalWorktreeView? {
+    val control = unitOfWork.goalRunnerControls.controlState(workflowId)
+    val path = control.executionWorktreePath ?: return null
+    val state =
+      when {
+        control.executionWorktreeRemovedAt != null || !goalRuntimeStateFiles.directoryExists(Path.of(path)) ->
+          GoalWorktreeState.REMOVED
+        control.executionWorktreeRetentionReason != null -> GoalWorktreeState.RETAINED
+        else -> GoalWorktreeState.ACTIVE
+      }
+    return GoalWorktreeView(
+      path,
+      state,
+      control.executionWorktreeRetentionReason,
+      control.executionWorktreeRetentionDetail,
     )
   }
 
@@ -480,7 +510,8 @@ public class WorkBoardItemProjection(
     resolved: ResolvedWorkItem? = null,
   ): IdeStatusCandidate? {
     val repositoryIdentity = repository.identity
-    val repositoryCorrelation = IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity)
+    val repositoryCorrelation =
+      IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity, repository.monitorIdentity)
     val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork)
     val family = item.workflowKind.toIdeFamily()
     val lifecycle =
@@ -558,7 +589,11 @@ public class WorkBoardItemProjection(
       found.standalone?.takeIf { it.launchScope == IdeStatusLaunchScope.GOAL }
         ?.takeIf { found.work?.item?.workflowKind != WorkItemKind.FEATURE_GOAL }
     val issueKey = standalone?.issueKey?.takeIf(String::isNotBlank) ?: return false
-    return unitOfWork.workList.goalParentCandidatePage(issueKey, standalone.repositoryIdentity, 0, 1).isNotEmpty()
+    val exact = standalone.repositoryIdentity
+    val primary = decodeRepositoryRoot(exact)?.let(repositoryEnclosingRootPort::primaryRepositoryIdentity)
+    return setOfNotNull(exact, primary).any { identity ->
+      unitOfWork.workList.goalParentCandidatePage(issueKey, identity, 0, 1).isNotEmpty()
+    }
   }
 
   internal fun isExcludedGoalChild(
@@ -583,15 +618,7 @@ public class WorkBoardItemProjection(
     normalizedFilter: String?,
   ): Boolean = normalizedFilter == null || searchText(item).contains(normalizedFilter)
 
-  internal fun decodeRepositoryRoot(identity: String): Path? {
-    return try {
-      val prefix = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX
-      if (!identity.startsWith(prefix)) return null
-      Path.of(identity.removePrefix(prefix)).takeIf { it.isAbsolute }
-    } catch (_: InvalidPathException) {
-      null
-    }
-  }
+  internal fun decodeRepositoryRoot(identity: String): Path? = goalRepositoryRootFromIdentity(identity)
 }
 
 internal data class BoardProjectionWindow(val observedAt: Instant, val finishedFrom: Instant)

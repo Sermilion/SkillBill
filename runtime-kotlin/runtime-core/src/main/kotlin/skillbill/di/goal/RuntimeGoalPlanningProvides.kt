@@ -7,8 +7,10 @@ import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PlanWorkflowGoalPlanningSource
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
+import skillbill.infrastructure.workflow.goalworktree.GitGoalWorktreeResources
 import skillbill.ports.goalrunner.planning.GoalPlanningBoundaryBodyResolver
 import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 
 internal interface RuntimeGoalPlanningProvides {
   @Provides
@@ -27,4 +29,7 @@ internal interface RuntimeGoalPlanningProvides {
   fun goalPlanningBoundaryBodyResolver(
     adapter: FileSystemGoalPlanningBoundaryBodyResolver,
   ): GoalPlanningBoundaryBodyResolver = adapter
+
+  @Provides
+  fun goalWorktreeResources(adapter: GitGoalWorktreeResources): GoalWorktreeResources = adapter
 }

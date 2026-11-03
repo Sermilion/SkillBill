@@ -49,6 +49,8 @@ class ChatSession internal constructor(
 
   internal var delivered: ExecutionSnapshot? = null
   internal var started: Boolean = false
+  internal var startedRoot: String? = null
+  internal var worktreeRemovedNoticed: Boolean = false
   internal var turnJob: Job? = null
   internal var resumeJob: Job? = null
 
@@ -57,13 +59,15 @@ class ChatSession internal constructor(
     sessionIdState.value = newSessionId
     delivered = null
     started = false
+    startedRoot = null
   }
 
   /** The next turn continues the saved agent session [savedSessionId] and sends the full snapshot, since what it last saw is unknown. */
-  internal fun resumeFrom(savedSessionId: String) {
+  internal fun resumeFrom(savedSessionId: String, root: String) {
     sessionIdState.value = savedSessionId
     delivered = null
     started = true
+    startedRoot = root
   }
 
   internal val thread = ChatThread(clock)

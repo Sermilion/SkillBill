@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolv
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.projectstore.ProjectStorePort
@@ -53,12 +54,12 @@ class FeatureTaskRuntimeRunPreparation(
     repoRoot: Path,
     goalChild: Boolean,
   ) {
-    val identity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot)
     val result =
       if (goalChild) {
-        lookupService.lookupGoalChild(issueKey, identity, workflowId)
+        val candidates = goalRepositoryIdentityCandidates(repoRoot, repositoryEnclosingRootPort)
+        lookupService.lookupGoalChild(issueKey, lookupService.selectorIdentity(workflowId, candidates), workflowId)
       } else {
-        lookupService.lookup(issueKey, identity, workflowId)
+        lookupService.lookup(issueKey, repositoryEnclosingRootPort.repositoryIdentity(repoRoot), workflowId)
       }
     val candidate = resumableRuntimeCandidate(workflowId, result)
     requireRuntimeMode(workflowId, candidate.mode)

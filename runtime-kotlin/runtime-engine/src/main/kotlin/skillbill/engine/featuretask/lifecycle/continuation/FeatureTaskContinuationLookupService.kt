@@ -142,6 +142,14 @@ public class FeatureTaskContinuationLookupService(
     }
   }
 
+  public fun selectorIdentity(
+    workflowId: String,
+    candidates: List<String>,
+  ): String =
+    database.read { unit -> unit.workflowStates.getFeatureTaskExecutionIdentity(workflowId)?.repositoryIdentity }
+      ?.takeIf { it in candidates }
+      ?: candidates.first()
+
   public fun lookup(
     issueKey: String,
     repositoryIdentity: String,

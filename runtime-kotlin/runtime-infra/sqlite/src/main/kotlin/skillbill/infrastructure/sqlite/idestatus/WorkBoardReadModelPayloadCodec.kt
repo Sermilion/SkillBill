@@ -15,6 +15,7 @@ import skillbill.infrastructure.sqlite.idestatus.WorkBoardReadModelPayloadValida
 import skillbill.infrastructure.sqlite.idestatus.WorkBoardReadModelPayloadValidation.exactLong
 import skillbill.infrastructure.sqlite.idestatus.WorkBoardReadModelPayloadValidation.nullableStringList
 import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusCurrentModel
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
@@ -72,6 +73,15 @@ internal object WorkBoardReadModelPayloadCodec {
         WorkBoardReadModelPayloadKeys.DISPLAY_PRIORITY to row.item.displayPriority,
         WorkBoardReadModelPayloadKeys.EXACT_PAUSE_REASON to row.item.exactPauseReason,
         WorkBoardReadModelPayloadKeys.EXECUTING_AGENT_ID to row.item.executingAgentId,
+        WorkBoardReadModelPayloadKeys.GOAL_WORKTREE to
+          row.item.goalWorktree?.let {
+            mapOf(
+              WorkBoardReadModelPayloadKeys.DB_PATH to it.path,
+              WorkBoardReadModelPayloadKeys.PLANNING_STATE to it.state.name,
+              WorkBoardReadModelPayloadKeys.REASON to it.retentionReason,
+              WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL to it.retentionDetail,
+            )
+          },
         WorkBoardReadModelPayloadKeys.PAUSE_ELIGIBLE to row.item.pauseEligible,
         WorkBoardReadModelPayloadKeys.RUNNING to row.item.running,
         WorkBoardReadModelPayloadKeys.RECENTLY_FINISHED_PHASE to row.item.recentlyFinishedPhase,
@@ -131,6 +141,16 @@ internal object WorkBoardReadModelPayloadCodec {
         doneWithinDay = fields.boolean(WorkBoardReadModelPayloadKeys.DONE_WITHIN_DAY),
         membershipDeadline = fields.instant(WorkBoardReadModelPayloadKeys.MEMBERSHIP_DEADLINE),
         executingAgentId = fields.nullableText(WorkBoardReadModelPayloadKeys.EXECUTING_AGENT_ID),
+        goalWorktree =
+          fields.map(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE)?.let {
+            GoalWorktreeView(
+              it.text(WorkBoardReadModelPayloadKeys.DB_PATH),
+              it.enumOrNull(WorkBoardReadModelPayloadKeys.PLANNING_STATE)
+                ?: error("Missing goal worktree state."),
+              it.nullableText(WorkBoardReadModelPayloadKeys.REASON),
+              it.nullableText(WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL),
+            )
+          },
         databaseFileObservation =
           fields.map(WorkBoardReadModelPayloadKeys.DATABASE_FILE_OBSERVATION)?.let {
             DatabaseFileObservation(

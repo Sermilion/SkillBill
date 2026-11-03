@@ -22,6 +22,16 @@ class GitWorkChangesAdapter : WorkChangesPort {
   override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
     val root = Path.of(baseline.worktreeRoot)
     listRepositoryProblem(root)?.let { return it }
+    if (baseline is WorkChangeBaseline.CommittedBranchRange) {
+      return committedBranchRange(root, baseline.targetBranch, baseline.headBranch)
+    }
+    return workingChanges(root, baseline)
+  }
+
+  private fun workingChanges(
+    root: Path,
+    baseline: WorkChangeBaseline,
+  ): WorkChangeListResult {
     val base =
       when (val resolved = resolveBase(root, baseline)) {
         is BaseRead.Resolved -> resolved.sha
@@ -120,6 +130,7 @@ class GitWorkChangesAdapter : WorkChangesPort {
       is WorkChangeBaseline.SubtaskStart -> BaseRead.Resolved(baseline.baseSha)
       is WorkChangeBaseline.RunStart -> BaseRead.Resolved(baseline.baseSha)
       is WorkChangeBaseline.TargetMergeBase -> mergeBase(root, baseline.targetBranch)
+      is WorkChangeBaseline.CommittedBranchRange -> error("Committed branch ranges resolve separately.")
     }
 
   private fun listChanges(
@@ -176,5 +187,38 @@ class GitWorkChangesAdapter : WorkChangesPort {
       is WorkChangeBaseline.SubtaskStart -> baseline.excludedUntrackedPaths.toSet()
       is WorkChangeBaseline.RunStart -> baseline.excludedUntrackedPaths.toSet()
       is WorkChangeBaseline.TargetMergeBase -> emptySet()
+      is WorkChangeBaseline.CommittedBranchRange -> emptySet()
     }
+
+  private fun committedBranchRange(
+    root: Path,
+    targetBranch: String,
+    headBranch: String,
+  ): WorkChangeListResult {
+    val headRef = "refs/heads/$headBranch"
+    val head =
+      scalar(
+        root,
+        listOf("rev-parse", "--verify", "--quiet", "$headRef^{commit}"),
+        "goal branch $headBranch no longer exists",
+      )
+    if (head !is BaseRead.Resolved) {
+      return when (head) {
+        is BaseRead.Unavailable -> WorkChangeListResult.BaseUnavailable(head.reason)
+        is BaseRead.Failed -> WorkChangeListResult.Failed(head.message)
+        is BaseRead.Resolved -> error("Resolved branch was handled above.")
+      }
+    }
+    val base =
+      scalar(root, listOf("merge-base", targetBranch, headRef), "no merge-base between $targetBranch and $headBranch")
+    return when (base) {
+      is BaseRead.Resolved ->
+        when (val listed = committedList(root, base.sha, headRef)) {
+          is WorkChangeListResult.Listed -> listed.copy(baseSha = base.sha)
+          else -> listed
+        }
+      is BaseRead.Unavailable -> WorkChangeListResult.BaseUnavailable(base.reason)
+      is BaseRead.Failed -> WorkChangeListResult.Failed(base.message)
+    }
+  }
 }

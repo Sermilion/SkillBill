@@ -18,9 +18,11 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
+import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkGoalSubtaskPage
@@ -36,6 +38,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -71,12 +74,15 @@ class IdeStatusServiceGoalProjectionTest {
               },
           ),
           manifestStore = StubGoalManifestStore(zeroAc46ManifestState(fixture, identity)),
-          qaCapabilities =
-            QaCapabilityResolver(
-              RecordingWorkflowGitOperations().apply {
-                trackedPathsValue = listOf("runtime-kotlin/src/Main.kt")
-              },
-            ) { listOf(pack) },
+          ports =
+            IdeStatusServiceTestPorts(
+              qaCapabilities =
+                QaCapabilityResolver(
+                  RecordingWorkflowGitOperations().apply {
+                    trackedPathsValue = listOf("runtime-kotlin/src/Main.kt")
+                  },
+                ) { listOf(pack) },
+            ),
         )
 
       val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
@@ -1024,6 +1030,87 @@ class IdeStatusServiceGoalProjectionTest {
             },
         ),
     )
+  }
+
+  @Test
+  fun `primary bound goal is visible from a linked worktree and a main standalone row is not`() {
+    val scratch = Files.createTempDirectory("ide-status-worktree-identity")
+    try {
+      val main = scratch.resolve("main")
+      gitRepository(main)
+      val linked = scratch.resolve("linked")
+      git(main, "worktree", "add", "-q", "--detach", linked.toString())
+      val primary = CanonicalRepositoryRoot.primaryRepositoryIdentity(main)
+      val mainExact = CanonicalRepositoryRoot.repositoryIdentity(main)
+
+      val goalService =
+        ideStatusService(
+          TrackingDatabase(
+            work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, "running", "2026-08-06T10:00:00Z")),
+            workflows = IdeStatusWorkflowStates(),
+            controls =
+              object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+                override fun controlState(parentWorkflowId: String) =
+                  GoalRunnerControlState(repositoryIdentity = primary)
+              },
+          ),
+          manifestStore = StubGoalManifestStore(goalManifestState(main, primary, childWorkflowId = "w-child")),
+          ports = IdeStatusServiceTestPorts(repositoryEnclosingRootPort = CanonicalRepositoryRoot),
+        )
+      val goalStatus =
+        goalService.status(IdeStatusRequest(repoRoot = linked.toString(), observedAt = ideStatusObservedAt))
+      assertEquals(IdeStatusWorkflowFamily.FEATURE_GOAL, goalStatus.snapshot.workflowFamily)
+
+      val workflows = IdeStatusWorkflowStates()
+      workflows.saveFeatureTaskWorkflow(
+        runtimeRecord("w-standalone", "2026-08-06T10:00:00Z"),
+        FeatureTaskWorkflowMode.RUNTIME,
+      )
+      workflows.saveFeatureTaskExecutionIdentity(identityFor("w-standalone", mainExact))
+      val standaloneService =
+        ideStatusService(
+          TrackingDatabase(
+            work =
+              listOf(
+                workItem("w-standalone", WorkItemKind.FEATURE_TASK_RUNTIME, "running", "2026-08-06T10:00:00Z"),
+              ),
+            workflows = workflows,
+          ),
+          ports = IdeStatusServiceTestPorts(repositoryEnclosingRootPort = CanonicalRepositoryRoot),
+        )
+      val standaloneStatus =
+        standaloneService.status(IdeStatusRequest(repoRoot = linked.toString(), observedAt = ideStatusObservedAt))
+      assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, standaloneStatus.snapshot.problem?.code)
+    } finally {
+      scratch.toFile().deleteRecursively()
+    }
+  }
+
+  private fun gitRepository(directory: Path) {
+    git(directory.parent, "init", "-q", directory.fileName.toString())
+    git(
+      directory,
+      "-c",
+      "user.name=skillbill",
+      "-c",
+      "user.email=skillbill@example.com",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "i",
+    )
+  }
+
+  private fun git(
+    directory: Path,
+    vararg arguments: String,
+  ) {
+    val builder = ProcessBuilder(listOf("git", "-C", directory.toString()) + arguments).redirectErrorStream(true)
+    builder.environment() += mapOf("GIT_CONFIG_GLOBAL" to "/dev/null", "GIT_CONFIG_NOSYSTEM" to "1")
+    val process = builder.start()
+    val output = process.inputStream.bufferedReader().readText()
+    check(process.waitFor() == 0) { "git ${arguments.toList()}: $output" }
   }
 
   private fun zeroAc46Database(

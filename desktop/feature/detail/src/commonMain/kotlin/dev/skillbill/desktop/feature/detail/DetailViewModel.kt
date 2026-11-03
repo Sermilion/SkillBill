@@ -271,7 +271,7 @@ class DetailViewModel(
         if (!state.header.showsChanges) return@map null
         (state.sections as? SectionsUi.Loaded)?.let {
           val goal = state.header.kind == WorkKind.Goal
-          ChangesKey(if (goal) null else it.detail.changeBaseline, state.header.running, goal)
+          ChangesKey(if (goal) null else it.detail.changeBaseline, state.header.running, goal, state.header.goalWorktree)
         }
       }
       .distinctUntilChanged()
@@ -343,7 +343,12 @@ class DetailViewModel(
   }
 }
 
-private data class ChangesKey(val baseline: ChangeBaseline?, val running: Boolean, val goal: Boolean)
+private data class ChangesKey(
+  val baseline: ChangeBaseline?,
+  val running: Boolean,
+  val goal: Boolean,
+  val goalWorktree: dev.skillbill.desktop.core.domain.model.GoalWorktree?,
+)
 
 private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
   running = row.running,

@@ -58,7 +58,7 @@ class ChangeObservations internal constructor(
       emit(ChangesState.Loading)
       while (true) {
         emit(read(baseline, gitReads))
-        if (!running) break
+        if (!running || baseline is ChangeBaseline.CommittedBranchRange) break
         delay(CHANGE_REFRESH_INTERVAL)
       }
     }.distinctUntilChanged()
@@ -67,7 +67,8 @@ class ChangeObservations internal constructor(
   private suspend fun read(baseline: ChangeBaseline, gitReads: Mutex): ChangesState {
     val read = readOrProblem(runtime, diagnostics) {
       val portBaseline = baseline.toPort()
-      workingTree.changes(portBaseline) { gitReads.withLock { withContext(io) { port.changes(portBaseline) } } }
+      val read: suspend () -> WorkChangeListResult = { gitReads.withLock { withContext(io) { port.changes(portBaseline) } } }
+      if (baseline is ChangeBaseline.CommittedBranchRange) read() else workingTree.changes(portBaseline, read)
     }
     val state = when (read) {
       is Outcome.Failure -> ChangesState.Unavailable(read.error)
@@ -84,11 +85,16 @@ class ChangeObservations internal constructor(
   }
 
   // Parsing a patch up to the runtime's size limit is real work, so it stays on IO too.
-  suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile, gitReads: Mutex): FileDiffState {
+  suspend fun fileDiff(baseline: ChangeBaseline, baseSha: String, file: ChangedFile, gitReads: Mutex): FileDiffState {
     val read = readOrProblem(runtime, diagnostics) {
       gitReads.withLock {
         withContext(io) {
-          when (val result = port.fileDiff(worktreeRoot, baseSha, file.toPort())) {
+          val result = when (baseline) {
+            is ChangeBaseline.CommittedBranchRange ->
+              port.committedFileDiff(baseline.worktreeRoot, baseSha, baseline.headRef, file.toPort())
+            else -> port.fileDiff(baseline.worktreeRoot, baseSha, file.toPort())
+          }
+          when (result) {
             is WorkFileDiffResult.Patch -> FileDiffState.Shown(parseUnifiedDiff(result.text))
             WorkFileDiffResult.Binary -> FileDiffState.Binary
             is WorkFileDiffResult.TooLarge -> FileDiffState.TooLarge(result.limitBytes)
@@ -107,11 +113,12 @@ class ChangeObservations internal constructor(
   }
 
   /** Strips `VISUAL` and `EDITOR` so the launcher falls through to the system opener; a deleted file is never launched. */
-  suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome {
+  suspend fun open(baseline: ChangeBaseline, file: ChangedFile): OpenOutcome {
+    if (baseline is ChangeBaseline.CommittedBranchRange) return OpenOutcome.NotOpened
     if (file.status == ChangeStatus.Deleted) return OpenOutcome.NotOpened
     val opened = withContext(io) {
       val target = try {
-        Path.of(worktreeRoot).resolve(file.path)
+        Path.of(baseline.worktreeRoot).resolve(file.path)
       } catch (_: InvalidPathException) {
         null
       }

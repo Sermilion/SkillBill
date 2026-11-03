@@ -5,6 +5,20 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 
 internal fun StringBuilder.appendOperatorSurfaceLines(projection: GoalRunnerStatusProjection) {
+  projection.goalWorktree?.let { worktree ->
+    val removedAt = worktree.removedAt
+    val retentionReason = worktree.retentionReason
+    if (removedAt != null) {
+      appendLine("worktree: removed path=${worktree.path.goalCliToken()} at=${removedAt.goalCliToken()}")
+    } else if (retentionReason != null) {
+      appendLine(
+        "worktree: retained path=${worktree.path.goalCliToken()} reason=${retentionReason.goalCliToken()} " +
+          "detail=${worktree.retentionDetail.orEmpty().goalCliToken()}",
+      )
+      appendLine("worktree_discard_command: git worktree remove --force ${worktree.path.worktreeCommandPath()}")
+    }
+  }
+  projection.launchWarning?.let { appendLine("launch_warning: $it") }
   if (projection.blockedAttemptCount > 0 || projection.supervisorKillCount > 0) {
     appendLine(
       "blocked_attempts: ${projection.blockedAttemptCount} supervisor_kills=${projection.supervisorKillCount}",
@@ -105,6 +119,21 @@ internal fun StringBuilder.appendDiffStatusLines(
 }
 
 internal fun StringBuilder.appendOperatorSurfaceLines(payload: Map<*, *>) {
+  val worktree = payload[GoalCliWorktreeStatusKeys.GOAL_WORKTREE] as? Map<*, *>
+  if (worktree != null) {
+    val path = worktree[GoalCliWorktreeStatusKeys.PATH]?.toString().orEmpty()
+    val removedAt = worktree[GoalCliWorktreeStatusKeys.REMOVED_AT]?.toString()
+    val reason = worktree[GoalCliWorktreeStatusKeys.RETENTION_REASON]?.toString()
+    if (removedAt != null) {
+      appendLine("worktree: removed path=${path.goalCliToken()} at=${removedAt.goalCliToken()}")
+    } else if (reason != null) {
+      appendLine(
+        "worktree: retained path=${path.goalCliToken()} reason=${reason.goalCliToken()} " +
+          "detail=${worktree[GoalCliWorktreeStatusKeys.RETENTION_DETAIL]?.toString().orEmpty().goalCliToken()}",
+      )
+      appendLine("worktree_discard_command: git worktree remove --force ${path.worktreeCommandPath()}")
+    }
+  }
   val blockedAttemptCount = (payload["blocked_attempt_count"] as? Number)?.toInt() ?: 0
   val supervisorKillCount = (payload["supervisor_kill_count"] as? Number)?.toInt() ?: 0
   if (blockedAttemptCount > 0 || supervisorKillCount > 0) {
@@ -170,3 +199,16 @@ internal fun String.goalCliToken(): String =
   replace("\\", "\\\\")
     .replace("\t", "\\t")
     .replace(" ", "\\s")
+
+private fun String.worktreeCommandPath(): String =
+  if (
+    all { character ->
+      character.isAsciiLetterOrDigit() || character in "._/-"
+    }
+  ) {
+    this
+  } else {
+    "'${replace("'", "'\\''")}'"
+  }
+
+private fun Char.isAsciiLetterOrDigit(): Boolean = this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9'

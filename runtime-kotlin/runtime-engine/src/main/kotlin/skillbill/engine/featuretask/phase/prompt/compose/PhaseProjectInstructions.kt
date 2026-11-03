@@ -24,6 +24,8 @@ public sealed interface PhaseProjectInstructionsResolution {
 }
 
 internal object AbsentPhaseInstructionFileSource : PhaseInstructionFileSource {
+  override fun projectPhasesDirectory(repoRoot: Path): Path? = null
+
   override fun markdownFileNames(directory: Path): List<String>? = null
 
   override fun regularFileSize(file: Path): Long? = null

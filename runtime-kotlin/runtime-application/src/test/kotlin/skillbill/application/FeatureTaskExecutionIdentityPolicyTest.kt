@@ -23,6 +23,40 @@ class FeatureTaskExecutionIdentityPolicyTest {
   }
 
   @Test
+  fun `goal execution root prefers recorded path then a launched child's repository`() {
+    val invoked = "/checkout/invoked"
+    val bound = "${FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX}/checkout/bound"
+
+    assertEquals(
+      "/state/goals/SKILL-129/checkout",
+      FeatureTaskExecutionIdentityPolicy.goalExecutionRootCandidate(
+        "/state/goals/SKILL-129/checkout",
+        hasLaunchedChild = true,
+        repositoryIdentity = bound,
+        invokedRoot = invoked,
+      ),
+    )
+    assertEquals(
+      "/checkout/bound",
+      FeatureTaskExecutionIdentityPolicy.goalExecutionRootCandidate(
+        recordedPath = null,
+        hasLaunchedChild = true,
+        repositoryIdentity = bound,
+        invokedRoot = invoked,
+      ),
+    )
+    assertEquals(
+      invoked,
+      FeatureTaskExecutionIdentityPolicy.goalExecutionRootCandidate(
+        recordedPath = null,
+        hasLaunchedChild = false,
+        repositoryIdentity = bound,
+        invokedRoot = invoked,
+      ),
+    )
+  }
+
+  @Test
   fun `lookup request accepts a digit-leading tracker key`() {
     assertEquals(
       "0AC-11",

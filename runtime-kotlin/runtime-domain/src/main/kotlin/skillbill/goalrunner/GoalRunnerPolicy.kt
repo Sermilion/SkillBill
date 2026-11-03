@@ -14,6 +14,7 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskSchedulingResult
 import skillbill.workflow.decomposition.model.DecompositionDependency
+import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
@@ -22,6 +23,18 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 
 object GoalRunnerQualityGateSelectionResolver {
   fun resolve(): FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE
+}
+
+public fun DecompositionManifest.goalWorkBranch(): String? {
+  val branch =
+    when (executionModel) {
+      DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK -> featureBranch
+      DecompositionExecutionModel.STACKED_BRANCHES -> {
+        val selected = (GoalRunnerPlanner.selectNext(this) as? GoalRunnerSelection.Run)?.decision?.subtask?.id
+        stackBranches.firstOrNull { it.subtaskId == selected }?.branch ?: featureBranch
+      }
+    }
+  return branch?.trim()?.takeIf(String::isNotBlank)
 }
 
 private val SETTLED_SUBTASK_STATUSES: Set<DecompositionStatus> =

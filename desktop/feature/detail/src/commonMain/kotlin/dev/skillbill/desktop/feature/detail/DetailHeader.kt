@@ -23,6 +23,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 
 internal data class QaHeaderFacts(val testedCommit: String?, val criteriaSource: String?)
 
@@ -78,6 +79,22 @@ internal fun DetailHeader(
             BasicText("Criteria from $source", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
           }
         }
+      }
+      when (val worktree = item.goalWorktree) {
+        null -> Unit
+        else -> when (worktree.state) {
+          GoalWorktreeState.Removed ->
+            BasicText("The goal's worktree was removed. Its branch stays.", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+          GoalWorktreeState.Retained ->
+            BasicText(
+              "The goal's worktree stays at ${worktree.path}: ${worktree.retentionDetail ?: worktree.retentionReason.orEmpty()}.",
+              style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted),
+            )
+          GoalWorktreeState.Active -> Unit
+        }
+      }
+      item.launchWarning?.let { warning ->
+        BasicText(warning, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
       }
     },
     actions = actions?.let { { it() } },

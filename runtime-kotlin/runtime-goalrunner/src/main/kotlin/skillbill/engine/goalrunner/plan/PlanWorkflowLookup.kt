@@ -16,6 +16,13 @@ public class PlanWorkflowLookup(
     workflowId: String?,
   ): FeatureTaskContinuationLookupResult = lookupService.lookupPlan(issueKey, repositoryIdentity, workflowId)
 
+  internal fun lookupSelected(
+    issueKey: String,
+    repositoryIdentities: List<String>,
+    workflowId: String,
+  ): FeatureTaskContinuationLookupResult =
+    lookup(issueKey, lookupService.selectorIdentity(workflowId, repositoryIdentities), workflowId)
+
   internal fun lookupAfterCrashRecovery(
     issueKey: String,
     repositoryIdentity: String,

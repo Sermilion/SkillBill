@@ -67,6 +67,7 @@ import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestSt
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
@@ -732,7 +733,12 @@ class FeatureTaskExecutionPlanCreationTest {
       database, NoopWorkflowGitOperations, UnavailableDecompositionManifestStore, testWorkflowSnapshotValidator,
       testDecompositionManifestValidator, testDecompositionManifestWriter, testRepositoryRoot,
       AcceptingFeatureTaskRuntimeWireArtifactValidator, NoopRuntimeDiagnostics, testHarnessClock,
-      ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+      ProjectCheckout(
+        TestRepositoryEnclosingRoot,
+        testProjectStore,
+        InPlaceGoalWorktreeResources,
+        NoopWorkflowGitOperations,
+      ),
     )
 
   private fun openArgs(descriptor: ValidatedFeatureTaskRuntimeExecutionPlan?) =

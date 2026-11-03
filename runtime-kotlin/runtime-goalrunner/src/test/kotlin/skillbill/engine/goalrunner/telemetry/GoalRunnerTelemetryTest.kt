@@ -31,6 +31,7 @@ import skillbill.telemetry.model.GoalAssessmentTelemetryCounts
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.withWorkflowId
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
@@ -347,6 +348,7 @@ class GoalRunnerTelemetryTest {
 
   @Test
   fun `blocked segments carry enum stop reasons and completed issue emits once with parent workflow id`() {
+    val repoRoot = Files.createTempDirectory("goal-telemetry-retry")
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
     val outcomes = RecordingOutcomeStore()
     val telemetry = RecordingGoalLifecycleTelemetryEmitter()
@@ -365,11 +367,16 @@ class GoalRunnerTelemetryTest {
         launchFacts()
       }
 
-    telemetryRunner(store, blockedLauncher, outcomes, telemetry).run(runRequest())
+    telemetryRunner(store, blockedLauncher, outcomes, telemetry).run(runRequest().copy(repoRoot = repoRoot))
     store.mutate { current -> current.withBlockedSubtaskState(1, "wfl-blocked", "review failed") }
-    telemetryRunner(store, blockedLauncher, outcomes, telemetry).run(runRequest())
+    telemetryRunner(store, blockedLauncher, outcomes, telemetry).run(runRequest().copy(repoRoot = repoRoot))
     outcomes["wfl-blocked"] = completeOutcome(1)
-    telemetryRunner(store, completingLauncher(store, outcomes), outcomes, telemetry).run(runRequest())
+    telemetryRunner(
+      store,
+      completingLauncher(store, outcomes),
+      outcomes,
+      telemetry,
+    ).run(runRequest().copy(repoRoot = repoRoot))
 
     assertEquals(listOf("FAILED", "FAILED"), telemetry.finished.take(2).map { it.stopReason })
     assertEquals(listOf(false, true, true), telemetry.started.map { it.resumed })

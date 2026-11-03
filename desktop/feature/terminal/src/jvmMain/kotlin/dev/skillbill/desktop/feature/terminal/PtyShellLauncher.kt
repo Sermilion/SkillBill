@@ -52,7 +52,7 @@ class PtyShellLauncher : ShellLauncher {
         .setInitialColumns(80)
         .setInitialRows(24)
         .start()
-      ShellStart.Started(PtyShellProcess(process, PtyConnector(process, File(launch.command.first()).name)))
+      ShellStart.Started(PtyShellProcess(process, PtyConnector(process, File(launch.command.first()).name, launch.notice)))
     } catch (failure: IOException) {
       ShellStart.Failed(failure.message ?: failure.toString())
     } catch (failure: LinkageError) {
@@ -88,8 +88,21 @@ private class PtyShellProcess(private val process: PtyProcess, override val conn
   }
 }
 
-private class PtyConnector(private val process: PtyProcess, private val shellName: String) :
+private class PtyConnector(private val process: PtyProcess, private val shellName: String, notice: String?) :
   ProcessTtyConnector(process, StandardCharsets.UTF_8) {
+  private val noticeText = notice?.plus("\r\n")?.toCharArray() ?: charArrayOf()
+  private var noticeOffset = 0
+
+  override fun read(buffer: CharArray, offset: Int, length: Int): Int {
+    if (noticeOffset < noticeText.size) {
+      val count = minOf(length, noticeText.size - noticeOffset)
+      noticeText.copyInto(buffer, offset, noticeOffset, noticeOffset + count)
+      noticeOffset += count
+      return count
+    }
+    return super.read(buffer, offset, length)
+  }
+
   override fun resize(termSize: TermSize) {
     if (isConnected) process.winSize = WinSize(termSize.columns, termSize.rows)
   }

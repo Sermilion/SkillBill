@@ -50,12 +50,15 @@ class FeatureTaskLookupCommand(
   private val format by formatOption()
 
   override fun run() {
+    val root = resolveCliRepositoryRoot(repoRoot, inputs)
+    val exact = lookupService.lookup(issueKey, repositoryEnclosingRootPort.repositoryIdentity(root), workflowId)
     val result =
-      lookupService.lookup(
-        issueKey,
-        repositoryEnclosingRootPort.repositoryIdentity(resolveCliRepositoryRoot(repoRoot, inputs)),
-        workflowId,
-      )
+      if (exact == FeatureTaskContinuationLookupResult.NoMatch && workflowId == null) {
+        val primary = lookupService.lookup(issueKey, repositoryEnclosingRootPort.primaryRepositoryIdentity(root))
+        primary as? FeatureTaskContinuationLookupResult.GoalContinuation ?: exact
+      } else {
+        exact
+      }
     state.complete(result.toCliPayload(), format)
   }
 }

@@ -16,9 +16,12 @@ import skillbill.engine.goalrunner.model.GoalRunnerResetRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.WorkflowStatus
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -35,6 +38,23 @@ class GoalHardResetCommitSpanRecoveryTest {
   private val headSha = "cccccccccccccccccccccccccccccccccccccccc"
   private val parentSha = "dddddddddddddddddddddddddddddddddddddddd"
   private val identity = FeatureTaskRuntimeSubtaskCommitIdentity(issueKey, "1")
+
+  @Test
+  fun `hard reset runs git from the recorded goal worktree`() {
+    val worktree = Files.createTempDirectory("goal-hard-reset-worktree").toRealPath()
+    val git = RootRecordingWorkflowGitOperations(sequenceGit())
+    val service =
+      interruptedSequenceService(
+        git,
+        GoalRunnerControlState(executionWorktreePath = worktree.toString()),
+      )
+
+    val result = service.reset(GoalRunnerResetRequest(issueKey = issueKey, hard = true, repoRoot = repoRoot))
+
+    assertNull(requireNotNull(result).refusalReason)
+    assertContains(git.mutationRoots, worktree)
+    assertEquals(false, git.mutationRoots.contains(repoRoot))
+  }
 
   @Test
   fun `issue 346 sequence rejects unusable scoped recovery then hard reset clears ambiguous span`() {
@@ -227,7 +247,10 @@ class GoalHardResetCommitSpanRecoveryTest {
       }
     }
 
-  private fun interruptedSequenceService(git: RecordingWorkflowGitOperations): GoalRunnerStatusService {
+  private fun interruptedSequenceService(
+    git: WorkflowGitOperations,
+    controlState: GoalRunnerControlState = GoalRunnerControlState(),
+  ): GoalRunnerStatusService {
     val outcomes =
       RecordingOutcomeStore().apply {
         progresses["wfl-interrupted"] =
@@ -254,6 +277,7 @@ class GoalHardResetCommitSpanRecoveryTest {
               ),
             ),
         ),
+        initialControlState = controlState,
       )
     return testGoalRunnerStatusService(
       manifestStore = store,
@@ -261,5 +285,19 @@ class GoalHardResetCommitSpanRecoveryTest {
       phaseRecorder = goalTestPhaseRecorder(),
       ports = GoalRunnerStatusTestPorts(gitOperations = git),
     )
+  }
+}
+
+private class RootRecordingWorkflowGitOperations(
+  private val delegate: WorkflowGitOperations,
+) : WorkflowGitOperations by delegate {
+  val mutationRoots = mutableListOf<Path>()
+
+  override fun resetHardToCommit(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitOperationResult {
+    mutationRoots.add(repoRoot)
+    return delegate.resetHardToCommit(repoRoot, commitSha)
   }
 }

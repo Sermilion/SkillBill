@@ -231,6 +231,18 @@ internal fun GoalRunnerStatusProjection.monitorResumableState(): String =
   }
 
 internal fun MutableMap<String, Any?>.putGoalLedgerCliEntries(projection: GoalRunnerStatusProjection) {
+  projection.goalWorktree?.let { worktree ->
+    put(
+      GoalCliWorktreeStatusKeys.GOAL_WORKTREE,
+      linkedMapOf(
+        GoalCliWorktreeStatusKeys.PATH to worktree.path,
+        GoalCliWorktreeStatusKeys.REMOVED_AT to worktree.removedAt,
+        GoalCliWorktreeStatusKeys.RETENTION_REASON to worktree.retentionReason,
+        GoalCliWorktreeStatusKeys.RETENTION_DETAIL to worktree.retentionDetail,
+      ),
+    )
+  }
+  projection.launchWarning?.let { warning -> put("launch_warning", warning) }
   if (projection.blockedAttemptCount > 0) put("blocked_attempt_count", projection.blockedAttemptCount)
   if (projection.supervisorKillCount > 0) put("supervisor_kill_count", projection.supervisorKillCount)
   if (projection.phaseAttemptCounts.isNotEmpty()) put("phase_attempt_counts", projection.phaseAttemptCounts)
@@ -239,6 +251,14 @@ internal fun MutableMap<String, Any?>.putGoalLedgerCliEntries(projection: GoalRu
   }
   if (projection.reAttemptCauseCounts.isNotEmpty()) put("re_attempt_causes", projection.reAttemptCauseCounts)
   projection.findingsInScope?.let { count -> put("findings_in_scope", count) }
+}
+
+internal object GoalCliWorktreeStatusKeys {
+  const val GOAL_WORKTREE = "goal_worktree"
+  const val PATH = "path"
+  const val REMOVED_AT = "removed_at"
+  const val RETENTION_REASON = "retention_reason"
+  const val RETENTION_DETAIL = "retention_detail"
 }
 
 internal fun List<GoalRunnerAcceptedSubtask>.toGoalAcceptanceCliList(): List<Map<String, Any?>>? =

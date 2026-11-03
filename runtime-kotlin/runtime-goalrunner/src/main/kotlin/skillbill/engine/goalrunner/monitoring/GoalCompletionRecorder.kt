@@ -1,7 +1,8 @@
-package skillbill.engine.goalrunner.completion
+package skillbill.engine.goalrunner.monitoring
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.truncateWalBestEffort
+import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.ports.db.DatabaseCheckpoint
@@ -14,6 +15,7 @@ public class GoalCompletionRecorder(
   private val clock: Clock,
   private val checkpoint: DatabaseCheckpoint,
   private val diagnostics: RuntimeDiagnostics,
+  private val worktreeSettlement: GoalWorktreeCompletionSettlement,
 ) {
   internal fun clock(): Clock = clock
 
@@ -32,4 +34,8 @@ public class GoalCompletionRecorder(
     }
     checkpoint.truncateWalBestEffort(diagnostics, "goal_completion")
   }
+
+  internal fun settleWorktree(parentWorkflowId: String) = worktreeSettlement.settle(parentWorkflowId)
+
+  internal fun retryWorktreeIfPending(state: GoalRunnerManifestState) = worktreeSettlement.retryIfPending(state)
 }

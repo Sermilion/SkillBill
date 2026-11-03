@@ -336,9 +336,9 @@ class DetailViewModelTest {
       return flow
     }
 
-    override suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState = error("unused")
+    override suspend fun fileDiff(baseline: ChangeBaseline, baseSha: String, file: ChangedFile): FileDiffState = error("unused")
 
-    override suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome = error("unused")
+    override suspend fun open(baseline: ChangeBaseline, file: ChangedFile): OpenOutcome = error("unused")
   }
 
   private class RecordingScopesRepository : WorkChangeScopesRepository {

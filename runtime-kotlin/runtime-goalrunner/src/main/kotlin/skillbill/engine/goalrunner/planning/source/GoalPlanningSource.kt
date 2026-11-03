@@ -12,6 +12,8 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.plan.PlanSubtasksReplan
@@ -94,8 +96,9 @@ public class PlanWorkflowGoalPlanningSource(
       GoalPlanningIdentity(
         state.parentWorkflowId,
         FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
-        repositories.repositoryIdentity(request.repoRoot),
+        state.controlState.repositoryIdentity ?: goalRepositoryIdentity(request.repoRoot, repositories),
       ),
+    fallbackPlanIdentities = goalRepositoryIdentityCandidates(request.repoRoot, repositories),
     canonicalRepository = canonicalRepository(request.repoRoot, repositories),
     store = canonicalStore(projectStore.resolve(request.repoRoot), repositories),
   )
@@ -287,7 +290,11 @@ public class PlanWorkflowGoalPlanningSource(
   private fun linkedPlan(scope: PlanningScope): LinkedPlan? =
     database.read { unitOfWork ->
       val states = unitOfWork.workflowStates
-      states.findLinkedSubtaskPlanWorkflowId(scope.identity, scope.pending) { workflowId ->
+      states.findLinkedSubtaskPlanWorkflowId(
+        scope.identity,
+        scope.pending,
+        scope.fallbackPlanIdentities,
+      ) { workflowId ->
         states.getFeatureTaskExecutionIdentity(
           workflowId,
         )?.governedSpecPath?.let { scope.governsParentSpec(it) } ?: true
@@ -360,6 +367,7 @@ public class PlanWorkflowGoalPlanningSource(
     val state: GoalRunnerManifestState,
     val request: GoalRunnerRunRequest,
     val identity: GoalPlanningIdentity,
+    val fallbackPlanIdentities: List<String>,
     val canonicalRepository: Path,
     val store: ProjectStoreLocation,
   ) {
