@@ -1,3 +1,8 @@
+## [2026-11-03] Footer Chats only flips pane visibility
+Context: Cmd/Ctrl+L and Work-detail Chat call toggleChat(item), which opens leftover SelectionHolder and can create a tab. Terminal toggle creates a tab when none exist. toggleChat(null) does not hide an already-open empty pane because shownId is null with no tabs.
+Decision: The footer calls ChatCommands.toggleChatPane, which only hides or setPaneOpen(true). It does not read SelectionHolder and does not call open, newChat, or openChat.
+Reason: The operator asked to slide the existing pane, not add a third create path. Writing panes.chatOpen from the footer would not show FloatingPane, which reads workspace.paneOpen. CHAT_SHORTCUT stays off the item because that chord is not visibility-only.
+
 ## [2026-11-03] Show the Goal run card only when the operator is asking to run a goal
 Context: After the first turn the card appeared on every New task chat, including questions about an issue that were not a request to start a run.
 Decision: showGoalOfferCard is the only visibility gate. It stays hidden until the operator asks to run a goal or plan, or the latest reply offers a goal or plan start. A later review, validate, qa, pr or release request, or a later standalone start, hides it again. A pending prefix choice, start problem or started confirmation still keeps it, because only the card shows those.
