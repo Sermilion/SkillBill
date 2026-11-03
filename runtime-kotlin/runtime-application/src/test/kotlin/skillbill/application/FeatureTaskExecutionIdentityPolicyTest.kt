@@ -9,8 +9,56 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 class FeatureTaskExecutionIdentityPolicyTest {
+  @Test
+  fun `repository root decode accepts a Windows drive path`() {
+    assertEquals(
+      WINDOWS_DRIVE_ROOT,
+      FeatureTaskExecutionIdentityPolicy.repositoryRootFromIdentity(WINDOWS_DRIVE_IDENTITY),
+    )
+  }
+
+  @Test
+  fun `lookup request accepts a Windows drive repository identity`() {
+    assertEquals(
+      "SKILL-129",
+      FeatureTaskExecutionIdentityPolicy.validateLookupRequest(
+        issueKey = "SKILL-129",
+        repositoryIdentity = WINDOWS_DRIVE_IDENTITY,
+      ),
+    )
+  }
+
+  @Test
+  fun `repository root decode accepts a Unix absolute path`() {
+    assertEquals(
+      "/home/me/projects/app",
+      FeatureTaskExecutionIdentityPolicy.repositoryRootFromIdentity(
+        "${FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX}/home/me/projects/app",
+      ),
+    )
+  }
+
+  @Test
+  fun `repository root decode rejects a relative path after the prefix`() {
+    assertNull(
+      FeatureTaskExecutionIdentityPolicy.repositoryRootFromIdentity(
+        "${FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX}home/me/projects/app",
+      ),
+    )
+  }
+
+  @Test
+  fun `repository root decode rejects a Windows drive-relative path`() {
+    assertNull(
+      FeatureTaskExecutionIdentityPolicy.repositoryRootFromIdentity(
+        "${FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX}C:repo",
+      ),
+    )
+  }
+
   @Test
   fun `lookup request accepts a canonical repository identity`() {
     assertEquals(
@@ -158,4 +206,10 @@ class FeatureTaskExecutionIdentityPolicyTest {
       governedSpecPath = governedSpecPath,
       mode = FeatureTaskWorkflowMode.RUNTIME,
     )
+
+  private companion object {
+    const val WINDOWS_DRIVE_ROOT = """D:\a\SkillBill\SkillBill"""
+    const val WINDOWS_DRIVE_IDENTITY =
+      "${FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX}$WINDOWS_DRIVE_ROOT"
+  }
 }
