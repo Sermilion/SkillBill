@@ -12,19 +12,33 @@ import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
+import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.toNewTaskKind
+import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
+import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.loadedBoard
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ShellInput
+import dev.skillbill.desktop.core.ui.feedback.ToastQueue
+import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 @OptIn(ExperimentalTestApi::class)
@@ -129,7 +143,7 @@ class NewTaskHomeTest {
 
   @Test
   fun `chips stay disabled until a repository and an agent are selected`() = runComposeUiTest {
-    val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = { _, _ -> })
+    val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = { _, _, _ -> })
     val state = NewTaskUiState(home = newTaskHome(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(workItem("SKILL-1"))))))
     val draft = testNewTaskDraft()
     setContent {
@@ -155,6 +169,52 @@ class NewTaskHomeTest {
     listOf("Review my branch", "Run the checks", "QA my branch", "Open a PR").forEach { onNodeWithText(it).performClick() }
     waitForIdle()
     assertEquals(listOf("review", "validation", "qa", "pr"), started)
+  }
+
+  @Test
+  fun `clicking a suggested goal forwards its exact action fields through the host`() = runComposeUiTest {
+    val action = ChatSuggestedAction(
+      "Plan selected change",
+      "Plan only the selected change.",
+      ChatPermissionMode.Act,
+      NewTaskActionKind.Plan,
+      title = null,
+    )
+    val chats = FakeExecutionChatRepository().apply {
+      events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
+    }
+    val controls = FakeWorkControlRepository().apply { newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP")) }
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System).apply {
+      chatDispatcher = Dispatchers.Unconfined
+      repository = NewTaskRepository("/work/app", "app")
+      agentId = "claude"
+      selectedAgent = chats.agent
+      text = "Existing issue SKILL-123 is unrelated."
+      send()
+    }
+    val startable = NewTaskScreenHost(
+      now = { Instant.fromEpochMilliseconds(0) },
+      onOpenRun = {},
+      onShowAllWork = {},
+      onStart = { wire, target, selectedAction ->
+        NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { kind ->
+          draft.start(kind, target = target, action = selectedAction)
+        }
+      },
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskScreen(NewTaskUiState(), draft, startable) {}
+        }
+      }
+    }
+
+    onNodeWithText("Plan selected change").performClick()
+    waitForIdle()
+
+    assertEquals("Plan only the selected change.", controls.newTaskRequests.single().requirements)
+    assertNull(controls.newTaskRequests.single().title)
   }
 
   @Test

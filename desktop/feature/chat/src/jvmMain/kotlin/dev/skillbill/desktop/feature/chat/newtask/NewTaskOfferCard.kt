@@ -36,7 +36,8 @@ internal fun NewTaskOfferCard(
   agent: String,
   busy: Boolean,
   offer: NewTaskOffer,
-  onStart: (dev.skillbill.desktop.core.domain.model.NewTaskKind, String?) -> Unit,
+  onStart: (dev.skillbill.desktop.core.domain.model.NewTaskKind) -> Unit,
+  onRetryPrefix: (String) -> Unit,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
@@ -52,10 +53,10 @@ internal fun NewTaskOfferCard(
     BasicText("base ${branch.ifBlank { "default branch" }} · $agent", style = type.monoSm.copy(color = colors.fgMuted))
     BasicText("plan › implement › audit › review › validate › qa › pr", style = type.monoSm.copy(color = colors.fgMuted))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      SbButton("Start goal run", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun, null) }, variant = SbButtonVariant.Primary, enabled = canStart)
-      SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly, null) }, enabled = canStart)
+      SbButton("Start goal run", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun) }, variant = SbButtonVariant.Primary, enabled = canStart)
+      SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly) }, enabled = canStart)
     }
-    if (prefixKind != null) IssuePrefixPicker(offer.choices, canStart) { onStart(prefixKind, it) }
+    if (prefixKind != null) IssuePrefixPicker(offer.choices, canStart, onRetryPrefix)
     offer.started?.let { Callout(tone = FeedbackTone.Success, body = "$it. Send another message to start again.") }
     offer.problem?.let { Callout(tone = FeedbackTone.Error, body = it) }
   }

@@ -33,8 +33,10 @@ class NewTaskFeatureEntry(private val createViewModel: () -> NewTaskViewModel, p
       now = viewModel::now,
       onOpenRun = { navigator.navigate(DetailRoute(it)) },
       onShowAllWork = { navigator.navigate(WorkRoute(null)) },
-      onStart = { wire, target ->
-        NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { viewModel.draft.start(it, target = target) }
+      onStart = { wire, target, action ->
+        NewTaskActionKind.entries.firstOrNull { it.wire == wire }?.toNewTaskKind()?.let { kind ->
+          viewModel.draft.start(kind, target = target, action = action)
+        }
       },
     )
     NewTaskScreen(state, viewModel.draft, host, viewModel::onAction)
