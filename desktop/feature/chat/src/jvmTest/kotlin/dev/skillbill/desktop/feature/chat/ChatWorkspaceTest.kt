@@ -345,6 +345,57 @@ class ChatWorkspaceTest {
   }
 
   @Test
+  fun `toggleChatPane with leftover selection and no tabs only flips pane visibility`() = runTest {
+    val item = workItem("SKILL-473")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val workspace = workspace()
+    selection.select(item)
+
+    workspace.toggleChatPane()
+    assertTrue(workspace.paneOpen.value)
+    assertTrue(panes.chatOpen)
+    assertTrue(workspace.tabs.value.tabs.isEmpty())
+    assertTrue(chat.requests.isEmpty())
+
+    workspace.toggleChatPane()
+    assertFalse(workspace.paneOpen.value)
+    assertFalse(panes.chatOpen)
+    assertTrue(workspace.tabs.value.tabs.isEmpty())
+    assertTrue(chat.requests.isEmpty())
+  }
+
+  @Test
+  fun `toggleChatPane hide then show restores the same tabs without opening leftover selection`() = runTest {
+    val goal = workItem("SKILL-1")
+    val other = workItem("SKILL-2")
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), other.id to flowOf(loaded(other)))
+    val cancelled = mutableListOf<String>()
+    chat.events = { request -> flow<ChatEvent> { try { awaitCancellation() } finally { cancelled += request.executionId } } }
+    val workspace = workspace()
+    workspace.open(goal)
+    runCurrent()
+    val tabsBefore = workspace.tabs.value
+    val requestsBefore = chat.requests.size
+    val session = workspace.session(goal.id)!!
+
+    selection.select(other)
+    workspace.toggleChatPane()
+    assertFalse(workspace.paneOpen.value)
+    assertTrue(session.job.isActive)
+    assertTrue(cancelled.isEmpty())
+    workspace.toggleChatPane()
+    runCurrent()
+
+    assertTrue(workspace.paneOpen.value)
+    assertEquals(tabsBefore.tabs.map { it.id }, workspace.tabs.value.tabs.map { it.id })
+    assertEquals(tabsBefore.activeId, workspace.tabs.value.activeId)
+    assertEquals(requestsBefore, chat.requests.size)
+    assertTrue(workspace.tabs.value.tabs.none { it.executionId == other.id })
+    assertTrue(session.job.isActive)
+    assertTrue(cancelled.isEmpty())
+  }
+
+  @Test
   fun `toggling the chat opens another execution's tab beside the active one and hides the pane for the active one without ending it`() = runTest {
     val phase = workItem("phase-1", kind = WorkKind.Phase)
     val operation = workItem("op-1", kind = WorkKind.Operation)

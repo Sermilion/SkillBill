@@ -35,4 +35,10 @@ class GoalRepositoryIdentityTest {
 
     assertEquals(listOf("repo-root-realpath-v1:/main"), goalRepositoryIdentityCandidates(repoRoot, port))
   }
+
+  @Test
+  fun `repository root from identity decodes wire drive letter paths`() {
+    val identity = "repo-root-realpath-v1:/C:/Users/runner/work/skillbill"
+    assertEquals(Path.of("C:/Users/runner/work/skillbill"), goalRepositoryRootFromIdentity(identity))
+  }
 }

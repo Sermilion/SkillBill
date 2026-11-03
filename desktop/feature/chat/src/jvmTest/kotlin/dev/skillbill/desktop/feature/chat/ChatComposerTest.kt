@@ -4,6 +4,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
@@ -138,7 +141,8 @@ class ChatComposerTest {
     runComposeUiTest {
       setContent {
         SkillBillTheme(reducedMotion = true) {
-          CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          // The no-image paste falls through to text paste; an empty fake keeps it off the host clipboard.
+          CompositionLocalProvider(LocalShellInput provides ShellInput(), LocalClipboard provides EmptyClipboard) {
             // Encoding on the test's own dispatcher lets waitForIdle observe the chip with no real-time polling.
             ChatComposer(session, workspace, clipboard = { pasted }, encodeContext = EmptyCoroutineContext)
           }
@@ -168,4 +172,12 @@ class ChatComposerTest {
       runOnIdle { assertEquals("typed", workspace.drafts[item.id]) }
     }
   }
+}
+
+private object EmptyClipboard : Clipboard {
+  override val nativeClipboard = java.awt.datatransfer.Clipboard("empty")
+
+  override suspend fun getClipEntry(): ClipEntry? = null
+
+  override suspend fun setClipEntry(clipEntry: ClipEntry?) = Unit
 }
