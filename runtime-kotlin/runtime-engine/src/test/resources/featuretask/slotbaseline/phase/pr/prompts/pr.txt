@@ -86,45 +86,58 @@ Only when NO repo-native template is found at any of the above locations, fall b
 
 ## PR Title
 
-Use `[<ISSUE_KEY>] <descriptive title>` with the issue key in square brackets. Write a concise, title-case description that explains the user-visible outcome rather than copying a branch name or slug. Keep it under 70 characters when possible.
+Use `[<ISSUE_KEY>] <descriptive title>` with the issue key in square brackets; drop the brackets when the work has no issue key. A reviewer scanning a list of pull requests should understand the change from the title alone:
+
+- Start with an imperative verb that names the outcome: "Add", "Fix", "Stop", "Let", "Keep". Write "Fix duplicate tickets after offline sync", not "Ticket sync changes" or "Fixed a bug".
+- Describe what changes for the user or the codebase, not how. Leave class names, file names, and branch slugs out unless the change is about them.
+- Keep it under 70 characters, in sentence case, with no trailing period.
+
+## Writing the Description
+
+These rules apply to every section, whether it comes from the repo-native template or the built-in fallback.
+
+- Open the summary with the problem or goal in one or two sentences, then say what this change does about it. A reviewer who reads only the first paragraph should know why the pull request exists.
+- State the outcome a user or developer will notice. Reference the ticket or spec it delivers.
+- Group the changes by concern, one bullet per logical change. Name the key modules or types a reviewer should open first. Do not list every file; the diff already does.
+- Call out what needs a careful look: risky paths, trade-offs and the alternative you rejected, migrations, rollout or feature-flag steps, and anything deliberately left out of scope.
+- Report the validation that actually ran: tests added or changed, checks, manual verification, and what each showed. Give numbered steps a reviewer can follow to reproduce, with the expected result. Never claim validation that did not run.
+- If the change is behind a feature flag, name the flag and say how to enable it for testing.
+- Write plain, direct sentences. Skip filler such as "This PR…", "successfully", or restating the title.
+- Leave out a section that does not apply instead of writing "N/A", unless the repo-native template requires it.
+- Do not include a checklist in the generated description.
 
 ## Built-in Fallback Template
 
 This template is a fallback. Use it ONLY when no repo-native PR template was found in the search above.
 
 ```markdown
-# Summary
+## Summary
 
-<1-3 sentences: what changed, why it matters, and the user-visible outcome. Reference the ticket/spec.>
+<The problem or goal in one or two sentences, what this change does about it, and the outcome a user or developer will notice. Reference the ticket or spec.>
 
-<optional: bullet list of key changes if more than one logical change>
+## Changes
 
-## Feature Flags
+- <One bullet per logical change, grouped by concern. Name the key modules or types.>
 
-<flag name and description, or "N/A">
+## Reviewer Notes
 
-## Media
+<Risks, trade-offs, migrations, rollout or feature-flag steps, and anything deliberately out of scope. Omit when there is nothing to call out.>
 
-<screenshots or videos for UI changes, or "N/A">
+## Testing
 
-# How Has This Been Tested?
+<The validation that ran and what it showed.>
 
-<overview of tests performed — unit tests, manual verification, preview checks>
+1. <Step a reviewer can follow>
+2. <Expected result>
 
-<reproducible test instructions:>
-1. <step>
-2. <step>
-3. <expected result>
+## Screenshots
+
+<Before and after captures for UI changes. Omit for changes without UI.>
 ```
 
 ## Rules
 
-- Summary should explain the **why**, not just list files changed.
-- Test instructions should be concrete enough for a reviewer to reproduce.
-- If the feature is behind a flag, mention how to enable it for testing.
-- Include the Media section for UI changes, or write "N/A".
-- Do not include a checklist in the generated description.
-- Keep it concise — reviewers appreciate brevity.
+- Keep it concise: a reviewer should take in the summary in under a minute.
 - Always search for a repo-native PR template first — never skip the search step.
 - Specs are no longer committed, so put a short spec summary in the description: the intended outcome and the acceptance criteria titles from the bundle's parent spec.
 - If invoked from the feature workflow, check the project store spec `specs/<ISSUE_KEY>-<feature-name>/spec.md` (`skill-bill project path` prints the store) for additional context; a legacy goal keeps it at `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md` (this file exists only for prepared feature work).

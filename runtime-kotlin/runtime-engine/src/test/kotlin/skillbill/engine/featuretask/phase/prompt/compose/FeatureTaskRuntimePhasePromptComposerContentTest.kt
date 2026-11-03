@@ -113,7 +113,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(prPrompt, PullRequestTemplateSearch.SEARCH_ORDER.joinToString(", ") { "`$it`" })
     assertContains(prPrompt, "## Repo-Native PR Template Search (mandatory)")
     assertContains(prPrompt, "`[<ISSUE_KEY>] <descriptive title>`")
-    assertContains(prPrompt, "# How Has This Been Tested?")
+    assertContains(prPrompt, "## Built-in Fallback Template")
     assertContains(prPrompt, "create or reuse the open")
     assertFalse(prPrompt.contains("pr_result"), "pr must not ask the agent for pr_result")
   }

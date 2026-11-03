@@ -21,18 +21,13 @@ import kotlin.test.assertTrue
 
 class GoalRunnerPullRequestFormattingTest {
   @Test
-  fun `pull request uses issue key title case feature title and capmo summary sections`() {
+  fun `fallback pull request uses the issue key title and lists each subtask as a change`() {
     val request = manifest().toPullRequestRequest(Path.of("/repo"))
 
     assertEquals("[333] Review Citation Ingestion", request.title)
-    assertTrue(request.body.startsWith("# Summary\n\n"))
-    assertTrue(request.body.contains("This pull request delivers Review Citation Ingestion"))
-    assertTrue(request.body.contains("## Feature Flags\n\nN/A"))
-    assertTrue(request.body.contains("## Media\n\nN/A"))
-    assertTrue(request.body.contains("# How Has This Been Tested?"))
-    assertTrue(request.body.contains("- Parse citation metadata"))
-    assertFalse(request.body.contains("# Checklist"))
-    assertFalse(request.body.contains("- [ ]"))
+    assertTrue(request.body.contains("## Changes\n\n- Parse citation metadata\n"), request.body)
+    assertFalse(request.body.contains("N/A"), request.body)
+    assertFalse(request.body.contains("- [ ]"), request.body)
   }
 
   @Test
@@ -55,7 +50,7 @@ class GoalRunnerPullRequestFormattingTest {
     assertTrue(
       body.contains("- Parse citation metadata: skipped (offline_target), after 2 qa_fix attempts"),
     )
-    assertTrue(body.contains("## Mobile QA\n\n- Goal: skipped (offline_target), after 2 qa_fix attempts"))
+    assertTrue(body.contains("### Mobile QA\n\n- Goal: skipped (offline_target), after 2 qa_fix attempts"))
 
     val preQa =
       manifest().toPullRequestRequest(Path.of("/repo"), qaSummary = { GoalSubtaskQaSummary.NotComposed }).body
@@ -70,7 +65,7 @@ class GoalRunnerPullRequestFormattingTest {
     val body =
       twoSubtaskManifest().toPullRequestRequest(Path.of("/repo"), unknownScenarios = ::unknownScenariosFor).body
 
-    assertTrue(body.contains("## Interaction Trace\n\n"))
+    assertTrue(body.contains("### Interaction Trace\n\n"))
     assertTrue(
       body.contains(
         "- Parse citation metadata: Interaction scenarios not traced: IS-001 (malformed audit \\| \\`output\\`); " +

@@ -94,7 +94,7 @@ class PrDescriptionTemplateRunTest {
 
   private fun assertFallbackPrompt(prompt: String) {
     assertRuntimeOwnedRules(prompt)
-    listOf("# Summary", "# Feature Flags", "# Media", "# How Has This Been Tested?").forEach { heading ->
+    listOf("## Summary", "## Changes", "## Testing").forEach { heading ->
       assertTrue(heading in prompt, "the fallback template must carry '$heading': $prompt")
     }
     assertTrue("found no repo-native template. Use the built-in fallback template." in prompt, prompt)

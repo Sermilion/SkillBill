@@ -60,23 +60,18 @@ internal fun DecompositionManifest.pullRequestRequestOf(
 ): GoalPullRequestRequest {
   val body =
     buildString {
-      appendLine("# Summary")
+      appendLine("## Summary")
       appendLine()
-      appendLine("This pull request delivers ${featureName.toPullRequestTitle()} through the completed goal subtasks:")
+      appendLine("Delivers ${featureName.toPullRequestTitle()} for $issueKey in ${subtasks.size} goal subtask(s).")
+      appendLine()
+      appendLine("## Changes")
+      appendLine()
       subtasks.forEach { subtask -> appendLine("- ${subtask.name}") }
       appendLine()
-      appendLine("## Feature Flags")
-      appendLine()
-      appendLine("N/A")
-      appendLine()
-      appendLine("## Media")
-      appendLine()
-      appendLine("N/A")
-      appendLine()
-      appendLine("# How Has This Been Tested?")
+      appendLine("## Testing")
       appendLine()
       appendLine(GATES_PASSED)
-      appendFacts(facts, "##")
+      appendFacts(facts, "###")
     }
   return GoalPullRequestRequest(
     repoRoot = repoRoot,
