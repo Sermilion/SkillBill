@@ -107,7 +107,7 @@ class NewTaskDraft(
 
   private fun sendTurn(submitted: String, action: ChatSuggestedAction?) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
-    offerState.value = offerState.value.copy(started = null)
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, problem = null, started = null)
     current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
@@ -116,14 +116,38 @@ class NewTaskDraft(
     if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in RUN_KINDS) return
     if (kind in RUN_KINDS && offerState.value.started != null) return
-    val agent = selectedAgent ?: return
-    val root = repository?.root ?: return
-    val clicked = action ?: offerState.value.action.takeIf { keyChoice != null }
+    if (selectedAgent == null || repository == null) return
+    offerState.value = NewTaskOffer(starting = true, started = offerState.value.started)
+    startRequest(kind, keyChoice, target, action, current)
+  }
+
+  internal fun retryPrefix(keyChoice: String) {
+    val pending = offerState.value
+    val kind = pending.prefixKind ?: return
+    val current = chatState.value
+    if (kind !in GOAL_KINDS || closing || pending.starting || current?.thread?.busy?.value == true) return
+    if (current == null || pending.started != null) return
+    if (selectedAgent == null || repository == null) return
+    offerState.value = pending.copy(starting = true, problem = null)
+    startRequest(kind, keyChoice, null, pending.action, current)
+  }
+
+  private fun startRequest(
+    kind: NewTaskKind,
+    keyChoice: String?,
+    target: String?,
+    action: ChatSuggestedAction?,
+    current: NewTaskChat?,
+  ) {
+    val agent = checkNotNull(selectedAgent)
+    val root = checkNotNull(repository).root
     val transcript = current?.thread?.transcript?.value.orEmpty()
-    val requirements = listOfNotNull(clicked?.instruction, newTaskRequirements(transcript))
-      .filter(String::isNotBlank)
-      .joinToString("\n\n")
-    val title = clicked?.title ?: current?.let { newTaskTitle(transcript) }
+    val requirements = if (kind in GOAL_KINDS && action != null) action.instruction else {
+      listOfNotNull(action?.instruction, newTaskRequirements(transcript))
+        .filter(String::isNotBlank)
+        .joinToString("\n\n")
+    }
+    val title = if (kind in GOAL_KINDS && action != null) action.title else action?.title ?: current?.let { newTaskTitle(transcript) }
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
@@ -136,9 +160,8 @@ class NewTaskDraft(
       keyChoice,
       expectedSessionId,
       title = title,
-      target = target ?: clicked?.target,
+      target = target ?: action?.target,
     )
-    offerState.value = offerState.value.copy(starting = true, problem = null)
     scope.launch {
       try {
         val outcome = workControls.startNewTask(startRequest)
@@ -152,7 +175,7 @@ class NewTaskDraft(
               }
               toasts.show(ToastMessage(ToastTone.Confirmation, message))
               if (kind in RUN_KINDS && ownsChat(current)) {
-                offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, problem = null, started = message)
+                offerState.value = NewTaskOffer(started = message)
               }
             } else {
               reportStandalone(current, kind, outcome)
@@ -160,7 +183,7 @@ class NewTaskDraft(
           }
           is NewTaskStartOutcome.NeedsKey -> {
             if (ownsChat(current)) {
-              offerState.value = offerState.value.copy(prefixKind = kind, choices = outcome.choices, action = clicked, problem = null)
+              offerState.value = NewTaskOffer(starting = true, prefixKind = kind, choices = outcome.choices, action = action)
             } else {
               toasts.show(ToastMessage(ToastTone.Problem, "Choose an issue key to start this run."))
             }
