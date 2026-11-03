@@ -63,6 +63,21 @@ internal class GoalSharedPreplanSql(
       it.bindAll(parentGoalWorkflowId)
       it.executeUpdate()
     }
+
+  fun listForExport(parentGoalWorkflowId: String): List<SharedGoalPreplanCheckpoint> {
+    return connection.prepareStatement(
+      "SELECT * FROM goal_shared_preplans WHERE parent_goal_workflow_id = ?",
+    ).use { statement ->
+      statement.bindAll(parentGoalWorkflowId)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) {
+            add(rows.toExportShared(parentGoalWorkflowId))
+          }
+        }
+      }
+    }
+  }
 }
 
 private fun requireHydratedSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
@@ -78,6 +93,34 @@ private fun requireHydratedSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint
   if (failure != null) {
     throw invalidGoalPlanningPreparationSchemaError(label, failure.first, failure.second)
   }
+}
+
+private fun ResultSet.toExportShared(parentGoalWorkflowId: String): SharedGoalPreplanCheckpoint {
+  val identity =
+    GoalPlanningIdentity(
+      requireColumn(this, parentGoalWorkflowId, "parent_goal_workflow_id"),
+      requireColumn(this, parentGoalWorkflowId, "normalized_issue_key"),
+      requireColumn(this, parentGoalWorkflowId, "repository_identity"),
+    )
+  val status = decodeState(parentGoalWorkflowId, requireColumn(this, parentGoalWorkflowId, "preparation_status"))
+  return SharedGoalPreplanCheckpoint(
+    identity = identity,
+    preparationStatus = status,
+    provenance =
+      GoalPlanningContractProvenance(
+        requireColumn(this, parentGoalWorkflowId, "parent_spec_hash"),
+        requireColumn(this, parentGoalWorkflowId, "decomposition_manifest_hash"),
+        requireColumn(this, parentGoalWorkflowId, "planning_contract_id"),
+        requireColumn(this, parentGoalWorkflowId, "planning_contract_version"),
+        requireColumn(this, parentGoalWorkflowId, "phase_output_contract_id"),
+        requireColumn(this, parentGoalWorkflowId, "phase_output_contract_version"),
+      ),
+    payloadSha256 = requireColumn(this, parentGoalWorkflowId, "payload_sha256"),
+    preplanPayload = requireColumn(this, parentGoalWorkflowId, "preplan_payload_json"),
+    repairEvidence = optionalRepairEvidence(this, parentGoalWorkflowId, "repair_evidence_json"),
+    createdAt = getString("created_at").orEmpty(),
+    contractVersion = requireColumn(this, parentGoalWorkflowId, "contract_version"),
+  )
 }
 
 private fun ResultSet.toShared(expected: GoalPlanningIdentity): SharedGoalPreplanLookupResult {

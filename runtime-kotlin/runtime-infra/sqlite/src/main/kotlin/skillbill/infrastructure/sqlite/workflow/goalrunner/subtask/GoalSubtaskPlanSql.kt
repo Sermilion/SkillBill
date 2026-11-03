@@ -73,6 +73,21 @@ internal class GoalSubtaskPlanSql(
     }
   }
 
+  fun listAllSubtaskPlansForExport(parentGoalWorkflowId: String): List<GoalSubtaskPlanCheckpoint> {
+    return connection.prepareStatement(
+      "SELECT * FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? ORDER BY manifest_order, subtask_id",
+    ).use { statement ->
+      statement.bindAll(parentGoalWorkflowId)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) {
+            add(rows.toExportPlan(parentGoalWorkflowId))
+          }
+        }
+      }
+    }
+  }
+
   private fun readOrderedPlan(
     rows: ResultSet,
     expectedIdentity: GoalPlanningIdentity,
@@ -152,6 +167,40 @@ private fun requireHydratedSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
   if (failure != null) {
     throw invalidGoalPlanningPreparationSchemaError(label, failure.first, failure.second)
   }
+}
+
+private fun ResultSet.toExportPlan(parentGoalWorkflowId: String): GoalSubtaskPlanCheckpoint {
+  val subtaskId = requirePositiveInt(this, parentGoalWorkflowId, "subtask_id")
+  val label = "$parentGoalWorkflowId#$subtaskId"
+  val identity =
+    GoalPlanningIdentity(
+      requireColumn(this, label, "parent_goal_workflow_id"),
+      requireColumn(this, label, "normalized_issue_key"),
+      requireColumn(this, label, "repository_identity"),
+    )
+  val status = decodeState(label, requireColumn(this, label, "preparation_status"))
+  return GoalSubtaskPlanCheckpoint(
+    identity = identity,
+    subtaskId = subtaskId,
+    manifestOrder = requireNonNegativeInt(this, label, "manifest_order"),
+    governedSubSpecPath = requireColumn(this, label, "governed_sub_spec_path"),
+    subSpecHash = requireColumn(this, label, "sub_spec_hash"),
+    preparationStatus = status,
+    provenance =
+      GoalPlanningContractProvenance(
+        requireColumn(this, label, "parent_spec_hash"),
+        requireColumn(this, label, "decomposition_manifest_hash"),
+        requireColumn(this, label, "planning_contract_id"),
+        requireColumn(this, label, "planning_contract_version"),
+        requireColumn(this, label, "phase_output_contract_id"),
+        requireColumn(this, label, "phase_output_contract_version"),
+      ),
+    payloadSha256 = requireColumn(this, label, "payload_sha256"),
+    planPayload = requireColumn(this, label, "plan_payload_json"),
+    repairEvidence = optionalRepairEvidence(this, label, "repair_evidence_json"),
+    createdAt = getString("created_at").orEmpty(),
+    contractVersion = requireColumn(this, label, "contract_version"),
+  )
 }
 
 private fun ResultSet.toPlan(

@@ -100,7 +100,7 @@ private fun requirePlanningPayloadHash(
   }
 }
 
-internal fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
+public fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
     GoalPlanningPreparationPayloadKeys.RECORD_TYPE to "shared_preplan",
@@ -112,7 +112,7 @@ internal fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
     GoalPlanningPreparationPayloadKeys.REPAIR_EVIDENCE to repairEvidence?.asWorkflowArtifactEntry(),
   ).filterValues { it != null }
 
-internal fun GoalSubtaskPlanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
+public fun GoalSubtaskPlanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
     GoalPlanningPreparationPayloadKeys.RECORD_TYPE to "subtask_plan",

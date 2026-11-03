@@ -27,7 +27,10 @@ import skillbill.infrastructure.sqlite.workflow.WorktreeEditJournalStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.AgentActivityStampStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.StandalonePhaseStatusStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.GoalPlanningPreparationStore
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationLegacySql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
+import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
+import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanSql
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
 import skillbill.learnings.LearningsRuntime
 import skillbill.learnings.model.CreateLearningRequest
@@ -48,6 +51,9 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
+import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
@@ -82,8 +88,13 @@ import skillbill.review.model.NumberedFinding
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.review.model.ReviewFinishedTelemetry
 import java.nio.file.Path
+import java.sql.Blob
 import java.sql.Connection
+import java.sql.ResultSet
+import java.sql.ResultSetMetaData
+import java.sql.Types
 import java.time.Clock
+import java.util.Base64
 
 internal class SQLiteUnitOfWork(
   private val connection: Connection,
@@ -170,6 +181,9 @@ internal class SQLiteUnitOfWork(
     return GoalPurgeTableCounts(counts)
   }
 
+  fun snapshotOwnedGoal(target: GoalPurgeTarget): GoalArchiveOwnedSnapshot =
+    archiveOwnedSnapshot(connection, workflowStates, purgeScope(target))
+
   private fun purgeScope(target: GoalPurgeTarget): GoalPurgeScope {
     val workflowIds =
       (
@@ -191,48 +205,6 @@ internal class SQLiteUnitOfWork(
       }
     }
   }
-
-  private fun goalRunSessionsFilter(scope: GoalPurgeScope): SqlFilter? {
-    val segmentClauses =
-      scope.parentIds.map { parentId ->
-        SqlFilter("substr(workflow_id, 1, length(?) + 5) = ? || ':seg:'", listOf(parentId, parentId))
-      }
-    val clauses =
-      listOfNotNull(
-        inFilter("workflow_id", scope.workflowIds),
-        inFilter("parent_workflow_id", scope.parentIds),
-      ) + segmentClauses
-    return anyOf(clauses)
-  }
-
-  private fun runtimeSessionsFilter(scope: GoalPurgeScope): SqlFilter? {
-    val owned =
-      anyOf(
-        listOfNotNull(
-          inFilter("session_id", scope.sessionIds),
-          inFilter("workflow_id", scope.workflowIds),
-          inFilter("goal_parent_workflow_id", scope.parentIds),
-        ),
-      ) ?: return null
-    val survivingReference =
-      "NOT EXISTS (SELECT 1 FROM $WORKFLOWS_TABLE w " +
-        "WHERE (w.session_id = $RUNTIME_SESSIONS_TABLE.session_id " +
-        "OR w.workflow_id = $RUNTIME_SESSIONS_TABLE.workflow_id) " +
-        "AND w.workflow_id NOT IN (${placeholders(scope.workflowIds)}))"
-    return SqlFilter("(${owned.clause}) AND $survivingReference", owned.args + scope.workflowIds)
-  }
-
-  private fun inFilter(
-    column: String,
-    ids: List<String>,
-  ): SqlFilter? = if (ids.isEmpty()) null else SqlFilter("$column IN (${placeholders(ids)})", ids)
-
-  private fun anyOf(filters: List<SqlFilter>): SqlFilter? =
-    if (filters.isEmpty()) {
-      null
-    } else {
-      SqlFilter(filters.joinToString(" OR ") { "(${it.clause})" }, filters.flatMap(SqlFilter::args))
-    }
 
   private fun deleteMatching(
     table: String,
@@ -280,8 +252,6 @@ internal class SQLiteUnitOfWork(
         statement.executeQuery().use { rows -> if (rows.next()) rows.getInt(1) else 0 }
       }
   }
-
-  private fun placeholders(values: List<String>): String = values.joinToString(", ") { "?" }
 }
 
 private const val WORKFLOWS_TABLE = "feature_task_workflows"
@@ -316,6 +286,153 @@ private val PURGE_WORKFLOW_KEYED_TABLES =
   )
 
 private val PURGE_PARENT_KEYED_TABLES = listOf("goal_runner_controls", "goal_issue_progress")
+
+private fun archiveOwnedSnapshot(
+  connection: Connection,
+  workflowStates: WorkflowStateRepository,
+  scope: GoalPurgeScope,
+): GoalArchiveOwnedSnapshot {
+  val sharedPreplanSql = GoalSharedPreplanSql(connection)
+  val subtaskPlanSql = GoalSubtaskPlanSql(connection)
+  val legacyPreparationSql = GoalPlanningPreparationLegacySql(connection)
+  val ownedTables = linkedMapOf<String, List<GoalArchiveTableRow>>()
+  PURGE_WORKFLOW_KEYED_TABLES.forEach { table ->
+    ownedTables[table] =
+      archiveSelectWhereIn(connection, table, "workflow_id", scope.workflowIds).map(::GoalArchiveTableRow)
+  }
+  PURGE_PARENT_KEYED_TABLES.forEach { table ->
+    ownedTables[table] =
+      archiveSelectWhereIn(connection, table, "parent_workflow_id", scope.parentIds).map(::GoalArchiveTableRow)
+  }
+  ownedTables[GOAL_RUN_SESSIONS_TABLE] =
+    archiveSelectMatching(connection, GOAL_RUN_SESSIONS_TABLE, goalRunSessionsFilter(scope)).map(::GoalArchiveTableRow)
+  ownedTables[RUNTIME_SESSIONS_TABLE] =
+    archiveSelectMatching(connection, RUNTIME_SESSIONS_TABLE, runtimeSessionsFilter(scope)).map(::GoalArchiveTableRow)
+  return GoalArchiveOwnedSnapshot(
+    workflows = scope.workflowIds.mapNotNull(workflowStates::getFeatureTaskWorkflow),
+    sharedPreplans = scope.parentIds.flatMap(sharedPreplanSql::listForExport),
+    subtaskPlans = scope.parentIds.flatMap(subtaskPlanSql::listAllSubtaskPlansForExport),
+    legacyPreparations = scope.parentIds.flatMap(legacyPreparationSql::listForExport),
+    ownedTables = GoalArchiveOwnedTables.of(ownedTables),
+  )
+}
+
+private fun archiveSelectWhereIn(
+  connection: Connection,
+  table: String,
+  column: String,
+  ids: List<String>,
+): List<Map<String, Any?>> {
+  if (ids.isEmpty()) return emptyList()
+  return connection.prepareStatement("SELECT * FROM $table WHERE $column IN (${placeholders(ids)})").use { statement ->
+    statement.bindAll(ids)
+    statement.executeQuery().use { rows -> archiveReadAllRows(rows) }
+  }
+}
+
+private fun archiveSelectMatching(
+  connection: Connection,
+  table: String,
+  filter: SqlFilter?,
+): List<Map<String, Any?>> {
+  if (filter == null) return emptyList()
+  return connection.prepareStatement("SELECT * FROM $table WHERE ${filter.clause}").use { statement ->
+    statement.bindAll(filter.args)
+    statement.executeQuery().use { rows -> archiveReadAllRows(rows) }
+  }
+}
+
+private fun archiveReadAllRows(rows: ResultSet): List<Map<String, Any?>> =
+  buildList {
+    val meta = rows.metaData
+    while (rows.next()) {
+      add(archiveRowMap(rows, meta))
+    }
+  }
+
+private fun archiveRowMap(
+  rows: ResultSet,
+  meta: ResultSetMetaData,
+): Map<String, Any?> =
+  buildMap {
+    for (index in 1..meta.columnCount) {
+      val name = meta.getColumnName(index)
+      put(name, archiveCellValue(rows, index, meta.getColumnType(index)))
+    }
+  }
+
+private fun archiveCellValue(
+  rows: ResultSet,
+  index: Int,
+  sqlType: Int,
+): Any? {
+  val value = rows.getObject(index) ?: return null
+  return archiveEncodedBinary(value, rows, index, sqlType) ?: value
+}
+
+private fun archiveEncodedBinary(
+  value: Any,
+  rows: ResultSet,
+  index: Int,
+  sqlType: Int,
+): String? =
+  when {
+    value is ByteArray -> archiveBase64(value)
+    value is Blob -> archiveBlobBytes(value)
+    sqlType in ARCHIVE_BINARY_SQL_TYPES -> rows.getBytes(index)?.let(::archiveBase64)
+    else -> null
+  }
+
+private fun archiveBlobBytes(blob: Blob): String = archiveBase64(blob.getBytes(1, blob.length().toInt()))
+
+private fun archiveBase64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+
+private val ARCHIVE_BINARY_SQL_TYPES =
+  setOf(Types.BLOB, Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY)
+
+private fun goalRunSessionsFilter(scope: GoalPurgeScope): SqlFilter? {
+  val segmentClauses =
+    scope.parentIds.map { parentId ->
+      SqlFilter("substr(workflow_id, 1, length(?) + 5) = ? || ':seg:'", listOf(parentId, parentId))
+    }
+  val clauses =
+    listOfNotNull(
+      inFilter("workflow_id", scope.workflowIds),
+      inFilter("parent_workflow_id", scope.parentIds),
+    ) + segmentClauses
+  return anyOf(clauses)
+}
+
+private fun runtimeSessionsFilter(scope: GoalPurgeScope): SqlFilter? {
+  val owned =
+    anyOf(
+      listOfNotNull(
+        inFilter("session_id", scope.sessionIds),
+        inFilter("workflow_id", scope.workflowIds),
+        inFilter("goal_parent_workflow_id", scope.parentIds),
+      ),
+    ) ?: return null
+  val survivingReference =
+    "NOT EXISTS (SELECT 1 FROM $WORKFLOWS_TABLE w " +
+      "WHERE (w.session_id = $RUNTIME_SESSIONS_TABLE.session_id " +
+      "OR w.workflow_id = $RUNTIME_SESSIONS_TABLE.workflow_id) " +
+      "AND w.workflow_id NOT IN (${placeholders(scope.workflowIds)}))"
+  return SqlFilter("(${owned.clause}) AND $survivingReference", owned.args + scope.workflowIds)
+}
+
+private fun inFilter(
+  column: String,
+  ids: List<String>,
+): SqlFilter? = if (ids.isEmpty()) null else SqlFilter("$column IN (${placeholders(ids)})", ids)
+
+private fun anyOf(filters: List<SqlFilter>): SqlFilter? =
+  if (filters.isEmpty()) {
+    null
+  } else {
+    SqlFilter(filters.joinToString(" OR ") { "(${it.clause})" }, filters.flatMap(SqlFilter::args))
+  }
+
+private fun placeholders(values: List<String>): String = values.joinToString(", ") { "?" }
 
 internal class SQLiteUnaddressedFindingsRepository(connection: Connection) : UnaddressedFindingsRepository {
   private val runtime = UnaddressedFindingsRuntime(connection)

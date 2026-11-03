@@ -1,0 +1,497 @@
+package skillbill.engine.goalrunner.reset
+
+import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.decompositionManifestPath
+import skillbill.application.decomposition.findMatchingDecompositionManifests
+import skillbill.application.decomposition.model.SpecBundleScope
+import skillbill.application.decomposition.repoRelativePath
+import skillbill.application.decomposition.resolvedParentSpecPath
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GoalArchiveEnvelopeKeys
+import skillbill.contracts.workflow.goal.GoalArchiveRecordKeys
+import skillbill.contracts.workflow.goal.goalArchiveEnvelopeWireMap
+import skillbill.engine.goalplanning.toEnvelopeMap
+import skillbill.engine.goalrunner.archive.toGoalArchiveFieldMap
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
+import skillbill.engine.goalrunner.model.GoalRunnerExportResult
+import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.goal.goalArchivePathTraversalError
+import skillbill.goalrunner.model.ExecutionLiveness
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
+import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.goalrunner.GoalArchiveEnvelopeValidator
+import skillbill.ports.goalrunner.GoalArchiveSnapshotPort
+import skillbill.ports.goalrunner.model.GoalArchiveEnvelope
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
+import skillbill.ports.persistence.model.GoalPurgeTarget
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.time.Clock
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import kotlin.io.path.createDirectories
+import kotlin.io.path.name
+
+@Inject
+public class GoalRunnerArchiveCoordinator(
+  private val manifestStore: GoalRunnerManifestStore,
+  private val gitOperations: WorkflowGitOperations,
+  private val projectionAssembler: GoalRunnerStatusProjectionAssembler,
+  private val manifestFileStore: DecompositionManifestStore,
+  private val manifestValidator: DecompositionManifestValidator,
+  private val database: DatabaseSessionFactory,
+  private val projectStore: ProjectStorePort,
+  private val clock: Clock,
+  private val archiveSnapshotPort: GoalArchiveSnapshotPort,
+  private val envelopeValidator: GoalArchiveEnvelopeValidator,
+  private val workflowArtifactWireEncoder: WorkflowArtifactWireEncoder,
+) {
+  private val changedSummary = "Database file changed during export; no archive was written."
+
+  public fun export(
+    request: GoalRunnerExportRequest,
+    expectedObservation: DatabaseFileObservation? = null,
+  ): GoalRunnerExportResult {
+    val repoRoot = request.repoRoot ?: error("repoRoot is required to export goal '${request.issueKey}'.")
+    val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey)
+    val outputPath = request.outputPath.toAbsolutePath().normalize()
+    val protection =
+      when (val result = database.acquireDatabasePathProtection()) {
+        is DatabasePathProtectionResult.Acquired -> result.protection
+        is DatabasePathProtectionResult.Unavailable ->
+          return GoalRunnerExportResult.Refused(
+            issueKey,
+            "Database path protection is unavailable; export made no changes. ${result.reason}",
+          )
+      }
+    return protection.use {
+      exportProtected(repoRoot, issueKey, outputPath, expectedObservation)
+    }
+  }
+
+  private fun exportProtected(
+    repoRoot: Path,
+    issueKey: String,
+    outputPath: Path,
+    expectedObservation: DatabaseFileObservation?,
+  ): GoalRunnerExportResult {
+    val observation =
+      expectedObservation ?: if (database.databaseExists()) {
+        database.read { it.databaseFileObservation }
+      } else {
+        null
+      }
+    observationRefusal(issueKey, observation)?.let { return it }
+    requireNotNull(observation)
+    return exportAdmitted(repoRoot, issueKey, outputPath, observation)
+  }
+
+  private fun exportAdmitted(
+    repoRoot: Path,
+    issueKey: String,
+    outputPath: Path,
+    observation: DatabaseFileObservation,
+  ): GoalRunnerExportResult {
+    val plan =
+      when (val admission = database.transactionFenced(observation) { discover(repoRoot, issueKey) }) {
+        FencedTransactionResult.ChangedTarget -> return GoalRunnerExportResult.Refused(issueKey, changedSummary)
+        is FencedTransactionResult.Committed -> admission.value
+      }
+    plan.refusalReason?.let { return GoalRunnerExportResult.Refused(issueKey, it) }
+    val git =
+      when (val admission = branchHeadAdmission(repoRoot, plan)) {
+        is BranchHeadAdmission.Refused -> return GoalRunnerExportResult.Refused(issueKey, admission.reason)
+        is BranchHeadAdmission.Ready -> admission
+      }
+    return snapshotAndWrite(ReadyExport(repoRoot, issueKey, outputPath, observation, plan, git))
+  }
+
+  private fun snapshotAndWrite(ready: ReadyExport): GoalRunnerExportResult {
+    val snapshot =
+      when (
+        val result = database.transactionFenced(ready.observation) { archiveSnapshotPort.snapshot(ready.plan.target) }
+      ) {
+        FencedTransactionResult.ChangedTarget -> return GoalRunnerExportResult.Refused(ready.issueKey, changedSummary)
+        is FencedTransactionResult.Committed -> result.value
+      }
+    if (!isCurrent(ready.observation)) return GoalRunnerExportResult.Refused(ready.issueKey, changedSummary)
+    return writeArchive(ready, snapshot)
+  }
+
+  private fun observationRefusal(
+    issueKey: String,
+    observation: DatabaseFileObservation?,
+  ): GoalRunnerExportResult? {
+    val selectedPath = database.resolveDbPath().toAbsolutePath().normalize()
+    val reason =
+      when {
+        !database.databaseExists() -> "Selected database does not exist; export made no changes."
+        observation == null -> "Database file identity is unavailable; export made no changes."
+        observation.path.toAbsolutePath().normalize() != selectedPath ->
+          "Database observation does not match the selected database path; export made no changes."
+        else -> null
+      }
+    return reason?.let { GoalRunnerExportResult.Refused(issueKey, it) }
+  }
+
+  private fun writeArchive(
+    ready: ReadyExport,
+    snapshot: GoalArchiveOwnedSnapshot,
+  ): GoalRunnerExportResult {
+    val sourceManifest =
+      ready.plan.sourceManifest ?: return GoalRunnerExportResult.Failed(ready.issueKey, "No decomposition manifest.")
+    val specEntries =
+      when (val specs = readSpecBundleEntries(ready.repoRoot, sourceManifest, ready.plan.manifestPath)) {
+        is SpecBundleRead.Missing ->
+          return GoalRunnerExportResult.Failed(ready.issueKey, "Spec bundle file is missing at ${specs.path}.")
+        is SpecBundleRead.Ready -> specs.entries
+      }
+    val documents = archiveDocuments(ready.issueKey, ready.git, snapshot)
+    try {
+      envelopeValidator.validate(documents.envelope)
+    } catch (error: SkillBillRuntimeException) {
+      return GoalRunnerExportResult.Failed(ready.issueKey, error.message ?: error.code.toString())
+    }
+    return persistArchiveZip(ready, specEntries, documents, snapshot)
+  }
+
+  private fun archiveDocuments(
+    issueKey: String,
+    git: BranchHeadAdmission.Ready,
+    snapshot: GoalArchiveOwnedSnapshot,
+  ): ArchiveDocuments =
+    ArchiveDocuments(
+      envelope =
+        GoalArchiveEnvelope(
+          contractVersion = GOAL_ARCHIVE_CONTRACT_VERSION,
+          issueKey = issueKey,
+          featureBranch = git.featureBranch,
+          commitSha = git.commitSha,
+          exportedAt = clock.instant().toString(),
+        ),
+      workflowsJson = snapshot.workflows.map { it.toGoalArchiveFieldMap(workflowArtifactWireEncoder) },
+      planningJson =
+        linkedMapOf(
+          GoalArchiveRecordKeys.SHARED_PREPLANS to snapshot.sharedPreplans.map { it.toEnvelopeMap() },
+          GoalArchiveRecordKeys.SUBTASK_PLANS to snapshot.subtaskPlans.map { it.toEnvelopeMap() },
+          GoalArchiveRecordKeys.LEGACY_PREPARATIONS to snapshot.legacyPreparations.map { it.toEnvelopeMap() },
+        ),
+      ownedTablesJson = ownedTablesJson(snapshot.ownedTables),
+    )
+
+  private fun persistArchiveZip(
+    ready: ReadyExport,
+    specEntries: List<Pair<String, ByteArray>>,
+    documents: ArchiveDocuments,
+    snapshot: GoalArchiveOwnedSnapshot,
+  ): GoalRunnerExportResult {
+    val parentDir = ready.outputPath.parent ?: ready.outputPath
+    parentDir.createDirectories()
+    val tempFile = Files.createTempFile(parentDir, "${ready.outputPath.name}-", ".part")
+    try {
+      catchingNonCancellation {
+        ZipOutputStream(Files.newOutputStream(tempFile)).use { zip ->
+          writeJsonEntry(zip, GoalArchiveEnvelopeKeys.ARCHIVE_JSON, documents.envelope.wireMap())
+          specEntries.forEach { (entryName, bytes) ->
+            zip.putNextEntry(ZipEntry(entryName))
+            zip.write(bytes)
+            zip.closeEntry()
+          }
+          writeJsonEntry(zip, GoalArchiveEnvelopeKeys.WORKFLOWS_JSON, documents.workflowsJson)
+          writeJsonEntry(zip, GoalArchiveEnvelopeKeys.PLANNING_JSON, documents.planningJson)
+          writeJsonEntry(zip, GoalArchiveEnvelopeKeys.OWNED_TABLES_JSON, documents.ownedTablesJson)
+        }
+        Files.move(tempFile, ready.outputPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+      }.getOrElse { error ->
+        return GoalRunnerExportResult.Failed(ready.issueKey, archiveWriteFailureMessage(error))
+      }
+    } finally {
+      Files.deleteIfExists(tempFile)
+    }
+    return GoalRunnerExportResult.Exported(
+      issueKey = ready.issueKey,
+      featureBranch = ready.git.featureBranch,
+      commitSha = ready.git.commitSha,
+      archivePath = ready.outputPath,
+      fileCount = specEntries.size + 4,
+      rowCounts = rowCounts(snapshot),
+    )
+  }
+
+  private fun archiveWriteFailureMessage(error: Throwable): String =
+    when (error) {
+      is SkillBillRuntimeException -> error.message ?: error.code.toString()
+      else -> error.message ?: error::class.simpleName.orEmpty()
+    }
+
+  private fun writeJsonEntry(
+    zip: ZipOutputStream,
+    entryName: String,
+    payload: Any,
+  ) {
+    zip.putNextEntry(ZipEntry(entryName))
+    zip.write(JsonCodec.valueToJsonString(payload).encodeToByteArray())
+    zip.closeEntry()
+  }
+
+  private fun rowCounts(snapshot: GoalArchiveOwnedSnapshot): Map<String, Int> =
+    buildMap {
+      put("feature_task_workflows", snapshot.workflows.size)
+      snapshot.ownedTables.orderedTables().forEach { (table, rows) -> put(table, rows.size) }
+      put("goal_shared_preplans", snapshot.sharedPreplans.size)
+      put("goal_subtask_plans", snapshot.subtaskPlans.size)
+      put("goal_planning_preparations", snapshot.legacyPreparations.size)
+    }
+
+  private fun readSpecBundleEntries(
+    repoRoot: Path,
+    manifest: DecompositionManifest,
+    manifestPath: Path?,
+  ): SpecBundleRead {
+    val store = projectStore.resolve(repoRoot)
+    val resolvedManifestPath = manifestPath ?: derivedManifestPath(repoRoot, manifest)
+    val paths =
+      linkedSetOf(
+        resolvedManifestPath,
+        resolvedParentSpecPath(repoRoot, Path.of(manifest.parentSpecPath), store),
+      ) +
+        manifest.subtasks.map { subtask -> resolvedParentSpecPath(repoRoot, Path.of(subtask.specPath), store) }
+    val entries = mutableListOf<Pair<String, ByteArray>>()
+    for (path in paths) {
+      if (!manifestFileStore.isRegularFile(path)) {
+        return SpecBundleRead.Missing(repoRelativePath(repoRoot, store, path))
+      }
+      val relative = repoRelativePath(repoRoot, store, path)
+      entries += archiveSpecEntryName(relative) to manifestFileStore.readText(path).encodeToByteArray()
+    }
+    return SpecBundleRead.Ready(entries)
+  }
+
+  private fun archiveSpecEntryName(storeRelativePath: String): String {
+    val normalized = storeRelativePath.replace('\\', '/').trimStart('/')
+    val entry = GoalArchiveEnvelopeKeys.SPECS_PREFIX + normalized
+    val entryPath = Path.of(entry).normalize()
+    val specsRoot = Path.of(GoalArchiveEnvelopeKeys.SPECS_PREFIX).normalize()
+    if (!entryPath.startsWith(specsRoot) || entry.contains("..")) {
+      throw goalArchivePathTraversalError(entry)
+    }
+    return entryPath.toString().replace('\\', '/')
+  }
+
+  private fun branchHeadAdmission(
+    repoRoot: Path,
+    plan: ArchivePlan,
+  ): BranchHeadAdmission {
+    val featureBranch =
+      plan.sourceManifest?.featureBranch?.takeIf(String::isNotBlank)
+        ?: return BranchHeadAdmission.Refused(
+          "Goal '${plan.issueKey}' has no recorded feature branch; export refused.",
+        )
+    return admittedGit(repoRoot, featureBranch)
+  }
+
+  private fun admittedGit(
+    repoRoot: Path,
+    featureBranch: String,
+  ): BranchHeadAdmission {
+    val current =
+      gitValue(gitOperations.currentBranch(repoRoot))
+        ?: return BranchHeadAdmission.Refused("Current branch is unavailable; export refused.")
+    if (current != featureBranch) {
+      return BranchHeadAdmission.Refused(
+        "Current branch '$current' is not the recorded feature branch '$featureBranch'; export refused.",
+      )
+    }
+    val commitSha =
+      gitValue(gitOperations.headCommitSha(repoRoot))
+        ?: return BranchHeadAdmission.Refused("HEAD commit SHA is unavailable; export refused.")
+    return BranchHeadAdmission.Ready(featureBranch, commitSha)
+  }
+
+  private fun gitValue(result: WorkflowGitOperationResult): String? =
+    (result as? WorkflowGitOperationResult.Ok)?.value?.takeIf(String::isNotBlank)
+
+  private fun discover(
+    repoRoot: Path,
+    issueKey: String,
+  ): ArchivePlan {
+    val ownership = manifestStore.discoverPurgeOwnership(issueKey, repoRoot)
+    val diskCandidate =
+      findMatchingDecompositionManifests(
+        scope = SpecBundleScope(repoRoot, projectStore.resolve(repoRoot)),
+        issueKey = issueKey,
+        fileStore = manifestFileStore,
+        validator = manifestValidator,
+        recoverPending = false,
+      ).firstOrNull()
+    val childrenByParent = ownership.parentWorkflowIds.associateWith(manifestStore::listOwnedGoalChildWorkflowIds)
+    val manifests = listOfNotNull(diskCandidate?.manifest) + ownership.manifests.map { it.manifest }
+    val manifestRecordedIds =
+      manifests.flatMapTo(linkedSetOf()) { manifest ->
+        manifest.subtasks.mapNotNull { subtask -> subtask.workflowId?.takeIf(String::isNotBlank) }
+      }
+    val verifiedIds =
+      manifestStore.verifyOwnedWorkflowIds(manifestRecordedIds, ownership.parentWorkflowIds, issueKey, repoRoot)
+    val target =
+      GoalPurgeTarget(
+        parentWorkflowIds = ownership.parentWorkflowIds,
+        workflowIds =
+          ownership.parentWorkflowIds + childrenByParent.values.flatten() + verifiedIds + ownership.planWorkflowIds,
+      )
+    val sourceManifest = manifests.firstOrNull()
+    val orphanIds = verifiedIds - childrenByParent.values.flatten().toSet()
+    val refusalReason =
+      childrenByParent.firstNotNullOfOrNull { (parentId, childIds) ->
+        livenessRefusal(issueKey, parentId, childIds + orphanIds)
+      }
+        ?: planLivenessRefusal(issueKey, ownership.planWorkflowIds)
+        ?: leftoverRefusal(issueKey, ownership.unclassifiedWorkflows, ownership.siblingWorktreeWorkflows)
+    return ArchivePlan(
+      issueKey = issueKey,
+      target = target,
+      sourceManifest = sourceManifest,
+      manifestPath = diskCandidate?.path ?: sourceManifest?.let { derivedManifestPath(repoRoot, it) },
+      refusalReason = refusalReason,
+    )
+  }
+
+  private fun leftoverRefusal(
+    issueKey: String,
+    unclassified: List<String>,
+    siblings: List<String>,
+  ): String? {
+    siblings.firstOrNull()?.let { sibling ->
+      val exportHint = sibling.replace("skill-bill goal purge", "skill-bill goal export")
+      return "Goal '$issueKey' has sibling worktree workflows; export refused. $exportHint"
+    }
+    unclassified.firstOrNull()?.let { leftover ->
+      return "Goal '$issueKey' has undecodable owned workflows; export refused. $leftover"
+    }
+    return null
+  }
+
+  private fun derivedManifestPath(
+    repoRoot: Path,
+    manifest: DecompositionManifest,
+  ): Path =
+    decompositionManifestPath(
+      repoRoot,
+      projectStore.resolve(repoRoot),
+      Path.of(manifest.parentSpecPath),
+      manifest.subtasks.map { it.specPath },
+    )
+
+  private fun livenessRefusal(
+    issueKey: String,
+    parentWorkflowId: String,
+    childWorkflowIds: List<String>,
+  ): String? =
+    when (projectionAssembler.resolvePurgeBlockingLiveness(parentWorkflowId, childWorkflowIds)) {
+      ExecutionLiveness.IDLE, null -> null
+      ExecutionLiveness.LIVE ->
+        "Goal '$issueKey' is live; refuse export while a parent or child worker is active. " +
+          "Use GoalPauseCommand or GoalStopCommand first."
+      ExecutionLiveness.LIVE_EXPIRED ->
+        "Goal '$issueKey' has a live-but-expired lease; refuse export until ownership is reconciled."
+      ExecutionLiveness.UNKNOWN ->
+        "Goal '$issueKey' has unknown execution liveness; refuse export until liveness is known."
+      ExecutionLiveness.FOREIGN_HOST ->
+        "Goal '$issueKey' has foreign-host ownership; refuse export until ownership is reconciled."
+      ExecutionLiveness.PID_REUSED ->
+        "Goal '$issueKey' has pid-reused ownership; refuse export until ownership is reconciled."
+    }
+
+  private fun planLivenessRefusal(
+    issueKey: String,
+    planWorkflowIds: Collection<String>,
+  ): String? =
+    when (projectionAssembler.resolveWorkerBlockingLiveness(planWorkflowIds)) {
+      ExecutionLiveness.IDLE, null -> null
+      ExecutionLiveness.LIVE ->
+        "Goal '$issueKey' has a live plan worker; refuse export while a plan workflow is active. " +
+          "Use GoalPauseCommand or GoalStopCommand first."
+      ExecutionLiveness.LIVE_EXPIRED ->
+        "Goal '$issueKey' has a live-but-expired plan worker; refuse export until ownership is reconciled."
+      ExecutionLiveness.UNKNOWN ->
+        "Goal '$issueKey' has unknown plan worker liveness; refuse export until liveness is known."
+      ExecutionLiveness.FOREIGN_HOST ->
+        "Goal '$issueKey' has foreign-host plan ownership; refuse export until ownership is reconciled."
+      ExecutionLiveness.PID_REUSED ->
+        "Goal '$issueKey' has pid-reused plan ownership; refuse export until ownership is reconciled."
+    }
+
+  private fun isCurrent(expected: DatabaseFileObservation): Boolean =
+    when (database.transactionFenced(expected) { true }) {
+      FencedTransactionResult.ChangedTarget -> false
+      is FencedTransactionResult.Committed -> true
+    }
+}
+
+private fun GoalArchiveEnvelope.wireMap(): Map<String, Any?> =
+  goalArchiveEnvelopeWireMap(contractVersion, issueKey, featureBranch, commitSha, exportedAt)
+
+private fun ownedTablesJson(tables: GoalArchiveOwnedTables): Map<String, List<Map<String, Any?>>> =
+  tables.orderedTables().associate { (name, rows) ->
+    name to rows.map { row -> row.orderedEntries().toMap() }
+  }
+
+private data class ReadyExport(
+  val repoRoot: Path,
+  val issueKey: String,
+  val outputPath: Path,
+  val observation: DatabaseFileObservation,
+  val plan: ArchivePlan,
+  val git: BranchHeadAdmission.Ready,
+)
+
+private sealed interface BranchHeadAdmission {
+  data class Ready(
+    val featureBranch: String,
+    val commitSha: String,
+  ) : BranchHeadAdmission
+
+  data class Refused(
+    val reason: String,
+  ) : BranchHeadAdmission
+}
+
+private sealed interface SpecBundleRead {
+  data class Ready(
+    val entries: List<Pair<String, ByteArray>>,
+  ) : SpecBundleRead
+
+  data class Missing(
+    val path: String,
+  ) : SpecBundleRead
+}
+
+private data class ArchiveDocuments(
+  val envelope: GoalArchiveEnvelope,
+  val workflowsJson: List<Map<String, Any?>>,
+  val planningJson: Map<String, Any?>,
+  val ownedTablesJson: Map<String, List<Map<String, Any?>>>,
+)
+
+private data class ArchivePlan(
+  val issueKey: String,
+  val target: GoalPurgeTarget,
+  val sourceManifest: DecompositionManifest?,
+  val manifestPath: Path?,
+  val refusalReason: String?,
+)

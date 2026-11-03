@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.archive.RecordingGoalArchiveSnapshotPort
 import skillbill.engine.goalrunner.assessment.GoalAssessmentRoundResult
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
@@ -39,6 +40,7 @@ import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.repair.GoalRunnerFreshQualityCoordinator
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.repair.NoopGoalRunnerChildRepairStore
+import skillbill.engine.goalrunner.reset.GoalRunnerArchiveCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.engine.goalrunner.status.GoalRunnerStatusControlVerbs
@@ -46,12 +48,15 @@ import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
+import skillbill.infrastructure.contracts.workflow.goal.ClasspathGoalArchiveEnvelopeValidator
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.GoalArchiveSnapshotPort
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -120,6 +125,7 @@ data class GoalRunnerStatusTestPorts(
       override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest) =
         ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
     },
+  val archiveSnapshotPort: GoalArchiveSnapshotPort = RecordingGoalArchiveSnapshotPort(),
 )
 
 fun testGoalRunnerStatusService(
@@ -214,6 +220,20 @@ fun testGoalRunnerStatusService(
         projectStore = ports.projectStore,
         diagnostics = ports.diagnostics,
         worktrees = ports.goalWorktrees,
+      ),
+    archiveCoordinator =
+      GoalRunnerArchiveCoordinator(
+        manifestStore = manifestStore,
+        gitOperations = ports.gitOperations,
+        projectionAssembler = projectionAssembler,
+        manifestFileStore = decompositionManifestStore,
+        manifestValidator = testDecompositionManifestValidator,
+        database = database,
+        projectStore = ports.projectStore,
+        clock = clock,
+        archiveSnapshotPort = ports.archiveSnapshotPort,
+        envelopeValidator = ClasspathGoalArchiveEnvelopeValidator(),
+        workflowArtifactWireEncoder = SqliteWorkflowArtifactWireEncoder(),
       ),
     freshQualityCoordinator =
       GoalRunnerFreshQualityCoordinator(

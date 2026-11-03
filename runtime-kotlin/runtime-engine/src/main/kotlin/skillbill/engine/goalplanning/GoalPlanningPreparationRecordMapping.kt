@@ -6,7 +6,7 @@ import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 
-internal fun GoalPlanningPreparationRecord.toEnvelopeMap(): Map<String, Any?> =
+public fun GoalPlanningPreparationRecord.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
     "parent_goal_workflow_id" to parentGoalWorkflowId,

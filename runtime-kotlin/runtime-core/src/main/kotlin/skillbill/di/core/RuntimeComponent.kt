@@ -78,6 +78,7 @@ import skillbill.engine.work.changes.scope.WorkChangeScopesService
 import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
 import skillbill.engine.work.timeline.WorkActivityService
+import skillbill.infrastructure.contracts.workflow.goal.ClasspathGoalArchiveEnvelopeValidator
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.blockincident.FileProductReportDeliveryOwnership
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
@@ -90,6 +91,7 @@ import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
 import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
+import skillbill.infrastructure.sqlite.workflow.goalrunner.archive.SqliteGoalArchiveSnapshotPort
 import skillbill.infrastructure.workflow.git.changes.GitWorkChangesAdapter
 import skillbill.infrastructure.workflow.git.lineage.GitRepositoryLineage
 import skillbill.model.EnvironmentContext
@@ -113,6 +115,8 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.editor.FileEditorLauncherPort
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.goalrunner.GoalArchiveEnvelopeValidator
+import skillbill.ports.goalrunner.GoalArchiveSnapshotPort
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
@@ -286,6 +290,13 @@ abstract class RuntimeComponent(
 
   @Provides
   fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter
+
+  @Provides
+  fun goalArchiveSnapshotPort(adapter: SqliteGoalArchiveSnapshotPort): GoalArchiveSnapshotPort = adapter
+
+  @Provides
+  fun goalArchiveEnvelopeValidator(adapter: ClasspathGoalArchiveEnvelopeValidator): GoalArchiveEnvelopeValidator =
+    adapter
 
   @Provides
   fun standalonePhaseStatusPublisherFactory(

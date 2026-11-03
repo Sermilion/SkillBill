@@ -12,6 +12,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
+import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
+import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
@@ -24,6 +26,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerResetRequest
 import skillbill.engine.goalrunner.model.GoalRunnerResetResult
 import skillbill.engine.goalrunner.repair.GoalRunnerFreshQualityCoordinator
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
+import skillbill.engine.goalrunner.reset.GoalRunnerArchiveCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
@@ -43,6 +46,7 @@ public class GoalRunnerStatusService(
   private val projectionAssembler: GoalRunnerStatusProjectionAssembler,
   private val resetReplanCoordinator: GoalRunnerResetReplanCoordinator,
   private val purgeCoordinator: GoalRunnerPurgeCoordinator,
+  private val archiveCoordinator: GoalRunnerArchiveCoordinator,
   private val freshQualityCoordinator: GoalRunnerFreshQualityCoordinator,
 ) : GoalRunnerStatusPort {
   public override fun status(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? {
@@ -103,6 +107,17 @@ public class GoalRunnerStatusService(
     expectedObservation: DatabaseFileObservation?,
   ): GoalRunnerPurgeResult =
     purgeCoordinator.purge(
+      request.copy(repoRoot = request.repoRoot ?: repositoryRoot.path),
+      expectedObservation,
+    )
+
+  public fun export(request: GoalRunnerExportRequest): GoalRunnerExportResult = export(request, null)
+
+  public fun export(
+    request: GoalRunnerExportRequest,
+    expectedObservation: DatabaseFileObservation?,
+  ): GoalRunnerExportResult =
+    archiveCoordinator.export(
       request.copy(repoRoot = request.repoRoot ?: repositoryRoot.path),
       expectedObservation,
     )

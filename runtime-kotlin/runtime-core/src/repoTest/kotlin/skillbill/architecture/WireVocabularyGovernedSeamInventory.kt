@@ -16,6 +16,7 @@ import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJou
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
+import skillbill.infrastructure.contracts.locator.GoalArchiveSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
@@ -85,6 +86,18 @@ internal object WireVocabularyGovernedSeamInventory {
           listOf(
             "infrastructure/sqlite/workflow/artifact/",
             "runtime-goalrunner/src/main/kotlin/skillbill/engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
+          ),
+      ),
+      GovernedPayloadSeam(
+        seamId = "goal-archive",
+        schemaRepoRelativePath = GoalArchiveSchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "contracts/workflow/goal/GoalArchiveEnvelopeKeys",
+            "contracts/workflow/goal/GoalArchiveRecordKeys",
+            "engine/goalrunner/reset/GoalRunnerArchiveCoordinator",
+            "engine/goalrunner/archive/GoalArchiveWorkflowEncoding",
+            "cli/goal/export/",
           ),
       ),
       GovernedPayloadSeam(
@@ -169,6 +182,8 @@ internal object WireVocabularyGovernedSeamInventory {
         )
       FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH ->
         executionPlanGovernedKeys(loadRepoSchema(schemaRepoRelativePath))
+      GoalArchiveSchemaPaths.REPO_RELATIVE_PATH ->
+        propertyNames(loadRepoSchema(schemaRepoRelativePath).path("properties")).toSet()
       GoalQualityExecutionSchemaPaths.REPO_RELATIVE_PATH ->
         payloadKeyValues(GoalQualityExecutionPayloadKeys::class.java)
       GOAL_CONTINUATION_ARTIFACT_SCHEMA_AUTHORITY -> goalContinuationArtifactGovernedKeys()
