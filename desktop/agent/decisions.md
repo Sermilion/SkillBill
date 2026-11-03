@@ -1,3 +1,23 @@
+## [2026-11-03] Claim destroyTree once so cancel cannot wait twice
+Context: A cancelled runProcess calls destroyTree from the killer finally and again from the outer finally.
+Decision: destroyTree returns unless live.remove(process) succeeds. Both call sites stay. The shutdown hook uses signalTree, SIGTERM only.
+Reason: Without the claim, a process that survives SIGKILL would wait 8s and record chat.process_force_killed twice, which exceeds STOP_WAIT_MS. The killer must still escalate because it unblocks process.waitFor.
+
+## [2026-11-03] Read chat stdout on a daemon thread
+Context: useLines blocked in readLine, and flowOn made the collector wait for that producer. An orphaned child outside the descendant list can hold stdout after cancel.
+Decision: stdoutLines reads on daemon thread chat-stdout into a buffered Channel. The flow emits those lines then waitFor, and cancel closes the channel and still runs destroyTree.
+Reason: The collection must finish without waiting for the pipe to close. The daemon may live until the pipe closes; it holds no coroutine and cannot block JVM exit. Elapsed-time tests are forbidden, so AC-002 has no unit test.
+
+## [2026-11-03] Wait for a stopped Claude job, then open anyway
+Context: ClaudeChatTransport.stop cancelled the session job and registered opened a new process at once, so two claude processes could write the same session.
+Decision: stop records the job in stopping before cancel. run joins that job for STOP_WAIT_MS (5s) before registered. On timeout it records chat.stop_wait_expired and continues. Different session ids do not wait on each other.
+Reason: 5s is longer than SIGTERM plus force-kill. A stuck job must not block chat forever. Registering stopping before remove keeps a concurrent run from seeing the session gone with no entry.
+
+## [2026-11-03] Keep a stopped Junie execution exchange
+Context: JunieChatTransport saved exchanges only on Completed, so a cancelled turn vanished from the next prompt.
+Decision: onCompletion saves history plus the prompt and trimmed reply when the cause is CancellationException, the reply is not blank, and scope is not NewTask.
+Reason: The next execution turn reads store.exchanges. New-task Junie builds history from saved draft lines, which subtask 3 keeps current, so this path must not write them.
+
 ## [2026-11-03] Give non-Claude agents pasted images as file paths, Claude as content blocks
 Context: Chat turns can carry pasted images. Claude's stream-json input accepts base64 image content blocks. Codex, Cursor and Junie take only text on stdin or argv.
 Decision: Claude receives image blocks in the user message. The other three save each image to a per-session temp directory and append a footer listing absolute file paths. Each deletes the directory in end(sessionId), and saved history keeps only the typed prompt.
