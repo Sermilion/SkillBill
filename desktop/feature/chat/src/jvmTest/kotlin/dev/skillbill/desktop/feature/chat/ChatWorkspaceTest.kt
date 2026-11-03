@@ -832,7 +832,7 @@ class ChatWorkspaceTest {
   fun `start action that needs a prefix offers the choices and retries with the chosen one`() = runTest {
     val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false)
     details.details = mapOf(item.id to flowOf(loaded(item)))
-    controls.newTaskOutcome = NewTaskStartOutcome.NeedsPrefix(listOf("SKILL", "OPS"))
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("SKILL", "OPS"))
     val action = ChatSuggestedAction("Run phase:goal", "Build the thing.", ChatPermissionMode.Act, NewTaskActionKind.Goal)
     chat.events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
     val workspace = workspace()

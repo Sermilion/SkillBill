@@ -257,6 +257,26 @@ class NewTaskDraftStartTest {
   }
 
   @Test
+  fun `a clicked goal action leads the requirements and survives a key choice`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    val section = ChatSuggestedAction("Section 1", "Implement section 1 only.", ChatPermissionMode.Act, NewTaskActionKind.Goal, title = "Mobile operations")
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP-2"))
+    draft.start(NewTaskKind.GoalRun, action = section)
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun, "APP-2")
+    runCurrent()
+
+    controls.newTaskRequests.forEach { request ->
+      assertTrue(request.requirements.startsWith("Implement section 1 only."))
+      assertEquals("Mobile operations", request.title)
+    }
+    assertEquals("APP-2", controls.newTaskRequests.last().keyChoice)
+  }
+
+  @Test
   fun `standalone start reports in the chat and a later failure explains itself`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
@@ -400,7 +420,7 @@ class NewTaskDraftStartTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
     val draft = draftWithFinishedTurn(chats, controls)
-    controls.newTaskOutcome = NewTaskStartOutcome.NeedsPrefix(listOf("APP"))
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP"))
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     assertEquals(NewTaskKind.GoalRun, draft.offer.value.prefixKind)

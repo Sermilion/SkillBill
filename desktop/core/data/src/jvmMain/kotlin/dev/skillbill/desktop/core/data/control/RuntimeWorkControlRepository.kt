@@ -252,7 +252,7 @@ class RuntimeWorkControlRepository(
         is Outcome.Success -> preparedResult.value
       }
       when (prepared) {
-        is NewTaskPreparation.NeedsPrefix -> return NewTaskStartOutcome.NeedsPrefix(prepared.choices)
+        is NewTaskPreparation.NeedsKey -> return NewTaskStartOutcome.NeedsKey(prepared.choices)
         is NewTaskPreparation.Refused -> return NewTaskStartOutcome.Refused(prepared.reason)
         is NewTaskPreparation.Ready -> {
           triedKeys += prepared.key

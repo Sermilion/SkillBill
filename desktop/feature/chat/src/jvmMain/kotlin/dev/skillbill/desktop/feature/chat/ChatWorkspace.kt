@@ -287,8 +287,8 @@ class ChatWorkspace(
         }
         is NewTaskStartOutcome.Refused -> session.append(ChatMessage.Notice(outcome.message))
         is NewTaskStartOutcome.Failed -> session.append(ChatMessage.Error(null, readProblemText(outcome.problem)))
-        is NewTaskStartOutcome.NeedsPrefix -> {
-          session.append(ChatMessage.Notice("Choose an issue prefix to start this run."))
+        is NewTaskStartOutcome.NeedsKey -> {
+          session.append(ChatMessage.Notice("Choose an issue key to start this run."))
           session.prefixChoiceState.value = PendingPrefixChoice(action, start, outcome.choices)
         }
       }

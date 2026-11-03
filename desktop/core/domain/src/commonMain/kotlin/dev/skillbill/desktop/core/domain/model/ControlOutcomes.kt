@@ -157,7 +157,7 @@ sealed interface NewTaskStartOutcome {
     val awaitFailure: (suspend () -> String?)? = null,
   ) : NewTaskStartOutcome
 
-  data class NeedsPrefix(val choices: List<String>) : NewTaskStartOutcome
+  data class NeedsKey(val choices: List<String>) : NewTaskStartOutcome
 
   data class Refused(val message: String) : NewTaskStartOutcome
 

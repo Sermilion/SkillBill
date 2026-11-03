@@ -35,6 +35,7 @@ import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
@@ -100,8 +101,8 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
             if (draft.sendSuggestedAction(action)) {
               focusManager.clearFocus()
             }
-          } else {
-            host.onStart?.invoke(start.wire, action.target)
+          } else if (host.onStart != null) {
+            start.toNewTaskKind()?.let { draft.start(it, action = action) }
           }
         }
       }

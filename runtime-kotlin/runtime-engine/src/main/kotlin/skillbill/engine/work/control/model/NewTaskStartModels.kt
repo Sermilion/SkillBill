@@ -23,7 +23,7 @@ public sealed interface NewTaskPreparation {
     public val allocated: Boolean,
   ) : NewTaskPreparation
 
-  public data class NeedsPrefix(public val choices: List<String>) : NewTaskPreparation
+  public data class NeedsKey(public val choices: List<String>) : NewTaskPreparation
 
   public data class Refused(public val reason: String) : NewTaskPreparation
 }

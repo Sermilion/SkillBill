@@ -43,6 +43,7 @@ data class NewTaskOffer(
   val starting: Boolean = false,
   val prefixKind: NewTaskKind? = null,
   val choices: List<String> = emptyList(),
+  val action: ChatSuggestedAction? = null,
   val problem: String? = null,
   val started: String? = null,
 )
@@ -110,15 +111,19 @@ class NewTaskDraft(
     current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
-  internal fun start(kind: NewTaskKind, keyChoice: String? = null, target: String? = null) {
+  internal fun start(kind: NewTaskKind, keyChoice: String? = null, target: String? = null, action: ChatSuggestedAction? = null) {
     val current = chatState.value
     if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in RUN_KINDS) return
     if (kind in RUN_KINDS && offerState.value.started != null) return
     val agent = selectedAgent ?: return
     val root = repository?.root ?: return
-    val requirements = current?.let { newTaskRequirements(it.thread.transcript.value) }.orEmpty()
-    val title = current?.let { newTaskTitle(it.thread.transcript.value) }
+    val clicked = action ?: offerState.value.action.takeIf { keyChoice != null }
+    val transcript = current?.thread?.transcript?.value.orEmpty()
+    val requirements = listOfNotNull(clicked?.instruction, newTaskRequirements(transcript))
+      .filter(String::isNotBlank)
+      .joinToString("\n\n")
+    val title = clicked?.title ?: current?.let { newTaskTitle(transcript) }
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
@@ -131,7 +136,7 @@ class NewTaskDraft(
       keyChoice,
       expectedSessionId,
       title = title,
-      target = target,
+      target = target ?: clicked?.target,
     )
     offerState.value = offerState.value.copy(starting = true, problem = null)
     scope.launch {
@@ -147,17 +152,17 @@ class NewTaskDraft(
               }
               toasts.show(ToastMessage(ToastTone.Confirmation, message))
               if (kind in RUN_KINDS && ownsChat(current)) {
-                offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null, started = message)
+                offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, problem = null, started = message)
               }
             } else {
               reportStandalone(current, kind, outcome)
             }
           }
-          is NewTaskStartOutcome.NeedsPrefix -> {
+          is NewTaskStartOutcome.NeedsKey -> {
             if (ownsChat(current)) {
-              offerState.value = offerState.value.copy(prefixKind = kind, choices = outcome.choices, problem = null)
+              offerState.value = offerState.value.copy(prefixKind = kind, choices = outcome.choices, action = clicked, problem = null)
             } else {
-              toasts.show(ToastMessage(ToastTone.Problem, "Choose an issue prefix to start this run."))
+              toasts.show(ToastMessage(ToastTone.Problem, "Choose an issue key to start this run."))
             }
           }
           is NewTaskStartOutcome.Refused -> {
@@ -328,7 +333,7 @@ class NewTaskDraft(
   }
 
   private fun clearChatFeedback() {
-    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null, started = null)
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, problem = null, started = null)
   }
 }
 

@@ -61,7 +61,7 @@ internal fun NewTaskOfferCard(
   }
 }
 
-/** Lets the operator pick one of [choices], or type a prefix or key when the runtime offers none. */
+/** Lets the operator pick one of the suggested [choices], or type any prefix or key. */
 @Composable
 internal fun IssuePrefixPicker(choices: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
   val type = SkillBillTheme.type
@@ -71,18 +71,17 @@ internal fun IssuePrefixPicker(choices: List<String>, enabled: Boolean, onChoose
   BasicText("Issue prefix or key", style = type.tXs.copy(color = colors.fgMuted))
   if (choices.isNotEmpty()) {
     SbMenu(choices.map { choice -> SbMenuEntry.Item(choice, { onChoose(choice) }, mono = true, enabled = enabled) })
-  } else {
-    SbInput(
-      keyChoice,
-      { keyChoice = it },
-      modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
-      placeholder = "Issue prefix or key",
-      isError = keyChoice.isNotBlank() && !valid,
-      enabled = enabled,
-      onSubmit = { if (enabled && valid) onChoose(keyChoice.trim()) },
-    )
-    SbButton("Use issue prefix or key", { onChoose(keyChoice.trim()) }, size = SbControlSize.Small, enabled = enabled && valid)
   }
+  SbInput(
+    keyChoice,
+    { keyChoice = it },
+    modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
+    placeholder = "Issue prefix or key",
+    isError = keyChoice.isNotBlank() && !valid,
+    enabled = enabled,
+    onSubmit = { if (enabled && valid) onChoose(keyChoice.trim()) },
+  )
+  SbButton("Use issue prefix or key", { onChoose(keyChoice.trim()) }, size = SbControlSize.Small, enabled = enabled && valid)
 }
 
 private val ISSUE_CHOICE = Regex("[A-Za-z0-9]+(?:-\\d+(?:\\.\\d+)?)?")
