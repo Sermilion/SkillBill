@@ -45,7 +45,6 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -71,7 +70,7 @@ import kotlin.random.Random
 public class GoalRunnerSubtaskLaunchPrepare(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
-  private val gitOperations: WorkflowGitOperations,
+  private val branchCheckouts: GoalBranchCheckouts,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val clock: Clock,
   private val random: Random,
@@ -118,7 +117,7 @@ public class GoalRunnerSubtaskLaunchPrepare(
           status = WorkflowGitOperationStatus.ERROR,
           error = "Goal subtask '$subtaskId' has no durable child branch for review baseline capture.",
         )
-    return gitOperations.captureGoalSubtaskReviewBaseline(request.repoRoot, branch)
+    return branchCheckouts.git.captureGoalSubtaskReviewBaseline(request.repoRoot, branch)
   }
 
   internal fun blockedReviewBaselineIteration(
@@ -324,6 +323,10 @@ public class GoalRunnerSubtaskLaunchPrepare(
     if (branchPlan.branch.isBlank()) {
       return null
     }
+    branchCheckouts.heldElsewhereReason(request.issueKey, branchPlan.branch, request.repoRoot)?.let { reason ->
+      return blockedBranchSetupIteration(state, subtaskId, reason, request)
+    }
+    val gitOperations = branchCheckouts.git
     val checkout = gitOperations.checkoutBranch(request.repoRoot, branchPlan.branch, branchPlan.baseBranch)
     val setupError =
       if (checkout !is WorkflowGitOperationResult.Ok) {

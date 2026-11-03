@@ -8,7 +8,8 @@ import skillbill.contracts.qa.QA_DEVICE_LEASE_CONTRACT_VERSION
 import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.resolveTelemetryStateDir
-import skillbill.infrastructure.workflow.process.runGitProcess
+import skillbill.infrastructure.workflow.process.RepositoryStateKeyResult
+import skillbill.infrastructure.workflow.process.repositoryStateKey
 import skillbill.model.EnvironmentContext
 import skillbill.ports.qa.model.QaOwnedResource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
@@ -28,9 +29,6 @@ internal const val RESOURCES_DIRECTORY = "resources"
 private const val RESOURCE_DIGEST_LENGTH = 32
 private val RESERVED_DIRECTORIES = setOf(LEASES_DIRECTORY, RESOURCES_DIRECTORY)
 private const val QA_DIRECTORY = "qa"
-private const val REPO_KEY_DIGEST_LENGTH = 16
-private const val UNNAMED_REPOSITORY = "repo"
-private val REPOSITORY_NAME_UNSAFE = Regex("[^A-Za-z0-9._-]")
 
 internal data class QaInvocationOwner(
   val invocationId: String,
@@ -51,29 +49,19 @@ internal object QaPaths {
   ): Path =
     resolveTelemetryStateDir(environment.environment, environment.userHome)
       .resolve(QA_DIRECTORY)
-      .resolve(repoKey(gitCommonDir(repoRoot)))
+      .resolve(qaRepositoryKey(repoRoot))
 
-  private fun repoKey(gitCommonDir: Path): String {
-    val name =
-      REPOSITORY_NAME_UNSAFE.replace(gitCommonDir.parent?.fileName?.toString().orEmpty(), "-")
-        .ifEmpty { UNNAMED_REPOSITORY }
-    return "$name-${sha256Hex(gitCommonDir.toString()).take(REPO_KEY_DIGEST_LENGTH)}"
-  }
-
-  private fun gitCommonDir(repoRoot: Path): Path {
-    val probe = runGitProcess(repoRoot, listOf("rev-parse", "--git-common-dir"))
-    val output = probe.output.trim()
-    val probeFailed = probe.timedOut || probe.readFailure != null || probe.exitCode != 0
-    if (probeFailed || output.isEmpty()) {
-      throw qaDeviceLeaseFailed("$repoRoot is not a Git working tree: ${probe.readFailure?.message ?: output}")
+  private fun qaRepositoryKey(repoRoot: Path): String =
+    when (val key = repositoryStateKey(repoRoot)) {
+      is RepositoryStateKeyResult.Resolved -> key.key
+      is RepositoryStateKeyResult.NotAWorkingTree ->
+        throw qaDeviceLeaseFailed("$repoRoot is not a Git working tree: ${key.detail}")
+      is RepositoryStateKeyResult.CommonDirectoryUnresolved ->
+        throw qaDeviceLeaseFailed(
+          "could not resolve the Git common directory ${key.commonDirectory}: ${key.failure.message}",
+          key.failure,
+        )
     }
-    val commonDir = repoRoot.toAbsolutePath().resolve(output).normalize()
-    return try {
-      commonDir.toRealPath()
-    } catch (failure: IOException) {
-      throw qaDeviceLeaseFailed("could not resolve the Git common directory $commonDir: ${failure.message}", failure)
-    }
-  }
 
   fun invocationDirectory(
     qaRoot: Path,

@@ -81,20 +81,35 @@ public class GoalRunner(
         ?: intakeAdmission.intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
     alreadyCompleteReport(admittedState)?.let { return it }
+    return when (val rooted = runPreparation.resolveExecutionRoot(admittedState, request)) {
+      is GoalRunPreparation.PreparationBlocked -> settleBlockedStart(admittedState, rooted.report)
+      is GoalRunPreparation.Prepared ->
+        runFromExecutionRoot(rooted.state, rooted.request, resumesExistingGoal = durableState != null)
+    }
+  }
+
+  private fun settleBlockedStart(
+    state: GoalRunnerManifestState,
+    report: GoalRunnerRunReport,
+  ): GoalRunnerRunReport =
+    when (
+      val ownedStart =
+        executionCoordinator.runOwnedWithLease(state.parentWorkflowId) { generation, ownerToken ->
+          settleAcceptedGoalBlock(state, report, generation, ownerToken)
+        }
+    ) {
+      is GoalRunnerOwnedRun.Completed -> ownedStart.value
+      is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(state, ownedStart.reason)
+    }
+
+  private fun runFromExecutionRoot(
+    rootedState: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    resumesExistingGoal: Boolean,
+  ): GoalRunnerRunReport {
     val loadedState =
-      when (
-        val start = runPreparation.prepareStart(admittedState, request, resumesExistingGoal = durableState != null)
-      ) {
-        is GoalRunPreparation.PreparationBlocked ->
-          return when (
-            val ownedStart =
-              executionCoordinator.runOwnedWithLease(admittedState.parentWorkflowId) { generation, ownerToken ->
-                settleAcceptedGoalBlock(admittedState, start.report, generation, ownerToken)
-              }
-          ) {
-            is GoalRunnerOwnedRun.Completed -> ownedStart.value
-            is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(admittedState, ownedStart.reason)
-          }
+      when (val start = runPreparation.prepareStart(rootedState, request, resumesExistingGoal)) {
+        is GoalRunPreparation.PreparationBlocked -> return settleBlockedStart(rootedState, start.report)
         is GoalRunPreparation.Prepared -> start.state
       }
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)

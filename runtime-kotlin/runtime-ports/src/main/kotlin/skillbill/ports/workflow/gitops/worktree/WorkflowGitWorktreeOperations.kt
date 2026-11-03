@@ -8,6 +8,8 @@ import skillbill.ports.workflow.gitops.model.WorkflowWorktreeActivityResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeNumstatResult
 import java.nio.file.Path
 
+const val MAX_IGNORED_FILE_BYTES: Long = 1_048_576L
+
 interface WorkflowGitWorktreeOperations {
   fun stageAll(repoRoot: Path): WorkflowGitOperationResult
 

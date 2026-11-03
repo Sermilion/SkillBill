@@ -5,6 +5,7 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 
 internal fun StringBuilder.appendOperatorSurfaceLines(projection: GoalRunnerStatusProjection) {
+  projection.launchWarning?.let { appendLine("launch_warning: $it") }
   if (projection.blockedAttemptCount > 0 || projection.supervisorKillCount > 0) {
     appendLine(
       "blocked_attempts: ${projection.blockedAttemptCount} supervisor_kills=${projection.supervisorKillCount}",

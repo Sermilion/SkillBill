@@ -2,6 +2,7 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.work.eligibility.workControlEligible
 import skillbill.engine.work.eligibility.workDisplayGroup
 import skillbill.engine.work.eligibility.workDisplayPriority
@@ -62,7 +63,6 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.time.parsePersistedInstantOrNull
-import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.time.Instant
 import java.util.Locale
@@ -590,15 +590,7 @@ public class WorkBoardItemProjection(
     normalizedFilter: String?,
   ): Boolean = normalizedFilter == null || searchText(item).contains(normalizedFilter)
 
-  internal fun decodeRepositoryRoot(identity: String): Path? {
-    return try {
-      val prefix = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX
-      if (!identity.startsWith(prefix)) return null
-      Path.of(identity.removePrefix(prefix)).takeIf { it.isAbsolute }
-    } catch (_: InvalidPathException) {
-      null
-    }
-  }
+  internal fun decodeRepositoryRoot(identity: String): Path? = goalRepositoryRootFromIdentity(identity)
 }
 
 internal data class BoardProjectionWindow(val observedAt: Instant, val finishedFrom: Instant)

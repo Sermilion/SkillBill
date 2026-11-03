@@ -423,6 +423,7 @@ public class GoalRunnerStatusProjectionAssembler(
       auditAcRetryCount = assembly.auditAcRetryCount,
       noChangeStatus = assembly.noChangeStatus,
       goalCompletedAt = goalCompletedAt,
+      launchWarning = assembly.loadedState.controlState.launchWarning,
     )
   }
 

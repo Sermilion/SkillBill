@@ -8,6 +8,7 @@ import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowIgnoredFilesCopyResult
+import skillbill.ports.workflow.gitops.worktree.MAX_IGNORED_FILE_BYTES
 import java.nio.file.Path
 
 internal sealed interface QaCheckoutOpening {
@@ -102,7 +103,6 @@ public class QaCheckouts(
   private companion object {
     const val CHECKOUT_DIRECTORY = "checkout"
     const val WORKTREE_KIND = "worktree"
-    const val MAX_IGNORED_FILE_BYTES = 1_048_576L
     const val MAX_LISTED_PATHS = 20
     const val MAX_RECORD_REASON = 200
   }

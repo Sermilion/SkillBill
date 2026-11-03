@@ -101,8 +101,14 @@ data class GoalRunnerControlState(
   val goalPullRequestUrl: String? = null,
   val goalBlockedReason: String? = null,
   val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  val executionWorktreePath: String? = null,
+  val launchWarning: String? = null,
 ) {
   init {
+    executionWorktreePath?.let {
+      require(it.isNotBlank()) { "executionWorktreePath must not be blank when provided." }
+    }
+    launchWarning?.let { require(it.isNotBlank()) { "launchWarning must not be blank when provided." } }
     goalCompletedAt?.let { require(it.isNotBlank()) { "goalCompletedAt must not be blank when provided." } }
     goalPullRequestUrl?.let { require(it.isNotBlank()) { "goalPullRequestUrl must not be blank when provided." } }
     require(goalPullRequestUrl == null || goalCompletedAt != null) {

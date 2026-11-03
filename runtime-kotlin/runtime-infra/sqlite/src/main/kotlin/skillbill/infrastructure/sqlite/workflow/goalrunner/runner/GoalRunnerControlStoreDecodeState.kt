@@ -34,6 +34,8 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
       "goal_pull_request_url",
       GoalRunnerControlPayloadKeys.BLOCKED_REASON,
       GoalRunnerControlPayloadKeys.QA_SELECTION,
+      GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_PATH,
+      GoalRunnerControlPayloadKeys.LAUNCH_WARNING,
     )
   state.keys.forEach { key ->
     if (key !in allowedKeys) {
@@ -68,5 +70,7 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
     goalPullRequestUrl = state.nullableString("goal_pull_request_url"),
     qaSelection =
       state.nullableString(GoalRunnerControlPayloadKeys.QA_SELECTION)?.let(FeatureTaskRuntimeQaSelection::fromWire),
+    executionWorktreePath = state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_PATH),
+    launchWarning = state.nullableString(GoalRunnerControlPayloadKeys.LAUNCH_WARNING),
   )
 }

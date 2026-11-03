@@ -11,6 +11,8 @@ import skillbill.engine.goal.OperatorBlockedPhaseReopenRequest
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
+import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
+import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
@@ -24,6 +26,7 @@ import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -56,21 +59,7 @@ class BlockedWorkerCrashRecoveryTest {
       val otherLease = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(OTHER_WORKFLOW_ID) }
       val reconciler = reconciler(database, FeatureTaskRuntimeProcessInspection.NotRunning)
 
-      val preparation =
-        GoalRunnerRunPreparation(
-          TestNoopGoalPlanningManifestStore,
-          testWorkflowGoalRunnerOutcomeStore(database),
-          TestRepositoryEnclosingRoot,
-          execution.recoveryResolver(),
-          reconciler,
-          testStandalonePhasePublisher(database, testHarnessClock, NoopRuntimeDiagnostics),
-          NoopWorkflowGitOperations,
-          testGoalRunnerRepairCoordinator(
-            TestNoopGoalPlanningManifestStore,
-            testWorkflowGoalRunnerOutcomeStore(database),
-          ),
-          testBlockIncidentEntryReconciler(database, testHarnessClock, NoopRuntimeDiagnostics),
-        )
+      val preparation = runPreparation(database, reconciler)
       val manifest =
         DecompositionManifest(
           issueKey = "SKILL-384",
@@ -143,6 +132,32 @@ class BlockedWorkerCrashRecoveryTest {
       )
       assertEquals(reserved, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID) })
     }
+
+  private fun runPreparation(
+    database: DatabaseSessionFactory,
+    reconciler: FeatureTaskRuntimeCrashReconciler,
+  ): GoalRunnerRunPreparation =
+    GoalRunnerRunPreparation(
+      TestNoopGoalPlanningManifestStore,
+      testWorkflowGoalRunnerOutcomeStore(database),
+      TestRepositoryEnclosingRoot,
+      execution.recoveryResolver(),
+      reconciler,
+      testStandalonePhasePublisher(database, testHarnessClock, NoopRuntimeDiagnostics),
+      GoalBranchCheckouts(NoopWorkflowGitOperations, InPlaceGoalWorktreeResources, TestRepositoryEnclosingRoot),
+      testGoalRunnerRepairCoordinator(
+        TestNoopGoalPlanningManifestStore,
+        testWorkflowGoalRunnerOutcomeStore(database),
+      ),
+      testBlockIncidentEntryReconciler(database, testHarnessClock, NoopRuntimeDiagnostics),
+      GoalExecutionRootResolver(
+        TestNoopGoalPlanningManifestStore,
+        InPlaceGoalWorktreeResources,
+        NoopWorkflowGitOperations,
+        TestRepositoryEnclosingRoot,
+        NoopRuntimeDiagnostics,
+      ),
+    )
 
   private fun assertOtherWorkflowRemainsBlocked(
     reconciler: FeatureTaskRuntimeCrashReconciler,

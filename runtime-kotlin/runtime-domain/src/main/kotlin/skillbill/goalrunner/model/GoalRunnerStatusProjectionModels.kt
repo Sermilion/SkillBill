@@ -134,6 +134,7 @@ data class GoalRunnerStatusProjection(
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
   val goalCompletedAt: String? = null,
+  val launchWarning: String? = null,
   val parentWorkflowId: String? = null,
 ) {
   fun admittedParentComplete(): Boolean =
@@ -338,6 +339,7 @@ data class GoalRunnerStatusProjectionRuntimeInputs(
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
   val goalCompletedAt: String? = null,
+  val launchWarning: String? = null,
 )
 
 object GoalRunnerStatusProjector {

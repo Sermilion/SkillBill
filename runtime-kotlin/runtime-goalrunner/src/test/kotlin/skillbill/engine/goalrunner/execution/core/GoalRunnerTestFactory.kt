@@ -34,6 +34,8 @@ import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakeAdmissionService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
+import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
+import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -80,6 +82,8 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.specscratch.UnavailableSpecScratchStore
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -116,6 +120,7 @@ internal data class GoalRunnerTestWiring(
   val goalPlanningSource: GoalPlanningSource,
   val specScratchStore: SpecScratchStore,
   val gitOperations: WorkflowGitOperations,
+  val goalWorktrees: GoalWorktreeResources = InPlaceGoalWorktreeResources,
   val telemetry: GoalLifecycleTelemetryEmitter,
   val clock: Clock,
   val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
@@ -204,6 +209,7 @@ internal data class GoalRunnerTestInputs(
     },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
+  val goalWorktrees: GoalWorktreeResources = InPlaceGoalWorktreeResources,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -214,6 +220,7 @@ internal data class GoalRunnerTestInputs(
       goalPlanningSource = goalPlanningSource,
       specScratchStore = specScratchStore,
       gitOperations = gitOperations,
+      goalWorktrees = goalWorktrees,
       telemetry = telemetry,
       clock = clock,
       unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
@@ -288,29 +295,42 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       ),
     diagnostics = wiring.diagnostics,
     executionCoordinator = wiring.executionCoordinator,
-    runPreparation =
-      GoalRunnerRunPreparation(
-        wiring.manifestStore,
-        wiring.outcomeStore,
-        TestRepositoryEnclosingRoot,
-        executionPlans,
-        crashReconciler,
-        testStandalonePhasePublisher(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
-        wiring.gitOperations,
-        testGoalRunnerRepairCoordinator(
-          wiring.manifestStore,
-          wiring.outcomeStore,
-          wiring.phaseRecorder,
-          wiring.clock,
-          GoalRunnerStatusTestPorts(gitOperations = wiring.gitOperations, diagnostics = wiring.diagnostics),
-        ),
-        testBlockIncidentEntryReconciler(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
-      ),
+    runPreparation = goalRunnerRunPreparation(wiring, executionPlans, crashReconciler),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
     intakeAdmission = GoalIntakeAdmissionService(wiring.manifestStore, intakePreparation),
   )
 }
+
+private fun goalRunnerRunPreparation(
+  wiring: GoalRunnerTestWiring,
+  executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
+  crashReconciler: FeatureTaskRuntimeCrashReconciler,
+): GoalRunnerRunPreparation =
+  GoalRunnerRunPreparation(
+    wiring.manifestStore,
+    wiring.outcomeStore,
+    TestRepositoryEnclosingRoot,
+    executionPlans,
+    crashReconciler,
+    testStandalonePhasePublisher(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
+    GoalBranchCheckouts(wiring.gitOperations, wiring.goalWorktrees, TestRepositoryEnclosingRoot),
+    testGoalRunnerRepairCoordinator(
+      wiring.manifestStore,
+      wiring.outcomeStore,
+      wiring.phaseRecorder,
+      wiring.clock,
+      GoalRunnerStatusTestPorts(gitOperations = wiring.gitOperations, diagnostics = wiring.diagnostics),
+    ),
+    testBlockIncidentEntryReconciler(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
+    GoalExecutionRootResolver(
+      wiring.manifestStore,
+      wiring.goalWorktrees,
+      wiring.gitOperations,
+      TestRepositoryEnclosingRoot,
+      wiring.diagnostics,
+    ),
+  )
 
 private fun goalRunnerIntakePreparation(wiring: GoalRunnerTestWiring): GoalIntakePreparation {
   val noMatchResolver =
@@ -364,7 +384,7 @@ private fun testGoalRunnerLoopAssembler(
     GoalRunnerSubtaskLaunchPrepare(
       wiring.manifestStore,
       wiring.outcomeStore,
-      wiring.gitOperations,
+      GoalBranchCheckouts(wiring.gitOperations, wiring.goalWorktrees, TestRepositoryEnclosingRoot),
       TestRepositoryEnclosingRoot,
       wiring.clock,
       Random(GOAL_RUNNER_TEST_WORKFLOW_ID_SEED),

@@ -665,9 +665,7 @@ internal fun goalFixture(
   legacyBundle: Boolean = false,
 ): GoalCliFixture {
   val tempDir = Files.createTempDirectory("skillbill-cli-goal")
-  val gitInit = ProcessBuilder("git", "init", "--quiet", tempDir.toString()).redirectErrorStream(true).start()
-  val gitOutput = gitInit.inputStream.bufferedReader().use { it.readText() }
-  check(gitInit.waitFor() == 0) { gitOutput }
+  initGoalFixtureRepository(tempDir)
   installGoalBuildPack(tempDir)
   val dbPath = tempDir.resolve("metrics.db")
   val bundleRoot =
@@ -706,10 +704,53 @@ internal fun goalFixture(
       parentSpec = parentSpec,
       subtaskSpecs = subtaskSpecs,
     )
+  if (legacyBundle) {
+    commitGoalFixture(tempDir, "Goal fixture bundle")
+  }
   if (seedWorkflow) {
     seedParentWorkflow(fixture)
   }
   return fixture
+}
+
+internal fun initGoalFixtureRepository(repository: Path) {
+  fixtureGit(repository, "init", "--quiet", "--initial-branch=main", repository.toString())
+  Files.writeString(repository.resolve(".git/info/exclude"), ".skill-bill/\nmetrics.db\n")
+  commitGoalFixture(repository, "Goal fixture base")
+}
+
+private fun commitGoalFixture(
+  repository: Path,
+  message: String,
+) {
+  fixtureGit(repository, "add", "--all")
+  fixtureGit(
+    repository,
+    "-c",
+    "user.name=Goal Fixture",
+    "-c",
+    "user.email=goal-fixture@example.invalid",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "--no-verify",
+    "-m",
+    message,
+  )
+}
+
+private fun fixtureGit(
+  directory: Path,
+  vararg arguments: String,
+) {
+  val process =
+    ProcessBuilder(
+      listOf("git", *arguments),
+    ).directory(directory.toFile()).redirectErrorStream(true).start()
+  val output = process.inputStream.bufferedReader().use { it.readText() }
+  check(process.waitFor() == 0) { output }
 }
 
 internal fun seedParentWorkflow(fixture: GoalCliFixture) {

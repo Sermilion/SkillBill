@@ -231,6 +231,7 @@ internal fun GoalRunnerStatusProjection.monitorResumableState(): String =
   }
 
 internal fun MutableMap<String, Any?>.putGoalLedgerCliEntries(projection: GoalRunnerStatusProjection) {
+  projection.launchWarning?.let { warning -> put("launch_warning", warning) }
   if (projection.blockedAttemptCount > 0) put("blocked_attempt_count", projection.blockedAttemptCount)
   if (projection.supervisorKillCount > 0) put("supervisor_kill_count", projection.supervisorKillCount)
   if (projection.phaseAttemptCounts.isNotEmpty()) put("phase_attempt_counts", projection.phaseAttemptCounts)

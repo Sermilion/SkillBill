@@ -12,6 +12,8 @@ import skillbill.engine.goal.GoalRunnerWedgeClass
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.execution.support.goalWorkBranch
+import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
+import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
@@ -31,7 +33,6 @@ import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
@@ -46,10 +47,16 @@ public class GoalRunnerRunPreparation(
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
-  private val gitOperations: WorkflowGitOperations,
+  private val branchCheckouts: GoalBranchCheckouts,
   private val repairCoordinator: GoalRunnerRepairCoordinator,
   private val blockIncidents: BlockIncidentEntryReconciler,
+  private val executionRoots: GoalExecutionRootResolver,
 ) {
+  internal fun resolveExecutionRoot(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalRunPreparation = executionRoots.resolve(state, request)
+
   internal fun guardEntry(
     blocked: (GoalRunnerRunReport) -> Boolean,
     run: () -> GoalRunnerRunReport,
@@ -138,16 +145,20 @@ public class GoalRunnerRunPreparation(
         is GoalRunnerSelection.Done -> state.manifest.goalWorkBranch()?.trim() ?: return null
         is GoalRunnerSelection.Blocked -> return null
       }
-    val failure = existingGoalBranchCheckoutFailure(request.repoRoot, branch) ?: return null
+    val blockedReason =
+      branchCheckouts.heldElsewhereReason(request.issueKey, branch, request.repoRoot)
+        ?: existingGoalBranchCheckoutFailure(request.repoRoot, branch)?.let { failure ->
+          "Goal '${request.issueKey}' resumes on branch '$branch', and the runtime could not check it out " +
+            "before continuing its work: $failure"
+        }
+        ?: return null
     return stopped(
       StoppedReportArgs(
         issueKey = request.issueKey,
         attempted = emptyList(),
         subtaskId = subtaskId,
         reason = GoalRunnerStopReason.BLOCKED,
-        blockedReason =
-          "Goal '${request.issueKey}' resumes on branch '$branch', and the runtime could not check it out " +
-            "before continuing its work: $failure",
+        blockedReason = blockedReason,
         workflowId = state.parentWorkflowId,
         lastResumableStep = if (subtaskId == 0) "goal_assessment" else "plan",
       ),
@@ -158,13 +169,14 @@ public class GoalRunnerRunPreparation(
     repoRoot: Path,
     branch: String,
   ): String? {
-    if (branch.isBlank() || gitOperations.currentBranch(repoRoot).value.trim() == branch) return null
-    val exists = gitOperations.branchExists(repoRoot, branch)
+    val git = branchCheckouts.git
+    if (branch.isBlank() || git.currentBranch(repoRoot).value.trim() == branch) return null
+    val exists = git.branchExists(repoRoot, branch)
     return when {
       exists !is WorkflowGitOperationResult.Ok -> exists.error
       exists.value.trim() != "true" -> null
       else ->
-        gitOperations.checkoutBranch(repoRoot, branch, baseBranch = null)
+        git.checkoutBranch(repoRoot, branch, baseBranch = null)
           .takeUnless { it is WorkflowGitOperationResult.Ok }
           ?.error
     }

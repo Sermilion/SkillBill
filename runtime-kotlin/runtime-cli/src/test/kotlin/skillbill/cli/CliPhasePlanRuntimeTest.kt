@@ -33,7 +33,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 class CliPhasePlanRuntimeTest {
-  private val tempDir: Path = Files.createTempDirectory("skillbill-cli-phase-plan")
+  private val tempDir: Path = Files.createTempDirectory("skillbill-cli-phase-plan").also(::initGoalFixtureRepository)
   private val fixture =
     GoalCliFixture(
       tempDir = tempDir,

@@ -56,6 +56,29 @@ class GoalRunnerControlStoreTest {
   }
 
   @Test
+  fun `worktree path and launch warning round trip and stay out of the record when null`() {
+    val dbPath = Files.createTempDirectory("goal-worktree-control").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = GoalRunnerControlStore(connection)
+      val state = GoalRunnerControlState(executionWorktreePath = "/state/checkout", launchWarning = "2 uncommitted")
+
+      store.persistControlState("parent-worktree", state)
+      assertEquals(state, store.controlState("parent-worktree"))
+
+      store.persistControlState("parent-worktree", GoalRunnerControlState())
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT control_state_json FROM goal_runner_controls WHERE parent_workflow_id = 'parent-worktree'",
+        ).use { rows ->
+          assertTrue(rows.next())
+          val raw = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(rows.getString(1))))
+          assertTrue("execution_worktree_path" !in raw && "launch_warning" !in raw, "$raw")
+        }
+      }
+    }
+  }
+
+  @Test
   fun `review policy and operator acceptance remain durable outside workflow projection`() {
     val dbPath = Files.createTempDirectory("skillbill-goal-controls").resolve("metrics.db")
 
