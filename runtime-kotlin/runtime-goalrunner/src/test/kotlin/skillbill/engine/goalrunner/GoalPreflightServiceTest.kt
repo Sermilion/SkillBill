@@ -41,6 +41,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
@@ -48,6 +49,7 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files
@@ -389,16 +391,24 @@ class GoalPreflightServiceTest {
 
   @Test
   fun `completed standalone terminal history without occupying parent is new work`() {
-    val occupying = GoalRunnerManifestState("parent-complete", "/fake/metrics.db", manifest())
+    val root = Files.createTempDirectory("goal-preflight-complete-reuse")
+    val states = InMemoryWorkflowStates()
+    seedCompletedStandalone(states, root)
+    val leftover = GoalRunnerManifestState("parent-complete", "/fake/metrics.db", manifest())
+    val database = FakeDatabaseSessionFactory(states)
     val lookup =
-      FeatureTaskContinuationLookupResult.TerminalOnly(listOf(terminalCandidate(WorkflowStatus.COMPLETED)))
-    val adjusted = adjustGoalPreflightContinuationLookup(lookup, occupying = null, occupyingWorkflowStatus = null)
-    assertEquals(FeatureTaskContinuationLookupResult.NoMatch, adjusted)
+      FeatureTaskContinuationLookupService(
+        database,
+        testWorkflowSnapshotValidator,
+        ExecutionPlanAdmissionFixture().compatibility,
+        NoopRuntimeDiagnostics,
+      ).lookupIfPresent("SKILL-901", goalRepositoryIdentity(root))
+    assertIs<FeatureTaskContinuationLookupResult.TerminalOnly>(lookup)
     val result =
       service(
-        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
-        manifestStore = TestManifestStore(occupying, occupyingState = null),
-      ).preflight(request(Files.createTempDirectory("goal-preflight-complete-reuse")))
+        database = database,
+        manifestStore = TestManifestStore(leftover, occupyingState = null),
+      ).preflight(request(root))
     assertEquals(GoalPreflightVerdict.NEW_WORK, result.verdict)
     assertNull(result.gateBlock)
   }
@@ -424,6 +434,42 @@ class GoalPreflightServiceTest {
     val adjusted =
       adjustGoalPreflightContinuationLookup(lookup, occupying, WorkflowStatus.RUNNING)
     assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(adjusted)
+  }
+
+  private fun seedCompletedStandalone(
+    states: InMemoryWorkflowStates,
+    root: Path,
+    workflowId: String = "wfl-standalone",
+    issueKey: String = "SKILL-901",
+  ) {
+    states.saveFeatureTaskWorkflow(
+      WorkflowStateRecord(
+        workflowId = workflowId,
+        sessionId = "sess-complete",
+        workflowName = "bill-feature-task",
+        contractVersion = "0.1",
+        workflowStatus = WorkflowStatus.COMPLETED.wireValue,
+        currentStepId = "plan",
+        stepsJson = "[]",
+        artifactsJson = "{}",
+        startedAt = null,
+        updatedAt = null,
+        finishedAt = null,
+        mode = FeatureTaskWorkflowMode.RUNTIME,
+        issueKey = issueKey,
+      ),
+      FeatureTaskWorkflowMode.RUNTIME,
+    )
+    states.saveFeatureTaskExecutionIdentity(
+      FeatureTaskExecutionIdentity(
+        workflowId = workflowId,
+        normalizedIssueKey = issueKey,
+        repositoryIdentity = goalRepositoryIdentity(root),
+        governedSpecPath = ".feature-specs/SKILL-901-goal/spec.md",
+        mode = FeatureTaskWorkflowMode.RUNTIME,
+        routeScope = FeatureTaskRouteScope.STANDALONE,
+      ),
+    )
   }
 
   private fun terminalCandidate(

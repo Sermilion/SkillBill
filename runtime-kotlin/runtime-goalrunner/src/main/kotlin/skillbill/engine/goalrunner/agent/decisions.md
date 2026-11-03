@@ -1,5 +1,16 @@
 # goalrunner boundary decisions
 
+## [2026-11-03] Occupying lookup skips completed and abandoned parents
+Context: skill-bill goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
+Decision: Occupancy is parent workflowStatus not completed or abandoned. Run admission and preflight use a dedicated occupying lookup. Shared discovery, loadDurableByIssueKey, purge listing, and status newest-fallback still return completed parents.
+Reason: Emptying the shared lookup would hide preserved history from status, reset, repair, and purge. FAILED stays occupying even when goal continuation is null so preflight cannot report NEW_WORK.
+Alternatives considered: Changing findDecomposedParentWorkflow or loadDurableByIssueKey globally.
+
+## [2026-11-03] Independent parent plus shared-preplan unique-pair drop
+Context: A second parent for a reusable key could not persist its shared preplan while UNIQUE(normalized_issue_key, repository_identity) remained, and importing the completed projection cloned child identities and skipped planning.
+Decision: Import an independent parent with a new workflow id, no completed-plan attachment, and no cloned child completion. Migration 100 drops that unique pair. parent_goal_workflow_id stays the primary key.
+Reason: Occupancy without a new parent would still bind the old run. A new parent without the unique-pair drop cannot keep both preplans. The completed projection is history, not durable state for the new parent.
+
 ## [2026-11-03] Settle goal worktrees after recording completion
 Context: Goal worktrees can contain changes or commits that do not exist elsewhere, and cleanup can fail after the goal has finished.
 Decision: Record completion first, then settle the worktree without forcing removal or deleting its branch. Retain and report work that cannot be removed safely, and retry settlement on a later completion check.
@@ -192,6 +203,7 @@ Alternatives considered: Migrating existing child rows to validate was rejected;
 Context: A full run must go through the plan skeleton, but stored goals and hand-written bundles must keep working.
 Decision: Plan first only when loadDurableByIssueKey finds no stored goal and intakePreparation.prepare finds no bundle. Otherwise go straight to goalRunner.run.
 Reason: A stored goal resumes with no planning. A bundle on disk is imported as before, even when an incomplete plan workflow exists, so plan resume applies only without a manifest. Running hand-written bundles through plan_subtasks belongs to other parent work.
+Superseded by: Occupying lookup skips completed and abandoned parents (2026-11-03)
 Alternatives considered: Having the CLI choose between open and resume was rejected because StandalonePlanRun.run already does both.
 
 ## [2026-10-10] Rewrite status extras together on live goal finalization
@@ -215,6 +227,7 @@ Reason: SKILL-362 still requires a truthful idle-versus-pause distinction. Clear
 Context: The manifest reports complete as soon as every subtask is terminal, before the commit, push and PR. Rerunning a finished goal therefore finalized it again against whatever worktree and branch were current.
 Decision: After a Completed or CompletedNoChange report, the runner records goal_completed_at and the PR URL in the goal control state. A later run returns AlreadyComplete before migration, planning or finalization while that marker exists and every subtask is still terminal.
 Reason: Only successful finalization proves that the goal finished. Hard reset clears control state, and a scoped replan reopens a subtask, so both start real work again without a separate unmark step.
+Superseded by: Occupying lookup skips completed and abandoned parents (2026-11-03)
 
 ## [2026-10-09] Commit leftover paths at goal finalization in every execution model
 Context: Same-branch goals stopped at finalization when the worktree had changes outside a subtask commit, which left the operator with no way through.

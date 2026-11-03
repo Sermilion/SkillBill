@@ -3,12 +3,14 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
+import skillbill.infrastructure.sqlite.core.schema.databaseSchemaStatements
 import java.nio.file.Files
 import java.sql.Connection
 import java.sql.SQLException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GoalPlanningPhaseOutputMigrationTest {
@@ -158,11 +160,39 @@ class GoalPlanningPhaseOutputMigrationTest {
   }
 
   @Test
+  fun `fresh shared preplans schema does not unique-constrain issue key and repository`() {
+    val sharedPreplansDdl =
+      databaseSchemaStatements.single { statement ->
+        "CREATE TABLE IF NOT EXISTS goal_shared_preplans" in statement
+      }
+    assertFalse(hasIssueKeyRepositoryUnique(sharedPreplansDdl))
+
+    val dbPath = Files.createTempDirectory("goal-shared-preplans-fresh-schema").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertFalse(hasIssueKeyRepositoryUnique(tableSql(connection, "goal_shared_preplans")))
+      seedPlanningRow(
+        connection,
+        phaseOutputContractVersion = "0.7",
+        workflowId = "wfl-first",
+        issueKey = "SKILL-472",
+      )
+      seedPlanningRow(
+        connection,
+        phaseOutputContractVersion = "0.7",
+        workflowId = "wfl-second",
+        issueKey = "SKILL-472",
+      )
+      assertEquals(2, scalar(connection, "SELECT COUNT(*) FROM goal_shared_preplans"))
+    }
+  }
+
+  @Test
   fun `migrated databases store multiple shared preplans for one issue key`() {
     val dbPath = Files.createTempDirectory("goal-shared-preplans-reuse-keys").resolve("metrics.db")
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       DatabaseMigrations.apply(connection)
+      assertFalse(hasIssueKeyRepositoryUnique(tableSql(connection, "goal_shared_preplans")))
       restoreIssueKeyUnique(connection)
       seedPlanningRow(
         connection,
@@ -170,7 +200,7 @@ class GoalPlanningPhaseOutputMigrationTest {
         workflowId = "wfl-first",
         issueKey = "SKILL-472",
       )
-      assertTrue("UNIQUE(normalized_issue_key, repository_identity)" in tableSql(connection, "goal_shared_preplans"))
+      assertTrue(hasIssueKeyRepositoryUnique(tableSql(connection, "goal_shared_preplans")))
       assertFailsWith<SQLException> {
         seedPlanningRow(
           connection,
@@ -183,7 +213,7 @@ class GoalPlanningPhaseOutputMigrationTest {
       DatabaseMigrations.apply(connection)
 
       val sharedSchema = tableSql(connection, "goal_shared_preplans")
-      assertTrue("UNIQUE(normalized_issue_key, repository_identity)" !in sharedSchema)
+      assertFalse(hasIssueKeyRepositoryUnique(sharedSchema))
       seedPlanningRow(
         connection,
         phaseOutputContractVersion = "0.7",
@@ -245,7 +275,7 @@ class GoalPlanningPhaseOutputMigrationTest {
       payload_sha256 TEXT NOT NULL,
       preplan_payload_json TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP$repairEvidence,
-      UNIQUE(normalized_issue_key, repository_identity)
+      $ISSUE_KEY_REPOSITORY_UNIQUE
     )
     """.trimIndent()
 
@@ -352,6 +382,9 @@ class GoalPlanningPhaseOutputMigrationTest {
       }
     }
 
+  private fun hasIssueKeyRepositoryUnique(sql: String): Boolean =
+    ISSUE_KEY_REPOSITORY_UNIQUE_PATTERN.containsMatchIn(sql)
+
   private fun tableHasColumn(
     connection: Connection,
     table: String,
@@ -362,4 +395,10 @@ class GoalPlanningPhaseOutputMigrationTest {
       statement.setString(2, column)
       statement.executeQuery().use { rows -> rows.next() }
     }
+
+  private companion object {
+    const val ISSUE_KEY_REPOSITORY_UNIQUE = "UNIQUE(normalized_issue_key, repository_identity)"
+    val ISSUE_KEY_REPOSITORY_UNIQUE_PATTERN =
+      Regex("""UNIQUE\s*\(\s*normalized_issue_key\s*,\s*repository_identity\s*\)""")
+  }
 }
