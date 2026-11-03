@@ -56,6 +56,51 @@ class CursorAgentRunTransportTest {
   }
 
   @Test
+  fun `last turn review payload with lanes NO_FINDINGS and verdict wins over concatenated terminal result`() {
+    val progress = "I'll fetch the bound evidence."
+    val payload = "lanes: architecture\\nNO_FINDINGS\\nverdict: approved"
+    val jsonl =
+      """
+      {"type":"assistant","message":{"content":[{"type":"text","text":"$progress"}]}}
+      {"type":"assistant","message":{"content":[{"type":"text","text":"$payload"}]}}
+      {"type":"result","result":"${progress}NO_FINDINGS","usage":{"inputTokens":10,"outputTokens":4}}
+      """.trimIndent()
+
+    val decoded = AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(jsonl)
+    assertTrue(decoded.text.contains("lanes: architecture"))
+    assertTrue(decoded.text.contains("NO_FINDINGS"))
+    assertTrue(decoded.text.contains("verdict: approved"))
+    assertFalse(decoded.text.contains(progress))
+  }
+
+  @Test
+  fun `buffered result with progress glued onto NO_FINDINGS and verdict harvests register and verdict`() {
+    val glued =
+      "I'll fetch the bound evidence then score the parse return type is the core change.reachaNO_FINDINGS" +
+        "verdict: approved"
+    val decoded =
+      AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(
+        """{"type":"result","subtype":"success","is_error":false,"result":"$glued",""" +
+          """"usage":{"inputTokens":134323,"outputTokens":21191}}""",
+      )
+
+    assertTrue(decoded.text.contains("NO_FINDINGS"))
+    assertTrue(decoded.text.contains("verdict: approved"))
+    assertFalse(decoded.text.contains("reacha"))
+  }
+
+  @Test
+  fun `finding description ending in verdict approved is not harvested as a register verdict`() {
+    val glued = "progress[F-001] Major | High | path.kt:1 | dropped verdict: approved"
+    val decoded =
+      AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(
+        """{"type":"result","result":"$glued"}""",
+      )
+
+    assertEquals("[F-001] Major | High | path.kt:1 | dropped verdict: approved", decoded.text)
+  }
+
+  @Test
   fun `last assistant register wins over concatenated terminal result`() {
     val jsonl =
       """
