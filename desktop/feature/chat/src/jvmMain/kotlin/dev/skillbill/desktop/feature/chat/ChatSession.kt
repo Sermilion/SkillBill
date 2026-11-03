@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -15,7 +16,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.time.Clock
 
-internal data class QueuedChatMessage(val text: String, val action: ChatSuggestedAction?, val pauseAndAct: Boolean)
+internal data class QueuedChatMessage(
+  val text: String,
+  val action: ChatSuggestedAction?,
+  val pauseAndAct: Boolean,
+  val images: List<ChatImage> = emptyList(),
+)
 
 /**
  * One chat about an execution; an execution can have several. [id] names the chat tab. [sessionId] names the agent CLI session and changes when the operator switches agents; [job] parents

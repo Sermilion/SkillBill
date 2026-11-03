@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performClick
@@ -18,7 +19,9 @@ import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextRange
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -39,8 +42,11 @@ import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
 import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
 import kotlinx.coroutines.test.runTest
+import java.awt.image.BufferedImage
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 
@@ -113,6 +119,53 @@ class ChatComposerTest {
       }
       onNodeWithText("Ready").assertExists()
       onNodeWithText("Thinking...").assertDoesNotExist()
+    }
+  }
+
+  @Test
+  fun `pasting an image adds a numbered chip, removing it empties the row, and sending clears pending images`() = runTest {
+    val workspace = ChatWorkspace(
+      FakeExecutionChatRepository(supported = setOf("claude")), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
+      WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
+      testNewTaskDraft(),
+    )
+    val item = workItem("SKILL-450")
+    workspace.open(item)
+    val session = workspace.session(item.id)!!
+    session.agentState.value = ChatAgent("claude", null, null)
+    session.agentSupportedState.value = true
+    var pasted: BufferedImage? = BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB)
+    runComposeUiTest {
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+            // Encoding on the test's own dispatcher lets waitForIdle observe the chip with no real-time polling.
+            ChatComposer(session, workspace, clipboard = { pasted }, encodeContext = EmptyCoroutineContext)
+          }
+        }
+      }
+      val field = onNode(hasSetTextAction())
+      val paste = Key.V
+      val modifier = if (pasteUsesMeta) Key.MetaLeft else Key.CtrlLeft
+      field.performKeyInput { withKeyDown(modifier) { pressKey(paste) } }
+      onNodeWithText("[Image #1]").assertExists()
+      onNodeWithContentDescription("Remove image 1").performClick()
+      onNodeWithText("[Image #1]").assertDoesNotExist()
+
+      field.performKeyInput { withKeyDown(modifier) { pressKey(paste) } }
+      onNodeWithText("[Image #1]").assertExists()
+      field.performKeyInput { pressKey(Key.Enter) }
+      runOnIdle {
+        assertNull(workspace.pastedImages[item.id])
+        val sent = session.queued.value.map { it.images } + session.transcript.value.filterIsInstance<ChatMessage.Operator>().map { it.images }
+        assertEquals(1, sent.single().size)
+      }
+
+      pasted = null
+      field.performTextInput("typed")
+      field.performKeyInput { withKeyDown(modifier) { pressKey(paste) } }
+      onNodeWithText("[Image #1]").assertDoesNotExist()
+      runOnIdle { assertEquals("typed", workspace.drafts[item.id]) }
     }
   }
 }

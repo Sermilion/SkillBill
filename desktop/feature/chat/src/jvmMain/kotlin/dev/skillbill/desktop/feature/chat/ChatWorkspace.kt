@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -96,6 +97,22 @@ class ChatWorkspace(
 
   /** Unsent composer text per chat, so switching tabs or hiding the pane keeps it. */
   internal val drafts = mutableStateMapOf<String, String>()
+
+  /** Pasted images waiting for the next message per chat; in memory only, numbered by position in the list. */
+  internal val pastedImages = mutableStateMapOf<String, List<ChatImage>>()
+
+  // A paste still normalizing when its chat closes must not leave an orphan entry behind.
+  internal fun addPastedImage(id: String, image: ChatImage) {
+    if (id !in sessions) return
+    pastedImages[id] = pastedImages[id].orEmpty() + image
+  }
+
+  internal fun removePastedImage(id: String, index: Int) {
+    val images = pastedImages[id] ?: return
+    if (index !in images.indices) return
+    val rest = images.filterIndexed { i, _ -> i != index }
+    if (rest.isEmpty()) pastedImages.remove(id) else pastedImages[id] = rest
+  }
 
   private val tabState = MutableStateFlow(ChatTabsState())
   val tabs: StateFlow<ChatTabsState> = tabState.asStateFlow()
@@ -203,6 +220,7 @@ class ChatWorkspace(
   fun close(id: String) {
     val session = sessions.remove(id) ?: return
     drafts.remove(id)
+    pastedImages.remove(id)
     session.job.cancel()
     chat.end(session.sessionId)
     tabState.update { it.without(id) }
@@ -227,6 +245,7 @@ class ChatWorkspace(
     }
     sessions.clear()
     drafts.clear()
+    pastedImages.clear()
     tabState.value = ChatTabsState()
   }
 
@@ -296,16 +315,18 @@ class ChatWorkspace(
   }
 
   /** Asks the agent about the execution, in the mode its state allows now; it never changes the execution. */
-  fun send(id: String, text: String) = send(id, text, null)
+  fun send(id: String, text: String, images: List<ChatImage> = emptyList()) {
+    enqueue(id, QueuedChatMessage(text, null, pauseAndAct = false, images = images))
+  }
 
   private fun send(id: String, text: String, action: ChatSuggestedAction?) {
     enqueue(id, QueuedChatMessage(text, action, pauseAndAct = false))
   }
 
-  private fun send(session: ChatSession, text: String) {
+  private fun send(session: ChatSession, text: String, images: List<ChatImage>) {
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
-      turns.turn(session, read, modeFor(read.header), text)
+      turns.turn(session, read, modeFor(read.header), text, images = images)
     }
   }
 
@@ -314,17 +335,19 @@ class ChatWorkspace(
    * or its tab closes. The relaunch is skipped when, after the turn, the execution is already running, finished or gone.
    * On an execution that is not running it is a plain [send].
    */
-  fun pauseAndAct(id: String, text: String) = pauseAndAct(id, text, null)
+  fun pauseAndAct(id: String, text: String, images: List<ChatImage> = emptyList()) {
+    enqueue(id, QueuedChatMessage(text, null, pauseAndAct = true, images = images))
+  }
 
   private fun pauseAndAct(id: String, text: String, action: ChatSuggestedAction?) {
     enqueue(id, QueuedChatMessage(text, action, pauseAndAct = true))
   }
 
-  private fun pauseAndAct(session: ChatSession, text: String) {
+  private fun pauseAndAct(session: ChatSession, text: String, images: List<ChatImage>) {
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       if (modeFor(read.header) == ChatPermissionMode.Act) {
-        turns.turn(session, read, ChatPermissionMode.Act, text)
+        turns.turn(session, read, ChatPermissionMode.Act, text, images = images)
         return@launchTurn
       }
       val deadline = clock.now() + PAUSE_WAIT
@@ -352,7 +375,7 @@ class ChatWorkspace(
       }
       val stoppedRead = turns.accept(session, stopped) ?: return@launchTurn
       resumeAfter(currentCoroutineContext().job, session.id, stoppedRead.header)
-      turns.turn(session, stoppedRead, ChatPermissionMode.Act, text, prefix = ACT_PREFIX)
+      turns.turn(session, stoppedRead, ChatPermissionMode.Act, text, prefix = ACT_PREFIX, images = images)
     }
   }
 
@@ -381,6 +404,7 @@ class ChatWorkspace(
    */
   fun clear(id: String) {
     val session = sessions[id] ?: return
+    pastedImages.remove(id)
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
     if (session.goneState.value) return
@@ -438,7 +462,7 @@ class ChatWorkspace(
 
   private fun enqueue(id: String, message: QueuedChatMessage) {
     val session = sessions[id] ?: return
-    if (session.goneState.value || message.text.isBlank()) return
+    if (session.goneState.value || (message.text.isBlank() && message.images.isEmpty())) return
     session.prefixChoiceState.value = null
     session.queuedState.value += message
     drainQueue(session)
@@ -449,8 +473,8 @@ class ChatWorkspace(
     val next = session.queuedState.value.firstOrNull() ?: return
     session.queuedState.value = session.queuedState.value.drop(1)
     session.busyState.value = true
-    session.append(ChatMessage.Operator(next.text, next.action))
-    if (next.pauseAndAct) pauseAndAct(session, next.text) else send(session, next.text)
+    session.append(ChatMessage.Operator(next.text, next.action, next.images))
+    if (next.pauseAndAct) pauseAndAct(session, next.text, next.images) else send(session, next.text, next.images)
   }
 
   // Only the session's current turn clears busy, so a turn that a resume cancelled cannot unlock the composer mid-swap.

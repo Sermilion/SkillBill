@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
@@ -94,7 +95,7 @@ internal class ChatTurns(
   }
 
   /** Sends [text] with the full snapshot on a first turn and the diff since the last delivered one after that. */
-  suspend fun turn(session: ChatSession, read: ExecutionRead, mode: ChatPermissionMode, text: String, prefix: String? = null) {
+  suspend fun turn(session: ChatSession, read: ExecutionRead, mode: ChatPermissionMode, text: String, prefix: String? = null, images: List<ChatImage> = emptyList()) {
     val agent = session.agentState.value ?: resolve(session, read) ?: run {
       session.append(ChatMessage.Notice(NO_AGENT_NOTICE))
       return
@@ -102,7 +103,8 @@ internal class ChatTurns(
     val current = snapshot(read.header, read.detail)
     val delivered = session.delivered
     val context = if (session.started && delivered != null) diff(delivered, current).render() else current.render()
-    stream(session, agent, read.header, mode, listOfNotNull(prefix, context, text).joinToString("\n\n"), current)
+    val prompt = listOfNotNull(prefix, context, text.takeIf { it.isNotBlank() }).joinToString("\n\n")
+    stream(session, agent, read.header, mode, prompt, current, images)
   }
 
   /** Resolves the session's agent without a turn, so a chat that skips the opening turn can still be sent to. */
@@ -125,9 +127,10 @@ internal class ChatTurns(
     mode: ChatPermissionMode,
     prompt: String,
     sent: ExecutionSnapshot,
+    images: List<ChatImage>,
   ) {
     val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, header.checkoutRoot)
-    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt)
+    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt, images)
     var delivered = false
     try {
       chat.send(request).collect { event ->
