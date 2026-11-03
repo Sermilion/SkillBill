@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservatio
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReserved
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
+import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
@@ -136,6 +137,12 @@ internal class FeatureTaskRuntimeGoalReviewPassRecorder(
         unitOfWork.workflowStates,
         mapOf(DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(updated.toPersistenceWire())),
       )
+      val ledger = unitOfWork.unaddressedFindings.fetchWorkflowLedger(workflowId)
+      (updated.repairReceipts - state.repairReceipts.toSet()).forEach { receipt ->
+        unitOfWork.unaddressedFindings.recordOutcomes(
+          GoalSubtaskReviewSummaryReducer.repairedFindingOutcomes(ledger, receipt),
+        )
+      }
       updated
     }
 
@@ -186,6 +193,7 @@ internal class FeatureTaskRuntimeGoalReviewPassRecorder(
     val ledgerFindings: List<UnaddressedFinding>,
     val supersededFindings: List<UnaddressedFinding>,
     val dispositions: List<GoalSubtaskBlockerDisposition>,
+    val settledOutcomes: List<ReviewFindingOutcomeRecord>,
   )
 
   private fun loadGoalReviewPassWrite(
@@ -207,18 +215,20 @@ internal class FeatureTaskRuntimeGoalReviewPassRecorder(
         unitOfWork.reviews::fetchFindingVerdicts,
         request.normalizedOutput,
       )
+    val scope =
+      UnaddressedFindingLedgerScope(
+        issueKey = continuation.issueKey,
+        subtaskId = continuation.subtaskId,
+        workflowId = request.workflowId,
+        reviewPassNumber = reservedPass,
+      )
     val ledgerFindings =
       GoalSubtaskReviewSummaryReducer.unaddressedFindings(
         output = request.normalizedOutput,
-        scope =
-          UnaddressedFindingLedgerScope(
-            issueKey = continuation.issueKey,
-            subtaskId = continuation.subtaskId,
-            workflowId = request.workflowId,
-            reviewPassNumber = reservedPass,
-          ),
+        scope = scope,
         recordedVerdicts = recordedVerdicts,
       )
+    val settledOutcomes = GoalSubtaskReviewSummaryReducer.settledFindingOutcomes(request.normalizedOutput, scope)
     val supersededFindings = unitOfWork.unaddressedFindings.fetchWorkflowLedger(request.workflowId)
     val dispositions = request.blockerDispositions
     return GoalReviewPassWrite(
@@ -228,6 +238,7 @@ internal class FeatureTaskRuntimeGoalReviewPassRecorder(
       ledgerFindings = ledgerFindings,
       supersededFindings = supersededFindings,
       dispositions = dispositions,
+      settledOutcomes = settledOutcomes,
     )
   }
 
@@ -244,7 +255,7 @@ internal class FeatureTaskRuntimeGoalReviewPassRecorder(
         supersededFindings = loaded.supersededFindings,
         currentFindings = loaded.ledgerFindings,
         blockerDispositions = loaded.dispositions,
-      ),
+      ) + loaded.settledOutcomes,
     )
     patcher.save(
       loaded.record,

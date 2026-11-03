@@ -189,6 +189,7 @@ object ParallelReviewFindingParser {
           citations = peeled.citations,
           severityAdjustment = peeled.severityAdjustment,
           sourceFindingRef = findingRef,
+          settlement = peeled.settlement,
         ),
       citationDiagnostics =
         peeled.citationDiagnostics.map { diagnostic ->

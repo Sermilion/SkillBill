@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 
 class GoalRunnerReviewPassFindingsTest {
   @Test
-  fun `stored findings keep their full text, lane and status and drop refuted claims`() {
+  fun `stored findings keep their full text, lane and status and mark refuted claims`() {
     val kept =
       NumberedFinding(
         number = 1,
@@ -45,6 +45,15 @@ class GoalRunnerReviewPassFindingsTest {
           null,
           "The tab title reads `session.item.issueKey` from `ChatPane.kt`",
           ReviewFindingStatus.OPEN,
+        ),
+        GoalRunnerReviewFinding(
+          "F-003",
+          "Minor",
+          "High",
+          "bill-kmp-code-review-ui",
+          "desktop/ChatPane.kt:25",
+          "The tab title reads `session.item.issueKey` from `ChatPane.kt`",
+          ReviewFindingStatus.REJECTED,
         ),
       ),
       projected,

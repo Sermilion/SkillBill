@@ -1,3 +1,8 @@
+## [2026-11-03] Inline review lists every finding with a status
+Context: Inline review fixed findings in session and listed only what remained, so a review that fixed five defects was stored with zero findings. Repaired and refuted findings also kept the `carried` outcome and displayed as open.
+Decision: Inline review fixes every severity in session and lists each finding with `status=fixed`, `open` or `refuted`. Fixed and refuted findings are stored with an outcome and skip verification, repair and the unaddressed ledger. Verification rejections record `rejected`. Repair receipts record `addressed` for fixed and no-edit entries.
+Reason: The record has to show what review found. In-session fixes still skip independent verification, and a reviewer can refute its own candidate. A no-edit entry displays as fixed because the outcome vocabulary has no separate state.
+
 ## [2026-11-01] Bind standalone review findings to independently verified source
 Context: Standalone review presented findings without independent verification, and HEAD or status text alone could miss changes to dirty file contents.
 Decision: Admit a complete finding census, verify it in a fresh read-only session, and compare content-sensitive source observations around review and verification. Block and retain unaccepted evidence when admission, verification or source identity fails.

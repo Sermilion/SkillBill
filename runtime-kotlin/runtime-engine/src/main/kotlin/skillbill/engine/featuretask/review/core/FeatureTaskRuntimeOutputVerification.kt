@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.review.model.ReviewClaimVerdict
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.parsing.ReviewFindingActionability
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -107,9 +108,12 @@ private fun reviewVerdictFrom(outputObject: FeatureTaskRuntimeWorkflowArtifactMa
       ?.let(JsonCodec::anyToStringAnyMap)
       ?.get(FeatureTaskRuntimeVerificationSignalKeys.REVIEW_FINDINGS) as? List<*>
       ?: return null
-  val findings = findingsRaw.mapNotNull(::actionableReviewFinding)
+  val findings = findingsRaw.filterNot(::isSettledReviewFinding).mapNotNull(::actionableReviewFinding)
   return FeatureTaskRuntimeReviewVerdict(findings)
 }
+
+private fun isSettledReviewFinding(entry: Any?): Boolean =
+  ReviewFindingSettlement.fromWire(JsonCodec.anyToStringAnyMap(entry)?.get(ReviewFindingPayloadKeys.SETTLEMENT)) != null
 
 private fun actionableReviewFinding(entry: Any?): FeatureTaskRuntimeReviewFinding? {
   val map = JsonCodec.anyToStringAnyMap(entry) ?: return null

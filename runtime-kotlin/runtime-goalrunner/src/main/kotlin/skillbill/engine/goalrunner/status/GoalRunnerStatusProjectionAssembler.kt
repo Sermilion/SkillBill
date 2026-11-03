@@ -1025,8 +1025,9 @@ internal fun storedReviewPassFindings(
   statuses: Map<String, ReviewFindingStatus>,
 ): List<GoalRunnerReviewFinding> =
   findings
-    .filter { ReviewFindingActionability.isActionable(it.claimVerdict, it.scopeDisposition) }
     .map { finding ->
+      val actionable = ReviewFindingActionability.isActionable(finding.claimVerdict, finding.scopeDisposition)
+      val status = statuses[finding.findingId] ?: ReviewFindingStatus.OPEN
       GoalRunnerReviewFinding(
         ref = finding.findingId,
         severity = finding.severity,
@@ -1034,6 +1035,6 @@ internal fun storedReviewPassFindings(
         specialist = finding.laneSkillName,
         location = finding.location.takeIf(String::isNotBlank),
         description = finding.description,
-        status = statuses[finding.findingId] ?: ReviewFindingStatus.OPEN,
+        status = if (status == ReviewFindingStatus.OPEN && !actionable) ReviewFindingStatus.REJECTED else status,
       )
     }

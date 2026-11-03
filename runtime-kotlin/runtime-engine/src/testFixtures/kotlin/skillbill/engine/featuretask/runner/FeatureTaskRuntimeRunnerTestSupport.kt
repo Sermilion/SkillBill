@@ -407,6 +407,7 @@ class RunnerHarness(
   val repository: InMemoryRuntimeWorkflowRepository get() = io.repository
   val gitOperations: RecordingWorkflowGitOperations get() = io.gitOperations
   val ledgerRows: List<UnaddressedFinding> get() = io.database.ledgerRows
+  val outcomeRows: List<ReviewFindingOutcomeRecord> get() = io.database.outcomeRows.toList()
 
   fun seedRawReviewResults(state: GoalSubtaskReviewState) {
     val artifacts = repository.taskRuntimeArtifacts(WORKFLOW_ID).toMutableMap()

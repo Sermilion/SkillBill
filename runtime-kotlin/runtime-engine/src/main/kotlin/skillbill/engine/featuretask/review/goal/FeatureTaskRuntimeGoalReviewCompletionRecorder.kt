@@ -266,16 +266,17 @@ public class FeatureTaskRuntimeGoalReviewCompletionRecorder(
         unitOfWork.reviews::fetchFindingVerdicts,
         output,
       )
+    val scope =
+      UnaddressedFindingLedgerScope(
+        issueKey = continuation.issueKey,
+        subtaskId = continuation.subtaskId,
+        workflowId = request.workflowId,
+        reviewPassNumber = passNumber,
+      )
     val findings =
       GoalSubtaskReviewSummaryReducer.unaddressedFindings(
         output = output,
-        scope =
-          UnaddressedFindingLedgerScope(
-            issueKey = continuation.issueKey,
-            subtaskId = continuation.subtaskId,
-            workflowId = request.workflowId,
-            reviewPassNumber = passNumber,
-          ),
+        scope = scope,
         recordedVerdicts = recordedVerdicts,
       )
     val superseded = unitOfWork.unaddressedFindings.fetchWorkflowLedger(request.workflowId)
@@ -285,7 +286,7 @@ public class FeatureTaskRuntimeGoalReviewCompletionRecorder(
         supersededFindings = superseded,
         currentFindings = findings,
         blockerDispositions = blockerDispositions,
-      ),
+      ) + GoalSubtaskReviewSummaryReducer.settledFindingOutcomes(output, scope),
     )
   }
 

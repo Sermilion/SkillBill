@@ -7,6 +7,7 @@ import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingCitation
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.model.ReviewSeverityAdjustment
@@ -572,6 +573,30 @@ class ParallelReviewMergerTest {
       "- [F-001] [claude] Major | High | path=\"Auth.kt\" | line=10 | Token logged",
       result.formattedOutput,
     )
+  }
+
+  @Test
+  fun `formattedOutput keeps fixed and refuted status and omits open`() {
+    val result =
+      ParallelReviewMerger.merge(
+        laneResult(
+          "claude",
+          """
+          - [F-001] Minor | High | path="A.kt" | line=1 | closed defect | status=fixed
+          - [F-002] Minor | High | path="B.kt" | line=2 | dismissed candidate | status=refuted
+          - [F-003] Minor | High | path="C.kt" | line=3 | live defect | status=open
+          """.trimIndent(),
+        ),
+        laneResult("codex", ""),
+      )
+
+    assertEquals(
+      listOf(ReviewFindingSettlement.FIXED, ReviewFindingSettlement.REFUTED, null),
+      result.findings.map { it.settlement },
+    )
+    assertContains(result.formattedOutput, "closed defect | status=fixed")
+    assertContains(result.formattedOutput, "dismissed candidate | status=refuted")
+    assertFalse(result.formattedOutput.contains("live defect | status="))
   }
 
   @Test

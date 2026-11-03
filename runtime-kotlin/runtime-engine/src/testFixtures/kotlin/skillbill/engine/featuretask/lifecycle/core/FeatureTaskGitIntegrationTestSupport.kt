@@ -1,12 +1,16 @@
 package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.contracts.JsonCodec
+import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
+import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.goalrunner.UnaddressedFindingsRepository
+import skillbill.ports.goalrunner.UnavailableUnaddressedFindingsRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
@@ -127,6 +131,13 @@ class FeatureTaskGitIntegrationDatabase(
 
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
+      override val unaddressedFindings: UnaddressedFindingsRepository =
+        object : UnaddressedFindingsRepository by UnavailableUnaddressedFindingsRepository {
+          override fun fetchWorkflowLedger(workflowId: String): List<UnaddressedFinding> = emptyList()
+
+          override fun recordOutcomes(outcomes: List<ReviewFindingOutcomeRecord>) = Unit
+        }
+
       override val dbPath: Path = this@FeatureTaskGitIntegrationDatabase.dbPath
       override val reviews: ReviewRepository = noopPort(ReviewRepository::class.java)
       override val learnings: LearningRepository = noopPort(LearningRepository::class.java)

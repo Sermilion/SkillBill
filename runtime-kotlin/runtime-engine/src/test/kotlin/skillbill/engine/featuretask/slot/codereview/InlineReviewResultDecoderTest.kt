@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.review.model.ParallelReviewSeverity
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.parallel.ParallelReviewFindingParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,6 +14,34 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InlineReviewResultDecoderTest {
+  @Test
+  fun `each register status reaches the merged finding and leaves the description`() {
+    val result =
+      InlineReviewResultDecoder.decode(
+        "cursor",
+        reviewStepOutput(
+          """
+          - [F-001] Minor | High | src/main/A.kt:1 | closed defect | status=fixed
+          - [F-002] Minor | High | src/main/B.kt:2 | dismissed candidate | status=refuted
+          - [F-003] Minor | High | src/main/C.kt:3 | live defect | status=open
+          - [F-004] Minor | High | src/main/D.kt:4 | unmarked defect
+          verdict: approved
+          """.trimIndent(),
+        ),
+      )
+
+    val byDescription = result.mergeResult.findings.associate { it.description to it.settlement }
+    assertEquals(
+      mapOf(
+        "closed defect" to ReviewFindingSettlement.FIXED,
+        "dismissed candidate" to ReviewFindingSettlement.REFUTED,
+        "live defect" to null,
+        "unmarked defect" to null,
+      ),
+      byDescription,
+    )
+  }
+
   @Test
   fun `remaining blocker findings parse into the review register`() {
     val result =

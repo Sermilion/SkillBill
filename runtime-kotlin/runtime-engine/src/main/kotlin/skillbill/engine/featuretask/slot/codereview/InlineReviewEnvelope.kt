@@ -116,6 +116,7 @@ internal object InlineReviewEnvelope {
       finding.repositoryPath?.let { put(ReviewFindingPayloadKeys.REPOSITORY_PATH, it) }
       finding.claimVerdict?.let { put(ReviewFindingPayloadKeys.CLAIM_VERDICT, it.wireValue) }
       finding.scopeDisposition?.let { put(ReviewFindingPayloadKeys.SCOPE_DISPOSITION, it.wireValue) }
+      finding.settlement?.let { put(ReviewFindingPayloadKeys.SETTLEMENT, it.wireValue) }
       if (finding.citations.isNotEmpty()) {
         put(ReviewFindingPayloadKeys.CITATIONS, finding.citations.map(::citationPayload))
       }

@@ -285,6 +285,11 @@ public class FeatureTaskRuntimeReviewGenerationRecorder(
         passNumber,
         mergedExisting + appended,
       )
+      unitOfWork.unaddressedFindings.recordOutcomes(
+        GoalSubtaskReviewSummaryReducer.rejectedFindingOutcomes(
+          mergedExisting.filter { it.findingId in rejectedById } + appended,
+        ),
+      )
     }
   }
 }

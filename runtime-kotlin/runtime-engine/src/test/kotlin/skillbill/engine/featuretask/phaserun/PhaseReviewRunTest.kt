@@ -288,7 +288,7 @@ class PhaseReviewRunTest {
 
     durable.withRunLoopEntry(RecordingRunLoopEntry()).run(durable.request)
 
-    val reviews = directives.filter { "Fix every Blocker and Major finding" in it }
+    val reviews = directives.filter { "Fix every finding" in it }
     assertTrue(reviews.isNotEmpty(), "the full-run review must still launch")
     assertTrue(reviews.none { InlineReviewLanesSection.HEADING in it })
     assertTrue(diagnostics.warnings.any { RUBRIC_FAILURE in it }, diagnostics.warnings.toString())

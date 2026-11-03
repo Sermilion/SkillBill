@@ -5,13 +5,21 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.goalrunner.model.ReviewFindingOutcome
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
+import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.goalrunner.model.reviewFindingIdentityKey
 import skillbill.goalrunner.model.toOutcomeRecord
+import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.review.model.ReviewClaimVerdict
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.parsing.ReviewFindingActionability
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDispositionVerdict
+import skillbill.workflow.model.goalreview.normalizeIdentityPart
 import skillbill.workflow.model.goalreview.reviewStateError
 
 internal object GoalSubtaskReviewOutcomeDispositionReduction {
@@ -42,6 +50,46 @@ internal object GoalSubtaskReviewOutcomeDispositionReduction {
       currentFindings
         .map { finding -> finding.toOutcomeRecord(ReviewFindingOutcome.CARRIED) }
     return supersededOutcomes + currentOutcomes
+  }
+
+  fun settledFindingOutcomes(
+    output: Any,
+    scope: UnaddressedFindingLedgerScope,
+  ): List<ReviewFindingOutcomeRecord> {
+    val reviewRunId = GoalSubtaskReviewStructuredFindingsParse.reviewRunIdOf(output)
+    val openCount = GoalSubtaskReviewStructuredFindingsParse.structuredFindings(output).size
+    return GoalSubtaskReviewStructuredFindingsParse.settledFindings(output).mapIndexed { index, finding ->
+      ReviewFindingOutcomeRecord(
+        workflowId = scope.workflowId,
+        reviewPassNumber = scope.reviewPassNumber,
+        findingOrdinal = openCount + index + 1,
+        outcome =
+          if (finding.settlement == ReviewFindingSettlement.FIXED) {
+            ReviewFindingOutcome.ADDRESSED
+          } else {
+            ReviewFindingOutcome.REJECTED
+          },
+        reviewRunId = reviewRunId,
+        findingId = finding.findingId,
+        findingKey = reviewFindingIdentityKey(finding.location, finding.message),
+      )
+    }
+  }
+
+  fun repairedFindingOutcomes(
+    ledger: List<UnaddressedFinding>,
+    receipt: FeatureTaskRuntimeRepairReceipt,
+  ): List<ReviewFindingOutcomeRecord> {
+    val closed =
+      receipt.entries
+        .filter { it.outcome != FeatureTaskRuntimeRepairOutcome.ATTEMPTED_UNRESOLVED }
+        .mapTo(mutableSetOf(), FeatureTaskRuntimeRepairReceiptEntry::findingIdentity)
+    val latestPass = ledger.maxOfOrNull(UnaddressedFinding::reviewPassNumber)
+    return ledger
+      .filter { it.reviewPassNumber == latestPass }
+      .filter { it.verificationDisposition != UNADDRESSED_FINDING_REJECTED_DISPOSITION }
+      .filter { finding -> finding.findingId?.let(::normalizeIdentityPart) in closed }
+      .map { finding -> finding.toOutcomeRecord(ReviewFindingOutcome.ADDRESSED) }
   }
 
   fun blockerDispositions(

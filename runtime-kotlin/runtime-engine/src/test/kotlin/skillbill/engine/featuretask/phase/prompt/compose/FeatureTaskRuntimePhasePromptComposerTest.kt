@@ -22,7 +22,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
         promptComposerBriefingFor("review"),
       ) { copy(codeReviewMode = CodeReviewExecutionMode.INLINE) }
 
-    assertContains(prompt, "Fix every Blocker and Major")
+    assertContains(prompt, "Fix every finding")
     assertFalse(prompt.contains("Run `bill-code-review"))
     assertFalse(prompt.contains("parallel:claude"))
   }
@@ -220,7 +220,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     val verifyPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS)
 
     assertContains(reviewPrompt, MATERIALITY_RULE)
-    assertContains(reviewPrompt, "Do not report or fix such cases")
+    assertContains(reviewPrompt, "Do not fix such cases; list them as refuted")
     assertContains(verifyPrompt, MATERIALITY_RULE)
     assertContains(verifyPrompt, "or when it is not material")
   }
