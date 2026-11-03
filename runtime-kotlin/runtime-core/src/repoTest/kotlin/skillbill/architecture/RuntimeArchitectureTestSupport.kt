@@ -675,10 +675,10 @@ internal fun assertNoBannedSourceReferences(
 }
 
 internal fun String.containsBannedReference(reference: String): Boolean =
-  if (reference == "Files.") {
-    Regex("""\bFiles\.""").containsMatchIn(this)
-  } else {
-    reference in this
+  when (reference) {
+    "Files." -> Regex("""\bFiles\.""").containsMatchIn(this)
+    "Thread(" -> Regex("""\bThread\s*[({]""").containsMatchIn(this)
+    else -> reference in this
   }
 
 internal fun assertMcpScaffoldRuntimeOnlyUsesFilesForRepoRootDiscovery(mcpFiles: List<SourceFile>) {

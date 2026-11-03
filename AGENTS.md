@@ -13,7 +13,7 @@ Non-negotiable contracts:
 - `agent-addons/<slug>/` contains only user-owned `agent-addon.yaml` and `content.md`.
 - Generated support pointers, provider-specific native-agent outputs, and install staging artifacts are not committed.
 - Discovery, install, routing, and validation stay dynamic and manifest-driven.
-- Missing manifests, wrong contract versions, missing content, and missing required sections fail loudly with typed errors.
+- Missing manifests, content or required sections, and wrong contract versions fail loudly with typed errors.
 - Every fallback, degradation, or swallowed failure emits a record; see `docs/observability-policy.md`.
 
 ## Internal Skills
@@ -22,7 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Each goal runs in its own runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after recording completion unless it holds unpublished work. Standalone phases keep working in the caller's checkout.
+Each goal runs in a runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after completion unless it holds unpublished work. Standalone phases use the caller's checkout.
 
 ## Product Intent
 
@@ -78,7 +78,7 @@ Code review: pack root + conforming manifest/`content.md`, manifest-registered p
 
 ## Writing And Comments
 
-Write direct, active prose; drop filler, stale phrases, praise, and repetition, but preserve names, numbers, and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
+Write direct, active prose; drop filler, stale wording, praise and repetition; preserve names, numbers and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
 
 ## Testing
 

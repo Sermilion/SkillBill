@@ -37,6 +37,7 @@ import skillbill.di.install.RuntimeInstallPlanProvides
 import skillbill.di.install.RuntimeInstallTargetProvides
 import skillbill.di.install.RuntimeInstallerProvides
 import skillbill.di.operation.RuntimeOperationProvides
+import skillbill.di.review.RuntimeDiffCommentProvides
 import skillbill.di.review.RuntimeReviewAddonCatalogProvides
 import skillbill.di.review.RuntimeReviewEvidenceProvides
 import skillbill.di.review.RuntimeReviewLaunchProvides
@@ -150,6 +151,7 @@ abstract class RuntimeComponent(
     RuntimeReviewLaunchProvides,
     RuntimeReviewAddonCatalogProvides,
     RuntimeReviewEvidenceProvides,
+    RuntimeDiffCommentProvides,
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
     RuntimeStandaloneMonitorProvides,
