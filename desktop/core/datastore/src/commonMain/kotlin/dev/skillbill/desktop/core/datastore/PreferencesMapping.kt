@@ -15,6 +15,9 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
   val storedHeight = this[AppPreferenceKeys.TERMINAL_HEIGHT_DP]
   val height = storedHeight?.coerceIn(AppSettings.TERMINAL_HEIGHT_MIN_DP, AppSettings.TERMINAL_HEIGHT_MAX_DP)
   if (height != storedHeight) onUnsupported("${AppPreferenceKeys.TERMINAL_HEIGHT_DP.name}=$storedHeight")
+  val favoriteWork = this[AppPreferenceKeys.FAVORITE_WORK].orEmpty().mapNotNull { encoded ->
+    FavoriteWorkKeyEncoding.decode(encoded).also { if (it == null) onUnsupported("${AppPreferenceKeys.FAVORITE_WORK.name}=$encoded") }
+  }.toSet()
   return AppSettings(
     databasePath = this[AppPreferenceKeys.DATABASE_PATH],
     claudeConfigDir = this[AppPreferenceKeys.CLAUDE_CONFIG_DIR],
@@ -25,5 +28,6 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
     startAtLogin = this[AppPreferenceKeys.START_AT_LOGIN] ?: false,
     terminalHeightDp = height ?: AppSettings.TERMINAL_HEIGHT_DEFAULT_DP,
     trayLastTab = decode(AppPreferenceKeys.TRAY_LAST_TAB, TrayTab.DEFAULT) { raw -> TrayTab.entries.firstOrNull { it.wireValue == raw } },
+    favoriteWork = favoriteWork,
   )
 }

@@ -1,5 +1,16 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-11-03] SKILL-475 Keep Cursor review payload through harvest
+Areas: runtime-infra/launcher Cursor stream harvest
+- Last-turn Cursor JSONL whose non-empty lines are all review-register lines is kept as a strict register, so a lanes / NO_FINDINGS / canonical-verdict payload no longer falls through to concatenated-result harvest.
+- Review-register lines are NO_FINDINGS, case-insensitive No findings., canonical verdict lines from FeatureTaskRuntimeVerdict wire values, lanes/coverage/warning prefixes, finding rows, and markdown or colon review headings. Unmatched progress prose still fails the allow-list.
+- Mixed-result harvest keeps a present canonical verdict with NO_FINDINGS or finding rows after splitting a verdict glued onto NO_FINDINGS, and strips progress. Bare NO_FINDINGS and glued progress with no verdict still harvest exactly NO_FINDINGS. Harvest never appends a verdict that was not in the source.
+- Pattern: match verdict locally in the launcher decoder; do not import admission or census. Goal-assessment Finding: none harvest is unchanged (SKILL-465).
+- reusable: glued canonical-verdict split only after NO_FINDINGS, so a finding description that ends in verdict: approved stays on the finding line.
+- Transport tests cover last-turn payload versus concatenated result, glued NO_FINDINGS plus verdict, and the finding-description non-split.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-23] SKILL-441 subtask 3: runtime state relocation into the project store
 Areas: runtime-infra/host (repo-local config), runtime-infra/skills (install), runtime-infra/workflow (evidence, checklist, repair), runtime-engine (run evidence, goal purge), runtime-domain, runtime-ports (incl. testFixtures), runtime-cli
 - Repo-local config reads and writes the store `configPath` through ProjectStorePort. A legacy checkout `.skill-bill/config.yaml` is copied once, atomically (LegacyRepoLocalConfigCopy); after that the legacy file is ignored and never modified. A failed copy falls back to the legacy file with a legacy_config_copy_failed diagnostic. Install scaffolds the default config in the store.

@@ -21,13 +21,16 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.repository.WorkDetailResolution
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
 
 /** One shared board flow for every query; records the queries observed and counts refreshes and page loads. */
 class FakeWorkBoardRepository(initial: BoardState = BoardState.Loading) : WorkBoardRepository {
   val state = MutableStateFlow(initial)
+  private val refreshVersion = MutableStateFlow(0L)
   val queries = mutableListOf<BoardQuery>()
   var refreshes = 0
     private set
@@ -39,6 +42,8 @@ class FakeWorkBoardRepository(initial: BoardState = BoardState.Loading) : WorkBo
     return state
   }
 
+  override fun observeRefreshes(query: BoardQuery): Flow<Unit> = refreshVersion.map { Unit }
+
   override suspend fun loadMore(query: BoardQuery, cursor: String): LoadMoreOutcome {
     loadMoreCursors += cursor
     return loadMoreOutcome
@@ -46,6 +51,7 @@ class FakeWorkBoardRepository(initial: BoardState = BoardState.Loading) : WorkBo
 
   override fun refresh() {
     refreshes++
+    refreshVersion.value++
   }
 }
 
@@ -53,8 +59,11 @@ class FakeWorkBoardRepository(initial: BoardState = BoardState.Loading) : WorkBo
 class FakeWorkDetailRepository(var runOptions: Map<String, RunOptions> = emptyMap()) : WorkDetailRepository {
   val prefetched = mutableListOf<String>()
   var details: Map<String, Flow<DetailState>> = emptyMap()
+  var favoriteResolver: suspend (String) -> WorkDetailResolution = { WorkDetailResolution.Missing }
 
   override fun observe(item: WorkItem): Flow<DetailState> = details[item.id] ?: emptyFlow()
+
+  override suspend fun resolve(id: String): WorkDetailResolution = favoriteResolver(id)
 
   override suspend fun refresh(id: String) = Unit
 

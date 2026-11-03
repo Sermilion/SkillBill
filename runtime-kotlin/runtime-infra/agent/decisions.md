@@ -1,5 +1,10 @@
 # Boundary decisions
 
+## [2026-11-03] Cursor review harvest keeps a present verdict and never synthesizes one
+Context: Cursor concatenates progress onto last-turn present_findings. The review-register predicate accepted only exact NO_FINDINGS or finding rows, so a lanes plus NO_FINDINGS plus canonical-verdict payload fell through and harvest collapsed to NO_FINDINGS. Admission then rejected the missing unique verdict (SKILL-475).
+Decision: Widen the last-turn review-register allow-list in CursorAgentRunDecoding and keep a present canonical verdict when harvesting mixed result strings. Match verdict tokens locally from FeatureTaskRuntimeVerdict wire values. Split a glued verdict only when it follows NO_FINDINGS. Do not import admission or census.
+Reason: Admission already requires a unique canonical verdict and is outside this file ownership. Assessment harvest is a separate grammar (SKILL-465). Splitting any glued verdict line would take that phrase out of a finding description.
+
 ## [2026-11-02] Cursor harvest keeps goal-assessment grammar, not only the review register
 Context: Goal assessment agents answer with `Finding: none` and `Scenario IS-NNN:` lines. Cursor concatenates progress turns onto that last line. Harvest only treated `NO_FINDINGS` and `[F-NNN]` as a register, so `GoalAssessmentLineParser` saw one line starting with "I'll assess" and recorded `malformed` / `assessment_unavailable` (SKILL-465, wftr-20261102-153141-jv9f).
 Decision: `pickCursorHarvest` keeps a last assistant turn that is an assessment register, and glued `Finding:` / `Scenario` / `Regression` / `Verify` / `Test value:` lines are split out of a concatenated `result` the same way review findings are.

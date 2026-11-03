@@ -25,6 +25,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +52,7 @@ fun SidebarItem(
   on: Boolean = false,
   tooltip: String? = null,
   shortcut: String? = null,
+  trailingText: String? = null,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
@@ -68,7 +70,10 @@ fun SidebarItem(
     Row(
       modifier.fillMaxWidth().height(28.dp).background(fill, shape)
         .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
-        .sbFocusRing(interaction, shape).semantics { selected = on }.padding(horizontal = 8.dp),
+        .sbFocusRing(interaction, shape).semantics {
+          selected = on
+          if (trailingText != null) contentDescription = "$label, $trailingText"
+        }.padding(horizontal = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(9.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -81,6 +86,9 @@ fun SidebarItem(
         }
       }
       BasicText(label, Modifier.weight(1f), style = type.tBaseMedium.copy(color = textColor), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      if (trailingText != null) {
+        BasicText(trailingText, style = type.tSmMedium.copy(color = textColor), maxLines = 1)
+      }
       if (attention != null && attention > 0) {
         Box(
           Modifier.defaultMinSize(minWidth = 18.dp).height(18.dp).background(colors.accentTint, SkillBillRadius.full).padding(horizontal = 5.dp),
