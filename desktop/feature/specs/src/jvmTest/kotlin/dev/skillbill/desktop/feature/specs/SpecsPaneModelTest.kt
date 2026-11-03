@@ -17,6 +17,8 @@ import dev.skillbill.desktop.core.domain.model.SpecStatus
 import dev.skillbill.desktop.core.domain.model.SpecTree
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
+import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
@@ -62,6 +64,7 @@ class SpecsPaneModelTest {
 
   private val project = SpecProject("p1", "Project", "/repo/.skill-bill/specs", "/repo")
   private val goal = workItem("SKILL-1")
+  private val settings = FakeAppSettingsRepository()
   private val specs = FakeSpecs()
   private val controls = FakeWorkControlRepository()
   private val toasts = ToastQueue()
@@ -234,9 +237,78 @@ class SpecsPaneModelTest {
     return model
   }
 
+  @Test
+  fun `toggle favorite writes only for bundle selection`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1/spec.md"))
+    advanceUntilIdle()
+    model.onAction(SpecsAction.ToggleFavorite)
+    advanceUntilIdle()
+    assertTrue(settings.settings.value.favoriteSpecs.isEmpty())
+
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+    model.onAction(SpecsAction.ToggleFavorite)
+    advanceUntilIdle()
+    assertEquals(setOf(FavoriteSpecKey("p1", "SKILL-1")), settings.settings.value.favoriteSpecs)
+    assertTrue(model.state.value.toolbar.favorite)
+  }
+
+  @Test
+  fun `revealFavorite selects the bundle after the tree loads`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.treeState.value = SpecTreeState.Loading
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.revealFavorite("p1", "SKILL-1")
+    specs.treeState.value = SpecTreeState.Loaded(specs.loadedTree, project.specsRoot)
+    advanceUntilIdle()
+    assertEquals(ToolbarSelection.Bundle("SKILL-1"), model.state.value.toolbar.selection)
+  }
+
+  @Test
+  fun `manual project choice cancels a pending favorite reveal`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.treeState.value = SpecTreeState.Loading
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.revealFavorite("p1", "SKILL-1")
+    model.onAction(SpecsAction.PickProject("p1"))
+    specs.treeState.value = SpecTreeState.Loaded(specs.loadedTree, project.specsRoot)
+    advanceUntilIdle()
+
+    assertEquals(ToolbarSelection.None, model.state.value.toolbar.selection)
+  }
+
+  @Test
+  fun `favorite reveal ignores a path now occupied by a file`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.treeState.value = SpecTreeState.Loading
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.revealFavorite("p1", "SKILL-1")
+    val file = SpecNode.File("SKILL-1", "SKILL-1", "/repo/.skill-bill/specs/SKILL-1", SpecFileKind.ParentSpec, null, null, null)
+    specs.treeState.value = SpecTreeState.Loaded(specs.loadedTree.copy(roots = listOf(file)), project.specsRoot)
+    advanceUntilIdle()
+
+    assertEquals(ToolbarSelection.None, model.state.value.toolbar.selection)
+    assertNull(model.state.value.selectedPath)
+  }
+
   private fun model(dispatcher: TestDispatcher) = SpecsPaneModel(
     specs,
     controls,
+    settings,
     SelectionHolder(),
     toasts,
     AppDispatchers(dispatcher, dispatcher, dispatcher),
@@ -273,11 +345,12 @@ class SpecsPaneModelTest {
       listOf(SpecNode.File("spec.md", "SKILL-1/spec.md", "/repo/.skill-bill/specs/SKILL-1/spec.md", SpecFileKind.ParentSpec, null, null, null)),
     )
     private val tree = SpecTree(project, listOf(bundle), SpecCounts(1, 0, 1, 0), false)
-    private val state = MutableStateFlow<SpecTreeState>(SpecTreeState.Loaded(tree, project.specsRoot))
+    val loadedTree = tree
+    val treeState = MutableStateFlow<SpecTreeState>(SpecTreeState.Loaded(tree, project.specsRoot))
 
     override suspend fun projects() = Outcome.Success(listOf(project))
     override suspend fun projectFor(repoRoot: String) = Outcome.Success(project)
-    override fun observeTree(projectId: String): Flow<SpecTreeState> = state
+    override fun observeTree(projectId: String): Flow<SpecTreeState> = treeState
     var refreshes = 0
     val deletes = mutableListOf<SpecBundleRef>()
     var deleteOutcome: SpecDeleteOutcome = SpecDeleteOutcome.Deleted

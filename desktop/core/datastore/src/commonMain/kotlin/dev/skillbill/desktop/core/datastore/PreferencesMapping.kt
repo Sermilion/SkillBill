@@ -18,6 +18,9 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
   val favoriteWork = this[AppPreferenceKeys.FAVORITE_WORK].orEmpty().mapNotNull { encoded ->
     FavoriteWorkKeyEncoding.decode(encoded).also { if (it == null) onUnsupported("${AppPreferenceKeys.FAVORITE_WORK.name}=$encoded") }
   }.toSet()
+  val favoriteSpecs = this[AppPreferenceKeys.FAVORITE_SPECS].orEmpty().mapNotNull { encoded ->
+    FavoriteSpecKeyEncoding.decode(encoded).also { if (it == null) onUnsupported("${AppPreferenceKeys.FAVORITE_SPECS.name}=$encoded") }
+  }.toSet()
   return AppSettings(
     databasePath = this[AppPreferenceKeys.DATABASE_PATH],
     claudeConfigDir = this[AppPreferenceKeys.CLAUDE_CONFIG_DIR],
@@ -29,5 +32,6 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
     terminalHeightDp = height ?: AppSettings.TERMINAL_HEIGHT_DEFAULT_DP,
     trayLastTab = decode(AppPreferenceKeys.TRAY_LAST_TAB, TrayTab.DEFAULT) { raw -> TrayTab.entries.firstOrNull { it.wireValue == raw } },
     favoriteWork = favoriteWork,
+    favoriteSpecs = favoriteSpecs,
   )
 }

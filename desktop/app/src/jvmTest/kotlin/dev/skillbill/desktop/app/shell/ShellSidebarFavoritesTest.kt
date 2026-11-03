@@ -17,6 +17,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
@@ -38,10 +39,10 @@ class ShellSidebarFavoritesTest {
       SkillBillTheme(reducedMotion = true) {
         Box(Modifier.width(280.dp).height(420.dp)) {
           ShellSidebar(
-            topRoute = WorkRoute(null), sectionSizes = null, favorites = entries, specsOpen = false, terminalOpen = false,
+            topRoute = WorkRoute(null), sectionSizes = null, favorites = entries, specFavorites = emptyList(), specsOpen = false, terminalOpen = false,
             chatOpen = false, newTaskDraft = false, contributions = emptyList(), onNavigate = { selected = it },
             onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {}, onToggleChat = {}, onShowShortcuts = {},
-            onRemoveFavorite = { removed = it },
+            onRemoveFavorite = { removed = it }, onRemoveSpecFavorite = {}, onOpenSpecFavorite = { _, _ -> },
           )
         }
       }
@@ -56,6 +57,32 @@ class ShellSidebarFavoritesTest {
     runOnIdle {
       assertEquals("favorite-11", (selected as dev.skillbill.desktop.core.ui.navigation.DetailRoute).item.id)
       assertEquals("favorite-4", removed?.workItemId)
+    }
+  }
+
+  @Test
+  fun `resolved spec favorite opens specs instead of detail`() = runComposeUiTest {
+    val specKey = FavoriteSpecKey("p1", "SKILL-1")
+    val specEntries = listOf(FavoriteSpecSidebarEntry.Resolved(specKey, "Spec title", "SKILL-1"))
+    var selected: dev.skillbill.desktop.core.ui.navigation.AppRoute? = null
+    var opened: Pair<String, String>? = null
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.width(280.dp).height(420.dp)) {
+          ShellSidebar(
+            topRoute = WorkRoute(null), sectionSizes = null, favorites = emptyList(), specFavorites = specEntries, specsOpen = false,
+            terminalOpen = false, chatOpen = false, newTaskDraft = false, contributions = emptyList(), onNavigate = { selected = it },
+            onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {}, onToggleChat = {}, onShowShortcuts = {},
+            onRemoveFavorite = {}, onRemoveSpecFavorite = {}, onOpenSpecFavorite = { projectId, path -> opened = projectId to path },
+          )
+        }
+      }
+    }
+
+    onNodeWithContentDescription("Spec title, SKILL-1").performClick()
+    runOnIdle {
+      assertEquals(null, selected)
+      assertEquals("p1" to "SKILL-1", opened)
     }
   }
 }

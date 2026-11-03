@@ -19,6 +19,9 @@ import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
+import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
+import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ControlAction
 import dev.skillbill.desktop.core.ui.feedback.FeedbackSubject
@@ -34,6 +37,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -135,6 +139,7 @@ private class TreePresentation(
 class SpecsPaneModel(
   private val specs: SpecRepository,
   private val controls: WorkControlRepository,
+  private val settings: AppSettingsRepository,
   private val selection: SelectionHolder,
   private val toasts: ToastQueue,
   dispatchers: AppDispatchers,
@@ -162,10 +167,67 @@ class SpecsPaneModel(
   private var resolutionJob: Job? = null
   private var retryJob: Job? = null
   private var treeGeneration = 0
-  val state = combine(local, controls.reservations) { current, reservations ->
+  private var pendingReveal: Pair<String, String>? = null
+  private val specFavoritesSnapshot = MutableStateFlow<Outcome<Set<FavoriteSpecKey>, SettingsRejection>?>(null)
+  private var specFavoriteWrite: SpecFavoriteWrite? = null
+  private var specFavoriteRequestId = 0L
+
+  private data class SpecFavoriteWrite(
+    val requestId: Long,
+    val key: FavoriteSpecKey,
+    val desired: Boolean,
+    var writeSucceeded: Boolean = false,
+  )
+
+  val state = combine(local, controls.reservations, specFavoritesSnapshot) { current, reservations, favoriteResult ->
+    val bundleSelection = current.toolbar.selection as? ToolbarSelection.Bundle
+    val projectId = current.project?.projectId
+    val path = bundleSelection?.path
+    val (favorite, favoriteAvailable) = if (bundleSelection == null || projectId == null || path == null) {
+      false to false
+    } else when (favoriteResult) {
+      null -> false to false
+      is Outcome.Failure -> false to false
+      is Outcome.Success -> (FavoriteSpecKey(projectId, path) in favoriteResult.value) to true
+    }
     val key = selectedBundleKey(current)
-    current.copy(toolbar = current.toolbar.copy(reserved = key != null && key in reservations))
+    current.copy(
+      toolbar = current.toolbar.copy(
+        reserved = key != null && key in reservations,
+        favorite = favorite,
+        favoriteAvailable = favoriteAvailable,
+      ),
+    )
   }.stateIn(scope, SharingStarted.Eagerly, SpecsUiState())
+
+  init {
+    scope.launch {
+      settings.favoriteSpecs.collect { result ->
+        specFavoritesSnapshot.value = result
+        when (result) {
+          is Outcome.Success -> {
+            specFavoriteWrite?.takeIf { it.writeSucceeded && (it.key in result.value) == it.desired }?.let {
+              finishSpecFavoriteWrite(it.requestId)
+            }
+          }
+          is Outcome.Failure -> {
+            toasts.show(ToastMessage(ToastTone.Problem, "Couldn't read saved favorites. Try again later."))
+            specFavoriteWrite?.takeIf { it.writeSucceeded }?.let {
+              toasts.show(ToastMessage(ToastTone.Problem, "Couldn't confirm this favorite. Try again."))
+              finishSpecFavoriteWrite(it.requestId)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  fun revealFavorite(projectId: String, path: String) {
+    explicitPick = true
+    open()
+    pendingReveal = projectId to path
+    applyPendingReveal()
+  }
 
   fun open() {
     if (started) return
@@ -192,7 +254,8 @@ class SpecsPaneModel(
                 resolutionJob?.cancel()
                 resolutionJob = scope.launch {
                   loadProjects()
-                  if (failure !is RetryFailure.ProjectList) follow(selection.item.value?.repositoryRoot)
+                  if (pendingReveal != null) applyPendingReveal()
+                  else if (failure !is RetryFailure.ProjectList) follow(selection.item.value?.repositoryRoot)
                 }
               }
             }
@@ -202,6 +265,7 @@ class SpecsPaneModel(
     }
     scope.launch {
       loadProjects()
+      if (pendingReveal != null) applyPendingReveal()
       selection.item.distinctUntilChanged { old, new -> old?.repositoryRoot == new?.repositoryRoot }
         .collect { item ->
           val repoRoot = item?.repositoryRoot
@@ -227,7 +291,7 @@ class SpecsPaneModel(
                   storePath = null,
                   rows = emptyList(),
                   selectedPath = null,
-                  toolbar = SpecToolbarState(),
+                  toolbar = emptyToolbar(),
                 )
               } else {
                 treeJob?.cancel()
@@ -242,7 +306,7 @@ class SpecsPaneModel(
                   storePath = null,
                   rows = emptyList(),
                   selectedPath = null,
-                  toolbar = SpecToolbarState(),
+                  toolbar = emptyToolbar(),
                 )
               }
               resolutionJob = scope.launch {
@@ -260,6 +324,7 @@ class SpecsPaneModel(
   fun onAction(action: SpecsAction) {
     when (action) {
       is SpecsAction.PickProject -> {
+        pendingReveal = null
         retryJob?.cancel()
         resolutionJob?.cancel()
         local.value = local.value.copy(projectMenuOpen = false)
@@ -279,9 +344,18 @@ class SpecsPaneModel(
       is SpecsAction.Toggle -> findNode(roots(), action.path)?.let { node ->
         treePresentation.setExpansion(node.path, !treePresentation.isExpanded(node.path))
       }
-      is SpecsAction.Select -> selectPath(action.path)
-      is SpecsAction.Click -> click(action.path)
-      is SpecsAction.Activate -> click(action.path)
+      is SpecsAction.Select -> {
+        pendingReveal = null
+        selectPath(action.path)
+      }
+      is SpecsAction.Click -> {
+        pendingReveal = null
+        click(action.path)
+      }
+      is SpecsAction.Activate -> {
+        pendingReveal = null
+        click(action.path)
+      }
       SpecsAction.CollapseAll -> treePresentation.collapseAll()
       SpecsAction.Retry -> retry()
       SpecsAction.Reveal -> reveal()
@@ -328,6 +402,7 @@ class SpecsPaneModel(
       is SpecsAction.RequestDelete -> requestDelete(action.path)
       SpecsAction.KeepSpecFiles -> local.value = local.value.copy(deleteTarget = null)
       SpecsAction.ConfirmDelete -> deleteBundle()
+      SpecsAction.ToggleFavorite -> toggleSpecFavorite()
     }
   }
 
@@ -341,6 +416,7 @@ class SpecsPaneModel(
         if (result.value.isEmpty() && local.value.project == null && failure == null) {
           local.value = local.value.copy(tree = SpecTreeState.NoSpecs(null), storePath = null, rows = emptyList())
         }
+        applyPendingReveal()
       }
       is Outcome.Failure -> {
         local.value = local.value.copy(projectsLoaded = true)
@@ -420,8 +496,21 @@ class SpecsPaneModel(
           SpecTreeState.Loading, SpecTreeState.NoCheckout, is SpecTreeState.Unavailable -> null
         }
         val roots = (tree as? SpecTreeState.Loaded)?.tree?.roots.orEmpty()
+        val pendingPath = pendingReveal?.takeIf { it.first == project.projectId }?.second
+        val selectionPath = when {
+          tree is SpecTreeState.Loaded && pendingPath != null -> {
+            pendingReveal = null
+            if (findNode(roots, pendingPath) !is SpecNode.Bundle) {
+              reconcileSelection(null, treeUpdate = tree, storePath = storePath, rowsUpdate = treePresentation.rows(roots))
+              dropVanishedBundleTargets(roots)
+              return@collect
+            }
+            pendingPath
+          }
+          else -> if (tree is SpecTreeState.Loaded) current.selectedPath else null
+        }
         reconcileSelection(
-          if (tree is SpecTreeState.Loaded) current.selectedPath else null,
+          selectionPath,
           treeUpdate = tree,
           storePath = storePath,
           rowsUpdate = treePresentation.rows(roots),
@@ -530,6 +619,7 @@ class SpecsPaneModel(
         confirmingCancel = sameIdentity && previous.confirmingCancel,
         purgeDialogOpen = sameIdentity && previous.purgeDialogOpen,
         inFlight = activeOperations.isNotEmpty(),
+        favoriteInFlight = previous.favoriteInFlight,
       ),
     )
     selectedIdentity = identity
@@ -860,5 +950,79 @@ class SpecsPaneModel(
     val path = (current.toolbar.selection as? ToolbarSelection.Bundle)?.path ?: return null
     return (findNode((current.tree as? SpecTreeState.Loaded)?.tree?.roots.orEmpty(), path) as? SpecNode.Bundle)?.issueKey
   }
-  private fun emptyToolbar() = SpecToolbarState(inFlight = activeOperations.isNotEmpty())
+  private fun emptyToolbar() = SpecToolbarState(
+    inFlight = activeOperations.isNotEmpty(),
+    favoriteInFlight = local.value.toolbar.favoriteInFlight,
+  )
+
+  private fun applyPendingReveal() {
+    val pending = pendingReveal ?: return
+    val (projectId, path) = pending
+    val current = local.value
+    if (!current.projectsLoaded) return
+    val project = current.projects.firstOrNull { it.projectId == projectId }
+    if (project == null) {
+      pendingReveal = null
+      return
+    }
+    if (current.project?.projectId == projectId && current.tree is SpecTreeState.Loaded) {
+      pendingReveal = null
+      val roots = (current.tree as SpecTreeState.Loaded).tree.roots
+      if (findNode(roots, path) is SpecNode.Bundle) reconcileSelection(path)
+      else invalidateSelection(clearPath = true)
+      return
+    }
+    if (current.project?.projectId != projectId || treeJob?.isActive != true) selectProject(project)
+  }
+
+  private fun toggleSpecFavorite() {
+    val current = local.value
+    val bundleSelection = current.toolbar.selection as? ToolbarSelection.Bundle ?: return
+    if (specFavoriteWrite != null || current.toolbar.favoriteInFlight) return
+    val favorites = (specFavoritesSnapshot.value as? Outcome.Success)?.value ?: return
+    val project = current.project ?: return
+    val key = FavoriteSpecKey(project.projectId, bundleSelection.path)
+    val desired = key !in favorites
+    val requestId = ++specFavoriteRequestId
+    val write = SpecFavoriteWrite(requestId, key, desired)
+    specFavoriteWrite = write
+    local.value = current.copy(toolbar = current.toolbar.copy(favoriteInFlight = true))
+    scope.launch {
+      try {
+        when (settings.setSpecFavorite(key, desired)) {
+          is Outcome.Success -> if (isCurrentSpecFavoriteWrite(write)) {
+            write.writeSucceeded = true
+            val latestFavorites = (specFavoritesSnapshot.value as? Outcome.Success)?.value
+            when {
+              latestFavorites == null -> {
+                toasts.show(ToastMessage(ToastTone.Problem, "Couldn't confirm this favorite. Try again."))
+                finishSpecFavoriteWrite(requestId)
+              }
+              (key in latestFavorites) == desired -> finishSpecFavoriteWrite(requestId)
+            }
+          }
+          is Outcome.Failure -> if (isCurrentSpecFavoriteWrite(write)) {
+            toasts.show(ToastMessage(ToastTone.Problem, "Couldn't save this favorite. Try again."))
+            finishSpecFavoriteWrite(requestId)
+          }
+        }
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        if (isCurrentSpecFavoriteWrite(write)) {
+          toasts.show(ToastMessage(ToastTone.Problem, "Couldn't save this favorite. Try again."))
+          finishSpecFavoriteWrite(requestId)
+        }
+      }
+    }
+  }
+
+  private fun isCurrentSpecFavoriteWrite(write: SpecFavoriteWrite): Boolean =
+    specFavoriteWrite === write && specFavoriteRequestId == write.requestId
+
+  private fun finishSpecFavoriteWrite(requestId: Long) {
+    if (specFavoriteWrite?.requestId != requestId) return
+    specFavoriteWrite = null
+    local.value = local.value.copy(toolbar = local.value.toolbar.copy(favoriteInFlight = false))
+  }
 }

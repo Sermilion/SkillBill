@@ -183,6 +183,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val session by window.session.state.collectAsState()
   val board by window.board.view.collectAsState()
   val favorites by window.favorites.entries.collectAsState()
+  val specFavorites by window.favorites.specEntries.collectAsState()
   val newTaskDraft by window.chat.newTaskDraftOpen.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
@@ -199,6 +200,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         topRoute = topRoute,
         sectionSizes = board.lastLoaded?.sections?.associate { it.kind to it.items.size },
         favorites = favorites,
+        specFavorites = specFavorites,
         specsOpen = panes.specsOpen,
         terminalOpen = panes.terminalOpen,
         chatOpen = panes.chatOpen,
@@ -211,6 +213,12 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         onToggleChat = window.chat::toggleChatPane,
         onShowShortcuts = { panes.shortcutsOpen = true },
         onRemoveFavorite = window.favorites::remove,
+        onRemoveSpecFavorite = window.favorites::removeSpec,
+        onOpenSpecFavorite = { projectId, path ->
+          window.specsPane.open()
+          panes.specsOpen = true
+          window.specsPane.revealFavorite(projectId, path)
+        },
       )
     }
   }
