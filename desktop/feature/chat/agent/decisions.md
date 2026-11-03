@@ -3,6 +3,11 @@ Context: Cmd/Ctrl+L and Work-detail Chat call toggleChat(item), which opens left
 Decision: The footer calls ChatCommands.toggleChatPane, which only hides or setPaneOpen(true). It does not read SelectionHolder and does not call open, newChat, or openChat.
 Reason: The operator asked to slide the existing pane, not add a third create path. Writing panes.chatOpen from the footer would not show FloatingPane, which reads workspace.paneOpen. CHAT_SHORTCUT stays off the item because that chord is not visibility-only.
 
+## [2026-11-03] Keep suggested input with the pending prefix choice
+Context: A suggested goal or plan can need a prefix before it starts. Transcript-derived retry input can select an unrelated instruction or title.
+Decision: Carry the selected action through the screen host and retain it with the pending prefix choice. Use its instruction and exact nullable title for the initial request and retry. Clear or replace pending input on a new turn or launch; card starts use the transcript.
+Reason: The retry must start the action the operator selected, while a later card start must not inherit that action.
+
 ## [2026-11-03] Show the Goal run card only when the operator is asking to run a goal
 Context: After the first turn the card appeared on every New task chat, including questions about an issue that were not a request to start a run.
 Decision: showGoalOfferCard is the only visibility gate. It stays hidden until the operator asks to run a goal or plan, or the latest reply offers a goal or plan start. A later review, validate, qa, pr or release request, or a later standalone start, hides it again. A pending prefix choice, start problem or started confirmation still keeps it, because only the card shows those.

@@ -34,8 +34,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.WorkItem
-import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
@@ -49,7 +49,7 @@ internal class NewTaskScreenHost(
   val now: () -> Instant,
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
-  val onStart: ((String, String?) -> Unit)? = null,
+  val onStart: ((String, String?, ChatSuggestedAction?) -> Unit)? = null,
 )
 
 @Composable
@@ -90,7 +90,8 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
                 chipText(draft.selectedAgent),
                 chatBusy,
                 offer,
-                draft::start,
+                { kind -> draft.start(kind) },
+                draft::retryPrefix,
               )
             }
           } else null,
@@ -101,7 +102,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
               focusManager.clearFocus()
             }
           } else if (host.onStart != null) {
-            start.toNewTaskKind()?.let { draft.start(it, action = action) }
+            host.onStart?.invoke(start.wire, action.target, action)
           }
         }
       }
@@ -113,7 +114,10 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
     ) {
       if (chat == null && state.home is NewTaskHome.Returning) {
         val startable = draft.repository != null && draft.agentId != null
-        NewTaskChips(host.onStart.takeIf { startable }, Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth())
+        NewTaskChips(
+          host.onStart?.takeIf { startable }?.let { onStart -> { wire, target -> onStart(wire, target, null) } },
+          Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
+        )
       }
       NewTaskComposer(state, draft, focus, host.now, onAction)
     }

@@ -266,14 +266,54 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.GoalRun, action = section)
     runCurrent()
     controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
-    draft.start(NewTaskKind.GoalRun, "APP-2")
+    draft.retryPrefix("APP-2")
     runCurrent()
 
     controls.newTaskRequests.forEach { request ->
-      assertTrue(request.requirements.startsWith("Implement section 1 only."))
+      assertEquals("Implement section 1 only.", request.requirements)
       assertEquals("Mobile operations", request.title)
     }
     assertEquals("APP-2", controls.newTaskRequests.last().keyChoice)
+  }
+
+  @Test
+  fun `a null action title survives plan prefix retry and the next card start uses the transcript`() = runTest {
+    val unrelated = ChatSuggestedAction("Other", "Implement another change.", ChatPermissionMode.Act, NewTaskActionKind.Goal, title = "Other change")
+    val chats = FakeExecutionChatRepository().apply {
+      events = { kotlinx.coroutines.flow.flowOf(ChatEvent.SuggestedActions(listOf(unrelated)), ChatEvent.Completed) }
+    }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls)
+    assertEquals("Other change", newTaskTitle(assertNotNull(draft.chat.value).thread.transcript.value))
+    val action = ChatSuggestedAction("Plan", "Plan the requested export.", ChatPermissionMode.Act, NewTaskActionKind.Plan)
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP"))
+
+    draft.start(NewTaskKind.PlanOnly, action = action)
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.PlanOnly)
+    draft.retryPrefix("APP")
+    runCurrent()
+
+    assertEquals("Plan the requested export.", controls.newTaskRequests[0].requirements)
+    assertNull(controls.newTaskRequests[0].title)
+    assertEquals("Plan the requested export.", controls.newTaskRequests[1].requirements)
+    assertNull(controls.newTaskRequests[1].title)
+
+    draft.text = "Start another task"
+    draft.send()
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP"))
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
+    draft.retryPrefix("APP")
+    runCurrent()
+
+    val transcript = assertNotNull(draft.chat.value).thread.transcript.value
+    assertEquals(newTaskRequirements(transcript), controls.newTaskRequests[2].requirements)
+    assertEquals(newTaskTitle(transcript), controls.newTaskRequests[2].title)
+    assertEquals(newTaskRequirements(transcript), controls.newTaskRequests[3].requirements)
+    assertEquals(newTaskTitle(transcript), controls.newTaskRequests[3].title)
   }
 
   @Test
@@ -428,7 +468,7 @@ class NewTaskDraftStartTest {
     assertEquals(NewTaskKind.GoalRun, draft.offer.value.prefixKind)
     assertEquals(listOf("APP"), draft.offer.value.choices)
     controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
-    draft.start(NewTaskKind.GoalRun, "APP")
+    draft.retryPrefix("APP")
     runCurrent()
     assertNull(draft.offer.value.prefixKind)
     assertEquals(emptyList(), draft.offer.value.choices)
