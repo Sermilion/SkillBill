@@ -55,8 +55,14 @@ public class GoalIntakePreparation(
       null
     }
 
-  public fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? =
-    manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
+  public fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? {
+    val repoRoot = request.repoRoot
+    manifestStore.loadOccupyingByIssueKey(request.issueKey, repoRoot)?.state?.let { return it }
+    if (manifestStore.loadDurableByIssueKey(request.issueKey, repoRoot) != null) {
+      return manifestStore.importIndependentParentFromProjection(request.issueKey, repoRoot)
+    }
+    return manifestStore.loadByIssueKey(request.issueKey, repoRoot)
+  }
 
   override fun resolvePlanSpec(
     issueKey: String,

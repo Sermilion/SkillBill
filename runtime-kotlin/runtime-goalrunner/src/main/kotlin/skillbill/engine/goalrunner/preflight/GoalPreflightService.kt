@@ -9,14 +9,17 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
+import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentityCandidates
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
+import java.nio.file.Path
 
 @Inject
 public class GoalPreflightService(
@@ -65,15 +68,44 @@ public class GoalPreflightService(
         continuationLookup.lookupIfPresent(normalizedIssueKey, identity)
           .takeIf { it != FeatureTaskContinuationLookupResult.NoMatch }
       } ?: FeatureTaskContinuationLookupResult.NoMatch
+    val occupyingParent = manifestStore.loadOccupyingByIssueKey(normalizedIssueKey, root)
+    val effectiveLookup =
+      adjustGoalPreflightContinuationLookup(
+        lookup,
+        occupyingParent?.state,
+        occupyingParent?.workflowStatus,
+      )
+    val omitLeftoverGateBlock =
+      omitLeftoverGateBlockForNewWork(
+        effectiveLookup = effectiveLookup,
+        manifestState = manifestState,
+        occupyingParent = occupyingParent,
+        normalizedIssueKey = normalizedIssueKey,
+        root = root,
+      )
     return lookupResolver.resolve(
       GoalPreflightLookupInput(
-        lookup = lookup,
+        lookup = effectiveLookup,
         normalizedIssueKey = normalizedIssueKey,
         manifest = manifest,
         manifestState = manifestState,
         request = request,
         root = root,
+        omitLeftoverGateBlock = omitLeftoverGateBlock,
       ),
     )
+  }
+
+  private fun omitLeftoverGateBlockForNewWork(
+    effectiveLookup: FeatureTaskContinuationLookupResult,
+    manifestState: GoalRunnerManifestState?,
+    occupyingParent: OccupyingGoalParent?,
+    normalizedIssueKey: String,
+    root: Path,
+  ): Boolean {
+    if (effectiveLookup != FeatureTaskContinuationLookupResult.NoMatch) return false
+    if (manifestState == null || occupyingParent != null) return false
+    if (manifestState.parentWorkflowId.isBlank()) return false
+    return manifestStore.loadDurableByIssueKey(normalizedIssueKey, root) != null
   }
 }

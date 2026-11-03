@@ -9,7 +9,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusManifestPage
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.workflow.decomposition.runtime.isActiveGoalRuntime
+import skillbill.workflow.decomposition.runtime.isOccupyingActiveGoalRuntime
 import java.nio.file.Path
 
 internal class WorkflowGoalRunnerStatusManifestQueries(
@@ -67,7 +67,13 @@ internal class WorkflowGoalRunnerStatusManifestQueries(
         )
       if (newest == null) newest = page.firstOrNull()?.workflowId
       page.forEach { candidate ->
-        if (isActiveGoalRuntime(candidate.manifestStatus, candidate.hasUnsettledSubtasks)) {
+        if (
+          isOccupyingActiveGoalRuntime(
+            candidate.workflowStatus,
+            candidate.manifestStatus,
+            candidate.hasUnsettledSubtasks,
+          )
+        ) {
           check(active == null) {
             "Ambiguous decomposed parent workflows for '$issueKey': " +
               "$active, ${candidate.workflowId}."

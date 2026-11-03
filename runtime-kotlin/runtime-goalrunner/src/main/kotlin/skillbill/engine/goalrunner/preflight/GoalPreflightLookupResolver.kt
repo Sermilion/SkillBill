@@ -10,7 +10,6 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.goalrunner.model.GoalContinuation
-import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
@@ -20,8 +19,7 @@ internal class GoalPreflightLookupResolver(
 ) {
   fun resolve(input: GoalPreflightLookupInput): GoalPreflightResult =
     when (input.lookup) {
-      FeatureTaskContinuationLookupResult.NoMatch ->
-        noMatchResult(input.normalizedIssueKey, input.manifest, input.request, input.root, input.manifestState)
+      FeatureTaskContinuationLookupResult.NoMatch -> noMatchResult(input)
       is FeatureTaskContinuationLookupResult.Resumable ->
         resumableResult(input.lookup, input.normalizedIssueKey, input.manifestState, input.request, input.root)
       is FeatureTaskContinuationLookupResult.AlreadyRunning ->
@@ -39,26 +37,24 @@ internal class GoalPreflightLookupResolver(
         throw invalidFeatureTaskExecutionIdentitySchema(input.lookup.workflowId, input.lookup.summary)
     }
 
-  private fun noMatchResult(
-    issueKey: String,
-    manifest: DecompositionManifest?,
-    request: GoalPreflightRequest,
-    root: Path,
-    manifestState: GoalRunnerManifestState?,
-  ): GoalPreflightResult {
+  private fun noMatchResult(input: GoalPreflightLookupInput): GoalPreflightResult {
     val activeManifest =
-      manifest?.takeUnless {
-        it.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
+      if (input.omitLeftoverGateBlock) {
+        null
+      } else {
+        input.manifest?.takeUnless {
+          it.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
+        }
       }
     return GoalPreflightResult(
       verdict = GoalPreflightVerdict.NEW_WORK,
-      issueKey = issueKey,
+      issueKey = input.normalizedIssueKey,
       gateBlock =
         activeManifest?.let {
-          gateBlockBuilder.build(request, it, root, manifestState?.parentWorkflowId)
+          gateBlockBuilder.build(input.request, it, input.root, input.manifestState?.parentWorkflowId)
         },
-      rehydrateTargets = activeManifest?.let { gateBlockBuilder.rehydrateTargets(root, it) }.orEmpty(),
-      manifestMissing = manifest == null,
+      rehydrateTargets = activeManifest?.let { gateBlockBuilder.rehydrateTargets(input.root, it) }.orEmpty(),
+      manifestMissing = input.manifest == null,
     )
   }
 

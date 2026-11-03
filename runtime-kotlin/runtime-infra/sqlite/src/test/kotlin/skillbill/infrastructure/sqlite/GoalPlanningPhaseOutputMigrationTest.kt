@@ -3,12 +3,14 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
+import skillbill.infrastructure.sqlite.core.schema.databaseSchemaStatements
 import java.nio.file.Files
 import java.sql.Connection
 import java.sql.SQLException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GoalPlanningPhaseOutputMigrationTest {
@@ -157,10 +159,160 @@ class GoalPlanningPhaseOutputMigrationTest {
     }
   }
 
+  @Test
+  fun `fresh shared preplans schema does not unique-constrain issue key and repository`() {
+    val sharedPreplansDdl =
+      databaseSchemaStatements.single { statement ->
+        "CREATE TABLE IF NOT EXISTS goal_shared_preplans" in statement
+      }
+    assertFalse(hasIssueKeyRepositoryUnique(sharedPreplansDdl))
+
+    val dbPath = Files.createTempDirectory("goal-shared-preplans-fresh-schema").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertFalse(hasIssueKeyRepositoryUnique(tableSql(connection, "goal_shared_preplans")))
+      seedPlanningRow(
+        connection,
+        phaseOutputContractVersion = "0.7",
+        workflowId = "wfl-first",
+        issueKey = "SKILL-472",
+      )
+      seedPlanningRow(
+        connection,
+        phaseOutputContractVersion = "0.7",
+        workflowId = "wfl-second",
+        issueKey = "SKILL-472",
+      )
+      assertEquals(2, scalar(connection, "SELECT COUNT(*) FROM goal_shared_preplans"))
+    }
+  }
+
+  @Test
+  fun `migrated databases store multiple shared preplans for one issue key`() {
+    val dbPath = Files.createTempDirectory("goal-shared-preplans-reuse-keys").resolve("metrics.db")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      DatabaseMigrations.apply(connection)
+      assertFalse(hasIssueKeyRepositoryUnique(tableSql(connection, "goal_shared_preplans")))
+      restoreIssueKeyUnique(connection)
+      seedPlanningRow(
+        connection,
+        phaseOutputContractVersion = "0.7",
+        workflowId = "wfl-first",
+        issueKey = "SKILL-472",
+      )
+      assertTrue(hasIssueKeyRepositoryUnique(tableSql(connection, "goal_shared_preplans")))
+      assertFailsWith<SQLException> {
+        seedPlanningRow(
+          connection,
+          phaseOutputContractVersion = "0.7",
+          workflowId = "wfl-second",
+          issueKey = "SKILL-472",
+        )
+      }
+
+      DatabaseMigrations.apply(connection)
+
+      val sharedSchema = tableSql(connection, "goal_shared_preplans")
+      assertFalse(hasIssueKeyRepositoryUnique(sharedSchema))
+      seedPlanningRow(
+        connection,
+        phaseOutputContractVersion = "0.7",
+        workflowId = "wfl-second",
+        issueKey = "SKILL-472",
+      )
+      assertEquals(2, scalar(connection, "SELECT COUNT(*) FROM goal_shared_preplans"))
+      assertEquals(1, scalar(connection, "SELECT COUNT(*) FROM schema_migrations WHERE version = 100"))
+    }
+  }
+
+  private fun restoreIssueKeyUnique(connection: Connection) {
+    val sharedDdl =
+      issueKeyUniqueSharedPreplansDdl(optionalRepairEvidenceColumn(connection, "goal_shared_preplans"))
+    val subtaskDdl =
+      issueKeyUniqueSubtaskPlansDdl(optionalRepairEvidenceColumn(connection, "goal_subtask_plans"))
+    connection.createStatement().use { statement ->
+      statement.execute("ALTER TABLE goal_subtask_plans RENAME TO goal_subtask_plans_with_issue_key_unique")
+      statement.execute("ALTER TABLE goal_shared_preplans RENAME TO goal_shared_preplans_with_issue_key_unique")
+      statement.execute(sharedDdl)
+      statement.execute(subtaskDdl)
+      statement.execute(
+        "INSERT INTO goal_shared_preplans SELECT * FROM goal_shared_preplans_with_issue_key_unique",
+      )
+      statement.execute(
+        "INSERT INTO goal_subtask_plans SELECT * FROM goal_subtask_plans_with_issue_key_unique",
+      )
+      statement.execute("DROP TABLE goal_subtask_plans_with_issue_key_unique")
+      statement.execute("DROP TABLE goal_shared_preplans_with_issue_key_unique")
+      statement.execute("DELETE FROM schema_migrations WHERE version = 100")
+    }
+  }
+
+  private fun optionalRepairEvidenceColumn(
+    connection: Connection,
+    table: String,
+  ): String =
+    if (tableHasColumn(connection, table, "repair_evidence_json")) {
+      ",\n      repair_evidence_json TEXT"
+    } else {
+      ""
+    }
+
+  private fun issueKeyUniqueSharedPreplansDdl(repairEvidence: String): String =
+    """
+    CREATE TABLE goal_shared_preplans (
+      parent_goal_workflow_id TEXT PRIMARY KEY,
+      normalized_issue_key TEXT NOT NULL,
+      repository_identity TEXT NOT NULL,
+      preparation_status TEXT NOT NULL CHECK (preparation_status = 'prepared'),
+      contract_version TEXT NOT NULL CHECK (contract_version = '0.2'),
+      parent_spec_hash TEXT NOT NULL,
+      decomposition_manifest_hash TEXT NOT NULL,
+      planning_contract_id TEXT NOT NULL,
+      planning_contract_version TEXT NOT NULL CHECK (planning_contract_version = '0.2'),
+      phase_output_contract_id TEXT NOT NULL,
+      phase_output_contract_version TEXT NOT NULL CHECK (phase_output_contract_version IN ('0.2', '0.3', '0.4',
+        '0.5', '0.6', '0.7')),
+      payload_sha256 TEXT NOT NULL,
+      preplan_payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP$repairEvidence,
+      $ISSUE_KEY_REPOSITORY_UNIQUE
+    )
+    """.trimIndent()
+
+  private fun issueKeyUniqueSubtaskPlansDdl(repairEvidence: String): String =
+    """
+    CREATE TABLE goal_subtask_plans (
+      parent_goal_workflow_id TEXT NOT NULL,
+      normalized_issue_key TEXT NOT NULL,
+      repository_identity TEXT NOT NULL,
+      subtask_id INTEGER NOT NULL CHECK (subtask_id > 0),
+      manifest_order INTEGER NOT NULL CHECK (manifest_order >= 0),
+      governed_sub_spec_path TEXT NOT NULL,
+      sub_spec_hash TEXT NOT NULL,
+      preparation_status TEXT NOT NULL CHECK (preparation_status = 'prepared'),
+      contract_version TEXT NOT NULL CHECK (contract_version = '0.2'),
+      parent_spec_hash TEXT NOT NULL,
+      decomposition_manifest_hash TEXT NOT NULL,
+      planning_contract_id TEXT NOT NULL,
+      planning_contract_version TEXT NOT NULL CHECK (planning_contract_version = '0.2'),
+      phase_output_contract_id TEXT NOT NULL,
+      phase_output_contract_version TEXT NOT NULL CHECK (phase_output_contract_version IN ('0.2', '0.3', '0.4',
+        '0.5', '0.6', '0.7')),
+      payload_sha256 TEXT NOT NULL,
+      plan_payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP$repairEvidence,
+      PRIMARY KEY(parent_goal_workflow_id, subtask_id),
+      UNIQUE(parent_goal_workflow_id, governed_sub_spec_path),
+      UNIQUE(parent_goal_workflow_id, manifest_order),
+      FOREIGN KEY(parent_goal_workflow_id) REFERENCES goal_shared_preplans(parent_goal_workflow_id) ON DELETE CASCADE
+    )
+    """.trimIndent()
+
   private fun seedPlanningRow(
     connection: Connection,
     phaseOutputContractVersion: String,
     workflowId: String = "wfl-planning",
+    issueKey: String = "SKILL-000-$workflowId",
   ) {
     connection.createStatement().use { statement ->
       statement.execute(
@@ -171,7 +323,7 @@ class GoalPlanningPhaseOutputMigrationTest {
           planning_contract_version, phase_output_contract_id, phase_output_contract_version,
           payload_sha256, preplan_payload_json, created_at
         ) VALUES (
-          '$workflowId', 'SKILL-000-$workflowId', 'repo', 'prepared', '0.2', 'spec-hash', 'manifest-hash',
+          '$workflowId', '$issueKey', 'repo', 'prepared', '0.2', 'spec-hash', 'manifest-hash',
           'goal-planning-preparation', '0.2', 'feature-task-runtime-phase-output', '$phaseOutputContractVersion',
           'payload-sha', '{}', CURRENT_TIMESTAMP
         )
@@ -185,7 +337,7 @@ class GoalPlanningPhaseOutputMigrationTest {
           decomposition_manifest_hash, planning_contract_id, planning_contract_version,
           phase_output_contract_id, phase_output_contract_version, payload_sha256, plan_payload_json, created_at
         ) VALUES (
-          '$workflowId', 'SKILL-000-$workflowId', 'repo', 1, 0, '.feature-specs/x/spec_subtask_1.md', 'sub-hash',
+          '$workflowId', '$issueKey', 'repo', 1, 0, '.feature-specs/x/spec_subtask_1.md', 'sub-hash',
           'prepared', '0.2', 'spec-hash', 'manifest-hash', 'goal-planning-preparation', '0.2',
           'feature-task-runtime-phase-output', '$phaseOutputContractVersion', 'payload-sha', '{}', CURRENT_TIMESTAMP
         )
@@ -230,6 +382,9 @@ class GoalPlanningPhaseOutputMigrationTest {
       }
     }
 
+  private fun hasIssueKeyRepositoryUnique(sql: String): Boolean =
+    ISSUE_KEY_REPOSITORY_UNIQUE_PATTERN.containsMatchIn(sql)
+
   private fun tableHasColumn(
     connection: Connection,
     table: String,
@@ -240,4 +395,10 @@ class GoalPlanningPhaseOutputMigrationTest {
       statement.setString(2, column)
       statement.executeQuery().use { rows -> rows.next() }
     }
+
+  private companion object {
+    const val ISSUE_KEY_REPOSITORY_UNIQUE = "UNIQUE(normalized_issue_key, repository_identity)"
+    val ISSUE_KEY_REPOSITORY_UNIQUE_PATTERN =
+      Regex("""UNIQUE\s*\(\s*normalized_issue_key\s*,\s*repository_identity\s*\)""")
+  }
 }

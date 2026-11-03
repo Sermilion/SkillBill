@@ -7,18 +7,21 @@ import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowIdForProjectSpec
 import skillbill.application.workflow.decomposition.findDecomposedParentOrCorruptFallback
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
+import skillbill.application.workflow.decomposition.findOccupyingDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.importedPlanStepUpdates
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.application.workflow.decomposition.withImportedPlan
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -30,6 +33,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.model.workflowStatus
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
@@ -58,6 +62,22 @@ public class WorkflowGoalRunnerManifestLoader(
     recoverPending = recoverPending,
   )
 
+  internal fun loadOccupyingFromWorkflowStore(
+    issueKey: String,
+    currentProjectedManifest: DecompositionManifest? = null,
+    repositoryIdentity: String? = null,
+  ): OccupyingGoalParent? =
+    database.read { unitOfWork ->
+      val record =
+        unitOfWork.workflowStates.findOccupyingDecomposedParentWorkflow(
+          issueKey,
+          currentProjectedManifest,
+          repositoryIdentity,
+        ) ?: return@read null
+      val state = manifestStateForParent(unitOfWork, record) ?: return@read null
+      OccupyingGoalParent(state, record.workflowStatus.workflowStatus() ?: WorkflowStatus.PAUSED)
+    }
+
   internal fun loadFromWorkflowStore(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest? = null,
@@ -81,13 +101,21 @@ public class WorkflowGoalRunnerManifestLoader(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest?,
     repositoryIdentity: String?,
-  ): GoalRunnerManifestState? {
-    val record =
+  ): GoalRunnerManifestState? =
+    manifestStateForParent(
+      unitOfWork,
       unitOfWork.workflowStates.findDecomposedParentWorkflow(
         issueKey,
         currentProjectedManifest,
         repositoryIdentity,
-      ) ?: return null
+      ),
+    )
+
+  private fun manifestStateForParent(
+    unitOfWork: UnitOfWork,
+    record: WorkflowStateRecord?,
+  ): GoalRunnerManifestState? {
+    record ?: return null
     val snapshot = record.toSnapshot()
     val manifest = snapshot.decompositionRuntime() ?: return null
     return GoalRunnerManifestState(
@@ -101,14 +129,20 @@ public class WorkflowGoalRunnerManifestLoader(
   internal fun importFromManifestProjection(
     manifest: DecompositionManifest,
     repositoryIdentities: List<String?> = listOf(null),
+    independentParent: Boolean = false,
   ): GoalRunnerManifestState? =
     database.transaction { unitOfWork ->
       val existingRecord =
-        repositoryIdentities.firstNotNullOfOrNull { identity ->
-          unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(manifest.issueKey, manifest, identity)
+        if (independentParent) {
+          null
+        } else {
+          repositoryIdentities.firstNotNullOfOrNull { identity ->
+            unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(manifest.issueKey, manifest, identity)
+          }
         }
       existingRecord?.requireRuntimeModeForEngineWrite()
       val existing = existingRecord?.toSnapshot()
+      val attachCompletedPlan = existing == null && !independentParent
       val base =
         existing ?: engine.openRecord(
           WorkflowFamily.TASK_RUNTIME.definition,
@@ -117,7 +151,7 @@ public class WorkflowGoalRunnerManifestLoader(
           "plan",
         )
       val planWorkflowId =
-        if (existing == null) {
+        if (attachCompletedPlan) {
           repositoryIdentities.firstNotNullOfOrNull { identity ->
             unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, identity)
           }
@@ -125,7 +159,7 @@ public class WorkflowGoalRunnerManifestLoader(
           null
         }
       val qualityPlanWorkflowId =
-        if (existing == null) {
+        if (attachCompletedPlan) {
           planWorkflowId ?: unitOfWork.workflowStates.findCompletedPlanWorkflowIdForProjectSpec(manifest)
         } else {
           null
@@ -232,7 +266,7 @@ internal fun mergeConcurrentGoalProgress(
   }
 }
 
-private fun DecompositionManifest.isCompleteGoalProjection(): Boolean =
+internal fun DecompositionManifest.isCompleteGoalProjection(): Boolean =
   status.decompositionStatus() == DecompositionStatus.COMPLETE &&
     currentSubtaskIntent.action == "complete" &&
     subtasks.all { subtask ->
@@ -242,3 +276,16 @@ private fun DecompositionManifest.isCompleteGoalProjection(): Boolean =
         else -> false
       }
     }
+
+internal fun projectionStillReusableParentHistory(
+  projected: DecompositionManifest,
+  storedParent: GoalRunnerManifestState,
+): Boolean {
+  val storedManifest = storedParent.manifest
+  return projected.isCompleteGoalProjection() ||
+    projected == storedManifest ||
+    projected.subtasks.any { subtask ->
+      val workflowId = subtask.workflowId?.takeIf(String::isNotBlank) ?: return@any false
+      storedManifest.subtasks.any { it.workflowId == workflowId }
+    }
+}

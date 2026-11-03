@@ -109,6 +109,22 @@ internal fun rebuildGoalPlanningPlansForPhaseOutputVersion7(connection: Connecti
   }
 }
 
+internal fun rebuildGoalSharedPreplansDropIssueKeyUnique(connection: Connection) {
+  connection.createStatement().use { statement ->
+    statement.execute("ALTER TABLE goal_subtask_plans RENAME TO $LEGACY_PLANS_REUSE_KEYS")
+    statement.execute("ALTER TABLE goal_shared_preplans RENAME TO $LEGACY_PREPLANS_REUSE_KEYS")
+    statement.execute(
+      connection.sharedPreplansDdl(LEGACY_PREPLANS_REUSE_KEYS, PHASE_OUTPUT_CHECK_THROUGH_0_7),
+    )
+    statement.execute(connection.subtaskPlansDdl(LEGACY_PLANS_REUSE_KEYS, PHASE_OUTPUT_CHECK_THROUGH_0_7))
+    statement.execute("INSERT INTO goal_shared_preplans SELECT * FROM $LEGACY_PREPLANS_REUSE_KEYS")
+    statement.execute("INSERT INTO goal_subtask_plans SELECT * FROM $LEGACY_PLANS_REUSE_KEYS")
+    statement.execute("DROP TABLE $LEGACY_PLANS_REUSE_KEYS")
+    statement.execute("DROP TABLE $LEGACY_PREPLANS_REUSE_KEYS")
+    statement.execute(ORDERED_SUBTASK_PLANS_INDEX)
+  }
+}
+
 private const val PHASE_OUTPUT_CHECK_THROUGH_0_4 = "IN ('0.2', '0.3', '0.4')"
 
 private const val PHASE_OUTPUT_CHECK_THROUGH_0_5 = "IN ('0.2', '0.3', '0.4', '0.5')"
@@ -132,6 +148,10 @@ private const val LEGACY_PLANS_PRE_0_6 = "goal_subtask_plans_pre_0_6"
 private const val LEGACY_PREPLANS_PRE_0_7 = "goal_shared_preplans_pre_0_7"
 
 private const val LEGACY_PLANS_PRE_0_7 = "goal_subtask_plans_pre_0_7"
+
+private const val LEGACY_PREPLANS_REUSE_KEYS = "goal_shared_preplans_pre_reuse_keys"
+
+private const val LEGACY_PLANS_REUSE_KEYS = "goal_subtask_plans_pre_reuse_keys"
 
 private const val LEGACY_PREPLANS = "goal_shared_preplans_pre_0_2"
 
@@ -164,8 +184,7 @@ private fun Connection.sharedPreplansDdl(
     phase_output_contract_version TEXT NOT NULL CHECK (phase_output_contract_version $phaseOutputCheck),
     payload_sha256 TEXT NOT NULL,
     preplan_payload_json TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP${optionalRepairEvidenceColumn(legacyTable)},
-    UNIQUE(normalized_issue_key, repository_identity)
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP${optionalRepairEvidenceColumn(legacyTable)}
   )
   """.trimIndent()
 

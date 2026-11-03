@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.model.GoalRunnerStatusManifestPage
+import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -21,6 +22,7 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Path
 import java.time.Instant
 
@@ -65,6 +67,17 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
     issueKey: String,
     repoRoot: Path?,
   ): GoalRunnerManifestState? = loadByIssueKey(issueKey, repoRoot)
+
+  override fun loadOccupyingByIssueKey(
+    issueKey: String,
+    repoRoot: Path?,
+  ): OccupyingGoalParent? =
+    loadDurableByIssueKey(issueKey, repoRoot)?.let { OccupyingGoalParent(it, WorkflowStatus.PAUSED) }
+
+  override fun importIndependentParentFromProjection(
+    issueKey: String,
+    repoRoot: Path,
+  ): GoalRunnerManifestState? = null
 
   override fun requestPause(parentWorkflowId: String): GoalRunnerControlState? = null
 

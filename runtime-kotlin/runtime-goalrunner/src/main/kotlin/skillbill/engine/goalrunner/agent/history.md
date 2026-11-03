@@ -1,5 +1,16 @@
 # goalrunner boundary history
 
+## [2026-11-03] SKILL-472: reuse completed and cancelled keys for independent goals
+Areas: runtime-goalrunner, runtime-application/workflow/decomposition, runtime-domain, runtime-infra/sqlite
+- A key is reusable for new work only when every matching decomposed parent is completed or abandoned. Occupancy uses parent workflowStatus, not isActiveGoalRuntime. FAILED, RUNNING, PAUSED, BLOCKED, PENDING, and TIMED_OUT still occupy.
+- CLI GoalRunner and desktop preflight admit through loadOccupyingByIssueKey. Standalone completed or abandoned TerminalOnly remaps to NEW_WORK. Failed standalone history stays TERMINAL_ONLY. A failed occupying parent occupies even when goal continuation is null.
+- Reusable keys open a new parent_workflow_id, re-enter planning, and skip attaching a completed plan or cloning prior child identities. Completed on-disk projections are history. loadDurableByIssueKey, findDecomposedParentWorkflow, purge listing, and status newest-fallback still resolve completed parents.
+- Migration 100 rebuilds goal_shared_preplans without UNIQUE(normalized_issue_key, repository_identity) so two parents of one key keep preplans. Shared preplan SQL stays parent-id scoped.
+- reusable: occupiesGoalIssueKey, findOccupyingDecomposedParentWorkflow, loadOccupyingByIssueKey, OccupyingGoalParent, importIndependentParentFromProjection, GoalPreflightOccupancyLookup.
+- Limits: AlreadyComplete still fires when a caller loads that completed parent by workflow id. Failed keys cannot start a second parent. Spec.md stays key-scoped.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-03] Goal pull request description follows the repo template
 Areas: runtime-goalrunner finalization, runtime-domain skeleton, runtime-engine slot bindings, runtime-core goal wiring
 - Goal finalization writes the pull request through the pr-description step, the same strategy phase:pr uses, run as the in-memory `goal-pr` skeleton (pull_request slot only) via `GoalRunnerPullRequestWriter`. The step resolves the repo-native template, fills every section from the goal diff and spec, and opens the draft PR.

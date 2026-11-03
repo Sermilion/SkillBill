@@ -49,7 +49,8 @@ internal fun readWorkGoalParentCandidatePage(
   val continuation = "$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}"
   return connection.prepareStatement(
     """
-    SELECT workflow_id, json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.STATUS}') AS manifest_status,
+    SELECT workflow_id, workflow_status,
+      json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.STATUS}') AS manifest_status,
       EXISTS(SELECT 1 FROM json_each(artifacts_json, '$manifest.${DecompositionPlanningPayloadKeys.SUBTASKS}')
         WHERE json_extract(value, '$.${SharedPayloadKeys.STATUS}') NOT IN (?, ?)) AS unsettled
     FROM feature_task_workflows
@@ -76,7 +77,12 @@ internal fun readWorkGoalParentCandidatePage(
     statement.executeQuery().use { rows ->
       buildList {
         while (rows.next()) add(
-          WorkGoalParentCandidate(rows.getString(1), rows.getString(2), rows.getBoolean("unsettled")),
+          WorkGoalParentCandidate(
+            rows.getString("workflow_id"),
+            rows.getString("workflow_status"),
+            rows.getString("manifest_status"),
+            rows.getBoolean("unsettled"),
+          ),
         )
       }
     }

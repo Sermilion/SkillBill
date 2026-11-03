@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.reset.GoalChildWorkflowSaveResult
 import skillbill.engine.goalrunner.reset.GoalRunnerOperatorCompletion
@@ -146,6 +147,32 @@ public class WorkflowGoalRunnerManifestStore
       identityCandidates(repoRoot).firstNotNullOfOrNull { identity ->
         manifestLoader.loadFromWorkflowStore(issueKey, repositoryIdentity = identity)
       }
+
+    override fun loadOccupyingByIssueKey(
+      issueKey: String,
+      repoRoot: Path?,
+    ): OccupyingGoalParent? {
+      val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
+      return identityCandidates(repoRoot).firstNotNullOfOrNull { identity ->
+        manifestLoader.loadOccupyingFromWorkflowStore(issueKey, projected, identity)
+      }?.let { occupying -> occupying.copy(state = occupying.state.copy(repoRoot = repoRoot)) }
+    }
+
+    override fun importIndependentParentFromProjection(
+      issueKey: String,
+      repoRoot: Path,
+    ): GoalRunnerManifestState? {
+      val projected =
+        manifestLoader.findProjectedManifest(repoRoot, issueKey) ?: return null
+      val stored = loadDurableByIssueKey(issueKey, repoRoot) ?: return null
+      if (projectionStillReusableParentHistory(projected, stored)) {
+        return null
+      }
+      val identities = identityCandidates(repoRoot)
+      return manifestLoader
+        .importFromManifestProjection(projected, identities, independentParent = true)
+        ?.copy(repoRoot = repoRoot)
+    }
 
     private fun identityCandidates(repoRoot: Path?): List<String?> =
       goalRepositoryIdentityFilters(repoRoot, repositoryEnclosingRootPort)
