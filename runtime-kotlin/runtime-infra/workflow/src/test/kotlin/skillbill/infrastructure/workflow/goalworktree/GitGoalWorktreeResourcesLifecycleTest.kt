@@ -28,6 +28,7 @@ class GitGoalWorktreeResourcesLifecycleTest {
       runGit(root, "init", "-b", "main")
       runGit(root, "config", "user.email", "test@example.com")
       runGit(root, "config", "user.name", "Test")
+      runGit(root, "config", "commit.gpgsign", "false")
       Files.writeString(root.resolve("tracked.txt"), "committed\n")
       runGit(root, "add", ".")
       runGit(root, "commit", "-m", "initial")
