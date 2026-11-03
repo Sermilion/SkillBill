@@ -4,8 +4,11 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.model.ImportedReviewResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
+import skillbill.review.model.FeedbackRequest
+import skillbill.review.model.FeedbackTelemetryOptions
 import skillbill.review.model.ImportedFinding
 import skillbill.review.model.ImportedReview
+import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 @Inject
@@ -17,10 +20,25 @@ class StandaloneReviewService(private val database: DatabaseSessionFactory) {
       val existing = unit.reviews.fetchFindingStatuses(review.reviewRunId)
       val refs = review.findings.map { it.findingId }.toSet()
       if (existing.isNotEmpty() && existing.keys != refs) return@transaction null
-      if (existing.isEmpty()) unit.reviews.saveImportedReview(review, sourcePath = null)
+      if (existing.isEmpty()) {
+        unit.reviews.saveImportedReview(review, sourcePath = null)
+        refutedRefs(record).takeIf { it.isNotEmpty() }?.let { refuted ->
+          unit.reviews.recordFeedback(
+            FeedbackRequest(review.reviewRunId, refuted, FALSE_POSITIVE_EVENT, VERIFIER_REFUTATION_NOTE),
+            FeedbackTelemetryOptions(),
+          )
+        }
+      }
       review.toImportedReviewResult(dbPath = unit.dbPath.toString())
     }
 }
+
+private fun refutedRefs(record: StandalonePhaseStatusRecord): List<String> =
+  StandaloneReviewReportReader.read(record.acceptedResult ?: record.terminalResult)
+    ?.findings
+    ?.filter { it.status == ReviewFindingStatus.FALSE_POSITIVE }
+    ?.map { it.ref }
+    .orEmpty()
 
 private fun savedReview(record: StandalonePhaseStatusRecord): ImportedReview? {
   val runId = record.reviewRunId
@@ -55,3 +73,6 @@ private fun savedReview(record: StandalonePhaseStatusRecord): ImportedReview? {
       },
   )
 }
+
+private const val FALSE_POSITIVE_EVENT = "false_positive"
+private const val VERIFIER_REFUTATION_NOTE = "Rejected by the standalone review verifier."

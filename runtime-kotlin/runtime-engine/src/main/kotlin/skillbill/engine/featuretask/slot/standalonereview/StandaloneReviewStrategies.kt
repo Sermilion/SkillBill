@@ -9,6 +9,7 @@ import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
+import skillbill.application.review.service.StandaloneReviewReportReader
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.review.ReviewTarget
@@ -272,12 +273,14 @@ public abstract class StandaloneReviewStrategy(
       binding.reviewExecutionContext().diagnostics,
     )
     if (rejection.isNotBlank()) {
+      val presented =
+        if (report.admitted && report.census.isNotEmpty()) "$rejection\n\n${presentedFindings(report)}" else rejection
       binding.blockReviewStep(
         iteration,
-        rejection,
+        presented,
         FeatureTaskRuntimeFailureDisposition.RETRYABLE,
       )
-      return PhaseOutcome.blocked(rejection)
+      return PhaseOutcome.blocked(presented)
     }
     return completeReport(
       binding,
@@ -328,7 +331,7 @@ public abstract class StandaloneReviewStrategy(
       val retainedEvidence = unacceptedReviewEvidence(output, retainedResult, verifierEvidence)
       binding.retainReviewOutput(iteration, retainedEvidence)
       retainedResult.copy(
-        mergeResult = retainedResult.mergeResult.copy(findings = emptyList(), formattedOutput = retainedEvidence),
+        mergeResult = retainedResult.mergeResult.copy(formattedOutput = retainedEvidence),
         rawOutput = retainedEvidence,
       )
     }
@@ -444,24 +447,30 @@ public abstract class StandaloneReviewStrategy(
     val verdict = verifiedFindingVerdict(report, verification.findingDispositions, warningClassifications)
     val register =
       buildString {
+        appendLine(presentedFindings(report))
+        appendLine()
+        appendLine(StandaloneReviewReportReader.VERIFICATION_HEADING)
         report.census.forEach { finding ->
-          appendLine(
-            "[${finding.identity}] ${verification.findingDispositions.getValue(finding.identity)} " +
-              "| source=${finding.source} | ${finding.text}",
-          )
+          appendLine("- ${presentedLabel(finding)}: ${verification.findingDispositions.getValue(finding.identity)}")
         }
         report.reviewWarnings.forEach { warning ->
-          appendLine(
-            "[${warning.identity}] ${warningClassifications.getValue(warning.identity)} " +
-              "| source=${warning.source} | ${warning.text}",
-          )
+          appendLine("- ${warning.identity} (${warning.source}): ${warningClassifications.getValue(warning.identity)}")
         }
-        report.coverage?.let { appendLine(it) }
-        report.warnings.forEach { appendLine("warning: $it") }
         append("verdict: $verdict")
       }
     return VerificationResult.Accepted(register, verdict)
   }
+
+  private fun presentedFindings(report: StandaloneReviewReport): String =
+    report.registerOutput.lineSequence()
+      .filterNot { VERDICT_LINE.matches(it.trim()) }
+      .joinToString("\n")
+      .trimEnd()
+
+  private fun presentedLabel(finding: StandaloneReviewFinding): String =
+    StandaloneReviewReportReader.read(finding.text)?.findings?.singleOrNull()?.ref
+      ?.takeIf { finding.text.contains("[$it]") }
+      ?: "${finding.identity} (unstructured report text)"
 
   private fun verificationInput(
     run: PhaseRun,
@@ -867,6 +876,7 @@ internal data class ParsedVerificationRegister(
   val warningClassifications: Map<String, String>,
 )
 
+private val VERDICT_LINE = Regex("^verdict:\\s*\\S+$", RegexOption.IGNORE_CASE)
 private val FINDING_DISPOSITIONS = setOf("confirmed", "rejected", "unresolved")
 private val WARNING_CLASSIFICATIONS = setOf("incomplete", "complete")
 private val VERIFICATION_REGISTER_LINE =

@@ -7,6 +7,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.repository.ReviewRepository
+import skillbill.review.model.FeedbackRequest
 import skillbill.review.model.ImportedReview
 import skillbill.review.model.NumberedFinding
 import skillbill.review.model.ReviewFindingStatus
@@ -48,6 +49,32 @@ class StandaloneReviewServiceTest {
     assertNull(harness.service.prepareFindings("invocation"))
     assertEquals(emptyList(), harness.imports)
   }
+
+  @Test
+  fun `preparing a verified review records each verifier rejection as a false positive once`() {
+    val harness = PreparationHarness()
+    harness.record =
+      harness.record.copy(
+        acceptedResult =
+          """
+          [F-007] Major | high | src/A.kt:9 | Broken boundary
+          [F-012] Minor | medium | src/B.kt:2 | Missing recovery
+
+          Verification:
+          - F-007: confirmed
+          - F-012: rejected
+          verdict: changes_requested
+          """.trimIndent(),
+      )
+
+    assertNotNull(harness.service.prepareFindings("invocation"))
+    assertNotNull(harness.service.prepareFindings("invocation"))
+
+    assertEquals(listOf("F-007", "F-012"), harness.imports.single().findings.map { it.findingId })
+    val recorded = harness.feedback.single()
+    assertEquals(listOf("F-012"), recorded.findingIds)
+    assertEquals("false_positive", recorded.eventType)
+  }
 }
 
 private class PreparationHarness {
@@ -67,6 +94,7 @@ private class PreparationHarness {
         """.trimIndent(),
     )
   val imports = mutableListOf<ImportedReview>()
+  val feedback = mutableListOf<FeedbackRequest>()
   var existing = emptyList<NumberedFinding>()
   private val reviews =
     proxy<ReviewRepository> { name, args ->
@@ -87,6 +115,10 @@ private class PreparationHarness {
               )
             }
           Unit
+        }
+        "recordFeedback" -> {
+          feedback += args[0] as FeedbackRequest
+          null
         }
         else -> error("Unexpected review call $name")
       }
