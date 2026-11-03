@@ -57,7 +57,7 @@ class ClaudeChatTransport(
     val uuid = UUID.randomUUID().toString()
     val sink = Channel<ChatEvent>(Channel.UNLIMITED)
     val session = registered(request.sessionId, command, uuid, sink)
-    session.send(uuid, claudeMessage(request))
+    session.send(uuid, claudeMessage(request), request.images)
     var answered = false
     try {
       for (event in sink) {

@@ -29,13 +29,13 @@ class CodexChatTransport(
 ) : ChatTransport {
   override val agentId = "codex"
 
-  override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
+  override fun run(request: ChatTurnRequest): Flow<ChatEvent> = turnWithImages(request) { text ->
     val thread = if (request.firstTurn) null else store.agentSession(request.sessionId)
     if (!request.firstTurn && thread == null) diagnostics.record("chat.codex_thread_missing")
     val prompt = if (thread == null || request.scope is ChatScope.NewTask) {
-      withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt)
+      withScope(scopeSystemPrompt(request.scope, request.mode), text)
     } else {
-      request.prompt
+      text
     }
     val command = ChatCommand(
       argv = agentCommand("codex", codexArguments(request, thread), host.variables["SHELL"]),
@@ -43,8 +43,10 @@ class CodexChatTransport(
       environment = host.variables + request.agent.profile?.let { mapOf(AgentHomeEnvironmentKeys.CODEX_HOME to it) }.orEmpty(),
       stdin = prompt,
     )
-    return runChatTurn(launcher, diagnostics, command, CodexStreamDecoder { store.saveAgentSession(request.sessionId, it) })
+    runChatTurn(launcher, diagnostics, command, CodexStreamDecoder { store.saveAgentSession(request.sessionId, it) })
   }
+
+  override fun end(sessionId: String) = deleteChatImages(sessionId)
 }
 
 /** Options go before `resume`, which reads the prompt from stdin through `-`. */

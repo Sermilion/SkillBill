@@ -1383,7 +1383,7 @@ class GoalRunnerQualityGateSelectionTest {
 class GoalRunnerLinearScratchFinalizeTest {
   @Test
   fun `decomposed linear run deletes each subtask spec after its commit and the dir after the final pr`() {
-    val repoRoot = Files.createTempDirectory("goal-linear-cleanup")
+    val repoRoot = Files.createTempDirectory("goal-linear-cleanup").toRealPath()
     val specDir = repoRoot.resolve(".feature-specs/SKILL-56-goal")
     Files.createDirectories(specDir)
     Files.writeString(specDir.resolve("spec.md"), "# Parent\n")
@@ -1424,7 +1424,7 @@ class GoalRunnerLinearScratchFinalizeTest {
 
   @Test
   fun `decomposed linear run that stops mid-goal leaves remaining scratch and manifest intact`() {
-    val repoRoot = Files.createTempDirectory("goal-linear-abort")
+    val repoRoot = Files.createTempDirectory("goal-linear-abort").toRealPath()
     val specDir = repoRoot.resolve(".feature-specs/SKILL-56-goal")
     Files.createDirectories(specDir)
     val parentSpec = specDir.resolve("spec.md").also { Files.writeString(it, "# Parent\n") }

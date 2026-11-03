@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
@@ -123,6 +124,33 @@ class ClaudeChatTransportRunTest {
     val events = transport(claude).run(chatRequest()).toList()
 
     assertEquals(listOf(ChatEvent.Failed(ChatFailure.ProcessFailed, "The working directory /gone does not exist.")), events)
+  }
+
+  // Claude takes images as base64 content blocks; text-only turns must keep the plain string content they always had.
+  @Test
+  fun `an image turn sends content blocks and a text-only turn still sends a string`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+
+    val first = async { transport.run(chatRequest().copy(images = listOf(ChatImage(byteArrayOf(1, 2, 3), "image/png")))).toList() }
+    val line = claude.stdin.receive()
+    val uuid = Json.parseToJsonElement(line).jsonObject.getValue("uuid").jsonPrimitive.content
+    assertEquals(
+      """{"type":"user","uuid":"$uuid","message":{"role":"user","content":[{"type":"text","text":"operator prompt"},""" +
+        """{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AQID"}}]}}""",
+      line,
+    )
+    claude.print(replay(uuid), """{"type":"result","is_error":false,"result":""}""")
+    assertEquals(listOf<ChatEvent>(ChatEvent.Completed), first.await())
+
+    val second = async { transport.run(chatRequest(firstTurn = false)).toList() }
+    val (secondUuid, text) = claude.nextMessage()
+    claude.print(replay(secondUuid), """{"type":"result","is_error":false,"result":""}""")
+    assertEquals(listOf<ChatEvent>(ChatEvent.Completed), second.await())
+    assertEquals("operator prompt", text)
+
+    transport.end("session-1")
+    claude.stopped.await()
   }
 
   private fun replay(uuid: String) =

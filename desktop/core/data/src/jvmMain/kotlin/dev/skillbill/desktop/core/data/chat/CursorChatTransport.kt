@@ -33,13 +33,13 @@ class CursorChatTransport(
 ) : ChatTransport {
   override val agentId = "cursor"
 
-  override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
+  override fun run(request: ChatTurnRequest): Flow<ChatEvent> = turnWithImages(request) { text ->
     val chat = if (request.firstTurn) null else store.agentSession(request.sessionId)
     if (!request.firstTurn && chat == null) diagnostics.record("chat.cursor_chat_missing")
     val prompt = if (chat == null || request.scope is ChatScope.NewTask) {
-      withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt)
+      withScope(scopeSystemPrompt(request.scope, request.mode), text)
     } else {
-      request.prompt
+      text
     }
     val command = ChatCommand(
       argv = agentCommand("agent", cursorArguments(request, chat), host.variables["SHELL"]),
@@ -47,8 +47,10 @@ class CursorChatTransport(
       environment = host.variables + request.agent.profile?.let { mapOf(CURSOR_CONFIG_DIR to it) }.orEmpty(),
       stdin = prompt,
     )
-    return runChatTurn(launcher, diagnostics, command, CursorStreamDecoder { store.saveAgentSession(request.sessionId, it) })
+    runChatTurn(launcher, diagnostics, command, CursorStreamDecoder { store.saveAgentSession(request.sessionId, it) })
   }
+
+  override fun end(sessionId: String) = deleteChatImages(sessionId)
 }
 
 internal fun cursorArguments(request: ChatTurnRequest, chat: String?): List<String> = buildList {
