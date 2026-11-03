@@ -63,6 +63,9 @@ public class WorkControlService(
       item.takeIf { it.observation == unit.workList.observation() }?.let { runs.options(it, unit) }
     }
 
+  public fun optionsForObservedItem(item: WorkDetailItem): WorkRunOptions =
+    database.read { unit -> runs.options(item, unit) }
+
   public fun request(
     target: WorkRunTarget,
     action: WorkControlAction,
