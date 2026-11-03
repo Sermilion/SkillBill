@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.toResetSnapshot
 import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
@@ -10,6 +11,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptanceEvidence
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
+import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -27,6 +29,8 @@ public class GoalRunnerAcceptanceCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val gitOperations: WorkflowGitOperations,
   private val clock: Clock,
+  private val executionRoots: GoalExecutionRootResolver,
+  private val worktreeSettlement: GoalWorktreeCompletionSettlement,
 ) {
   public fun accept(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult {
     val rejection = acceptanceRejection(request)
@@ -35,8 +39,14 @@ public class GoalRunnerAcceptanceCoordinator(
     }
     val loaded = requireNotNull(manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot))
     val repoRoot = requireNotNull(request.repoRoot)
+    val gitRoot =
+      executionRoots.ensureForControlVerb(loaded, repoRoot, request.subtaskId, requireExistingBranch = true)
+        ?: return GoalRunnerAcceptResult.Rejected(
+          request.issueKey,
+          "The goal worktree could not be recreated for acceptance.",
+        )
     val resolvedSha =
-      when (val evidence = acceptanceEvidence(request, loaded.manifest, repoRoot)) {
+      when (val evidence = acceptanceEvidence(request, loaded.manifest, gitRoot)) {
         is GoalRunnerAcceptanceEvidence.Rejected -> return rejected(request, evidence.reason)
         is GoalRunnerAcceptanceEvidence.Resolved -> evidence.commitSha
       }
@@ -47,6 +57,14 @@ public class GoalRunnerAcceptanceCoordinator(
         reason = request.reason,
         acceptedAt = clock.instant().atOffset(ZoneOffset.UTC).toString(),
       )
+    return restoreAcceptance(request, loaded, acceptance)
+  }
+
+  private fun restoreAcceptance(
+    request: GoalRunnerAcceptRequest,
+    loaded: GoalRunnerManifestState,
+    acceptance: GoalRunnerOutOfBandAcceptance,
+  ): GoalRunnerAcceptResult {
     val restored =
       when (val result = manifestStore.restoreOutOfBandAcceptance(loaded, acceptance)) {
         is GoalChildHistoryAcceptanceRestoreResult.Refused -> return rejected(request, result.reason)
@@ -77,9 +95,21 @@ public class GoalRunnerAcceptanceCoordinator(
           request.issueKey,
           "No prepared goal exists for '${request.issueKey}'.",
         )
-    val evidence =
-      completionRejection(loaded)?.let(GoalRunnerAcceptanceEvidence::Rejected)
-        ?: resolvedAcceptanceEvidence(request.commitSha, repoRoot)
+    completionRejection(loaded)?.let { return GoalRunnerCompleteResult.Rejected(request.issueKey, it) }
+    val gitRoot = executionRoots.ensureForControlVerb(loaded, repoRoot, requireExistingBranch = true)
+    return if (gitRoot == null) {
+      GoalRunnerCompleteResult.Rejected(request.issueKey, "The goal worktree could not be recreated for completion.")
+    } else {
+      completeWithEvidence(request, loaded, gitRoot)
+    }
+  }
+
+  private fun completeWithEvidence(
+    request: GoalRunnerCompleteRequest,
+    loaded: GoalRunnerManifestState,
+    gitRoot: Path,
+  ): GoalRunnerCompleteResult {
+    val evidence = resolvedAcceptanceEvidence(request.commitSha, gitRoot)
     val commitSha =
       when (evidence) {
         is GoalRunnerAcceptanceEvidence.Rejected -> return GoalRunnerCompleteResult.Rejected(
@@ -90,6 +120,7 @@ public class GoalRunnerAcceptanceCoordinator(
       }
     val completedAt = clock.instant().atOffset(ZoneOffset.UTC).toString()
     val saved = manifestStore.saveOperatorGoalCompletion(loaded, commitSha, request.reason, completedAt)
+    worktreeSettlement.settle(saved.parentWorkflowId)
     return GoalRunnerCompleteResult.Completed(
       issueKey = saved.manifest.issueKey,
       parentWorkflowId = saved.parentWorkflowId,

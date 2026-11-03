@@ -111,6 +111,7 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -217,7 +218,13 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     val first =
@@ -267,7 +274,13 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -317,7 +330,13 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     val historyArtifact = """{"plan":{"mode":"decompose"},"history_note":"retain-me"}"""
     workflows.saveFeatureTaskWorkflow(
@@ -374,7 +393,13 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -418,7 +443,13 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -479,7 +510,13 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -684,7 +721,13 @@ class WorkflowServiceTest {
         repositoryRoot = testRepositoryRoot,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     assertFailsWith<SkillBillRuntimeException> {
       service.get(WorkflowFamilyKind.TASK_RUNTIME, "wftr-loud")
@@ -725,7 +768,13 @@ class WorkflowServiceTest {
         repositoryRoot = testRepositoryRoot,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     val result =
@@ -769,7 +818,13 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = testFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     val opened = assertIs<WorkflowOpenResult.Ok>(service.openTestRuntime("ftr-001"))
     assertNull(opened.goalObservability)
@@ -896,7 +951,13 @@ class WorkflowServiceTest {
       goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
       runtimeDiagnostics = NoopRuntimeDiagnostics,
       clock = Clock.systemUTC(),
-      projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+      projectCheckout =
+        ProjectCheckout(
+          TestRepositoryEnclosingRoot,
+          testProjectStore,
+          InPlaceGoalWorktreeResources,
+          NoopWorkflowGitOperations,
+        ),
     )
 }
 
@@ -2403,7 +2464,13 @@ class WorkflowUpdateAcknowledgementBudgetTest {
       repositoryRoot = testRepositoryRoot,
       runtimeDiagnostics = NoopRuntimeDiagnostics,
       clock = Clock.systemUTC(),
-      projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+      projectCheckout =
+        ProjectCheckout(
+          TestRepositoryEnclosingRoot,
+          testProjectStore,
+          InPlaceGoalWorktreeResources,
+          NoopWorkflowGitOperations,
+        ),
     )
 }
 
@@ -4296,7 +4363,13 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     val opened =

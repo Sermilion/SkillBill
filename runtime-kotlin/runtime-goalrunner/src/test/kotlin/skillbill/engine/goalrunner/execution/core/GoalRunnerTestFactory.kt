@@ -29,7 +29,6 @@ import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
-import skillbill.engine.goalrunner.completion.GoalCompletionRecorder
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakeAdmissionService
@@ -39,7 +38,9 @@ import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.monitoring.GoalCompletionRecorder
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
+import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
@@ -292,6 +293,13 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
           DatabaseCheckpointResult.Absent
         },
         wiring.diagnostics,
+        GoalWorktreeCompletionSettlement(
+          wiring.manifestStore,
+          wiring.goalWorktrees,
+          TestRepositoryEnclosingRoot,
+          wiring.diagnostics,
+          wiring.clock,
+        ),
       ),
     diagnostics = wiring.diagnostics,
     executionCoordinator = wiring.executionCoordinator,
@@ -329,6 +337,7 @@ private fun goalRunnerRunPreparation(
       wiring.gitOperations,
       TestRepositoryEnclosingRoot,
       wiring.diagnostics,
+      ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore, wiring.goalWorktrees, wiring.gitOperations),
     ),
   )
 
@@ -446,7 +455,13 @@ private fun testNoChangeChildCloser(
       goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
       runtimeDiagnostics = NoopRuntimeDiagnostics,
       clock = clock,
-      projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+      projectCheckout =
+        ProjectCheckout(
+          TestRepositoryEnclosingRoot,
+          testProjectStore,
+          InPlaceGoalWorktreeResources,
+          NoopWorkflowGitOperations,
+        ),
     ),
   )
 

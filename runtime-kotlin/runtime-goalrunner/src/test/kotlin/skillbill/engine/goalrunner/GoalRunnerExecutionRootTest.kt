@@ -8,11 +8,14 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Files
@@ -29,7 +32,47 @@ class GoalRunnerExecutionRootTest {
   private fun request() = GoalRunnerRunRequest("SKILL-56", launchingRoot, "claude")
 
   @Test
+  fun `already complete goal retries retained worktree cleanup`() {
+    val worktree = Files.createTempDirectory("goal-completion-retry").toRealPath()
+    val store =
+      InMemoryGoalManifestStore(
+        manifest(subtaskCount = 0).copy(issueKey = "SKILL-56", status = "complete"),
+        initialControlState =
+          GoalRunnerControlState(
+            goalCompletedAt = "2026-11-03T00:00:00Z",
+            executionWorktreePath = worktree.toString(),
+          ),
+      )
+    val worktrees =
+      RecordingGoalWorktrees(
+        GoalWorktreeResult.Created(worktree),
+        settlementResult =
+          GoalWorktreeSettlement.Retained(
+            MonitorRetentionReason.UNPUBLISHED_COMMITS,
+            worktree,
+            "the worktree has 1 unpublished commit",
+          ),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          store,
+          RecordingSubtaskLauncher { error("A completed goal must not launch.") },
+          RecordingOutcomeStore(),
+          RecordingPullRequestPort(),
+        ).copy(goalWorktrees = worktrees),
+      )
+
+    val report = runner.run(request())
+
+    assertIs<GoalRunnerRunReport.AlreadyComplete>(report)
+    assertEquals(1, worktrees.settlements)
+    assertEquals("unpublished_commits", store.controlState.executionWorktreeRetentionReason)
+  }
+
+  @Test
   fun `a new goal runs every branch checkout and child in the created worktree`() {
+    val worktree = Files.createTempDirectory("goal-settlement-failure").toRealPath()
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -39,20 +82,26 @@ class GoalRunnerExecutionRootTest {
         launchFacts()
       }
     val git = BranchRootRecordingGit()
-    val worktrees = RecordingGoalWorktrees(GoalWorktreeResult.Created(worktree))
+    val worktrees =
+      RecordingGoalWorktrees(
+        GoalWorktreeResult.Created(worktree),
+        settlementFailure = IllegalStateException("worktree removal failed"),
+      )
     val runner =
       testGoalRunner(
         goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort())
           .copy(gitOperations = git, goalWorktrees = worktrees),
       )
 
-    runner.run(request())
+    val report = assertIs<GoalRunnerRunReport.Completed>(runner.run(request()))
 
+    assertEquals("SKILL-56", report.issueKey)
     assertEquals(worktree, launcher.requests.single().skillRunRequest.repoRoot)
     assertEquals(1, worktrees.creations)
     assertTrue(git.checkoutRoots.isNotEmpty())
     assertEquals(setOf(worktree), git.checkoutRoots.toSet())
     assertEquals(worktree.toString(), store.controlState("parent").executionWorktreePath)
+    assertEquals("cleanup_failed", store.controlState("parent").executionWorktreeRetentionReason)
   }
 
   @Test
@@ -124,8 +173,11 @@ class GoalRunnerExecutionRootTest {
 private class RecordingGoalWorktrees(
   private val result: GoalWorktreeResult,
   private val holder: Path? = null,
+  private val settlementFailure: RuntimeException? = null,
+  private val settlementResult: GoalWorktreeSettlement = GoalWorktreeSettlement.Absent,
 ) : GoalWorktreeResources {
   var creations = 0
+  var settlements = 0
 
   override fun createOrAdopt(
     repoRoot: Path,
@@ -141,6 +193,14 @@ private class RecordingGoalWorktrees(
     repoRoot: Path,
     branch: String,
   ): Path? = holder
+
+  override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement {
+    settlements += 1
+    settlementFailure?.let { throw it }
+    return settlementResult
+  }
+
+  override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? = null
 }
 
 private class BranchRootRecordingGit : WorkflowGitOperations by NoopWorkflowGitOperations {

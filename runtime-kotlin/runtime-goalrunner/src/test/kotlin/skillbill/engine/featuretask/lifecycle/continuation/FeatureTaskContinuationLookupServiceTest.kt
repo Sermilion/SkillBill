@@ -32,6 +32,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -436,7 +437,13 @@ class FeatureTaskContinuationLookupServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     return Fixture(
       states = states,

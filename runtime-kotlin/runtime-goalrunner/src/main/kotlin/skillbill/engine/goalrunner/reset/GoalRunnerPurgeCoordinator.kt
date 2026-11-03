@@ -27,6 +27,9 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.goalstate.model.GoalRuntimeDirectoryDeletion
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
@@ -44,6 +47,7 @@ public class GoalRunnerPurgeCoordinator(
   private val goalStateFiles: GoalRuntimeStateFileStore,
   private val projectStore: ProjectStorePort,
   private val diagnostics: RuntimeDiagnostics,
+  private val worktrees: GoalWorktreeResources,
 ) {
   private val changedSummary = "Database file changed during purge; remaining steps were stopped."
   private val specBundleReset =
@@ -113,6 +117,19 @@ public class GoalRunnerPurgeCoordinator(
 
   private fun deleteDirectories(progress: PurgeProgress): GoalRunnerPurgeResult? {
     val failed = mutableListOf<String>()
+    for (path in progress.plan.worktreePaths) {
+      if (!isCurrent(progress.observation)) return progress.changed()
+      when (
+        val result =
+          worktrees.settle(
+            GoalWorktreeSettleRequest(repositoryEnclosingRootPort.primaryRepositoryRoot(progress.repoRoot), path),
+          )
+      ) {
+        GoalWorktreeSettlement.Removed -> progress.removedPaths += path.toString()
+        GoalWorktreeSettlement.Absent -> Unit
+        is GoalWorktreeSettlement.Retained -> failed += "${result.path}: ${result.reason.wireValue}: ${result.detail}"
+      }
+    }
     for (directory in progress.directories) {
       if (!isCurrent(progress.observation)) return progress.changed()
       when (val deletion = goalStateFiles.deleteDirectoryTree(directory)) {
@@ -256,15 +273,42 @@ public class GoalRunnerPurgeCoordinator(
       )
     val sourceManifest = manifests.firstOrNull()
     val orphanIds = verifiedIds - childrenByParent.values.flatten().toSet()
+    val refusalReason =
+      childrenByParent.firstNotNullOfOrNull { (parentId, childIds) ->
+        refusal(issueKey, parentId, childIds + orphanIds)
+      }
+        ?: planRefusal(issueKey, ownership.planWorkflowIds)
+    val worktreePaths =
+      if (refusalReason == null) {
+        ownership.parentWorkflowIds.mapNotNull { parentId ->
+          manifestStore.controlState(parentId).executionWorktreePath?.let(Path::of)
+        }
+      } else {
+        emptyList()
+      }
+    val worktreeRefusal =
+      worktreePaths.firstNotNullOfOrNull { path ->
+        if (repoRoot.toAbsolutePath().normalize().startsWith(path.toAbsolutePath().normalize())) {
+          "Run skill-bill goal purge $issueKey from the main checkout, not from the goal's worktree at $path."
+        } else {
+          val verdict =
+            worktrees.retentionVerdict(
+              GoalWorktreeSettleRequest(repositoryEnclosingRootPort.primaryRepositoryRoot(repoRoot), path),
+            )
+          verdict?.let {
+            "Goal '$issueKey' has ${it.reason.wireValue} in its worktree at $path. " +
+              "Keep the work, or discard it with: " +
+              "git worktree remove --force $path. Then run skill-bill goal purge $issueKey again."
+          }
+        }
+      }
     return PurgePlan(
       issueKey = issueKey,
       target = target,
       sourceManifest = sourceManifest,
       manifestPath = diskCandidate?.path ?: sourceManifest?.let { derivedManifestPath(repoRoot, it) },
-      refusalReason =
-        childrenByParent.firstNotNullOfOrNull { (parentId, childIds) ->
-          refusal(issueKey, parentId, childIds + orphanIds)
-        } ?: planRefusal(issueKey, ownership.planWorkflowIds),
+      refusalReason = refusalReason ?: worktreeRefusal,
+      worktreePaths = worktreePaths,
       unclassifiedLeftovers = ownership.unclassifiedWorkflows + ownership.siblingWorktreeWorkflows,
     )
   }
@@ -372,6 +416,7 @@ private data class PurgePlan(
   val sourceManifest: DecompositionManifest?,
   val manifestPath: Path?,
   val refusalReason: String?,
+  val worktreePaths: List<Path>,
   val unclassifiedLeftovers: List<String>,
 ) {
   fun toResult(): GoalRunnerPurgeResult =

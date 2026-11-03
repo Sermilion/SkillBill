@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.pruneResetSubtaskCheckp
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goal.goalRepositoryIdentityCandidates
+import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
 import skillbill.engine.goalrunner.manifest.toResetSnapshot
@@ -32,6 +33,7 @@ import skillbill.model.RepositoryRoot
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.workflow.decomposition.executionRootSubtaskId
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.replanIntent
@@ -49,17 +51,45 @@ public class GoalRunnerResetReplanCoordinator(
   private val projectionAssembler: GoalRunnerStatusProjectionAssembler,
   private val repositoryRoot: RepositoryRoot,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val executionRoots: GoalExecutionRootResolver,
 ) {
   public fun reset(request: GoalRunnerResetRequest): GoalRunnerResetResult? {
     val loaded = loadResetState(request) ?: return null
     if (request.deleteChildWorkflow) return deleteIncompatibleChildWorkflow(request, loaded)
     reconcileResetState(loaded)
     val latest = manifestStore.loadByIssueKey(request.issueKey, request.repoRoot) ?: loaded
-    val hardResetRepoRoot = request.takeHardResetRepositoryRoot(latest)
-    val coordination = hardResetBranchCoordination(request, latest, hardResetRepoRoot)
-    if (coordination is GoalRunnerHardResetBranchCoordination.Refused) {
-      return refusedResetResult(latest, coordination)
+    val invokedHardResetRoot = request.takeHardResetRepositoryRoot(latest)
+    val hardResetRepoRoot =
+      invokedHardResetRoot?.let {
+        executionRoots.ensureForControlVerb(
+          latest,
+          it,
+          activeHardResetSubtaskId(latest.manifest) ?: latest.manifest.executionRootSubtaskId(),
+        )
+      }
+    if (request.hard && hardResetRepoRoot == null) {
+      return refusedResetResult(
+        latest,
+        GoalRunnerHardResetBranchCoordination.Refused(
+          reason = "The goal worktree could not be recreated for hard reset.",
+          remedyCommand = "skill-bill goal reset ${request.issueKey}",
+        ),
+      )
     }
+    val coordination = hardResetBranchCoordination(request, latest, hardResetRepoRoot)
+    return if (coordination is GoalRunnerHardResetBranchCoordination.Refused) {
+      refusedResetResult(latest, coordination)
+    } else {
+      finishReset(request, latest, hardResetRepoRoot, coordination)
+    }
+  }
+
+  private fun finishReset(
+    request: GoalRunnerResetRequest,
+    latest: GoalRunnerManifestState,
+    hardResetRepoRoot: Path?,
+    coordination: GoalRunnerHardResetBranchCoordination,
+  ): GoalRunnerResetResult {
     val branchActionTaken =
       (coordination as? GoalRunnerHardResetBranchCoordination.Documented)
         ?.branchActionTaken
@@ -170,13 +200,17 @@ public class GoalRunnerResetReplanCoordinator(
         "`skill-bill phase plan ${request.issueKey}`."
     }
     requireIdleForScopedReplan(loaded, request)
+    val invokedRoot = request.repoRoot ?: repositoryRoot.path
+    val gitRoot =
+      executionRoots.ensureForControlVerb(loaded, invokedRoot, request.subtaskId)
+        ?: error("The goal worktree could not be recreated before scoped replan.")
     val beforeSubtasks = loaded.manifest.toResetSnapshot().subtasks
     val retargeted =
       loaded.copy(
         manifest = loaded.manifest.copy(currentSubtaskIntent = replanIntent(selected)),
         repoRoot = request.repoRoot,
       )
-    val repoRoot = request.repoRoot ?: repositoryRoot.path
+    val repoRoot = invokedRoot
     val written =
       manifestStore.saveScopedReplan(
         state = retargeted,
@@ -191,7 +225,7 @@ public class GoalRunnerResetReplanCoordinator(
       )
     pruneResetSubtaskCheckpointRefs(
       gitOperations = gitOperations,
-      repoRoot = repoRoot,
+      repoRoot = gitRoot,
       issueKey = written.state.manifest.issueKey,
       subtaskIds = written.clearedChildSubtaskIds,
       record = { message -> RuntimeDiagnosticsBestEffortWarning.record(diagnostics, message) },
@@ -336,6 +370,17 @@ public class GoalRunnerResetReplanCoordinator(
       "Child workflow '$workflowId' is ${classification.wireValue}; scoped deletion requires an incompatible " +
         "terminal child."
     }
+    val invokedRoot = request.repoRoot ?: repositoryRoot.path
+    val gitRoot =
+      executionRoots.ensureForControlVerb(authoritativeState, invokedRoot, subtaskId)
+        ?: return GoalRunnerResetResult(
+          issueKey = authoritativeState.manifest.issueKey,
+          mode = "scoped_child_recovery",
+          parentWorkflowId = authoritativeState.parentWorkflowId,
+          before = authoritativeState.manifest.toResetSnapshot(),
+          after = authoritativeState.manifest.toResetSnapshot(),
+          refusalReason = "The goal worktree could not be recreated before child deletion.",
+        )
     val saved =
       manifestStore.deleteIncompatibleChildWorkflow(
         authoritativeState,
@@ -344,7 +389,7 @@ public class GoalRunnerResetReplanCoordinator(
       )
     pruneResetSubtaskCheckpointRefs(
       gitOperations = gitOperations,
-      repoRoot = request.repoRoot ?: repositoryRoot.path,
+      repoRoot = gitRoot,
       issueKey = saved.manifest.issueKey,
       subtaskIds = listOf(subtaskId),
       record = { message -> RuntimeDiagnosticsBestEffortWarning.record(diagnostics, message) },

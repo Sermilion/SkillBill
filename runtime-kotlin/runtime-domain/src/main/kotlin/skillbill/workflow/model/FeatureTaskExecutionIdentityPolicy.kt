@@ -68,6 +68,24 @@ object FeatureTaskExecutionIdentityPolicy {
   ): Boolean =
     canonicalGovernedSpecPath(left, repositoryIdentity) == canonicalGovernedSpecPath(right, repositoryIdentity)
 
+  fun goalExecutionRootCandidate(
+    recordedPath: String?,
+    hasLaunchedChild: Boolean,
+    repositoryIdentity: String?,
+    invokedRoot: String,
+  ): String =
+    recordedPath ?: if (hasLaunchedChild) {
+      repositoryIdentity?.let(::repositoryRootFromIdentity) ?: invokedRoot
+    } else {
+      invokedRoot
+    }
+
+  fun repositoryRootFromIdentity(identity: String): String? {
+    if (!identity.startsWith(REPOSITORY_IDENTITY_PREFIX)) return null
+    val root = identity.removePrefix(REPOSITORY_IDENTITY_PREFIX)
+    return root.takeIf { it.startsWith('/') && '\u0000' !in it }
+  }
+
   fun validateLookupRequest(
     issueKey: String,
     repositoryIdentity: String,

@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.goal.GoalRunnerAppliedRepair
 import skillbill.engine.goal.GoalRunnerWedgeClass
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosisRequest
@@ -46,6 +47,7 @@ public class GoalRunnerRepairCoordinator(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
+  private val executionRoots: GoalExecutionRootResolver,
 ) {
   private val parentWedgeDiagnosis = GoalRunnerParentRepairWedgeDiagnosis(clock)
 
@@ -64,6 +66,15 @@ public class GoalRunnerRepairCoordinator(
       } else {
         GoalRunnerParentWedgeDiagnosis()
       }
+    val operationRoot = executionRoots.ensureForControlVerb(loaded, repoRoot)
+    if (operationRoot == null) {
+      return GoalRunnerRepairResult(
+        issueKey = request.issueKey,
+        status = GoalRunnerRepairStatus.OPERATOR_REQUIRED,
+        parentWorkflowId = loaded.parentWorkflowId,
+        refusalReason = "The goal worktree could not be recreated for repair.",
+      )
+    }
     val children =
       loaded.manifest.subtasks
         .filter { request.subtaskId == null || it.id == request.subtaskId }
@@ -76,15 +87,17 @@ public class GoalRunnerRepairCoordinator(
             issueKey = request.issueKey,
             subtaskId = subtask.id,
             subtasks = loaded.manifest.subtasks,
-            repoRoot = repoRoot,
+            repoRoot = operationRoot,
           ),
         )
       }
     val childWedged = diagnoses.filterNot(GoalRunnerChildWedgeDiagnosis::isHealthy)
     val wedged = !parentDiagnosis.isHealthy || childWedged.isNotEmpty()
+    val ancestryUnknown = diagnoses.any(::reviewAncestryUnknown)
     return when {
       request.subtaskId != null && children.isEmpty() ->
         subtaskNotFound(request, loaded.parentWorkflowId, parentDiagnosis)
+      ancestryUnknown -> reviewAncestryUnknownResult(request, loaded.parentWorkflowId, parentDiagnosis, diagnoses)
       !wedged ->
         healthyResult(request, loaded.parentWorkflowId, parentDiagnosis, diagnoses)
       childWedged.any { diagnosis -> diagnosis.wedges.any { it.wedgeClass.operatorRequired } } ->
@@ -99,7 +112,7 @@ public class GoalRunnerRepairCoordinator(
             parentDiagnosis = parentDiagnosis,
             diagnoses = diagnoses,
             childWedged = childWedged,
-            repoRoot = repoRoot,
+            repoRoot = operationRoot,
             manifestSubtasks = loaded.manifest.subtasks,
           ),
         )
@@ -147,6 +160,34 @@ public class GoalRunnerRepairCoordinator(
     GoalRunnerRepairResult(
       issueKey = issueKey,
       status = GoalRunnerRepairStatus.NOT_FOUND,
+    )
+
+  private fun reviewAncestryUnknown(diagnosis: GoalRunnerChildWedgeDiagnosis): Boolean {
+    val wedgeClasses = diagnosis.wedges.map(GoalRunnerWedgeFinding::wedgeClass)
+    return (
+      PASSED_REVIEW_BASE !in diagnosis.passedChecks &&
+        GoalRunnerWedgeClass.UNREACHABLE_REVIEW_BASE !in wedgeClasses
+    ) ||
+      (
+        PASSED_REMEDIATION_BASE !in diagnosis.passedChecks &&
+          GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE !in wedgeClasses
+      )
+  }
+
+  private fun reviewAncestryUnknownResult(
+    request: GoalRunnerRepairRequest,
+    parentWorkflowId: String,
+    parentDiagnosis: GoalRunnerParentWedgeDiagnosis,
+    diagnoses: List<GoalRunnerChildWedgeDiagnosis>,
+  ): GoalRunnerRepairResult =
+    GoalRunnerRepairResult(
+      issueKey = request.issueKey,
+      status = if (request.apply) GoalRunnerRepairStatus.OPERATOR_REQUIRED else GoalRunnerRepairStatus.INSPECTED,
+      parentWorkflowId = parentWorkflowId,
+      parentWedges = parentDiagnosis.wedges,
+      parentPassedChecks = parentDiagnosis.passedChecks,
+      diagnoses = diagnoses,
+      refusalReason = "Review ancestry could not be established in the goal worktree; no repair was applied.",
     )
 
   private fun subtaskNotFound(

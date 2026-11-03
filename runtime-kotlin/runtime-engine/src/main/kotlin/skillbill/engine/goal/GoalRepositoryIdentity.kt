@@ -2,7 +2,6 @@ package skillbill.engine.goal
 
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
-import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
 public fun goalRepositoryIdentity(
@@ -24,12 +23,5 @@ public fun goalRepositoryIdentityFilters(
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): List<String?> = repoRoot?.let { goalRepositoryIdentityCandidates(it, repositoryEnclosingRootPort) } ?: listOf(null)
 
-public fun goalRepositoryRootFromIdentity(identity: String): Path? {
-  val prefix = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX
-  if (!identity.startsWith(prefix)) return null
-  return try {
-    Path.of(identity.removePrefix(prefix)).takeIf { it.isAbsolute }
-  } catch (_: InvalidPathException) {
-    null
-  }
-}
+public fun goalRepositoryRootFromIdentity(identity: String): Path? =
+  FeatureTaskExecutionIdentityPolicy.repositoryRootFromIdentity(identity)?.let(Path::of)

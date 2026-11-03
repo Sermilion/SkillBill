@@ -11,34 +11,8 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
       ?.let(JsonCodec::jsonElementToValue)
       ?.let(JsonCodec::anyToStringAnyMap)
       ?: goalRunnerControlSchemaError("durable record must be an object.")
-  val allowedKeys =
-    setOf(
-      "stop_after_subtask_id",
-      "pause_requested",
-      "pause_consumed",
-      "paused",
-      "pause_reason",
-      "paused_at",
-      "stop_after_consumed",
-      "repository_identity",
-      "execution_lease",
-      "active_duration_ms",
-      "active_duration_as_of",
-      "current_subtask_id",
-      "subtask_active_duration_ms",
-      "subtask_active_duration_as_of",
-      "validation_quality_retries_by_subtask",
-      "pending_re_attempt_cause_by_subtask",
-      "pending_causing_loop_entry_by_subtask",
-      "goal_completed_at",
-      "goal_pull_request_url",
-      GoalRunnerControlPayloadKeys.BLOCKED_REASON,
-      GoalRunnerControlPayloadKeys.QA_SELECTION,
-      GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_PATH,
-      GoalRunnerControlPayloadKeys.LAUNCH_WARNING,
-    )
   state.keys.forEach { key ->
-    if (key !in allowedKeys) {
+    if (key !in allowedControlKeys) {
       goalRunnerControlSchemaError("has unsupported field '$key'.")
     }
   }
@@ -71,6 +45,49 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
     qaSelection =
       state.nullableString(GoalRunnerControlPayloadKeys.QA_SELECTION)?.let(FeatureTaskRuntimeQaSelection::fromWire),
     executionWorktreePath = state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_PATH),
+    executionWorktreeRemovedAt =
+      state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_REMOVED_AT)?.also { value ->
+        if (parsePersistedInstantOrNull(value) == null) {
+          goalRunnerControlSchemaError(
+            "field '${GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_REMOVED_AT}' must be a supported " +
+              "persisted instant.",
+          )
+        }
+      },
+    executionWorktreeRetentionReason =
+      state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON),
+    executionWorktreeRetentionDetail =
+      state.nullableString(GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL),
     launchWarning = state.nullableString(GoalRunnerControlPayloadKeys.LAUNCH_WARNING),
   )
 }
+
+private val allowedControlKeys =
+  setOf(
+    "stop_after_subtask_id",
+    "pause_requested",
+    "pause_consumed",
+    "paused",
+    "pause_reason",
+    "paused_at",
+    "stop_after_consumed",
+    "repository_identity",
+    "execution_lease",
+    "active_duration_ms",
+    "active_duration_as_of",
+    "current_subtask_id",
+    "subtask_active_duration_ms",
+    "subtask_active_duration_as_of",
+    "validation_quality_retries_by_subtask",
+    "pending_re_attempt_cause_by_subtask",
+    "pending_causing_loop_entry_by_subtask",
+    "goal_completed_at",
+    "goal_pull_request_url",
+    GoalRunnerControlPayloadKeys.BLOCKED_REASON,
+    GoalRunnerControlPayloadKeys.QA_SELECTION,
+    GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_PATH,
+    GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_REMOVED_AT,
+    GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON,
+    GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL,
+    GoalRunnerControlPayloadKeys.LAUNCH_WARNING,
+  )

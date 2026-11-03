@@ -215,7 +215,7 @@ class CliPhasePlanRuntimeTest {
     assertEquals(3, result.exitCode, result.stdout + result.stderr)
     assertEquals(PLAN_LAUNCHES, planner.phaseIds)
     assertTrue(planner.timeouts.all { it == 180.minutes }, planner.timeouts.toString())
-    assertEquals(1, goal.childLaunches.size)
+    assertEquals(1, goal.childLaunches.size, result.stdout + result.stderr)
     assertEquals(1, rowCount("goal_runner_controls"))
     assertTrue(workflowIdsMentioning(planWorkflowId()).isNotEmpty())
     assertEquals(

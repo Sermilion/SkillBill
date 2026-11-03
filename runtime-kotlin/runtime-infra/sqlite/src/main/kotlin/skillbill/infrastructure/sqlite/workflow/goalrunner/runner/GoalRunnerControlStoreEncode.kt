@@ -79,6 +79,9 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
   ) +
     listOfNotNull(
       executionWorktreePath?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_PATH to it },
+      executionWorktreeRemovedAt?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_REMOVED_AT to it },
+      executionWorktreeRetentionReason?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON to it },
+      executionWorktreeRetentionDetail?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL to it },
       launchWarning?.let { GoalRunnerControlPayloadKeys.LAUNCH_WARNING to it },
     )
 

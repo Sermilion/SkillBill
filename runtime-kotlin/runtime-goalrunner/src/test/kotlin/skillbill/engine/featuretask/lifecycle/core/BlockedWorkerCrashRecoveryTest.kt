@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testHarnessClock
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.block.testBlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -21,6 +22,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
@@ -156,6 +158,12 @@ class BlockedWorkerCrashRecoveryTest {
         NoopWorkflowGitOperations,
         TestRepositoryEnclosingRoot,
         NoopRuntimeDiagnostics,
+        ProjectCheckout(
+          TestRepositoryEnclosingRoot,
+          FixedProjectStorePort(Files.createTempDirectory("goal-execution-root-test")),
+          InPlaceGoalWorktreeResources,
+          NoopWorkflowGitOperations,
+        ),
       ),
     )
 

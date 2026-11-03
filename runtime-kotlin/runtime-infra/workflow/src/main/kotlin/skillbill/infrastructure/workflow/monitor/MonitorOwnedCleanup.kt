@@ -1,11 +1,12 @@
 package skillbill.infrastructure.workflow.monitor
 
+import skillbill.infrastructure.workflow.worktree.worktreeDirtyRetention
+import skillbill.infrastructure.workflow.worktree.worktreePathProblem
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.monitor.model.MonitorSettlement
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -89,33 +90,17 @@ internal class MonitorOwnedCleanup(
     record: MonitorOwnershipRecord,
   ): MonitorSettlement.Retained? {
     val problem =
-      try {
-        when {
-          Files.isSymbolicLink(path) -> "the worktree path is a symbolic link"
-          !path.toRealPath().startsWith(directory.toRealPath()) -> "the worktree path left the admission directory"
-          currentBranch(path) != record.executionBranch -> "the worktree no longer has its owned branch checked out"
-          else -> null
+      worktreePathProblem(path, directory, "the admission directory")
+        ?: if (currentBranch(path) != record.executionBranch) {
+          "the worktree no longer has its owned branch checked out"
+        } else {
+          null
         }
-      } catch (failure: IOException) {
-        "the worktree path could not be verified: ${failure.message}"
-      }
     return problem?.let { MonitorSettlement.Retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, it) }
   }
 
-  private fun dirtyRetention(path: Path): MonitorSettlement.Retained? {
-    val status = monitorGit(path, "status", "--porcelain", "--untracked-files=all")
-    val lines = status.output.lines().filter(String::isNotBlank)
-    val reason =
-      when {
-        !status.ok -> MonitorRetentionReason.PUBLICATION_UNKNOWN
-        lines.any { !it.startsWith("??") } -> MonitorRetentionReason.DIRTY_WORKTREE
-        lines.isNotEmpty() -> MonitorRetentionReason.UNTRACKED_FILES
-        else -> null
-      }
-    val detail =
-      if (status.ok) "the worktree has ${lines.size} changed path(s)" else "git status failed: ${status.output}"
-    return reason?.let { MonitorSettlement.Retained(it, path, detail) }
-  }
+  private fun dirtyRetention(path: Path): MonitorSettlement.Retained? =
+    worktreeDirtyRetention(path)?.let { MonitorSettlement.Retained(it.reason, path, it.detail) }
 
   private fun orphanedBranchRetention(
     record: MonitorOwnershipRecord,

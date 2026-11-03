@@ -717,6 +717,7 @@ internal fun initGoalFixtureRepository(repository: Path) {
   fixtureGit(repository, "init", "--quiet", "--initial-branch=main", repository.toString())
   Files.writeString(repository.resolve(".git/info/exclude"), ".skill-bill/\nmetrics.db\n")
   commitGoalFixture(repository, "Goal fixture base")
+  fixtureGit(repository, "branch", "feat/SKILL-901-goal")
 }
 
 private fun commitGoalFixture(
@@ -915,7 +916,12 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
   override fun branchExists(
     repoRoot: Path,
     branch: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "true")
+  ): WorkflowGitOperationResult {
+    val process =
+      ProcessBuilder("git", "show-ref", "--verify", "--quiet", "refs/heads/$branch")
+        .directory(repoRoot.toFile()).start()
+    return WorkflowGitOperationResult.Ok(value = (process.waitFor() == 0).toString())
+  }
 
   override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "feat/SKILL-901-goal")
@@ -950,8 +956,17 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
     message: String,
   ): WorkflowGitCommitResult = WorkflowGitCommitResult.Committed(commitSha = "1".repeat(40))
 
-  override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
-    WorkflowGitOperationResult.Ok(value = "1".repeat(40))
+  override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult {
+    val process = ProcessBuilder("git", "rev-parse", "HEAD").directory(repoRoot.toFile()).start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    check(process.waitFor() == 0) { "could not read fixture HEAD" }
+    return WorkflowGitOperationResult.Ok(value = output)
+  }
+
+  override fun resolveCommit(
+    repoRoot: Path,
+    revision: String,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "1".repeat(40))
 
   override fun mergeBaseWithHead(
     repoRoot: Path,

@@ -313,6 +313,7 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
         ),
       )
 
+    assertEquals(1, diagnosis.wedges.size, diagnosis.wedges.toString())
     assertEquals(GoalRunnerWedgeClass.UNREACHABLE_REMEDIATION_BASE, diagnosis.wedges.single().wedgeClass)
     assertEquals(unreachable, diagnosis.wedges.single().currentValue)
   }
@@ -336,6 +337,11 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
     )
     val git =
       object : WorkflowGitOperations by NoopWorkflowGitOperations {
+        override fun branchExists(
+          repoRoot: Path,
+          branch: String,
+        ) = WorkflowGitOperationResult.Ok(value = "true")
+
         override fun headCommitSha(repoRoot: Path) = WorkflowGitOperationResult.Ok(value = HEAD_SHA)
 
         override fun resolveCommit(

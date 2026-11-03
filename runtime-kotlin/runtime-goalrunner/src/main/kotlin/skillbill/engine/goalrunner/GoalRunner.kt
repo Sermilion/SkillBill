@@ -3,7 +3,6 @@ package skillbill.engine.goalrunner
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.engine.goal.GoalRunnerManifestState
-import skillbill.engine.goalrunner.completion.GoalCompletionRecorder
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
 import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
 import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
@@ -23,6 +22,7 @@ import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.monitoring.GoalCompletionRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
@@ -196,6 +196,7 @@ public class GoalRunner(
           )
         }
       }
+    completionRecorder.retryWorktreeIfPending(state)
     return GoalRunnerRunReport.AlreadyComplete(
       issueKey = state.manifest.issueKey,
       completedAt = completedAt,
@@ -315,6 +316,9 @@ public class GoalRunner(
       val finalReport = requireNotNull(loopResult.report)
       closeGoalTelemetrySegment(telemetryEmitter, state, finalReport, loopResult.attempted)
       recordGoalCompletion(state.parentWorkflowId, finalReport)
+      if (finalReport is GoalRunnerRunReport.Completed || finalReport is GoalRunnerRunReport.CompletedNoChange) {
+        completionRecorder.settleWorktree(state.parentWorkflowId)
+      }
       emitCompletedGoalEvent(effectiveRequest, finalReport)
       finalReport.withParentWorkflowId(state.parentWorkflowId)
     }.getOrElse { failure ->

@@ -9,12 +9,19 @@ import skillbill.infrastructure.workflow.process.GIT_HOOKED_COMMAND_TIMEOUT_SECO
 import skillbill.infrastructure.workflow.process.RepositoryStateKeyResult
 import skillbill.infrastructure.workflow.process.invokeGitProcess
 import skillbill.infrastructure.workflow.process.repositoryStateKey
+import skillbill.infrastructure.workflow.worktree.parseWorktreeRecords
+import skillbill.infrastructure.workflow.worktree.worktreeDirtyRetention
+import skillbill.infrastructure.workflow.worktree.worktreeGit
+import skillbill.infrastructure.workflow.worktree.worktreePathProblem
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.time.model.RuntimeWaitResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -71,10 +78,142 @@ class GitGoalWorktreeResources(
       )
       return null
     }
-    return worktreeRecords(listing)
+    return parseWorktreeRecords(listing.output)
       .firstOrNull { record -> "branch refs/heads/$branch" in record }
       ?.firstOrNull { field -> field.startsWith(WORKTREE_FIELD_PREFIX) }
       ?.let { field -> Path.of(field.removePrefix(WORKTREE_FIELD_PREFIX)) }
+  }
+
+  override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
+    val path = request.worktreePath
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null
+    return ownershipRetention(request) ?: worktreeDirtyRetention(path)?.let { retained(it.reason, path, it.detail) }
+      ?: ignoredRetention(path) ?: publicationRetention(path)
+  }
+
+  private fun ownershipRetention(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
+    val path = request.worktreePath
+    val root =
+      goalsRoot(request.primaryRoot)
+        ?: return retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, "the goals directory could not be resolved")
+    val problem = worktreePathProblem(path, root, "the goals directory")
+    if (problem != null) return retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, problem)
+    val realPath =
+      try {
+        path.toRealPath()
+      } catch (failure: IOException) {
+        return retained(
+          MonitorRetentionReason.UNOWNED_RESOURCE,
+          path,
+          "the worktree path could not be verified: ${failure.message}",
+        )
+      }
+    return listingRetention(request.primaryRoot, path, realPath)
+  }
+
+  private fun listingRetention(
+    primaryRoot: Path,
+    path: Path,
+    realPath: Path,
+  ): GoalWorktreeSettlement.Retained? {
+    val listing = worktreeGit(primaryRoot, "worktree", "list", "--porcelain", "-z")
+    if (!listing.ok) {
+      return retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, "git worktree list failed: ${listing.output}")
+    }
+    val listed =
+      parseWorktreeRecords(listing.output).any { record ->
+        val listedPath = record.firstOrNull()?.removePrefix("worktree ")?.let(Path::of)
+        listedPath != null &&
+          try {
+            listedPath.toRealPath() == realPath
+          } catch (_: IOException) {
+            false
+          }
+      }
+    if (!listed) {
+      return retained(MonitorRetentionReason.UNOWNED_RESOURCE, path, "the worktree is missing from git worktree list")
+    }
+    return null
+  }
+
+  private fun ignoredRetention(path: Path): GoalWorktreeSettlement.Retained? {
+    val ignored = worktreeGit(path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory")
+    if (!ignored.ok) {
+      return retained(
+        MonitorRetentionReason.PUBLICATION_UNKNOWN,
+        path,
+        "git ignored-file inspection failed: ${ignored.output}",
+      )
+    }
+    if (ignored.output.isNotBlank()) {
+      return retained(MonitorRetentionReason.UNTRACKED_FILES, path, "the worktree contains ignored files")
+    }
+    return null
+  }
+
+  private fun publicationRetention(path: Path): GoalWorktreeSettlement.Retained? {
+    val published = worktreeGit(path, "rev-list", "--count", "HEAD", "--not", "--remotes")
+    if (!published.ok) {
+      return retained(MonitorRetentionReason.PUBLICATION_UNKNOWN, path, "git rev-list failed: ${published.output}")
+    }
+    val count =
+      published.output.trim().toLongOrNull()
+        ?: return retained(
+          MonitorRetentionReason.PUBLICATION_UNKNOWN,
+          path,
+          "git rev-list returned an invalid count: ${published.output}",
+        )
+    return if (count > 0) {
+      retained(
+        MonitorRetentionReason.UNPUBLISHED_COMMITS,
+        path,
+        "the worktree has $count commit(s) missing from remote-tracking refs",
+      )
+    } else {
+      null
+    }
+  }
+
+  override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement {
+    val path = request.worktreePath
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+      val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
+      if (!prune.ok) diagnostics.warning("goal worktree prune failed: seam=goal_worktree.settle path=$path", null)
+      return GoalWorktreeSettlement.Absent
+    }
+    retentionVerdict(request)?.let { return it }
+    val removal = worktreeGit(request.primaryRoot, "worktree", "remove", path.toString())
+    if (!removal.ok) {
+      return retained(MonitorRetentionReason.CLEANUP_FAILED, path, "git worktree remove failed: ${removal.output}")
+    }
+    val prune = worktreeGit(request.primaryRoot, "worktree", "prune")
+    if (!prune.ok) {
+      diagnostics.warning(
+        "goal worktree prune failed: seam=goal_worktree.settle path=$path reason=${prune.output}",
+        null,
+      )
+    }
+    try {
+      Files.deleteIfExists(path.parent)
+    } catch (failure: IOException) {
+      diagnostics.warning("goal worktree parent cleanup failed: seam=goal_worktree.settle path=${path.parent}", failure)
+    } catch (failure: SecurityException) {
+      diagnostics.warning("goal worktree parent cleanup failed: seam=goal_worktree.settle path=${path.parent}", failure)
+    }
+    return GoalWorktreeSettlement.Removed
+  }
+
+  private fun retained(
+    reason: MonitorRetentionReason,
+    path: Path,
+    detail: String,
+  ) = GoalWorktreeSettlement.Retained(reason, path, detail)
+
+  private fun goalsRoot(repoRoot: Path): Path? {
+    val key = repositoryStateKey(repoRoot) as? RepositoryStateKeyResult.Resolved ?: return null
+    return resolveTelemetryStateDir(environment.environment, environment.userHome)
+      .resolve(GOALS_DIRECTORY)
+      .resolve(key.key)
   }
 
   private fun preparationFailed(
@@ -267,15 +406,13 @@ class GitGoalWorktreeResources(
 
   private fun listWorktrees(repoRoot: Path): GitRun = monitorGit(repoRoot, "worktree", "list", "--porcelain", "-z")
 
-  private fun worktreeRecords(listing: GitRun): List<List<String>> =
-    listing.output.split("\u0000\u0000").map { it.split('\u0000') }
-
   private fun entryOf(
     listing: GitRun,
     target: Path,
   ): WorktreeEntry {
     val record =
-      worktreeRecords(listing).firstOrNull { "$WORKTREE_FIELD_PREFIX$target" in it } ?: return WorktreeEntry.UNLISTED
+      parseWorktreeRecords(listing.output)
+        .firstOrNull { "$WORKTREE_FIELD_PREFIX$target" in it } ?: return WorktreeEntry.UNLISTED
     return if (LOCKED_INITIALIZING_FIELD in record) WorktreeEntry.INITIALIZING else WorktreeEntry.FINISHED
   }
 }

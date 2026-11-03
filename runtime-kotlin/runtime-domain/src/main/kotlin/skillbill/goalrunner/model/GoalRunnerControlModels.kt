@@ -102,11 +102,23 @@ data class GoalRunnerControlState(
   val goalBlockedReason: String? = null,
   val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val executionWorktreePath: String? = null,
+  val executionWorktreeRemovedAt: String? = null,
+  val executionWorktreeRetentionReason: String? = null,
+  val executionWorktreeRetentionDetail: String? = null,
   val launchWarning: String? = null,
 ) {
   init {
     executionWorktreePath?.let {
       require(it.isNotBlank()) { "executionWorktreePath must not be blank when provided." }
+    }
+    executionWorktreeRemovedAt?.let {
+      require(it.isNotBlank()) { "executionWorktreeRemovedAt must not be blank when provided." }
+    }
+    executionWorktreeRetentionReason?.let {
+      require(it.isNotBlank()) { "executionWorktreeRetentionReason must not be blank when provided." }
+    }
+    executionWorktreeRetentionDetail?.let {
+      require(it.isNotBlank()) { "executionWorktreeRetentionDetail must not be blank when provided." }
     }
     launchWarning?.let { require(it.isNotBlank()) { "launchWarning must not be blank when provided." } }
     goalCompletedAt?.let { require(it.isNotBlank()) { "goalCompletedAt must not be blank when provided." } }

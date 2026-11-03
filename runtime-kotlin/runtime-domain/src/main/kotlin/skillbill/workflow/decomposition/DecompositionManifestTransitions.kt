@@ -2,6 +2,7 @@ package skillbill.workflow.decomposition
 
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
+import skillbill.workflow.decomposition.model.DecompositionContinuationSelection
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -353,6 +354,35 @@ fun DecompositionManifest.baseForSubtask(subtaskId: Int): String? =
     DecompositionExecutionModel.STACKED_BRANCHES ->
       stackBranches.firstOrNull { it.subtaskId == subtaskId }?.baseBranch ?: baseBranch
   }
+
+fun DecompositionManifest.executionRootSubtaskId(): Int? {
+  subtasks.firstOrNull {
+    it.status.decompositionStatus() == DecompositionStatus.COMPLETE && it.commitSha.isNullOrBlank()
+  }?.let { return it.id }
+  if (
+    subtasks.isNotEmpty() &&
+    subtasks.all {
+      it.status.decompositionStatus() in
+        setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE)
+    }
+  ) {
+    return subtasks.lastOrNull()?.id
+  }
+  val current = subtasks.firstOrNull { it.id == currentSubtaskIntent.subtaskId }
+  if (
+    current != null &&
+    (current.hasStarted() || current.status.decompositionStatus() == DecompositionStatus.BLOCKED)
+  ) {
+    return current.id
+  }
+  return when (val selection = DecompositionContinuationSelector.select(this)) {
+    is DecompositionContinuationSelection.Resume -> selection.subtask.id
+    is DecompositionContinuationSelection.Start -> selection.subtask.id
+    is DecompositionContinuationSelection.Blocked -> selection.subtask.id
+    is DecompositionContinuationSelection.TerminalSubtask -> selection.subtask.id
+    is DecompositionContinuationSelection.Done -> subtasks.lastOrNull()?.id
+  }
+}
 
 fun DecompositionManifest.withPreservedRuntimeState(existing: DecompositionManifest?): DecompositionManifest {
   if (existing == null) {

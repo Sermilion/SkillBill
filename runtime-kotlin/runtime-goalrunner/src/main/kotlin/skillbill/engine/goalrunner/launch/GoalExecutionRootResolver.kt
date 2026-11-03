@@ -1,12 +1,15 @@
 package skillbill.engine.goalrunner.launch
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.ProjectCheckout
+import skillbill.application.workflow.model.GoalExecutionRootAccess
+import skillbill.application.workflow.model.GoalExecutionRootOptions
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
-import skillbill.engine.goalrunner.execution.support.goalWorkBranch
+import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
@@ -22,6 +25,11 @@ import skillbill.ports.workflow.gitops.model.WorkflowIgnoredFilesCopyResult
 import skillbill.ports.workflow.gitops.worktree.MAX_IGNORED_FILE_BYTES
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.workflow.decomposition.baseForSubtask
+import skillbill.workflow.decomposition.executionRootSubtaskId
+import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.nio.file.Files
 import java.nio.file.Path
 
 private const val MAX_LISTED_PATHS = 20
@@ -34,7 +42,53 @@ public class GoalExecutionRootResolver(
   private val gitOperations: WorkflowGitOperations,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val diagnostics: RuntimeDiagnostics,
+  private val checkout: ProjectCheckout,
 ) {
+  public fun ensureForControlVerb(
+    state: GoalRunnerManifestState,
+    invokedRoot: Path,
+    revisionSubtaskId: Int? = state.manifest.executionRootSubtaskId(),
+    requireExistingBranch: Boolean = false,
+  ): Path? {
+    val control = manifestStore.controlState(state.parentWorkflowId)
+    return when (
+      val access =
+        checkout.ensureGoalExecutionRoot(
+          control,
+          state.manifest,
+          invokedRoot,
+          options =
+            GoalExecutionRootOptions(
+              recreateCompleted = true,
+              revisionSubtaskId = revisionSubtaskId,
+              requireExistingBranch = requireExistingBranch,
+            ),
+        )
+    ) {
+      is GoalExecutionRootAccess.Failed -> {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "goal worktree recreation failed: seam=goal_execution_root " +
+            "value_expected=worktree value_used=refused reason=${access.reason}",
+        )
+        null
+      }
+      is GoalExecutionRootAccess.Ready -> {
+        if (access.recreated) {
+          manifestStore.updateControlState(state.parentWorkflowId) { current ->
+            current.copy(
+              executionWorktreePath = access.path.toString(),
+              executionWorktreeRemovedAt = null,
+              executionWorktreeRetentionReason = null,
+              executionWorktreeRetentionDetail = null,
+            )
+          }
+        }
+        access.path
+      }
+    }
+  }
+
   internal fun resolve(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
@@ -93,26 +147,50 @@ public class GoalExecutionRootResolver(
     launchingRoot: Path,
     recordedPath: Path?,
   ): WorkflowGitOperationResult {
-    val goalBranch = recordedPath?.let { state.manifest.goalWorkBranch()?.trim() }.orEmpty()
-    if (goalBranch.isNotEmpty()) {
-      val exists = gitOperations.branchExists(launchingRoot, goalBranch)
-      if (exists is WorkflowGitOperationResult.Ok && exists.value.trim() == "true") {
-        return WorkflowGitOperationResult.Ok(value = goalBranch)
-      }
-      if (exists !is WorkflowGitOperationResult.Ok) {
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "goal branch unknown: seam=goal_worktree value_expected=$goalBranch value_used=base_branch " +
-            "reason=${exists.error.take(MAX_RECORD_REASON)}",
-        )
-      }
+    if (recordedPath != null && Files.isDirectory(recordedPath)) {
+      return gitOperations.headCommitSha(recordedPath)
     }
-    val base = state.manifest.baseBranch.trim()
+    val selectedSubtaskId = state.manifest.executionRootSubtaskId()
+    val subtask = selectedSubtaskId?.let { id -> state.manifest.subtasks.firstOrNull { it.id == id } }
+    val goalBranch = selectedSubtaskId?.let { state.manifest.branchPlanFor(it).branch.trim() }.orEmpty()
+    if (goalBranch.isEmpty() && subtask?.hasStarted() == true) {
+      return WorkflowGitOperationResult.Failed("goal branch for subtask ${subtask.id} is not recorded")
+    }
+    val branchRevision = branchRevision(launchingRoot, goalBranch, subtask)
+    if (branchRevision != null) return branchRevision
+    val base =
+      selectedSubtaskId?.let(state.manifest::baseForSubtask)?.trim().orEmpty()
+        .ifBlank { state.manifest.baseBranch.trim() }
     return if (base.isEmpty()) {
       gitOperations.headCommitSha(launchingRoot)
     } else {
       WorkflowGitOperationResult.Ok(value = base)
     }
+  }
+
+  private fun branchRevision(
+    launchingRoot: Path,
+    goalBranch: String,
+    subtask: DecompositionSubtask?,
+  ): WorkflowGitOperationResult? {
+    if (goalBranch.isNotEmpty()) {
+      val exists = gitOperations.branchExists(launchingRoot, goalBranch)
+      if (exists is WorkflowGitOperationResult.Ok && exists.value.trim() == "true") {
+        return WorkflowGitOperationResult.Ok(value = goalBranch)
+      }
+      if (exists is WorkflowGitOperationResult.Ok && subtask?.hasStarted() == true) {
+        return WorkflowGitOperationResult.Failed("goal branch '$goalBranch' for subtask ${subtask.id} is missing")
+      }
+      if (exists !is WorkflowGitOperationResult.Ok) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "goal branch unknown: seam=goal_worktree value_expected=$goalBranch value_used=refused " +
+            "reason=${exists.error.take(MAX_RECORD_REASON)}",
+        )
+        return exists
+      }
+    }
+    return null
   }
 
   private fun copyIgnoredFiles(
@@ -211,3 +289,21 @@ public class GoalExecutionRootResolver(
       ),
     )
 }
+
+internal fun resolveGoalExecutionRoot(
+  state: GoalRunnerManifestState,
+  invokedRoot: Path,
+): Path =
+  Path.of(
+    FeatureTaskExecutionIdentityPolicy.goalExecutionRootCandidate(
+      state.controlState.executionWorktreePath,
+      state.manifest.subtasks.any { !it.workflowId.isNullOrBlank() },
+      state.controlState.repositoryIdentity,
+      invokedRoot.toString(),
+    ),
+  )
+
+internal fun existingGoalExecutionRoot(
+  state: GoalRunnerManifestState,
+  invokedRoot: Path,
+): Path? = resolveGoalExecutionRoot(state, invokedRoot).takeIf(Files::isDirectory)

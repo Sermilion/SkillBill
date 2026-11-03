@@ -134,6 +134,7 @@ data class GoalRunnerStatusProjection(
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
   val goalCompletedAt: String? = null,
+  val goalWorktree: GoalRunnerWorktreeStatus? = null,
   val launchWarning: String? = null,
   val parentWorkflowId: String? = null,
 ) {
@@ -141,6 +142,13 @@ data class GoalRunnerStatusProjection(
     !goalCompletedAt.isNullOrBlank() ||
       noChangeStatus?.state == GoalNoChangeState.COMPLETED_NO_CHANGE
 }
+
+data class GoalRunnerWorktreeStatus(
+  val path: String,
+  val removedAt: String?,
+  val retentionReason: String?,
+  val retentionDetail: String?,
+)
 
 data class GoalRunnerSubtaskValidationEvidence(
   val subtaskId: Int,
@@ -339,6 +347,7 @@ data class GoalRunnerStatusProjectionRuntimeInputs(
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
   val goalCompletedAt: String? = null,
+  val goalWorktree: GoalRunnerWorktreeStatus? = null,
   val launchWarning: String? = null,
 )
 

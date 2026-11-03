@@ -1,6 +1,8 @@
 package skillbill.ports.workflow.goalworktree
 
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import java.nio.file.Path
 
 interface GoalWorktreeResources {
@@ -21,4 +23,10 @@ interface GoalWorktreeResources {
     repoRoot: Path,
     branch: String,
   ): Path?
+
+  /** Removes an owned clean worktree or returns the reason it must stay. */
+  fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement
+
+  /** Reads the retention decision without changing the worktree or repository. */
+  fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained?
 }

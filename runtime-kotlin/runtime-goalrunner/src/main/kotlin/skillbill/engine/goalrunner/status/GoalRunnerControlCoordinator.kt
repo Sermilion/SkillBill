@@ -225,7 +225,13 @@ internal fun reconcileControlStateForManifest(
   val current = existing.reconciledForCurrentSubtask(manifest.currentSubtaskIntent.subtaskId)
   val reconciled =
     if (current.goalCompletedAt != null && GoalRunnerPlanner.selectNext(manifest) !is GoalRunnerSelection.Done) {
-      current.copy(goalCompletedAt = null, goalPullRequestUrl = null)
+      current.copy(
+        goalCompletedAt = null,
+        goalPullRequestUrl = null,
+        executionWorktreeRemovedAt = null,
+        executionWorktreeRetentionReason = null,
+        executionWorktreeRetentionDetail = null,
+      )
     } else {
       current
     }

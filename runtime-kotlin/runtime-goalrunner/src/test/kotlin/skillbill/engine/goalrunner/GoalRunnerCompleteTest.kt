@@ -7,8 +7,13 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.goalrunner.model.GoalRunnerRunReport
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.nio.file.Files
@@ -24,6 +29,36 @@ import kotlin.test.assertTrue
 private const val RESOLVED_SHA = "abc1234abc1234abc1234abc1234abc1234abcd"
 
 class GoalRunnerCompleteTest {
+  @Test
+  fun `operator completion settles only after the completion state is saved`() {
+    val worktree = Files.createTempDirectory("goal-complete-settlement").toRealPath()
+    val store =
+      InMemoryGoalManifestStore(
+        partlyFinishedManifest(),
+        initialControlState = GoalRunnerControlState(executionWorktreePath = worktree.toString()),
+      )
+    var completionWasSavedBeforeSettlement = false
+    val worktrees =
+      object : GoalWorktreeResources by InPlaceGoalWorktreeResources {
+        override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement {
+          completionWasSavedBeforeSettlement = store.controlState.goalCompletedAt != null
+          return GoalWorktreeSettlement.Absent
+        }
+      }
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = store,
+        outcomeStore = RecordingOutcomeStore(),
+        phaseRecorder = goalTestPhaseRecorder(),
+        ports = GoalRunnerStatusTestPorts(gitOperations = AcceptGitOperations(), goalWorktrees = worktrees),
+      )
+
+    val result = service.complete(completeRequest().copy(repoRoot = worktree))
+
+    assertIs<GoalRunnerCompleteResult.Completed>(result)
+    assertTrue(completionWasSavedBeforeSettlement)
+  }
+
   @Test
   fun `complete accepts unfinished subtasks and a later run reports the goal already complete`() {
     val store = InMemoryGoalManifestStore(manifest = partlyFinishedManifest())

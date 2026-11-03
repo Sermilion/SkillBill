@@ -1,6 +1,8 @@
 package skillbill.ports.workflow.goalworktree
 
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import java.nio.file.Path
 
 object InPlaceGoalWorktreeResources : GoalWorktreeResources {
@@ -15,4 +17,8 @@ object InPlaceGoalWorktreeResources : GoalWorktreeResources {
     repoRoot: Path,
     branch: String,
   ): Path? = null
+
+  override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement = GoalWorktreeSettlement.Absent
+
+  override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? = null
 }

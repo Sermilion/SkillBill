@@ -4,10 +4,13 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.infrastructure.workflow.git.runGit
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.time.NoopRuntimeTimingPort
 import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.time.model.RuntimeWaitResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
@@ -130,5 +133,74 @@ class GitGoalWorktreeResourcesLifecycleTest {
     assertEquals(repo, resources.checkoutHolding(goalWorktree, "main"))
     assertEquals(other, resources.checkoutHolding(goalWorktree, "feat/other"))
     assertEquals(null, resources.checkoutHolding(goalWorktree, "feat/absent"))
+  }
+
+  @Test
+  fun `settlement removes a clean published worktree and keeps its branch`() {
+    val remote = temp.toRealPath().resolve("remote.git")
+    Files.createDirectories(remote)
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
+    runGit(repo, "fetch", "origin", "main")
+    val worktree = created("SKILL-2")
+    val branchTip = runGit(repo, "rev-parse", "refs/heads/main")
+
+    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+    assertTrue(Files.notExists(worktree))
+    assertEquals(branchTip, runGit(repo, "rev-parse", "refs/heads/main"))
+  }
+
+  @Test
+  fun `settlement retains tracked edits with their reason and contents`() {
+    val worktree = created("SKILL-3")
+    Files.writeString(worktree.resolve("tracked.txt"), "keep this edit\n")
+
+    val retained =
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+
+    assertEquals(MonitorRetentionReason.DIRTY_WORKTREE, retained.reason)
+    assertEquals("keep this edit\n", Files.readString(worktree.resolve("tracked.txt")))
+  }
+
+  @Test
+  fun `settlement retains untracked files`() {
+    val worktree = created("SKILL-4")
+    Files.writeString(worktree.resolve("untracked.txt"), "keep this file\n")
+
+    val retained =
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+
+    assertEquals(MonitorRetentionReason.UNTRACKED_FILES, retained.reason)
+    assertEquals("keep this file\n", Files.readString(worktree.resolve("untracked.txt")))
+  }
+
+  @Test
+  fun `settlement retains ignored files that git worktree remove would delete`() {
+    Files.writeString(repo.resolve(".gitignore"), "private.txt\n")
+    runGit(repo, "add", ".gitignore")
+    runGit(repo, "commit", "-m", "ignore private file")
+    val worktree = created("SKILL-ignored")
+    Files.writeString(worktree.resolve("private.txt"), "keep this file\n")
+
+    val retained =
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+
+    assertEquals(MonitorRetentionReason.UNTRACKED_FILES, retained.reason)
+    assertEquals("keep this file\n", Files.readString(worktree.resolve("private.txt")))
+  }
+
+  @Test
+  fun `settlement retains a clean commit that has no remote tracking ref`() {
+    val worktree = created("SKILL-5")
+    Files.writeString(worktree.resolve("private-commit.txt"), "keep this commit\n")
+    runGit(worktree, "add", "private-commit.txt")
+    runGit(worktree, "commit", "-m", "unpublished work")
+
+    val retained =
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+
+    assertEquals(MonitorRetentionReason.UNPUBLISHED_COMMITS, retained.reason)
+    assertEquals("keep this commit\n", Files.readString(worktree.resolve("private-commit.txt")))
   }
 }

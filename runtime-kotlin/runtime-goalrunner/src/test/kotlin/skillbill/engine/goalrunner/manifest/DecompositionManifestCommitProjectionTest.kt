@@ -39,6 +39,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
@@ -603,7 +604,13 @@ class DecompositionManifestCommitProjectionTest {
         goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
