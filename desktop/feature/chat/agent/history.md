@@ -1,3 +1,26 @@
+## [2026-11-03] SKILL-469 new-task chat Stop and Send now
+Areas: desktop/feature/chat
+- NewTaskChat.stop ends a running or unprompted reply, keeps the partial, appends Stopped, and always releases busy and the turn job. A cancelled save still writes under NonCancellable so drainQueue is not stuck after a cancelled IO save.
+- Stop before any output rotates sessionId, deletes the old saved draft, and saves with sessionEstablished false so the next turn is a first turn on a new agent session.
+- Late unprompted events after Stop are dropped until the next turn's first event. Send now interrupts without emptying the queue so the first queued message sends after Stopped.
+- NewTaskDraft.stop restores queued texts ahead of existing draft text. NewTaskAction.Stop and SendNow reach those methods from the composer.
+- NewTaskComposer shows Stop while stoppable, relabels Queue to Send now on an empty draft with a queue, and SendNowGate refuses a double tap or held Enter.
+- Limits: pause-and-act, Esc, and process ending stay with subtasks 1 and 2. A queued suggested action does not survive restore. flush and end still save a cancelled turn but add no Stopped notice.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-03] SKILL-469 execution chat Stop and Send now
+Areas: desktop/feature/chat
+- ChatThread adds stoppableState, dropUnprompted, STOPPED_NOTICE, and restoredDraft. ChatSession passes stoppable through and holds stoppedTurn and pauseWatch. reusable
+- stop restores queued text to the draft and interrupts. sendNow interrupts and leaves the queue so drainQueue sends. A null turnJob ends the agent then finishStopped.
+- stoppable is true for operator send, pause-and-act, opening start, and owned unprompted replies. It is false on Stop, Send now, clear, resume, switchAgent, and launchTurn finally.
+- finishStopped appends Stopped, saves a started session, and otherwise rotates the session id with no save. settleTurn saves under NonCancellable and clears busy in a nested identity check, including from invokeOnCompletion.
+- Unprompted Stop sets dropUnprompted so a late event cannot busy the chat. stream resets it on the next turn's first event. watchStoppedPause relaunches a cancelled pause wait without holding busy.
+- ChatComposer shows Stop while stoppable. The primary button reads Send now on an empty draft with a queue. SendNowGate refuses a held Enter or a press inside 500ms. reusable
+- Limits: Stop does not end executions or goal runs. Queued action and pause-and-act flags do not survive the return to plain text. No Esc shortcut.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-03] SKILL-450 Paste images in the chat composer
 Areas: desktop/feature/chat
 - Cmd/Ctrl+V in ChatComposer reads the clipboard through ClipboardImageReader (default SystemClipboardImageReader). The key is consumed only when the clipboard holds an image and no text; otherwise normal text paste runs. The image is scaled to a 1568 px longest edge and encoded as PNG; over 3,750,000 bytes it is re-encoded as JPEG at 0.85 on white. Encoding runs off the UI thread; a failure adds no chip.

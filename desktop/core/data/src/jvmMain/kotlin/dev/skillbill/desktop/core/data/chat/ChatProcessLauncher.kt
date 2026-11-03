@@ -1,9 +1,12 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.di.AppScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -16,6 +19,7 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -54,8 +58,8 @@ fun interface LiveChatProcessLauncher {
 @Inject
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
-class ProcessChatLauncher : ChatProcessLauncher {
-  override fun run(command: ChatCommand): Flow<ChatProcessOutput> = runProcess(command) { process ->
+class ProcessChatLauncher(private val diagnostics: Diagnostics) : ChatProcessLauncher {
+  override fun run(command: ChatCommand): Flow<ChatProcessOutput> = runProcess(command, diagnostics) { process ->
     try {
       process.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(command.stdin) }
     } catch (_: IOException) {
@@ -67,8 +71,8 @@ class ProcessChatLauncher : ChatProcessLauncher {
 @Inject
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
-class ProcessLiveChatLauncher : LiveChatProcessLauncher {
-  override fun open(command: ChatCommand, input: ReceiveChannel<String>): Flow<ChatProcessOutput> = runProcess(command) { process ->
+class ProcessLiveChatLauncher(private val diagnostics: Diagnostics) : LiveChatProcessLauncher {
+  override fun open(command: ChatCommand, input: ReceiveChannel<String>): Flow<ChatProcessOutput> = runProcess(command, diagnostics) { process ->
     try {
       process.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
         for (line in input) {
@@ -85,8 +89,24 @@ class ProcessLiveChatLauncher : LiveChatProcessLauncher {
   }
 }
 
+private fun stdoutLines(process: Process): ReceiveChannel<String> {
+  val lines = Channel<String>(Channel.BUFFERED)
+  thread(isDaemon = true, name = "chat-stdout") {
+    try {
+      process.inputStream.bufferedReader(Charsets.UTF_8).useLines { source ->
+        for (line in source) if (lines.trySendBlocking(line).isFailure) break
+      }
+    } catch (_: IOException) {
+      // A closed stdout ends the stream; the exit code and stderr tail still report the turn.
+    } finally {
+      lines.close()
+    }
+  }
+  return lines
+}
+
 // Starts [command], runs [feed] to supply stdin, and streams stdout until the process exits.
-private fun runProcess(command: ChatCommand, feed: suspend (Process) -> Unit): Flow<ChatProcessOutput> =
+private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: suspend (Process) -> Unit): Flow<ChatProcessOutput> =
   flow {
     if (!File(command.workingDirectory).isDirectory) {
       emit(ChatProcessOutput.StartFailed("The working directory ${command.workingDirectory} does not exist."))
@@ -105,12 +125,12 @@ private fun runProcess(command: ChatCommand, feed: suspend (Process) -> Unit): F
     ChatProcesses.installShutdownHook()
     try {
       coroutineScope {
-        // A blocked readLine ignores cancellation; destroying the process ends the read.
+        // A blocked waitFor ignores cancellation; destroying the process ends the wait.
         val killer = launch {
           try {
             awaitCancellation()
           } finally {
-            ChatProcesses.destroyTree(process)
+            ChatProcesses.destroyTree(process, diagnostics)
           }
         }
         val stderr = StringBuilder()
@@ -128,12 +148,11 @@ private fun runProcess(command: ChatCommand, feed: suspend (Process) -> Unit): F
           }
         }
         val feeding = launch { feed(process) }
+        val lines = stdoutLines(process)
         try {
-          process.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
-            for (line in lines) emit(ChatProcessOutput.Line(line))
-          }
-        } catch (_: IOException) {
-          // A closed stdout ends the stream; the exit code and stderr tail still report the turn.
+          for (line in lines) emit(ChatProcessOutput.Line(line))
+        } finally {
+          lines.cancel()
         }
         val code = process.waitFor()
         // A descendant can hold stderr open after claude exits; report the tail read so far.
@@ -143,7 +162,7 @@ private fun runProcess(command: ChatCommand, feed: suspend (Process) -> Unit): F
         killer.cancel()
       }
     } finally {
-      ChatProcesses.destroyTree(process)
+      ChatProcesses.destroyTree(process, diagnostics)
       ChatProcesses.live -= process
     }
   }.flowOn(Dispatchers.IO)
@@ -151,17 +170,32 @@ private fun runProcess(command: ChatCommand, feed: suspend (Process) -> Unit): F
 private object ChatProcesses {
   const val STDERR_TAIL = 2000
   const val STDERR_DRAIN_MS = 2000L
+  const val STOP_GRACE_MS = 3000L
+  const val FORCE_WAIT_MS = 1000L
   val live: MutableSet<Process> = ConcurrentHashMap.newKeySet()
   private val hookInstalled = AtomicBoolean(false)
 
   fun installShutdownHook() {
     if (hookInstalled.compareAndSet(false, true)) {
-      Runtime.getRuntime().addShutdownHook(Thread({ live.forEach(::destroyTree) }, "chat-shutdown"))
+      Runtime.getRuntime().addShutdownHook(Thread({ live.forEach(::signalTree) }, "chat-shutdown"))
     }
   }
 
-  fun destroyTree(process: Process) {
-    if (!process.isAlive) return
+  fun destroyTree(process: Process, diagnostics: Diagnostics) {
+    if (!process.isAlive || !live.remove(process)) return
+    val handle = process.toHandle()
+    val descendants = handle.descendants().toList()
+    descendants.forEach { it.destroy() }
+    process.destroy()
+    process.waitFor(STOP_GRACE_MS, TimeUnit.MILLISECONDS)
+    val survivors = (descendants + handle).filter { it.isAlive }
+    if (survivors.isEmpty()) return
+    survivors.forEach { it.destroyForcibly() }
+    diagnostics.record("chat.process_force_killed")
+    process.waitFor(FORCE_WAIT_MS, TimeUnit.MILLISECONDS)
+  }
+
+  private fun signalTree(process: Process) {
     process.toHandle().descendants().forEach { it.destroy() }
     process.destroy()
   }

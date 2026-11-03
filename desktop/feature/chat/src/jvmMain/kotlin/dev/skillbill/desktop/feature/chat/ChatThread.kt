@@ -15,6 +15,11 @@ import kotlin.time.Clock
 
 private const val SAVED_LINES = 10
 
+internal const val STOPPED_NOTICE = "Stopped"
+
+internal fun restoredDraft(queued: List<QueuedChatMessage>, draft: String): String =
+  (queued.map { it.text } + listOf(draft).filter { it.isNotBlank() }).joinToString("\n\n")
+
 /** One chat's messages and turn state, with or without an execution behind it. */
 internal class ChatThread(private val clock: Clock) {
   private val messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -28,6 +33,12 @@ internal class ChatThread(private val clock: Clock) {
 
   val busyState = MutableStateFlow(false)
   val busy: StateFlow<Boolean> = busyState.asStateFlow()
+
+  val stoppableState = MutableStateFlow(false)
+  val stoppable: StateFlow<Boolean> = stoppableState.asStateFlow()
+
+  @Volatile
+  var dropUnprompted = false
 
   val queuedState = MutableStateFlow<List<QueuedChatMessage>>(emptyList())
   val queued: StateFlow<List<QueuedChatMessage>> = queuedState.asStateFlow()

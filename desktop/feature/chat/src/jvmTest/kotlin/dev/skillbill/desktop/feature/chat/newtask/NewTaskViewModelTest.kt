@@ -32,9 +32,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -253,6 +255,53 @@ class NewTaskViewModelTest {
     assertEquals(other, draft.repository)
     assertNotEquals(firstSession, draft.chat.value?.sessionId)
     assertEquals(other.root, draft.chat.value?.repositoryRoot)
+    model.viewModelScope.cancel()
+    draft.close()
+  }
+
+  @Test
+  fun `stop returns queued text and send now sends a queued message`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chatRepo = FakeExecutionChatRepository()
+    val replies = mutableListOf<Channel<ChatEvent>>()
+    chatRepo.events = {
+      val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+      replies += reply
+      flow { for (event in reply) emit(event) }
+    }
+    val draft = NewTaskDraft(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
+      agentId = "claude"
+      selectedAgent = chatRepo.agent
+    }
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chatRepo, detecting("claude"), FIXED_CLOCK)
+    advanceUntilIdle()
+    draft.text = "first"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    draft.text = "queued"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    model.onAction(NewTaskAction.Stop)
+    runCurrent()
+    assertEquals("queued", draft.text)
+    replies[0].close()
+    runCurrent()
+    draft.text = "again"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    draft.text = "now"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    model.onAction(NewTaskAction.SendNow)
+    runCurrent()
+    replies[1].close()
+    runCurrent()
+    replies[2].send(ChatEvent.Completed)
+    replies[2].close()
+    runCurrent()
+    assertEquals(listOf("first", "again", "now"), chatRepo.requests.map { it.prompt })
     model.viewModelScope.cancel()
     draft.close()
   }

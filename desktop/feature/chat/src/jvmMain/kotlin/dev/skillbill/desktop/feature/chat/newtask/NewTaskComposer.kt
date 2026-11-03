@@ -20,6 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalFocusManager
@@ -44,6 +49,7 @@ import dev.skillbill.desktop.feature.chat.ChatActivityPill
 import dev.skillbill.desktop.feature.chat.ChatPill
 import dev.skillbill.desktop.feature.chat.ResumePicker
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
+import dev.skillbill.desktop.feature.chat.SendNowGate
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -53,16 +59,19 @@ private const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
 private const val PICKERS_DISABLED_STARTING = "Wait for Start goal run to finish"
 private const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
 
-/** The task input with its repository, agent and Send controls. Enter and Send share one condition. A busy turn queues the next message and locks the pickers; a change rebinds the open chat. */
+/** The task input with repository, agent, Send, Stop and Send now. Enter and Send share one condition; a busy turn queues the next message. */
 @Composable
 internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: FocusRequester = remember { FocusRequester() }, now: () -> Instant = Clock.System::now, onAction: (NewTaskAction) -> Unit) {
   LaunchedEffect(focus) { focus.requestFocus() }
   val focusManager = LocalFocusManager.current
   val chat by draft.chat.collectAsState()
   val busy = chat?.let { key(it) { it.thread.busy.collectAsState().value } } ?: false
+  val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
+  val gate = remember(chat) { SendNowGate() }
   val offer by draft.offer.collectAsState()
   val ready = !offer.starting && draft.canSend()
+  val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && !offer.starting
   val pickersDisabledWhy = when {
     busy -> PICKERS_DISABLED_BUSY
     offer.starting -> PICKERS_DISABLED_STARTING
@@ -76,16 +85,31 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
     onAction(NewTaskAction.Send)
     if (startsTurn) focusManager.clearFocus()
   }
+  val press = { viaEnter: Boolean ->
+    if (sendNow) {
+      if (gate.admit(now(), viaEnter)) {
+        onAction(NewTaskAction.SendNow)
+        focus.requestFocus()
+      }
+    } else if (ready) {
+      submit()
+      gate.pressed(now(), viaEnter)
+    }
+  }
   Column(Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     // A draft whose repository is gone refuses every turn, so it has no activity to report and is not "Ready".
     chat?.takeUnless { it.repositoryMissing }?.let { key(it) { ChatActivityPill(it.thread) } }
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         draft.text, { onAction(NewTaskAction.TextChanged(it)) },
-        modifier = Modifier.fillMaxWidth().focusRequester(focus).gatesShortcutsWhileFocused(),
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).gatesShortcutsWhileFocused()
+          .onPreviewKeyEvent {
+            if (it.key == Key.Enter && it.type == KeyEventType.KeyUp) gate.enterReleased()
+            false
+          },
         placeholder = if (chat != null) "Reply to the agent" else "Describe the work, or paste an issue key or spec path",
         multiline = true,
-        onSubmit = { if (ready) submit() },
+        onSubmit = { press(true) },
       )
       if (state.resumePickerOpen) {
         ResumePicker(saved, now(), { onAction(NewTaskAction.ResumeDraft(it)) }, { onAction(NewTaskAction.DismissResume) })
@@ -95,8 +119,26 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       RepositoryPicker(state, draft, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy, onAction)
       AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
-      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-        SbButton(if (busy) "Queue" else "Send", submit, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
+      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+        if (stoppable) {
+          SbButton(
+            "Stop", { onAction(NewTaskAction.Stop); focus.requestFocus() },
+            size = SbControlSize.Small,
+            tooltip = "Stop the reply. Queued messages return to the draft.",
+          )
+        }
+        SbButton(
+          when {
+            sendNow -> "Send now"
+            busy -> "Queue"
+            else -> "Send"
+          },
+          { press(false) },
+          variant = SbButtonVariant.Primary,
+          size = SbControlSize.Small,
+          enabled = ready || sendNow,
+          shortcut = "↵",
+        )
       }
     }
   }

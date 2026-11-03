@@ -1,3 +1,38 @@
+## [2026-11-03] Always release a cancelled turn after a NonCancellable save
+Context: The window scope uses Dispatchers.Main, not Main.immediate, so a job cancelled before first dispatch never enters its body. A cancelled IO save can skip clearing the turn job, and /clear can replace turnJob during that suspension.
+Decision: Both chats save the stopped turn under NonCancellable and clear busy, stoppable, and the turn job in a nested finally. invokeOnCompletion still finishes the turn when the body never ran. Execution chat also clears only when turnJob still matches.
+Reason: A cancelled turn must always release the chat so drainQueue is not stuck. Without the completion path the chat stays busy until /clear. Without the second identity check the old turn would unlock the composer in the middle of a swap.
+
+## [2026-11-03] Open a new agent session when Stop happens before any output
+Context: Whether the Claude CLI rejects a reused session id after a kill is unverified. Saving a never-started session would make /resume open a session the agent never created.
+Decision: Both chats rotate to a new session id when Stop happens before output. Execution chat saves nothing. New-task chat deletes the old draft and saves with sessionEstablished false.
+Reason: The next turn must be a first turn on a fresh session for every agent. The stopped message stays in the transcript even though the new session never saw it.
+
+## [2026-11-03] Drop late unprompted events after Stop
+Context: Unprompted replies have no turnJob. Abandon emits no terminal event, and unpromptedEvents is a buffered shared flow. showUnprompted takes busy when no turn runs.
+Decision: Stop and Send now set dropUnprompted. unprompted and showUnprompted return immediately while it is true. The next turn clears it only after ensureActive on its first event. A null turnJob ends the agent then finishStopped.
+Reason: A late event would set busy again with nothing collecting it, or append after Stopped. ensureActive keeps a cancelled turn from clearing the flag itself.
+
+## [2026-11-03] Return queued chat text to the draft on Stop
+Context: DrainQueue runs when a turn ends, so Stop would send the next queued message. New-task stopUnprompted also ends in drainQueue.
+Decision: Stop empties the queue in both chats, including an unprompted new-task reply, and restoredDraft writes that list into the draft ahead of existing text before cancel.
+Reason: Nothing sends and nothing is lost. A queued message's action and pause-and-act flag do not survive, so the operator chooses Send or Pause and act again. Emptying only the running-turn path would let an unprompted stop drain the queue.
+
+## [2026-11-03] Watch a stopped pause wait without holding the chat busy
+Context: resumeAfter is registered only after the pause wait, so Stop during that wait would drop the relaunch.
+Decision: A Stop or Send now cancellation during the wait starts watchStoppedPause, which waits with the original deadline then resumeAfter. It does not set busy while waiting. A refused or failed pause starts no watcher. The pause control call runs under NonCancellable so its outcome is known.
+Reason: The operator can keep chatting. At most one watcher runs per session. /clear and tab close do not set stoppedTurn, so they start no watcher.
+
+## [2026-11-03] Refuse held Enter and double-tap Send now
+Context: SbInput fires onSubmit on every Enter key-down with no repeat detection. After Queue, the empty draft would fire Send now.
+Decision: SendNowGate.admit refuses a press within 500ms of the last recorded press and refuses Enter until a key-up. Each refused press restarts the window. A click needs no key-up.
+Reason: A held key or double tap would kill the running turn. The class has no Compose types so the new-task composer can reuse it.
+
+## [2026-11-03] Send now leaves the queue so drain sends
+Context: Stop and Send now both end the running reply, and drainQueue would send after either if the queue remains.
+Decision: sendNow uses the same interrupt as Stop and leaves the queue in place. Stop empties it first.
+Reason: The stopped notice is written in the turn finally before drain runs, so Stopped always precedes the new operator message.
+
 ## [2026-11-03] Keep pasted chat images in the session, not in chat history
 Context: Operator messages can carry pasted images, but ChatStore history lines hold text only and images are large.
 Decision: Images stay on QueuedChatMessage and ChatMessage.Operator for the running session. ChatThread.historyLines and restored name their fields explicitly and drop images. No persistence code or history contract change was added.
