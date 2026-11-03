@@ -30,7 +30,7 @@ internal fun scopeTouchCount(path: String, scope: ChangeScope, stats: Map<Int, S
 
 internal fun scopeLabel(scope: ChangeScope, subtasks: List<ScopeSubtask>): String = when (scope) {
   ChangeScope.All -> "All changes"
-  ChangeScope.Outside -> "Outside subtasks"
+  ChangeScope.Operator -> "Operator commits"
   ChangeScope.Uncommitted -> "Uncommitted"
   is ChangeScope.Subtasks -> if (scope.from == scope.to) subtasks.firstOrNull { it.id == scope.from }?.let { "${it.id} · ${it.name}" } ?: "Subtask ${scope.from}" else "Subtasks ${scope.from}–${scope.to}"
 }

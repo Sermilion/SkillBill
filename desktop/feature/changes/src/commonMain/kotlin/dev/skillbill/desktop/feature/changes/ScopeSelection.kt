@@ -3,7 +3,6 @@ package dev.skillbill.desktop.feature.changes
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
-import dev.skillbill.desktop.core.domain.model.OutsideCommit
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeKind
 import dev.skillbill.desktop.core.domain.model.ScopeRead
@@ -40,7 +39,7 @@ internal fun stepTarget(subtasks: List<ScopeSubtask>, scope: ChangeScope, forwar
 }
 
 /** The scope bar's commit range for [scope]. */
-internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope, outsideCommits: List<OutsideCommit>): String = when (scope) {
+internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope): String = when (scope) {
   ChangeScope.All -> when (val baseline = target.allBaseline) {
     is ChangeBaseline.TargetMergeBase -> "${baseline.targetBranch ?: "default branch"}...HEAD"
     is ChangeBaseline.RunStart -> "${baseline.baseSha.take(7)}..HEAD"
@@ -48,12 +47,13 @@ internal fun commitRangeText(target: ChangeScopeTarget, scope: ChangeScope, outs
     is ChangeBaseline.CommittedBranchRange -> "${baseline.targetBranch}...${baseline.headBranch}"
   }
   ChangeScope.Uncommitted -> ""
-  ChangeScope.Outside -> outsideCommits.joinToString(", ") { it.sha.take(7) }.ifEmpty { "none" }
+  ChangeScope.Operator -> target.timeline?.commits?.filter { it.operator }?.joinToString(", ") { it.sha.take(7) }.orEmpty()
   is ChangeScope.Subtasks -> {
     val range = when (val read = resolveScope(target, scope)) {
       is ScopeRead.Committed -> "${read.fromSha.take(7)}..${read.toSha.take(7)}"
       is ScopeRead.Baseline -> "${(read.baseline as? ChangeBaseline.SubtaskStart)?.baseSha?.take(7).orEmpty()}..HEAD"
       is ScopeRead.Unavailable -> read.reason
+      is ScopeRead.PerCommit -> read.commits.joinToString(", ") { it.sha.take(7) }
       else -> ""
     }
     if (scope.to > scope.from) "$range · ${scope.to - scope.from + 1} of ${target.subtasks.size} subtasks" else range
@@ -68,14 +68,15 @@ internal fun filterSubtasks(subtasks: List<ScopeSubtask>, query: String): List<S
 }
 
 /**
- * The toolbar's quick buttons. All, Outside and Uncommitted count their latest list; Running counts its subtask's stats and shows
- * disabled when no subtask runs. A button with a zero count or a failed read is disabled. Without Subtasks only All and Uncommitted.
+ * The toolbar's quick buttons. All stays available for the current target. Settled errors remain selectable for Operator and
+ * Uncommitted so their actual read state can be shown. Running counts its subtask's stats and is disabled when no subtask runs.
+ * Without Subtasks only All and Uncommitted are available.
  */
 internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
   val scope = state.scope
   val allCount = (state.allRead as? ScopeListUi.Listed)?.changes?.files?.size
   val buttons = mutableListOf(
-    QuickButtonUi(QuickScope.All, "All", allCount, enabled = state.allRead == null || (allCount ?: 0) > 0, pressed = scope == ChangeScope.All),
+    QuickButtonUi(QuickScope.All, "All", allCount, enabled = state.target != null, pressed = scope == ChangeScope.All),
   )
   val scopes = state.target?.let(::availableScopes).orEmpty()
   if (state.subtasksAvailable) {
@@ -89,8 +90,8 @@ internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
       pressed = running != null && scope == ChangeScope.Subtasks(running.id, running.id),
       running = running != null,
     )
-    if (ScopeKind.Outside in scopes) {
-      buttons += readButton(QuickScope.Outside, "Outside subtasks", state.outsideRead, scope == ChangeScope.Outside)
+    if (ScopeKind.Operator in scopes) {
+      buttons += readButton(QuickScope.Operator, "Operator", state.operatorRead, scope == ChangeScope.Operator)
     }
   }
   if (ScopeKind.Uncommitted in scopes) {
@@ -101,5 +102,10 @@ internal fun quickButtons(state: ChangesWindowUiState): List<QuickButtonUi> {
 
 private fun readButton(kind: QuickScope, label: String, read: ScopeChangesState?, pressed: Boolean): QuickButtonUi {
   val count = (read as? ScopeChangesState.Listed)?.changes?.files?.size
-  return QuickButtonUi(kind, label, count, enabled = (count ?: 0) > 0, pressed = pressed)
+  val enabled = when (read) {
+    null, ScopeChangesState.Loading -> false
+    is ScopeChangesState.Listed -> read.changes.files.isNotEmpty()
+    else -> true
+  }
+  return QuickButtonUi(kind, label, count, enabled, pressed)
 }

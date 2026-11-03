@@ -38,7 +38,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
@@ -79,7 +78,9 @@ class ChangesWindowViewModel(
     detail.observe(item).onEach { observed ->
       val runningChanged = mutableState.value.item.running != observed.header.running
       if (runningChanged) invalidateDiffRead()
-      mutableState.update { it.copy(item = observed.header) }
+      mutableState.update {
+        it.copy(item = observed.header, allRead = if (runningChanged) null else it.allRead)
+      }
       when (val sections = observed.sections) {
         DetailSections.Pending -> {
           currentLoadedDetail = null
@@ -175,6 +176,7 @@ class ChangesWindowViewModel(
     val effective = effectiveScope(target, requestedScope.value)
     requestedScope.value = effective
     val current = mutableState.value
+    val targetChanged = current.target != target
     if (current.content == WindowContent.Ready(target) && current.scope == effective) {
       if (subtasks != null && stats != null) {
         mutableState.update { old -> project(old.copy(subtasks = subtasks, stats = stats)) }
@@ -189,6 +191,7 @@ class ChangesWindowViewModel(
           scope = effective,
           subtasks = subtasks ?: old.subtasks,
           stats = stats ?: old.stats,
+          allRead = if (targetChanged) null else old.allRead,
         ),
         list = if (old.scope == effective) old.list else ScopeListUi.Loading,
       )
@@ -237,7 +240,7 @@ class ChangesWindowViewModel(
       val subtask = target.subtasks.firstOrNull { it.id == id } ?: return@mapNotNull null
       val inScope = when (scope) {
         is ChangeScope.Subtasks -> id in scope.from..scope.to
-        ChangeScope.All, ChangeScope.Outside, ChangeScope.Uncommitted -> false
+        ChangeScope.All, ChangeScope.Operator, ChangeScope.Uncommitted -> false
       }
       SubtaskChipUi(id, subtask.name, inScope, normalizeRange(target, id, id) != null)
     }
@@ -269,7 +272,7 @@ class ChangesWindowViewModel(
   }
 
   /**
-   * Uncommitted, and Outside when the target offers it, stay observed for the quick buttons' counts. The shown list reuses these
+   * Uncommitted, and Operator when the target offers it, stay observed for the quick buttons' counts. The shown list reuses these
    * reads when the scope is one of them, so the same scope is never polled twice.
    */
   private fun observeQuickReads() {
@@ -280,30 +283,37 @@ class ChangesWindowViewModel(
       } else {
         flowOf(null)
       }
-      val outside = if (ScopeKind.Outside in availableScopes(key.target)) {
-        scopes.observeScope(key.target, ChangeScope.Outside, key.running)
+      val operator = if (ScopeKind.Operator in availableScopes(key.target)) {
+        scopes.observeScope(key.target, ChangeScope.Operator, key.running)
       } else {
         flowOf(null)
       }
-      combine(uncommitted, outside) { u, o -> QuickReads(key, u, o) }
+      combine(uncommitted, operator) { u, o -> QuickReads(key, u, o) }
     }.onEach { reads ->
       val previous = quickReads.value?.takeIf { it.key == reads?.key }
       // A re-read of the same target keeps the last settled list until the new one lands, like the shown list.
       val settled = reads?.copy(
         uncommitted = reads.uncommitted?.settledOver(previous?.uncommitted),
-        outside = reads.outside?.settledOver(previous?.outside),
+        operator = reads.operator?.settledOver(previous?.operator),
       )
       quickReads.value = settled
-      mutableState.update { it.copy(uncommittedRead = settled?.uncommitted, outsideRead = settled?.outside) }
+      mutableState.update { it.copy(uncommittedRead = settled?.uncommitted, operatorRead = settled?.operator) }
     }.launchIn(viewModelScope)
   }
 
   /** A panel opened on another scope still shows All's count: one read, not polled, until All is viewed. */
   private fun observeAllCount() {
-    state.map { ui -> ui.target?.takeIf { ui.allRead == null && ui.scope != ChangeScope.All } }.filterNotNull().distinctUntilChanged().flatMapLatest { target ->
-      scopes.observeScope(target, ChangeScope.All, running = false)
-    }.onEach { read ->
-      if (read != ScopeChangesState.Loading) mutableState.update { if (it.allRead == null) it.copy(allRead = read.toUi()) else it }
+    state.map { ui ->
+      if (ui.scope != ChangeScope.All && ui.allRead == null) ui.target?.let { AllCountKey(it, ui.item.running) } else null
+    }.distinctUntilChanged().flatMapLatest { key ->
+      if (key == null) emptyFlow() else scopes.observeScope(key.target, ChangeScope.All, running = false).map { key to it }
+    }.onEach { (key, read) ->
+      if (read == ScopeChangesState.Loading) return@onEach
+      mutableState.update { current ->
+        if (current.target == key.target && current.item.running == key.running && current.scope != ChangeScope.All && current.allRead == null) {
+          current.copy(allRead = read.toUi())
+        } else current
+      }
     }.launchIn(viewModelScope)
   }
 
@@ -314,7 +324,7 @@ class ChangesWindowViewModel(
     }.distinctUntilChanged().flatMapLatest { key ->
       when {
         key == null -> emptyFlow()
-        key.scope == ChangeScope.Uncommitted || key.scope == ChangeScope.Outside -> quickReads
+        key.scope == ChangeScope.Uncommitted || key.scope == ChangeScope.Operator -> quickReads
           .map { reads -> reads?.takeIf { it.key == QuickKey(key.target, key.running) }?.get(key.scope) ?: ScopeChangesState.Loading }
           .distinctUntilChanged()
           .map { key to it }
@@ -506,7 +516,7 @@ class ChangesWindowViewModel(
     if (state.value.quick.none { it.kind == kind && it.enabled }) return
     when (kind) {
       QuickScope.All -> requestScope(ChangeScope.All)
-      QuickScope.Outside -> requestScope(ChangeScope.Outside)
+      QuickScope.Operator -> requestScope(ChangeScope.Operator)
       QuickScope.Uncommitted -> requestScope(ChangeScope.Uncommitted)
       QuickScope.Running -> state.value.subtasks.firstOrNull { it.state == ScopeSubtaskState.RUNNING }?.let { selectSubtask(it.id) }
     }
@@ -570,8 +580,10 @@ internal const val REMOVED_WORKTREE_FILE_NOT_OPENED = "The goal's worktree was r
 
 private data class QuickKey(val target: ChangeScopeTarget, val running: Boolean)
 
-private data class QuickReads(val key: QuickKey, val uncommitted: ScopeChangesState?, val outside: ScopeChangesState?) {
-  operator fun get(scope: ChangeScope): ScopeChangesState? = if (scope == ChangeScope.Outside) outside else uncommitted
+private data class AllCountKey(val target: ChangeScopeTarget, val running: Boolean)
+
+private data class QuickReads(val key: QuickKey, val uncommitted: ScopeChangesState?, val operator: ScopeChangesState?) {
+  operator fun get(scope: ChangeScope): ScopeChangesState? = if (scope == ChangeScope.Operator) operator else uncommitted
 }
 
 private fun ScopeChangesState.settledOver(previous: ScopeChangesState?): ScopeChangesState =

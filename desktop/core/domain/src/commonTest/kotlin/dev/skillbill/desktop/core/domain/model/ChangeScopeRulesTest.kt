@@ -5,56 +5,74 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class ChangeScopeRulesTest {
+  private val timeline = ChangeScopeTimeline(
+    "base",
+    "head",
+    listOf(
+      ScopeCommit("op-before", "base", "operator before", emptyList()),
+      ScopeCommit("s1", "op-before", "one", listOf(1)),
+      ScopeCommit("op-middle", "s1", "operator middle", emptyList()),
+      ScopeCommit("s2", "op-middle", "two", listOf(2)),
+      ScopeCommit("s3", "s2", "three", listOf(3)),
+    ),
+  )
   private val subtasks = listOf(
-    ScopeSubtask(1, "one", ScopeSubtaskState.DONE, "s1", "e1", listOf("one.txt")),
-    ScopeSubtask(2, "two", ScopeSubtaskState.DONE, "s2", "e2", emptyList()),
-    ScopeSubtask(3, "three", ScopeSubtaskState.RUNNING, "s3", null, emptyList()),
-    ScopeSubtask(4, "four", ScopeSubtaskState.NOT_STARTED, null, null, emptyList()),
+    ScopeSubtask(1, "one", ScopeSubtaskState.DONE, "s1", listOf("s1"), false, listOf("one.txt")),
+    ScopeSubtask(2, "two", ScopeSubtaskState.DONE, "s2", listOf("s2"), false, emptyList()),
+    ScopeSubtask(3, "three", ScopeSubtaskState.RUNNING, null, listOf("s3"), false, emptyList()),
+    ScopeSubtask(4, "four", ScopeSubtaskState.NOT_STARTED, null, emptyList(), false, emptyList()),
   )
   private val target = ChangeScopeTarget(
-    "goal", "/worktree", ChangeBaseline.TargetMergeBase("/worktree", "main"), subtasks, true,
+    "goal", "/worktree", ChangeBaseline.TargetMergeBase("/worktree", "main"), subtasks, true, timeline = timeline,
   )
 
   @Test
-  fun `resolves committed ranges and a range ending at the running subtask`() {
+  fun `operator scope includes all operator commits`() {
     assertEquals(
-      ScopeRead.Baseline(ChangeBaseline.SubtaskStart("/worktree", "s1", listOf("one.txt"))),
-      resolveScope(target, ChangeScope.Subtasks(1, 3)),
-    )
-    assertEquals(ScopeRead.Committed("s1", "e2"), resolveScope(target, ChangeScope.Subtasks(1, 2)))
-    assertEquals(
-      ScopeRead.Unavailable("scope not available"),
-      resolveScope(target.copy(rangesSupported = false), ChangeScope.Subtasks(1, 2)),
+      ScopeRead.PerCommit(listOf(timeline.commits[0], timeline.commits[2])),
+      resolveScope(target, ChangeScope.Operator),
     )
   }
 
   @Test
-  fun `outside ranges leave an earlier unfinished subtask open`() {
-    val target = target.copy(
-      subtasks = listOf(
-        subtasks[0],
-        subtasks[1].copy(state = ScopeSubtaskState.INTERRUPTED, endSha = null),
-        subtasks[2],
-      ),
+  fun `removed worktree never reads the repository working tree`() {
+    val removed = target.copy(committedOnly = true)
+    assertEquals(false, ScopeKind.Uncommitted in availableScopes(removed))
+    assertEquals(ScopeRead.Committed("s2", "s3"), resolveScope(removed, ChangeScope.Subtasks(3, 3)))
+    val withoutCommit = removed.copy(timeline = timeline.copy(commits = timeline.commits.dropLast(1)))
+    assertEquals(ScopeRead.Unavailable("no end commit"), resolveScope(withoutCommit, ChangeScope.Subtasks(3, 3)))
+  }
+
+  @Test
+  fun `subtask range keeps spanned operator commits and omits operators outside its span`() {
+    assertEquals(
+      ScopeRead.Committed("op-before", "s2"),
+      resolveScope(target, ChangeScope.Subtasks(1, 2)),
     )
     assertEquals(
-      ScopeRead.Outside(listOf(CommitRange("s1", "e1"), CommitRange("s3", null))),
-      resolveScope(target, ChangeScope.Outside),
+      ScopeRead.Baseline(ChangeBaseline.SubtaskStart("/worktree", "s2", emptyList())),
+      resolveScope(target, ChangeScope.Subtasks(3, 3)),
     )
   }
 
   @Test
-  fun `range selection requires selectable ends but allows gaps`() {
-    assertNull(normalizeRange(target, 1, 4))
-    val withGap = target.copy(
-      subtasks = listOf(
-        subtasks[0],
-        subtasks[1].copy(state = ScopeSubtaskState.NOT_STARTED, startSha = null, endSha = null),
-        subtasks[2],
-      ),
+  fun `another subtask in the middle switches the range to selected commits`() {
+    val mixed = target.copy(timeline = timeline.copy(commits = listOf(
+      ScopeCommit("s1", "base", "one", listOf(1)),
+      ScopeCommit("s2", "s1", "four", listOf(4)),
+      ScopeCommit("s3", "s2", "three", listOf(3)),
+    )))
+    assertEquals(
+      ScopeRead.PerCommit(listOf(mixed.timeline!!.commits[0], mixed.timeline.commits[2])),
+      resolveScope(mixed, ChangeScope.Subtasks(1, 3)),
     )
-    assertEquals(ChangeScope.Subtasks(1, 3), normalizeRange(withGap, 3, 1))
-    assertEquals(setOf(ScopeKind.All, ScopeKind.Uncommitted), availableScopes(target.copy(rangesSupported = false)))
+  }
+
+  @Test
+  fun `no-change subtask is not selectable and timeline is required for scopes`() {
+    val noChange = target.copy(subtasks = subtasks + ScopeSubtask(5, "none", ScopeSubtaskState.DONE, null, emptyList(), false, emptyList()))
+    assertNull(normalizeRange(noChange, 5, 5))
+    assertEquals(setOf(ScopeKind.All, ScopeKind.Uncommitted), availableScopes(target.copy(timeline = null)))
     assertEquals(
       setOf(ScopeKind.All, ScopeKind.Uncommitted),
       availableScopes(executionScopeTarget("run", ChangeBaseline.RunStart("/worktree", "start", emptyList()))),
@@ -62,36 +80,14 @@ class ChangeScopeRulesTest {
   }
 
   @Test
-  fun `removed worktree offers committed scopes and refuses a range without an end commit`() {
-    val committed = target.copy(
-      allBaseline = ChangeBaseline.CommittedBranchRange("/repo", "main", "goal"),
-      committedOnly = true,
-    )
-
-    assertEquals(setOf(ScopeKind.All, ScopeKind.Subtasks), availableScopes(committed))
-    assertEquals(ScopeRead.Committed("s1", "e2"), resolveScope(committed, ChangeScope.Subtasks(1, 2)))
-    assertEquals(ScopeRead.Unavailable("no end commit"), resolveScope(committed, ChangeScope.Subtasks(1, 3)))
-    assertEquals(ScopeRead.Unavailable("scope not available"), resolveScope(committed, ChangeScope.Uncommitted))
-  }
-
-  @Test
   fun `hunk attribution requires exclusive added and removed lines`() {
     val range = FileDiff(
-      listOf(
-        hunk(added = listOf("only three")),
-        hunk(added = listOf("three", "five")),
-        hunk(added = listOf("shared")),
-      ),
-      4,
-      0,
+      listOf(hunk(listOf("only three")), hunk(listOf("three", "five")), hunk(listOf("shared"))), 4, 0,
     )
-    val three = FileDiff(listOf(hunk(added = listOf("only three", "three", "shared"))), 3, 0)
-    val five = FileDiff(listOf(hunk(added = listOf("five", "shared"))), 2, 0)
+    val three = FileDiff(listOf(hunk(listOf("only three", "three", "shared"))), 3, 0)
+    val five = FileDiff(listOf(hunk(listOf("five", "shared"))), 2, 0)
     assertEquals(listOf(3, null, null), attributeHunks(range, mapOf(3 to three, 5 to five)))
   }
 
-  private fun hunk(added: List<String>) = DiffHunk(
-    "@@ -1 +1 @@",
-    added.map { DiffLine(DiffLineKind.Added, null, 1, it) },
-  )
+  private fun hunk(added: List<String>) = DiffHunk("@@ -1 +1 @@", added.map { DiffLine(DiffLineKind.Added, null, 1, it) })
 }

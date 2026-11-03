@@ -72,6 +72,8 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
+import dev.skillbill.desktop.core.domain.model.TimelineProblem
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -282,6 +284,9 @@ private fun StripCard(
         maxLines = 1,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
       )
+      if (subtask.changedAfterFinish) {
+        BasicText("changed after finish", style = changesSans(10f, FontWeight.Medium, colors.stFailed), maxLines = 1, softWrap = false)
+      }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       if (started) {
@@ -348,6 +353,9 @@ private fun StripColumn(
         Modifier.fillMaxWidth().fillMaxHeight(fraction).heightIn(min = MIN_BAR_HEIGHT)
           .background(bar, RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)),
       )
+      if (subtask.changedAfterFinish) {
+        Box(Modifier.align(Alignment.TopCenter).size(5.dp).background(colors.stFailed, CircleShape))
+      }
     }
   }
 }
@@ -388,7 +396,8 @@ private fun StripTip(subtask: ScopeSubtask, stats: SubtaskStats?, position: Offs
           withStyle(changesMono(11f, FontWeight.Medium, colors.stDone).toSpanStyle()) { append("+${stats?.insertions ?: 0}") }
           append(" ")
           withStyle(changesMono(11f, FontWeight.Medium, colors.stFailed).toSpanStyle()) { append("−${stats?.deletions ?: 0}") }
-          append(" · ${subtask.endSha?.take(7) ?: "no commit"}")
+          append(" · ${subtask.commitShas.lastOrNull()?.take(7) ?: "no commit"}")
+          if (subtask.changedAfterFinish) append(" · changed after finish")
         }
       }
       BasicText(detail, style = changesMono(11f, FontWeight.Normal, colors.fgMuted, lineHeight = 15.4f))
@@ -438,6 +447,15 @@ fun subtaskTooltip(subtask: ScopeSubtask, stats: SubtaskStats?): String {
   val head = "${subtask.id} · ${subtask.name}"
   if (subtask.state == ScopeSubtaskState.NOT_STARTED) return "$head\nnot started"
   val running = if (subtask.state == ScopeSubtaskState.RUNNING) "running · " else ""
-  val sha = subtask.endSha?.take(7) ?: "no commit"
-  return "$head\n$running${filesLabel(stats?.files?.size ?: 0)} · +${stats?.insertions ?: 0} −${stats?.deletions ?: 0} · $sha"
+  val sha = subtask.commitShas.lastOrNull()?.take(7) ?: "no commit"
+  val changed = if (subtask.changedAfterFinish) " · changed after finish" else ""
+  return "$head\n$running${filesLabel(stats?.files?.size ?: 0)} · +${stats?.insertions ?: 0} −${stats?.deletions ?: 0} · $sha$changed"
+}
+
+fun timelineProblemText(problem: TimelineProblem): String = when (problem) {
+  is TimelineProblem.OnOtherBranch ->
+    "Checkout is on ${problem.currentBranch ?: "detached HEAD"}, not the goal branch ${problem.featureBranch}. Subtask scopes need the goal branch."
+  is TimelineProblem.BaseUnavailable -> "Base commit unavailable: ${problem.reason}"
+  is TimelineProblem.NotARepository -> "${problem.worktreeRoot} is not a git repository."
+  is TimelineProblem.Unavailable -> readProblemText(problem.problem)
 }

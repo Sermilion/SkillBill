@@ -19,6 +19,7 @@ import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.filesLabel
+import dev.skillbill.desktop.core.ui.changes.timelineProblemText
 import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 
 /** The scope label and commit range; for a subtask range the previous, next and Show all links; the visible files' totals. */
@@ -36,7 +37,7 @@ internal fun ScopeBar(state: ChangesWindowUiState, onAction: (ChangesWindowActio
     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
       BasicText(scopeLabel(state.scope, state.subtasks), style = changesSans(12f, FontWeight.SemiBold, colors.fg2), maxLines = 1, softWrap = false)
       BasicText(
-        commitRangeText(target, state.scope, state.outsideCommits),
+        state.target?.timelineProblem?.let(::timelineProblemText) ?: commitRangeText(target, state.scope),
         Modifier.weight(1f, fill = false),
         style = mono,
         maxLines = 1,

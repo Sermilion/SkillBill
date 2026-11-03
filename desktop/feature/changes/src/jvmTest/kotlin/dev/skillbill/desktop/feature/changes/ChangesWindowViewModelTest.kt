@@ -2,6 +2,8 @@ package dev.skillbill.desktop.feature.changes
 
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.ChangeScopeTimeline
+import dev.skillbill.desktop.core.domain.model.ScopeCommit
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
@@ -95,6 +97,7 @@ class ChangesWindowViewModelTest {
       rangesSupported = true,
       subtasks = listOf(subtask(3), subtask(5)),
       stats = mapOf(3 to SubtaskStats(listOf(foo), 1, 0), 5 to SubtaskStats(listOf(foo), 1, 0)),
+      timeline = timelineFor(listOf(subtask(3), subtask(5))),
     )
     val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
     scopes.list(ChangeScope.All).value = listed(file("a/Bar.kt"), foo)
@@ -127,6 +130,7 @@ class ChangesWindowViewModelTest {
       rangesSupported = true,
       subtasks = listOf(subtask(3), subtask(5)),
       stats = mapOf(3 to SubtaskStats(listOf(foo), 1, 0), 5 to SubtaskStats(listOf(foo), 1, 0)),
+      timeline = timelineFor(listOf(subtask(3), subtask(5))),
     )
     scopes.list(ChangeScope.Subtasks(3, 3)).value = ScopeChangesState.BaseUnavailable("start3 is not in the repository")
     val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(3, 3), details, scopes, opener)
@@ -180,7 +184,7 @@ class ChangesWindowViewModelTest {
   @Test
   fun `steps skip subtasks that cannot be selected, stop at both ends and restart from all changes`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    val viewModel = goalWindow(listOf(subtask(1), subtask(2).copy(startSha = null), subtask(3), notStarted(4)))
+    val viewModel = goalWindow(listOf(subtask(1), subtask(2).copy(recordedSha = null, commitShas = emptyList()), subtask(3), notStarted(4)))
 
     viewModel.onAction(ChangesWindowAction.Step(forward = true))
     assertEquals(ChangeScope.Subtasks(1, 1), viewModel.state.value.scope)
@@ -201,11 +205,33 @@ class ChangesWindowViewModelTest {
   }
 
   @Test
+  fun `operator quick selection shows the limit while all keeps its changes`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val viewModel = goalWindow(listOf(subtask(1)))
+    val changed = file("src/Changed.kt")
+    scopes.list(ChangeScope.All).value = listed(changed)
+    scopes.list(ChangeScope.Operator).value = ScopeChangesState.TooManyCommits(200)
+    advanceUntilIdle()
+
+    viewModel.onAction(ChangesWindowAction.SelectQuickScope(QuickScope.Operator))
+    advanceUntilIdle()
+    assertEquals(ChangeScope.Operator, viewModel.state.value.scope)
+    assertEquals(ScopeListUi.TooManyCommits(200), viewModel.state.value.list)
+
+    viewModel.onAction(ChangesWindowAction.SelectQuickScope(QuickScope.All))
+    advanceUntilIdle()
+    assertEquals(ChangeScope.All, viewModel.state.value.scope)
+    assertEquals(listOf(changed), (viewModel.state.value.list as ScopeListUi.Listed).changes.files)
+  }
+
+  @Test
   fun `a window opened on a subtask still counts all changes`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val goal = workItem("G")
     detailOf(goal)
-    scopes.subtasks.value = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap())
+    scopes.subtasks.value = SubtaskScopesState.Listed(
+      "/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap(), timeline = timelineFor(listOf(subtask(1))),
+    )
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
     val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(1, 1), details, scopes, opener)
     advanceUntilIdle()
@@ -264,7 +290,9 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val goal = workItem("G")
     detailOf(goal)
-    scopes.subtasks.value = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap())
+    scopes.subtasks.value = SubtaskScopesState.Listed(
+      "/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap(), timeline = timelineFor(listOf(subtask(1))),
+    )
     val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"))
     advanceUntilIdle()
@@ -307,13 +335,19 @@ class ChangesWindowViewModelTest {
   private fun TestScope.goalWindow(subtasks: List<ScopeSubtask>): ChangesWindowViewModel {
     val goal = workItem("G")
     detailOf(goal)
-    scopes.subtasks.value = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = subtasks, stats = emptyMap())
+    val commits = subtasks.flatMap { subtask -> subtask.commitShas.mapIndexed { index, sha ->
+      ScopeCommit(sha, "parent-$sha", sha, listOf(subtask.id))
+    } }
+    scopes.subtasks.value = SubtaskScopesState.Listed(
+      "/repo", "main", rangesSupported = true, subtasks = subtasks, stats = emptyMap(),
+      timeline = ChangeScopeTimeline("base", "head", commits),
+    )
     val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
     advanceUntilIdle()
     return viewModel
   }
 
-  private fun notStarted(id: Int) = ScopeSubtask(id, "Subtask $id", ScopeSubtaskState.NOT_STARTED, null, null, emptyList())
+  private fun notStarted(id: Int) = ScopeSubtask(id, "Subtask $id", ScopeSubtaskState.NOT_STARTED, null, emptyList(), false, emptyList())
 
   private class RecordingOpener : WorkChangesRepository {
     var outcome = OpenOutcome.Opened
@@ -339,7 +373,11 @@ class ChangesWindowViewModelTest {
 
   private fun listed(vararg files: ChangedFile) = ScopeChangesState.Listed(ChangeSet("base", files.toList(), files.sumOf { it.insertions ?: 0 }, 0))
 
-  private fun subtask(id: Int) = ScopeSubtask(id, "Subtask $id", ScopeSubtaskState.DONE, "start$id", "end$id", emptyList())
+  private fun subtask(id: Int) = ScopeSubtask(id, "Subtask $id", ScopeSubtaskState.DONE, "end$id", listOf("end$id"), false, emptyList())
+
+  private fun timelineFor(subtasks: List<ScopeSubtask>) = ChangeScopeTimeline(
+    "base", "head", subtasks.flatMap { subtask -> subtask.commitShas.map { ScopeCommit(it, "parent-$it", it, listOf(subtask.id)) } },
+  )
 
   private class FakeChangeScopes : WorkChangeScopesRepository {
     val subtasks = MutableStateFlow<SubtaskScopesState>(SubtaskScopesState.Loading)
@@ -348,7 +386,7 @@ class ChangesWindowViewModelTest {
     private val lists = mutableMapOf<ChangeScope, MutableStateFlow<ScopeChangesState>>()
 
     /** Scopes read for the shown list; the window always observes Uncommitted and Outside for the quick buttons. */
-    val shown: List<ChangeScope> get() = observed.filterNot { it == ChangeScope.Uncommitted || it == ChangeScope.Outside }
+    val shown: List<ChangeScope> get() = observed.filterNot { it == ChangeScope.Uncommitted || it == ChangeScope.Operator }
 
     fun list(scope: ChangeScope): MutableStateFlow<ScopeChangesState> = lists.getOrPut(scope) { MutableStateFlow(ScopeChangesState.Loading) }
 

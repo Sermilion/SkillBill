@@ -3,15 +3,16 @@ package dev.skillbill.desktop.core.domain.model
 fun goalScopeTarget(workId: String, listed: SubtaskScopesState.Listed): ChangeScopeTarget = ChangeScopeTarget(
   workId = workId,
   worktreeRoot = listed.worktreeRoot,
-  allBaseline =
-    if (listed.committedHeadBranch != null && listed.targetBranch != null) {
-      ChangeBaseline.CommittedBranchRange(listed.worktreeRoot, listed.targetBranch, listed.committedHeadBranch)
-    } else {
-      ChangeBaseline.TargetMergeBase(listed.worktreeRoot, listed.targetBranch)
-    },
+  allBaseline = if (listed.committedHeadBranch != null && listed.targetBranch != null) {
+    ChangeBaseline.CommittedBranchRange(listed.worktreeRoot, listed.targetBranch, listed.committedHeadBranch)
+  } else {
+    ChangeBaseline.TargetMergeBase(listed.worktreeRoot, listed.targetBranch)
+  },
   subtasks = listed.subtasks,
   rangesSupported = listed.rangesSupported,
   committedOnly = listed.committedHeadBranch != null,
+  timeline = listed.timeline,
+  timelineProblem = listed.timelineProblem,
 )
 
 fun executionScopeTarget(workId: String, baseline: ChangeBaseline): ChangeScopeTarget = ChangeScopeTarget(
@@ -22,13 +23,14 @@ fun executionScopeTarget(workId: String, baseline: ChangeBaseline): ChangeScopeT
   rangesSupported = false,
 )
 
-fun availableScopes(target: ChangeScopeTarget): Set<ScopeKind> =
-  when {
-    target.committedOnly ->
-      if (target.rangesSupported) setOf(ScopeKind.All, ScopeKind.Subtasks) else setOf(ScopeKind.All)
-    target.subtasks.isNotEmpty() && target.rangesSupported -> ScopeKind.entries.toSet()
-    else -> setOf(ScopeKind.All, ScopeKind.Uncommitted)
+fun availableScopes(target: ChangeScopeTarget): Set<ScopeKind> {
+  val scopes = if (target.subtasks.isNotEmpty() && target.rangesSupported && target.timeline != null) {
+    ScopeKind.entries.toSet()
+  } else {
+    setOf(ScopeKind.All, ScopeKind.Uncommitted)
   }
+  return if (target.committedOnly) scopes - ScopeKind.Uncommitted else scopes
+}
 
 fun normalizeRange(target: ChangeScopeTarget, a: Int, b: Int): ChangeScope.Subtasks? {
   if (ScopeKind.Subtasks !in availableScopes(target)) return null
@@ -42,43 +44,54 @@ fun resolveScope(target: ChangeScopeTarget, scope: ChangeScope): ScopeRead {
   return when (scope) {
     ChangeScope.All -> ScopeRead.Baseline(target.allBaseline)
     ChangeScope.Uncommitted -> ScopeRead.Uncommitted
-    ChangeScope.Outside -> ScopeRead.Outside(outsideRanges(target.subtasks))
+    ChangeScope.Operator -> ScopeRead.PerCommit(target.timeline!!.commits.filter(ScopeCommit::operator))
     is ChangeScope.Subtasks -> resolveSubtasks(target, scope)
   }
 }
 
+fun workingBaseSha(timeline: ChangeScopeTimeline, subtask: ScopeSubtask): String =
+  timeline.commits.firstOrNull { subtask.id in it.ownerIds }?.parentSha ?: timeline.headSha
+
 private fun resolveSubtasks(target: ChangeScopeTarget, scope: ChangeScope.Subtasks): ScopeRead {
   if (scope.from > scope.to) return ScopeRead.Unavailable("scope not available")
-  val subtasks = target.subtasks.associateBy { it.id }
-  val start = subtasks[scope.from]?.takeIf { it.selectable } ?: return ScopeRead.Unavailable("no end commit")
-  val end = subtasks[scope.to]?.takeIf { it.selectable } ?: return ScopeRead.Unavailable("scope not available")
-  val fromSha = start.startSha ?: return ScopeRead.Unavailable("no end commit")
-  end.endSha?.let { return ScopeRead.Committed(fromSha, it) }
-  return if (end.isLastStarted(target.subtasks)) {
-    if (target.committedOnly) ScopeRead.Unavailable("no end commit")
-    else ScopeRead.Baseline(ChangeBaseline.SubtaskStart(target.worktreeRoot, fromSha, start.baselineUntrackedPaths))
-  } else {
-    ScopeRead.Unavailable("no end commit")
+  val subtasks = target.subtasks.associateBy(ScopeSubtask::id)
+  val start = subtasks[scope.from]?.takeIf(ScopeSubtask::selectable) ?: return ScopeRead.Unavailable("no end commit")
+  val end = subtasks[scope.to]?.takeIf(ScopeSubtask::selectable) ?: return ScopeRead.Unavailable("scope not available")
+  val timeline = target.timeline ?: return ScopeRead.Unavailable("scope not available")
+  val ownedIndices = timeline.commits.indices.filter { index ->
+    timeline.commits[index].ownerIds.any { it in scope.from..scope.to }
   }
-}
-
-private fun outsideRanges(subtasks: List<ScopeSubtask>): List<CommitRange> {
-  val lastStarted = subtasks.indices.lastOrNull { index ->
-    val current = subtasks[index]
-    current.state in setOf(ScopeSubtaskState.RUNNING, ScopeSubtaskState.INTERRUPTED) &&
-      current.startSha != null && subtasks.drop(index + 1).none { it.startSha != null }
-  } ?: -1
-  return subtasks.mapIndexedNotNull { index, subtask ->
-    val start = subtask.startSha ?: return@mapIndexedNotNull null
-    val end = subtask.endSha ?: if (index == lastStarted) null else return@mapIndexedNotNull null
-    CommitRange(start, end)
+  val lastStarted = end.isLastStarted(target.subtasks)
+  if (ownedIndices.isEmpty()) {
+    return if (!target.committedOnly && end.recordedSha == null && lastStarted) {
+      ScopeRead.Baseline(ChangeBaseline.SubtaskStart(target.worktreeRoot, timeline.headSha, start.baselineUntrackedPaths))
+    } else {
+      ScopeRead.Unavailable("no end commit")
+    }
   }
+  val firstIndex = ownedIndices.first()
+  val lastIndex = ownedIndices.last()
+  val span = timeline.commits.subList(firstIndex, lastIndex + 1)
+  val selected = span.filter { commit ->
+    commit.operator || commit.ownerIds.any { it in scope.from..scope.to }
+  }
+  val includesOtherOwner = span.any { commit ->
+    commit.ownerIds.isNotEmpty() && commit.ownerIds.none { it in scope.from..scope.to }
+  }
+  if (includesOtherOwner) return ScopeRead.PerCommit(selected)
+  if (!target.committedOnly && end.recordedSha == null && lastStarted) {
+    val base = span.firstOrNull()?.parentSha ?: timeline.headSha
+    return ScopeRead.Baseline(ChangeBaseline.SubtaskStart(target.worktreeRoot, base, start.baselineUntrackedPaths))
+  }
+  val first = span.first()
+  val last = span.last()
+  return ScopeRead.Committed(first.parentSha, last.sha)
 }
 
 private fun ScopeSubtask.isLastStarted(subtasks: List<ScopeSubtask>): Boolean {
   val index = subtasks.indexOf(this)
   return index >= 0 && state in setOf(ScopeSubtaskState.RUNNING, ScopeSubtaskState.INTERRUPTED) &&
-    startSha != null && subtasks.drop(index + 1).none { it.startSha != null }
+    subtasks.drop(index + 1).all { it.state == ScopeSubtaskState.NOT_STARTED }
 }
 
 fun subtasksTouching(path: String, stats: Map<Int, SubtaskStats>): List<Int> = stats.entries
@@ -91,7 +104,7 @@ fun touchCount(path: String, scope: ChangeScope, stats: Map<Int, SubtaskStats>):
   return when (scope) {
     ChangeScope.All -> ids.size
     is ChangeScope.Subtasks -> ids.count { it in scope.from..scope.to }
-    ChangeScope.Outside, ChangeScope.Uncommitted -> null
+    ChangeScope.Operator, ChangeScope.Uncommitted -> null
   }
 }
 

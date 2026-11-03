@@ -17,7 +17,10 @@ import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.workchanges.WorkChangesPort
+import skillbill.ports.workchanges.model.WorkCommitTimelineResult
 import skillbill.ports.workchanges.model.WorkGoalScopesResult
+import skillbill.ports.workchanges.model.WorkGoalTimelineResult
 import skillbill.ports.workchanges.model.WorkScopeSubtask
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -36,7 +39,50 @@ public class WorkChangeScopesService(
   private val workBoardItemProjection: WorkBoardItemProjection,
   private val goalRunnerStatusService: GoalRunnerStatusPort,
   private val diagnostics: RuntimeDiagnostics,
+  private val workChangesPort: WorkChangesPort,
 ) {
+  public fun goalSubtaskTimeline(scopes: WorkGoalScopesResult.Listed): WorkGoalTimelineResult {
+    val recordedShas =
+      scopes.subtasks
+        .asSequence()
+        .filter { it.status != DecompositionStatus.COMPLETED_NO_CHANGE }
+        .mapNotNull(WorkScopeSubtask::recordedSha)
+        .distinct()
+        .toList()
+    val result =
+      workChangesPort.commitTimeline(
+        scopes.worktreeRoot,
+        scopes.targetBranch,
+        recordedShas,
+        scopes.committedHeadBranch,
+      )
+    return when (result) {
+      is WorkCommitTimelineResult.Listed -> {
+        val featureBranch = scopes.featureBranch?.takeIf(String::isNotBlank)
+        if (scopes.committedHeadBranch == null && featureBranch != null && result.currentBranch != featureBranch) {
+          warn(
+            "work_change_scopes issue=${scopes.issueKey} value_used=${result.currentBranch ?: "detached HEAD"} " +
+              "value_expected=$featureBranch cause=goal timeline read from another branch",
+            null,
+          )
+          WorkGoalTimelineResult.OnOtherBranch(result.currentBranch, featureBranch)
+        } else {
+          attributeTimeline(scopes.issueKey, scopes.subtasks, result)
+        }
+      }
+      is WorkCommitTimelineResult.BaseUnavailable -> WorkGoalTimelineResult.BaseUnavailable(result.reason)
+      is WorkCommitTimelineResult.NotARepository -> WorkGoalTimelineResult.NotARepository(result.worktreeRoot)
+      is WorkCommitTimelineResult.Failed -> {
+        warn(
+          "work_change_scopes issue=${scopes.issueKey} value_used=failed " +
+            "value_expected=commit_timeline cause=${result.message}",
+          null,
+        )
+        WorkGoalTimelineResult.Failed(result.message)
+      }
+    }
+  }
+
   public fun goalSubtaskScopes(goalWorkflowId: String): WorkGoalScopesResult {
     if (!database.databaseExists()) return WorkGoalScopesResult.Unavailable("Skill Bill database is not present.")
     return try {
@@ -89,6 +135,8 @@ public class WorkChangeScopesService(
       committedHeadBranch = committedHeadBranch,
       rangesSupported = pages.manifest.executionModel == DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK,
       subtasks = scopeSubtasks(goalWorkflowId, pages, unit),
+      issueKey = pages.manifest.issueKey,
+      featureBranch = pages.manifest.featureBranch,
     )
   }
 
@@ -125,35 +173,29 @@ public class WorkChangeScopesService(
     goalWorkflowId: String,
     pages: ScopePages,
     unit: UnitOfWork,
-  ): List<WorkScopeSubtask> {
-    var previousEnd: String? = null
-    return pages.subtasks.map { subtask ->
+  ): List<WorkScopeSubtask> =
+    pages.subtasks.map { subtask ->
       val status = statusOf(goalWorkflowId, subtask)
-      val child = subtask.workflowId?.takeIf(String::isNotBlank)?.let { childRead(it, unit) }
-      val reviewBase = child?.reviewBaseSha?.takeIf(String::isNotBlank)
-      val startSha =
-        when {
-          child == null -> null
-          reviewBase != null -> reviewBase
-          else -> previousEnd.also { warnStartFallback(goalWorkflowId, subtask.id, it, child) }
+      val child =
+        subtask.workflowId?.takeIf(String::isNotBlank)?.let {
+          childRead(goalWorkflowId, subtask.id, it, unit)
         }
-      val endSha =
-        subtask.commitSha?.takeIf(String::isNotBlank)
-          ?: child?.commitSha?.takeIf(String::isNotBlank)
-          ?: startSha.takeIf { status == DecompositionStatus.COMPLETED_NO_CHANGE }
-      previousEnd = endSha
       val current = subtask.workflowId != null && subtask.workflowId == pages.currentWorkflowId
       WorkScopeSubtask(
         id = subtask.id,
         name = subtask.name,
         status = status,
         running = current && status == DecompositionStatus.IN_PROGRESS,
-        startSha = startSha,
-        endSha = endSha,
+        recordedSha = subtask.commitSha?.takeIf(String::isNotBlank) ?: child?.commitSha?.takeIf(String::isNotBlank),
+        reviewBaseSha =
+          if (pages.manifest.executionModel == DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK) {
+            null
+          } else {
+            child?.reviewBaseSha
+          },
         baselineUntrackedPaths = child?.baselineUntrackedPaths.orEmpty(),
       )
     }
-  }
 
   private fun statusOf(
     goalWorkflowId: String,
@@ -168,14 +210,21 @@ public class WorkChangeScopesService(
     }
 
   private fun childRead(
+    goalWorkflowId: String,
+    subtaskId: Int,
     childWorkflowId: String,
     unit: UnitOfWork,
   ): ChildRead =
     try {
       val artifacts = taskRuntimeRecordOrNull(unit.workflowStates, childWorkflowId)?.artifacts
-      reviewRead(artifacts, artifacts?.commitPushResultArtifact()?.commitSha)
+      reviewRead(goalWorkflowId, subtaskId, artifacts, artifacts?.commitPushResultArtifact()?.commitSha)
     } catch (error: SkillBillRuntimeException) {
-      ChildRead(null, null, null, error.message ?: "child record read failed", error)
+      warn(
+        "work_change_scopes goal=$goalWorkflowId subtask=$subtaskId value_used=empty " +
+          "cause=${error.message ?: "child record read failed"}",
+        error,
+      )
+      ChildRead(null, null, null)
     }
 
   private fun taskRuntimeRecordOrNull(
@@ -189,32 +238,22 @@ public class WorkChangeScopesService(
     }
 
   private fun reviewRead(
+    goalWorkflowId: String,
+    subtaskId: Int,
     artifacts: DurableWorkflowArtifacts?,
     commitSha: String?,
   ): ChildRead =
     try {
       val state = artifacts?.goalSubtaskReviewArtifacts()?.state
-      ChildRead(
-        reviewBaseSha = state?.reviewBaseSha,
-        baselineUntrackedPaths = state?.baselineUntrackedPaths,
-        commitSha = commitSha,
-        cause = if (state == null) "review state artifact missing" else "review base sha blank",
-        error = null,
-      )
+      ChildRead(state?.baselineUntrackedPaths, commitSha, state?.reviewBaseSha?.takeIf(String::isNotBlank))
     } catch (error: SkillBillRuntimeException) {
-      ChildRead(null, null, commitSha, error.message ?: "review state read failed", error)
+      warn(
+        "work_change_scopes goal=$goalWorkflowId subtask=$subtaskId value_used=empty " +
+          "cause=${error.message ?: "review state read failed"}",
+        error,
+      )
+      ChildRead(null, commitSha, null)
     }
-
-  private fun warnStartFallback(
-    goalWorkflowId: String,
-    subtaskId: Int,
-    used: String?,
-    child: ChildRead,
-  ) = warn(
-    "work_change_scopes goal=$goalWorkflowId subtask=$subtaskId value_used=${used ?: "none"} " +
-      "value_expected=goal_subtask_review_state cause=${child.cause}",
-    child.error,
-  )
 
   private fun unavailable(
     goalWorkflowId: String,
@@ -240,10 +279,8 @@ public class WorkChangeScopesService(
   )
 
   private data class ChildRead(
-    val reviewBaseSha: String?,
     val baselineUntrackedPaths: List<String>?,
     val commitSha: String?,
-    val cause: String,
-    val error: Throwable?,
+    val reviewBaseSha: String?,
   )
 }

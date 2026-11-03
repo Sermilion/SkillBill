@@ -7,22 +7,26 @@ import dev.skillbill.desktop.core.data.runtime.readOrProblem
 import dev.skillbill.desktop.core.data.runtime.toDomain
 import dev.skillbill.desktop.core.data.runtime.toPort
 import dev.skillbill.desktop.core.data.runtime.toState
+import dev.skillbill.desktop.core.data.runtime.withTimeline
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
-import dev.skillbill.desktop.core.domain.model.CommitRange
+import dev.skillbill.desktop.core.domain.model.CommitChanges
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
+import dev.skillbill.desktop.core.domain.model.ScopeCommit
 import dev.skillbill.desktop.core.domain.model.ScopeRead
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
+import dev.skillbill.desktop.core.domain.model.TimelineProblem
 import dev.skillbill.desktop.core.domain.model.goalScopeTarget
 import dev.skillbill.desktop.core.domain.model.resolveScope
+import dev.skillbill.desktop.core.domain.model.workingBaseSha
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -36,11 +40,11 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.ports.workchanges.WorkChangesPort
 import skillbill.ports.workchanges.model.WorkChangeListResult
 import skillbill.ports.workchanges.model.WorkGoalScopesResult
-import skillbill.ports.workchanges.model.WorkOutsideCommitsResult
+import skillbill.ports.workchanges.model.WorkGoalTimelineResult
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicReference
 
 internal const val SCOPES_READ_FAILED = "desktop_work_change_scopes_read_failed"
+internal const val PER_COMMIT_READ_LIMIT = 200
 
 class ChangeScopeObservations internal constructor(
   private val runtime: RuntimeComponent,
@@ -49,37 +53,26 @@ class ChangeScopeObservations internal constructor(
   private val port: WorkChangesPort = runtime.workChangesPort,
   private val io: CoroutineDispatcher = Dispatchers.IO,
   private val workingTree: WorkingTreeReads = WorkingTreeReads(),
+  private val readTimeline: (WorkGoalScopesResult.Listed) -> WorkGoalTimelineResult = runtime.workChangeScopesService::goalSubtaskTimeline,
 ) {
-  private data class InterruptedStatsKey(
-    val worktreeRoot: String,
-    val subtaskId: Int,
-    val startSha: String,
-    val baselineUntrackedPaths: List<String>,
-  )
+  private data class InterruptedStatsKey(val worktreeRoot: String, val subtaskId: Int, val baseSha: String)
   private data class StatsAttemptKey(
     val worktreeRoot: String,
     val subtaskId: Int,
-    val startSha: String?,
-    val endSha: String?,
+    val read: IndividualStatsRead,
     val state: ScopeSubtaskState,
-    val baselineUntrackedPaths: List<String>,
   )
   private sealed interface IndividualStatsRead {
     data class Working(val baseline: ChangeBaseline.SubtaskStart) : IndividualStatsRead
     data class Committed(val scope: ScopeRead.Committed) : IndividualStatsRead
+    data class PerCommit(val commits: List<ScopeCommit>) : IndividualStatsRead
     data object Unavailable : IndividualStatsRead
   }
-  private data class OutsideKey(val worktreeRoot: String, val targetBranch: String?, val ranges: List<CommitRange>)
-  private class OutsideMemo(val key: OutsideKey, val state: ScopeChangesState.Listed)
 
   private val baseShas = ConcurrentHashMap<ListedBaseKey, String>()
   private val latestSubtaskStates = ConcurrentHashMap<String, SubtaskScopesState.Listed>()
-  private val interruptedReadLock = Mutex()
-  // Single-slot memo: Outside depends on HEAD, so it stays out of the app cache and is re-read only on a range change.
-  private val outsideMemo = AtomicReference<OutsideMemo?>(null)
-  private val diffs = ChangeScopeDiffs(runtime, diagnostics, port, io, baseShas, ::readAttributionStats) { target, ranges, lock ->
-    readOutside(target, ranges, lock, useMemo = true)
-  }
+  private val interruptedStats = ConcurrentHashMap<InterruptedStatsKey, SubtaskStats>()
+  private val diffs = ChangeScopeDiffs(runtime, diagnostics, port, io, baseShas, ::readAttributionStats, ::readPerCommit)
 
   fun observeScope(
     target: ChangeScopeTarget,
@@ -91,11 +84,10 @@ class ChangeScopeObservations internal constructor(
     emit(ScopeChangesState.Loading)
     val resolved = resolveScope(target, scope)
     while (true) {
-      // A non-running collection reads Outside fresh so commits landing after the last subtask show up.
-      emit(readScope(target, resolved, lock, cache, useOutsideMemo = running))
-      val followsHead =
-        (resolved is ScopeRead.Baseline && resolved.baseline !is ChangeBaseline.CommittedBranchRange) ||
-          resolved == ScopeRead.Uncommitted
+      emit(readScope(target, scope, resolved, lock, cache))
+      val followsHead = (resolved is ScopeRead.Baseline && resolved.baseline !is ChangeBaseline.CommittedBranchRange) ||
+        resolved == ScopeRead.Uncommitted ||
+        (resolved is ScopeRead.PerCommit && runningWorkingBaseline(target, scope) != null)
       if (!running || !followsHead) break
       delay(CHANGE_REFRESH_INTERVAL)
     }
@@ -109,111 +101,134 @@ class ChangeScopeObservations internal constructor(
   ): Flow<SubtaskScopesState> = flow {
     emit(SubtaskScopesState.Loading)
     val attempted = mutableSetOf<StatsAttemptKey>()
-    val reportedFailures = mutableSetOf<StatsAttemptKey>()
-    val interruptedStats = mutableMapOf<InterruptedStatsKey, SubtaskStats>()
+    var previousTimelineProblem: TimelineProblem? = null
     while (true) {
       val read = readOrProblem(runtime, diagnostics) { readSubtasks(goalWorkflowId) }
-      val state = when (read) {
+      val scopes = when (read) {
+        is Outcome.Success -> read.value.toState()
         is Outcome.Failure -> {
           diagnostics.record(SCOPES_READ_FAILED)
           SubtaskScopesState.Unavailable(read.error)
         }
-        is Outcome.Success -> read.value.toState()
       }
-      if (state is SubtaskScopesState.Unavailable && read is Outcome.Success) diagnostics.record(SCOPES_READ_FAILED)
-      if (state !is SubtaskScopesState.Listed) {
-        interruptedStats.clear()
-        attempted.removeAll { it.state == ScopeSubtaskState.INTERRUPTED }
-        reportedFailures.removeAll { it.state == ScopeSubtaskState.INTERRUPTED }
+      if (scopes !is SubtaskScopesState.Listed) {
         latestSubtaskStates.remove(goalWorkflowId)
-        emit(state)
+        emit(scopes)
       } else {
-        val target = goalScopeTarget(goalWorkflowId, state)
-        val currentInterruptedKeys = state.subtasks
-          .filter {
-            it.selectable && it.state == ScopeSubtaskState.INTERRUPTED &&
-              individualStatsRead(target, it) is IndividualStatsRead.Working
+        val mapped = if (scopes.rangesSupported) {
+          val listed = (read as Outcome.Success).value as WorkGoalScopesResult.Listed
+          when (val timeline = git(lock) { readTimeline(listed) }) {
+            is Outcome.Success -> scopes.withTimeline(timeline.value)
+            is Outcome.Failure -> scopes.copy(
+              timeline = null,
+              timelineProblem = TimelineProblem.Unavailable(timeline.error),
+            )
           }
-          .mapNotNull { subtask -> subtask.startSha?.let { interruptedStatsKey(target.worktreeRoot, subtask, it) } }
-          .toSet()
-        interruptedStats.keys.retainAll(currentInterruptedKeys)
-        val currentInterruptedAttempts = state.subtasks
-          .filter { it.selectable && it.state == ScopeSubtaskState.INTERRUPTED }
-          .map { statsAttemptKey(target.worktreeRoot, it) }
-          .toSet()
-        attempted.removeAll { it.state == ScopeSubtaskState.INTERRUPTED && it !in currentInterruptedAttempts }
-        reportedFailures.removeAll { it.state == ScopeSubtaskState.INTERRUPTED && it !in currentInterruptedAttempts }
+        } else scopes.copy(timeline = null, timelineProblem = null)
+        val problem = mapped.timelineProblem
+        if (problem != null && problem != previousTimelineProblem) diagnostics.record(SCOPES_READ_FAILED)
+        previousTimelineProblem = problem
+        val target = goalScopeTarget(goalWorkflowId, mapped)
         val stats = linkedMapOf<Int, SubtaskStats>()
-        for (subtask in state.subtasks.filter { it.selectable }) {
-          val selection = individualStatsRead(target, subtask)
-          val cached = (selection as? IndividualStatsRead.Committed)?.scope
-            ?.committedKey(target.worktreeRoot)?.let(cache::list)?.toStats()
-          val working = (selection as? IndividualStatsRead.Working)?.baseline
-            ?.takeIf { subtask.state == ScopeSubtaskState.INTERRUPTED }
-            ?.let { baseline ->
-              interruptedStats[interruptedStatsKey(target.worktreeRoot, subtask, baseline.baseSha)]
-            }
-          if (cached != null) stats[subtask.id] = cached else if (working != null) stats[subtask.id] = working
-        }
-        state.copy(stats = stats.toMap()).also { latestSubtaskStates[goalWorkflowId] = it }.let { emit(it) }
-        val ordered = state.subtasks.filter { it.selectable }.let { items ->
-          items.filter { it.state == ScopeSubtaskState.RUNNING } + items.filter { it.state != ScopeSubtaskState.RUNNING }.sortedBy { it.id }
-        }
-        for (subtask in ordered) {
-          val readKey = statsAttemptKey(target.worktreeRoot, subtask)
-          val selection = individualStatsRead(target, subtask)
-          val capturedInterrupted = if (
-            selection is IndividualStatsRead.Working && subtask.state == ScopeSubtaskState.INTERRUPTED
-          ) {
-            latestSubtaskStates[goalWorkflowId]?.takeIf { it.matches(target) }?.stats?.get(subtask.id)
-          } else null
-          if (capturedInterrupted != null) {
-            stats[subtask.id] = capturedInterrupted
-            state.copy(stats = stats.toMap()).also { latestSubtaskStates[goalWorkflowId] = it }.let { emit(it) }
-            continue
-          }
-          if (subtask.state == ScopeSubtaskState.INTERRUPTED && stats.containsKey(subtask.id)) continue
-          val listKey = (selection as? IndividualStatsRead.Committed)?.scope?.committedKey(target.worktreeRoot)
-          if (subtask.state != ScopeSubtaskState.RUNNING && listKey != null && cache.list(listKey) != null) continue
-          if (subtask.state != ScopeSubtaskState.RUNNING && readKey in attempted) continue
-          val result = if (selection is IndividualStatsRead.Working && subtask.state == ScopeSubtaskState.INTERRUPTED) {
-            readInterruptedStats(target, subtask, lock, cache)
-          } else {
-            readSubtaskStats(target, subtask, lock, cache)
-          }
-          if (result != null) {
-            stats[subtask.id] = result
-            if (subtask.state == ScopeSubtaskState.INTERRUPTED) {
-              (selection as? IndividualStatsRead.Working)?.baseline?.let {
-                interruptedStats[interruptedStatsKey(target.worktreeRoot, subtask, it.baseSha)] = result
+        if (mapped.timeline != null || !mapped.rangesSupported) {
+          for (subtask in mapped.subtasks.filter(ScopeSubtask::selectable)) {
+            val selection = individualStatsRead(target, subtask)
+            val key = statsAttemptKey(target, subtask, selection)
+            val cached = cachedStats(target, selection, subtask, cache)
+            val value = cached ?: if (subtask.state != ScopeSubtaskState.RUNNING && key in attempted) null
+            else readSubtaskStats(target, subtask, selection, lock, cache)
+            if (value != null) {
+              stats[subtask.id] = value
+              if (selection is IndividualStatsRead.Working && subtask.state == ScopeSubtaskState.INTERRUPTED) {
+                interruptedStats[InterruptedStatsKey(target.worktreeRoot, subtask.id, selection.baseline.baseSha)] = value
               }
+            } else if (key !in attempted && subtask.state != ScopeSubtaskState.RUNNING) {
+              attempted += key
+              diagnostics.record(SCOPES_READ_FAILED)
             }
-          } else {
-            attempted += readKey
-            if (reportedFailures.add(readKey)) diagnostics.record(SCOPES_READ_FAILED)
           }
-          state.copy(stats = stats.toMap()).also { latestSubtaskStates[goalWorkflowId] = it }.let { emit(it) }
+        } else {
+          attempted.clear()
+          interruptedStats.clear()
         }
+        mapped.copy(stats = stats).also { latestSubtaskStates[goalWorkflowId] = it }.let { emit(it) }
       }
       if (!running) break
       delay(CHANGE_REFRESH_INTERVAL)
     }
   }.distinctUntilChanged()
 
+  private fun statsAttemptKey(target: ChangeScopeTarget, subtask: ScopeSubtask, selection: IndividualStatsRead) =
+    StatsAttemptKey(target.worktreeRoot, subtask.id, selection, subtask.state)
+
+  private fun cachedStats(
+    target: ChangeScopeTarget,
+    selection: IndividualStatsRead,
+    subtask: ScopeSubtask,
+    cache: CommittedChangeCache,
+  ): SubtaskStats? = when (selection) {
+    is IndividualStatsRead.Committed -> cache.list(selection.scope.key(target.worktreeRoot))?.toStats()
+    is IndividualStatsRead.PerCommit -> {
+      val keys = selection.commits.map { CommittedListKey(target.worktreeRoot, it.parentSha, it.sha) }
+      val changes = keys.mapNotNull(cache::list)
+      if (changes.size != keys.size) null else changes.mapIndexed { index, set -> CommitChanges(selection.commits[index], set.files) }
+        .aggregate(target.timeline!!.mergeBaseSha).toStats()
+    }
+    is IndividualStatsRead.Working -> if (subtask.state == ScopeSubtaskState.INTERRUPTED) {
+      interruptedStats[InterruptedStatsKey(target.worktreeRoot, subtask.id, selection.baseline.baseSha)]
+    } else null
+    IndividualStatsRead.Unavailable -> null
+  }
+
+  private fun individualStatsRead(target: ChangeScopeTarget, subtask: ScopeSubtask): IndividualStatsRead {
+    if (!target.rangesSupported) {
+      val reviewBaseSha = subtask.reviewBaseSha ?: return IndividualStatsRead.Unavailable
+      if (!target.committedOnly && (subtask.state == ScopeSubtaskState.RUNNING ||
+        (subtask.state == ScopeSubtaskState.INTERRUPTED && subtask.recordedSha == null)
+      )) {
+        return IndividualStatsRead.Working(
+          ChangeBaseline.SubtaskStart(target.worktreeRoot, reviewBaseSha, subtask.baselineUntrackedPaths),
+        )
+      }
+      val endCommitSha = if (subtask.completedNoChange) reviewBaseSha else subtask.recordedSha
+      return endCommitSha?.let { IndividualStatsRead.Committed(ScopeRead.Committed(reviewBaseSha, it)) }
+        ?: IndividualStatsRead.Unavailable
+    }
+    val timeline = target.timeline ?: return IndividualStatsRead.Unavailable
+    if (!target.committedOnly && (subtask.state == ScopeSubtaskState.RUNNING ||
+      (subtask.state == ScopeSubtaskState.INTERRUPTED && subtask.recordedSha == null)
+    )) {
+      return IndividualStatsRead.Working(
+        ChangeBaseline.SubtaskStart(target.worktreeRoot, workingBaseSha(timeline, subtask), subtask.baselineUntrackedPaths),
+      )
+    }
+    val commits = timeline.commits.filter { subtask.id in it.ownerIds }
+    if (commits.isEmpty()) return IndividualStatsRead.Unavailable
+    val indices = commits.map { commit -> timeline.commits.indexOf(commit) }
+    return if (indices.zipWithNext().all { (first, second) -> second == first + 1 }) {
+      IndividualStatsRead.Committed(ScopeRead.Committed(commits.first().parentSha, commits.last().sha))
+    } else {
+      IndividualStatsRead.PerCommit(commits)
+    }
+  }
+
   private suspend fun readSubtaskStats(
     target: ChangeScopeTarget,
     subtask: ScopeSubtask,
+    selection: IndividualStatsRead,
     lock: Mutex,
     cache: CommittedChangeCache,
-  ): SubtaskStats? {
-    return when (val selection = individualStatsRead(target, subtask)) {
-      is IndividualStatsRead.Working -> when (val read = readChanges(selection.baseline, lock)) {
-        is Outcome.Success -> (read.value as? WorkChangeListResult.Listed)?.toChangeSet()?.toStats()
-        is Outcome.Failure -> null
-      }
-      is IndividualStatsRead.Committed -> readCommittedList(target.worktreeRoot, selection.scope, lock, cache)?.toStats()
-      IndividualStatsRead.Unavailable -> null
+  ): SubtaskStats? = when (selection) {
+    is IndividualStatsRead.Working -> when (val result = readChanges(selection.baseline, lock)) {
+      is Outcome.Success -> (result.value as? WorkChangeListResult.Listed)?.toChangeSet()?.toStats()
+      is Outcome.Failure -> null
     }
+    is IndividualStatsRead.Committed -> readCommittedList(target.worktreeRoot, selection.scope, lock, cache)?.toStats()
+    is IndividualStatsRead.PerCommit -> when (val result = readPerCommit(target, selection.commits, lock, cache)) {
+      is ScopeChangesState.Listed -> result.changes.toStats()
+      else -> null
+    }
+    IndividualStatsRead.Unavailable -> null
   }
 
   private suspend fun readAttributionStats(
@@ -221,66 +236,14 @@ class ChangeScopeObservations internal constructor(
     subtask: ScopeSubtask,
     lock: Mutex,
     cache: CommittedChangeCache,
-  ): SubtaskStats? {
-    val current = latestSubtaskStates[target.workId]?.takeIf { it.matches(target) }
-    val snapshot = if (subtask.state == ScopeSubtaskState.INTERRUPTED) current?.stats?.get(subtask.id) else null
-    val stats = snapshot ?: if (
-      individualStatsRead(target, subtask) is IndividualStatsRead.Working &&
-      subtask.state == ScopeSubtaskState.INTERRUPTED
-    ) {
-      readInterruptedStats(target, subtask, lock, cache)
-    } else {
-      readSubtaskStats(target, subtask, lock, cache)
-    }
-    if (stats == null) {
-      diagnostics.record(SCOPES_READ_FAILED)
-    }
-    return stats
-  }
-
-  private suspend fun readInterruptedStats(
-    target: ChangeScopeTarget,
-    subtask: ScopeSubtask,
-    lock: Mutex,
-    cache: CommittedChangeCache,
-  ): SubtaskStats? = interruptedReadLock.withLock {
-    val selection = individualStatsRead(target, subtask)
-    if (selection !is IndividualStatsRead.Working || subtask.state != ScopeSubtaskState.INTERRUPTED) {
-      return@withLock null
-    }
-    val snapshot = latestSubtaskStates[target.workId]?.takeIf { it.matches(target) }?.stats?.get(subtask.id)
-    if (snapshot != null) return@withLock snapshot
-    val stats = readSubtaskStats(target, subtask, lock, cache) ?: return@withLock null
-    latestSubtaskStates.compute(target.workId) { _, state ->
-      when {
-        state == null -> SubtaskScopesState.Listed(
-          target.worktreeRoot,
-          target.targetBranch(),
-          target.rangesSupported,
-          target.subtasks,
-          mapOf(subtask.id to stats),
-          target.committedHeadBranch(),
-        )
-        state.matches(target) -> state.copy(stats = state.stats + (subtask.id to stats))
-        else -> SubtaskScopesState.Listed(
-          target.worktreeRoot,
-          target.targetBranch(),
-          target.rangesSupported,
-          target.subtasks,
-          mapOf(subtask.id to stats),
-          target.committedHeadBranch(),
-        )
-      }
-    }
-    stats
-  }
+  ): SubtaskStats? = readSubtaskStats(target, subtask, individualStatsRead(target, subtask), lock, cache)
 
   private suspend fun readScope(
     target: ChangeScopeTarget,
+    scope: ChangeScope,
     scopeRead: ScopeRead,
     lock: Mutex,
     cache: CommittedChangeCache,
-    useOutsideMemo: Boolean,
   ): ScopeChangesState = when (scopeRead) {
     is ScopeRead.Baseline -> when (val result = readChanges(scopeRead.baseline, lock)) {
       is Outcome.Failure -> unavailable(result.error)
@@ -290,15 +253,42 @@ class ChangeScopeObservations internal constructor(
     }
     ScopeRead.Uncommitted -> when (val result = git(lock) { port.uncommittedChanges(target.worktreeRoot) }) {
       is Outcome.Failure -> unavailable(result.error)
-      is Outcome.Success -> result.value.toScopeState().also { state ->
-        if (state is ScopeChangesState.Listed) baseShas[ListedBaseKey(target.worktreeRoot, scopeRead)] = state.changes.baseSha
+      is Outcome.Success -> result.value.toScopeState()
+    }
+    is ScopeRead.Committed -> readCommittedState(target.worktreeRoot, scopeRead, lock, cache)
+    is ScopeRead.PerCommit -> {
+      val commits = readPerCommit(target, scopeRead.commits, lock, cache)
+      val baseline = runningWorkingBaseline(target, scope)
+      if (baseline == null || commits !is ScopeChangesState.Listed) commits
+      else when (val working = readChanges(baseline, lock)) {
+        is Outcome.Failure -> unavailable(working.error)
+        is Outcome.Success -> when (val state = working.value.toScopeState()) {
+          is ScopeChangesState.Listed -> commits.withWorkingChanges(state.changes)
+          else -> state
+        }
       }
     }
-    is ScopeRead.Committed -> {
-      readCommittedState(target.worktreeRoot, scopeRead, lock, cache)
-    }
-    is ScopeRead.Outside -> readOutside(target, scopeRead.ranges, lock, useOutsideMemo)
     is ScopeRead.Unavailable -> ScopeChangesState.Unavailable(ReadProblem.Runtime(scopeRead.reason))
+  }
+
+  private suspend fun readPerCommit(
+    target: ChangeScopeTarget,
+    commits: List<ScopeCommit>,
+    lock: Mutex,
+    cache: CommittedChangeCache,
+  ): ScopeChangesState {
+    if (commits.size > PER_COMMIT_READ_LIMIT) return ScopeChangesState.TooManyCommits(PER_COMMIT_READ_LIMIT)
+    val files = mutableListOf<CommitChanges>()
+    for (commit in commits) {
+      when (val state = readCommittedState(target.worktreeRoot, ScopeRead.Committed(commit.parentSha, commit.sha), lock, cache)) {
+        is ScopeChangesState.Listed -> files += CommitChanges(commit, state.changes.files)
+        else -> return state
+      }
+    }
+    return ScopeChangesState.Listed(
+      files.aggregate(target.timeline!!.mergeBaseSha),
+      perCommit = files,
+    )
   }
 
   private suspend fun readCommittedList(
@@ -306,23 +296,9 @@ class ChangeScopeObservations internal constructor(
     scope: ScopeRead.Committed,
     lock: Mutex,
     cache: CommittedChangeCache,
-  ): ChangeSet? {
-    val key = CommittedListKey(worktreeRoot, scope.fromSha, scope.toSha)
-    cache.list(key)?.let { return it }
-    return when (val result = readOrProblem(runtime, diagnostics) {
-      lock.withLock {
-        cache.list(key) ?: withContext(io) {
-          when (val value = port.committedChanges(worktreeRoot, scope.fromSha, scope.toSha)) {
-            is WorkChangeListResult.Listed -> value.toChangeSet().also { cache.putList(key, it) }
-            is WorkChangeListResult.BaseUnavailable, is WorkChangeListResult.NotARepository,
-            is WorkChangeListResult.Failed -> null
-          }
-        }
-      }
-    }) {
-      is Outcome.Failure -> null
-      is Outcome.Success -> result.value
-    }
+  ): ChangeSet? = when (val state = readCommittedState(worktreeRoot, scope, lock, cache)) {
+    is ScopeChangesState.Listed -> state.changes
+    else -> null
   }
 
   private suspend fun readCommittedState(
@@ -331,80 +307,13 @@ class ChangeScopeObservations internal constructor(
     lock: Mutex,
     cache: CommittedChangeCache,
   ): ScopeChangesState {
-    val key = CommittedListKey(worktreeRoot, scope.fromSha, scope.toSha)
+    val key = scope.key(worktreeRoot)
     cache.list(key)?.let { return ScopeChangesState.Listed(it) }
-    return when (val result = readOrProblem(runtime, diagnostics) {
-      lock.withLock {
-        cache.list(key)?.let { return@withLock ScopeChangesState.Listed(it) }
-        withContext(io) {
-          when (val value = port.committedChanges(worktreeRoot, scope.fromSha, scope.toSha)) {
-            is WorkChangeListResult.Listed -> ScopeChangesState.Listed(value.toChangeSet()).also { cache.putList(key, it.changes) }
-            is WorkChangeListResult.BaseUnavailable -> ScopeChangesState.BaseUnavailable(value.reason)
-            is WorkChangeListResult.NotARepository -> ScopeChangesState.NotARepository(value.worktreeRoot)
-            is WorkChangeListResult.Failed -> {
-              diagnostics.record(SCOPES_READ_FAILED)
-              ScopeChangesState.Unavailable(ReadProblem.Runtime(value.message))
-            }
-          }
-        }
-      }
-    }) {
+    return when (val result = git(lock) { port.committedChanges(worktreeRoot, scope.fromSha, scope.toSha) }) {
       is Outcome.Failure -> unavailable(result.error)
-      is Outcome.Success -> result.value
-    }
-  }
-
-  private suspend fun readOutside(
-    target: ChangeScopeTarget,
-    ranges: List<CommitRange>,
-    lock: Mutex,
-    useMemo: Boolean,
-  ): ScopeChangesState {
-    val key = OutsideKey(target.worktreeRoot, target.targetBranch(), ranges)
-    if (useMemo) outsideMemo.get()?.takeIf { it.key == key }?.let { return it.state }
-    val result = git(lock) { port.outsideCommits(target.worktreeRoot, target.targetBranch(), ranges.map { it.toPort() }) }
-    return when (result) {
-      is Outcome.Failure -> unavailable(result.error)
-      is Outcome.Success -> when (val value = result.value) {
-        is WorkOutsideCommitsResult.Listed -> ScopeChangesState.Listed(
-          value.commits.aggregate(value.mergeBaseSha), value.commits.map { it.toDomain() },
-        ).also { outsideMemo.set(OutsideMemo(key, it)) }
-        is WorkOutsideCommitsResult.BaseUnavailable -> ScopeChangesState.BaseUnavailable(value.reason)
-        is WorkOutsideCommitsResult.NotARepository -> ScopeChangesState.NotARepository(value.worktreeRoot)
-        is WorkOutsideCommitsResult.TooMany -> ScopeChangesState.TooManyCommits(value.limit)
-        is WorkOutsideCommitsResult.Failed -> {
-          diagnostics.record(SCOPES_READ_FAILED)
-          ScopeChangesState.Unavailable(ReadProblem.Runtime(value.message))
-        }
+      is Outcome.Success -> result.value.toScopeState().also { state ->
+        if (state is ScopeChangesState.Listed) cache.putList(key, state.changes)
       }
-    }
-  }
-
-  private fun interruptedStatsKey(worktreeRoot: String, subtask: ScopeSubtask, startSha: String) =
-    InterruptedStatsKey(worktreeRoot, subtask.id, startSha, subtask.baselineUntrackedPaths.toList())
-
-  private fun statsAttemptKey(worktreeRoot: String, subtask: ScopeSubtask) = StatsAttemptKey(
-    worktreeRoot,
-    subtask.id,
-    subtask.startSha,
-    subtask.endSha,
-    subtask.state,
-    subtask.baselineUntrackedPaths.toList(),
-  )
-
-  private fun individualStatsRead(target: ChangeScopeTarget, subtask: ScopeSubtask): IndividualStatsRead {
-    val startSha = subtask.startSha ?: return IndividualStatsRead.Unavailable
-    val endSha = subtask.endSha
-    val baseline = ChangeBaseline.SubtaskStart(target.worktreeRoot, startSha, subtask.baselineUntrackedPaths)
-    if (target.committedOnly) {
-      return endSha?.let { IndividualStatsRead.Committed(ScopeRead.Committed(startSha, it)) }
-        ?: IndividualStatsRead.Unavailable
-    }
-    return when {
-      subtask.state == ScopeSubtaskState.RUNNING -> IndividualStatsRead.Working(baseline)
-      endSha != null -> IndividualStatsRead.Committed(ScopeRead.Committed(startSha, endSha))
-      subtask.state == ScopeSubtaskState.INTERRUPTED -> IndividualStatsRead.Working(baseline)
-      else -> IndividualStatsRead.Unavailable
     }
   }
 
@@ -443,27 +352,46 @@ class ChangeScopeObservations internal constructor(
     }
   }
 
-  private fun WorkChangeListResult.Listed.toChangeSet(): ChangeSet =
-    ChangeSet(baseSha, files.map { it.toDomain() }, insertions, deletions)
+  private fun WorkChangeListResult.Listed.toChangeSet() = ChangeSet(baseSha, files.map { it.toDomain() }, insertions, deletions)
 
-  private fun ChangeSet.toStats(): SubtaskStats = SubtaskStats(files, insertions, deletions)
-
-  private fun ScopeRead.committedKey(worktreeRoot: String): CommittedListKey? =
-    (this as? ScopeRead.Committed)?.let { CommittedListKey(worktreeRoot, it.fromSha, it.toSha) }
-
-  private fun ChangeScopeTarget.targetBranch(): String? =
-    when (val baseline = allBaseline) {
-      is ChangeBaseline.TargetMergeBase -> baseline.targetBranch
-      is ChangeBaseline.CommittedBranchRange -> baseline.targetBranch
-      else -> null
+  private fun ScopeChangesState.Listed.withWorkingChanges(working: ChangeSet): ScopeChangesState.Listed {
+    val files = changes.files.associateByTo(linkedMapOf<String, ChangedFile>()) { it.path }
+    for (file in working.files) {
+      val committed = files[file.path]
+      files[file.path] = if (committed == null) file else file.copy(
+        oldPath = file.oldPath ?: committed.oldPath,
+        insertions = if (file.binary || committed.binary) null else (file.insertions ?: 0) + (committed.insertions ?: 0),
+        deletions = if (file.binary || committed.binary) null else (file.deletions ?: 0) + (committed.deletions ?: 0),
+      )
     }
+    val merged = files.values.sortedBy(ChangedFile::path)
+    return copy(changes = ChangeSet(
+      changes.baseSha,
+      merged,
+      merged.sumOf { it.insertions ?: 0 },
+      merged.sumOf { it.deletions ?: 0 },
+    ))
+  }
 
-  private fun ChangeScopeTarget.committedHeadBranch(): String? =
-    (allBaseline as? ChangeBaseline.CommittedBranchRange)?.headBranch
+  private fun ChangeSet.toStats() = SubtaskStats(files, insertions, deletions)
+  private fun ScopeRead.Committed.key(worktreeRoot: String) = CommittedListKey(worktreeRoot, fromSha, toSha)
+  private fun ChangeScopeTarget.targetBranch(): String? = when (val baseline = allBaseline) {
+    is ChangeBaseline.TargetMergeBase -> baseline.targetBranch
+    is ChangeBaseline.CommittedBranchRange -> baseline.targetBranch
+    else -> null
+  }
+}
 
-  private fun SubtaskScopesState.Listed.matches(target: ChangeScopeTarget): Boolean =
-    worktreeRoot == target.worktreeRoot && targetBranch == target.targetBranch() &&
-      rangesSupported == target.rangesSupported && subtasks == target.subtasks
-      && committedHeadBranch == target.committedHeadBranch()
-
+internal fun runningWorkingBaseline(target: ChangeScopeTarget, scope: ChangeScope): ChangeBaseline.SubtaskStart? {
+  if (target.committedOnly || scope !is ChangeScope.Subtasks) return null
+  val timeline = target.timeline ?: return null
+  val subtasks = target.subtasks
+  val endIndex = subtasks.indexOfFirst { it.id == scope.to }
+  if (endIndex < 0) return null
+  val end = subtasks[endIndex]
+  if (end.recordedSha != null || end.state !in setOf(ScopeSubtaskState.RUNNING, ScopeSubtaskState.INTERRUPTED) ||
+    subtasks.drop(endIndex + 1).any { it.state != ScopeSubtaskState.NOT_STARTED }
+  ) return null
+  val start = subtasks.firstOrNull { it.id == scope.from } ?: return null
+  return ChangeBaseline.SubtaskStart(target.worktreeRoot, timeline.headSha, start.baselineUntrackedPaths)
 }

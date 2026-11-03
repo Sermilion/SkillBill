@@ -10,7 +10,9 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScope.Subtasks
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangedFile
-import dev.skillbill.desktop.core.domain.model.CommitRange
+import dev.skillbill.desktop.core.domain.model.CommitChanges
+import dev.skillbill.desktop.core.domain.model.ScopeCommit
+import dev.skillbill.desktop.core.domain.model.workingBaseSha
 import dev.skillbill.desktop.core.domain.model.FileDiff
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
@@ -41,7 +43,7 @@ internal class ChangeScopeDiffs(
   private val io: CoroutineDispatcher,
   private val baseShas: ConcurrentHashMap<ListedBaseKey, String>,
   private val readAttributionStats: suspend (ChangeScopeTarget, ScopeSubtask, Mutex, CommittedChangeCache) -> SubtaskStats?,
-  private val readOutside: suspend (ChangeScopeTarget, List<CommitRange>, Mutex) -> ScopeChangesState,
+  private val readPerCommit: suspend (ChangeScopeTarget, List<ScopeCommit>, Mutex, CommittedChangeCache) -> ScopeChangesState,
 ) {
   suspend fun fileDiff(
     target: ChangeScopeTarget,
@@ -69,7 +71,11 @@ internal class ChangeScopeDiffs(
         }
       }
       is ScopeRead.Committed -> readCommittedPatch(target.worktreeRoot, resolved.fromSha, resolved.toSha, file, lock, cache)
-      is ScopeRead.Outside -> outsideFileDiff(target, resolved.ranges, file, lock, cache)
+      is ScopeRead.PerCommit -> {
+        val baseline = runningWorkingBaseline(target, scope)
+        if (baseline == null) perCommitFileDiff(target, resolved.commits, file, lock, cache)
+        else perCommitFileDiffWithWorking(target, resolved.commits, baseline, file, lock, cache)
+      }
       is ScopeRead.Unavailable -> FileDiffState.Unavailable(ReadProblem.Runtime(resolved.reason))
     }
     if (scope is Subtasks && scope.to > scope.from && result is FileDiffState.Shown) {
@@ -176,22 +182,22 @@ internal class ChangeScopeDiffs(
     }
   }
 
-  private suspend fun outsideFileDiff(
+  private suspend fun perCommitFileDiff(
     target: ChangeScopeTarget,
-    ranges: List<CommitRange>,
+    commits: List<ScopeCommit>,
     file: ChangedFile,
     lock: Mutex,
     cache: CommittedChangeCache,
   ): FileDiffState {
-    val outside = readOutside(target, ranges, lock)
-    if (outside is ScopeChangesState.TooManyCommits) {
-      return FileDiffState.Unavailable(ReadProblem.Runtime("More than ${outside.limit} commits outside subtasks."))
+    val perCommit = readPerCommit(target, commits, lock, cache)
+    if (perCommit is ScopeChangesState.TooManyCommits) {
+      return FileDiffState.Unavailable(ReadProblem.Runtime("More than ${perCommit.limit} commits to read one by one."))
     }
-    if (outside !is ScopeChangesState.Listed) return outside.toFileDiffState()
-    val matching = outside.outsideCommits.mapNotNull { commit ->
-      commit.files.firstOrNull { entry ->
+    if (perCommit !is ScopeChangesState.Listed) return perCommit.toFileDiffState()
+    val matching = perCommit.perCommit.mapNotNull { change ->
+      change.files.firstOrNull { entry ->
         entry.path == file.path || entry.path == file.oldPath || entry.oldPath == file.path
-      }?.let { commit to it }
+      }?.let { change.commit to it }
     }
     if (matching.isEmpty()) return FileDiffState.Shown(FileDiff(emptyList(), 0, 0))
     val patches = matching.map { (commit, entry) ->
@@ -215,6 +221,28 @@ internal class ChangeScopeDiffs(
         shown.sumOf { it.second.deletions },
       ),
     )
+  }
+
+  private suspend fun perCommitFileDiffWithWorking(
+    target: ChangeScopeTarget,
+    commits: List<ScopeCommit>,
+    baseline: ChangeBaseline.SubtaskStart,
+    file: ChangedFile,
+    lock: Mutex,
+    cache: CommittedChangeCache,
+  ): FileDiffState {
+    val committed = perCommitFileDiff(target, commits, file, lock, cache)
+    if (committed !is FileDiffState.Shown) return committed
+    return when (val working = readWorkingPatch(target.worktreeRoot, baseline.baseSha, file, lock)) {
+      is FileDiffState.Shown -> FileDiffState.Shown(
+        FileDiff(
+          committed.diff.hunks + working.diff.hunks,
+          committed.diff.insertions + working.diff.insertions,
+          committed.diff.deletions + working.diff.deletions,
+        ),
+      )
+      else -> working
+    }
   }
 
   private suspend fun attributeRangeDiff(
@@ -266,26 +294,31 @@ internal class ChangeScopeDiffs(
     lock: Mutex,
     cache: CommittedChangeCache,
   ): FileDiffState {
-    if (scope is Subtasks && scope.from == scope.to) {
-      val subtask = target.subtasks.firstOrNull { it.id == scope.from }
-      val subtaskRead = resolveScope(target, scope)
-      val workingSubtask = subtask?.takeIf {
-        !target.committedOnly && (it.state == ScopeSubtaskState.RUNNING ||
-          (it.state == ScopeSubtaskState.INTERRUPTED && subtaskRead !is ScopeRead.Committed)
-        )
-      }
-      if (workingSubtask != null) {
-        val startSha = workingSubtask.startSha ?: return FileDiffState.Unavailable(ReadProblem.Runtime("no end commit"))
-        return readWorkingPatch(
-          target.worktreeRoot,
-          startSha,
-          file,
-          lock,
-        )
+    val resolved = resolveScope(target, scope)
+    if (resolved is ScopeRead.PerCommit) {
+      val baseline = runningWorkingBaseline(target, scope)
+      if (baseline != null) {
+        return perCommitFileDiffWithWorking(target, resolved.commits, baseline, file, lock, cache)
       }
     }
-    return when (val read = resolveScope(target, scope)) {
+    if (!target.committedOnly && scope is Subtasks && scope.from == scope.to) {
+      val subtask = target.subtasks.firstOrNull { it.id == scope.from }
+      val workingSubtask = subtask?.takeIf {
+        it.state == ScopeSubtaskState.RUNNING ||
+          (it.state == ScopeSubtaskState.INTERRUPTED && it.recordedSha == null)
+      }
+      if (workingSubtask != null) {
+        val baseline = if (!target.rangesSupported) {
+          workingSubtask.reviewBaseSha
+        } else {
+          target.timeline?.let { workingBaseSha(it, workingSubtask) }
+        } ?: return FileDiffState.Unavailable(ReadProblem.Runtime("scope not available"))
+        return readWorkingPatch(target.worktreeRoot, baseline, file, lock)
+      }
+    }
+    return when (val read = resolved) {
       is ScopeRead.Committed -> readCommittedPatch(target.worktreeRoot, read.fromSha, read.toSha, file, lock, cache)
+      is ScopeRead.PerCommit -> perCommitFileDiff(target, read.commits, file, lock, cache)
       is ScopeRead.Baseline -> when (val base = baselineFileBase(target.worktreeRoot, read, lock)) {
         is Outcome.Failure -> base.error
         is Outcome.Success ->
@@ -310,8 +343,8 @@ internal class ChangeScopeDiffs(
     is ScopeChangesState.BaseUnavailable -> FileDiffState.BaseUnavailable(reason)
     is ScopeChangesState.NotARepository -> FileDiffState.Unavailable(ReadProblem.Runtime("${worktreeRoot} is not a repository."))
     is ScopeChangesState.Unavailable -> FileDiffState.Unavailable(problem)
-    is ScopeChangesState.TooManyCommits -> FileDiffState.Unavailable(ReadProblem.Runtime("More than $limit commits outside subtasks."))
-    else -> FileDiffState.Unavailable(ReadProblem.Runtime("Unable to read outside commits."))
+    is ScopeChangesState.TooManyCommits -> FileDiffState.Unavailable(ReadProblem.Runtime("More than $limit commits to read one by one."))
+    else -> FileDiffState.Unavailable(ReadProblem.Runtime("Unable to read the commits one by one."))
   }
   private suspend fun readChanges(baseline: ChangeBaseline, lock: Mutex): Outcome<WorkChangeListResult, ReadProblem> =
     git(lock) { port.changes(baseline.toPort()) }

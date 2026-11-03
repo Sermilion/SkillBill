@@ -5,7 +5,6 @@ import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
-import dev.skillbill.desktop.core.domain.model.OutsideCommit
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeKind
@@ -31,7 +30,7 @@ data class ChangesWindowUiState(
   val pickerQuery: String = "",
   /** The latest settled All list, for the All button's count; null until All has been read. */
   val allRead: ScopeListUi? = null,
-  val outsideRead: ScopeChangesState? = null,
+  val operatorRead: ScopeChangesState? = null,
   val uncommittedRead: ScopeChangesState? = null,
   /** The diffs loaded for this scope by path; each is good for the [ChangedFile] it was read for. */
   val fileDiffs: Map<String, LoadedDiff> = emptyMap(),
@@ -42,13 +41,12 @@ data class ChangesWindowUiState(
 ) {
   val target: ChangeScopeTarget? get() = (content as? WindowContent.Ready)?.target
   val subtasksAvailable: Boolean get() = target?.let { ScopeKind.Subtasks in availableScopes(it) } == true
-  val outsideCommits: List<OutsideCommit> get() = (outsideRead as? ScopeChangesState.Listed)?.outsideCommits.orEmpty()
   val visibleFiles: List<ChangedFile> get() = groups.flatMap { group -> group.rows.map { it.file } }
   val selectedFile: ChangedFile? get() = visibleFiles.firstOrNull { it.path == selectedPath }
   val quick: List<QuickButtonUi> get() = quickButtons(this)
 }
 
-enum class QuickScope { All, Running, Outside, Uncommitted }
+enum class QuickScope { All, Running, Operator, Uncommitted }
 
 /** A quick scope button; [count] is null before its read lands. */
 data class QuickButtonUi(val kind: QuickScope, val label: String, val count: Int?, val enabled: Boolean, val pressed: Boolean, val running: Boolean = false)
