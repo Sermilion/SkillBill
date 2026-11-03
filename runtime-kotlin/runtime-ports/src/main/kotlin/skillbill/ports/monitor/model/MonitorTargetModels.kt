@@ -29,17 +29,36 @@ data class MonitorRepositoryIdentity(
   }
 }
 
+sealed interface MonitorTargetIdentity {
+  val repository: MonitorRepositoryIdentity
+  val targetKey: String
+  val url: String
+}
+
 data class MonitorPullRequestIdentity(
-  val repository: MonitorRepositoryIdentity,
+  override val repository: MonitorRepositoryIdentity,
   val number: Int,
-) {
+) : MonitorTargetIdentity {
   init {
     require(number > 0) { "A pull request number must be positive." }
   }
 
-  val targetKey: String get() = "${repository.host}/${repository.slug}#$number"
+  override val targetKey: String get() = "${repository.host}/${repository.slug}#$number"
 
-  val url: String get() = "https://${repository.host}/${repository.slug}/pull/$number"
+  override val url: String get() = "https://${repository.host}/${repository.slug}/pull/$number"
+}
+
+data class MonitorBranchIdentity(
+  override val repository: MonitorRepositoryIdentity,
+  val ref: String,
+) : MonitorTargetIdentity {
+  init {
+    require(ref.isNotBlank()) { "A branch ref must be non-blank." }
+  }
+
+  override val targetKey: String get() = "${repository.host}/${repository.slug}@$ref"
+
+  override val url: String get() = "https://${repository.host}/${repository.slug}/tree/$ref"
 }
 
 enum class MonitorPullRequestState { OPEN, MERGED, CLOSED }
@@ -80,15 +99,22 @@ data class MonitorPullRequestSummary(
   val headRepository: MonitorRepositoryIdentity?,
 )
 
-enum class MonitorWritability { REPOSITORY_PUSH, MAINTAINER_CAN_MODIFY }
+enum class MonitorWritability { REPOSITORY_PUSH, MAINTAINER_CAN_MODIFY, REPORT_ONLY }
 
 data class MonitorResolvedTarget(
-  val pullRequest: MonitorPullRequestIdentity,
+  val identity: MonitorTargetIdentity,
   val head: MonitorPullRequestHead,
   val base: MonitorBranchTip,
   val baseFetchUrl: String,
   val writability: MonitorWritability,
+  val reportOnlyReason: String? = null,
 ) {
+  init {
+    require((writability == MonitorWritability.REPORT_ONLY) == (reportOnlyReason != null)) {
+      "reportOnlyReason must be set exactly when writability is REPORT_ONLY."
+    }
+  }
+
   val state: MonitorPullRequestState get() = MonitorPullRequestState.OPEN
 }
 
@@ -104,6 +130,18 @@ sealed interface MonitorPullRequestLookup {
   data object Missing : MonitorPullRequestLookup
 
   data class Failed(val reason: String) : MonitorPullRequestLookup
+}
+
+sealed interface MonitorBranchLookup {
+  data class Found(
+    val head: MonitorPullRequestHead,
+    val protected: Boolean?,
+    val defaultBranch: MonitorBranchTip,
+  ) : MonitorBranchLookup
+
+  data object Missing : MonitorBranchLookup
+
+  data class Failed(val reason: String) : MonitorBranchLookup
 }
 
 sealed interface MonitorPullRequestListing {

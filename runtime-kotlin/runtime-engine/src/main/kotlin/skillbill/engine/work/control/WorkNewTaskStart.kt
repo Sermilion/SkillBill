@@ -193,6 +193,7 @@ public class WorkNewTaskStart(
     target: String? = null,
   ): NewTaskStartResult {
     if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
+    standaloneIntakeRefusal(target, phaseId)?.let { return it }
     return launchStandaloneCommand(repoRoot, "phase", phaseId, target, agentId)
   }
 
@@ -239,6 +240,8 @@ public class WorkNewTaskStart(
       )
     goalStartRefusal(checked)?.let { return NewTaskStartResult.Refused(it) }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val ownership =
+      if (launchTarget == null) "$identity:$id:standalone" else "$identity:$id:standalone:$launchTarget"
     val args =
       buildList {
         add(verb)
@@ -254,7 +257,7 @@ public class WorkNewTaskStart(
             WorkRunLaunchRequest(
               repoRoot,
               unit.dbPath,
-              "$identity:$id:standalone",
+              ownership,
               WorkRunLaunchKind.RuntimeCommand(args),
               emptyMap(),
             ),
@@ -265,6 +268,24 @@ public class WorkNewTaskStart(
           launched.exit?.let { NewTaskStartResult.Running(runFailure(it, launched.logPath)) }
             ?: NewTaskStartResult.Started
       }
+    }
+  }
+
+  private fun standaloneIntakeRefusal(
+    intake: String?,
+    phaseId: String,
+  ): NewTaskStartResult.Refused? {
+    if (intake == null) return null
+    val trimmed = intake.trim()
+    if (trimmed.isEmpty()) return null
+    return when {
+      phaseId != "monitor" ->
+        NewTaskStartResult.Refused("Intake is supported only for standalone monitor runs.")
+      trimmed.contains(' ') || trimmed.any { it.isISOControl() } ->
+        NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
+      trimmed.startsWith(MONITOR_INTAKE_MODE_PREFIX) || trimmed.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
+        NewTaskStartResult.Refused("Monitor intake must name the target directly, not as a phase option.")
+      else -> null
     }
   }
 
@@ -357,5 +378,7 @@ public class WorkNewTaskStart(
     const val MAX_REASON_CHARS = 500
     val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", "monitor")
     val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
+    const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
+    const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
   }
 }

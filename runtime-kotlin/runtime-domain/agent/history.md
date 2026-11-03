@@ -1,5 +1,12 @@
 # Boundary History — runtime-domain
 
+## [2026-11-03] SKILL-463 Accept Windows drive paths in repository identity decode
+Areas: runtime-domain FeatureTaskExecutionIdentityPolicy; runtime-application identity tests
+- Identity decode treats a drive-letter absolute Git root as valid, same as a Unix absolute root. Drive-relative forms such as C:repo still fail, as do relative paths after the prefix.
+- Lookup and identity validation share that absolute-root check.
+Feature flag: N/A
+Acceptance criteria: not a parent criterion; parent monitor criteria remain 5/5
+
 ## [2026-10-10] SKILL-414 subtask 4 — measure review quality with an on-demand eval set
 Areas: runtime-domain test skillbill.review.eval; evals/review (README.md, capmo-android-pr-3110 case)
 - Added a pure test-side scorer (ReviewEvalScorer) that reads a review register through ReviewParser.parseReview only as a best-effort reader. Production parsing, review templates, report schemas, validation, completion, verdicts, repair rounds and telemetry are unchanged.

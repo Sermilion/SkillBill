@@ -35,6 +35,8 @@ import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
@@ -59,6 +61,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
+  val onOfferStart = remember(draft) { { kind: NewTaskKind -> draft.start(kind) } }
   LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -90,7 +93,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
                 chipText(draft.selectedAgent),
                 chatBusy,
                 offer,
-                { kind -> draft.start(kind) },
+                onOfferStart,
                 draft::retryPrefix,
               )
             }
@@ -102,7 +105,10 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
               focusManager.clearFocus()
             }
           } else if (host.onStart != null) {
-            host.onStart?.invoke(start.wire, action.target, action)
+            val monitorTarget =
+              action.target?.trim()?.takeIf(String::isNotBlank)
+                ?: action.instruction.trim().takeIf { start == NewTaskActionKind.Monitor }
+            host.onStart?.invoke(start.wire, monitorTarget, action)
           }
         }
       }

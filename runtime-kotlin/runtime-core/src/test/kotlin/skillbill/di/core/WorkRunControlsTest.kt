@@ -769,6 +769,62 @@ class WorkRunControlsTest {
     }
   }
 
+  @Test
+  fun `a branch monitor rerun launches its branch selector instead of an unparsable tree url`() {
+    establishTemporarySchemaReadiness("monitor-branch-target-controls").use { fixture ->
+      Files.createDirectory(fixture.tempDir.resolve(".git"))
+      Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/OTHER-1-unrelated\n")
+      val launched = mutableListOf<WorkRunLaunchRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest): WorkRunStopResult = WorkRunStopResult.Stopped
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launched += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("monitor.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      component.databaseSession.transaction { unit ->
+        unit.standalonePhaseStatuses.register(
+          registration(fixture.tempDir).copy(
+            branchCorrelation = "main",
+            invocationId = "monitor-main",
+            executionId = "execution-main",
+            launchAgentId = "claude",
+            monitorTarget =
+              StandaloneMonitorTarget(
+                pullRequestKey = "github.com/acme/repo@main",
+                pullRequestUrl = "https://github.com/acme/repo/tree/main",
+                headRepository = "github.com/acme/repo",
+                headRef = "main",
+                callerRoot = fixture.tempDir.toString(),
+                worktreePath = null,
+              ),
+          ),
+        )
+      }
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("monitor-main")).item)
+      val target =
+        WorkRunTarget(
+          "monitor-main",
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt,
+          assertNotNull(item.databaseFileObservation),
+        )
+
+      assertEquals(WorkControlResult.Accepted, component.launchRun(target, "codex"))
+
+      val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
+      assertContains(prompt, "Monitor exactly branch:main")
+      assertContains(prompt, "Do not check out the branch main in this repository")
+      assertFalse("/tree/main" in prompt)
+    }
+  }
+
   private fun RuntimeComponent.launchRun(
     target: WorkRunTarget,
     agent: String?,

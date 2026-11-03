@@ -346,6 +346,22 @@ class NewTaskDraftStartTest {
   }
 
   @Test
+  fun `monitor start trims the target before launch`() = runTest {
+    val chats = FakeExecutionChatRepository()
+    val controls = FakeWorkControlRepository()
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+    }
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
+    draft.start(NewTaskKind.Monitor, target = " branch:main ")
+    runCurrent()
+    assertEquals("branch:main", controls.newTaskRequests.single().target)
+  }
+
+  @Test
   fun `standalone refusal goes to the chat and goal refusal to the offer card`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()

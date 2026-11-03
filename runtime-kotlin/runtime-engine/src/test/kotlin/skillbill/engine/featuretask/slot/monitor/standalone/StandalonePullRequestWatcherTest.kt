@@ -13,6 +13,7 @@ import skillbill.ports.monitor.model.MonitorFailureLog
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
+import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
@@ -46,8 +47,13 @@ class StandalonePullRequestWatcherTest {
           else -> reported
         }
 
+      override fun commitChecks(
+        repository: MonitorRepositoryIdentity,
+        sha: String,
+      ): PullRequestChecks = error("the pull request watcher reads pull request checks")
+
       override fun failureLog(
-        pullRequest: MonitorPullRequestIdentity,
+        repository: MonitorRepositoryIdentity,
         check: PullRequestCheck,
       ): MonitorFailureLog = MonitorFailureLog.Unavailable("not needed")
     }

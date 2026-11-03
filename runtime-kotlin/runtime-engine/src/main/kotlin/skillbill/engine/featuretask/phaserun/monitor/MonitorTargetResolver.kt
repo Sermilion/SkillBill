@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.phaserun.monitor
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.monitor.MonitorPullRequestSource
+import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorPullRequestListing
@@ -25,7 +27,8 @@ public class MonitorTargetResolver(
         when (selector) {
           is MonitorTargetSelector.Url -> resolveUrl(caller.repository, selector.url)
           is MonitorTargetSelector.IssueKey -> resolveIssueKey(caller.repository, selector.key)
-          is MonitorTargetSelector.CurrentBranch -> resolveBranch(caller.repository, selector.branch)
+          is MonitorTargetSelector.CurrentBranch -> resolveBranch(caller.repository, selector.branch, named = false)
+          is MonitorTargetSelector.Branch -> resolveBranch(caller.repository, selector.name, named = true)
         }
     }
 
@@ -74,6 +77,7 @@ public class MonitorTargetResolver(
   private fun resolveBranch(
     caller: MonitorRepositoryIdentity,
     branch: String,
+    named: Boolean,
   ): MonitorTargetResolution =
     when (val listing = source.pullRequestsForBranch(caller, caller, branch)) {
       is MonitorPullRequestListing.Failed -> MonitorTargetResolution.Failed(listing.reason)
@@ -86,7 +90,30 @@ public class MonitorTargetResolver(
               "Branch $branch has more than one open pull request.",
               selection.candidateUrls,
             )
-          MonitorCandidateSelection.Absent -> MonitorTargetResolution.NoOpenPullRequest
+          MonitorCandidateSelection.Absent ->
+            if (named || listing.pullRequests.none { it.headRepository == caller && it.headRef == branch }) {
+              resolveBranchTarget(MonitorBranchIdentity(caller, branch), named)
+            } else {
+              MonitorTargetResolution.NoOpenPullRequest
+            }
+        }
+    }
+
+  private fun resolveBranchTarget(
+    identity: MonitorBranchIdentity,
+    named: Boolean,
+  ): MonitorTargetResolution =
+    when (val lookup = source.branch(identity.repository, identity.ref)) {
+      is MonitorBranchLookup.Failed -> MonitorTargetResolution.Failed(lookup.reason)
+      is MonitorBranchLookup.Found -> validatedBranchTarget(identity, lookup)
+      MonitorBranchLookup.Missing ->
+        if (named) {
+          MonitorTargetResolution.Refused(
+            MonitorTargetRefusal.TARGET_NOT_FOUND,
+            "Branch ${identity.ref} does not exist on ${identity.repository.slug}.",
+          )
+        } else {
+          MonitorTargetResolution.NoOpenPullRequest
         }
     }
 

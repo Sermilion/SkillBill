@@ -53,7 +53,7 @@ internal class RuntimeDetailReads(
   override suspend fun refresh(id: String, extended: Map<DetailList, Int>): DetailRead = read("detail") { component ->
     component.databaseSession.readIfPresent snapshot@{
       val result = component.ideStatusService.detail(WorkDetailRequest(id, observedAt = null))
-      val options = result.item?.let(component.workControlService::options)
+      val options = result.item?.let(component.workControlService::optionsForObservedItem)
       val head = result.toRead(component, options, sessionId)
       if (head !is DetailRead.Loaded) return@snapshot head
       extended.entries.fold(head) { loaded, (list, count) ->

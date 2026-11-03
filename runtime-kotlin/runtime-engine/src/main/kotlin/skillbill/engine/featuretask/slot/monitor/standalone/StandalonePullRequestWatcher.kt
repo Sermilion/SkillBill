@@ -47,14 +47,12 @@ internal class StandalonePullRequestWatcher(
     val startTimeoutEligible: Boolean = false,
   )
 
-  private data class Progress(val at: Instant? = null, val names: List<String>? = null)
-
   private class WatchState(
     var heads: StandaloneWatchHeads,
     val adoptHead: (String) -> String?,
     val refreshGraceEndsAt: Instant,
     var ciStarted: Boolean = false,
-    var progress: Progress = Progress(),
+    val progress: StandaloneWatchProgress,
   )
 
   fun watch(
@@ -64,7 +62,8 @@ internal class StandalonePullRequestWatcher(
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
   ): PullRequestCiOutcome {
     val startedAt = now()
-    val state = WatchState(heads, adoptHead, startedAt + refreshGrace)
+    val progress = StandaloneWatchProgress(now, progressInterval)
+    val state = WatchState(heads, adoptHead, startedAt + refreshGrace, progress = progress)
     while (true) {
       val round =
         if (cancelled()) {
@@ -117,10 +116,10 @@ internal class StandalonePullRequestWatcher(
     val reportedChecks = (reported as? PullRequestChecks.Reported)?.checks.orEmpty()
     if (reportedChecks.isNotEmpty()) state.ciStarted = true
     val verdict =
-      verdictFor(reportedChecks, open.headSha, open.pullRequest.editableFieldsDigest)
+      standaloneVerdictFor(reportedChecks, open.headSha, open.pullRequest.editableFieldsDigest)
         ?.takeUnless { it is PullRequestCiOutcome.Failed && !refreshed(reportedChecks, state) }
     if (verdict == null) {
-      state.progress = reportRunning(pullRequest, reportedChecks, onCiRunning, state.progress)
+      state.progress.report(pullRequest.url, reportedChecks, onCiRunning)
       return PollRound(startTimeoutEligible = reportedChecks.isEmpty())
     }
     return when (val confirmation = observe(pullRequest, state.heads)) {
@@ -195,44 +194,7 @@ internal class StandalonePullRequestWatcher(
       )
   }
 
-  private fun verdictFor(
-    reportedChecks: List<PullRequestCheck>,
-    headSha: String,
-    editableFieldsDigest: String?,
-  ): PullRequestCiOutcome? {
-    val failing = reportedChecks.filter { it.bucket == CheckBucket.FAIL }
-    return when {
-      failing.isNotEmpty() -> PullRequestCiOutcome.Failed(failing, headSha, editableFieldsDigest)
-      reportedChecks.isEmpty() || reportedChecks.any { it.bucket == CheckBucket.PENDING } -> null
-      else -> PullRequestCiOutcome.Passed(headSha)
-    }
-  }
-
-  private fun reportRunning(
-    pullRequest: MonitorPullRequestIdentity,
-    reportedChecks: List<PullRequestCheck>,
-    onCiRunning: (String, List<PullRequestCheck>) -> Unit,
-    previous: Progress,
-  ): Progress {
-    val pending = reportedChecks.filter { it.bucket == CheckBucket.PENDING }
-    val names = pending.map(PullRequestCheck::name)
-    val due = previous.at == null || Duration.between(previous.at, now()) >= progressInterval
-    if (!due && names == previous.names) return previous
-    onCiRunning(
-      pullRequest.url,
-      pending.take(MAX_PROGRESS_CHECKS).map { it.copy(name = it.name.take(MAX_PROGRESS_TEXT_LENGTH), link = "") },
-    )
-    return Progress(now(), names)
-  }
-
   companion object {
     const val CANCELLED_REASON: String = "Monitoring was cancelled."
-
-    private val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(30)
-    private val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
-    private val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofSeconds(30)
-    private val DEFAULT_REFRESH_GRACE: Duration = Duration.ofMinutes(10)
-    private const val MAX_PROGRESS_CHECKS: Int = 8
-    private const val MAX_PROGRESS_TEXT_LENGTH: Int = 160
   }
 }

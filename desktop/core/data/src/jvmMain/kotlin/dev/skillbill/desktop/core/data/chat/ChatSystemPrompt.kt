@@ -100,6 +100,8 @@ Use this exact fenced block format, with a JSON array containing up to 3 actions
 Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
 Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
 Offer a start action once the request is clear.
+When "start" is "monitor", set optional JSON "target" to exactly one token: branch:<name>, a pull request URL, or an issue key.
+The app turns that action into a button and starts the selected run only after the operator clicks it. Do not launch skill-bill yourself.
 For an action without "start", the app sends its instruction as the next chat turn when clicked.
 $SHARED_START_ACTION_GUIDANCE
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.

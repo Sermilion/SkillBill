@@ -6,12 +6,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.workflow.identity.task.STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.monitor.model.MonitorBranchIdentity
 import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.monitor.model.MonitorRetentionReason
+import skillbill.ports.monitor.model.MonitorTargetIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -27,7 +29,7 @@ internal data class MonitorRetentionRecord(
 )
 
 internal data class MonitorOwnershipRecord(
-  val target: MonitorPullRequestIdentity,
+  val target: MonitorTargetIdentity,
   val invocationId: String,
   val ownerToken: String,
   val generation: Long,
@@ -132,18 +134,33 @@ internal object StandaloneMonitorOwnershipCodec {
     node: JsonNode,
     reader: FieldReader,
     label: String,
-  ): MonitorPullRequestIdentity {
+  ): MonitorTargetIdentity {
     requireObject(node, Keys.TARGET, label)
     requireKnownKeys(node, Keys.TARGET_FIELDS, label, Keys.TARGET)
+    val namesPullRequest = namesPullRequest(node, label)
     val slug = reader.text(node, Keys.TARGET_REPOSITORY).split('/')
     if (slug.size != 2 || slug.any(String::isBlank)) throw invalid(label, "target.repository is not owner/name")
-    val identity =
-      MonitorPullRequestIdentity(
-        MonitorRepositoryIdentity.canonical(reader.text(node, Keys.TARGET_HOST), slug[0], slug[1]),
-        reader.positiveLong(node, Keys.TARGET_NUMBER).toInt(),
-      )
+    val repository =
+      MonitorRepositoryIdentity.canonical(reader.text(node, Keys.TARGET_HOST), slug[0], slug[1])
+    val identity: MonitorTargetIdentity =
+      if (namesPullRequest) {
+        MonitorPullRequestIdentity(repository, reader.positiveLong(node, Keys.TARGET_NUMBER).toInt())
+      } else {
+        MonitorBranchIdentity(repository, reader.text(node, Keys.TARGET_REF))
+      }
     if (reader.text(node, Keys.TARGET_URL) != identity.url) throw invalid(label, "target.url does not match the target")
     return identity
+  }
+
+  private fun namesPullRequest(
+    node: JsonNode,
+    label: String,
+  ): Boolean {
+    val hasNumber = !node.path(Keys.TARGET_NUMBER).isMissingNode
+    val hasRef = !node.path(Keys.TARGET_REF).isMissingNode
+    if (hasNumber && hasRef) throw invalid(label, "target names both number and ref")
+    if (!hasNumber && !hasRef) throw invalid(label, "target names neither number nor ref")
+    return hasNumber
   }
 
   private fun processOf(
@@ -274,12 +291,22 @@ internal object StandaloneMonitorOwnershipCodec {
     if (unknown.isNotEmpty()) throw invalid(label, "'$path' has unknown keys $unknown")
   }
 
-  private fun targetNode(target: MonitorPullRequestIdentity): ObjectNode =
-    mapper.createObjectNode().apply {
-      put(Keys.TARGET_HOST, target.repository.host)
-      put(Keys.TARGET_REPOSITORY, target.repository.slug)
-      put(Keys.TARGET_NUMBER, target.number)
-      put(Keys.TARGET_URL, target.url)
+  private fun targetNode(target: MonitorTargetIdentity): ObjectNode =
+    when (target) {
+      is MonitorPullRequestIdentity ->
+        mapper.createObjectNode().apply {
+          put(Keys.TARGET_HOST, target.repository.host)
+          put(Keys.TARGET_REPOSITORY, target.repository.slug)
+          put(Keys.TARGET_NUMBER, target.number)
+          put(Keys.TARGET_URL, target.url)
+        }
+      is MonitorBranchIdentity ->
+        mapper.createObjectNode().apply {
+          put(Keys.TARGET_HOST, target.repository.host)
+          put(Keys.TARGET_REPOSITORY, target.repository.slug)
+          put(Keys.TARGET_REF, target.ref)
+          put(Keys.TARGET_URL, target.url)
+        }
     }
 
   private fun processNode(process: FeatureTaskRuntimeProcessIdentity): ObjectNode =

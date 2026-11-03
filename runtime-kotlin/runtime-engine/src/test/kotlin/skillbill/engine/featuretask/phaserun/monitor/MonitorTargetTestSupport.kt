@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
 import skillbill.ports.monitor.MonitorPullRequestSource
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorPullRequest
@@ -53,9 +54,11 @@ internal class FakeMonitorPullRequestSource(
   var lookup: (Int) -> MonitorPullRequestLookup = { MonitorPullRequestLookup.Missing },
   var listing: MonitorPullRequestListing = MonitorPullRequestListing.Complete(emptyList()),
   var branchListing: MonitorPullRequestListing = MonitorPullRequestListing.Complete(emptyList()),
+  var branchLookup: (String) -> MonitorBranchLookup = { MonitorBranchLookup.Missing },
 ) : MonitorPullRequestSource {
   val lookups = mutableListOf<Pair<MonitorRepositoryIdentity, Int>>()
   val branchQueries = mutableListOf<Triple<MonitorRepositoryIdentity, MonitorRepositoryIdentity, String>>()
+  val branchReads = mutableListOf<String>()
 
   override fun callerRepository(callerRoot: Path) = caller
 
@@ -76,5 +79,13 @@ internal class FakeMonitorPullRequestSource(
   ): MonitorPullRequestListing {
     branchQueries += Triple(repository, headRepository, branch)
     return branchListing
+  }
+
+  override fun branch(
+    repository: MonitorRepositoryIdentity,
+    ref: String,
+  ): MonitorBranchLookup {
+    branchReads += ref
+    return branchLookup(ref)
   }
 }

@@ -35,6 +35,8 @@ public class StandaloneMonitorLedger internal constructor(
 
   internal val acknowledgedHeadSha: String get() = heads.last()
 
+  public val followedHeadShas: List<String> get() = heads.drop(1)
+
   internal val supersededHeadShas: Set<String> get() = heads.dropLast(1).toSet()
 
   internal var pendingRepair: StandalonePendingRepair? = null
@@ -66,10 +68,14 @@ public class StandaloneMonitorLedger internal constructor(
     }
 
   internal fun acknowledge(commitSha: String) {
+    publishedRepairBaselineSha = pendingRepair?.baselineSha
     receipts += StandalonePublishedRepair(commitSha)
     heads += commitSha
     pendingRepair = null
   }
+
+  internal var publishedRepairBaselineSha: String? = null
+    private set
 
   internal fun acknowledgePullRequestEdit() {
     val edit = StandalonePullRequestEdit(receipts.size + 1, pendingRepair?.startedAt)

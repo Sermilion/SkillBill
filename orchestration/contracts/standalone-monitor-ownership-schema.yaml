@@ -2,7 +2,7 @@ $schema: https://json-schema.org/draft/2020-12/schema
 $id: https://skill-bill.dev/contracts/standalone-monitor-ownership-schema.yaml
 title: Standalone Monitor Ownership
 description: >-
-  Fenced ownership metadata for one standalone pull-request monitor invocation. One record lives beside the
+  Fenced ownership metadata for one standalone monitor invocation. One record lives beside the
   admission lock file under the canonical Git common directory and is rewritten atomically while the lock is held.
 type: object
 additionalProperties: false
@@ -23,22 +23,39 @@ properties:
   contract_version:
     const: "1.0"
   target:
-    type: object
-    additionalProperties: false
-    required: [host, repository, number, url]
-    properties:
-      host:
-        type: string
-        minLength: 1
-      repository:
-        type: string
-        pattern: "^[^/\\s]+/[^/\\s]+$"
-      number:
-        type: integer
-        minimum: 1
-      url:
-        type: string
-        minLength: 1
+    oneOf:
+      - type: object
+        additionalProperties: false
+        required: [host, repository, number, url]
+        properties:
+          host:
+            type: string
+            minLength: 1
+          repository:
+            type: string
+            pattern: "^[^/\\s]+/[^/\\s]+$"
+          number:
+            type: integer
+            minimum: 1
+          url:
+            type: string
+            minLength: 1
+      - type: object
+        additionalProperties: false
+        required: [host, repository, ref, url]
+        properties:
+          host:
+            type: string
+            minLength: 1
+          repository:
+            type: string
+            pattern: "^[^/\\s]+/[^/\\s]+$"
+          ref:
+            type: string
+            minLength: 1
+          url:
+            type: string
+            minLength: 1
   invocation_id:
     type: string
     minLength: 1

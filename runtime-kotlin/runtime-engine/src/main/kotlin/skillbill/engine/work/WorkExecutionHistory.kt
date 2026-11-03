@@ -37,8 +37,8 @@ internal fun phaseGroupIdentity(record: StandalonePhaseStatusRecord): Triple<Str
 internal fun StandalonePhaseStatusRecord.monitorTargetDetail(): String? =
   monitorTarget?.let { target ->
     listOfNotNull(
-      "Pull request ${target.pullRequestUrl}",
-      "repository ${target.pullRequestKey.substringBefore('#')}",
+      if (target.branchRef != null) "Branch ${target.pullRequestUrl}" else "Pull request ${target.pullRequestUrl}",
+      "repository ${target.pullRequestKey.substringBefore(if (target.branchRef != null) '@' else '#')}",
       "branch ${target.headRef} (${target.headRepository})",
       "invocation $invocationId",
       target.worktreePath?.let { "worktree $it" },

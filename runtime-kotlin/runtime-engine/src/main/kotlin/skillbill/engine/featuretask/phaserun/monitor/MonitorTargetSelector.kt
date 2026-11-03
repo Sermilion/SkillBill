@@ -12,6 +12,8 @@ public sealed interface MonitorTargetSelector {
   public data class IssueKey(val key: String) : MonitorTargetSelector
 
   public data class CurrentBranch(val branch: String) : MonitorTargetSelector
+
+  public data class Branch(val name: String) : MonitorTargetSelector
 }
 
 public sealed interface MonitorIntakeParse {
@@ -25,6 +27,7 @@ public sealed interface MonitorIntakeParse {
 
 private val ISSUE_KEY_TOKEN = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
 public val WHITESPACE: Regex = Regex("\\s+")
+internal const val MONITOR_BRANCH_PREFIX: String = "branch:"
 private const val URL_SCHEME_SEPARATOR = "://"
 private const val PULL_SEGMENT = "pull"
 private const val PULL_URL_SEGMENTS = 4
@@ -34,6 +37,8 @@ public fun parseMonitorIntake(
   currentBranch: String?,
 ): MonitorIntakeParse {
   val tokens = intake?.trim().orEmpty().split(WHITESPACE).filter(String::isNotBlank)
+  val branchName =
+    tokens.singleOrNull()?.takeIf { it.startsWith(MONITOR_BRANCH_PREFIX) }?.removePrefix(MONITOR_BRANCH_PREFIX)
   return when {
     tokens.isEmpty() ->
       currentBranch?.trim()?.takeIf(String::isNotEmpty)
@@ -47,17 +52,22 @@ public fun parseMonitorIntake(
         MonitorTargetRefusal.AMBIGUOUS_INTAKE,
         "Monitor intake names more than one target: ${tokens.joinToString(" ")}.",
       )
+    branchName != null && isSafeRefName(branchName) ->
+      MonitorIntakeParse.Selected(MonitorTargetSelector.Branch(branchName))
+    branchName != null -> malformedIntake(tokens.single())
     URL_SCHEME_SEPARATOR in tokens.single() ->
       MonitorIntakeParse.Selected(MonitorTargetSelector.Url(tokens.single()))
     ISSUE_KEY_TOKEN.matches(tokens.single()) ->
       MonitorIntakeParse.Selected(MonitorTargetSelector.IssueKey(tokens.single().uppercase()))
-    else ->
-      MonitorIntakeParse.Refused(
-        MonitorTargetRefusal.MALFORMED_INTAKE,
-        "Monitor intake '${tokens.single()}' is neither a pull request URL nor an issue key.",
-      )
+    else -> malformedIntake(tokens.single())
   }
 }
+
+private fun malformedIntake(token: String): MonitorIntakeParse.Refused =
+  MonitorIntakeParse.Refused(
+    MonitorTargetRefusal.MALFORMED_INTAKE,
+    "Monitor intake '$token' is not a pull request URL, an issue key, or branch:<name> with a safe branch name.",
+  )
 
 public sealed interface MonitorUrlParse {
   public data class Parsed(val identity: MonitorPullRequestIdentity) : MonitorUrlParse

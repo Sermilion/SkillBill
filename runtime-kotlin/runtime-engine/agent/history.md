@@ -1,3 +1,24 @@
+## [2026-11-03] SKILL-463 subtask 2 - Repair pushable branches, document the target, start monitor from chat
+Areas: runtime-engine featuretask (phaserun/monitor, runloop/finalization/standalone, slot/monitor/standalone) and work/control; runtime-ports monitor; runtime-infra workflow/monitor; desktop core domain/data and feature/chat; skills/skill-bill; README; docs/runtime-command-guidance
+- MEDIUM feature. Branch targets are REPORT_ONLY when they are the default branch, protected is not false, or repositoryPush is not true (null data fails safe); otherwise REPOSITORY_PUSH. Report-only blocks name the reason and that no repair ran. Pushable failures route to repair with a null pull-request digest.
+- Publication re-reads the branch and refuses a moved tip, lost push permission, new protection, or a default-branch change. A repair with no tree change blocks without reading a pull request. failureLog takes the repository. Directives apply pull-request rules only when the target is a pull request.
+- The ledger stores the published repair baseline. The branch watcher treats that SHA as API lag until DEFAULT_REFRESH_GRACE (ten minutes, shared in StandaloneWatchPolicy), then follows it; any other earlier SHA is followed at once.
+- Docs describe branch:<name> intake, the three report-only conditions, no merge-conflict repair for branches, and the one-hour no-CI block. Chat start adds monitor to STANDALONE_PHASES, NewTaskKind.Monitor, and a one-token action instruction; home chips stay unchanged.
+- Monitor intake refuses blank, whitespace, ISO controls, a leading dash, and mode:/target: prefixes. Launcher ownership includes the intake so different targets do not collide. Desktop reservation stays per repository and is released after a monitor start because Completed/Refused write no board row.
+- Limits: listed skill text takes effect after a later install; CLI and desktop must ship together. A chat start that Completes or Refuses still shows Started monitor with no status row. GitHub can leave protected false for a ruleset-guarded branch; a rejected push keeps the work.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-02] SKILL-463 subtask 1 - Watch a named branch to a report-only verdict
+Areas: runtime-engine featuretask (phaserun/monitor, slot/monitor/standalone, runloop/finalization/standalone, work control and status); runtime-ports monitor and idestatus; runtime-infra/workflow/monitor and workflow.process; runtime-cli phase; orchestration/contracts
+- MEDIUM feature. phase monitor branch:<name> selects that branch of the caller repository. A named branch with one open pull request still resolves to that pull request. No-intake CurrentBranch watches the checked-out branch only when its pull-request listing is empty.
+- Every branch target in this subtask is REPORT_ONLY: a failing verdict blocks with check links and publishes nothing. Subtask 2 owns the repairable class, failureLog widening, docs and the chat start.
+- A branch watcher follows a moving tip, adopts a rewind, discards a verdict whose confirming read sees a new SHA, and blocks a deleted branch or a followed commit with no checks for 60 minutes. Shared verdict and progress helpers live in StandaloneWatchPolicy; the pull-request watcher delegates and keeps its behavior. reusable
+- Ownership schema stays at 1.0 with target as a oneOf of pull-request and branch shapes. Pull-request records stay byte-identical. Admission hashes targetKey, so one monitor per branch. RecordedProcessLiveness moved to workflow.process so the monitor package stays at the 12-file ceiling.
+- Status, rerun, report and recovery name the branch (branch:<ref>, tree URL, followed commits). Pull-request rows, goal finalization and phase:pr are unchanged.
+- Limits: CLI and desktop must ship together, because an older runtime refuses branch: intake and rejects a branch status row. A feature branch with no pull request still gets no push-triggered CI in this repository and blocks after one hour.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for this subtask
 ## [2026-11-02] SKILL-466 standalone monitor and operation launches
 Areas: runtime-engine work/control, runtime-ports work/model, runtime-infra launcher, desktop/core/data control
 - monitor joins STANDALONE_PHASES and startStandalone appends a nonblank target as a positional. startOperation launches verify and pr-review-fix as operation argv, with no auto-confirm. Verify with a blank target refuses before launch.

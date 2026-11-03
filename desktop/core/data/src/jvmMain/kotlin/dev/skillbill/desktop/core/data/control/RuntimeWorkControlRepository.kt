@@ -392,7 +392,11 @@ class RuntimeWorkControlRepository(
       launches.release(handle)
       throw failure
     }
-    if (settleOnStarted && outcome is NewTaskStartOutcome.Started) launches.settle(handle, true) else launches.release(handle)
+    if (settleOnStarted && outcome is NewTaskStartOutcome.Started) {
+      if (request.kind == NewTaskKind.Monitor) launches.release(handle) else launches.settle(handle, true)
+    } else {
+      launches.release(handle)
+    }
     return outcome
   }
 

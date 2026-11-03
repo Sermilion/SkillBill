@@ -82,8 +82,8 @@ class RuntimeDetailReadsTest {
         assertNotNull(loaded.sections.runOptions)
         val execution = assertNotNull(loaded.sections.detail.executionHistory.singleOrNull())
         val mappedChecklist = assertNotNull(execution.qaChecklist)
-        assertEquals(checklist.invocationDirectory, mappedChecklist.invocationDirectory)
-        assertEquals(checklist.reportPath, mappedChecklist.reportPath)
+        assertEquals(Path.of(checklist.invocationDirectory).normalize(), Path.of(mappedChecklist.invocationDirectory).normalize())
+        assertEquals(Path.of(checklist.reportPath).normalize(), Path.of(mappedChecklist.reportPath).normalize())
         assertEquals(listOf("QA-1"), execution.qaFindings.map { it.id })
       } finally {
         sessionJob.cancel()

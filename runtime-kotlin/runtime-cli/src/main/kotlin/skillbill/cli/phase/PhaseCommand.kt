@@ -82,8 +82,8 @@ class PhaseCommand(
   private val recoverStaleOwners by option(
     "--recover-stale-owner",
     help =
-      "Monitor only: reclaim a stale pull request monitor owner. Pass the owner token the blocked monitor " +
-        "reported, with an explicit pull request target.",
+      "Monitor only: reclaim a stale monitor owner. Pass the owner token the blocked monitor " +
+        "reported, with an explicit target.",
   ).multiple()
 
   override fun run() {
@@ -280,7 +280,7 @@ object PhaseInvocationParser {
       when {
         invocation.definitionId != SkeletonDefinition.MONITOR.id ->
           "--$RECOVER_STALE_OWNER_OPTION applies only to `phase ${SkeletonDefinition.MONITOR.id}`."
-        invocation.intake == null -> "--$RECOVER_STALE_OWNER_OPTION needs an explicit pull request target."
+        invocation.intake == null -> "--$RECOVER_STALE_OWNER_OPTION needs an explicit target."
         token.length < MIN_OWNER_TOKEN_LENGTH || token.any { it.isWhitespace() || it.isISOControl() } ->
           "--$RECOVER_STALE_OWNER_OPTION needs the owner token a blocked monitor reported."
         else -> null

@@ -24,6 +24,7 @@ class ChatSystemPromptTest {
     assertTrue(
       """set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix"""" in prompt,
     )
+    assertTrue("branch:<name>" in prompt)
     assertTrue("code review" in prompt)
     assertTrue("Run phase:" in prompt)
     assertTrue("Run operation:" in prompt)
@@ -42,6 +43,7 @@ class ChatSystemPromptTest {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
 
     assertTrue("Run phase:goal" in prompt)
+    assertTrue("branch:<name>" in prompt)
     assertTrue("the app starts the selected run when the operator clicks it" in prompt)
     assertFalse("Starting a run from this chat is not available yet" in prompt)
     assertFalse("Do not include a \"start\" field" in prompt)

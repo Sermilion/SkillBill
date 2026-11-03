@@ -2,7 +2,7 @@ package skillbill.infrastructure.workflow.monitor
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.workflow.repositoryStateKey
-import skillbill.ports.monitor.model.MonitorPullRequestIdentity
+import skillbill.ports.monitor.model.MonitorTargetIdentity
 import java.io.IOException
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
@@ -47,7 +47,7 @@ internal object MonitorAdmissionFiles {
   fun directoryFor(
     stateDir: Path,
     commonDir: Path,
-    target: MonitorPullRequestIdentity,
+    target: MonitorTargetIdentity,
   ): Path =
     stateDir
       .resolve(MONITOR_DIRECTORY)

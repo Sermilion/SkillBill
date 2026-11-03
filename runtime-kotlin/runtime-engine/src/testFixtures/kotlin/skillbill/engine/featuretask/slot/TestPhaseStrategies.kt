@@ -45,6 +45,7 @@ import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.monitor.MonitorCheckSource
 import skillbill.ports.monitor.MonitorPullRequestSource
 import skillbill.ports.monitor.MonitorRepairPublisher
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorCallerRepository
 import skillbill.ports.monitor.model.MonitorFailureLog
 import skillbill.ports.monitor.model.MonitorPublicationRefusal
@@ -217,6 +218,11 @@ object UnavailableStandaloneMonitorService {
         headRepository: MonitorRepositoryIdentity,
         branch: String,
       ): MonitorPullRequestListing = MonitorPullRequestListing.Failed("test runs do not reach GitHub")
+
+      override fun branch(
+        repository: MonitorRepositoryIdentity,
+        ref: String,
+      ): MonitorBranchLookup = MonitorBranchLookup.Failed("test runs do not reach GitHub")
     }
 
   val service: StandaloneMonitorService =
@@ -227,8 +233,13 @@ object UnavailableStandaloneMonitorService {
           override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks =
             PullRequestChecks.Unavailable("test runs do not reach GitHub")
 
+          override fun commitChecks(
+            repository: MonitorRepositoryIdentity,
+            sha: String,
+          ): PullRequestChecks = PullRequestChecks.Unavailable("test runs do not reach GitHub")
+
           override fun failureLog(
-            pullRequest: MonitorPullRequestIdentity,
+            repository: MonitorRepositoryIdentity,
             check: PullRequestCheck,
           ): MonitorFailureLog = MonitorFailureLog.Unavailable("test runs do not reach GitHub")
         },

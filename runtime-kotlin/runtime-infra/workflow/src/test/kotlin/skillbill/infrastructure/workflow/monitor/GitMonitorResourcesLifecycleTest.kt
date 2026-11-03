@@ -452,7 +452,7 @@ class GitMonitorResourcesLifecycleTest {
   fun `unreadable ownership blocks admission and recovery as corrupt without holding the lock`() {
     val fixture = fixture()
     val directory =
-      MonitorAdmissionFiles.directoryFor(stateDir, fixture.context().commonDir, fixture.target().pullRequest)
+      MonitorAdmissionFiles.directoryFor(stateDir, fixture.context().commonDir, fixture.target().identity)
     Files.createDirectories(directory)
     Files.writeString(MonitorAdmissionFiles.recordFile(directory), """{"contract_version":"0.1"}""")
 
@@ -502,7 +502,7 @@ class GitMonitorResourcesLifecycleTest {
     executionBranch: String? = null,
   ): Path {
     val context = fixture.context()
-    val target = fixture.target().pullRequest
+    val target = fixture.target().identity
     val directory = MonitorAdmissionFiles.directoryFor(stateDir, context.commonDir, target)
     Files.createDirectories(directory)
     MonitorAdmissionFiles.write(

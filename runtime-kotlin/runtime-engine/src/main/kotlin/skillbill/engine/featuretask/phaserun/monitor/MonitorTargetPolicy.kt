@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
+import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestHead
@@ -85,6 +87,42 @@ internal fun validatedOpenTarget(pullRequest: MonitorPullRequest): MonitorTarget
         "$label head ${head.tip.repository.slug}:${head.tip.ref} is not writable.",
       )
   }
+}
+
+internal fun validatedBranchTarget(
+  identity: MonitorBranchIdentity,
+  found: MonitorBranchLookup.Found,
+): MonitorTargetResolution {
+  val defect =
+    tipDefect("head", found.head.tip)
+      ?: tipDefect("default branch", found.defaultBranch)
+      ?: endpointDefect(found.head)
+  if (defect != null) {
+    return MonitorTargetResolution.Refused(
+      MonitorTargetRefusal.INCOMPLETE_TARGET,
+      "Branch ${identity.url} is not monitorable: $defect.",
+    )
+  }
+  val repository = identity.repository
+  val reportOnlyReason =
+    when {
+      found.head.tip.ref == found.defaultBranch.ref -> "it is the repository's default branch"
+      found.protected != false -> "it is protected"
+      found.head.writeEvidence.repositoryPush != true -> "the caller has no push permission"
+      else -> null
+    }
+  val writability =
+    if (reportOnlyReason != null) MonitorWritability.REPORT_ONLY else MonitorWritability.REPOSITORY_PUSH
+  return MonitorTargetResolution.Open(
+    MonitorResolvedTarget(
+      identity,
+      found.head,
+      found.defaultBranch,
+      "https://${repository.host}/${repository.slug}.git",
+      writability,
+      reportOnlyReason,
+    ),
+  )
 }
 
 private fun targetDefect(pullRequest: MonitorPullRequest): String? {

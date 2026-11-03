@@ -1,3 +1,29 @@
+## [2026-11-03] Classify unsafe branches as report-only before repair
+Context: Subtask 1 treated every branch as report-only. Subtask 2 must repair some branches without pushing to the default branch, a protected branch, or a branch the caller cannot push.
+Decision: Classify REPORT_ONLY in that order of reasons, with null protection or push data counting as report-only. MAINTAINER_CAN_MODIFY is never used for a branch target. A REPORT_ONLY failure names the reason and does not repair.
+Reason: A push to those refs only fails after an agent has spent the repair. Unknown permission fails safe rather than attempting a publish that the remote will reject after the work is done.
+
+## [2026-11-03] Treat the published repair baseline as bounded API lag
+Context: After a branch repair is pushed, a later branch read can still return the pre-push tip once while GitHub catches up.
+Decision: Record that baseline on acknowledge. While the tip equals that SHA and DEFAULT_REFRESH_GRACE has not ended, keep polling. After the grace, follow it like any other move. An unrelated earlier SHA is followed at once.
+Reason: Adopting the lagging tip would abandon the published commit. Treating every rewind as lag would hang a real rewind forever.
+
+## [2026-11-03] Refuse option-shaped monitor intake before launch
+Context: A chat action can send a model-written instruction as the monitor target, and PhaseInvocationParser treats mode: and target: as options.
+Decision: Refuse before preflight when intake is not a single safe token: blank, whitespace or ISO control, a leading dash, or a mode: or target: prefix.
+Reason: A dash prefix would reach the CLI as a flag such as --recover-stale-owner. mode: and target: would be consumed as phase options, so target:main would watch the checked-out branch without saying so.
+
+## [2026-11-03] Separate monitor launch ownership from the desktop start reservation
+Context: A monitor process can live for hours, and a Completed or Refused monitor writes no status row.
+Decision: When intake is present, the launcher ownership key is identity:phase:standalone:intake. The desktop reservation stays repository:monitor:standalone and is released after a started monitor instead of waiting for a board row.
+Reason: Different named targets must not block each other for the life of a watch. settle() would leave later starts refused as already starting until the database session changes, because those early outcomes never produce a row.
+
+## [2026-11-02] Keep standalone monitor ownership at contract 1.0
+Context: Branch targets needed a persisted identity beside pull requests. A version bump would loud-fail every previously monitored pull request, because released tombstones persist and requireVersion is strict equality.
+Decision: Keep contract_version at 1.0 and widen target to a oneOf of the existing pull-request shape and a branch shape (host, repository, ref, url). Pull-request records stay byte-identical. Admission still hashes targetKey, so branch and pull-request directories cannot collide.
+Reason: An older runtime never opens a branch directory because the hash differs, and it can still decode its own 1.0 pull-request tombstones. Those tombstones are live admission state, not discarded artifacts.
+Alternatives considered: Bumping the schema per AGENTS.md's loud-fail convention, rejected because it would block every previously monitored pull request on the next run.
+Revisit when: a later change needs ownership fields the 1.0 oneOf cannot carry without a bump.
 ## [2026-11-02] Read run failure logs in the launcher, not the engine
 Context: Exit reporting first had WorkNewTaskStart read the run log. Three architecture tests in :runtime-core:repoTest failed on its java.nio.file.Files import, runCatching call and // comment.
 Decision: The engine no longer reads files. WorkRunLaunchResult.Started carries an optional exit stage with the exit code and failure log lines, and DetachedWorkRunLauncher reads the log only after a non-zero exit.
