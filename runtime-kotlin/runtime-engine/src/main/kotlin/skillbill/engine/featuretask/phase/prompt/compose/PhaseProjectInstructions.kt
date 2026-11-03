@@ -12,13 +12,13 @@ import java.security.MessageDigest
 
 public sealed interface PhaseProjectInstructionsResolution {
   public data class Injected(
-    public val relativePath: String,
+    public val path: String,
     public val content: String,
     public val sha256: String,
   ) : PhaseProjectInstructionsResolution
 
   public data class Skipped(
-    public val relativePath: String,
+    public val path: String,
     public val reason: String,
   ) : PhaseProjectInstructionsResolution
 }
@@ -32,7 +32,7 @@ internal object AbsentPhaseInstructionFileSource : PhaseInstructionFileSource {
 }
 
 public data class PhaseProjectInstructionsOutcome(
-  public val injected: PhaseProjectInstructionsResolution.Injected? = null,
+  public val injected: List<PhaseProjectInstructionsResolution.Injected> = emptyList(),
   public val skipped: List<PhaseProjectInstructionsResolution.Skipped> = emptyList(),
 )
 
@@ -41,6 +41,7 @@ public object PhaseProjectInstructions {
   public const val PHASES_DIR: String = ".skill-bill/phases"
   public const val MARKDOWN_SUFFIX: String = ".md"
   private const val KIB_BYTES = 1024
+  private const val PROJECT_PHASES_LABEL = "project store phases directory"
   public val ALIASES: Map<String, String> = PhaseSlot.stepAliases
   private val knownPhaseIds: Set<String> = PhaseSlot.entries.flatMap(PhaseSlot::steps).toSet()
 
@@ -48,22 +49,37 @@ public object PhaseProjectInstructions {
     source: PhaseInstructionFileSource,
     repoRoot: Path,
     phaseId: String,
+  ): PhaseProjectInstructionsOutcome {
+    val repo = guarded(PHASES_DIR) { resolveFromDirectory(source, repoRoot.resolve(PHASES_DIR), PHASES_DIR, phaseId) }
+    val project =
+      guarded(PROJECT_PHASES_LABEL) {
+        source.projectPhasesDirectory(repoRoot)?.let { directory ->
+          resolveFromDirectory(source, directory, directory.toString(), phaseId)
+        } ?: PhaseProjectInstructionsOutcome()
+      }
+    return PhaseProjectInstructionsOutcome(repo.injected + project.injected, repo.skipped + project.skipped)
+  }
+
+  private fun guarded(
+    label: String,
+    resolve: () -> PhaseProjectInstructionsOutcome,
   ): PhaseProjectInstructionsOutcome =
     try {
-      resolveFromDirectory(source, repoRoot.resolve(PHASES_DIR), phaseId)
+      resolve()
     } catch (error: IOException) {
-      listingFailure(error)
+      listingFailure(label, error)
     } catch (error: UncheckedIOException) {
-      listingFailure(error)
+      listingFailure(label, error)
     } catch (error: DirectoryIteratorException) {
-      listingFailure(error)
+      listingFailure(label, error)
     } catch (error: SecurityException) {
-      listingFailure(error)
+      listingFailure(label, error)
     }
 
   private fun resolveFromDirectory(
     source: PhaseInstructionFileSource,
     directory: Path,
+    label: String,
     phaseId: String,
   ): PhaseProjectInstructionsOutcome {
     val stems =
@@ -75,43 +91,44 @@ public object PhaseProjectInstructions {
     val chosen = if (phaseId in stems) phaseId else aliasStems.firstOrNull()
     val skipped =
       stems.filter { it !in knownPhaseIds && it !in ALIASES }
-        .map { skippedEntry(it, "unknown phase id '$it'") } +
+        .map { skippedEntry(label, it, "unknown phase id '$it'") } +
         aliasStems.filter { it != chosen }
-          .map { skippedEntry(it, "shadowed by $PHASES_DIR/$chosen$MARKDOWN_SUFFIX") }
-    return when (val resolution = chosen?.let { readInstructions(source, directory, it) }) {
-      is PhaseProjectInstructionsResolution.Injected -> PhaseProjectInstructionsOutcome(resolution, skipped)
-      is PhaseProjectInstructionsResolution.Skipped -> PhaseProjectInstructionsOutcome(null, skipped + resolution)
-      null -> PhaseProjectInstructionsOutcome(null, skipped)
+          .map { skippedEntry(label, it, "shadowed by $label/$chosen$MARKDOWN_SUFFIX") }
+    return when (val resolution = chosen?.let { readInstructions(source, directory, label, it) }) {
+      is PhaseProjectInstructionsResolution.Injected -> PhaseProjectInstructionsOutcome(listOf(resolution), skipped)
+      is PhaseProjectInstructionsResolution.Skipped -> PhaseProjectInstructionsOutcome(skipped = skipped + resolution)
+      null -> PhaseProjectInstructionsOutcome(skipped = skipped)
     }
   }
 
   private fun readInstructions(
     source: PhaseInstructionFileSource,
     directory: Path,
+    label: String,
     stem: String,
   ): PhaseProjectInstructionsResolution? {
-    val relativePath = "$PHASES_DIR/$stem$MARKDOWN_SUFFIX"
+    val displayPath = "$label/$stem$MARKDOWN_SUFFIX"
     val path = directory.resolve("$stem$MARKDOWN_SUFFIX")
     return try {
       val size = source.regularFileSize(path)
       when {
-        size == null -> PhaseProjectInstructionsResolution.Skipped(relativePath, "unreadable: not a regular file")
+        size == null -> PhaseProjectInstructionsResolution.Skipped(displayPath, "unreadable: not a regular file")
         size > MAX_BYTES ->
           PhaseProjectInstructionsResolution.Skipped(
-            relativePath,
+            displayPath,
             "exceeds ${MAX_BYTES / KIB_BYTES} KiB cap ($size bytes)",
           )
-        else -> decodeInstructions(relativePath, source.readBytes(path))
+        else -> decodeInstructions(displayPath, source.readBytes(path))
       }
     } catch (error: IOException) {
-      PhaseProjectInstructionsResolution.Skipped(relativePath, "unreadable: ${error.describe()}")
+      PhaseProjectInstructionsResolution.Skipped(displayPath, "unreadable: ${error.describe()}")
     } catch (error: SecurityException) {
-      PhaseProjectInstructionsResolution.Skipped(relativePath, "unreadable: ${error.describe()}")
+      PhaseProjectInstructionsResolution.Skipped(displayPath, "unreadable: ${error.describe()}")
     }
   }
 
   private fun decodeInstructions(
-    relativePath: String,
+    displayPath: String,
     bytes: ByteArray,
   ): PhaseProjectInstructionsResolution? {
     val content =
@@ -121,7 +138,7 @@ public object PhaseProjectInstructions {
         .decode(ByteBuffer.wrap(bytes))
         .toString()
     return content.takeIf(String::isNotBlank)?.let {
-      PhaseProjectInstructionsResolution.Injected(relativePath, it, sha256Hex(bytes))
+      PhaseProjectInstructionsResolution.Injected(displayPath, it, sha256Hex(bytes))
     }
   }
 
@@ -129,14 +146,17 @@ public object PhaseProjectInstructions {
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
   private fun skippedEntry(
+    label: String,
     stem: String,
     reason: String,
-  ) = PhaseProjectInstructionsResolution.Skipped("$PHASES_DIR/$stem$MARKDOWN_SUFFIX", reason)
+  ) = PhaseProjectInstructionsResolution.Skipped("$label/$stem$MARKDOWN_SUFFIX", reason)
 
-  private fun listingFailure(error: Exception) =
-    PhaseProjectInstructionsOutcome(
-      skipped = listOf(PhaseProjectInstructionsResolution.Skipped(PHASES_DIR, "unreadable: ${error.describe()}")),
-    )
+  private fun listingFailure(
+    label: String,
+    error: Exception,
+  ) = PhaseProjectInstructionsOutcome(
+    skipped = listOf(PhaseProjectInstructionsResolution.Skipped(label, "unreadable: ${error.describe()}")),
+  )
 
   public fun Exception.describe(): String = message ?: this::class.simpleName.orEmpty()
 }

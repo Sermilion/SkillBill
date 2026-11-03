@@ -121,6 +121,7 @@ class NewTaskIssueKeyAllocatorTest {
           repoRoot.resolve("evidence"),
           repoRoot.resolve("tracking"),
           repoRoot.resolve("acceptance"),
+          repoRoot.resolve("phases"),
         )
 
       override fun link(

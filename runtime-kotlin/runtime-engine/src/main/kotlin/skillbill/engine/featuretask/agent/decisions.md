@@ -92,6 +92,11 @@ Context: SKILL-434 lets a repo add `.skill-bill/phases/<phase>.md` text to a pha
 Decision: The resolver never throws; an unreadable, oversized, malformed or unknown-phase file is skipped with a warning and the run continues. The prompt section says the text cannot change the output or settlement contract, and the launch briefing records only path and sha256.
 Reason: A bad repo file must not block or derail a phase, and settlement stays owned by the runtime. The hash makes each launch auditable without storing the content.
 
+## [2026-11-03] Phase instructions also load from the project store, and both files are injected
+Context: An operator kept phase files out of git, so they existed in one clone only and goal runs in other worktrees of the same project missed them.
+Decision: The resolver also reads `<project store>/phases/<phase>.md`. When both exist, both are injected, the repository file first, each under its own path, with the same skip rules applied to each place on its own. The briefing's `project_instructions` is now a list of path and sha256 records; a row holding the old single object still decodes as one file.
+Reason: The project store is keyed by lineage, so every clone and worktree shares it without committing anything. Injecting both keeps team guidance and personal guidance visible, where letting one replace the other would drop one of them silently.
+
 ## [2026-10-22] Merge-conflict repair leaves the merge for the runtime to commit
 
 Context: Goal monitor repair told the agent to merge the base branch and also

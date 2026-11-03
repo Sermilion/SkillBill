@@ -457,6 +457,7 @@ class ProjectStoreResolver(
       runEvidenceRoot = root.resolve("run-evidence"),
       trackingRoot = root.resolve("feature-task-tracking"),
       acceptanceRepairRoot = root.resolve("acceptance-repair"),
+      phasesRoot = root.resolve(ProjectStoreLayout.PHASES_DIRECTORY),
     )
   }
 

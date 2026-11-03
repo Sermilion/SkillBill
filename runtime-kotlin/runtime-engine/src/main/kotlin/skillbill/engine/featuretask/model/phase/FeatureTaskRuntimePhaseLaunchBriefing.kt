@@ -20,7 +20,7 @@ public data class FeatureTaskRuntimePhaseLaunchBriefing(
   public val derivedContextKeys: List<String>,
   public val briefingText: String,
   public val drivingVerdict: String? = null,
-  public val projectInstructions: FeatureTaskRuntimePhaseProjectInstructionsRecord? = null,
+  public val projectInstructions: List<FeatureTaskRuntimePhaseProjectInstructionsRecord> = emptyList(),
 ) {
   init {
     require(phaseId.isNotBlank()) { "FeatureTaskRuntimePhaseLaunchBriefing.phaseId must be non-blank." }
@@ -52,7 +52,9 @@ public data class FeatureTaskRuntimePhaseLaunchBriefing(
     ).let { base ->
       LinkedHashMap(base).apply {
         drivingVerdict?.let { put("driving_verdict", it) }
-        projectInstructions?.let { put("project_instructions", mapOf("path" to it.path, "sha256" to it.sha256)) }
+        projectInstructions.takeIf { it.isNotEmpty() }?.let { records ->
+          put("project_instructions", records.map { mapOf("path" to it.path, "sha256" to it.sha256) })
+        }
       }
     }
 
@@ -126,17 +128,21 @@ public data class FeatureTaskRuntimePhaseLaunchBriefing(
 
     private fun Map<String, Any?>.optionalProjectInstructionsField(
       key: String,
-    ): FeatureTaskRuntimePhaseProjectInstructionsRecord? {
-      if (!containsKey(key) || this[key] == null) {
-        return null
+    ): List<FeatureTaskRuntimePhaseProjectInstructionsRecord> {
+      val raw = this[key] ?: return emptyList()
+      val entries = raw as? List<*> ?: listOf(raw)
+      return entries.map { entry ->
+        val record =
+          JsonCodec.anyToStringAnyMap(entry)
+            ?: schemaError(
+              "Feature-task-runtime briefing artifact field '$key' must decode to an object or a list of objects " +
+                "when present.",
+            )
+        FeatureTaskRuntimePhaseProjectInstructionsRecord(
+          path = record.requireStringField("path"),
+          sha256 = record.requireStringField("sha256"),
+        )
       }
-      val record =
-        JsonCodec.anyToStringAnyMap(this[key])
-          ?: schemaError("Feature-task-runtime briefing artifact field '$key' must decode to an object when present.")
-      return FeatureTaskRuntimePhaseProjectInstructionsRecord(
-        path = record.requireStringField("path"),
-        sha256 = record.requireStringField("sha256"),
-      )
     }
 
     private fun Map<String, Any?>.requireStringListField(key: String): List<String> {
