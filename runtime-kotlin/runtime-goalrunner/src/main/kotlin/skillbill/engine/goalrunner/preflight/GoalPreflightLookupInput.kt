@@ -13,4 +13,5 @@ internal data class GoalPreflightLookupInput(
   val manifestState: GoalRunnerManifestState?,
   val request: GoalPreflightRequest,
   val root: Path,
+  val omitLeftoverGateBlock: Boolean,
 )

@@ -5,6 +5,9 @@ import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.ValueSource
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.application.testProjectStore
+import skillbill.engine.goal.GoalNewWorkAdmission
+import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightGateBlock
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightSubtask
@@ -17,6 +20,9 @@ import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.control.model.NewTaskPreparation
+import skillbill.engine.work.control.model.NewTaskRunKind
+import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunTarget
@@ -36,6 +42,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -45,6 +52,7 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -325,6 +333,60 @@ class WorkRunActionsTest {
     }
   }
 
+  @Test
+  fun `start goal launches reusable abandoned leftover when preflight omits gate block`() {
+    establishTemporarySchemaReadiness("start-goal-reusable-leftover").use { fixture ->
+      val root = fixture.tempDir.toRealPath()
+      val database = sqliteSessionFactoryForTests(root, fixture.dbPath.toString(), emptyMap(), ideStatusClock)
+      val launches = mutableListOf<WorkRunLaunchRequest>()
+      val manifests = testWorkflowGoalRunnerManifestStore(database, TestDecompositionManifestStore, ideStatusClock)
+      val leftover = GoalRunnerManifestState("parent-abandoned", fixture.dbPath.toString(), leftoverBlockedManifest())
+      val actions =
+        workRunActions(
+          database,
+          ideStatusService(database, manifests),
+          testGoalRunnerStatusService(manifests, EmptyOutcomeStore, database = database, clock = ideStatusClock),
+          recordingLauncher(root, launches),
+          goalPreflightServiceForTests(database, leftover),
+        )
+
+      assertEquals(WorkControlResult.Accepted, actions.startGoalForTest(root, "SKILL-901", "codex"))
+      assertEquals(1, launches.size)
+    }
+  }
+
+  @Test
+  fun `start new task goal kind launches reusable abandoned leftover when preflight omits gate block`() {
+    establishTemporarySchemaReadiness("start-new-task-reusable-leftover").use { fixture ->
+      val root = fixture.tempDir.toRealPath()
+      val database = sqliteSessionFactoryForTests(root, fixture.dbPath.toString(), emptyMap(), ideStatusClock)
+      val launches = mutableListOf<WorkRunLaunchRequest>()
+      val leftover = GoalRunnerManifestState("parent-abandoned", fixture.dbPath.toString(), leftoverBlockedManifest())
+      val start =
+        WorkNewTaskStart(
+          database,
+          GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
+          NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
+          goalPreflightServiceForTests(database, leftover),
+          recordingLauncher(root, launches),
+          EnvironmentContext(),
+          TestRepositoryEnclosingRoot,
+          NoopRuntimeDiagnostics,
+        )
+
+      val result =
+        start.startNewTask(
+          root,
+          NewTaskPreparation.Ready("SKILL-901", "SKILL-901", allocated = false),
+          NewTaskRunKind.GOAL,
+          "codex",
+        )
+
+      assertEquals(NewTaskStartResult.Started, result)
+      assertEquals(1, launches.size)
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(
     strings = [
@@ -383,6 +445,46 @@ class WorkRunActionsTest {
     assertNull(
       goalStartRefusalForTest(GoalPreflightResult(GoalPreflightVerdict.NEW_WORK, "SKILL-901", manifestMissing = true)),
     )
+  }
+
+  private fun leftoverBlockedManifest(): DecompositionManifest =
+    DecompositionManifest(
+      issueKey = "SKILL-901",
+      featureName = "blocked-gate",
+      parentSpecPath = ".feature-specs/SKILL-901-goal/spec.md",
+      specSource = SpecSource.LOCAL,
+      status = "in_progress",
+      baseBranch = "main",
+      featureBranch = "feat/SKILL-901-goal",
+      currentSubtaskIntent = CurrentSubtaskIntent(2, "start"),
+      subtasks =
+        listOf(
+          DecompositionSubtask(
+            id = 1,
+            name = "first",
+            specPath = ".feature-specs/SKILL-901-goal/spec_subtask_1.md",
+            status = "pending",
+          ),
+          DecompositionSubtask(
+            id = 2,
+            name = "second",
+            specPath = ".feature-specs/SKILL-901-goal/spec_subtask_2.md",
+            dependencies = listOf(DecompositionDependency(1)),
+            status = "pending",
+          ),
+        ),
+    )
+
+  private fun recordingLauncher(
+    root: Path,
+    launches: MutableList<WorkRunLaunchRequest>,
+  ) = object : WorkRunLauncher {
+    override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+      launches += request
+      return WorkRunLaunchResult.Started(root.resolve("goal.log"))
+    }
+
+    override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
   }
 
   private fun workRunActions(

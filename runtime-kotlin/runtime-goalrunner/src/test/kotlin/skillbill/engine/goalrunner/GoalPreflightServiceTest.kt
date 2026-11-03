@@ -27,6 +27,7 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.OccupyingGoalParent
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.preflight.adjustGoalPreflightContinuationLookup
+import skillbill.engine.work.goalStartRefusalForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -55,6 +56,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalPreflightServiceTest {
@@ -262,13 +264,19 @@ class GoalPreflightServiceTest {
   @Test
   fun `requested add-ons cannot bypass an empty durable selection on goal resume`() {
     val root = Files.createTempDirectory("goal-preflight-addon-mismatch")
+    val occupying = GoalRunnerManifestState("parent-1", "/fake/metrics.db", manifest())
 
     val error =
       assertFailsWith<SkillBillRuntimeException> {
         service(
           database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
-          manifestState = GoalRunnerManifestState("parent-1", "/fake/metrics.db", manifest()),
-          persistedReviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.DEFAULT),
+          manifestStore =
+            TestManifestStore(
+              occupying,
+              persistedReviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.DEFAULT),
+              occupyingState = occupying,
+              occupyingStatus = WorkflowStatus.PAUSED,
+            ),
         ).preflight(request(root, addons = listOf("new-addon")))
       }
     assertEquals(AgentAddonFailureCode.INVALID_SELECTION, error.code)
@@ -277,11 +285,7 @@ class GoalPreflightServiceTest {
   @Test
   fun `blocked planner selection has no expected runnable subtask`() {
     val root = Files.createTempDirectory("goal-preflight-blocked")
-    val blocked =
-      manifest().copy(
-        currentSubtaskIntent = CurrentSubtaskIntent(2, "start"),
-        subtasks = manifest().subtasks.map { it.copy(status = "pending") },
-      )
+    val blocked = blockedPlannerManifest()
     val result =
       service(
         database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
@@ -289,6 +293,47 @@ class GoalPreflightServiceTest {
       ).preflight(request(root))
 
     assertEquals(null, result.gateBlock?.expectedFirstRunnableSubtask)
+    requireNotNull(result.gateBlock)
+  }
+
+  @Test
+  fun `reusable abandoned leftover with blocked planner omits gate block`() {
+    val root = Files.createTempDirectory("goal-preflight-abandoned-leftover")
+    val leftover =
+      GoalRunnerManifestState("parent-abandoned", "/fake/metrics.db", blockedPlannerManifest())
+    val result =
+      service(
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        manifestStore = TestManifestStore(leftover, occupyingState = null),
+      ).preflight(request(root))
+
+    assertEquals(GoalPreflightVerdict.NEW_WORK, result.verdict)
+    assertNull(result.gateBlock)
+    assertNull(goalStartRefusalForTest(result))
+  }
+
+  @Test
+  fun `reusable completed leftover with done planner omits gate block`() {
+    val root = Files.createTempDirectory("goal-preflight-completed-leftover")
+    val doneLeftover =
+      manifest().copy(
+        status = "in_progress",
+        currentSubtaskIntent = CurrentSubtaskIntent(2, "complete"),
+        subtasks =
+          manifest().subtasks.map { subtask ->
+            subtask.copy(status = "complete")
+          },
+      )
+    val leftover = GoalRunnerManifestState("parent-complete", "/fake/metrics.db", doneLeftover)
+    val result =
+      service(
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        manifestStore = TestManifestStore(leftover, occupyingState = null),
+      ).preflight(request(root))
+
+    assertEquals(GoalPreflightVerdict.NEW_WORK, result.verdict)
+    assertNull(result.gateBlock)
+    assertNull(goalStartRefusalForTest(result))
   }
 
   @Test
@@ -355,6 +400,7 @@ class GoalPreflightServiceTest {
         manifestStore = TestManifestStore(occupying, occupyingState = null),
       ).preflight(request(Files.createTempDirectory("goal-preflight-complete-reuse")))
     assertEquals(GoalPreflightVerdict.NEW_WORK, result.verdict)
+    assertNull(result.gateBlock)
   }
 
   @Test
@@ -455,6 +501,12 @@ class GoalPreflightServiceTest {
       agentOverrideId = agentOverride,
       requestedReviewMode = reviewMode,
       requestedAgentAddonSlugs = addons,
+    )
+
+  private fun blockedPlannerManifest(): DecompositionManifest =
+    manifest().copy(
+      currentSubtaskIntent = CurrentSubtaskIntent(2, "start"),
+      subtasks = manifest().subtasks.map { it.copy(status = "pending") },
     )
 
   private fun manifest(specSource: SpecSource = SpecSource.LOCAL): DecompositionManifest =
