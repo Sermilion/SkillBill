@@ -485,6 +485,10 @@ public abstract class StandaloneReviewStrategy(
           "For each finding return exactly one line using its exact ID: " +
             "F-001: confirmed|rejected|unresolved.",
         )
+        appendLine(
+          "Some entries are prose lifted from the report. Confirm only text that claims a defect present in " +
+            "current source. Reject text that claims no defect, such as a summary or a count of the other findings.",
+        )
         report.census.forEach { appendLine("${it.identity}: source=${it.source} | ${it.text}") }
         appendLine(
           "For each warning or coverage block return exactly one line using its exact ID: " +
@@ -522,33 +526,6 @@ public abstract class StandaloneReviewStrategy(
         appendLine(output.stderr)
       }
     }.trimEnd()
-
-  private fun parseVerificationRegister(
-    output: String,
-    findingIdentities: Set<String>,
-    warningIdentities: Set<String>,
-  ): ParsedVerificationRegister? {
-    val findings = mutableMapOf<String, String>()
-    val warnings = mutableMapOf<String, String>()
-    var valid = true
-    output.lineSequence().map(String::trim).filter(String::isNotEmpty).forEach { line ->
-      val finding = Regex("^(F-\\d{3}): (confirmed|rejected|unresolved)$").matchEntire(line)
-      val warning = Regex("^(W-\\d{3}): (incomplete|complete)$").matchEntire(line)
-      when {
-        finding != null -> {
-          val identity = finding.groupValues[1]
-          if (identity !in findingIdentities || findings.put(identity, finding.groupValues[2]) != null) valid = false
-        }
-        warning != null -> {
-          val identity = warning.groupValues[1]
-          if (identity !in warningIdentities || warnings.put(identity, warning.groupValues[2]) != null) valid = false
-        }
-        else -> valid = false
-      }
-    }
-    if (!valid || findings.keys != findingIdentities || warnings.keys != warningIdentities) return null
-    return ParsedVerificationRegister(findings, warnings)
-  }
 
   private fun completeReport(
     binding: PhaseReviewStepBinding,
@@ -839,6 +816,30 @@ internal fun verifiedFindingVerdict(
   }
 }
 
+internal fun parseVerificationRegister(
+  output: String,
+  findingIdentities: Set<String>,
+  warningIdentities: Set<String>,
+): ParsedVerificationRegister? {
+  val findings = mutableMapOf<String, String>()
+  val warnings = mutableMapOf<String, String>()
+  output.lineSequence().forEach { line ->
+    val entry = VERIFICATION_REGISTER_LINE.matchEntire(line.trim()) ?: return@forEach
+    val identity = entry.groupValues[1].uppercase()
+    val status = entry.groupValues[2].lowercase()
+    val register =
+      when {
+        identity in findingIdentities && status in FINDING_DISPOSITIONS -> findings
+        identity in warningIdentities && status in WARNING_CLASSIFICATIONS -> warnings
+        else -> return@forEach
+      }
+    val earlier = register.putIfAbsent(identity, status)
+    if (earlier != null && earlier != status) return null
+  }
+  if (findings.keys != findingIdentities || warnings.keys != warningIdentities) return null
+  return ParsedVerificationRegister(findings, warnings)
+}
+
 private data class StandaloneLaunch(
   val rawOutput: String,
   val result: ParallelCodeReviewResult?,
@@ -861,10 +862,19 @@ private sealed interface VerificationResult {
   data class Blocked(val reason: String, val evidence: String = "") : VerificationResult
 }
 
-private data class ParsedVerificationRegister(
+internal data class ParsedVerificationRegister(
   val findingDispositions: Map<String, String>,
   val warningClassifications: Map<String, String>,
 )
+
+private val FINDING_DISPOSITIONS = setOf("confirmed", "rejected", "unresolved")
+private val WARNING_CLASSIFICATIONS = setOf("incomplete", "complete")
+private val VERIFICATION_REGISTER_LINE =
+  Regex(
+    "^(?:[-*+]\\s+|\\d+[.)]\\s+)?[*_`\\[]*([FW]-\\d{3})[*_`\\]]*\\s*[:=\\-–—]?\\s*[*_`]*\\s*" +
+      "(confirmed|rejected|unresolved|incomplete|complete)\\b.*$",
+    RegexOption.IGNORE_CASE,
+  )
 
 private const val DELEGATED_QUALITY_RUBRIC_HEADING = "## Selected local code-quality rubric"
 private const val MAX_FAILURE_DIAGNOSTICS = 5
