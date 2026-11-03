@@ -21,6 +21,7 @@ import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.monitor.MonitorCheckSource
 import skillbill.ports.monitor.MonitorRepairPublisher
 import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorBranchLookup
 import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorFailureLog
 import skillbill.ports.monitor.model.MonitorFence
@@ -34,6 +35,7 @@ import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorWorktree
 import skillbill.ports.monitor.model.MonitorWritability
+import skillbill.ports.monitor.model.MonitorWriteEvidence
 import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import java.nio.file.Path
@@ -84,7 +86,7 @@ class StandaloneMonitorServiceTest {
       ): PullRequestChecks = PullRequestChecks.NoChecks
 
       override fun failureLog(
-        pullRequest: MonitorPullRequestIdentity,
+        repository: MonitorRepositoryIdentity,
         check: PullRequestCheck,
       ): MonitorFailureLog =
         logs[check.name]?.let(MonitorFailureLog::Available) ?: MonitorFailureLog.Unavailable("none")
@@ -151,7 +153,11 @@ class StandaloneMonitorServiceTest {
   fun `a completed repair on a report-only branch is refused before staging, committing or pushing`() {
     val branch =
       ledgerOf(
-        target.copy(identity = MonitorBranchIdentity(ACME, "main"), writability = MonitorWritability.REPORT_ONLY),
+        target.copy(
+          identity = MonitorBranchIdentity(ACME, "main"),
+          writability = MonitorWritability.REPORT_ONLY,
+          reportOnlyReason = "it is the repository's default branch",
+        ),
       )
     branch.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
     branch.completePendingRepair()
@@ -301,4 +307,78 @@ class StandaloneMonitorServiceTest {
     assertTrue("'''" in evidence, evidence)
     assertEquals(6, evidence.count { it == '`' }, "only the evidence's own fence may remain: $evidence")
   }
+
+  @Test
+  fun `a branch repair blocks publication when the tip moved during the repair`() {
+    val branchLedger = pushableBranchLedger()
+    branchLedger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
+    branchLedger.completePendingRepair()
+    git.ownedPathsValue = listOf("src/Fix.kt")
+    source.branchLookup = { foundBranch(sha = TEAMMATE) }
+
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(branchLedger, repairWorktree))
+
+    assertTrue(TEAMMATE in blocked.reason, blocked.reason)
+    assertNothingTouched()
+  }
+
+  @Test
+  fun `a branch repair with no tree change blocks without reading a pull request`() {
+    val branchLedger = pushableBranchLedger()
+    branchLedger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
+    branchLedger.completePendingRepair()
+    source.branchLookup = { foundBranch(sha = PUBLISHED) }
+
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(branchLedger, repairWorktree))
+
+    assertTrue("made no change to the branch head" in blocked.reason, blocked.reason)
+    assertEquals(emptyList(), source.lookups)
+  }
+
+  @Test
+  fun `a branch repair blocks publication when push permission is lost`() {
+    val branchLedger = pushableBranchLedger()
+    branchLedger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
+    branchLedger.completePendingRepair()
+    git.ownedPathsValue = listOf("src/Fix.kt")
+    source.branchLookup = {
+      foundBranch(
+        sha = PUBLISHED,
+        writeEvidence = MonitorWriteEvidence(repositoryPush = false, maintainerCanModify = false),
+      )
+    }
+
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(branchLedger, repairWorktree))
+
+    assertTrue("no longer has push permission" in blocked.reason, blocked.reason)
+    assertNothingTouched()
+  }
+
+  @Test
+  fun `a branch repair blocks publication when the branch no longer exists`() {
+    val branchLedger = pushableBranchLedger()
+    branchLedger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
+    branchLedger.completePendingRepair()
+    git.ownedPathsValue = listOf("src/Fix.kt")
+    source.branchLookup = { MonitorBranchLookup.Missing }
+
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(branchLedger, repairWorktree))
+
+    assertTrue("no longer exists" in blocked.reason, blocked.reason)
+    assertNothingTouched()
+  }
+
+  private fun pushableBranchLedger() =
+    ledgerOf(
+      target.copy(identity = MonitorBranchIdentity(ACME, "feat/x"), writability = MonitorWritability.REPOSITORY_PUSH),
+    )
+
+  private fun foundBranch(
+    sha: String,
+    writeEvidence: MonitorWriteEvidence = MonitorWriteEvidence(true, false),
+  ) = MonitorBranchLookup.Found(
+    head(sha = sha, writeEvidence = writeEvidence),
+    protected = false,
+    MonitorBranchTip(ACME, "main", SHA),
+  )
 }

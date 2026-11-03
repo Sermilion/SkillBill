@@ -81,7 +81,8 @@ Use this exact fenced block format, with a JSON array containing up to 3 actions
 [{"label":"Start a goal run","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal"}]
 ```
 Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
-For an action that should start a run when clicked, set "start" to one of: "goal", "plan", "review", "validation", "qa" or "pr".
+For an action that should start a run when clicked, set "start" to one of: "goal", "plan", "review", "validation", "qa", "pr" or "monitor".
+When "start" is "monitor", its instruction must be exactly one token: branch:<name>, a pull request URL, or an issue key.
 The app turns that action into a button and starts the selected run only after the operator clicks it. Do not launch skill-bill yourself.
 For an action without "start", the app sends its instruction as the next chat turn when clicked.
 Omit the block when no action is useful. Keep the visible reply concise; this block is hidden by the app.

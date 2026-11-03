@@ -53,7 +53,7 @@ class StandalonePullRequestWatcherTest {
       ): PullRequestChecks = error("the pull request watcher reads pull request checks")
 
       override fun failureLog(
-        pullRequest: MonitorPullRequestIdentity,
+        repository: MonitorRepositoryIdentity,
         check: PullRequestCheck,
       ): MonitorFailureLog = MonitorFailureLog.Unavailable("not needed")
     }

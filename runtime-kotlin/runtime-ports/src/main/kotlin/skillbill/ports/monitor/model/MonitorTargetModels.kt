@@ -107,7 +107,14 @@ data class MonitorResolvedTarget(
   val base: MonitorBranchTip,
   val baseFetchUrl: String,
   val writability: MonitorWritability,
+  val reportOnlyReason: String? = null,
 ) {
+  init {
+    require((writability == MonitorWritability.REPORT_ONLY) == (reportOnlyReason != null)) {
+      "reportOnlyReason must be set exactly when writability is REPORT_ONLY."
+    }
+  }
+
   val state: MonitorPullRequestState get() = MonitorPullRequestState.OPEN
 }
 

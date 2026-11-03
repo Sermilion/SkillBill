@@ -7,8 +7,8 @@ import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 
 /**
- * Read-only CI observation for the standalone monitor. Every call names the pull request by repository and number;
- * no call resolves the caller's branch or working directory.
+ * Read-only CI observation for the standalone monitor. Every call names the repository; no call resolves the caller's
+ * branch or working directory.
  */
 interface MonitorCheckSource {
   fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks
@@ -19,9 +19,9 @@ interface MonitorCheckSource {
     sha: String,
   ): PullRequestChecks
 
-  /** Reads the failing-job log of [check] for [pullRequest], truncated to a bounded tail. */
+  /** Reads the failing-job log of [check] for [repository], truncated to a bounded tail. */
   fun failureLog(
-    pullRequest: MonitorPullRequestIdentity,
+    repository: MonitorRepositoryIdentity,
     check: PullRequestCheck,
   ): MonitorFailureLog
 }

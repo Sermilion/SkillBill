@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports QA findings for the repository's declared QA targets (backend endpoints, web journeys, a desktop app, or a device or simulator); /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports QA findings for the repository's declared QA targets (backend endpoints, web journeys, a desktop app, or a device or simulator); /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches CI on an exact open PR or a `branch:<name>` target from an owned temporary worktree and repairs failed checks or PR merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
@@ -68,7 +68,7 @@ operator's current request selects a standalone phase or operation.
 | `/skill-bill <standalone quality check: run checks, lint, format, or quality validation>` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<instructions>] phase:qa` | `skill-bill phase qa [<instructions>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill [<issue-key\|pr-url>] phase:monitor` | `skill-bill phase monitor [<intake>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill [<issue-key\|pr-url\|branch:<name>] phase:monitor` | `skill-bill phase monitor [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:update-check [--include-prereleases] [--format json]` | `skill-bill operation update-check [--include-prereleases] [--format json]` | none |
 | `/skill-bill [<instructions>] operation:release bump:<patch\|minor\|major>` | `skill-bill operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
@@ -415,30 +415,38 @@ workflow row, branch, or checkpoint commit.
 
 ## Phase Monitor
 
-`phase:monitor` watches CI on one exact open PR. Its intake is a single
-`https://<host>/<owner>/<repo>/pull/<number>` URL, a single issue key, or nothing. A
-URL names that PR. An issue key selects the one PR that mentions it in its title,
-body, or head branch, preferring open PRs. With no intake, the PR whose head is the
-checked-out branch is selected. Several matching PRs, a malformed or multi-token
-intake, an unwritable head, or incomplete PR data refuse the run and name the
-candidates or the defect. Resolution only reads PR data. It never checks out the
-target in the caller checkout, and the caller's branch, index, and uncommitted work
-stay untouched, so monitors for different PRs that share a head branch name run
-concurrently without colliding. The runtime fetches the PR head and base at pinned
-commits and creates an owned temporary worktree and branch under the caller's
-`.git/skill-bill/standalone-monitor` directory. All repair work runs in that
-worktree. The phase starts by watching CI and publishes nothing unless a repair
-is needed. It does not commit or push pending caller changes. A repair that settles
-completed is committed and pushed to the PR's head repository and branch only if
-the remote head is still the pinned commit, never to the base repository. A
-teammate push, a moved head, or a lost ownership fence blocks publication and
-keeps the repair. A merged PR completes without work. A closed, unmerged PR
-blocks. A selector with no open PR completes with a report that names the selector
-and that there is nothing to monitor. These early outcomes create no worktree. When every check passes, is skipped, or is
-cancelled, the phase completes. It also completes when the PR is merged, regardless
+`phase:monitor` watches CI on one exact open pull request or one named branch. Its intake is a single
+`https://<host>/<owner>/<repo>/pull/<number>` URL, `branch:<name>`, a single issue key, or nothing. A
+URL names that PR. `branch:<name>` watches that repository branch and follows its tip, naming each
+commit it adopts. An issue key selects the one PR that mentions it in its title, body, or head
+branch, preferring open PRs; when several open PRs match, the run refuses and names them. With
+`branch:<name>`, exactly one open pull request on that branch monitors that PR; several open pull
+requests refuse and name them; when no open pull request exists and the remote branch exists, that
+branch is watched, including when only merged or closed pull request history remains; a missing remote
+branch refuses. With no intake, exactly one open pull request headed by the checked-out branch
+monitors that PR; several such pull requests refuse; when the all-state listing has never had a pull
+request from the checked-out branch and that branch exists, the checkout is watched; when merged or
+closed history still lists that branch with no open pull request, or the checked-out branch is
+missing, the run completes with nothing to monitor. A branch on the default branch, a protected branch, or a branch the caller cannot push is
+report-only: CI failures block with the check links and no repair runs. Branch targets never receive
+merge-conflict repair. A branch with no reported CI blocks after one hour. Repositories whose
+workflows trigger only on `pull_request` report no CI for a branch with no open pull request. A tip
+that moves during a repair blocks with the work preserved rather than following the new tip.
+A malformed or multi-token intake, an unwritable head, or incomplete target data refuse the run and
+name the candidates or the defect. Resolution never checks the target out in the caller checkout, and
+the caller's branch, index, and uncommitted work stay untouched, so monitors for different pull
+requests or branches that share a head branch name run concurrently without colliding. The runtime
+fetches the pinned head and base and creates an owned temporary worktree and branch under the
+caller's `.git/skill-bill/standalone-monitor` directory. All repair work runs in that worktree. The
+phase starts by watching CI and publishes nothing unless a repair is needed. It does not commit or
+push pending caller changes. A repair that settles completed is committed and pushed to the target's
+head repository and branch only if the remote head is still the last acknowledged commit, never to
+the base repository. A teammate push, a moved head, or a lost ownership fence blocks publication and
+keeps the repair. A merged PR completes without work. A closed, unmerged PR blocks. These early
+outcomes create no worktree. When every check passes, is skipped, or is cancelled, the phase completes. It also completes when the PR is merged, regardless
 of failing or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
 while other checks are pending. This initial failure starts repair and does not
-count against the failed repair budget. A merge conflict starts merge repair on
+count against the failed repair budget. When the target is a pull request, a merge conflict starts merge repair on
 that poll, even when no checks are reported: the fix merges the base branch and
 resolves every conflict without spending a CI repair attempt. A merge repair
 fetches and merges the base tip current at that moment. A base that moves during
@@ -460,9 +468,9 @@ only if that result fails. Merge-only work does not spend a CI repair attempt.
 The cap report names failed repair commits and their check links from recorded
 evidence.
 
-Admission allows one monitor per PR. A second monitor for a PR with a live owner
-blocks and names that owner. A stale owner blocks and reports its owner token. After
-confirming the process is gone, rerun with the exact PR URL and
+Admission allows one monitor per pull request or named branch target. A second monitor for the same
+target with a live owner blocks and names that owner. A stale owner blocks and reports its owner
+token. After confirming the process is gone, rerun with the exact PR URL or `branch:<name>` and
 `--recover-stale-owner <owner-token>`. The option applies only to `phase monitor`,
 needs an explicit target, and is refused when the token is malformed or does not
 match the recorded owner. Recovery never takes over a live owner or a worktree with
@@ -473,10 +481,10 @@ branch and head repository, invocation, owned worktree, and the cleanup outcome.
 run releases the worktree and branch. A worktree with uncommitted or untracked
 changes, unpublished commits, unknown publication state, unowned resources, or a
 failed cleanup is retained, and the report names its path and reason. Retained work
-blocks a fresh monitor of the same PR until it is resolved. A hard kill leaves no
+blocks a fresh monitor of the same target until it is resolved. A hard kill leaves no
 cleanup record and is handled as stale recovery, not as guaranteed cleanup.
 Canceling or rerunning a monitor from the desktop targets its exact invocation and
-PR URL. A rerun launches `phase monitor <that URL>` without checking the head
+PR URL or `branch:<name>`. A rerun launches `phase monitor <that URL or branch:<name>>` without checking the head
 branch out in the caller checkout. Cancel stops the owning process and keeps
 retained work. Goal finalization and `phase:pr` keep their branch-based monitoring
 unchanged.

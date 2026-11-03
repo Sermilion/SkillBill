@@ -196,7 +196,5 @@ internal class StandalonePullRequestWatcher(
 
   companion object {
     const val CANCELLED_REASON: String = "Monitoring was cancelled."
-
-    private val DEFAULT_REFRESH_GRACE: Duration = Duration.ofMinutes(10)
   }
 }

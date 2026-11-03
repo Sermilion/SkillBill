@@ -44,6 +44,7 @@ enum class NewTaskActionKind(val wire: String) {
   Validation("validation"),
   Qa("qa"),
   Pr("pr"),
+  Monitor("monitor"),
 }
 
 /** A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. */

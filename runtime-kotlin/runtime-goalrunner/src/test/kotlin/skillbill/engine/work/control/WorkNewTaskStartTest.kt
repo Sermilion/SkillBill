@@ -1,0 +1,94 @@
+package skillbill.engine.work.control
+
+import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.application.testProjectStore
+import skillbill.engine.goal.GoalNewWorkAdmission
+import skillbill.engine.goal.GoalNewWorkAdmissionPort
+import skillbill.engine.goalrunner.goalPreflightServiceForTests
+import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.ideStatusClock
+import skillbill.engine.work.testGoalRepositoryIdentity
+import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
+import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.model.EnvironmentContext
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunLaunchKind
+import skillbill.ports.work.model.WorkRunLaunchRequest
+import skillbill.ports.work.model.WorkRunLaunchResult
+import skillbill.ports.work.model.WorkRunStopRequest
+import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+
+class WorkNewTaskStartTest {
+  @Test
+  fun `monitor intake launches phase monitor with the intake before the agent flag`() {
+    withRecordingStart("work-new-task-start-monitor") { start, root, launches ->
+      val result = start.startStandalone(root, "monitor", "cursor", "branch:main")
+      assertIs<NewTaskStartResult.Started>(result)
+      val command = launches.single().kind as WorkRunLaunchKind.RuntimeCommand
+      assertEquals(listOf("phase", "monitor", "branch:main", "--agent", "cursor"), command.arguments)
+    }
+  }
+
+  @Test
+  fun `model written intake tokens refuse before launch`() {
+    withRecordingStart("work-new-task-start-refuse") { start, root, launches ->
+      listOf("--recover-stale-owner", "two tokens", "target:main", "mode:inline").forEach { intake ->
+        assertIs<NewTaskStartResult.Refused>(start.startStandalone(root, "monitor", "cursor", intake))
+      }
+      assertIs<NewTaskStartResult.Refused>(start.startStandalone(root, "review", "cursor", "branch:main"))
+      assertEquals(emptyList(), launches)
+    }
+  }
+
+  @Test
+  fun `different monitor intakes use different ownership keys`() {
+    withRecordingStart("work-new-task-start-keys") { start, root, launches ->
+      val identity = testGoalRepositoryIdentity(root)
+      assertIs<NewTaskStartResult.Started>(start.startStandalone(root, "monitor", "cursor", "branch:one"))
+      assertIs<NewTaskStartResult.Started>(start.startStandalone(root, "monitor", "cursor", "branch:two"))
+      assertEquals(
+        listOf("$identity:monitor:standalone:branch:one", "$identity:monitor:standalone:branch:two"),
+        launches.map { it.ownershipKey },
+      )
+    }
+  }
+
+  private fun withRecordingStart(
+    name: String,
+    block: (WorkNewTaskStart, Path, MutableList<WorkRunLaunchRequest>) -> Unit,
+  ) {
+    establishTemporarySchemaReadiness(name).use { fixture ->
+      val root = fixture.tempDir.toRealPath()
+      val database = sqliteSessionFactoryForTests(root, fixture.dbPath.toString(), emptyMap(), ideStatusClock)
+      val launches = mutableListOf<WorkRunLaunchRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launches += request
+            return WorkRunLaunchResult.Started(root.resolve("monitor.log"))
+          }
+
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+        }
+      block(
+        WorkNewTaskStart(
+          database,
+          GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
+          NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
+          goalPreflightServiceForTests(database),
+          launcher,
+          EnvironmentContext(),
+          TestRepositoryEnclosingRoot,
+        ),
+        root,
+        launches,
+      )
+    }
+  }
+}

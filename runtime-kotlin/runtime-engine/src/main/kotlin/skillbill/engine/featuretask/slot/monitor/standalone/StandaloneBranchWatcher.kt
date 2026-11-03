@@ -22,6 +22,8 @@ internal class StandaloneBranchWatcher(
     val branch: MonitorBranchIdentity,
     var expected: String,
     var expectedSince: Instant,
+    val publishedRepairBaselineSha: String?,
+    val refreshGraceEndsAt: Instant,
     val adoptHead: (String) -> String?,
     val onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     val progress: StandaloneWatchProgress,
@@ -31,11 +33,23 @@ internal class StandaloneBranchWatcher(
   fun watch(
     branch: MonitorBranchIdentity,
     expectedSha: String,
+    publishedRepairBaselineSha: String?,
     adoptHead: (String) -> String?,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
   ): PullRequestCiOutcome {
+    val startedAt = now()
     val progress = StandaloneWatchProgress(now, DEFAULT_PROGRESS_INTERVAL)
-    val state = WatchState(branch, expectedSha, now(), adoptHead, onCiRunning, progress)
+    val state =
+      WatchState(
+        branch,
+        expectedSha,
+        startedAt,
+        publishedRepairBaselineSha,
+        startedAt + DEFAULT_REFRESH_GRACE,
+        adoptHead,
+        onCiRunning,
+        progress,
+      )
     while (true) {
       val outcome =
         if (cancelled()) {
@@ -60,6 +74,13 @@ internal class StandaloneBranchWatcher(
     tip: String,
     state: WatchState,
   ): PullRequestCiOutcome? {
+    if (
+      tip != state.expected &&
+      tip == state.publishedRepairBaselineSha &&
+      now().isBefore(state.refreshGraceEndsAt)
+    ) {
+      return null
+    }
     val refusal = state.adoptHead(tip)
     if (refusal == null) {
       state.expected = tip

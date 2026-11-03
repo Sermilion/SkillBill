@@ -180,7 +180,7 @@ This [scripted playback](docs/assets/generate_demo_gif.py) illustrates interrupt
 | `/skill-bill phase:validation` | Discover and run the project's full checks and repair failures |
 | `/skill-bill [<instructions>] phase:qa` | Report-only mobile QA on a device or simulator |
 | `/skill-bill phase:pr` | Commit pending changes, push, open or update the PR, and monitor CI |
-| `/skill-bill [<issue-key\|pr-url>] phase:monitor` | Watch one PR's CI from a temporary worktree and repair failures or merge conflicts |
+| `/skill-bill [<issue-key\|pr-url\|branch:<name>] phase:monitor` | Watch one PR or branch CI from a temporary worktree; repair failures on pushable branches or PR merge conflicts |
 
 ### Operations
 

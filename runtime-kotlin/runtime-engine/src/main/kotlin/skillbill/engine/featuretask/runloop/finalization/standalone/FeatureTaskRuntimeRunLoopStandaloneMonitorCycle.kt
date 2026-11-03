@@ -156,10 +156,12 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
     }
     val checks = failingChecksProse(outcome.failingChecks)
     if (ledger.execution.target.writability == MonitorWritability.REPORT_ONLY) {
+      val reason = ledger.execution.target.reportOnlyReason.orEmpty()
       return block(
         run,
         iteration,
-        "CI is failing on ${target.targetKey} at $head. $checks This branch is report-only, so no repair ran.",
+        "CI is failing on ${target.targetKey} at $head. $checks This branch is report-only because $reason, " +
+          "so no repair ran.",
       )
     }
     val confirmed =

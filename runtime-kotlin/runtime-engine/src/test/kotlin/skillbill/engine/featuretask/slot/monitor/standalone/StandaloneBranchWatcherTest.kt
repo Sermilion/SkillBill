@@ -19,6 +19,7 @@ import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 private const val FIRST = "1111111111111111111111111111111111111111"
 private const val SECOND = "2222222222222222222222222222222222222222"
@@ -50,7 +51,7 @@ class StandaloneBranchWatcherTest {
         }
 
       override fun failureLog(
-        pullRequest: MonitorPullRequestIdentity,
+        repository: MonitorRepositoryIdentity,
         check: PullRequestCheck,
       ): MonitorFailureLog = error("the branch watcher reads no logs")
     }
@@ -66,7 +67,12 @@ class StandaloneBranchWatcherTest {
 
   private fun bucket(bucket: CheckBucket) = PullRequestChecks.Reported(listOf(PullRequestCheck("build", bucket, LINK)))
 
-  private fun watch(): PullRequestCiOutcome =
+  private fun watch(): PullRequestCiOutcome = watchPublished(FIRST, null)
+
+  private fun watchPublished(
+    expectedSha: String,
+    baselineSha: String?,
+  ): PullRequestCiOutcome =
     StandaloneBranchWatcher(
       source,
       checks,
@@ -75,7 +81,8 @@ class StandaloneBranchWatcherTest {
       { cancelled },
     ).watch(
       MonitorBranchIdentity(ACME, "main"),
-      FIRST,
+      expectedSha,
+      baselineSha,
       { sha ->
         adopted += sha
         refusals[sha]
@@ -122,6 +129,30 @@ class StandaloneBranchWatcherTest {
 
     assertEquals(PullRequestCiOutcome.Blocked("CI did not start within 60 minutes on $SECOND."), outcome)
     assertEquals(start + POLL + Duration.ofHours(1), clock)
+  }
+
+  @Test
+  fun `the published repair baseline keeps polling through refresh grace`() {
+    reads(FIRST, SECOND, SECOND)
+    bySha[SECOND] = bucket(CheckBucket.PASS)
+
+    val outcome = watchPublished(SECOND, FIRST)
+
+    assertEquals(PullRequestCiOutcome.Passed(SECOND), outcome)
+    assertEquals(emptyList(), adopted)
+    assertTrue(clock <= Instant.parse("2026-11-02T10:10:00Z"))
+  }
+
+  @Test
+  fun `the published repair baseline is followed after refresh grace`() {
+    reads(FIRST)
+    bySha[FIRST] = bucket(CheckBucket.PASS)
+
+    val outcome = watchPublished(SECOND, FIRST)
+
+    assertEquals(PullRequestCiOutcome.Passed(FIRST), outcome)
+    assertEquals(listOf(FIRST), adopted)
+    assertTrue(clock >= Instant.parse("2026-11-02T10:10:00Z"))
   }
 
   @Test

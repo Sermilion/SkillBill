@@ -239,7 +239,7 @@ object UnavailableStandaloneMonitorService {
           ): PullRequestChecks = PullRequestChecks.Unavailable("test runs do not reach GitHub")
 
           override fun failureLog(
-            pullRequest: MonitorPullRequestIdentity,
+            repository: MonitorRepositoryIdentity,
             check: PullRequestCheck,
           ): MonitorFailureLog = MonitorFailureLog.Unavailable("test runs do not reach GitHub")
         },

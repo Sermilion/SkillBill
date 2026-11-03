@@ -142,11 +142,9 @@ public class WorkNewTaskStart(
     repoRoot: Path,
     phaseId: String,
     agentId: String,
+    intake: String? = null,
   ): NewTaskStartResult {
-    if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
-    if (agentId !in SupportedAgent.supportedIds) {
-      return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
-    }
+    standaloneLaunchRefusal(phaseId, agentId, intake)?.let { return it }
     val checked =
       preflight.preflight(
         GoalPreflightRequest(
@@ -159,6 +157,9 @@ public class WorkNewTaskStart(
       )
     goalStartRefusal(checked)?.let { return NewTaskStartResult.Refused(it) }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val ownership =
+      if (intake == null) "$identity:$phaseId:standalone" else "$identity:$phaseId:standalone:$intake"
+    val args = listOf("phase", phaseId) + listOfNotNull(intake) + listOf("--agent", agentId)
     return database.transaction { unit ->
       when (
         val launched =
@@ -166,8 +167,8 @@ public class WorkNewTaskStart(
             WorkRunLaunchRequest(
               repoRoot,
               unit.dbPath,
-              "$identity:$phaseId:standalone",
-              WorkRunLaunchKind.RuntimeCommand(listOf("phase", phaseId, "--agent", agentId)),
+              ownership,
+              WorkRunLaunchKind.RuntimeCommand(args),
               emptyMap(),
             ),
           )
@@ -175,6 +176,36 @@ public class WorkNewTaskStart(
         is WorkRunLaunchResult.Refused -> NewTaskStartResult.Refused(launched.reason)
         is WorkRunLaunchResult.Started -> NewTaskStartResult.Started
       }
+    }
+  }
+
+  private fun standaloneLaunchRefusal(
+    phaseId: String,
+    agentId: String,
+    intake: String?,
+  ): NewTaskStartResult.Refused? {
+    if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
+    if (agentId !in SupportedAgent.supportedIds) {
+      return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
+    }
+    return standaloneIntakeRefusal(intake, phaseId)
+  }
+
+  private fun standaloneIntakeRefusal(
+    intake: String?,
+    phaseId: String,
+  ): NewTaskStartResult.Refused? {
+    if (intake == null) return null
+    return when {
+      phaseId != "monitor" ->
+        NewTaskStartResult.Refused("Intake is supported only for standalone monitor runs.")
+      intake.isBlank() || intake.any { it.isWhitespace() || it.isISOControl() } ->
+        NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
+      intake.startsWith("-") ->
+        NewTaskStartResult.Refused("Monitor intake must not start with '-'.")
+      intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) || intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
+        NewTaskStartResult.Refused("Monitor intake must name the target directly, not as a phase option.")
+      else -> null
     }
   }
 
@@ -210,6 +241,8 @@ public class WorkNewTaskStart(
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
     val ASCII_WORD = Regex("[A-Za-z0-9]")
     const val MAX_INTAKE_BYTES = 30_000
-    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr")
+    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", "monitor")
+    const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
+    const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
   }
 }

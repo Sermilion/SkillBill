@@ -1,5 +1,8 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
+import skillbill.ports.monitor.model.MonitorBranchIdentity
+import skillbill.ports.monitor.model.MonitorBranchLookup
+import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestState
 import skillbill.ports.monitor.model.MonitorWritability
@@ -8,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MonitorTargetPolicyTest {
@@ -139,5 +143,63 @@ class MonitorTargetPolicyTest {
       val outcome = assertIs<MonitorTargetResolution.Refused>(validatedOpenTarget(candidate), candidate.toString())
       assertEquals(reason, outcome.reason, candidate.toString())
     }
+  }
+
+  @Test
+  fun `branch writability classifies default, protected, no push and pushable feature branches`() {
+    val defaultHead = head(ref = "main")
+    val defaultBranch = MonitorBranchTip(ACME, "main", SHA)
+    val default =
+      validatedBranchTarget(
+        MonitorBranchIdentity(ACME, "main"),
+        MonitorBranchLookup.Found(defaultHead, protected = false, defaultBranch),
+      )
+    val defaultOpen = assertIs<MonitorTargetResolution.Open>(default).target
+    assertEquals(MonitorWritability.REPORT_ONLY, defaultOpen.writability)
+    assertEquals("it is the repository's default branch", defaultOpen.reportOnlyReason)
+
+    val protected =
+      assertIs<MonitorTargetResolution.Open>(
+        validatedBranchTarget(
+          MonitorBranchIdentity(ACME, "feat/x"),
+          MonitorBranchLookup.Found(head(), protected = true, defaultBranch),
+        ),
+      ).target
+    assertEquals(MonitorWritability.REPORT_ONLY, protected.writability)
+    assertEquals("it is protected", protected.reportOnlyReason)
+
+    val unknownProtected =
+      assertIs<MonitorTargetResolution.Open>(
+        validatedBranchTarget(
+          MonitorBranchIdentity(ACME, "feat/x"),
+          MonitorBranchLookup.Found(head(), protected = null, defaultBranch),
+        ),
+      ).target
+    assertEquals(MonitorWritability.REPORT_ONLY, unknownProtected.writability)
+    assertEquals("it is protected", unknownProtected.reportOnlyReason)
+
+    val noPush =
+      assertIs<MonitorTargetResolution.Open>(
+        validatedBranchTarget(
+          MonitorBranchIdentity(ACME, "feat/x"),
+          MonitorBranchLookup.Found(
+            head(writeEvidence = MonitorWriteEvidence(repositoryPush = false, maintainerCanModify = false)),
+            protected = false,
+            defaultBranch,
+          ),
+        ),
+      ).target
+    assertEquals(MonitorWritability.REPORT_ONLY, noPush.writability)
+    assertEquals("the caller has no push permission", noPush.reportOnlyReason)
+
+    val pushable =
+      assertIs<MonitorTargetResolution.Open>(
+        validatedBranchTarget(
+          MonitorBranchIdentity(ACME, "feat/x"),
+          MonitorBranchLookup.Found(head(), protected = false, defaultBranch),
+        ),
+      ).target
+    assertEquals(MonitorWritability.REPOSITORY_PUSH, pushable.writability)
+    assertNull(pushable.reportOnlyReason)
   }
 }

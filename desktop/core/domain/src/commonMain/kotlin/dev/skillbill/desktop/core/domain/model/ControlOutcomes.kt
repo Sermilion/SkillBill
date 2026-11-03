@@ -123,7 +123,7 @@ sealed interface PurgeOutcome {
   data class Failed(val problem: ReadProblem) : PurgeOutcome
 }
 
-enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr }
+enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr, Monitor }
 
 data class NewTaskStart(
   val repoRoot: String,
@@ -133,6 +133,7 @@ data class NewTaskStart(
   val kind: NewTaskKind,
   val keyChoice: String?,
   val expectedDatabaseSessionId: Long?,
+  val monitorIntake: String? = null,
 )
 
 sealed interface NewTaskStartOutcome {

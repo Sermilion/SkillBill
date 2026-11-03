@@ -203,7 +203,7 @@ class RuntimeWorkControlRepository(
     val session = request.expectedDatabaseSessionId?.let(sessions::currentComponent)
       ?: return NewTaskStartOutcome.Refused("The database changed. Try again.")
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
-    if (request.kind in setOf(NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr)) {
+    if (request.kind in setOf(NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor)) {
       return startStandaloneTask(request, session)
     }
     val identity = callInSession(
@@ -302,6 +302,7 @@ class RuntimeWorkControlRepository(
       NewTaskKind.Validation -> "validation"
       NewTaskKind.Qa -> "qa"
       NewTaskKind.Pr -> "pr"
+      NewTaskKind.Monitor -> "monitor"
       else -> return NewTaskStartOutcome.Refused("Choose a standalone phase.")
     }
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
@@ -334,7 +335,12 @@ class RuntimeWorkControlRepository(
         val observation = session.purgeIdentity.observation
           ?: return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
         when (val result = runtime.databaseSession.transactionFenced(observation) {
-          if (!sessionIsCurrent(session)) null else runtime.workControlService.startStandalone(Path.of(request.repoRoot), phaseId, request.agentId)
+          if (!sessionIsCurrent(session)) null else runtime.workControlService.startStandalone(
+            Path.of(request.repoRoot),
+            phaseId,
+            request.agentId,
+            request.monitorIntake,
+          )
         }) {
           FencedTransactionResult.ChangedTarget -> NewTaskStartOutcome.Refused("The database changed. Try again.")
           is FencedTransactionResult.Committed -> when (val started = result.value) {
@@ -348,7 +354,11 @@ class RuntimeWorkControlRepository(
       launches.release(handle)
       throw failure
     }
-    if (outcome is NewTaskStartOutcome.Started) launches.settle(handle, true) else launches.release(handle)
+    if (outcome is NewTaskStartOutcome.Started) {
+      if (request.kind == NewTaskKind.Monitor) launches.release(handle) else launches.settle(handle, true)
+    } else {
+      launches.release(handle)
+    }
     return outcome
   }
 

@@ -41,7 +41,7 @@ class GhMonitorCheckSource internal constructor(
             "checks",
             pullRequest.number.toString(),
             "--repo",
-            repositoryArgument(pullRequest),
+            repositoryArgument(pullRequest.repository),
             "--json",
             "name,state,bucket,link,startedAt",
           ),
@@ -94,30 +94,30 @@ class GhMonitorCheckSource internal constructor(
     )
 
   override fun failureLog(
-    pullRequest: MonitorPullRequestIdentity,
+    repository: MonitorRepositoryIdentity,
     check: PullRequestCheck,
   ): MonitorFailureLog {
-    val repository = repositoryArgument(pullRequest)
+    val repositoryArgument = repositoryArgument(repository)
     val match =
-      runLinkOf(pullRequest, check.link)
-        ?: return MonitorFailureLog.Unavailable("The check link is not a workflow run of $repository.")
+      runLinkOf(repository, check.link)
+        ?: return MonitorFailureLog.Unavailable("The check link is not a workflow run of $repositoryArgument.")
     val (runId, jobId) = match.destructured
     val arguments =
       listOf("run", "view", runId) +
         (if (jobId.isBlank()) emptyList() else listOf("--job", jobId)) +
-        listOf("--log-failed", "--repo", repository)
+        listOf("--log-failed", "--repo", repositoryArgument)
     val result = gh.run(Path.of("."), arguments)
     return if (result.exitCode == 0) {
       MonitorFailureLog.Available(result.stdout.takeLast(LOG_TAIL_CHARACTERS))
     } else {
       val reason = result.describeFailure()
-      diagnostics.warning("monitor poll failure log unavailable for $repository#${pullRequest.number}: $reason")
+      diagnostics.warning("monitor poll failure log unavailable for $repositoryArgument: $reason")
       MonitorFailureLog.Unavailable(reason)
     }
   }
 
   private fun runLinkOf(
-    pullRequest: MonitorPullRequestIdentity,
+    repository: MonitorRepositoryIdentity,
     link: String,
   ): MatchResult? {
     val uri =
@@ -127,12 +127,12 @@ class GhMonitorCheckSource internal constructor(
         return null
       }
     val path = uri.path.orEmpty()
-    val ownPrefix = "/${pullRequest.repository.slug}/actions/runs/"
+    val ownPrefix = "/${repository.slug}/actions/runs/"
     return RUN_LINK.find(path)?.takeIf {
-      uri.host.equals(pullRequest.repository.host, ignoreCase = true) && path.startsWith(ownPrefix)
+      uri.host.equals(repository.host, ignoreCase = true) && path.startsWith(ownPrefix)
     }
   }
 
-  private fun repositoryArgument(pullRequest: MonitorPullRequestIdentity): String =
-    "${pullRequest.repository.host}/${pullRequest.repository.slug}"
+  private fun repositoryArgument(repository: MonitorRepositoryIdentity): String =
+    "${repository.host}/${repository.slug}"
 }

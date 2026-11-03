@@ -34,6 +34,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
@@ -48,7 +50,7 @@ internal class NewTaskScreenHost(
   val now: () -> Instant,
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
-  val onStart: ((String) -> Unit)? = null,
+  val onStart: ((String, String?) -> Unit)? = null,
 )
 
 @Composable
@@ -58,6 +60,8 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
+  val onOfferStart = remember(draft) { { kind: NewTaskKind, keyChoice: String? -> draft.start(kind, keyChoice) } }
+  val chipStart = remember(host.onStart) { host.onStart?.let { start -> { wire: String -> start(wire, null) } } }
   LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -88,7 +92,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
                 chipText(draft.selectedAgent),
                 chatBusy,
                 offer,
-                draft::start,
+                onOfferStart,
               )
             }
           } else null,
@@ -99,7 +103,10 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
               focusManager.clearFocus()
             }
           } else {
-            host.onStart?.invoke(start.wire)
+            host.onStart?.invoke(
+              start.wire,
+              action.instruction.takeIf { start == NewTaskActionKind.Monitor },
+            )
           }
         }
       }
@@ -111,7 +118,10 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
     ) {
       if (chat == null && state.home is NewTaskHome.Returning) {
         val startable = draft.repository != null && draft.agentId != null
-        NewTaskChips(host.onStart.takeIf { startable }, Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth())
+        NewTaskChips(
+          chipStart.takeIf { startable },
+          Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
+        )
       }
       NewTaskComposer(state, draft, focus, host.now, onAction)
     }

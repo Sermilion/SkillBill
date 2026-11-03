@@ -8,8 +8,10 @@ import java.time.Instant
 
 private const val POLL_INTERVAL_SECONDS: Long = 30
 private const val PROGRESS_INTERVAL_SECONDS: Long = 30
+private const val REFRESH_GRACE_MINUTES: Long = 10
 internal val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(POLL_INTERVAL_SECONDS)
 internal val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
+internal val DEFAULT_REFRESH_GRACE: Duration = Duration.ofMinutes(REFRESH_GRACE_MINUTES)
 internal val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofSeconds(PROGRESS_INTERVAL_SECONDS)
 private const val MAX_PROGRESS_CHECKS: Int = 8
 private const val MAX_PROGRESS_TEXT_LENGTH: Int = 160

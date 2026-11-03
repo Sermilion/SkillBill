@@ -109,7 +109,7 @@ class GhMonitorCheckSourceTest {
 
   @Test
   fun `a failing check's own workflow run is read through the target repository`() {
-    val log = source.failureLog(TARGET, failing("https://github.com/acme/repo/actions/runs/91/job/7"))
+    val log = source.failureLog(TARGET.repository, failing("https://github.com/acme/repo/actions/runs/91/job/7"))
 
     assertEquals(MonitorFailureLog.Available("failed step output"), log)
     assertEquals(
@@ -126,7 +126,7 @@ class GhMonitorCheckSourceTest {
       "https://github.com/acme/repo/pull/1?x=/acme/repo/actions/runs/91",
       "not a url",
     ).forEach { link ->
-      assertIs<MonitorFailureLog.Unavailable>(source.failureLog(TARGET, failing(link)), link)
+      assertIs<MonitorFailureLog.Unavailable>(source.failureLog(TARGET.repository, failing(link)), link)
     }
     assertEquals(emptyList(), calls)
   }

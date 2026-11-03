@@ -16,7 +16,7 @@ class ChatSystemPromptTest {
     assertTrue("Base branch: develop" in prompt)
     assertTrue("skillbill-actions" in prompt)
     assertTrue("\"mode\":\"act\",\"start\":\"goal\"" in prompt)
-    listOf("goal", "plan", "review", "validation", "qa", "pr").forEach {
+    listOf("goal", "plan", "review", "validation", "qa", "pr", "monitor").forEach {
       assertTrue("\"$it\"" in prompt)
     }
     assertTrue("without \"start\", the app sends its instruction as the next chat turn" in prompt)
@@ -32,7 +32,8 @@ class ChatSystemPromptTest {
   fun `the new-task prompt permits goal and review start actions`() {
     val prompt = scopeSystemPrompt(ChatScope.NewTask("/work/app", null))
 
-    assertTrue("set \"start\" to one of: \"goal\", \"plan\", \"review\", \"validation\", \"qa\" or \"pr\"" in prompt)
+    assertTrue("set \"start\" to one of: \"goal\", \"plan\", \"review\", \"validation\", \"qa\", \"pr\" or \"monitor\"" in prompt)
+    assertTrue("branch:<name>" in prompt)
     assertTrue("the app starts the selected run when the operator clicks it" in prompt)
     assertFalse("Starting a run from this chat is not available yet" in prompt)
     assertFalse("Do not include a \"start\" field" in prompt)

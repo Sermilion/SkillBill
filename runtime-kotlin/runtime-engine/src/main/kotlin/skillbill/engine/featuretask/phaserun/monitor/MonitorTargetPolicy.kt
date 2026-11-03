@@ -104,13 +104,23 @@ internal fun validatedBranchTarget(
     )
   }
   val repository = identity.repository
+  val reportOnlyReason =
+    when {
+      found.head.tip.ref == found.defaultBranch.ref -> "it is the repository's default branch"
+      found.protected != false -> "it is protected"
+      found.head.writeEvidence.repositoryPush != true -> "the caller has no push permission"
+      else -> null
+    }
+  val writability =
+    if (reportOnlyReason != null) MonitorWritability.REPORT_ONLY else MonitorWritability.REPOSITORY_PUSH
   return MonitorTargetResolution.Open(
     MonitorResolvedTarget(
       identity,
       found.head,
       found.defaultBranch,
       "https://${repository.host}/${repository.slug}.git",
-      MonitorWritability.REPORT_ONLY,
+      writability,
+      reportOnlyReason,
     ),
   )
 }

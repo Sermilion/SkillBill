@@ -186,4 +186,21 @@ class NewTaskDraftStartTest {
     assertEquals("Start another task", draft.text)
   }
 
+  @Test
+  fun `monitor start sends the action instruction as monitor intake`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/work/repo", "repo")
+      agentId = "claude"
+      selectedAgent = chats.agent
+    }
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
+
+    draft.start(NewTaskKind.Monitor, monitorIntake = " branch:main ")
+    runCurrent()
+
+    assertEquals("branch:main", controls.newTaskRequests.single().monitorIntake)
+  }
 }

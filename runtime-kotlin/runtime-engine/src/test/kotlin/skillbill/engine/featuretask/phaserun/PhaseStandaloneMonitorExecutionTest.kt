@@ -171,7 +171,10 @@ class PhaseStandaloneMonitorExecutionTest {
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(CHECK_URL in blocked.reason, blocked.reason)
-    assertTrue("This branch is report-only, so no repair ran." in blocked.reason, blocked.reason)
+    assertTrue(
+      "This branch is report-only because it is the repository's default branch, so no repair ran." in blocked.reason,
+      blocked.reason,
+    )
     assertEquals(emptyList(), repairCwds)
     assertEquals(baseSha, git(origin, "rev-parse", "main"), "a report-only run never pushes")
     assertOwnedWorktreeRemoved(blocked.targetReport)
@@ -619,7 +622,7 @@ class PhaseStandaloneMonitorExecutionTest {
     ): PullRequestChecks = bySha(sha)
 
     override fun failureLog(
-      pullRequest: MonitorPullRequestIdentity,
+      repository: MonitorRepositoryIdentity,
       check: PullRequestCheck,
     ): MonitorFailureLog = MonitorFailureLog.Available("FeatureTest > ready() FAILED: assertion failed in FeatureTest")
   }
