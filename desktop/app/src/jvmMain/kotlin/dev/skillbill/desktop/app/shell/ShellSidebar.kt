@@ -38,12 +38,14 @@ fun ShellSidebar(
   sectionSizes: Map<BoardSectionKind, Int>?,
   specsOpen: Boolean,
   terminalOpen: Boolean,
+  chatOpen: Boolean,
   newTaskDraft: Boolean,
   contributions: List<SidebarContribution>,
   onNavigate: (AppRoute) -> Unit,
   onOpenCommandMenu: () -> Unit,
   onToggleSpecs: () -> Unit,
   onToggleTerminal: () -> Unit,
+  onToggleChat: () -> Unit,
   onShowShortcuts: () -> Unit,
 ) {
   var boardExpanded by rememberSaveable { mutableStateOf(true) }
@@ -56,6 +58,7 @@ fun ShellSidebar(
     footer = {
       SidebarItem("Specs", onToggleSpecs, icon = LucideIcons.fileText, on = specsOpen, tooltip = "Specs pane", shortcut = "G S")
       SidebarItem("Terminal", onToggleTerminal, icon = LucideIcons.terminal, on = terminalOpen, tooltip = "Terminal", shortcut = "⌃ `")
+      SidebarItem("Chats", onToggleChat, icon = LucideIcons.bot, on = chatOpen, tooltip = "Chat pane")
       SidebarItem("Settings", { onNavigate(SettingsRoute(SettingsPageId.App)) }, icon = LucideIcons.sliders, tooltip = "Settings", shortcut = "G ,")
       SidebarItem("Keyboard shortcuts", onShowShortcuts, icon = LucideIcons.keyboard, tooltip = "Keyboard shortcuts", shortcut = "?")
     },

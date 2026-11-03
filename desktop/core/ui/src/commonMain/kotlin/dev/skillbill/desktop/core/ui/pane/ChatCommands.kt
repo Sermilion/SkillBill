@@ -21,6 +21,9 @@ interface ChatCommands {
   /** Hides the pane when it shows [item]'s chat, or any chat when [item] is null; otherwise opens [item]'s chat, or only shows the pane. */
   fun toggleChat(item: WorkItem?)
 
+  /** Shows or hides the chat pane without opening, creating, or switching a chat. */
+  fun toggleChatPane()
+
   fun openChat(item: WorkItem)
 
   fun runReviewAction(item: WorkItem, action: ReviewFindingsAction)

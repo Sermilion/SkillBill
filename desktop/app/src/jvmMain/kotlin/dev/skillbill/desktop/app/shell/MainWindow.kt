@@ -199,12 +199,14 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         sectionSizes = board.lastLoaded?.sections?.associate { it.kind to it.items.size },
         specsOpen = panes.specsOpen,
         terminalOpen = panes.terminalOpen,
+        chatOpen = panes.chatOpen,
         newTaskDraft = newTaskDraft,
         contributions = window.entries.flatMap { it.sidebarItems },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,
         onToggleSpecs = { panes.specsOpen = !panes.specsOpen },
         onToggleTerminal = window.terminal::toggle,
+        onToggleChat = window.chat::toggleChatPane,
         onShowShortcuts = { panes.shortcutsOpen = true },
       )
     }
