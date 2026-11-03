@@ -1,10 +1,22 @@
 package dev.skillbill.desktop.app.shell
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
@@ -36,6 +48,7 @@ import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 fun ShellSidebar(
   topRoute: AppRoute,
   sectionSizes: Map<BoardSectionKind, Int>?,
+  favorites: List<FavoriteSidebarEntry>,
   specsOpen: Boolean,
   terminalOpen: Boolean,
   chatOpen: Boolean,
@@ -47,6 +60,7 @@ fun ShellSidebar(
   onToggleTerminal: () -> Unit,
   onToggleChat: () -> Unit,
   onShowShortcuts: () -> Unit,
+  onRemoveFavorite: (dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey) -> Unit,
 ) {
   var boardExpanded by rememberSaveable { mutableStateOf(true) }
   Sidebar(
@@ -83,6 +97,22 @@ fun ShellSidebar(
       shortcut = "G W",
     )
     SidebarItem("History", { onNavigate(HistoryRoute) }, icon = LucideIcons.history, on = topRoute == HistoryRoute, tooltip = "History", shortcut = "G H")
+    SidebarSection("Favorites", expanded = true, onToggle = {}, collapsible = false) {
+      Column(Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
+        favorites.forEach { entry ->
+          when (entry) {
+            is FavoriteSidebarEntry.Resolved -> SidebarItem(
+              entry.item.title,
+              { onNavigate(DetailRoute(entry.item)) },
+              icon = LucideIcons.star,
+              tooltip = "${entry.item.title}, ${entry.item.lifecycle.name}",
+              trailingText = entry.item.lifecycle.name,
+            )
+            else -> FavoriteUnavailable(entry, onRemoveFavorite)
+          }
+        }
+      }
+    }
     SidebarSection("Board", boardExpanded, onToggle = { boardExpanded = !boardExpanded }) {
       BoardSectionKind.entries.forEach { kind ->
         val needsYou = kind == BoardSectionKind.NeedsYou
@@ -100,5 +130,25 @@ fun ShellSidebar(
       }
     }
     contributions.forEach { SidebarItem(it.label, it.onClick, icon = it.icon) }
+  }
+}
+
+@Composable
+private fun FavoriteUnavailable(
+  entry: FavoriteSidebarEntry,
+  onRemove: (dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey) -> Unit,
+) {
+  val key = entry.key
+  val status = when (entry) {
+    is FavoriteSidebarEntry.Loading -> "Loading"
+    is FavoriteSidebarEntry.Missing -> "Missing"
+    is FavoriteSidebarEntry.Failed -> "Could not load"
+    is FavoriteSidebarEntry.OtherDatabase -> "Other database"
+    is FavoriteSidebarEntry.Resolved -> return
+  }
+  val identity = "${key.databaseFile.path} · ${key.workItemId}"
+  Row(Modifier.fillMaxWidth().height(28.dp).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    BasicText("$status · ${key.workItemId}", Modifier.weight(1f), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 1)
+    SbIconButton(LucideIcons.trash, "Remove $status favorite $identity", { onRemove(key) }, size = SbControlSize.Small)
   }
 }
