@@ -1,3 +1,19 @@
+## [2026-11-03] Keep pasted chat images in the session, not in chat history
+Context: Operator messages can carry pasted images, but ChatStore history lines hold text only and images are large.
+Decision: Images stay on QueuedChatMessage and ChatMessage.Operator for the running session. ChatThread.historyLines and restored name their fields explicitly and drop images. No persistence code or history contract change was added.
+Reason: Persisting bytes would grow the history file and need a legacy read path for old lines. The agent already receives the images on the turn.
+Revisit when: restored chats must show or resend earlier images.
+
+## [2026-11-03] Normalize pasted images before they reach the turn request
+Context: Clipboard images can be arbitrarily large and are sent to the agent CLI.
+Decision: normalizedChatImage scales to a 1568 px longest edge and encodes PNG; above 3,750,000 bytes it re-encodes as JPEG at 0.85 on white. ChatComposer takes encodeContext, defaulting to Dispatchers.Default, so tests encode inline without polling.
+Reason: Agent image limits are lower than raw screenshot sizes, and encoding on the UI thread would freeze the composer. The injectable context avoids timing-based tests.
+
+## [2026-11-03] Return focus to the input when a pasted image chip is removed
+Context: The remove button leaves composition with its chip, which dropped focus from the input, so the next paste shortcut never reached onPreviewKeyEvent.
+Decision: The chip's onRemove calls focus.requestFocus() after removePastedImage, as submit already does.
+Reason: Remove then paste again is a normal flow and must keep working from the keyboard.
+
 ## [2026-11-03] Keep suggested input with the pending prefix choice
 Context: A suggested goal or plan can need a prefix before it starts. Transcript-derived retry input can select an unrelated instruction or title.
 Decision: Carry the selected action through the screen host and retain it with the pending prefix choice. Use its instruction and exact nullable title for the initial request and retry. Clear or replace pending input on a new turn or launch; card starts use the transcript.

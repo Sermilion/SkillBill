@@ -1,3 +1,13 @@
+## [2026-11-03] SKILL-450 Paste images in the chat composer
+Areas: desktop/feature/chat
+- Cmd/Ctrl+V in ChatComposer reads the clipboard through ClipboardImageReader (default SystemClipboardImageReader). The key is consumed only when the clipboard holds an image and no text; otherwise normal text paste runs. The image is scaled to a 1568 px longest edge and encoded as PNG; over 3,750,000 bytes it is re-encoded as JPEG at 0.85 on white. Encoding runs off the UI thread; a failure adds no chip.
+- ChatWorkspace keeps pastedImages per chat. The composer shows an [Image #N] chip per image with a Remove image N button; removing returns focus to the input. Pending images clear on close, closeExecutionChats, clear and submit. Send is enabled by text or images. An image finishing after its chat closed is dropped.
+- send and pauseAndAct take images. QueuedChatMessage and ChatMessage.Operator carry them, and drainQueue passes them to ChatTurnRequest.images. An image-only prompt has no trailing blank line. Suggested-action messages carry no images.
+- Operator bubbles show [Image #N] preview chips; clicking opens a popover with the image fitted into 320x240 dp, or "Preview unavailable" if it cannot decode.
+- Limits: images live only in the session and are not written to chat history, so a restored Operator message has no chips and an image-only message saves as a blank-text line. Only the clipboard path exists; no file drop or picker. No test covers chip styling or the popover. QA reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-03] SKILL-471 Preserve suggested start input
 Areas: desktop/feature/chat
 - Suggested goal and plan clicks carry the selected action through the screen host to NewTaskStart, using its instruction and exact nullable title instead of transcript-derived values.
