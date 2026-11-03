@@ -1,3 +1,8 @@
+## [2026-11-03] Footer Chats only flips pane visibility
+Context: Cmd/Ctrl+L and Work-detail Chat call toggleChat(item), which opens leftover SelectionHolder and can create a tab. Terminal toggle creates a tab when none exist. toggleChat(null) does not hide an already-open empty pane because shownId is null with no tabs.
+Decision: The footer calls ChatCommands.toggleChatPane, which only hides or setPaneOpen(true). It does not read SelectionHolder and does not call open, newChat, or openChat.
+Reason: The operator asked to slide the existing pane, not add a third create path. Writing panes.chatOpen from the footer would not show FloatingPane, which reads workspace.paneOpen. CHAT_SHORTCUT stays off the item because that chord is not visibility-only.
+
 ## [2026-11-03] Keep suggested input with the pending prefix choice
 Context: A suggested goal or plan can need a prefix before it starts. Transcript-derived retry input can select an unrelated instruction or title.
 Decision: Carry the selected action through the screen host and retain it with the pending prefix choice. Use its instruction and exact nullable title for the initial request and retry. Clear or replace pending input on a new turn or launch; card starts use the transcript.

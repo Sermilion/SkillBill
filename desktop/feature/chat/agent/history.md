@@ -1,3 +1,13 @@
+## [2026-11-03] SKILL-473 footer chats visibility toggle
+Areas: desktop/feature/chat, desktop/core/ui pane, desktop/app shell
+- ChatCommands.toggleChatPane shows or hides the run chat pane without opening, creating, or switching a chat. ChatWorkspace hides when the pane is open and otherwise only setPaneOpen(true). reusable.
+- ShellSidebar footer order is Specs, Terminal, Chats, Settings, Keyboard shortcuts. Chats uses LucideIcons.bot, on = chatOpen, tooltip Chat pane, and no shortcut. MainWindow binds chatOpen to panes.chatOpen and onToggleChat to window.chat::toggleChatPane.
+- Highlight follows pane visibility, not shownChatId, so an empty open pane still highlights. Settings still has no sidebar, so Chats is absent there without a second gate.
+- Work-detail Chat, ChatPane +, and Cmd/Ctrl+L stay on toggleChat(item) or newChat. Leftover SelectionHolder does not create a tab from this footer path.
+- ChatWorkspaceTest covers leftover-selection empty-pane and hide-then-show without open or newChat. NoChat stubs the new interface member.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-03] SKILL-471 Preserve suggested start input
 Areas: desktop/feature/chat
 - Suggested goal and plan clicks carry the selected action through the screen host to NewTaskStart, using its instruction and exact nullable title instead of transcript-derived values.

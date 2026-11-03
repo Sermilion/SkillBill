@@ -24,4 +24,6 @@ public fun goalRepositoryIdentityFilters(
 ): List<String?> = repoRoot?.let { goalRepositoryIdentityCandidates(it, repositoryEnclosingRootPort) } ?: listOf(null)
 
 public fun goalRepositoryRootFromIdentity(identity: String): Path? =
-  FeatureTaskExecutionIdentityPolicy.repositoryRootFromIdentity(identity)?.let(Path::of)
+  FeatureTaskExecutionIdentityPolicy.repositoryRootFromIdentity(identity)?.let { wire ->
+    Path.of(if (wire.matches(Regex("^/[A-Za-z]:/.*"))) wire.removePrefix("/") else wire)
+  }

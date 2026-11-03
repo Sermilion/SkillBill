@@ -36,14 +36,11 @@ object CanonicalRepositoryRoot : RepositoryEnclosingRootPort {
       null
     }
 
-  override fun repositoryIdentity(repoRoot: Path): String {
-    val gitRoot = canonicalPath(enclosingRepositoryRoot(repoRoot))
-    return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + gitRoot
-  }
+  override fun repositoryIdentity(repoRoot: Path): String =
+    identityPath(canonicalPath(enclosingRepositoryRoot(repoRoot)))
 
   override fun primaryRepositoryIdentity(repoRoot: Path): String =
-    FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX +
-      primaryRepositoryRoot(enclosingRepositoryRoot(repoRoot))
+    identityPath(primaryRepositoryRoot(enclosingRepositoryRoot(repoRoot)))
 
   override fun primaryRepositoryRoot(repoRoot: Path): Path {
     val root = canonicalPath(repoRoot)
@@ -68,6 +65,12 @@ object CanonicalRepositoryRoot : RepositoryEnclosingRootPort {
         ?: return null
     val commonDir = readTrimmed(gitDir.resolve(COMMONDIR_FILE))?.takeIf { it.isNotEmpty() }
     return commonDir?.let { gitDir.resolve(it).normalize() } ?: gitDir
+  }
+
+  private fun identityPath(path: Path): String {
+    val portable = path.toString().replace('\\', '/')
+    val wire = if (portable.matches(Regex("^[A-Za-z]:.*"))) "/$portable" else portable
+    return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + wire
   }
 
   private fun readTrimmed(path: Path): String? {

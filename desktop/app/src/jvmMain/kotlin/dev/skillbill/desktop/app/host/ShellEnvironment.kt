@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 private const val PATH = "PATH"
+private const val UNIX_PATH_SEPARATOR = ':'
 private const val MARKER = "__SKILL_BILL_SHELL_ENV__"
 private const val TIMEOUT_SECONDS = 3L
 private const val READER_JOIN_MS = 500L
@@ -55,10 +56,10 @@ internal fun parseShellEnvironment(output: String): Map<String, String>? {
 
 /** The shell's entries first, then inherited ones the shell does not list. */
 internal fun mergedPath(shellPath: String, inherited: String?): String =
-  (shellPath.split(File.pathSeparatorChar) + inherited.orEmpty().split(File.pathSeparatorChar))
+  (shellPath.split(UNIX_PATH_SEPARATOR) + inherited.orEmpty().split(UNIX_PATH_SEPARATOR))
     .filter(String::isNotBlank)
     .distinct()
-    .joinToString(File.pathSeparator)
+    .joinToString(UNIX_PATH_SEPARATOR.toString())
 
 /** Runs [command] with no stdin, so an interactive shell cannot wait for input, and returns its stdout, or null on failure. */
 private fun readShellOutput(command: List<String>): String? {

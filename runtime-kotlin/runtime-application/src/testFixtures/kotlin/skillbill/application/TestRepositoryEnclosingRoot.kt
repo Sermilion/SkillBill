@@ -28,7 +28,9 @@ object TestRepositoryEnclosingRoot : RepositoryEnclosingRootPort {
 
   override fun repositoryIdentity(repoRoot: Path): String {
     val gitRoot = canonicalPath(enclosingRepositoryRoot(repoRoot))
-    return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + gitRoot
+    val portable = gitRoot.toString().replace('\\', '/')
+    val wire = if (portable.matches(Regex("^[A-Za-z]:.*"))) "/$portable" else portable
+    return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + wire
   }
 
   override fun primaryRepositoryIdentity(repoRoot: Path): String = repositoryIdentity(repoRoot)

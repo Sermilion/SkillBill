@@ -127,6 +127,10 @@ class ChatWorkspace(
     }
   }
 
+  override fun toggleChatPane() {
+    if (paneState.value) hide() else setPaneOpen(true)
+  }
+
   override fun openChat(item: WorkItem) = open(item)
 
   override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) {

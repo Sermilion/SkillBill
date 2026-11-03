@@ -69,6 +69,8 @@ class ShellKeyboardEscapeTest {
 
     override fun toggleChat(item: WorkItem?) = Unit
 
+    override fun toggleChatPane() = Unit
+
     override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) = Unit
 
     override fun openChat(item: WorkItem) = Unit
