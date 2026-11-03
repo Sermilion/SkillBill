@@ -387,6 +387,9 @@ class DetailViewModelTest {
 
     override fun observe(item: WorkItem): Flow<DetailState> = flow
 
+    override suspend fun resolve(id: String): dev.skillbill.desktop.core.domain.repository.WorkDetailResolution =
+      dev.skillbill.desktop.core.domain.repository.WorkDetailResolution.Missing
+
     override suspend fun refresh(id: String) { refreshes += id }
 
     override suspend fun loadList(id: String, list: DetailList, anchor: String?): DetailListOutcome {

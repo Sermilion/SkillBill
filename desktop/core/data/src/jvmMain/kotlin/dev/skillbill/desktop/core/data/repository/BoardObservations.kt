@@ -14,7 +14,6 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -22,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.emptyFlow
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import skillbill.contracts.persistence.DesktopReadSchema
 import java.util.concurrent.atomic.AtomicInteger
@@ -54,21 +56,24 @@ class BoardObservations internal constructor(
   private val clock: Clock,
 ) {
   private val observations = HashMap<BoardQuery, Observation>()
-  private val refreshes = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+  private val refreshes = MutableStateFlow(0L)
 
   /** Counts collectors per query; the last one leaving evicts the query once its share timeout passes unclaimed. */
   fun observe(query: BoardQuery): Flow<BoardState> = flow {
-    val observation = synchronized(observations) {
-      observations.getOrPut(query) { Observation(query) }.also { it.subscribers++ }
-    }
+    val observation = acquire(query)
     try {
       emitAll(observation.state)
     } finally {
-      synchronized(observations) { observation.subscribers-- }
-      scope.launch {
-        delay(SHARE_TIMEOUT_MS)
-        synchronized(observations) { if (observation.subscribers == 0) observations.remove(query, observation) }
-      }
+      release(query, observation)
+    }
+  }
+
+  fun observeRefreshes(query: BoardQuery): Flow<Unit> = flow {
+    val observation = acquire(query)
+    try {
+      emitAll(observation.refreshEvents)
+    } finally {
+      release(query, observation)
     }
   }
 
@@ -86,7 +91,7 @@ class BoardObservations internal constructor(
           RevisionKey(it.generation, it.revisions[DesktopReadSchema.GOALS_TOPIC], it.revisions[DesktopReadSchema.PHASES_TOPIC], it.resyncEpoch)
         }.distinctUntilChanged().map { },
         deadlineTicks,
-        refreshes,
+        refreshes.drop(1).map { },
       ).conflate().map { reads.complete(query) }
         .onEach { result -> if (result is Outcome.Success) deadline.value = nextDeadline(result.value) }
         .distinctUntilChanged(),
@@ -99,7 +104,7 @@ class BoardObservations internal constructor(
     val observation = synchronized(observations) { observations[query] } ?: return LoadMoreOutcome.End
     return when (val read = reads.page(query, cursor)) {
       is Outcome.Failure -> {
-        refreshes.tryEmit(Unit)
+        refresh()
         LoadMoreOutcome.Failed(read.error)
       }
       is Outcome.Success -> {
@@ -111,7 +116,7 @@ class BoardObservations internal constructor(
   }
 
   fun refresh() {
-    refreshes.tryEmit(Unit)
+    refreshes.update { it + 1L }
   }
 
   private sealed interface Event {
@@ -121,6 +126,18 @@ class BoardObservations internal constructor(
   }
 
   private data class RevisionKey(val generation: String?, val goals: Long?, val phases: Long?, val resyncEpoch: Long)
+
+  private fun acquire(query: BoardQuery): Observation = synchronized(observations) {
+    observations.getOrPut(query) { Observation(query) }.also { it.subscribers++ }
+  }
+
+  private fun release(query: BoardQuery, observation: Observation) {
+    synchronized(observations) { observation.subscribers-- }
+    scope.launch {
+      delay(SHARE_TIMEOUT_MS)
+      synchronized(observations) { if (observation.subscribers == 0) observations.remove(query, observation) }
+    }
+  }
 
   private inner class Observation(private val query: BoardQuery) {
     var subscribers = 0
@@ -137,16 +154,30 @@ class BoardObservations internal constructor(
       }
     }
 
-    private val triggers: Flow<Unit> = merge(
+    private val boardTriggers: Flow<Unit> = merge(
       signals.map {
         RevisionKey(it.generation, it.revisions[DesktopReadSchema.GOALS_TOPIC], it.revisions[DesktopReadSchema.PHASES_TOPIC], it.resyncEpoch)
       }.distinctUntilChanged().map { },
       deadlineTicks,
-      refreshes,
+      refreshes.drop(1).map { },
     )
 
+    private val initialRefreshVersion = refreshes.value
+    private val initialRefreshKey = refreshKey(signals.value)
+
+    private val refreshTriggers: Flow<Unit> = merge(
+      signals.map(::refreshKey).distinctUntilChanged().dropWhile { it == initialRefreshKey }.map { },
+      deadlineTicks,
+      refreshes.dropWhile { it == initialRefreshVersion }.map { },
+    )
+
+    private val refreshVersion = refreshTriggers.runningFold(0L) { version, _ -> version + 1L }
+      .stateIn(scope, SharingStarted.WhileSubscribed(SHARE_TIMEOUT_MS), 0L)
+
+    val refreshEvents: Flow<Unit> = refreshVersion.map { Unit }
+
     val state: StateFlow<BoardState> = merge(
-      triggers.conflate().map {
+      boardTriggers.conflate().map {
         Event.Read(if (query.complete) reads.complete(query) else reads.pages(query, pageCount.get()))
       },
       appends.map { Event.Append(it) },
@@ -177,6 +208,22 @@ class BoardObservations internal constructor(
     private fun loaded(items: List<WorkItem>, nextCursor: String?) =
       BoardState.Loaded(sectionsOf(items), reads.counts(items), nextCursor, stale = false, items = items)
   }
+
+  private data class RefreshKey(
+    val generation: String?,
+    val goals: Long?,
+    val phases: Long?,
+    val activity: Long?,
+    val resyncEpoch: Long,
+  )
+
+  private fun refreshKey(snapshot: SignalSnapshot) = RefreshKey(
+    snapshot.generation,
+    snapshot.revisions[DesktopReadSchema.GOALS_TOPIC],
+    snapshot.revisions[DesktopReadSchema.PHASES_TOPIC],
+    snapshot.revisions[DesktopReadSchema.ACTIVITY_TOPIC],
+    snapshot.resyncEpoch,
+  )
 }
 
 /**

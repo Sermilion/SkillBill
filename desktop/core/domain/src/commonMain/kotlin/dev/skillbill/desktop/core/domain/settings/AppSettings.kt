@@ -36,6 +36,9 @@ data class AppSettings(
 
 data class FavoriteWorkKey(val databaseFile: DatabaseFileIdentity, val workItemId: String)
 
+fun Iterable<FavoriteWorkKey>.orderedFavorites(normalizePath: (String) -> String): List<FavoriteWorkKey> =
+  sortedWith(compareBy({ normalizePath(it.databaseFile.path) }, { it.databaseFile.fileKey }, { it.workItemId }))
+
 /** How far back the board shows finished work. */
 enum class HistoryWindow(val wireValue: String) {
   SixHours("6h"),

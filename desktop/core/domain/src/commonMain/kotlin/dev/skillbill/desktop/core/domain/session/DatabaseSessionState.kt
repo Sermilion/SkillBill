@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.domain.session
 
+import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import kotlinx.coroutines.flow.StateFlow
 
 /** The selected database's session. */
@@ -7,7 +8,7 @@ sealed interface DatabaseSessionState {
   /** [path] is the path setting being opened; null means the runtime default, which resolves only once the graph is built. */
   data class Opening(val path: String?) : DatabaseSessionState
 
-  data class Open(val path: String, val sessionId: Long) : DatabaseSessionState
+  data class Open(val path: String, val sessionId: Long, val databaseFile: DatabaseFileIdentity? = null) : DatabaseSessionState
 
   data class Failed(val path: String, val failure: StorageFailure) : DatabaseSessionState
 }

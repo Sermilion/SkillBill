@@ -113,7 +113,7 @@ internal class SessionLifecycle<G : SessionGraph>(
       }
       synchronized(coordinationBoundary) {
         mutableCurrent.value = OpenSession(id, checkNotNull(graph), scope)
-        mutableState.value = DatabaseSessionState.Open(path, id)
+        mutableState.value = DatabaseSessionState.Open(path, id, graph.databaseFile())
       }
       watcher.invokeOnCompletion { cause ->
         if (cause != null && cause !is CancellationException) requests.trySend(Request.WatchEnded(id, cause))
