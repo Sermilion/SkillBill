@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
@@ -20,11 +21,15 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.IOException
+
+private const val FAVORITE_READ_RETRY_MILLIS = 5_000L
 
 @Inject
 @SingleIn(AppScope::class)
@@ -59,6 +64,25 @@ class DataStoreAppSettingsRepository(
     }
   }.distinctUntilChanged()
 
+  override val favoriteWork: Flow<Outcome<Set<FavoriteWorkKey>, SettingsRejection>> = flow {
+    while (true) {
+      val seenWrites = writes.value
+      store.data
+        .map { preferences ->
+          val decoded = preferences.toAppSettings {}
+          val result: Outcome<Set<FavoriteWorkKey>, SettingsRejection> = Outcome.Success(decoded.favoriteWork)
+          result
+        }
+        .catch { failure ->
+          if (failure !is IOException) throw failure
+          diagnostics.record("desktop_settings_unreadable")
+          emit(Outcome.Failure(SettingsRejection.ReadFailed))
+        }
+        .collect { emit(it) }
+      withTimeoutOrNull(FAVORITE_READ_RETRY_MILLIS) { writes.first { it != seenWrites } }
+    }
+  }.distinctUntilChanged()
+
   override suspend fun setDatabasePath(path: String?): Outcome<Unit, SettingsRejection> {
     if (!path.isNullOrEmpty() && path.isBlank()) return Outcome.Failure(SettingsRejection.BlankDatabasePath)
     return edit { if (path.isNullOrEmpty()) it.remove(AppPreferenceKeys.DATABASE_PATH) else it[AppPreferenceKeys.DATABASE_PATH] = path.trim() }
@@ -80,6 +104,14 @@ class DataStoreAppSettingsRepository(
   }
 
   override suspend fun setTrayLastTab(tab: TrayTab) = edit { it[AppPreferenceKeys.TRAY_LAST_TAB] = tab.wireValue }
+
+  override suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean) = edit { preferences ->
+    val encoded = FavoriteWorkKeyEncoding.encode(key)
+    val stored = preferences[AppPreferenceKeys.FAVORITE_WORK].orEmpty().toMutableSet()
+    if (favorite) stored.add(encoded) else stored.remove(encoded)
+    if (stored.isEmpty()) preferences.remove(AppPreferenceKeys.FAVORITE_WORK)
+    else preferences[AppPreferenceKeys.FAVORITE_WORK] = stored
+  }
 
   private suspend fun edit(change: (MutablePreferences) -> Unit): Outcome<Unit, SettingsRejection> = try {
     store.edit(change)

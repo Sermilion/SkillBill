@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.core.domain.settings
 
+import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+
 /**
  * The app's preferences. A null [databasePath] means the runtime default (`SKILL_BILL_DB`, then `~/.skill-bill/review-metrics.db`),
  * and a null [claudeConfigDir] leaves the agent's own default.
@@ -12,6 +14,7 @@ data class AppSettings(
   val startAtLogin: Boolean,
   val terminalHeightDp: Int,
   val trayLastTab: TrayTab,
+  val favoriteWork: Set<FavoriteWorkKey> = emptySet(),
 ) {
   companion object {
     const val TERMINAL_HEIGHT_DEFAULT_DP = 200
@@ -26,9 +29,12 @@ data class AppSettings(
       startAtLogin = false,
       terminalHeightDp = TERMINAL_HEIGHT_DEFAULT_DP,
       trayLastTab = TrayTab.DEFAULT,
+      favoriteWork = emptySet(),
     )
   }
 }
+
+data class FavoriteWorkKey(val databaseFile: DatabaseFileIdentity, val workItemId: String)
 
 /** How far back the board shows finished work. */
 enum class HistoryWindow(val wireValue: String) {
