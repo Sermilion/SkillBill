@@ -10,6 +10,7 @@ import skillbill.infrastructure.launcher.review.CursorReviewStreamTerminationErr
 import skillbill.ports.agentrun.model.ReportedLaunchIdentity
 import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
 import skillbill.review.parallel.ParallelReviewFindingParser
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 internal fun decodeCursorStreamJson(stdout: String): DecodedAgentRunOutput {
   if (stdout.isBlank()) {
@@ -132,21 +133,33 @@ private fun harvestCursorRegister(text: String): String {
   }
   peelTrailingNoFindings(trimmed)?.let { return it }
   val split = insertCursorRegisterBoundaries(trimmed)
-  val findingLines =
+  val splitLines =
     split.lineSequence()
       .map { it.trim() }
-      .filter { it.isNotEmpty() && FINDING_LINE_START.containsMatchIn(it) }
+      .filter { it.isNotEmpty() }
       .toList()
+  val findingLines = splitLines.filter { FINDING_LINE_START.containsMatchIn(it) }
+  val verdictLine = splitLines.firstOrNull { CANONICAL_VERDICT_LINE.matches(it) }
+  val hasNoFindingsToken = splitLines.any { it == NO_FINDINGS_TOKEN }
   return when {
-    findingLines.isNotEmpty() -> findingLines.joinToString("\n")
-    split.lineSequence().any { it.trim() == NO_FINDINGS_TOKEN } -> NO_FINDINGS_TOKEN
+    findingLines.isNotEmpty() ->
+      (findingLines + listOfNotNull(verdictLine)).joinToString("\n")
+    hasNoFindingsToken && verdictLine != null ->
+      splitLines
+        .filter { line ->
+          line == NO_FINDINGS_TOKEN ||
+            CANONICAL_VERDICT_LINE.matches(line) ||
+            isReviewRegisterControlPrefix(line)
+        }.joinToString("\n")
+    hasNoFindingsToken -> NO_FINDINGS_TOKEN
     else -> assessmentRegisterOf(split) ?: trimmed
   }
 }
 
 private fun insertCursorRegisterBoundaries(text: String): String {
   val withFindings = GLUED_FINDING_START.replace(text, "\n$1")
-  val withNoFindings = GLUED_TRAILING_NO_FINDINGS.replace(withFindings, "\n$1")
+  val withVerdict = GLUED_CANONICAL_VERDICT_START.replace(withFindings, "\n$1")
+  val withNoFindings = GLUED_TRAILING_NO_FINDINGS.replace(withVerdict, "\n$1")
   return GLUED_ASSESSMENT_START.replace(withNoFindings, "\n$1")
 }
 
@@ -154,8 +167,25 @@ private fun isStrictReviewRegister(text: String): Boolean {
   val trimmed = text.trim()
   if (trimmed == NO_FINDINGS_TOKEN) return true
   val lines = trimmed.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
-  return lines.isNotEmpty() && lines.all { FINDING_LINE_START.containsMatchIn(it) }
+  return lines.isNotEmpty() && lines.all { isReviewRegisterLine(it) }
 }
+
+private fun isReviewRegisterLine(line: String): Boolean =
+  when {
+    line == NO_FINDINGS_TOKEN -> true
+    line.equals("No findings.", ignoreCase = true) -> true
+    CANONICAL_VERDICT_LINE.matches(line) -> true
+    isReviewRegisterControlPrefix(line) -> true
+    FINDING_LINE_START.containsMatchIn(line) -> true
+    REVIEW_REGISTER_MARKDOWN_HEADING.matches(line) -> true
+    REVIEW_REGISTER_COLON_HEADING.matches(line) -> true
+    else -> false
+  }
+
+private fun isReviewRegisterControlPrefix(line: String): Boolean =
+  line.startsWith("lanes:", ignoreCase = true) ||
+    line.startsWith("coverage:", ignoreCase = true) ||
+    line.startsWith("warning:", ignoreCase = true)
 
 private fun isStrictAssessmentRegister(text: String): Boolean {
   val lines = assessmentLines(text)
@@ -218,7 +248,25 @@ private val GLUED_FINDING_START =
   Regex(
     "(?<![\\n\\r])(\\[F-\\d{${ParallelReviewFindingParser.PARALLEL_REVIEW_FINDING_ID_PAD_WIDTH}}])",
   )
-private val GLUED_TRAILING_NO_FINDINGS = Regex("(?<![\\n\\r])(NO_FINDINGS)\\s*$")
+private val CANONICAL_VERDICT_BODY =
+  "verdict:\\s*(?:${FeatureTaskRuntimeVerdict.APPROVED.wireValue}|" +
+    "${FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue})"
+private val GLUED_TRAILING_NO_FINDINGS =
+  Regex("(?<![\\n\\r])(NO_FINDINGS)(?=\\s*(?:\$|(?i:$CANONICAL_VERDICT_BODY)))")
+private val CANONICAL_VERDICT_LINE =
+  Regex("^$CANONICAL_VERDICT_BODY$", RegexOption.IGNORE_CASE)
+private val GLUED_CANONICAL_VERDICT_START =
+  Regex("(?<=NO_FINDINGS)[ \\t]*((?i:$CANONICAL_VERDICT_BODY))")
+private val REVIEW_REGISTER_MARKDOWN_HEADING =
+  Regex(
+    "^#{1,6}\\s+(?:summary|overview|review|findings|code quality(?: \\(non-blocking\\))?)\\s*$",
+    RegexOption.IGNORE_CASE,
+  )
+private val REVIEW_REGISTER_COLON_HEADING =
+  Regex(
+    "^(?:Summary|Overview|Review|Findings|Code Quality):$",
+    RegexOption.IGNORE_CASE,
+  )
 private val ASSESSMENT_RECORD_LINE =
   Regex("""^(Finding|Test value|Scenario|Regression|Verify)\b""", RegexOption.IGNORE_CASE)
 private val GLUED_ASSESSMENT_START =
