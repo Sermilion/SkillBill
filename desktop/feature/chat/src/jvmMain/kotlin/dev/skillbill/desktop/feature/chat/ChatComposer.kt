@@ -19,8 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +55,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
+ * Stop ends the running reply and returns queued messages to the draft; Send now ends the reply and sends the first queued message.
  * The input stays editable while a turn runs. Submitting queues a message until the current turn ends.
  * A draft of `/resume` or `/clear` is a command: it shows highlighted and runs even while a turn runs. `/resume` opens the
  * saved-chat picker; `/clear` ends the running turn and starts a new conversation.
@@ -62,6 +67,7 @@ internal fun ChatComposer(
   encodeContext: CoroutineContext = Dispatchers.Default,
 ) {
   val busy by session.busy.collectAsState()
+  val stoppable by session.stoppable.collectAsState()
   val agent by session.agent.collectAsState()
   val supported by session.agentSupported.collectAsState()
   val gone by session.gone.collectAsState()
@@ -70,6 +76,7 @@ internal fun ChatComposer(
   val queued by session.queued.collectAsState()
   val prefixChoice by session.prefixChoice.collectAsState()
   val focus = remember(session) { FocusRequester() }
+  val gate = remember(session) { SendNowGate() }
   LaunchedEffect(session) { focus.requestFocus() }
   val id = session.id
   val text = workspace.drafts[id].orEmpty()
@@ -77,6 +84,7 @@ internal fun ChatComposer(
   val images = workspace.pastedImages[id].orEmpty()
   val scope = rememberCoroutineScope()
   val ready = command != null || (supported && !gone && (text.isNotBlank() || images.isNotEmpty()))
+  val sendNow = stoppable && queued.isNotEmpty() && text.isBlank() && supported && !gone
   fun run(command: String) {
     workspace.drafts.remove(id)
     when (command) {
@@ -91,6 +99,17 @@ internal fun ChatComposer(
     workspace.drafts.remove(id)
     workspace.pastedImages.remove(id)
     focus.requestFocus()
+  }
+  fun press(viaEnter: Boolean) {
+    if (sendNow) {
+      if (gate.admit(workspace.now(), viaEnter)) {
+        workspace.sendNow(id)
+        focus.requestFocus()
+      }
+      return
+    }
+    submit(workspace::send)
+    gate.pressed(workspace.now(), viaEnter)
   }
   // Returns true, consuming the key, only when the clipboard holds an image; a text paste falls through to the field.
   fun pasteImage(event: KeyEvent): Boolean {
@@ -117,10 +136,16 @@ internal fun ChatComposer(
     Box(Modifier.fillMaxWidth()) {
       SbInput(
         text, { workspace.drafts[id] = it },
-        modifier = Modifier.fillMaxWidth().onPreviewKeyEvent(::pasteImage).focusRequester(focus).gatesShortcutsWhileFocused(),
+        modifier = Modifier.fillMaxWidth()
+          .onPreviewKeyEvent { event ->
+            if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) gate.enterReleased()
+            pasteImage(event)
+          }
+          .focusRequester(focus)
+          .gatesShortcutsWhileFocused(),
         placeholder = "Ask about this execution, or type $RESUME_COMMAND or $CLEAR_COMMAND",
         enabled = !gone,
-        onSubmit = { submit(workspace::send) },
+        onSubmit = { press(viaEnter = true) },
         multiline = true,
         visualTransformation = CommandHighlight(SkillBillTheme.colors),
       )
@@ -144,6 +169,13 @@ internal fun ChatComposer(
       ModeBadge(mode)
       AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+        if (stoppable) {
+          SbButton(
+            "Stop", { workspace.stop(id); focus.requestFocus() },
+            size = SbControlSize.Small,
+            tooltip = "Ends this reply. Queued messages return to the draft",
+          )
+        }
         if (mode == ChatPermissionMode.ReadOnly) {
           SbButton(
             if (busy) "Queue pause and act" else "Pause and act", { submit(workspace::pauseAndAct) },
@@ -151,7 +183,19 @@ internal fun ChatComposer(
             tooltip = "Pauses the execution when this message runs, acts, then resumes it",
           )
         }
-        SbButton(if (busy && command == null) "Queue" else "Send", { submit(workspace::send) }, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
+        SbButton(
+          label = when {
+            command != null -> "Send"
+            sendNow -> "Send now"
+            busy -> "Queue"
+            else -> "Send"
+          },
+          onClick = { press(viaEnter = false) },
+          variant = SbButtonVariant.Primary,
+          size = SbControlSize.Small,
+          enabled = ready || sendNow,
+          shortcut = "↵",
+        )
       }
     }
   }

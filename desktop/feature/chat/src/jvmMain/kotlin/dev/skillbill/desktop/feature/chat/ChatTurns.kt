@@ -134,6 +134,7 @@ internal class ChatTurns(
     var delivered = false
     try {
       chat.send(request).collect { event ->
+        session.thread.dropUnprompted = false
         if (event !is ChatEvent.Failed && !delivered) {
           delivered = true
           session.delivered = sent
@@ -153,13 +154,31 @@ internal class ChatTurns(
    * composer while it streams unless an operator turn already does, and is saved once it ends.
    */
   suspend fun unprompted(session: ChatSession, event: ChatEvent) {
+    if (session.thread.dropUnprompted) return
     val ownTurn = session.turnJob == null
-    if (ownTurn) session.busyState.value = true
+    if (ownTurn) {
+      session.busyState.value = true
+      session.stoppableState.value = true
+    }
     val agent = session.agentState.value
     session.thread.show(agent, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
-    if (ownTurn) session.busyState.value = false
+    if (ownTurn) {
+      session.busyState.value = false
+      session.stoppableState.value = false
+    }
     if (agent != null && session.started) save(session, agent)
+  }
+
+  /** Closes a turn the operator stopped: a session the agent never created is not saved, and the next turn opens a new one. */
+  suspend fun finishStopped(session: ChatSession) {
+    session.endStreaming()
+    session.append(ChatMessage.Notice(STOPPED_NOTICE))
+    val agent = session.agentState.value
+    when {
+      !session.started -> session.restart(UUID.randomUUID().toString())
+      agent != null -> save(session, agent)
+    }
   }
 
   private suspend fun save(session: ChatSession, agent: ChatAgent) {
