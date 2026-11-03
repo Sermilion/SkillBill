@@ -32,6 +32,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -41,6 +42,7 @@ import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
@@ -435,7 +437,13 @@ class FeatureTaskContinuationLookupServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
     return Fixture(
       states = states,
@@ -639,6 +647,30 @@ class FeatureTaskContinuationLookupServiceTest {
           ),
         ),
       )
+  }
+
+  @Test
+  fun `selector identity keeps a legacy exact checkout row`() {
+    val fixture = fixture()
+    val exact = "repo-root-realpath-v1:/tmp/worktree"
+    val primary = "repo-root-realpath-v1:/tmp/main"
+    val opened =
+      fixture.open(exact, routeScope = FeatureTaskRouteScope.GOAL_CHILD, definition = SkeletonDefinition.GOAL_CHILD)
+    fixture.states.saveFeatureTaskExecutionIdentity(
+      FeatureTaskExecutionIdentity(
+        workflowId = opened.workflowId,
+        normalizedIssueKey = "SKILL-120",
+        repositoryIdentity = exact,
+        governedSpecPath = ".feature-specs/SKILL-120-continuation/spec.md",
+        mode = RUNTIME,
+        routeScope = FeatureTaskRouteScope.GOAL_CHILD,
+      ),
+    )
+
+    assertEquals(
+      exact,
+      fixture.lookup.selectorIdentity(opened.workflowId, listOf(primary, exact)),
+    )
   }
 
   private companion object {

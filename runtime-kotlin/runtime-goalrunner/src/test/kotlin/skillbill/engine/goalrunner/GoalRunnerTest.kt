@@ -966,6 +966,7 @@ class GoalRunnerTest {
 
   @Test
   fun `same-branch goal retries failed checkout without forwarding create branch to the new child`() {
+    val repoRoot = Files.createTempDirectory("goal-retry-checkout")
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -992,7 +993,7 @@ class GoalRunnerTest {
         ),
       )
 
-    val report = runner.run(runRequest())
+    val report = runner.run(runRequest().copy(repoRoot = repoRoot))
 
     val stopped = assertIs<GoalRunnerRunReport.Stopped>(report)
     assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
@@ -1008,7 +1009,8 @@ class GoalRunnerTest {
         goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(gitOperations = retryGit),
       )
 
-    assertIs<GoalRunnerRunReport.Completed>(retryRunner.run(runRequest()))
+    val retryReport = retryRunner.run(runRequest().copy(repoRoot = repoRoot))
+    assertIs<GoalRunnerRunReport.Completed>(retryReport, retryReport.toString())
     assertEquals(listOf("feat/SKILL-56-goal@main"), retryGit.checkouts)
     assertEquals(1, launcher.requests.size)
   }

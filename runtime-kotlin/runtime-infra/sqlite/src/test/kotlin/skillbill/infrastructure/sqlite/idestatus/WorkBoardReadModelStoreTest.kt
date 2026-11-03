@@ -5,6 +5,8 @@ import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.ports.idestatus.model.GoalWorktreeState
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.WorkBoardItem
@@ -50,7 +52,7 @@ class WorkBoardReadModelStoreTest {
   }
 
   @Test
-  fun `a row keeps its title and a row written before titles existed is undecodable`() {
+  fun `a row keeps its title and goal worktree and a row written before titles existed is undecodable`() {
     val at = Instant.parse("2026-10-28T10:00:00Z")
     val row =
       WorkBoardReadModelRow(
@@ -66,6 +68,7 @@ class WorkBoardReadModelStoreTest {
             title = "plan SKILL-452",
           ),
           repositoryRoot = "/repo",
+          goalWorktree = GoalWorktreeView("/goal", GoalWorktreeState.RETAINED, "unpublished_commits", "keep edits"),
         ),
         at,
         "plan",
@@ -77,6 +80,10 @@ class WorkBoardReadModelStoreTest {
     val payload = WorkBoardReadModelPayloadCodec.encode(row)
 
     assertEquals("plan SKILL-452", WorkBoardReadModelPayloadCodec.decode(payload, metadata)?.item?.snapshot?.title)
+    assertEquals(
+      GoalWorktreeView("/goal", GoalWorktreeState.RETAINED, "unpublished_commits", "keep edits"),
+      WorkBoardReadModelPayloadCodec.decode(payload, metadata)?.item?.goalWorktree,
+    )
     assertNull(WorkBoardReadModelPayloadCodec.decode(payload.replace("\"title\":\"plan SKILL-452\",", ""), metadata))
   }
 }

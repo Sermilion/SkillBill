@@ -35,6 +35,7 @@ import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.ports.workflow.goalstate.LocalGoalRuntimeStateFileStore
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -236,6 +237,8 @@ private class SnapshotFixture(
           NoopIdeStatusValidator,
           NoopFeatureTaskRuntimeWorkerSupervisor,
           NoopRuntimeDiagnostics,
+          CanonicalRepositoryRoot,
+          LocalGoalRuntimeStateFileStore(),
         ),
       diagnostics = NoopRuntimeDiagnostics,
       incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),

@@ -23,6 +23,7 @@ dependencies {
   testImplementation(testFixtures(project(":runtime-engine")))
   testImplementation(testFixtures(project(":runtime-ports")))
   testImplementation(testFixtures(project(":runtime-application")))
+  testImplementation(project(":runtime-infra:host"))
   testImplementation(project(":runtime-infra:contracts"))
   testImplementation(project(":runtime-infra:workflow"))
   testImplementation(project(":runtime-infra:sqlite"))

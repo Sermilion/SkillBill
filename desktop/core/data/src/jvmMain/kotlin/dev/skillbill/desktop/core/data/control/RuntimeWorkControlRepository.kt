@@ -28,6 +28,7 @@ import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
@@ -49,8 +50,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.work.control.model.WorkControlAction
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
+import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -203,8 +206,12 @@ class RuntimeWorkControlRepository(
     val session = request.expectedDatabaseSessionId?.let(sessions::currentComponent)
       ?: return NewTaskStartOutcome.Refused("The database changed. Try again.")
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
-    if (request.kind in setOf(NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor)) {
-      return startStandaloneTask(request, session)
+    when (request.kind) {
+      NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor ->
+        return startStandaloneTask(request, session)
+      NewTaskKind.Verify, NewTaskKind.PrReviewFix ->
+        return startOperationTask(request, session)
+      NewTaskKind.GoalRun, NewTaskKind.PlanOnly -> Unit
     }
     val identity = callInSession(
       session,
@@ -227,16 +234,25 @@ class RuntimeWorkControlRepository(
     val triedKeys = mutableSetOf<String>()
     repeat(3) { attempt ->
       val preparedResult = callInSession(session, "control_prepare_new_task", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
-        Outcome.Success(runtime.workControlService.prepareNewTask(
-          Path.of(request.repoRoot), request.requirements, request.baseBranch, request.keyChoice, launches.keys.value + triedKeys,
-        ))
+        Outcome.Success(
+          runtime.workControlService.prepareNewTask(
+            Path.of(request.repoRoot),
+            NewTaskIntakeRequest(
+              request.requirements,
+              request.title,
+              request.baseBranch,
+              request.keyChoice,
+              launches.keys.value + triedKeys,
+            ),
+          ),
+        )
       }
       val prepared = when (preparedResult) {
         is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.") else NewTaskStartOutcome.Failed(preparedResult.error)
         is Outcome.Success -> preparedResult.value
       }
       when (prepared) {
-        is NewTaskPreparation.NeedsPrefix -> return NewTaskStartOutcome.NeedsPrefix(prepared.choices)
+        is NewTaskPreparation.NeedsKey -> return NewTaskStartOutcome.NeedsKey(prepared.choices)
         is NewTaskPreparation.Refused -> return NewTaskStartOutcome.Refused(prepared.reason)
         is NewTaskPreparation.Ready -> {
           triedKeys += prepared.key
@@ -275,7 +291,7 @@ class RuntimeWorkControlRepository(
                     NewTaskStartOutcome.Refused("${prepared.key} is already in use. Choose another key.")
                   }
                   is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
-                  NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, request.kind)
+                  NewTaskStartResult.Started, is NewTaskStartResult.Running -> NewTaskStartOutcome.Started(prepared.key, request.kind)
                 }
               }
             }.let { it to keyWasTaken }
@@ -298,13 +314,36 @@ class RuntimeWorkControlRepository(
 
   private suspend fun startStandaloneTask(request: NewTaskStart, session: DatabaseSessionComponent): NewTaskStartOutcome {
     val phaseId = when (request.kind) {
-      NewTaskKind.Review -> "review"
-      NewTaskKind.Validation -> "validation"
-      NewTaskKind.Qa -> "qa"
-      NewTaskKind.Pr -> "pr"
-      NewTaskKind.Monitor -> "monitor"
+      NewTaskKind.Review -> NewTaskActionKind.Review.wire
+      NewTaskKind.Validation -> NewTaskActionKind.Validation.wire
+      NewTaskKind.Qa -> NewTaskActionKind.Qa.wire
+      NewTaskKind.Pr -> NewTaskActionKind.Pr.wire
+      NewTaskKind.Monitor -> NewTaskActionKind.Monitor.wire
       else -> return NewTaskStartOutcome.Refused("Choose a standalone phase.")
     }
+    return startReservedStandalone(request, session, phaseId, settleOnStarted = true) { runtime ->
+      runtime.workControlService.startStandalone(Path.of(request.repoRoot), phaseId, request.agentId, request.target)
+    }
+  }
+
+  private suspend fun startOperationTask(request: NewTaskStart, session: DatabaseSessionComponent): NewTaskStartOutcome {
+    val operationId = when (request.kind) {
+      NewTaskKind.Verify -> NewTaskActionKind.Verify.wire
+      NewTaskKind.PrReviewFix -> NewTaskActionKind.PrReviewFix.wire
+      else -> return NewTaskStartOutcome.Refused("Choose a standalone operation.")
+    }
+    return startReservedStandalone(request, session, operationId, settleOnStarted = false) { runtime ->
+      runtime.workControlService.startOperation(Path.of(request.repoRoot), operationId, request.target, request.agentId)
+    }
+  }
+
+  private suspend fun startReservedStandalone(
+    request: NewTaskStart,
+    session: DatabaseSessionComponent,
+    id: String,
+    settleOnStarted: Boolean,
+    start: (RuntimeComponent) -> NewTaskStartResult,
+  ): NewTaskStartOutcome {
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
     val identity = callInSession(session, "control_standalone_identity", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
       Outcome.Success(runtime.repositoryEnclosingRootPort.repositoryIdentity(Path.of(request.repoRoot)))
@@ -317,10 +356,10 @@ class RuntimeWorkControlRepository(
       is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.") else NewTaskStartOutcome.Failed(result.error)
       is Outcome.Success -> result.value
     }
-    val key = "$repositoryIdentity:$phaseId:standalone"
-    val admission = sessions.admitReservation(session, key, LaunchBoardTarget.StandalonePhase(phaseId, repositoryIdentity), null, snapshot)
+    val key = "$repositoryIdentity:$id:standalone"
+    val admission = sessions.admitReservation(session, key, LaunchBoardTarget.StandalonePhase(id, repositoryIdentity), null, snapshot)
     val handle = when (admission) {
-      ReservationAdmission.AlreadyReserved -> return NewTaskStartOutcome.Refused("$phaseId is already starting in this repository.")
+      ReservationAdmission.AlreadyReserved -> return NewTaskStartOutcome.Refused("$id is already starting in this repository.")
       ReservationAdmission.ChangedSession -> return NewTaskStartOutcome.Refused("The database changed. Try again.")
       is ReservationAdmission.Reserved -> admission.handle
     }
@@ -335,18 +374,17 @@ class RuntimeWorkControlRepository(
         val observation = session.purgeIdentity.observation
           ?: return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
         when (val result = runtime.databaseSession.transactionFenced(observation) {
-          if (!sessionIsCurrent(session)) null else runtime.workControlService.startStandalone(
-            Path.of(request.repoRoot),
-            phaseId,
-            request.agentId,
-            request.monitorIntake,
-          )
+          if (!sessionIsCurrent(session)) null else start(runtime)
         }) {
           FencedTransactionResult.ChangedTarget -> NewTaskStartOutcome.Refused("The database changed. Try again.")
           is FencedTransactionResult.Committed -> when (val started = result.value) {
             null -> NewTaskStartOutcome.Refused("The database changed. Try again.")
             is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
-            else -> NewTaskStartOutcome.Started(phaseId, request.kind)
+            is NewTaskStartResult.Running -> {
+              launches.releaseOnExit(handle, started.failure)
+              NewTaskStartOutcome.Started(id, request.kind) { started.failure.await() }
+            }
+            else -> NewTaskStartOutcome.Started(id, request.kind)
           }
         }
       }
@@ -354,7 +392,7 @@ class RuntimeWorkControlRepository(
       launches.release(handle)
       throw failure
     }
-    if (outcome is NewTaskStartOutcome.Started) {
+    if (settleOnStarted && outcome is NewTaskStartOutcome.Started) {
       if (request.kind == NewTaskKind.Monitor) launches.release(handle) else launches.settle(handle, true)
     } else {
       launches.release(handle)

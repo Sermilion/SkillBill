@@ -100,15 +100,13 @@ public class WorkflowGoalRunnerManifestLoader(
 
   internal fun importFromManifestProjection(
     manifest: DecompositionManifest,
-    repositoryIdentity: String? = null,
+    repositoryIdentities: List<String?> = listOf(null),
   ): GoalRunnerManifestState? =
     database.transaction { unitOfWork ->
       val existingRecord =
-        unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(
-          manifest.issueKey,
-          manifest,
-          repositoryIdentity,
-        )
+        repositoryIdentities.firstNotNullOfOrNull { identity ->
+          unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(manifest.issueKey, manifest, identity)
+        }
       existingRecord?.requireRuntimeModeForEngineWrite()
       val existing = existingRecord?.toSnapshot()
       val base =
@@ -120,7 +118,9 @@ public class WorkflowGoalRunnerManifestLoader(
         )
       val planWorkflowId =
         if (existing == null) {
-          unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, repositoryIdentity)
+          repositoryIdentities.firstNotNullOfOrNull { identity ->
+            unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, identity)
+          }
         } else {
           null
         }

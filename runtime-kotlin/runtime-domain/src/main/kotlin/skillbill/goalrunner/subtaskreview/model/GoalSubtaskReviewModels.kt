@@ -2,6 +2,7 @@ package skillbill.goalrunner.subtaskreview.model
 
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingCitation
+import skillbill.review.model.ReviewFindingSettlement
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.model.ReviewSeverityAdjustment
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -18,6 +19,7 @@ data class StructuredGoalReviewFinding(
   val scopeDisposition: ReviewScopeDisposition? = null,
   val citations: List<ReviewFindingCitation> = emptyList(),
   val severityAdjustment: ReviewSeverityAdjustment? = null,
+  val settlement: ReviewFindingSettlement? = null,
 )
 
 data class GoalSubtaskReviewOutputOutcome(

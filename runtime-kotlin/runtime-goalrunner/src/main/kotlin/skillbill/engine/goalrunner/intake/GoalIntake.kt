@@ -27,8 +27,8 @@ public data class GoalIntake(
       }
       val first = intake.split(Regex("\\s+")).first()
       val (key, fromReference) = reference(first) ?: return null
-      val contentLine = firstContentLine(intake, first)
-      return GoalIntake(key, intake, fromReference ?: shortName(contentLine), contentLine != null)
+      val lines = contentLines(intake, first)
+      return GoalIntake(key, intake, fromReference ?: shortName(lines), lines.isNotEmpty())
     }
 
     private fun reference(first: String): Pair<String, String?>? {
@@ -60,24 +60,29 @@ public data class GoalIntake(
       return key.uppercase() to fromDirectory
     }
 
-    private fun firstContentLine(
+    private fun contentLines(
       intake: String,
       first: String,
-    ): String? {
-      val rest = intake.substringAfter(first, missingDelimiterValue = "").trim()
-      return rest.lineSequence()
+    ): List<String> =
+      intake.substringAfter(first, missingDelimiterValue = "").trim().lines()
         .map { it.trim().trimStart('#').trim() }
-        .firstOrNull { it.isNotEmpty() }
+        .filter(String::isNotEmpty)
+
+    private fun shortName(lines: List<String>): String? {
+      val clauses =
+        lines.flatMap { it.split(CLAUSE_END) }
+          .map { clause -> clause.split(Regex("\\s+")).filter(String::isNotEmpty) }
+      val descriptive = clauses.map { it.filterNot(::isPathLike) }.firstOrNull(List<String>::isNotEmpty)
+      return slug((descriptive ?: clauses.firstOrNull().orEmpty()).take(NAME_WORDS).joinToString(" "))
     }
 
-    private fun shortName(line: String?): String? =
-      line
-        ?.split(CLAUSE_END, limit = 2)
-        ?.first()
-        ?.split(Regex("\\s+"))
-        ?.take(NAME_WORDS)
-        ?.joinToString(" ")
-        .let(::slug)
+    private fun isPathLike(raw: String): Boolean {
+      val token = raw.trim { it in TOKEN_EDGE }
+      return PATH_PREFIXES.any(token::startsWith) ||
+        DRIVE_PREFIX.containsMatchIn(token) ||
+        "://" in token ||
+        (token.any { it == '/' || it == '\\' } && FILE_EXTENSION.containsMatchIn(token))
+    }
 
     private fun slug(raw: String?): String? =
       raw
@@ -94,6 +99,10 @@ public data class GoalIntake(
 
     private val CLAUSE_END = Regex("(?<=\\S)[.:;!?](?=\\s|$)")
     private const val NAME_WORDS = 6
+    private const val TOKEN_EDGE = "()[]{}<>\"'`,.:;!?"
+    private val PATH_PREFIXES = listOf("/", "~/", "./", "../")
+    private val DRIVE_PREFIX = Regex("^[A-Za-z]:[\\\\/]")
+    private val FILE_EXTENSION = Regex("\\.[A-Za-z][A-Za-z0-9]{0,7}$")
     private val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
   }
 }

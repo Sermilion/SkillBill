@@ -12,6 +12,7 @@ import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.idestatus.model.boundedIdeStatusActivity
+import skillbill.ports.idestatus.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
@@ -333,6 +334,17 @@ internal object WorkBoardReadModelPayloadValidation {
         !optionalObject(fields, WorkBoardReadModelPayloadKeys.DATABASE_FILE_OBSERVATION) { value ->
           val path = requiredTextValue(value, WorkBoardReadModelPayloadKeys.DB_PATH) ?: return@optionalObject false
           requiredText(value, WorkBoardReadModelPayloadKeys.DB_FILE_KEY) && validPath(path)
+        } ||
+        !optionalObject(fields, WorkBoardReadModelPayloadKeys.GOAL_WORKTREE) { value ->
+          val path = requiredTextValue(value, WorkBoardReadModelPayloadKeys.DB_PATH) ?: return@optionalObject false
+          validPath(path) &&
+            requiredEnum(
+              value,
+              WorkBoardReadModelPayloadKeys.PLANNING_STATE,
+              GoalWorktreeState.entries.map { it.name },
+            ) &&
+            optionalText(value, WorkBoardReadModelPayloadKeys.REASON) &&
+            optionalText(value, WorkBoardReadModelPayloadKeys.GOAL_WORKTREE_RETENTION_DETAIL)
         }
 
     fun invalidFieldGroup7(fields: Map<String, Any?>): Boolean =

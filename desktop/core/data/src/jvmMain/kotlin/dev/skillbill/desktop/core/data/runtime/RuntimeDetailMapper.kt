@@ -15,6 +15,7 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
+import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentEvidence
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisiteDetail
@@ -56,6 +57,9 @@ import dev.skillbill.desktop.core.domain.model.ValidationResult
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import skillbill.ports.idestatus.model.WorkChangeBaseline
+import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import dev.skillbill.desktop.core.domain.model.WorkPhase
 import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
@@ -96,14 +100,23 @@ private const val GOAL_STATUS_READ_SOURCE = "goal_status"
 
 internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: CheckedOutBranchSource, sessionId: Long): WorkItem {
   val item = toWorkItem(sessionId)
+  val goalWorktree = item.goalWorktree
   val standalone = snapshot.execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE
-  val branch = if (standalone) item.branch else branches.checkedOutBranch(Path.of(repositoryRoot)) ?: item.branch
+  val branch =
+    when (goalWorktree?.state) {
+      GoalWorktreeState.Active, GoalWorktreeState.Retained ->
+        branches.checkedOutBranch(Path.of(goalWorktree.path)) ?: item.branch
+      GoalWorktreeState.Removed ->
+        (this.changeBaseline as? WorkChangeBaseline.CommittedBranchRange)?.headBranch ?: item.branch
+      null -> if (standalone) item.branch else branches.checkedOutBranch(Path.of(repositoryRoot)) ?: item.branch
+    }
   val planFeature = executionHistory.firstOrNull { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
   return item.copy(
     title = goalManifest?.featureName?.takeIf { item.kind == WorkKind.Goal && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) }
       ?: planFeature?.takeIf { standalone && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) } ?: item.title,
     agentId = goalStatus?.activeAgent ?: options?.agentId?.takeIf { standalone },
     branch = branch,
+    launchWarning = goalStatus?.launchWarning,
   )
 }
 
@@ -220,7 +233,15 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     changeBaseline = changeBaseline?.toDomain(),
     degradedGoalStatusSource = GOAL_STATUS_READ_SOURCE.takeIf { goal == null && !goalManifest?.subtasks.isNullOrEmpty() },
     currentSubtaskId = goal?.currentSubtaskId,
+    goalWorktree = goalWorktree?.let { GoalWorktree(it.path, it.state.toWorktreeDomain(), it.retentionReason, it.retentionDetail) },
+    launchWarning = goal?.launchWarning,
   )
+}
+
+private fun RuntimeGoalWorktreeState.toWorktreeDomain(): GoalWorktreeState = when (this) {
+  RuntimeGoalWorktreeState.ACTIVE -> GoalWorktreeState.Active
+  RuntimeGoalWorktreeState.RETAINED -> GoalWorktreeState.Retained
+  RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
 }
 
 private fun StandaloneQaChecklist.toDomain(): QaChecklist = QaChecklist(

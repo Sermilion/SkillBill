@@ -19,4 +19,10 @@ sealed interface WorkChangeBaseline {
     override val worktreeRoot: String,
     val targetBranch: String?,
   ) : WorkChangeBaseline
+
+  data class CommittedBranchRange(
+    override val worktreeRoot: String,
+    val targetBranch: String,
+    val headBranch: String,
+  ) : WorkChangeBaseline
 }

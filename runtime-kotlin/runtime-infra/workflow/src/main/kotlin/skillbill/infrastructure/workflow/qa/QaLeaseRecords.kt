@@ -9,6 +9,7 @@ import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.process.runGitProcess
+import skillbill.infrastructure.workflow.repositoryStateKey
 import skillbill.model.EnvironmentContext
 import skillbill.ports.qa.model.QaOwnedResource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
@@ -28,9 +29,6 @@ internal const val RESOURCES_DIRECTORY = "resources"
 private const val RESOURCE_DIGEST_LENGTH = 32
 private val RESERVED_DIRECTORIES = setOf(LEASES_DIRECTORY, RESOURCES_DIRECTORY)
 private const val QA_DIRECTORY = "qa"
-private const val REPO_KEY_DIGEST_LENGTH = 16
-private const val UNNAMED_REPOSITORY = "repo"
-private val REPOSITORY_NAME_UNSAFE = Regex("[^A-Za-z0-9._-]")
 
 internal data class QaInvocationOwner(
   val invocationId: String,
@@ -51,14 +49,7 @@ internal object QaPaths {
   ): Path =
     resolveTelemetryStateDir(environment.environment, environment.userHome)
       .resolve(QA_DIRECTORY)
-      .resolve(repoKey(gitCommonDir(repoRoot)))
-
-  private fun repoKey(gitCommonDir: Path): String {
-    val name =
-      REPOSITORY_NAME_UNSAFE.replace(gitCommonDir.parent?.fileName?.toString().orEmpty(), "-")
-        .ifEmpty { UNNAMED_REPOSITORY }
-    return "$name-${sha256Hex(gitCommonDir.toString()).take(REPO_KEY_DIGEST_LENGTH)}"
-  }
+      .resolve(repositoryStateKey(gitCommonDir(repoRoot)))
 
   private fun gitCommonDir(repoRoot: Path): Path {
     val probe = runGitProcess(repoRoot, listOf("rev-parse", "--git-common-dir"))

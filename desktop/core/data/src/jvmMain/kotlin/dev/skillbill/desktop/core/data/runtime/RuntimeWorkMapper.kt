@@ -10,6 +10,8 @@ import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
 import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.WorkDisplayGroup
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.GoalWorktree
+import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import dev.skillbill.desktop.core.domain.model.WorkProgress
@@ -23,6 +25,8 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
+import skillbill.ports.idestatus.model.GoalWorktreeView
+import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.work.model.WorkStoreObservation
 import kotlin.time.toKotlinInstant
@@ -52,13 +56,14 @@ internal class ItemVerdicts(
   val sessionId: Long,
   val agentId: String? = null,
   val completionSource: WorkBoardCompletionSource? = null,
+  val goalWorktree: GoalWorktreeView? = null,
 )
 
 internal fun WorkBoardItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWorkItem(
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase, doneWithinDay, freshnessDeadline, membershipDeadline, exactPauseReason, controlLease,
-    observation, databaseFileObservation, sessionId, executingAgentId, finishedAtSource,
+    observation, databaseFileObservation, sessionId, executingAgentId, finishedAtSource, goalWorktree,
   ),
 )
 
@@ -67,7 +72,8 @@ internal fun WorkDetailItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toW
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase = false, doneWithinDay = false, freshnessDeadline, membershipDeadline = null,
-    exactPauseReason, controlLease, observation, databaseFileObservation, sessionId, completionSource = finishedAtSource,
+    exactPauseReason, controlLease, observation, databaseFileObservation, sessionId,
+    completionSource = finishedAtSource, goalWorktree = goalWorktree,
   ),
 )
 
@@ -140,7 +146,16 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     qaVerdict = execution?.qaOutcome?.toDomain(),
     workflowQaOutcome = workflowQaOutcome?.toDomain(),
     standaloneExecution = execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE,
+    goalWorktree = verdicts.goalWorktree?.let {
+      GoalWorktree(it.path, it.state.toDomain(), it.retentionReason, it.retentionDetail)
+    },
   )
+}
+
+private fun RuntimeGoalWorktreeState.toDomain(): GoalWorktreeState = when (this) {
+  RuntimeGoalWorktreeState.ACTIVE -> GoalWorktreeState.Active
+  RuntimeGoalWorktreeState.RETAINED -> GoalWorktreeState.Retained
+  RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
 }
 
 private fun WorkBoardCompletionSource.toDomain(): CompletionSource = when (this) {

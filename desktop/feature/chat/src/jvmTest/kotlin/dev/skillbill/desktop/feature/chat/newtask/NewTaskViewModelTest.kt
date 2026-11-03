@@ -20,13 +20,14 @@ import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
+import dev.skillbill.desktop.core.testing.loadedBoard
+import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
-import dev.skillbill.desktop.core.testing.loadedBoard
-import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.feature.chat.chipText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -42,9 +43,11 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import java.lang.reflect.Proxy
+import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -69,7 +72,7 @@ class NewTaskViewModelTest {
       agentId = "claude"
       text = "add export"
     }
-    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), draft)
+    val workspace = ChatWorkspace(chatRepository, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK, ShellPanes(), SelectionHolder(), draft)
     val first = viewModel(FakeWorkBoardRepository(loadedBoard()), draft)
     advanceUntilIdle()
     first.onAction(NewTaskAction.Send)
@@ -191,6 +194,67 @@ class NewTaskViewModelTest {
     advanceUntilIdle()
     assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0), model.state.value.home)
     model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `choosing another agent after a chat rebinds that chat`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chatRepo = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
+    val draft = NewTaskDraft(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
+      agentId = "claude"
+      selectedAgent = chatRepo.agent
+      text = "add export"
+    }
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chatRepo, detecting("claude"), FIXED_CLOCK)
+    advanceUntilIdle()
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    val firstSession = chatRepo.requests.single().sessionId
+
+    model.onAction(NewTaskAction.ChooseAgent("codex"))
+    assertEquals(chatRepo.agent, draft.selectedAgent)
+    assertEquals(chipText(chatRepo.agent), chipText(model.state.value.agent))
+    advanceUntilIdle()
+
+    assertEquals("codex", draft.agentId)
+    assertEquals("codex", model.state.value.agent?.agentId)
+    assertEquals(chipText(chatRepo.agentFor("codex")), chipText(model.state.value.agent))
+    assertEquals(chipText(chatRepo.agentFor("codex")), chipText(draft.selectedAgent))
+    assertNotEquals(firstSession, draft.chat.value?.sessionId)
+    assertEquals("codex", draft.chat.value?.agent?.agentId)
+    model.viewModelScope.cancel()
+    draft.close()
+  }
+
+  @Test
+  fun `choosing another repository after a chat rebinds that chat`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chatRepo = FakeExecutionChatRepository()
+    val firstRoot = createTempDirectory("first-repo").toString()
+    val draft = NewTaskDraft(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository(firstRoot, "first")
+      agentId = "claude"
+      selectedAgent = chatRepo.agent
+      text = "add export"
+    }
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chatRepo, detecting("claude"), FIXED_CLOCK)
+    advanceUntilIdle()
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    val firstSession = chatRepo.requests.single().sessionId
+    val other = NewTaskRepository(createTempDirectory("other-repo").toString(), "other")
+
+    model.onAction(NewTaskAction.ChooseRepository(other))
+    runCurrent()
+
+    assertEquals(other, draft.repository)
+    assertNotEquals(firstSession, draft.chat.value?.sessionId)
+    assertEquals(other.root, draft.chat.value?.repositoryRoot)
+    model.viewModelScope.cancel()
+    draft.close()
   }
 
   private fun detecting(vararg names: String) = Proxy.newProxyInstance(

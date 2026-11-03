@@ -2,12 +2,14 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskKeyAllocation
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
@@ -15,12 +17,15 @@ import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import java.nio.file.Path
+import java.util.concurrent.CompletionStage
 
 @Inject
 public class WorkNewTaskStart(
@@ -31,38 +36,81 @@ public class WorkNewTaskStart(
   private val launcher: WorkRunLauncher,
   private val environment: EnvironmentContext,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   public fun prepareNewTask(
     repoRoot: Path,
-    requirements: String,
-    baseBranch: String?,
-    keyChoice: String?,
-    occupiedKeys: Set<String>,
+    request: NewTaskIntakeRequest,
   ): NewTaskPreparation {
+    val requirements = request.requirements
+    val agentTitle = usableTitle(request.title)
     val parsingText = requirements.trim()
     when (val first = admission.admit(requirements, repoRoot)) {
       is GoalNewWorkAdmission.Admitted -> {
-        val intake = if (requirements.any(Char::isWhitespace)) appendBase(requirements, baseBranch) else requirements
+        val intake =
+          if (requirements.any(Char::isWhitespace)) {
+            appendBase(keyedIntake(first.issueKey, requirements, agentTitle), request.baseBranch)
+          } else {
+            requirements
+          }
         return readyOrRefused(repoRoot, first.issueKey, intake, allocated = false)
       }
       is GoalNewWorkAdmission.Refused -> return NewTaskPreparation.Refused(first.reason)
       GoalNewWorkAdmission.NoIssueKey -> Unit
     }
 
-    val normalizedChoice = keyChoice?.trim()?.uppercase()
-    val chosenKey = normalizedChoice?.takeIf(ISSUE_KEY::matches)
-    val allocation = if (chosenKey == null) allocator.allocate(repoRoot, normalizedChoice, occupiedKeys) else null
-    val key =
-      chosenKey ?: when (allocation) {
-        is NewTaskKeyAllocation.Allocated -> allocation.key
-        is NewTaskKeyAllocation.NeedsPrefix -> return NewTaskPreparation.NeedsPrefix(allocation.choices)
-        null -> error("Allocation should be resolved when no complete key was supplied.")
+    val chosen =
+      when (val choice = chooseKey(repoRoot, requirements, request.keyChoice, request.occupiedKeys)) {
+        is KeyChoice.Ask -> return NewTaskPreparation.NeedsKey(choice.choices)
+        is KeyChoice.Chosen -> choice
       }
     val titleLine = parsingText.lineSequence().firstOrNull(String::isNotBlank).orEmpty()
-    val title = titleLine.takeIf(ASCII_WORD::containsMatchIn) ?: "New task from desktop"
-    val intake = appendBase("$key\n$title\n\n$requirements", baseBranch)
-    return readyOrRefused(repoRoot, key, intake, allocated = chosenKey == null)
+    val title = agentTitle ?: titleLine.takeIf(ASCII_WORD::containsMatchIn) ?: "New task from desktop"
+    val intake = appendBase("${chosen.key}\n$title\n\n$requirements", request.baseBranch)
+    return readyOrRefused(repoRoot, chosen.key, intake, chosen.allocated)
   }
+
+  private fun chooseKey(
+    repoRoot: Path,
+    requirements: String,
+    keyChoice: String?,
+    occupiedKeys: Set<String>,
+  ): KeyChoice {
+    val normalizedChoice = keyChoice?.trim()?.uppercase()?.takeIf(String::isNotBlank)
+    if (normalizedChoice != null && ISSUE_KEY.matches(normalizedChoice)) {
+      return KeyChoice.Chosen(normalizedChoice, false)
+    }
+    val prefixes = allocator.prefixes(repoRoot)
+    if (normalizedChoice != null) {
+      val allocation = allocator.allocate(repoRoot, normalizedChoice, occupiedKeys)
+      if (allocation is NewTaskKeyAllocation.Allocated) return KeyChoice.Chosen(allocation.key, true)
+    }
+    val linked = linkedKeys(requirements)
+    val named = namedKeys(requirements, prefixes)
+    val inferred = linked.singleOrNull() ?: named.singleOrNull()?.takeIf { linked.isEmpty() }
+    if (normalizedChoice == null && inferred != null) return KeyChoice.Chosen(inferred, false)
+    val nextFree =
+      prefixes.mapNotNull { prefix ->
+        (allocator.allocate(repoRoot, prefix, occupiedKeys) as? NewTaskKeyAllocation.Allocated)?.key
+      }
+    return KeyChoice.Ask((linked + named + nextFree).distinct())
+  }
+
+  private fun linkedKeys(text: String): List<String> =
+    URL.findAll(text)
+      .flatMap { url -> url.value.split('/', '?', '#', '&', '=').asSequence() }
+      .filter(MENTIONED_KEY::matches)
+      .distinct()
+      .toList()
+
+  private fun namedKeys(
+    text: String,
+    prefixes: List<String>,
+  ): List<String> =
+    text.split(WHITESPACE)
+      .map { token -> token.trim { it in TOKEN_PUNCTUATION } }
+      .filter { MENTIONED_KEY.matches(it) && it.substringBeforeLast('-') in prefixes }
+      .distinct()
 
   public fun startNewTask(
     repoRoot: Path,
@@ -142,9 +190,44 @@ public class WorkNewTaskStart(
     repoRoot: Path,
     phaseId: String,
     agentId: String,
-    intake: String? = null,
+    target: String? = null,
   ): NewTaskStartResult {
-    standaloneLaunchRefusal(phaseId, agentId, intake)?.let { return it }
+    if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
+    standaloneIntakeRefusal(target, phaseId)?.let { return it }
+    return launchStandaloneCommand(repoRoot, "phase", phaseId, target, agentId)
+  }
+
+  public fun startOperation(
+    repoRoot: Path,
+    operationId: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult {
+    if (operationId !in STANDALONE_OPERATIONS) {
+      return NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
+    }
+    if (operationId == "verify" && target.isNullOrBlank()) {
+      return NewTaskStartResult.Refused("Verify needs an intake before it can start.")
+    }
+    return launchStandaloneCommand(repoRoot, "operation", operationId, target, agentId)
+  }
+
+  private fun launchStandaloneCommand(
+    repoRoot: Path,
+    verb: String,
+    id: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult {
+    val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
+    if (launchTarget?.startsWith("-") == true) {
+      return NewTaskStartResult.Refused(
+        "The target '$launchTarget' starts with a dash, so the CLI would parse it as an option.",
+      )
+    }
+    if (agentId !in SupportedAgent.supportedIds) {
+      return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
+    }
     val checked =
       preflight.preflight(
         GoalPreflightRequest(
@@ -158,8 +241,15 @@ public class WorkNewTaskStart(
     goalStartRefusal(checked)?.let { return NewTaskStartResult.Refused(it) }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
     val ownership =
-      if (intake == null) "$identity:$phaseId:standalone" else "$identity:$phaseId:standalone:$intake"
-    val args = listOf("phase", phaseId) + listOfNotNull(intake) + listOf("--agent", agentId)
+      if (launchTarget == null) "$identity:$id:standalone" else "$identity:$id:standalone:$launchTarget"
+    val args =
+      buildList {
+        add(verb)
+        add(id)
+        launchTarget?.let(::add)
+        add("--agent")
+        add(agentId)
+      }
     return database.transaction { unit ->
       when (
         val launched =
@@ -174,21 +264,11 @@ public class WorkNewTaskStart(
           )
       ) {
         is WorkRunLaunchResult.Refused -> NewTaskStartResult.Refused(launched.reason)
-        is WorkRunLaunchResult.Started -> NewTaskStartResult.Started
+        is WorkRunLaunchResult.Started ->
+          launched.exit?.let { NewTaskStartResult.Running(runFailure(it, launched.logPath)) }
+            ?: NewTaskStartResult.Started
       }
     }
-  }
-
-  private fun standaloneLaunchRefusal(
-    phaseId: String,
-    agentId: String,
-    intake: String?,
-  ): NewTaskStartResult.Refused? {
-    if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
-    if (agentId !in SupportedAgent.supportedIds) {
-      return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
-    }
-    return standaloneIntakeRefusal(intake, phaseId)
   }
 
   private fun standaloneIntakeRefusal(
@@ -196,17 +276,38 @@ public class WorkNewTaskStart(
     phaseId: String,
   ): NewTaskStartResult.Refused? {
     if (intake == null) return null
+    val trimmed = intake.trim()
+    if (trimmed.isEmpty()) return null
     return when {
       phaseId != "monitor" ->
         NewTaskStartResult.Refused("Intake is supported only for standalone monitor runs.")
-      intake.isBlank() || intake.any { it.isWhitespace() || it.isISOControl() } ->
+      trimmed.contains(' ') || trimmed.any { it.isISOControl() } ->
         NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
-      intake.startsWith("-") ->
-        NewTaskStartResult.Refused("Monitor intake must not start with '-'.")
-      intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) || intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
+      trimmed.startsWith(MONITOR_INTAKE_MODE_PREFIX) || trimmed.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
         NewTaskStartResult.Refused("Monitor intake must name the target directly, not as a phase option.")
       else -> null
     }
+  }
+
+  private fun runFailure(
+    exit: CompletionStage<WorkRunExit>,
+    log: Path,
+  ): CompletionStage<String?> =
+    exit.handle { finished, failure ->
+      if (failure == null && finished.code == 0) {
+        null
+      } else {
+        "${stopReason(finished?.failureLogLines.orEmpty())} Full log: $log"
+      }
+    }
+
+  private fun stopReason(logLines: List<String>): String {
+    val lines =
+      logLines
+        .map(String::trim)
+        .filter { it.isNotEmpty() && !it.startsWith("Picked up ") }
+    return (lines.lastOrNull(STOP_LINE::containsMatchIn) ?: lines.lastOrNull())?.take(MAX_REASON_CHARS)
+      ?: "The run exited without a reason."
   }
 
   private fun readyOrRefused(
@@ -232,16 +333,51 @@ public class WorkNewTaskStart(
     }
   }
 
+  private fun usableTitle(raw: String?): String? {
+    if (raw == null) return null
+    val title = raw.trim()
+    val usable = title.isNotBlank() && '\n' !in title && '\r' !in title && ASCII_WORD.containsMatchIn(title)
+    if (!usable) RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "seam=new-task.title outcome=ignored")
+    return title.takeIf { usable }
+  }
+
+  private fun keyedIntake(
+    issueKey: String,
+    requirements: String,
+    title: String?,
+  ): String {
+    val leadsWithKey = ISSUE_KEY.matches(requirements.trim().split(Regex("\\s+")).first())
+    return if (title != null && leadsWithKey) "$issueKey\n$title\n\n$requirements" else requirements
+  }
+
   private fun appendBase(
     intake: String,
     baseBranch: String?,
   ): String = baseBranch?.takeIf(String::isNotBlank)?.let { "$intake\n\nUse $it as the base branch." } ?: intake
 
+  private sealed interface KeyChoice {
+    data class Chosen(
+      val key: String,
+      val allocated: Boolean,
+    ) : KeyChoice
+
+    data class Ask(
+      val choices: List<String>,
+    ) : KeyChoice
+  }
+
   private companion object {
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
+    val MENTIONED_KEY = Regex("[A-Z][A-Z0-9]*-\\d+(?:\\.\\d+)?")
+    val URL = Regex("https?://[^\\s<>()\"'`\\]]+")
+    val WHITESPACE = Regex("\\s+")
+    const val TOKEN_PUNCTUATION = "()[]{}<>.,;:!?\"'`*_"
     val ASCII_WORD = Regex("[A-Za-z0-9]")
+    val STOP_LINE = Regex("^(?:Phase '[^']+' blocked at |Operation '[^']+' (?:blocked|failed): )")
     const val MAX_INTAKE_BYTES = 30_000
+    const val MAX_REASON_CHARS = 500
     val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", "monitor")
+    val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
     const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
     const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
   }

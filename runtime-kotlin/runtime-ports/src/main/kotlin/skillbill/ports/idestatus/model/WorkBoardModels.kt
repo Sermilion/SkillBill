@@ -64,6 +64,7 @@ data class WorkBoardItem(
   val doneWithinDay: Boolean = false,
   val membershipDeadline: Instant? = null,
   val executingAgentId: String? = null,
+  val goalWorktree: GoalWorktreeView? = null,
 )
 
 data class WorkBoardDiagnostic(

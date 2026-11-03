@@ -56,6 +56,68 @@ class GoalRunnerControlStoreTest {
   }
 
   @Test
+  fun `worktree path and launch warning round trip and stay out of the record when null`() {
+    val dbPath = Files.createTempDirectory("goal-worktree-control").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = GoalRunnerControlStore(connection)
+      val state =
+        GoalRunnerControlState(
+          executionWorktreePath = "/state/checkout",
+          executionWorktreeRemovedAt = "2026-11-03T10:00:00Z",
+          executionWorktreeRetentionReason = "untracked_files",
+          executionWorktreeRetentionDetail = "the worktree has 1 changed path(s)",
+          launchWarning = "2 uncommitted",
+        )
+
+      store.persistControlState("parent-worktree", state)
+      assertEquals(state, store.controlState("parent-worktree"))
+
+      store.persistControlState("parent-worktree", GoalRunnerControlState())
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT control_state_json FROM goal_runner_controls WHERE parent_workflow_id = 'parent-worktree'",
+        ).use { rows ->
+          assertTrue(rows.next())
+          val raw = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(rows.getString(1))))
+          assertTrue(
+            listOf(
+              "execution_worktree_path",
+              "execution_worktree_removed_at",
+              "execution_worktree_retention_reason",
+              "execution_worktree_retention_detail",
+              "launch_warning",
+            ).none(raw::containsKey),
+            "$raw",
+          )
+        }
+      }
+    }
+  }
+
+  @Test
+  fun `clear control state keeps the worktree path and clears settlement details`() {
+    val dbPath = Files.createTempDirectory("goal-worktree-control-clear").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = GoalRunnerControlStore(connection)
+      store.persistControlState(
+        "parent-worktree-clear",
+        GoalRunnerControlState(
+          executionWorktreePath = "/state/checkout",
+          executionWorktreeRemovedAt = "2026-11-03T10:00:00Z",
+          executionWorktreeRetentionReason = "untracked_files",
+          executionWorktreeRetentionDetail = "work remains",
+        ),
+      )
+      store.clearControlState("parent-worktree-clear")
+      val retained = store.controlState("parent-worktree-clear")
+      assertEquals("/state/checkout", retained.executionWorktreePath)
+      assertEquals(null, retained.executionWorktreeRemovedAt)
+      assertEquals(null, retained.executionWorktreeRetentionReason)
+      assertEquals(null, retained.executionWorktreeRetentionDetail)
+    }
+  }
+
+  @Test
   fun `review policy and operator acceptance remain durable outside workflow projection`() {
     val dbPath = Files.createTempDirectory("skillbill-goal-controls").resolve("metrics.db")
 

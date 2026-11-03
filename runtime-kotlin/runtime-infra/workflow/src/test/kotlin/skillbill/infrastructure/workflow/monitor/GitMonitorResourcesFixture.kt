@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.monitor
 
 import skillbill.infrastructure.workflow.git.git
 import skillbill.infrastructure.workflow.git.runGit
+import skillbill.model.EnvironmentContext
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.monitor.model.MonitorAcquireRequest
 import skillbill.ports.monitor.model.MonitorAcquisition
@@ -17,6 +18,7 @@ import skillbill.ports.monitor.model.MonitorWritability
 import skillbill.ports.monitor.model.MonitorWriteEvidence
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -25,6 +27,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertIs
 
 internal const val FEATURE_BRANCH = "feat/SKILL-427"
+
+internal fun monitorStateEnvironment(stateDir: Path): EnvironmentContext =
+  EnvironmentContext(environment = mapOf(STATE_DIR_ENVIRONMENT_KEY to stateDir.toString()), userHome = stateDir)
 
 internal class FakeMonitorProcessInspector(
   var inspection: FeatureTaskRuntimeProcessInspection = FeatureTaskRuntimeProcessInspection.NotRunning,
@@ -93,7 +98,8 @@ internal class MonitorRepoFixture(root: Path) {
 
   fun context(from: Path = caller): MonitorRepositoryContext =
     assertIs<MonitorContextResolution.Resolved>(
-      GitMonitorResources(FakeMonitorProcessInspector(), Clock.systemUTC()).resolveContext(from),
+      GitMonitorResources(FakeMonitorProcessInspector(), Clock.systemUTC(), monitorStateEnvironment(caller.parent))
+        .resolveContext(from),
     ).context
 
   fun refs(prefix: String): List<String> =

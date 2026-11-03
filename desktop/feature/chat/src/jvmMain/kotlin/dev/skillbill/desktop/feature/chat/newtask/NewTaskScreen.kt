@@ -34,6 +34,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -50,7 +51,7 @@ internal class NewTaskScreenHost(
   val now: () -> Instant,
   val onOpenRun: (WorkItem) -> Unit,
   val onShowAllWork: () -> Unit,
-  val onStart: ((String, String?) -> Unit)? = null,
+  val onStart: ((String, String?, ChatSuggestedAction?) -> Unit)? = null,
 )
 
 @Composable
@@ -78,6 +79,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
     } else {
       key(chat) {
         val firstTurnEnded by chat.firstTurnEnded.collectAsState()
+        val transcript by chat.thread.transcript.collectAsState()
         ChatTranscript(
           chat.thread,
           gone = false,
@@ -85,7 +87,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
           modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
           allowStartActions = host.onStart != null,
           allowSuggestedActions = !offer.starting,
-          footer = if (firstTurnEnded) {
+          footer = if (showGoalOfferCard(firstTurnEnded, transcript, offer)) {
             {
               NewTaskOfferCard(
                 draft.baseBranch,
@@ -93,6 +95,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
                 chatBusy,
                 offer,
                 onOfferStart,
+                draft::retryPrefix,
               )
             }
           } else null,
@@ -102,11 +105,11 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
             if (draft.sendSuggestedAction(action)) {
               focusManager.clearFocus()
             }
-          } else {
-            host.onStart?.invoke(
-              start.wire,
-              action.instruction.takeIf { start == NewTaskActionKind.Monitor },
-            )
+          } else if (host.onStart != null) {
+            val monitorTarget =
+              action.target?.trim()?.takeIf(String::isNotBlank)
+                ?: action.instruction.trim().takeIf { start == NewTaskActionKind.Monitor }
+            host.onStart?.invoke(start.wire, monitorTarget, action)
           }
         }
       }
@@ -119,7 +122,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
       if (chat == null && state.home is NewTaskHome.Returning) {
         val startable = draft.repository != null && draft.agentId != null
         NewTaskChips(
-          chipStart.takeIf { startable },
+          host.onStart?.takeIf { startable }?.let { onStart -> { wire, target -> onStart(wire, target, null) } },
           Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
         )
       }

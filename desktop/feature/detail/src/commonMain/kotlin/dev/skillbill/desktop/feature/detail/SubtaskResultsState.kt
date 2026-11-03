@@ -21,7 +21,7 @@ internal sealed interface SubtaskReviewState {
     val passes: List<ReviewPass>,
     val runningReviewPass: RunningReviewPass? = null,
   ) : SubtaskReviewState
-  data object RunsAfterImplementation : SubtaskReviewState
+  data object RunsAfterAudit : SubtaskReviewState
   data object Omitted : SubtaskReviewState
 }
 
@@ -39,7 +39,7 @@ internal fun subtaskResultsState(kind: StatusKind, results: SubtaskPhaseResults?
   return SubtaskResultsState.Shown(
     review = when {
       passes.isNotEmpty() || runningReviewPass != null -> SubtaskReviewState.Passes(passes, runningReviewPass)
-      upcoming -> SubtaskReviewState.RunsAfterImplementation
+      upcoming -> SubtaskReviewState.RunsAfterAudit
       else -> SubtaskReviewState.Omitted
     },
   )

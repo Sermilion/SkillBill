@@ -323,6 +323,7 @@ internal object PhaseOutputGate {
           outputMap,
         ),
         capture,
+        attested,
         ::reject,
       )
     }?.let { return it }
@@ -432,6 +433,7 @@ internal object PhaseOutputGate {
   private fun PhaseOutputSettlementContext.settleStepOutputCheck(
     check: PhaseStepOutputCheck,
     capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
     reject: (
       String,
       String,
@@ -439,6 +441,16 @@ internal object PhaseOutputGate {
   ): AttemptResult? =
     when (check) {
       is PhaseStepOutputCheck.Reject -> reject(check.rule, check.reason)
+      is PhaseStepOutputCheck.Retry -> {
+        reject(check.rule, check.reason)
+        AttemptResult.RetryableTerminal(
+          operatorReason = check.reason,
+          fileManifest = capture.fileManifest,
+          failureDisposition = FeatureTaskRuntimeFailureDisposition.RETRYABLE,
+          normalizedOutput = attested,
+          continuationOutput = null,
+        )
+      }
       is PhaseStepOutputCheck.Redeliver -> AttemptResult.boundaryBodyDelivery(check.reason, capture.fileManifest)
       is PhaseStepOutputCheck.OweFindings ->
         AttemptResult.FindingsOwed(check.reason, check.refs, capture.fileManifest)
@@ -586,6 +598,7 @@ internal object PhaseOutputGate {
           args.attested.envelopeWireMap(),
         ),
         args.capture,
+        args.attested,
         args.reject,
       )
       ?: args.stepHooks.settleCompletedRound(

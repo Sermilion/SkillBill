@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.ui.pane
 
 import kotlinx.coroutines.flow.StateFlow
 import java.nio.file.Path
+import dev.skillbill.desktop.core.domain.model.WorkItem
 
 /**
  * The window's terminal pane, as the shell and other features ask for it; the terminal feature binds it. A tab opened without a
@@ -22,6 +23,8 @@ interface PaneCommands {
 
   /** Opens the pane and a new tab in [directory], or in the user's home when it is null. */
   fun openTerminal(directory: Path?)
+
+  fun openTerminal(item: WorkItem)
 
   /** The spec picker's project checkout; null when the project has none, which resolves to home. */
   fun specProjectSelected(checkout: Path?)

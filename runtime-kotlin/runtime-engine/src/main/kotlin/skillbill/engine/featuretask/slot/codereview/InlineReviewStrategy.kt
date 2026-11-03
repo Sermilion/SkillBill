@@ -147,11 +147,8 @@ internal object InlineReviewDirective {
         appendLine(
           "Do not launch `skill-bill phase review`, delegated review subagents, or an isolated review process.",
         )
-        appendLine("Fix every Blocker and Major finding in this same session before you emit.")
-        appendLine(
-          "You may edit files. Every remaining finding, including Minor and Nit, " +
-            "must go through verification and repair.",
-        )
+        appendLine("Fix every finding, including Minor and Nit, in this same session before you emit.")
+        appendLine("You may edit files. A finding you could not fix stays open and goes to verification and repair.")
         appendLine("Do not commit, amend, reset, or stage changes; the runtime owns the review checkpoint.")
         appendLine(
           "Criterion-gap detection remains exclusive to audit. Do not report unsatisfied acceptance criteria.",
@@ -178,11 +175,15 @@ internal object InlineReviewDirective {
             "verdict. Do not format evidence lines as `[F-NNN]` register lines or `verdict:` lines. The runtime " +
             "retains only the first 2,000 characters as the summary, so state any evidence limitation explicitly.",
         )
-        appendLine("After fixes, emit remaining findings in this register shape, one per line:")
-        appendLine("- [F-001] Blocker | High | path/File.kt:12 | remaining defect after your edits")
+        appendLine("After fixes, list every finding from this review in this register shape, one per line:")
+        appendLine("- [F-001] Blocker | High | path/File.kt:12 | what the defect was | status=fixed")
+        appendLine(
+          "Status is `fixed` when your edits closed it, `open` when it remains, and `refuted` when you " +
+            "investigated a candidate and dismissed it. A refuted line says why in its description.",
+        )
         appendLine("End with exactly one line: `verdict: approved` or `verdict: changes_requested`.")
-        appendLine("Use `changes_requested` when any Blocker or Major remains; otherwise `approved`.")
-        appendLine("An explicit empty findings list plus `verdict: approved` means no remaining Blocker or Major.")
+        appendLine("Use `changes_requested` when any Blocker or Major stays open; otherwise `approved`.")
+        appendLine("An explicit empty findings list plus `verdict: approved` means this review found nothing.")
       }
     if (agentAddonsSection.isEmpty()) return prompt
     return prompt.trimEnd() + "\n\n" + agentAddonsSection

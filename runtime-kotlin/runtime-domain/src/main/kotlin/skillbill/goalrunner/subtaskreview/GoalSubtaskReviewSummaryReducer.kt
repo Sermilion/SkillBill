@@ -2,16 +2,19 @@ package skillbill.goalrunner.subtaskreview
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.goalrunner.model.ReviewFindingOutcome
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.model.normalizedUnaddressedFindingCategory
 import skillbill.goalrunner.model.normalizedUnaddressedFindingSeverity
+import skillbill.goalrunner.model.toOutcomeRecord
 import skillbill.goalrunner.subtaskreview.model.GoalSubtaskReviewOutputOutcome
 import skillbill.goalrunner.subtaskreview.model.RejectedVerificationFindingsResult
 import skillbill.goalrunner.subtaskreview.model.StructuredGoalReviewFinding
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.parsing.ReviewFindingActionability
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GOAL_SUBTASK_REVIEW_PASS_VERDICTS
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskCommitFocusedAccounting
@@ -146,6 +149,21 @@ object GoalSubtaskReviewSummaryReducer {
       currentFindings,
       blockerDispositions,
     )
+
+  fun settledFindingOutcomes(
+    output: Any,
+    scope: UnaddressedFindingLedgerScope,
+  ): List<ReviewFindingOutcomeRecord> =
+    GoalSubtaskReviewOutcomeDispositionReduction.settledFindingOutcomes(output, scope)
+
+  fun rejectedFindingOutcomes(findings: List<UnaddressedFinding>): List<ReviewFindingOutcomeRecord> =
+    findings.map { finding -> finding.toOutcomeRecord(ReviewFindingOutcome.REJECTED) }
+
+  fun repairedFindingOutcomes(
+    ledger: List<UnaddressedFinding>,
+    receipt: FeatureTaskRuntimeRepairReceipt,
+  ): List<ReviewFindingOutcomeRecord> =
+    GoalSubtaskReviewOutcomeDispositionReduction.repairedFindingOutcomes(ledger, receipt)
 
   fun blockerDispositions(
     output: Any,

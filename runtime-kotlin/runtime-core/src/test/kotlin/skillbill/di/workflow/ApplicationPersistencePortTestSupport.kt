@@ -97,6 +97,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeActivityResult
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
@@ -1243,7 +1244,13 @@ internal fun testWorkflowService(
     goalObservabilityEventValidator = featureTaskRuntimeWireArtifactValidatorForTest(),
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
-    projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+    projectCheckout =
+      ProjectCheckout(
+        TestRepositoryEnclosingRoot,
+        testProjectStore,
+        InPlaceGoalWorktreeResources,
+        NoopWorkflowGitOperations,
+      ),
   )
 
 internal fun testDecompositionManifestFileStore() =

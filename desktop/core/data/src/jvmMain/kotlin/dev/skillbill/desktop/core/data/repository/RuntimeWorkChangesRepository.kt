@@ -32,21 +32,21 @@ class RuntimeWorkChangesRepository(
     failed = { ChangesState.Unavailable(ReadProblem.Storage(it)) },
   ) { it.changes.observe(baseline, running, gitReadLock.mutex) }
 
-  override suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState {
+  override suspend fun fileDiff(baseline: ChangeBaseline, baseSha: String, file: ChangedFile): FileDiffState {
     val changes = sessions.sessions.value?.changes
     if (changes == null) {
       diagnostics.record(DIFF_FAILED)
       return FileDiffState.Unavailable(ReadProblem.Runtime("No database session is open."))
     }
-    return changes.fileDiff(worktreeRoot, baseSha, file, gitReadLock.mutex)
+    return changes.fileDiff(baseline, baseSha, file, gitReadLock.mutex)
   }
 
-  override suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome {
+  override suspend fun open(baseline: ChangeBaseline, file: ChangedFile): OpenOutcome {
     val changes = sessions.sessions.value?.changes
     if (changes == null) {
       diagnostics.record(OPEN_FAILED)
       return OpenOutcome.NotOpened
     }
-    return changes.open(worktreeRoot, file)
+    return changes.open(baseline, file)
   }
 }

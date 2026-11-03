@@ -4,6 +4,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,6 +29,65 @@ class ChatReplyStreamTest {
   }
 
   @Test
+  fun `start monitor keeps string target`() {
+    val diagnostics = RecordingDiagnostics()
+    val stream = ChatReplyStream(diagnostics)
+    stream.accept(
+      ChatEvent.TextDelta(
+        "```skillbill-actions\n" +
+          """[{"label":"Run phase:monitor","instruction":"Watch the PR.","mode":"read","start":"monitor","target":"https://github.com/org/repo/pull/9"}]""" +
+          "\n```",
+      ),
+    )
+    val actions = stream.accept(ChatEvent.Completed).filterIsInstance<ChatEvent.SuggestedActions>().single().actions
+    assertEquals(
+      ChatSuggestedAction(
+        "Run phase:monitor",
+        "Watch the PR.",
+        ChatPermissionMode.ReadOnly,
+        NewTaskActionKind.Monitor,
+        target = "https://github.com/org/repo/pull/9",
+      ),
+      actions.single(),
+    )
+    assertTrue(diagnostics.categories.isEmpty())
+  }
+
+  @Test
+  fun `unknown start drops that action and records diagnostic while sibling is kept`() {
+    val diagnostics = RecordingDiagnostics()
+    val stream = ChatReplyStream(diagnostics)
+    stream.accept(
+      ChatEvent.TextDelta(
+        "```skillbill-actions\n" +
+          """[{"label":"Run phase:release","instruction":"Ship.","mode":"act","start":"release"},{"label":"Run phase:review","instruction":"Review branch.","mode":"read","start":"review"}]""" +
+          "\n```",
+      ),
+    )
+    val actions = stream.accept(ChatEvent.Completed).filterIsInstance<ChatEvent.SuggestedActions>().single().actions
+    assertEquals(
+      ChatSuggestedAction("Run phase:review", "Review branch.", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review),
+      actions.single(),
+    )
+    assertEquals(listOf("chat.action_start_unknown"), diagnostics.categories)
+  }
+
+  @Test
+  fun `non-string target drops that action`() {
+    val diagnostics = RecordingDiagnostics()
+    val stream = ChatReplyStream(diagnostics)
+    stream.accept(
+      ChatEvent.TextDelta(
+        "```skillbill-actions\n" +
+          """[{"label":"Run phase:monitor","instruction":"Watch.","mode":"read","start":"monitor","target":1}]""" +
+          "\n```",
+      ),
+    )
+    assertTrue(stream.accept(ChatEvent.Completed).none { it is ChatEvent.SuggestedActions })
+    assertTrue(diagnostics.categories.isEmpty())
+  }
+
+  @Test
   fun `invalid or failed action metadata never creates an executable suggestion`() {
     val diagnostics = RecordingDiagnostics()
     val stream = ChatReplyStream(diagnostics)
@@ -42,5 +102,62 @@ class ChatReplyStreamTest {
     failed.accept(ChatEvent.TextDelta("Answer\n```skillbill-actions\n[]\n```"))
     val error = ChatEvent.Failed(ChatFailure.ProcessFailed, "failed")
     assertEquals(listOf(error), failed.accept(error))
+  }
+
+  @Test
+  fun `a valid title decodes and an invalid title keeps the action`() {
+    val validDiagnostics = RecordingDiagnostics()
+    val valid = ChatReplyStream(validDiagnostics)
+    valid.accept(
+      ChatEvent.TextDelta(
+        "Answer\n```skillbill-actions\n" +
+          "[{\"label\":\"Start a goal run\",\"instruction\":\"Implement the change.\",\"mode\":\"act\",\"start\":\"goal\",\"title\":\"Add dark mode setting\"}]\n```",
+      ),
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.SuggestedActions(
+          listOf(
+            ChatSuggestedAction(
+              "Start a goal run",
+              "Implement the change.",
+              ChatPermissionMode.Act,
+              NewTaskActionKind.Goal,
+              "Add dark mode setting",
+            ),
+          ),
+        ),
+        ChatEvent.Completed,
+      ),
+      valid.accept(ChatEvent.Completed),
+    )
+    assertTrue(validDiagnostics.categories.isEmpty())
+
+    val invalidDiagnostics = RecordingDiagnostics()
+    val invalid = ChatReplyStream(invalidDiagnostics)
+    invalid.accept(
+      ChatEvent.TextDelta(
+        "Answer\n```skillbill-actions\n" +
+          "[{\"label\":\"Start a goal run\",\"instruction\":\"Implement the change.\",\"mode\":\"act\",\"start\":\"goal\",\"title\":\"!!!\"}]\n```",
+      ),
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.SuggestedActions(
+          listOf(
+            ChatSuggestedAction(
+              "Start a goal run",
+              "Implement the change.",
+              ChatPermissionMode.Act,
+              NewTaskActionKind.Goal,
+            ),
+          ),
+        ),
+        ChatEvent.Completed,
+      ),
+      invalid.accept(ChatEvent.Completed),
+    )
+    assertEquals(listOf("chat.action_title_invalid"), invalidDiagnostics.categories)
+    assertTrue("chat.actions_invalid" !in invalidDiagnostics.categories)
   }
 }

@@ -19,6 +19,15 @@ Areas: runtime-engine featuretask (phaserun/monitor, slot/monitor/standalone, ru
 - Limits: CLI and desktop must ship together, because an older runtime refuses branch: intake and rejects a branch status row. A feature branch with no pull request still gets no push-triggered CI in this repository and blocks after one hour.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented for this subtask
+## [2026-11-02] SKILL-466 standalone monitor and operation launches
+Areas: runtime-engine work/control, runtime-ports work/model, runtime-infra launcher, desktop/core/data control
+- monitor joins STANDALONE_PHASES and startStandalone appends a nonblank target as a positional. startOperation launches verify and pr-review-fix as operation argv, with no auto-confirm. Verify with a blank target refuses before launch.
+- launchStandaloneCommand refuses a trimmed target starting with "-" before preflight or launch, covering both entry points.
+- WorkRunLaunchResult.Started carries an optional exit stage of WorkRunExit. NewTaskStartResult.Running turns a non-zero exit into a reason. DetachedWorkRunLauncher reads the log only after a non-zero exit, decodes undecodable bytes leniently, and records failure_log_unreadable if the read fails.
+- STOP_LINE picks the Phase blocked at, Operation blocked or Operation failed line, then falls back to the last log line.
+- Limits: startNewTask still returns plain Started, so goal and plan starts expose no exit signal.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (full account in desktop/feature/chat/agent/history.md)
 
 ## [2026-11-01] SKILL-455 Activity timeline reads
 - Added WorkActivityService on RuntimeComponent, with Listed, NotFound and Unavailable results.

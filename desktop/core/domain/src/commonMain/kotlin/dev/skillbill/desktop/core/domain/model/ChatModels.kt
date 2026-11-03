@@ -45,14 +45,18 @@ enum class NewTaskActionKind(val wire: String) {
   Qa("qa"),
   Pr("pr"),
   Monitor("monitor"),
+  Verify("verify"),
+  PrReviewFix("pr-review-fix"),
 }
 
-/** A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. */
+/** A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. [title] names a started goal or plan. */
 data class ChatSuggestedAction(
   val label: String,
   val instruction: String,
   val mode: ChatPermissionMode,
   val start: NewTaskActionKind? = null,
+  val title: String? = null,
+  val target: String? = null,
 )
 
 data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?)

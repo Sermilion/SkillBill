@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.manifest
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goal.goalRepositoryIdentityFilters
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.history.restoreGoalChildHistoryAcceptance
 import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
@@ -99,15 +100,15 @@ public class WorkflowGoalRunnerManifestStore
       repoRoot: Path?,
     ): GoalRunnerManifestState? {
       val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
-      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
-      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected, identity)
+      val identities = identityCandidates(repoRoot)
+      val stored = identities.firstNotNullOfOrNull { manifestLoader.loadFromWorkflowStore(issueKey, projected, it) }
       if (manifestLoader.shouldRefreshFromCompleteProjection(stored, projected)) {
         return save(
           requireNotNull(stored).copy(manifest = requireNotNull(projected), repoRoot = repoRoot),
         )
       }
       return stored?.copy(repoRoot = repoRoot) ?: projected?.let { manifest ->
-        manifestLoader.importFromManifestProjection(manifest, identity)?.copy(repoRoot = repoRoot)
+        manifestLoader.importFromManifestProjection(manifest, identities)?.copy(repoRoot = repoRoot)
       }
     }
 
@@ -116,8 +117,10 @@ public class WorkflowGoalRunnerManifestStore
       repoRoot: Path?,
     ): GoalRunnerManifestState? {
       val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
-      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
-      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected, identity)
+      val stored =
+        identityCandidates(repoRoot).firstNotNullOfOrNull {
+          manifestLoader.loadFromWorkflowStore(issueKey, projected, it)
+        }
       return manifestLoader.readProjection(stored, projected, repoRoot)
     }
 
@@ -129,8 +132,10 @@ public class WorkflowGoalRunnerManifestStore
         repoRoot?.let { root ->
           manifestLoader.findProjectedManifest(root, issueKey, recoverPending = false)
         }
-      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
-      val stored = manifestLoader.loadFromWorkflowStoreIfPresent(issueKey, projected, identity)
+      val stored =
+        identityCandidates(repoRoot).firstNotNullOfOrNull {
+          manifestLoader.loadFromWorkflowStoreIfPresent(issueKey, projected, it)
+        }
       return manifestLoader.readProjection(stored, projected, repoRoot)
     }
 
@@ -138,10 +143,12 @@ public class WorkflowGoalRunnerManifestStore
       issueKey: String,
       repoRoot: Path?,
     ): GoalRunnerManifestState? =
-      manifestLoader.loadFromWorkflowStore(
-        issueKey,
-        repositoryIdentity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity),
-      )
+      identityCandidates(repoRoot).firstNotNullOfOrNull { identity ->
+        manifestLoader.loadFromWorkflowStore(issueKey, repositoryIdentity = identity)
+      }
+
+    private fun identityCandidates(repoRoot: Path?): List<String?> =
+      goalRepositoryIdentityFilters(repoRoot, repositoryEnclosingRootPort)
 
     override fun planningStatusFromSummary(
       parentWorkflowId: String,

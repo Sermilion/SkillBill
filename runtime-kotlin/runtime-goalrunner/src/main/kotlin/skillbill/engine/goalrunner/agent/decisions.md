@@ -1,5 +1,67 @@
 # goalrunner boundary decisions
 
+## [2026-11-03] Settle goal worktrees after recording completion
+Context: Goal worktrees can contain changes or commits that do not exist elsewhere, and cleanup can fail after the goal has finished.
+Decision: Record completion first, then settle the worktree without forcing removal or deleting its branch. Retain and report work that cannot be removed safely, and retry settlement on a later completion check.
+Reason: Cleanup must not turn a recorded completion into a failed goal or discard work. Check commit reachability against existing remote-tracking refs without fetching, so a deleted pull request head branch does not alone prevent cleanup.
+
+## [2026-11-03] Purge treats only non-candidate identities as sibling worktrees
+Context: Purge now owns rows under both the primary and exact identities, while a legacy row can still be keyed to another live worktree.
+Decision: Ownership discovery and verification use the union of candidates. A row under any other identity is reported as a leftover with its goal purge --repo-root command and is not deleted.
+Reason: Treating every row of the same repository as owned could purge an active legacy goal in another worktree. The 2026-10-19 rule on naming sibling-worktree state still applies to those legacy rows, so that entry stays.
+
+## [2026-11-03] Selector lookups resolve one identity instead of looping over candidates
+Context: A lookup with a workflow id throws when the selector is not among the rows for that identity.
+Decision: selectorIdentity reads the workflow's stored identity, uses it when it is a candidate and otherwise uses the first candidate, then the lookup runs once.
+Reason: A loop would have to swallow that throw, and AGENTS.md requires a record for every swallowed failure. A foreign identity still fails with the same error.
+
+## [2026-11-03] Plan rows follow goal identity despite their STANDALONE route scope
+Context: Plan workflows reach the run entry with no goal continuation, so their route scope is STANDALONE. Choosing identity by route scope alone stores a linked-worktree plan under the exact identity while goal code looks it up under the primary one.
+Decision: A row opened by the plan skeleton, or one where isPlanWorkflow is true, follows the goal rules. Every other STANDALONE row stays exact.
+Reason: With route scope alone, the plan lookup misses, a second plan opens, and a selector lookup throws.
+
+## [2026-11-03] Stored repository identities are never rewritten
+Context: Goals bound before SKILL-468 hold an exact checkout identity, and control verbs bind identity on many paths.
+Decision: Binding writes only when the stored identity is null, goal-scoped writes prefer the stored value, and reads fall back to the exact identity. There is no migration.
+Reason: Rebinding a legacy goal would move it to the main checkout's view and write primary-keyed children for a goal that runs elsewhere. Reading both identities keeps legacy rows usable from the checkout that owns them.
+
+## [2026-11-03] Goal-scoped rows use the primary repository identity, standalone rows keep the exact checkout
+Context: Identity was the checkout path, so a goal run in a temporary worktree would disappear from the main checkout and a removed worktree path could become its identity.
+Decision: New goal, goal child and plan rows store the primary repository identity. Other standalone rows, phase registrations and verify keep the exact checkout identity.
+Reason: One goal must look the same from every checkout of the repository. Standalone runs stay per checkout so the same phase can still run in the main checkout and a linked worktree at once, and a linked-worktree board does not pick up the main checkout's standalone rows.
+
+## [2026-11-02] Put the agent title in the intake instead of a separate name field
+Context: New task names came from the operator's first six tokens, so a pasted path became the slug for the spec directory, branch, PR and titles. Display code cannot recover those words.
+Decision: The agent supplies a short title on the start action. WorkNewTaskStart inserts it as the title line of the existing key, title, requirements intake. GoalIntake.shortName still derives the slug, and also drops path-like tokens when there is no usable title.
+Reason: A separate name field or CLI flag would duplicate the slug path. Putting the title in the intake keeps resolvePlanSpec and intakePlanSpec in agreement.
+Alternatives considered: A hidden agent turn at start, a feature-name CLI argument, and display-layer rewriting were non-goals.
+
+## [2026-11-02] prepareNewTask takes NewTaskIntakeRequest
+Context: Adding a title would have been a sixth function parameter. detekt LongParameterList reports at functionThreshold 6, default parameters included.
+Decision: prepareNewTask is repoRoot plus NewTaskIntakeRequest with value fields requirements, title, baseBranch, keyChoice and occupiedKeys, and no field defaults.
+Reason: The request holds values only, so it does not break A3, and its second consumer under A2 is RuntimeWorkControlRepository.
+
+## [2026-11-02] Keep path-only intakes admitted
+Context: Cleaning paths out of names could refuse an intake that is only a path.
+Decision: When no clause on any line holds a non-path token, use today's slug of the first clause of the first content line and record nothing.
+Reason: That is a naming rule rather than a failure. A path-only line must not become a new DESCRIPTION refusal.
+
+## [2026-11-02] Do not add a fallback when a selected clause slugs to null
+Context: A path followed by non-ASCII with no agent title, such as a home-directory screenshot path then Russian text, used to be admitted with a path slug. Criterion 1's selected-clause rule now yields a null name and the existing DESCRIPTION refusal.
+Decision: Implement the criterion as written. Do not fall back to the first line's path slug when the selected clause has no ASCII letters or digits.
+Reason: IS-004 covers only intakes with no non-path token at all. The smallest admission amendment would be: when the selected clause slugs to null and the first content line holds a path-like token, use today's first-clause slug.
+Revisit when: The owner prefers those intakes to stay admitted.
+
+## [2026-11-02] Keep a start action when its title is invalid
+Context: A bad label rejects the whole suggested-action block.
+Decision: An invalid present title, or a stored non-string title, records a diagnostic, nulls the title, and keeps the action.
+Reason: A missing title still starts the run from the cleaned first line. Dropping the action would hide a start the operator can still use.
+
+## [2026-11-02] Use the agent title on a keyed chat whose first token is a bare issue key
+Context: A keyed start already has an issue key, so a title could have been ignored.
+Decision: When requirements contain whitespace and the first token fully matches an issue key, a usable title composes the key, title line and verbatim requirements. A whitespace-free reference, URL-led intake, spec-path-led intake, or keyed start with no usable title keeps today's intake.
+Reason: The key stays as identity. The name can still come from the agent. Overriding a URL or spec-path reference would change existing reference slugs.
+
 ## [2026-10-31] Integrate remote commits before blocking a finalization push
 
 Context: SKILL-453 finalization committed on a local branch while another session had pushed two commits to the same PR branch, one a rebased copy of a local commit. The push was rejected as non-fast-forward. The push helper recovered only when the remote head had been on the local branch, so it refused, and finalization blocked the run with "Remote head ... was never on local branch". The operator had to rebase by hand and resume.
@@ -207,6 +269,7 @@ its directory. Unrelated worktree changes do not determine bundle readiness.
 Context: Repository identity is the worktree path, so another worktree of the same repository keeps its own goal state for the issue.
 Decision: Purge leaves that state alone and names the worktree that owns it.
 Reason: The sibling worktree may hold an active goal run. Reporting it lets the operator purge from that worktree without this purge reaching across repository identities.
+Superseded by: Purge treats only non-candidate identities as sibling worktrees (2026-11-03)
 
 ## [2026-10-19] Refuse to conclude an unfinished git operation at finalization
 Context: 0AC-65's goal monitor started `monitor_fix` after main moved. The agent began merging main into the feature worktree, and the run died before the merge was committed or validated. On resume, finalization commit-all staged the tree and concluded the merge, then the push was rejected because the PR branch had a commit pushed from elsewhere.

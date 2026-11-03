@@ -39,7 +39,7 @@ enum class ReviewFindingOutcome(val wireValue: String) {
 
 private val identityWhitespace = Regex("\\s+")
 
-private fun reviewFindingIdentityKey(
+internal fun reviewFindingIdentityKey(
   location: String,
   summary: String,
 ): String = "${normalizedIdentityPart(location)}|${normalizedIdentityPart(summary)}"

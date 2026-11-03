@@ -20,9 +20,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -32,12 +31,14 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
+import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
+import dev.skillbill.desktop.feature.chat.newtask.IssuePrefixPicker
 
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
@@ -54,8 +55,7 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
   val mode by session.mode.collectAsState()
   val choices by session.resumeChoices.collectAsState()
   val queued by session.queued.collectAsState()
-  val transcript by session.transcript.collectAsState()
-  val status = chatActivityStatus(busy, agent, gone, transcript)
+  val prefixChoice by session.prefixChoice.collectAsState()
   val focus = remember(session) { FocusRequester() }
   LaunchedEffect(session) { focus.requestFocus() }
   val id = session.id
@@ -77,7 +77,10 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
     focus.requestFocus()
   }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { ChatPill(status, dot = busy) }
+    ChatActivityPill(session.thread, gone)
+    prefixChoice?.takeIf { !gone }?.let { pending ->
+      IssuePrefixPicker(pending.choices, enabled = !busy) { workspace.choosePrefix(id, it) }
+    }
     if (command == null && commandTokenLength(text) == text.length) {
       matchingCommands(text).forEach { CommandHint(it) { run(it) } }
     }
@@ -115,18 +118,20 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
 
 /** The agent chip; clicking it lists the agents the chat can switch to. */
 @Composable
-internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
+internal fun AgentPicker(agent: ChatAgent?, agents: List<String>, enabled: Boolean, disabledWhy: String? = null, onChoose: (String) -> Unit) {
   var open by remember { mutableStateOf(false) }
   val close = { open = false }
+  val canOpen = enabled && agents.isNotEmpty()
+  val why = disabledWhy.takeIf { !canOpen }
   Box {
-    ChatPill(
-      chipText(agent),
-      mono = true,
-      icon = LucideIcons.cpu,
-      maxWidth = 220.dp,
-      modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(enabled = enabled && agents.isNotEmpty(), onClickLabel = "Change agent") { open = true },
-    )
-    if (open) {
+    val chipModifier = Modifier.then(if (canOpen) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+      .clickable(enabled = canOpen, onClickLabel = "Change agent") { open = true }
+      .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
+    val chip = @Composable {
+      ChatPill(chipText(agent), mono = true, icon = LucideIcons.cpu, maxWidth = 220.dp, modifier = chipModifier)
+    }
+    if (why != null) SbTooltip(why) { chip() } else chip()
+    if (open && canOpen) {
       ShellLayer(close)
       SbPopover(expanded = true, onDismissRequest = close) {
         SbMenu(

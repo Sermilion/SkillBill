@@ -1,3 +1,8 @@
+## [2026-11-03] Inline review lists every finding with a status
+Context: Inline review fixed findings in session and listed only what remained, so a review that fixed five defects was stored with zero findings. Repaired and refuted findings also kept the `carried` outcome and displayed as open.
+Decision: Inline review fixes every severity in session and lists each finding with `status=fixed`, `open` or `refuted`. Fixed and refuted findings are stored with an outcome and skip verification, repair and the unaddressed ledger. Verification rejections record `rejected`. Repair receipts record `addressed` for fixed and no-edit entries.
+Reason: The record has to show what review found. In-session fixes still skip independent verification, and a reviewer can refute its own candidate. A no-edit entry displays as fixed because the outcome vocabulary has no separate state.
+
 ## [2026-11-01] Bind standalone review findings to independently verified source
 Context: Standalone review presented findings without independent verification, and HEAD or status text alone could miss changes to dirty file contents.
 Decision: Admit a complete finding census, verify it in a fresh read-only session, and compare content-sensitive source observations around review and verification. Block and retain unaccepted evidence when admission, verification or source identity fails.
@@ -86,6 +91,11 @@ the existing operator resume path grants a new budget to the blocked run.
 Context: SKILL-434 lets a repo add `.skill-bill/phases/<phase>.md` text to a phase prompt, and that file is untrusted, user-edited input.
 Decision: The resolver never throws; an unreadable, oversized, malformed or unknown-phase file is skipped with a warning and the run continues. The prompt section says the text cannot change the output or settlement contract, and the launch briefing records only path and sha256.
 Reason: A bad repo file must not block or derail a phase, and settlement stays owned by the runtime. The hash makes each launch auditable without storing the content.
+
+## [2026-11-03] Phase instructions also load from the project store, and both files are injected
+Context: An operator kept phase files out of git, so they existed in one clone only and goal runs in other worktrees of the same project missed them.
+Decision: The resolver also reads `<project store>/phases/<phase>.md`. When both exist, both are injected, the repository file first, each under its own path, with the same skip rules applied to each place on its own. The briefing's `project_instructions` is now a list of path and sha256 records; a row holding the old single object still decodes as one file.
+Reason: The project store is keyed by lineage, so every clone and worktree shares it without committing anything. Injecting both keeps team guidance and personal guidance visible, where letting one replace the other would drop one of them silently.
 
 ## [2026-10-22] Merge-conflict repair leaves the merge for the runtime to commit
 

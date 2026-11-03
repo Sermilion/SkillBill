@@ -18,7 +18,7 @@ internal fun reviewActionInstruction(item: WorkItem, action: ReviewFindingsActio
   }
   val kind = action.name.lowercase()
   return "$task\n" +
-    "Target review invocation $invocation in ${item.repositoryRoot}. " +
+    "Target review invocation $invocation in ${item.checkoutRoot}. " +
     "First run $cli prepare-review --invocation-id ${shellArgument(invocation)} --format json. " +
     "Stop if preparation fails. Prefix every command below with $cli. Use the returned review_run_id. " +
     "Before inspecting or editing findings, run start-review-action --run-id <review_run_id> --action $kind --format json. " +

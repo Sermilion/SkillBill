@@ -1,5 +1,58 @@
 # goalrunner boundary history
 
+## [2026-11-03] Goal pull request description follows the repo template
+Areas: runtime-goalrunner finalization, runtime-domain skeleton, runtime-engine slot bindings, runtime-core goal wiring
+- Goal finalization writes the pull request through the pr-description step, the same strategy phase:pr uses, run as the in-memory `goal-pr` skeleton (pull_request slot only) via `GoalRunnerPullRequestWriter`. The step resolves the repo-native template, fills every section from the goal diff and spec, and opens the draft PR.
+- The runtime still owns the goal facts: goal and subtask QA, goal assessment, and untraced interaction scenarios. They reach the step as phase instructions and go in the template's testing section.
+- The step runs only when the head branch has no PR; an existing, merged, or unreadable PR identity goes to `GoalPullRequestPort` as before. When the step fails, blocks, or leaves no PR on the branch, the port opens it with the composed body, now the fallback only.
+- The pr-description directive gains title and description-writing rules that apply to every template, and its built-in fallback becomes Summary, Changes, Reviewer Notes, Testing and Screenshots with no "N/A" sections. The runtime-composed goal body follows the same Summary, Changes and Testing shape.
+- reusable: `pullRequestFacts` and `pullRequestRequestOf` build the facts once for both the instructions and the fallback body.
+Feature flag: N/A
+
+## [2026-11-03] SKILL-468 subtask 3: Finish and remove the goal worktree
+Areas: runtime-goalrunner, runtime-application/workflow, runtime-domain, runtime-infra/workflow, runtime-infra/sqlite, runtime-cli/goal, runtime-ports, docs
+- Goal control and continuation resolve the recorded execution root; status reads it without recreating a missing checkout.
+- Completion settles the recorded worktree after the completion record. Retention or cleanup failure leaves the goal complete and visible in status; later completion checks can retry settlement.
+- Shared worktree retention checks protect owned paths and work before removal. Purge refuses retained work before deleting goal state and keeps the branch. reusable: worktree retention and settlement ports.
+- Ignored files such as build output do not count as dirty; a published worktree that holds only ignored files is removed.
+- AGENTS.md and docs/runtime-command-guidance.md describe where goals run, when the worktree goes away, and what is retained.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-03] SKILL-468 subtask 2: run new goals in an owned worktree
+Areas: runtime-goalrunner, runtime-ports, runtime-infra/workflow and sqlite, runtime-domain, runtime-core DI, runtime-engine QA, runtime-cli
+- New goals create or adopt a detached worktree under the state directory and run branch setup and child phases there. The control state retains its path and primary repository identity; already launched goals without a recorded worktree continue at their bound root.
+- The reusable GoalWorktreeResources port creates or adopts registered worktrees without force, preserves unregistered directories, and identifies checkouts holding a branch. Branch setup blocks when another checkout holds the required branch.
+- Newly created worktrees receive eligible ignored files using the shared QA size limit. Adopted worktrees retain their own files. Copy and status failures produce diagnostics without blocking the goal.
+- A dirty launching checkout produces a persisted warning visible at launch and in goal status. Its uncommitted changes do not enter the goal worktree.
+- Limits: older runtimes reject control records containing the new worktree path.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-03] SKILL-468 subtask 1: resolve goal identity to the primary repository
+Areas: runtime-ports repository, runtime-infra/host, runtime-engine goal, featuretask and work, runtime-goalrunner, runtime-application workflow, runtime-cli featuretask, runtime-infra/workflow
+- RepositoryEnclosingRootPort gains primaryRepositoryIdentity. The main checkout, every linked worktree and their subdirectories return one value. repositoryIdentity is unchanged.
+- New goal, goal child and plan rows store the primary identity. Other standalone rows, phase registrations and verify keep the exact checkout identity.
+- bindRepositoryIdentity and the pause path write only when the stored identity is null. Goal-scoped writes use the stored identity first, so a legacy goal keeps its exact checkout binding.
+- Goal reads try the primary identity, then the exact identity, and take the first match. A null repo root still reads unfiltered. Purge takes the union across both identities and reports a row under any other identity as a sibling-worktree leftover.
+- Plan linking and scoped replan try the goal's stored identity, then fallbackPlanIdentities, so a primary-bound goal still finds a completed plan keyed to its exact checkout.
+- IDE status accepts either identity for goals and goal children, and the exact identity for standalone rows. The work board hides a plan phase of a listed goal by comparing the primary identity of the decoded root.
+- reusable: goalRepositoryIdentityCandidates, goalRepositoryIdentityFilters, FeatureTaskContinuationLookupService.selectorIdentity. ProjectCheckout has its own candidate list because runtime-application cannot import runtime-engine.
+- Limits: crash reconciliation turns a stored identity into a path, so a primary-keyed child launched from a linked worktree resolves recorded gate inputs from the main checkout. Differing config there can refuse recovery. A standalone row in the main checkout now refuses a goal launch from a linked worktree at preflight. A legacy row keyed to one linked worktree stays invisible from other checkouts.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-02] SKILL-464 descriptive titles from New task starts
+Areas: runtime-goalrunner intake, runtime-engine work control, desktop core/domain, desktop core/data, desktop feature/chat
+- New-task goal and plan starts carry an agent title on the start action. WorkNewTaskStart composes it as the intake title line so GoalIntake.shortName, the spec directory, branch, PR and goal titles all use it. Review, validation, QA and PR starts stay on startStandaloneTask and ignore the title.
+- GoalIntake.shortName walks content-line clauses, drops path-like tokens, and slugs the first descriptive clause. A path-only intake still uses today's first-clause slug and records nothing, so it stays admitted.
+- prepareNewTask takes NewTaskIntakeRequest. An unusable title is ignored with seam=new-task.title outcome=ignored and never refuses. A keyed first token plus a usable title inserts the title line. URL-led and spec-path-led intakes stay unchanged.
+- ChatSuggestedAction and NewTaskStart gain a trailing title. Decode and store keep a bad title's action. newTaskTitle reads the newest completed goal or plan title for both suggested-action and offer-card starts.
+- reusable: NewTaskIntakeRequest; GoalIntake path-token filter; newTaskTitle beside newTaskRequirements.
+- Limit: a path followed by non-ASCII with no agent title now hits the existing DESCRIPTION refusal. Today those intakes were admitted with a path slug. Display, offer-card title, and renaming existing bundles stay out of scope. The five-parameter prepareNewTask form is gone.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-27] SKILL-446 subtask 2: publish goal history after final checks
 Areas: runtime-engine goalrunner and featuretask, runtime-domain, runtime-application workflow, runtime-contracts, runtime-core goal wiring, runtime-infra contracts, orchestration/contracts
 - MEDIUM feature. Goal finalization runs the existing boundary writer after goal QA, repairs and already-required validation, before the remaining-worktree commit and PR. No-change and already-published exits remain.

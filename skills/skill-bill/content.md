@@ -437,7 +437,7 @@ name the candidates or the defect. Resolution never checks the target out in the
 the caller's branch, index, and uncommitted work stay untouched, so monitors for different pull
 requests or branches that share a head branch name run concurrently without colliding. The runtime
 fetches the pinned head and base and creates an owned temporary worktree and branch under the
-caller's `.git/skill-bill/standalone-monitor` directory. All repair work runs in that worktree. The
+`<state dir>/standalone-monitor/<repo-key>/`, outside `.git/`, because agents refuse edits under `.git/`. All repair work runs in that worktree. The
 phase starts by watching CI and publishes nothing unless a repair is needed. It does not commit or
 push pending caller changes. A repair that settles completed is committed and pushed to the target's
 head repository and branch only if the remote head is still the last acknowledged commit, never to

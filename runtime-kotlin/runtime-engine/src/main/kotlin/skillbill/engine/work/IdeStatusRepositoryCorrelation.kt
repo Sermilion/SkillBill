@@ -1,6 +1,5 @@
 package skillbill.engine.work
 
-import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
@@ -9,11 +8,13 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkItem
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.FeatureTaskRouteScope
 import java.nio.file.Path
 
 internal class IdeStatusRepositoryCorrelation(
   private val unitOfWork: UnitOfWork,
   private val repositoryIdentity: String,
+  private val primaryIdentity: String,
 ) {
   fun matches(
     item: WorkItem,
@@ -30,7 +31,8 @@ internal class IdeStatusRepositoryCorrelation(
 
   private fun matchesFeatureTaskRepository(workflowId: String): Boolean? {
     val identity = unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(workflowId) ?: return null
-    return identity.repositoryIdentity == repositoryIdentity
+    return identity.repositoryIdentity == repositoryIdentity ||
+      (identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD && identity.repositoryIdentity == primaryIdentity)
   }
 
   private fun matchesGoalRepository(item: WorkItem): Boolean? {
@@ -39,12 +41,13 @@ internal class IdeStatusRepositoryCorrelation(
       bound == null -> {
         val issueKey = item.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) ?: return null
         val childrenHere =
-          unitOfWork.workflowStates
-            .findGoalChildFeatureTaskCandidates(issueKey, repositoryIdentity)
+          setOf(repositoryIdentity, primaryIdentity).any { identity ->
+            unitOfWork.workflowStates.findGoalChildFeatureTaskCandidates(issueKey, identity).isNotEmpty()
+          }
         val childCountAnywhere = unitOfWork.workflowStates.countGoalChildIdentities(issueKey)
-        childrenHere.isNotEmpty() || childCountAnywhere == 0
+        childrenHere || childCountAnywhere == 0
       }
-      bound == repositoryIdentity -> true
+      bound == repositoryIdentity || bound == primaryIdentity -> true
       else -> false
     }
   }
@@ -76,7 +79,7 @@ internal fun resolveRepositoryIdentity(
     findGitRoot(resolvedStart, repositoryEnclosingRootPort)
       ?: return IdeStatusRepositoryResolution.Invalid("Path is not inside a Git repository: $repoRootArg")
   val canonicalGitRoot = repositoryEnclosingRootPort.canonicalPath(gitRoot)
-  val identity = goalRepositoryIdentity(canonicalGitRoot, repositoryEnclosingRootPort)
+  val identity = repositoryEnclosingRootPort.repositoryIdentity(canonicalGitRoot)
   return if (
     identity.isBlank() ||
     !identity.startsWith(FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX)
@@ -85,11 +88,10 @@ internal fun resolveRepositoryIdentity(
       "Could not form canonical repository identity for: $repoRootArg",
     )
   } else {
-    val primaryRoot = repositoryEnclosingRootPort.primaryRepositoryRoot(canonicalGitRoot)
     IdeStatusRepositoryResolution.Ok(
       identity = identity,
       repoRoot = canonicalGitRoot,
-      monitorIdentity = goalRepositoryIdentity(primaryRoot, repositoryEnclosingRootPort),
+      monitorIdentity = repositoryEnclosingRootPort.primaryRepositoryIdentity(canonicalGitRoot),
     )
   }
 }

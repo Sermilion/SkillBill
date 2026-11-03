@@ -22,7 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Keep phase edits in the repository root and branch from the active workflow briefing. Reconcile separate worktree changes into that checkout before reporting implementation complete.
+Each goal runs in its own runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after recording completion unless it holds unpublished work. Standalone phases keep working in the caller's checkout.
 
 ## Product Intent
 

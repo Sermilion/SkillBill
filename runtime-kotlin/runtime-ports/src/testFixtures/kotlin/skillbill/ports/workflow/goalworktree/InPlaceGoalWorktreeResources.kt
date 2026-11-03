@@ -1,0 +1,24 @@
+package skillbill.ports.workflow.goalworktree
+
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
+import java.nio.file.Path
+
+object InPlaceGoalWorktreeResources : GoalWorktreeResources {
+  override fun createOrAdopt(
+    repoRoot: Path,
+    issueKey: String,
+    recordedPath: Path?,
+    revision: String,
+  ): GoalWorktreeResult = GoalWorktreeResult.Adopted(repoRoot)
+
+  override fun checkoutHolding(
+    repoRoot: Path,
+    branch: String,
+  ): Path? = null
+
+  override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement = GoalWorktreeSettlement.Absent
+
+  override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? = null
+}

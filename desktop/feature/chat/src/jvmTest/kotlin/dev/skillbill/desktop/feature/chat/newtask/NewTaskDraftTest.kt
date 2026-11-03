@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -235,7 +236,7 @@ class NewTaskDraftTest {
     chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
     val draft = draft()
     val workspace = ChatWorkspace(
-      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), draft,
+      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), draft,
     )
     draft.say("add export")
     runCurrent()
@@ -269,5 +270,151 @@ class NewTaskDraftTest {
     runCurrent()
     assertFalse(thread.busy.value)
     draft.close()
+  }
+
+  @Test
+  fun `choosing another repository rebinds the chat to that checkout and keeps the transcript`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val firstSession = chat.requests.single().sessionId
+    val otherRoot = createTempDirectory("other-repo").toString()
+
+    draft.repository = NewTaskRepository(otherRoot, "other")
+    draft.rebindChat()
+    runCurrent()
+
+    val rebound = checkNotNull(draft.chat.value)
+    assertNotEquals(firstSession, rebound.sessionId)
+    assertEquals(otherRoot, rebound.repositoryRoot)
+    assertEquals(listOf(firstSession), chat.ended)
+    assertFalse(firstSession in chat.saved)
+    assertEquals("add export", (rebound.thread.transcript.value.first() as ChatMessage.Operator).text)
+    assertTrue(rebound.thread.transcript.value.last() is ChatMessage.Notice)
+    assertEquals(otherRoot, chat.saved.getValue(rebound.sessionId).newTask?.repositoryRoot)
+
+    draft.say("continue")
+    runCurrent()
+    assertEquals(ChatScope.NewTask(otherRoot, "main"), chat.requests.last().scope)
+    assertTrue(chat.requests.last().firstTurn)
+    draft.close()
+  }
+
+  @Test
+  fun `choosing another agent rebinds the chat onto a new session of that agent`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val firstSession = chat.requests.single().sessionId
+    val codex = chat.agentFor("codex")
+
+    draft.agentId = "codex"
+    draft.selectedAgent = codex
+    draft.rebindChat()
+    runCurrent()
+
+    val rebound = checkNotNull(draft.chat.value)
+    assertNotEquals(firstSession, rebound.sessionId)
+    assertEquals("codex", rebound.agent.agentId)
+    draft.say("continue")
+    runCurrent()
+    assertEquals("codex", chat.requests.last().agent.agentId)
+    assertTrue(chat.requests.last().firstTurn)
+    draft.close()
+  }
+
+  @Test
+  fun `rebind is a no-op when the repository and agent did not change`() = runTest {
+    chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("add export")
+    runCurrent()
+    val sessionId = chat.requests.single().sessionId
+
+    draft.rebindChat()
+    runCurrent()
+
+    assertEquals(sessionId, draft.chat.value?.sessionId)
+    assertTrue(chat.ended.isEmpty())
+    draft.close()
+  }
+
+  @Test
+  fun `messages queued during a reply run in order without splitting the streaming answer`() = runTest {
+    val replies = mutableListOf<Channel<ChatEvent>>()
+    chat.events = {
+      val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+      replies += reply
+      flow { for (event in reply) emit(event) }
+    }
+    val draft = draft()
+    draft.say("first")
+    runCurrent()
+    replies[0].send(ChatEvent.TextDelta("Before "))
+    runCurrent()
+    draft.say("second")
+    draft.say("third")
+    runCurrent()
+
+    val thread = checkNotNull(draft.chat.value).thread
+    assertEquals(1, chat.requests.size)
+    assertEquals(2, thread.queued.value.size)
+    replies[0].send(ChatEvent.TextDelta("after"))
+    replies[0].send(ChatEvent.Completed)
+    replies[0].close()
+    runCurrent()
+
+    assertEquals(2, chat.requests.size)
+    assertEquals("first", (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[0]).text)
+    assertEquals("second", (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[1]).text)
+    assertEquals("Before after", thread.transcript.value.filterIsInstance<ChatMessage.Agent>().first().text)
+    assertEquals(1, thread.queued.value.size)
+    replies[1].send(ChatEvent.Completed)
+    replies[1].close()
+    runCurrent()
+
+    assertEquals(3, chat.requests.size)
+    assertEquals("third", thread.transcript.value.filterIsInstance<ChatMessage.Operator>().last().text)
+    assertTrue(thread.queued.value.isEmpty())
+    draft.close()
+  }
+
+  @Test
+  fun `an unprompted reply holds queued messages until it ends`() = runTest {
+    val draft = draft()
+    draft.say("start")
+    runCurrent()
+    val thread = checkNotNull(draft.chat.value).thread
+    val sessionId = chat.requests.single().sessionId
+    chat.unpromptedEvents.emit(sessionId to ChatEvent.TextDelta("done"))
+    runCurrent()
+    draft.say("next")
+    runCurrent()
+    assertEquals(1, chat.requests.size)
+    assertEquals(1, thread.queued.value.size)
+
+    chat.unpromptedEvents.emit(sessionId to ChatEvent.Completed)
+    runCurrent()
+    assertEquals(2, chat.requests.size)
+    assertTrue(thread.queued.value.isEmpty())
+    draft.close()
+  }
+
+  @Test
+  fun `discard drops queued messages so they never send`() = runTest {
+    chat.events = { flow { awaitCancellation() } }
+    val draft = draft()
+    draft.say("one")
+    runCurrent()
+    draft.say("must not run")
+    runCurrent()
+    assertEquals(1, checkNotNull(draft.chat.value).thread.queued.value.size)
+
+    draft.discard()
+    runCurrent()
+    assertNull(draft.chat.value)
+    assertEquals(1, chat.requests.size)
   }
 }

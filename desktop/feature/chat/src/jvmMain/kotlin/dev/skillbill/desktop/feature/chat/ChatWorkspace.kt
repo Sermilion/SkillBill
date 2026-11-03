@@ -10,10 +10,18 @@ import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.NewTaskStart
+import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.di.WindowScope
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -72,6 +80,7 @@ class ChatWorkspace(
   private val chat: ExecutionChatRepository,
   private val details: WorkDetailRepository,
   private val controls: WorkControlRepository,
+  private val databaseSession: DatabaseSessionController,
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
   private val panes: ShellPanes,
@@ -225,9 +234,64 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (session.transcript.value.lastOrNull() !== reply) return
     if (reply.streaming || action !in reply.actions || !session.agentSupportedState.value || session.agentState.value == null) return
+    val start = action.start
+    if (start != null) {
+      executeStartAction(session, action, start)
+      return
+    }
     when (action.mode) {
       ChatPermissionMode.ReadOnly -> send(id, action.instruction, action)
       ChatPermissionMode.Act -> pauseAndAct(id, action.instruction, action)
+    }
+  }
+
+  /** Retries the start waiting on an issue prefix with [choice]. */
+  fun choosePrefix(id: String, choice: String) {
+    val session = sessions[id] ?: return
+    val pending = session.prefixChoiceState.value ?: return
+    if (session.agentState.value == null) return
+    executeStartAction(session, pending.action, pending.start, choice)
+  }
+
+  private fun executeStartAction(session: ChatSession, action: ChatSuggestedAction, start: NewTaskActionKind, keyChoice: String? = null) {
+    session.prefixChoiceState.value = null
+    if (modeFor(session.item) == ChatPermissionMode.ReadOnly) {
+      val name = session.item.issueKey ?: session.item.id
+      session.append(ChatMessage.Notice("Start for $name waits until this execution is not running."))
+      return
+    }
+    val open = databaseSession.state.value as? DatabaseSessionState.Open
+    if (open == null) {
+      session.append(ChatMessage.Notice("The database session is not open."))
+      return
+    }
+    val agentId = session.agentState.value?.agentId ?: return
+    val kind = start.toNewTaskKind()
+    scope.launch {
+      val outcome = controls.startNewTask(
+        NewTaskStart(
+          repoRoot = session.item.repositoryRoot,
+          requirements = if (kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) action.instruction else "",
+          baseBranch = null,
+          agentId = agentId,
+          kind = kind,
+          keyChoice = keyChoice,
+          expectedDatabaseSessionId = open.sessionId,
+          target = action.target,
+        ),
+      )
+      when (outcome) {
+        is NewTaskStartOutcome.Started -> {
+          session.append(ChatMessage.Notice("Started ${start.wire}."))
+          outcome.awaitFailure?.invoke()?.let { session.append(ChatMessage.Notice("${start.wire} stopped. $it")) }
+        }
+        is NewTaskStartOutcome.Refused -> session.append(ChatMessage.Notice(outcome.message))
+        is NewTaskStartOutcome.Failed -> session.append(ChatMessage.Error(null, readProblemText(outcome.problem)))
+        is NewTaskStartOutcome.NeedsKey -> {
+          session.append(ChatMessage.Notice("Choose an issue key to start this run."))
+          session.prefixChoiceState.value = PendingPrefixChoice(action, start, outcome.choices)
+        }
+      }
     }
   }
 
@@ -318,6 +382,7 @@ class ChatWorkspace(
   fun clear(id: String) {
     val session = sessions[id] ?: return
     session.resumeChoicesState.value = null
+    session.prefixChoiceState.value = null
     if (session.goneState.value) return
     session.queuedState.value = emptyList()
     val running = session.turnJob
@@ -334,7 +399,7 @@ class ChatWorkspace(
   fun showResumable(id: String) {
     val session = sessions[id] ?: return
     scope.launch(session.job) {
-      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.repositoryRoot, session.sessionId)
+      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.checkoutRoot, session.sessionId)
     }
   }
 
@@ -350,6 +415,7 @@ class ChatWorkspace(
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
     session.resumeChoicesState.value = null
+    session.prefixChoiceState.value = null
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
     session.queuedState.value = emptyList()
     val running = session.turnJob
@@ -358,7 +424,7 @@ class ChatWorkspace(
       running?.cancelAndJoin()
       val lines = chat.openSavedChat(entry)
       endAgent(session)
-      session.resumeFrom(entry.sessionId)
+      session.resumeFrom(entry.sessionId, session.item.checkoutRoot)
       session.agentState.value = entry.agent
       session.agentSupportedState.value = chat.supports(entry.agent.agentId)
       val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
@@ -373,6 +439,7 @@ class ChatWorkspace(
   private fun enqueue(id: String, message: QueuedChatMessage) {
     val session = sessions[id] ?: return
     if (session.goneState.value || message.text.isBlank()) return
+    session.prefixChoiceState.value = null
     session.queuedState.value += message
     drainQueue(session)
   }
@@ -484,6 +551,7 @@ class ChatWorkspace(
             turns.markGone(it)
           } else if (state.sections !is DetailSections.Pending) {
             it.item = state.header
+            turns.followWorktree(it)
             val title = state.header.issueKey ?: state.header.title
             tabState.update { s -> s.copy(tabs = s.tabs.map { t -> if (t.executionId == it.item.id) t.copy(title = title) else t }) }
             it.modeState.value = modeFor(state.header)

@@ -93,7 +93,9 @@ class ChangeScopeObservations internal constructor(
     while (true) {
       // A non-running collection reads Outside fresh so commits landing after the last subtask show up.
       emit(readScope(target, resolved, lock, cache, useOutsideMemo = running))
-      val followsHead = resolved is ScopeRead.Baseline || resolved == ScopeRead.Uncommitted
+      val followsHead =
+        (resolved is ScopeRead.Baseline && resolved.baseline !is ChangeBaseline.CommittedBranchRange) ||
+          resolved == ScopeRead.Uncommitted
       if (!running || !followsHead) break
       delay(CHANGE_REFRESH_INTERVAL)
     }
@@ -257,6 +259,7 @@ class ChangeScopeObservations internal constructor(
           target.rangesSupported,
           target.subtasks,
           mapOf(subtask.id to stats),
+          target.committedHeadBranch(),
         )
         state.matches(target) -> state.copy(stats = state.stats + (subtask.id to stats))
         else -> SubtaskScopesState.Listed(
@@ -265,6 +268,7 @@ class ChangeScopeObservations internal constructor(
           target.rangesSupported,
           target.subtasks,
           mapOf(subtask.id to stats),
+          target.committedHeadBranch(),
         )
       }
     }
@@ -392,6 +396,10 @@ class ChangeScopeObservations internal constructor(
     val startSha = subtask.startSha ?: return IndividualStatsRead.Unavailable
     val endSha = subtask.endSha
     val baseline = ChangeBaseline.SubtaskStart(target.worktreeRoot, startSha, subtask.baselineUntrackedPaths)
+    if (target.committedOnly) {
+      return endSha?.let { IndividualStatsRead.Committed(ScopeRead.Committed(startSha, it)) }
+        ?: IndividualStatsRead.Unavailable
+    }
     return when {
       subtask.state == ScopeSubtaskState.RUNNING -> IndividualStatsRead.Working(baseline)
       endSha != null -> IndividualStatsRead.Committed(ScopeRead.Committed(startSha, endSha))
@@ -403,7 +411,8 @@ class ChangeScopeObservations internal constructor(
   private suspend fun readChanges(baseline: ChangeBaseline, lock: Mutex): Outcome<WorkChangeListResult, ReadProblem> {
     val portBaseline = baseline.toPort()
     return readOrProblem(runtime, diagnostics) {
-      workingTree.changes(portBaseline) { lock.withLock { withContext(io) { port.changes(portBaseline) } } }
+      val read: suspend () -> WorkChangeListResult = { lock.withLock { withContext(io) { port.changes(portBaseline) } } }
+      if (baseline is ChangeBaseline.CommittedBranchRange) read() else workingTree.changes(portBaseline, read)
     }
   }
 
@@ -443,10 +452,18 @@ class ChangeScopeObservations internal constructor(
     (this as? ScopeRead.Committed)?.let { CommittedListKey(worktreeRoot, it.fromSha, it.toSha) }
 
   private fun ChangeScopeTarget.targetBranch(): String? =
-    (allBaseline as? ChangeBaseline.TargetMergeBase)?.targetBranch
+    when (val baseline = allBaseline) {
+      is ChangeBaseline.TargetMergeBase -> baseline.targetBranch
+      is ChangeBaseline.CommittedBranchRange -> baseline.targetBranch
+      else -> null
+    }
+
+  private fun ChangeScopeTarget.committedHeadBranch(): String? =
+    (allBaseline as? ChangeBaseline.CommittedBranchRange)?.headBranch
 
   private fun SubtaskScopesState.Listed.matches(target: ChangeScopeTarget): Boolean =
     worktreeRoot == target.worktreeRoot && targetBranch == target.targetBranch() &&
       rangesSupported == target.rangesSupported && subtasks == target.subtasks
+      && committedHeadBranch == target.committedHeadBranch()
 
 }

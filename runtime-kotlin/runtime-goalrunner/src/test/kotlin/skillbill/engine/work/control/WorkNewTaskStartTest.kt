@@ -85,6 +85,7 @@ class WorkNewTaskStartTest {
           launcher,
           EnvironmentContext(),
           TestRepositoryEnclosingRoot,
+          NoopRuntimeDiagnostics,
         ),
         root,
         launches,

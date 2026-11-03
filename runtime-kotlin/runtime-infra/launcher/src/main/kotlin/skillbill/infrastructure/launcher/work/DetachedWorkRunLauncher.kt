@@ -11,6 +11,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.system.HostAgentHomesPort
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -171,7 +172,7 @@ class DetachedWorkRunLauncher internal constructor(
         return refuse("The runner exited before starting. See $log")
       }
       diagnostics.info("seam=work-run.launch outcome=started log=$log")
-      WorkRunLaunchResult.Started(log)
+      WorkRunLaunchResult.Started(log, process.onExit().thenApply { workRunExit(it.exitValue(), log) })
     } catch (failure: IOException) {
       diagnostics.warning("seam=work-run.launch outcome=failed", failure)
       WorkRunLaunchResult.Refused("The runner could not start: ${failure.message}")
@@ -185,6 +186,19 @@ class DetachedWorkRunLauncher internal constructor(
       }
     }
   }
+
+  private fun workRunExit(
+    code: Int,
+    log: Path,
+  ): WorkRunExit = WorkRunExit(code, if (code == 0) emptyList() else failureLogLines(log))
+
+  private fun failureLogLines(log: Path): List<String> =
+    try {
+      String(Files.readAllBytes(log), Charsets.UTF_8).lines()
+    } catch (failure: IOException) {
+      diagnostics.warning("seam=work-run.launch outcome=failure_log_unreadable log=$log", failure)
+      emptyList()
+    }
 
   private fun releaseOnExit(
     process: Process,

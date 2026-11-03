@@ -78,6 +78,7 @@ internal class GoalRunnerControlStore(
         currentSubtaskId = existing.currentSubtaskId,
         subtaskActiveDurationMs = existing.subtaskActiveDurationMs,
         subtaskActiveDurationAsOf = existing.subtaskActiveDurationAsOf,
+        executionWorktreePath = existing.executionWorktreePath,
       )
     if (retained != GoalRunnerControlState()) {
       persistControlState(parentWorkflowId, retained)

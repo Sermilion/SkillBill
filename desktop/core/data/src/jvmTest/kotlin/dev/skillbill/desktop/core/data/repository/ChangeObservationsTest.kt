@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.ChangesState
+import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -85,12 +86,32 @@ class ChangeObservationsTest {
     val changes = observations(FakePort(files = 0), launcher)
 
     val modified = ChangedFile("src/A.kt", null, ChangeStatus.Modified, 1, 1)
-    assertEquals(OpenOutcome.Opened, changes.open(root.toString(), modified))
+    assertEquals(OpenOutcome.Opened, changes.open(ChangeBaseline.SubtaskStart(root.toString(), "abc", emptyList()), modified))
     assertEquals(listOf(root.resolve("src/A.kt") to mapOf("PATH" to "p")), launcher.launches)
 
     val deleted = ChangedFile("src/B.kt", null, ChangeStatus.Deleted, 0, 3)
-    assertEquals(OpenOutcome.NotOpened, changes.open(root.toString(), deleted))
+    assertEquals(OpenOutcome.NotOpened, changes.open(ChangeBaseline.SubtaskStart(root.toString(), "abc", emptyList()), deleted))
     assertEquals(1, launcher.launches.size)
+  }
+
+  @Test
+  fun `committed branch range reads once uses committed file diff and never opens the primary checkout file`() = runTest {
+    val port = FakePort(files = 1)
+    val launcher = RecordingLauncher(true)
+    val changes = observations(port, launcher)
+    val baseline = ChangeBaseline.CommittedBranchRange(root.toString(), "main", "goal")
+    val running = launch { changes.observe(baseline, running = true, Mutex()).collect { } }
+    runCurrent()
+    advanceTimeBy(30.seconds)
+    runCurrent()
+    assertEquals(1, port.calls)
+
+    val file = ChangedFile("src/A.kt", null, ChangeStatus.Modified, 1, 0)
+    assertEquals(FileDiffState.Binary, changes.fileDiff(baseline, "merge-base", file, Mutex()))
+    assertEquals(1, port.committedDiffCalls)
+    assertEquals(OpenOutcome.NotOpened, changes.open(baseline, file))
+    assertTrue(launcher.launches.isEmpty())
+    running.cancel()
   }
 
   private fun TestScope.observations(port: WorkChangesPort, launcher: FileEditorLauncherPort) = ChangeObservations(
@@ -105,6 +126,7 @@ class ChangeObservationsTest {
 
   private class FakePort(var files: Int) : WorkChangesPort {
     var calls = 0
+    var committedDiffCalls = 0
 
     override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
       calls++
@@ -122,7 +144,10 @@ class ChangeObservationsTest {
       fromSha: String,
       toSha: String,
       file: WorkChangedFile,
-    ): WorkFileDiffResult = WorkFileDiffResult.Binary
+    ): WorkFileDiffResult {
+      committedDiffCalls++
+      return WorkFileDiffResult.Binary
+    }
 
     override fun uncommittedChanges(worktreeRoot: String): WorkChangeListResult = WorkChangeListResult.Failed("unused")
 

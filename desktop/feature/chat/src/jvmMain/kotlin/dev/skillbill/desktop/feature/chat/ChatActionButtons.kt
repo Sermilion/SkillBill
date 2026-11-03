@@ -42,7 +42,8 @@ internal fun ChatActionButtons(
   Column(Modifier.fillMaxWidth().padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
     BasicText("SUGGESTED", style = SkillBillTheme.type.t2xs.copy(color = colors.fgMuted))
     actions.forEachIndexed { index, action ->
-      val pause = mode == ChatPermissionMode.ReadOnly && action.mode == ChatPermissionMode.Act
+      // A start never pauses the execution: on a running one the click only explains the refusal.
+      val pause = mode == ChatPermissionMode.ReadOnly && action.mode == ChatPermissionMode.Act && action.start == null
       ActionRow(
         label = if (pause) "Pause and ${action.label.replaceFirstChar { it.lowercase() }}" else action.label,
         action = action,

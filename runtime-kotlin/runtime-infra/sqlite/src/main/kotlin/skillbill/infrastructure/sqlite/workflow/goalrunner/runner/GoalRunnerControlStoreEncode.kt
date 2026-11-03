@@ -76,7 +76,14 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
     "goal_pull_request_url" to goalPullRequestUrl,
     GoalRunnerControlPayloadKeys.BLOCKED_REASON to goalBlockedReason,
     GoalRunnerControlPayloadKeys.QA_SELECTION to qaSelection?.wireValue,
-  )
+  ) +
+    listOfNotNull(
+      executionWorktreePath?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_PATH to it },
+      executionWorktreeRemovedAt?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_REMOVED_AT to it },
+      executionWorktreeRetentionReason?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON to it },
+      executionWorktreeRetentionDetail?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL to it },
+      launchWarning?.let { GoalRunnerControlPayloadKeys.LAUNCH_WARNING to it },
+    )
 
 private fun leaseTimestamp(
   value: Instant,

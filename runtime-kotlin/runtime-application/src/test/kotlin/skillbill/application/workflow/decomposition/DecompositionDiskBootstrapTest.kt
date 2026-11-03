@@ -19,6 +19,7 @@ import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
@@ -148,7 +149,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     assertFailsWith<IllegalArgumentException> {
@@ -201,7 +208,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     val result =
@@ -259,7 +272,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     val result =
@@ -312,7 +331,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     db.transaction { unitOfWork ->
@@ -402,7 +427,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
   }
 
@@ -447,7 +478,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     db.transaction { unitOfWork ->
@@ -524,18 +561,22 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
-    db.transaction { unitOfWork ->
-      continuation.continueDecomposedParentByIssueKey("SKILL-TEST", unitOfWork)
-    }
-    db.transaction { unitOfWork ->
-      continuation.continueDecomposedParentByIssueKey("SKILL-TEST", unitOfWork)
+    repeat(2) {
+      db.transaction { unitOfWork ->
+        continuation.continueDecomposedParentByIssueKey("SKILL-TEST", unitOfWork)
+      }
     }
     val parentRows = workflows.decomposedParentRows("SKILL-TEST")
-    assertEquals(1, parentRows.size, "Two calls must not mint a second parent row")
-    assertEquals("wfl-corrupt-idempotent", parentRows.single().workflowId, "Both calls must reuse the original row")
+    assertEquals(listOf("wfl-corrupt-idempotent"), parentRows.map { it.workflowId })
   }
 
   @Test
@@ -593,7 +634,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     db.transaction { unitOfWork ->
@@ -618,7 +665,13 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        checkout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     val result =

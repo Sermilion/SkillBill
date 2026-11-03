@@ -1,5 +1,6 @@
 package skillbill.ports.projectstore
 
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.ports.projectstore.model.ProjectStoreLocation
 import java.nio.file.Path
 
@@ -16,6 +17,7 @@ class FixedProjectStorePort(
       runEvidenceRoot = root.resolve("run-evidence"),
       trackingRoot = root.resolve("feature-task-tracking"),
       acceptanceRepairRoot = root.resolve("acceptance-repair"),
+      phasesRoot = root.resolve(ProjectStoreLayout.PHASES_DIRECTORY),
     )
 
   override fun resolve(workingDirectory: Path): ProjectStoreLocation = location

@@ -36,13 +36,13 @@ internal fun NewTaskOfferCard(
   agent: String,
   busy: Boolean,
   offer: NewTaskOffer,
-  onStart: (dev.skillbill.desktop.core.domain.model.NewTaskKind, String?) -> Unit,
+  onStart: (dev.skillbill.desktop.core.domain.model.NewTaskKind) -> Unit,
+  onRetryPrefix: (String) -> Unit,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  var keyChoice by remember { mutableStateOf("") }
   val prefixKind = offer.prefixKind
-  val canStart = !busy && !offer.starting
+  val canStart = !busy && !offer.starting && offer.started == null
   Column(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)
       .border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md))
@@ -53,27 +53,36 @@ internal fun NewTaskOfferCard(
     BasicText("base ${branch.ifBlank { "default branch" }} · $agent", style = type.monoSm.copy(color = colors.fgMuted))
     BasicText("plan › implement › audit › review › validate › qa › pr", style = type.monoSm.copy(color = colors.fgMuted))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      SbButton("Start goal run", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun, null) }, variant = SbButtonVariant.Primary, enabled = canStart)
-      SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly, null) }, enabled = canStart)
+      SbButton("Start goal run", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun) }, variant = SbButtonVariant.Primary, enabled = canStart)
+      SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly) }, enabled = canStart)
     }
-    if (offer.choices.isNotEmpty() && prefixKind != null) {
-      BasicText("Issue prefix or key", style = type.tXs.copy(color = colors.fgMuted))
-      SbMenu(offer.choices.map { choice -> SbMenuEntry.Item(choice, { onStart(prefixKind, choice) }, mono = true, enabled = canStart) })
-    } else if (prefixKind != null) {
-      BasicText("Issue prefix or key", style = type.tXs.copy(color = colors.fgMuted))
-      SbInput(
-        keyChoice,
-        { keyChoice = it },
-        modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
-        placeholder = "Issue prefix or key",
-        isError = keyChoice.isNotBlank() && !ISSUE_CHOICE.matches(keyChoice.trim()),
-        enabled = canStart,
-        onSubmit = { if (canStart && ISSUE_CHOICE.matches(keyChoice.trim())) onStart(prefixKind, keyChoice.trim()) },
-      )
-      SbButton("Use issue prefix or key", { onStart(prefixKind, keyChoice.trim()) }, size = SbControlSize.Small, enabled = canStart && ISSUE_CHOICE.matches(keyChoice.trim()))
-    }
+    if (prefixKind != null) IssuePrefixPicker(offer.choices, canStart, onRetryPrefix)
+    offer.started?.let { Callout(tone = FeedbackTone.Success, body = "$it. Send another message to start again.") }
     offer.problem?.let { Callout(tone = FeedbackTone.Error, body = it) }
   }
+}
+
+/** Lets the operator pick one of the suggested [choices], or type any prefix or key. */
+@Composable
+internal fun IssuePrefixPicker(choices: List<String>, enabled: Boolean, onChoose: (String) -> Unit) {
+  val type = SkillBillTheme.type
+  val colors = SkillBillTheme.colors
+  var keyChoice by remember { mutableStateOf("") }
+  val valid = ISSUE_CHOICE.matches(keyChoice.trim())
+  BasicText("Issue prefix or key", style = type.tXs.copy(color = colors.fgMuted))
+  if (choices.isNotEmpty()) {
+    SbMenu(choices.map { choice -> SbMenuEntry.Item(choice, { onChoose(choice) }, mono = true, enabled = enabled) })
+  }
+  SbInput(
+    keyChoice,
+    { keyChoice = it },
+    modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
+    placeholder = "Issue prefix or key",
+    isError = keyChoice.isNotBlank() && !valid,
+    enabled = enabled,
+    onSubmit = { if (enabled && valid) onChoose(keyChoice.trim()) },
+  )
+  SbButton("Use issue prefix or key", { onChoose(keyChoice.trim()) }, size = SbControlSize.Small, enabled = enabled && valid)
 }
 
 private val ISSUE_CHOICE = Regex("[A-Za-z0-9]+(?:-\\d+(?:\\.\\d+)?)?")

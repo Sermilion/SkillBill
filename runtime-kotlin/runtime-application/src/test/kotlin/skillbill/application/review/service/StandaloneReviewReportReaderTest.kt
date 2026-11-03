@@ -1,6 +1,7 @@
 package skillbill.application.review.service
 
 import skillbill.ports.idestatus.model.StandaloneReviewReportFinding
+import skillbill.review.model.ReviewFindingStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -90,5 +91,33 @@ class StandaloneReviewReportReaderTest {
 
     assertEquals(emptyList(), report.findings)
     assertEquals("Minor | wording only", report.summary)
+  }
+
+  @Test
+  fun `verified findings keep their rows and a rejected finding reads as a false positive`() {
+    val report =
+      StandaloneReviewReportReader.read(
+        """
+        - [F-001] Minor | High | specialist=bill-kotlin-code-review-testing | src/A.kt:9 | Nothing tests the failure branch.
+        - [F-002] [claude] Major | High | path="src/B.kt" | line=3 | The retry never stops.
+
+        All findings are Minor test-coverage gaps.
+
+        Verification:
+        - F-001: rejected
+        - F-002: confirmed
+        - F-003 (unstructured report text): confirmed
+        - W-001 (delegated coverage): complete
+        verdict: changes_requested
+        """.trimIndent(),
+      )!!
+
+    assertEquals(listOf("F-001", "F-002"), report.findings.map { it.ref })
+    assertEquals(
+      listOf(ReviewFindingStatus.FALSE_POSITIVE, ReviewFindingStatus.OPEN),
+      report.findings.map { it.status },
+    )
+    assertEquals("src/B.kt:3", report.findings[1].location)
+    assertEquals("changes_requested", report.verdict)
   }
 }

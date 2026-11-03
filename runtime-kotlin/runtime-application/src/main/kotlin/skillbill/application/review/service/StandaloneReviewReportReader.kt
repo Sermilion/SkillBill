@@ -2,10 +2,15 @@ package skillbill.application.review.service
 
 import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.StandaloneReviewReportFinding
+import skillbill.review.model.ReviewFindingStatus
 
 object StandaloneReviewReportReader {
   private val findingLine =
-    Regex("""^(?:\[(F-\d+)]\s+)?(blocker|critical|major|minor|nit)\s*\|\s*(.+)$""", RegexOption.IGNORE_CASE)
+    Regex(
+      """^(?:\[(F-\d+)]\s+)?(?:\[[^\]|]+]\s+)?(blocker|critical|major|minor|nit)\s*\|\s*(.+)$""",
+      RegexOption.IGNORE_CASE,
+    )
+  private val verificationLine = Regex("""^(F-\d+):\s*(confirmed|rejected|unresolved)$""", RegexOption.IGNORE_CASE)
   private val bulletPrefix = Regex("""^(?:[-*•]\s+)+""")
   private val verdictLine = Regex("""^verdict:\s*(\S+)\s*$""", RegexOption.IGNORE_CASE)
   private val findingsHeading = Regex("""^[#*_\s]*findings[:*_\s]*$""", RegexOption.IGNORE_CASE)
@@ -13,6 +18,8 @@ object StandaloneReviewReportReader {
   private val lanesLabel = Regex("""^[#*_\s]*lanes(?:\s+applied)?\s*[:*_]""", RegexOption.IGNORE_CASE)
   private val laneToken = Regex("""[a-z0-9]+(?:-[a-z0-9]+)*-code-review-[a-z0-9]+(?:-[a-z0-9]+)*""")
   private const val NO_FINDINGS = "NO_FINDINGS"
+  private const val REJECTED = "rejected"
+  const val VERIFICATION_HEADING = "Verification:"
   private const val REF_WIDTH = 3
   private const val ID_GROUP = 1
   private const val SEVERITY_GROUP = 2
@@ -24,9 +31,11 @@ object StandaloneReviewReportReader {
     val findings = mutableListOf<StandaloneReviewReportFinding>()
     val summary = mutableListOf<String>()
     val declaredLanes = mutableListOf<String>()
+    val refuted = mutableSetOf<String>()
     text.lines().forEach { raw ->
       val line = raw.trim().replace(bulletPrefix, "")
       val verdictMatch = verdictLine.matchEntire(line)
+      val verification = verificationLine.matchEntire(line)
       val finding = parseFinding(line, findings.size)
       val lanes =
         if (lanesLabel.containsMatchIn(
@@ -39,15 +48,23 @@ object StandaloneReviewReportReader {
         }
       when {
         verdictMatch != null -> verdict = verdictMatch.groupValues[1].lowercase()
+        verification != null -> {
+          val ref = verification.groupValues[1].uppercase()
+          if (verification.groupValues[2].equals(REJECTED, ignoreCase = true)) refuted += ref else refuted -= ref
+        }
         finding != null -> findings += finding
         lanes.isNotEmpty() -> declaredLanes += lanes
-        line == NO_FINDINGS || findingsHeading.matches(line) -> Unit
+        line == NO_FINDINGS || findingsHeading.matches(line) || line == VERIFICATION_HEADING -> Unit
         else -> summary += raw.trimEnd()
       }
     }
     val summaryText = summary.joinToString("\n").replace(excessBlankLines, "\n\n").trim().takeIf(String::isNotBlank)
     val lanes = (declaredLanes + findings.mapNotNull { it.specialist }).distinct()
-    return StandaloneReviewReport(verdict, summaryText, findings, lanes)
+    val verified =
+      findings.map { finding ->
+        if (finding.ref in refuted) finding.copy(status = ReviewFindingStatus.FALSE_POSITIVE) else finding
+      }
+    return StandaloneReviewReport(verdict, summaryText, verified, lanes)
   }
 
   private fun parseFinding(

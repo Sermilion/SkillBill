@@ -321,10 +321,10 @@ class ChangesWindowViewModelTest {
 
     override fun observe(baseline: ChangeBaseline?, running: Boolean): Flow<ChangesState> = emptyFlow()
 
-    override suspend fun fileDiff(worktreeRoot: String, baseSha: String, file: ChangedFile): FileDiffState = FileDiffState.Binary
+    override suspend fun fileDiff(baseline: ChangeBaseline, baseSha: String, file: ChangedFile): FileDiffState = FileDiffState.Binary
 
-    override suspend fun open(worktreeRoot: String, file: ChangedFile): OpenOutcome {
-      opened += worktreeRoot to file.path
+    override suspend fun open(baseline: ChangeBaseline, file: ChangedFile): OpenOutcome {
+      opened += baseline.worktreeRoot to file.path
       return outcome
     }
   }

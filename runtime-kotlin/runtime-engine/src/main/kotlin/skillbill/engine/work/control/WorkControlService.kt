@@ -5,6 +5,7 @@ import skillbill.engine.goal.GoalRunnerPauseStatus
 import skillbill.engine.goal.GoalRunnerStatusPort
 import skillbill.engine.goal.GoalRunnerStopStatus
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
@@ -84,11 +85,8 @@ public class WorkControlService(
 
   public fun prepareNewTask(
     repoRoot: Path,
-    requirements: String,
-    baseBranch: String?,
-    keyChoice: String?,
-    occupiedKeys: Set<String>,
-  ): NewTaskPreparation = newTaskStart.prepareNewTask(repoRoot, requirements, baseBranch, keyChoice, occupiedKeys)
+    request: NewTaskIntakeRequest,
+  ): NewTaskPreparation = newTaskStart.prepareNewTask(repoRoot, request)
 
   public fun startNewTask(
     repoRoot: Path,
@@ -101,8 +99,15 @@ public class WorkControlService(
     repoRoot: Path,
     phaseId: String,
     agentId: String,
-    intake: String? = null,
-  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId, intake)
+    target: String? = null,
+  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId, target)
+
+  public fun startOperation(
+    repoRoot: Path,
+    operationId: String,
+    target: String?,
+    agentId: String,
+  ): NewTaskStartResult = newTaskStart.startOperation(repoRoot, operationId, target, agentId)
 
   public fun recoveryPreview(
     target: WorkRunTarget,

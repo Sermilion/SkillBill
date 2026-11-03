@@ -88,6 +88,8 @@ internal fun assembleGoalRunnerStatusProjection(
     auditAcRetryCount = extras.auditAcRetryCount,
     noChangeStatus = extras.noChangeStatus,
     goalCompletedAt = extras.goalCompletedAt,
+    goalWorktree = extras.goalWorktree,
+    launchWarning = extras.launchWarning,
   )
 }
 

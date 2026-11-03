@@ -1,6 +1,7 @@
 package skillbill.ports.work.model
 
 import java.nio.file.Path
+import java.util.concurrent.CompletionStage
 
 data class WorkRunLaunchRequest(
   val repositoryRoot: Path,
@@ -16,8 +17,11 @@ sealed interface WorkRunLaunchKind {
   data class RuntimeCommand(val arguments: List<String>) : WorkRunLaunchKind
 }
 
+data class WorkRunExit(val code: Int, val failureLogLines: List<String>)
+
 sealed interface WorkRunLaunchResult {
-  data class Started(val logPath: Path) : WorkRunLaunchResult
+  /** [exit] completes when the runner exits, or is null when the launcher cannot observe that. */
+  data class Started(val logPath: Path, val exit: CompletionStage<WorkRunExit>? = null) : WorkRunLaunchResult
 
   data class Refused(val reason: String) : WorkRunLaunchResult
 }

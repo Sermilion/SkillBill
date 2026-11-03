@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatThread
+import dev.skillbill.desktop.feature.chat.QueuedChatMessage
 import dev.skillbill.desktop.feature.chat.show
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -38,9 +39,9 @@ internal class NewTaskChat(
   private val clock: Clock,
   val sessionId: String,
   var databaseSessionId: Long?,
-  private val repositoryRoot: String,
-  private val baseBranch: String?,
-  private val agent: ChatAgent,
+  val repositoryRoot: String,
+  val baseBranch: String?,
+  val agent: ChatAgent,
   initiallyStarted: Boolean = false,
   initiallyFirstTurnEnded: Boolean = initiallyStarted,
   initiallyPendingTurnLineIndex: Int? = null,
@@ -71,10 +72,23 @@ internal class NewTaskChat(
   }
 
   fun send(text: String, action: ChatSuggestedAction? = null, onAccepted: () -> Unit = {}) {
-    if (text.isBlank() || thread.busyState.value || repositoryMissing || closing) return
+    if (text.isBlank() || repositoryMissing || closing) return
+    thread.queuedState.value += QueuedChatMessage(text, action, pauseAndAct = false)
+    onAccepted()
+    drainQueue()
+  }
+
+  private fun drainQueue() {
+    if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
+    val next = thread.queuedState.value.firstOrNull() ?: return
+    thread.queuedState.value = thread.queuedState.value.drop(1)
+    startTurn(next.text, next.action)
+  }
+
+  private fun startTurn(text: String, action: ChatSuggestedAction?) {
     thread.append(ChatMessage.Operator(text, action))
     pendingTurnLineIndex = snapshotLines().lastIndex
-    pendingAcceptance = onAccepted
+    pendingAcceptance = null
     thread.busyState.value = true
     turnRunning = true
     val turn = scope.launch(job + dispatcher, start = CoroutineStart.LAZY) {
@@ -92,6 +106,9 @@ internal class NewTaskChat(
       }
     }
     turnJob = turn
+    turn.invokeOnCompletion {
+      if (!closing && job.isActive) scope.launch(job) { drainQueue() }
+    }
     turn.start()
   }
 
@@ -101,6 +118,7 @@ internal class NewTaskChat(
   /** Saves the current transcript before a draft-preserving exit. */
   suspend fun flush(): Boolean {
     closing = true
+    thread.queuedState.value = emptyList()
     val observer = unpromptedJob
     if (observer != null) observer.cancelAndJoin()
     val activeTurn = turnJob
@@ -122,9 +140,12 @@ internal class NewTaskChat(
   }
 
   fun end() {
+    thread.queuedState.value = emptyList()
     job.cancel()
     chat.end(sessionId)
   }
+
+  internal suspend fun persist(): Boolean = save()
 
   private fun observeUnprompted() {
     unpromptedJob = scope.launch(job + dispatcher) { chat.unprompted(sessionId).collect { showUnprompted(it) } }
@@ -164,6 +185,7 @@ internal class NewTaskChat(
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
     if (ownTurn) thread.busyState.value = false
     if (!save()) thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+    drainQueue()
   }
 
   private fun snapshotLines(): List<ChatHistoryLine> = thread.transcript.value.mapNotNull { message ->

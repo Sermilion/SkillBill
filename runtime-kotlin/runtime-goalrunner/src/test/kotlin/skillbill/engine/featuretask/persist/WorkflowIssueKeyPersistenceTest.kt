@@ -24,6 +24,7 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.time.Clock
 import kotlin.test.Test
@@ -48,7 +49,13 @@ class WorkflowIssueKeyPersistenceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     val firstRuntime =
@@ -100,7 +107,13 @@ class WorkflowIssueKeyPersistenceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+        projectCheckout =
+          ProjectCheckout(
+            TestRepositoryEnclosingRoot,
+            testProjectStore,
+            InPlaceGoalWorktreeResources,
+            NoopWorkflowGitOperations,
+          ),
       )
 
     assertFailsWith<SkillBillRuntimeException> {

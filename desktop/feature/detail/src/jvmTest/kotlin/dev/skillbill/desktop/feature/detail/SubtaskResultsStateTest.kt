@@ -24,7 +24,7 @@ class SubtaskResultsStateTest {
   fun `a missing goal status is unreadable except while pending`() {
     assertEquals(SubtaskResultsState.Unreadable("goal_status"), subtaskResultsState(StatusKind.Skipped, null, "goal_status"))
     assertEquals(
-      SubtaskResultsState.Shown(SubtaskReviewState.RunsAfterImplementation),
+      SubtaskResultsState.Shown(SubtaskReviewState.RunsAfterAudit),
       subtaskResultsState(StatusKind.Pending, null, "goal_status"),
     )
   }

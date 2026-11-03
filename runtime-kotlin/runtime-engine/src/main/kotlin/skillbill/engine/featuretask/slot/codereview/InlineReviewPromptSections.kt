@@ -126,12 +126,13 @@ internal fun InlineReviewRubricResolver?.recordInlineLanes(
 
 internal object InlineReviewPromptSections {
   const val REVIEW_DIRECTIVE: String =
-    "Review the last commit against its first parent in this repository. Fix every Blocker and Major " +
-      "finding in this same session before you emit. Emit remaining findings and a verdict of approved or " +
-      "changes_requested. Do not run `skill-bill phase review` or launch review subagents. Criterion-gap " +
+    "Review the last commit against its first parent in this repository. Fix every finding, including " +
+      "Minor and Nit, in this same session before you emit. List every finding with its status and a verdict " +
+      "of approved or changes_requested. Do not run `skill-bill phase review` or launch review subagents. " +
+      "Criterion-gap " +
       "detection remains exclusive to the audit phase. Do not run `./gradlew check`, the pack collect-all " +
       "gate, or `skill-bill phase validation`; validate owns those. For correctness, reliability, security, " +
-      "and contract findings: $MATERIALITY_RULE Do not report or fix such cases."
+      "and contract findings: $MATERIALITY_RULE Do not fix such cases; list them as refuted."
 
   const val VERIFY_FINDINGS_DIRECTIVE: String =
     "Verify every finding from the single preceding review pass against the subtask spec intent " +
@@ -148,9 +149,9 @@ internal object InlineReviewPromptSections {
       "as a no-op. See the mutating-phase idempotency contract below."
 
   private const val REVIEW_VALUE_CONTENT: String =
-    "State each remaining finding with its severity (blocker, major, minor, or nit) and a file reference, " +
-      "and say whether the review approved or requested changes. A Blocker or Major finding means changes " +
-      "were requested."
+    "State every finding with its severity (blocker, major, minor, or nit), a file reference, and its status " +
+      "(fixed, open, or refuted), and say whether the review approved or requested changes. A Blocker or Major " +
+      "finding still open means changes were requested."
 
   private const val VERIFY_FINDINGS_VALUE_CONTENT: String =
     "Name every review finding by its finding id and say for each whether verification verified it or " +

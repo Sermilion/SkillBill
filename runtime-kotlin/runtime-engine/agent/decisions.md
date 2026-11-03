@@ -24,6 +24,15 @@ Decision: Keep contract_version at 1.0 and widen target to a oneOf of the existi
 Reason: An older runtime never opens a branch directory because the hash differs, and it can still decode its own 1.0 pull-request tombstones. Those tombstones are live admission state, not discarded artifacts.
 Alternatives considered: Bumping the schema per AGENTS.md's loud-fail convention, rejected because it would block every previously monitored pull request on the next run.
 Revisit when: a later change needs ownership fields the 1.0 oneOf cannot carry without a bump.
+## [2026-11-02] Read run failure logs in the launcher, not the engine
+Context: Exit reporting first had WorkNewTaskStart read the run log. Three architecture tests in :runtime-core:repoTest failed on its java.nio.file.Files import, runCatching call and // comment.
+Decision: The engine no longer reads files. WorkRunLaunchResult.Started carries an optional exit stage with the exit code and failure log lines, and DetachedWorkRunLauncher reads the log only after a non-zero exit.
+Reason: This satisfies the architecture rules and replaces a swallowed read failure with a failure_log_unreadable diagnostic. Undecodable log bytes decode leniently, so they do not hide the stop reason.
+
+## [2026-11-02] Refuse a dash-prefixed target before launch
+Context: A target starting with "-" would be parsed as a CLI option if it were appended as a positional.
+Decision: launchStandaloneCommand refuses a trimmed target that starts with "-" before preflight or launch, with a reason that names the target.
+Reason: startStandalone and startOperation both go through this function, so monitor, verify, pr-review-fix and the other standalone phases are covered.
 
 ## [2026-11-01] A rejected plan bundle gets bounded repair turns before it blocks
 Context: The plan phase settled a full spec bundle whose scenarios lacked list bullets, and the readiness check blocked the run for the operator on attempt 1, after 15 minutes of planning. The plan policy's output-gate budget is 1, and the check reported one spec at a time.
@@ -176,6 +185,7 @@ Context: Concurrent standalone monitors of different PRs must not collide, and a
 Decision: Admission is keyed by the canonical common git dir and target PR, so linked worktrees contend on one lock. The worktree, branch and refs are invocation-specific under skill-bill/standalone-monitor in the common dir, and cleanup removes only an owned, clean, fully published worktree, never with force.
 Reason: A common-dir key makes linked worktrees see the same owner, and invocation tokens stop two runs sharing refs. Retaining with an exact reason and path is safer than guessing.
 Alternatives considered: Worktrees beside the caller checkout, rejected because they pollute it and are not keyed to the shared repository.
+Superseded in part (2026-11-02): the admission directory and worktree moved to the state dir, see "Standalone monitor worktrees live outside `.git/`".
 
 ## [2026-10-16] Stale monitor recovery requires positive death evidence of the exact owner
 Context: A crashed monitor leaves ownership state that blocks the same PR forever, but stealing it from a live or unknown owner would run two monitors on one worktree.
@@ -435,3 +445,15 @@ Reason: `updatedAt` is liveness, not identity. Status revision and execution id 
 Evidence: `WorkRunControlsTest` (`cancel accepts a target the runner heartbeat made older but refuses one for another execution`; the run-again test's options call with an older target). Replayed against a live goal on 2026-10-16: a target read just before Cancel was accepted, while `updatedAt` advanced every 10 seconds.
 
 Revisit when: Goal Pause and Stop (`WorkControlService.validate`) get the same treatment. They also compare `updatedAt` and the work store revision, which the heartbeat bumps too.
+
+## [2026-11-02] Standalone monitor worktrees live outside `.git/`
+
+Context: The owned repair worktree sat under `<common dir>/skill-bill/standalone-monitor/`. Claude Code treats every path under `.git/` as a sensitive file and refuses edits there, and org-managed settings can disable bypass mode, so the repair agent runs in default permission mode. On a real PR it found a two-file merge conflict, had every Edit refused as "a sensitive file", and reported the repair unresolved, so the monitor blocked.
+
+Decision: The admission directory, ownership record and worktree live under `<state dir>/standalone-monitor/<repo-key>/<target hash>/`. The repo key is the common-dir-derived key QA uses (`repositoryStateKey`), so linked worktrees still contend on one lock. The admission directory is canonicalized once it exists, so the worktree path matches what Git registers when the state dir sits behind a symlink.
+
+Reason: QA already keeps its agent-writable directory outside `.git/` for the same reason. Keeping the common-dir key preserves one owner per repository and PR.
+
+Alternatives considered: Asking operators to allow edits under `.git/`, rejected because allow rules do not lift the sensitive-file guard. A directory beside the checkout, rejected for the reasons above.
+
+Revisit when: Ownership written under the old `.git/skill-bill/standalone-monitor/` location matters. A retained worktree there no longer blocks a new monitor of that PR; remove it with `git worktree remove` once its work is saved.

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.monitor
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.workflow.repositoryStateKey
 import skillbill.ports.monitor.model.MonitorTargetIdentity
 import java.io.IOException
 import java.nio.channels.FileChannel
@@ -13,6 +14,7 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 private const val ADMISSION_HASH_CHARS = 32
+private const val MONITOR_DIRECTORY = "standalone-monitor"
 
 internal class HeldAdmission(
   val directory: Path,
@@ -43,23 +45,28 @@ internal object MonitorAdmissionFiles {
   private val reservedLockFiles = ConcurrentHashMap.newKeySet<Path>()
 
   fun directoryFor(
+    stateDir: Path,
     commonDir: Path,
     target: MonitorTargetIdentity,
-  ): Path = commonDir.resolve("skill-bill").resolve("standalone-monitor").resolve(hashOf(target.targetKey))
+  ): Path =
+    stateDir
+      .resolve(MONITOR_DIRECTORY)
+      .resolve(repositoryStateKey(commonDir))
+      .resolve(hashOf(target.targetKey))
 
   fun recordFile(directory: Path): Path = directory.resolve("ownership.json")
 
   fun tryLock(directory: Path): AdmissionAttempt {
-    val lockFile =
+    val realDirectory =
       try {
-        Files.createDirectories(directory)
-        directory.toRealPath().resolve("admission.lock")
+        Files.createDirectories(directory).toRealPath()
       } catch (failure: IOException) {
         throw ioFailure("lock the admission file in $directory", failure)
       }
+    val lockFile = realDirectory.resolve("admission.lock")
     if (!reservedLockFiles.add(lockFile)) return AdmissionAttempt.Contended
     return try {
-      lockReserved(directory, lockFile)
+      lockReserved(realDirectory, lockFile)
     } catch (failure: IOException) {
       unreserve(lockFile)
       throw ioFailure("lock the admission file in $directory", failure)

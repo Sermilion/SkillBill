@@ -145,6 +145,32 @@ class GitWorkChangesAdapterTest {
   }
 
   @Test
+  fun `committed branch range ignores HEAD and working tree state`() {
+    git(repo, "branch", "goal", "main")
+    git(repo, "branch", "target", base)
+    git(repo, "checkout", "target")
+    write("mod.txt", "dirty checkout\n")
+
+    val listed =
+      assertIs<WorkChangeListResult.Listed>(
+        adapter.changes(WorkChangeBaseline.CommittedBranchRange(repo.toString(), "target", "goal")),
+      )
+
+    assertEquals(base, listed.baseSha)
+    assertEquals(listOf("b.kt", "bin.dat", "mod.txt"), listed.files.map { it.path })
+  }
+
+  @Test
+  fun `committed branch range names a missing goal branch`() {
+    val result =
+      assertIs<WorkChangeListResult.BaseUnavailable>(
+        adapter.changes(WorkChangeBaseline.CommittedBranchRange(repo.toString(), "main", "missing-goal")),
+      )
+
+    assertTrue("missing-goal" in result.reason, result.reason)
+  }
+
+  @Test
   fun `uncommittedChanges lists staged, unstaged and untracked changes against HEAD`() {
     write("mod.txt", "x\ny\nz\n")
     git(repo, "add", "mod.txt")

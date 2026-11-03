@@ -12,6 +12,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -213,7 +214,13 @@ private fun newService(): WorkflowService =
     goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
-    projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+    projectCheckout =
+      ProjectCheckout(
+        TestRepositoryEnclosingRoot,
+        testProjectStore,
+        InPlaceGoalWorktreeResources,
+        NoopWorkflowGitOperations,
+      ),
   )
 
 private fun newBlockedImplementService(

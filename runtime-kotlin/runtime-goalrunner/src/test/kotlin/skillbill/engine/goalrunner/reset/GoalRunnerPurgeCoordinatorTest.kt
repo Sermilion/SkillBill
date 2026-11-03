@@ -21,11 +21,13 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecActionKind
+import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.projectstore.FixedProjectStorePort
@@ -42,6 +44,10 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.goalstate.LocalGoalRuntimeStateFileStore
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
+import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
 import java.nio.file.Files
@@ -56,6 +62,59 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalRunnerPurgeCoordinatorTest {
+  @Test
+  fun `worktree retention refuses purge before deleting rows or directories`() {
+    val path = Path.of("/tmp/goal-purge-retained/SKILL-245/checkout")
+    val store =
+      InMemoryGoalManifestStore(
+        manifest(subtaskCount = 1).copy(issueKey = "SKILL-245"),
+        initialControlState = GoalRunnerControlState(executionWorktreePath = path.toString()),
+      )
+    var purgeCalled = false
+    val guardedStore =
+      object : GoalRunnerManifestStore by store {
+        override fun discoverPurgeOwnership(
+          issueKey: String,
+          repoRoot: Path,
+        ): GoalPurgeOwnership {
+          val state = checkNotNull(store.loadDurableByIssueKey(issueKey)).copy(parentWorkflowId = "wf-parent")
+          return GoalPurgeOwnership(listOf(state), setOf("wf-parent"))
+        }
+
+        override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
+          purgeCalled = true
+          return GoalPurgeTableCounts()
+        }
+      }
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = guardedStore,
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            goalWorktrees =
+              object : GoalWorktreeResources by InPlaceGoalWorktreeResources {
+                override fun retentionVerdict(request: GoalWorktreeSettleRequest) =
+                  GoalWorktreeSettlement.Retained(
+                    MonitorRetentionReason.UNPUBLISHED_COMMITS,
+                    request.worktreePath,
+                    "the worktree has 1 commit missing from remote tracking refs",
+                  )
+              },
+          ),
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        decompositionManifestStore = TestDecompositionManifestStore,
+      )
+    val root = Files.createTempDirectory("goal-purge-retained-root")
+
+    val result = service.purge(GoalRunnerPurgeRequest("SKILL-245", root))
+
+    assertContains(result.refusalReason.orEmpty(), "unpublished_commits")
+    assertContains(result.refusalReason.orEmpty(), "git worktree remove --force $path")
+    assertFalse(purgeCalled)
+    assertTrue(result.removedPaths.isEmpty())
+  }
+
   @Test
   fun `live parent execution lease refuses purge`() {
     val goalManifest = manifest(subtaskCount = 1).copy(issueKey = "SKILL-245")

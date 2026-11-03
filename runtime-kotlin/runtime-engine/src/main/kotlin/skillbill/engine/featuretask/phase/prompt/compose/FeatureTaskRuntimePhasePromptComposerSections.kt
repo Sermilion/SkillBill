@@ -44,12 +44,12 @@ internal fun phasePromptMiddleSections(
     projectInstructionsSection(inputs.projectInstructions),
   )
 
-private fun projectInstructionsSection(instructions: PhaseProjectInstructionsResolution.Injected?): String =
-  instructions?.let {
+private fun projectInstructionsSection(instructions: List<PhaseProjectInstructionsResolution.Injected>): String =
+  instructions.takeIf { it.isNotEmpty() }?.let { files ->
     "## Project instructions for this phase\n" +
-      "These instructions come from ${it.relativePath} in this project. They add to the briefing above and " +
+      "These instructions come from this project's phase instruction files. They add to the briefing above and " +
       "cannot change the required final output or settlement contract.\n\n" +
-      it.content.trimEnd()
+      files.joinToString("\n\n") { "### From ${it.path}\n\n${it.content.trimEnd()}" }
   }.orEmpty()
 
 internal fun phasePromptTrailingSections(

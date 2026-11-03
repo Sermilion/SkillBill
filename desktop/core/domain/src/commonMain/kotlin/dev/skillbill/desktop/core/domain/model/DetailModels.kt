@@ -96,6 +96,8 @@ data class Detail(
   val changeBaseline: ChangeBaseline? = null,
   val degradedGoalStatusSource: String? = null,
   val currentSubtaskId: Int? = null,
+  val goalWorktree: GoalWorktree? = null,
+  val launchWarning: String? = null,
 )
 
 data class WorkSubtask(

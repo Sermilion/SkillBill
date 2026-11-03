@@ -33,10 +33,16 @@ public class StandalonePhaseRegistrationFactory(
     issueKey: String?,
     workflowId: String,
     workBranch: String? = null,
+    goalScoped: Boolean = false,
   ): IdeStatusWorkflowRegistration {
     val canonicalRoot = repositories.canonicalPath(repoRoot)
     return IdeStatusWorkflowRegistration(
-      repositoryIdentity = repositories.repositoryIdentity(canonicalRoot),
+      repositoryIdentity =
+        if (goalScoped) {
+          repositories.primaryRepositoryIdentity(canonicalRoot)
+        } else {
+          repositories.repositoryIdentity(canonicalRoot)
+        },
       branchCorrelation = workBranch ?: branchSource.checkedOutBranch(canonicalRoot) ?: "HEAD",
       issueKey = issueKey,
       workflowId = workflowId,

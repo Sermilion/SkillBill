@@ -4,8 +4,6 @@ import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
-import skillbill.goalrunner.GoalRunnerPlanner
-import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.workflow.decomposition.branchForFinalPullRequest
@@ -20,58 +18,58 @@ internal data class GoalRunnerBranchPlan(
   val validateBase: Boolean,
 )
 
+internal data class GoalPullRequestFactSection(
+  val heading: String,
+  val lines: List<String>,
+)
+
 public fun DecompositionManifest.toPullRequestRequest(
   repoRoot: Path,
   goalQaSummary: GoalQaSummary = GoalQaSummary.NotRecorded,
   goalAssessment: GoalAssessmentRecordRead = GoalAssessmentRecordRead.Absent,
   qaSummary: (DecompositionSubtask) -> GoalSubtaskQaSummary? = { null },
   unknownScenarios: (DecompositionSubtask) -> GoalSubtaskUnknownScenarios? = { null },
+): GoalPullRequestRequest =
+  pullRequestRequestOf(repoRoot, pullRequestFacts(goalQaSummary, goalAssessment, qaSummary, unknownScenarios))
+
+internal fun DecompositionManifest.pullRequestFacts(
+  goalQaSummary: GoalQaSummary,
+  goalAssessment: GoalAssessmentRecordRead,
+  qaSummary: (DecompositionSubtask) -> GoalSubtaskQaSummary?,
+  unknownScenarios: (DecompositionSubtask) -> GoalSubtaskUnknownScenarios?,
+): List<GoalPullRequestFactSection> {
+  val qa = subtasks.mapNotNull { subtask -> qaSummary(subtask)?.let { "- ${subtask.name}: ${it.pullRequestText()}" } }
+  val untraced =
+    subtasks.mapNotNull { subtask ->
+      (unknownScenarios(subtask) as? GoalSubtaskUnknownScenarios.Recorded)?.let {
+        "- ${subtask.name}: ${it.pullRequestText()}"
+      }
+    }
+  return listOfNotNull(
+    GoalPullRequestFactSection(MOBILE_QA, listOf("- Goal: ${goalQaSummary.pullRequestText()}") + qa),
+    GoalPullRequestFactSection(GOAL_ASSESSMENT, goalAssessment.pullRequestLines()),
+    untraced.takeIf { it.isNotEmpty() }?.let { GoalPullRequestFactSection(INTERACTION_TRACE, it) },
+  )
+}
+
+internal fun DecompositionManifest.pullRequestRequestOf(
+  repoRoot: Path,
+  facts: List<GoalPullRequestFactSection>,
 ): GoalPullRequestRequest {
-  val title = "[$issueKey] ${featureName.toPullRequestTitle()}"
   val body =
     buildString {
-      appendLine("# Summary")
+      appendLine("## Summary")
       appendLine()
-      appendLine("This pull request delivers ${featureName.toPullRequestTitle()} through the completed goal subtasks:")
-      subtasks.forEach { subtask ->
-        append("- ${subtask.name}")
-        appendLine()
-      }
+      appendLine("Delivers ${featureName.toPullRequestTitle()} for $issueKey in ${subtasks.size} goal subtask(s).")
       appendLine()
-      appendLine("## Feature Flags")
+      appendLine("## Changes")
       appendLine()
-      appendLine("N/A")
+      subtasks.forEach { subtask -> appendLine("- ${subtask.name}") }
       appendLine()
-      appendLine("## Media")
+      appendLine("## Testing")
       appendLine()
-      appendLine("N/A")
-      appendLine()
-      appendLine("# How Has This Been Tested?")
-      appendLine()
-      appendLine(
-        "Every subtask completed the configured review, audit, validation, and history gates before " +
-          "this pull request was opened.",
-      )
-      val qa = subtasks.mapNotNull { subtask -> qaSummary(subtask)?.let { subtask.name to it } }
-      appendLine()
-      appendLine("## Mobile QA")
-      appendLine()
-      appendLine("- Goal: ${goalQaSummary.pullRequestText()}")
-      qa.forEach { (name, summary) -> appendLine("- $name: ${summary.pullRequestText()}") }
-      appendLine()
-      appendLine("## Goal Assessment")
-      appendLine()
-      goalAssessment.pullRequestLines().forEach { appendLine(it) }
-      val untraced =
-        subtasks.mapNotNull { subtask ->
-          (unknownScenarios(subtask) as? GoalSubtaskUnknownScenarios.Recorded)?.let { subtask.name to it }
-        }
-      if (untraced.isNotEmpty()) {
-        appendLine()
-        appendLine("## Interaction Trace")
-        appendLine()
-        untraced.forEach { (name, recorded) -> appendLine("- $name: ${recorded.pullRequestText()}") }
-      }
+      appendLine(GATES_PASSED)
+      appendFacts(facts, "###")
     }
   return GoalPullRequestRequest(
     repoRoot = repoRoot,
@@ -79,9 +77,50 @@ public fun DecompositionManifest.toPullRequestRequest(
     featureName = featureName,
     baseBranch = baseBranch,
     headBranch = featureBranch.orEmpty().ifBlank { branchForFinalPullRequest() },
-    title = title,
+    title = "[$issueKey] ${featureName.toPullRequestTitle()}",
     body = body,
   )
+}
+
+internal fun DecompositionManifest.pullRequestDescriptionInstructions(
+  pullRequest: GoalPullRequestRequest,
+  facts: List<GoalPullRequestFactSection>,
+): String =
+  buildString {
+    appendLine(
+      "This pull request covers the whole goal ${pullRequest.title}, not a single subtask. Its subtasks are:",
+    )
+    subtasks.forEach { subtask -> appendLine("- ${subtask.name}") }
+    appendLine()
+    appendLine(
+      "Open it as a draft from `${pullRequest.headBranch}` into `${pullRequest.baseBranch}`, with a title " +
+        "that starts with `[$issueKey]`. If `${pullRequest.baseBranch}` no longer exists on the remote, target " +
+        "the repository's default branch and say so at the top of the description.",
+    )
+    appendLine(
+      "Describe the goal's full diff from its merge base with `${pullRequest.baseBranch}` to HEAD, across " +
+        "every subtask. The goal's parent spec is recorded at `$parentSpecPath`.",
+    )
+    appendLine(
+      "Fill every section of the pull request template from that diff and spec. Put the runtime facts below " +
+        "inside the template's section about how the change was tested, in reviewer-friendly prose. Keep each " +
+        "outcome, warning, skip, and open finding accurate, and claim no validation they do not show.",
+    )
+    appendLine()
+    appendLine(GATES_PASSED)
+    appendFacts(facts, "###")
+  }.trimEnd()
+
+private fun StringBuilder.appendFacts(
+  facts: List<GoalPullRequestFactSection>,
+  headingMarker: String,
+) {
+  facts.forEach { section ->
+    appendLine()
+    appendLine("$headingMarker ${section.heading}")
+    appendLine()
+    section.lines.forEach(::appendLine)
+  }
 }
 
 private fun String.toPullRequestTitle(): String =
@@ -90,18 +129,6 @@ private fun String.toPullRequestTitle(): String =
     .joinToString(" ") { word ->
       word.replaceFirstChar { character -> character.uppercase() }
     }
-
-internal fun DecompositionManifest.goalWorkBranch(): String? {
-  val branch =
-    when (executionModel) {
-      DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK -> featureBranch
-      DecompositionExecutionModel.STACKED_BRANCHES -> {
-        val selected = (GoalRunnerPlanner.selectNext(this) as? GoalRunnerSelection.Run)?.decision?.subtask?.id
-        stackBranches.firstOrNull { it.subtaskId == selected }?.branch ?: featureBranch
-      }
-    }
-  return branch?.trim()?.takeIf(String::isNotBlank)
-}
 
 internal fun DecompositionManifest.branchPlanFor(subtaskId: Int): GoalRunnerBranchPlan =
   when (executionModel) {
@@ -157,3 +184,10 @@ private fun GoalQaSummary.pullRequestText(): String =
         "warning: $reason".takeUnless { outcome?.reason?.contains(reason) == true },
       ).joinToString("; ")
   }
+
+private const val MOBILE_QA = "Mobile QA"
+private const val GOAL_ASSESSMENT = "Goal Assessment"
+private const val INTERACTION_TRACE = "Interaction Trace"
+private const val GATES_PASSED =
+  "Every subtask completed the configured review, audit, validation, and history gates before " +
+    "this pull request was opened."

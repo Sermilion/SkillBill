@@ -365,6 +365,8 @@ Every directive needs a non-blank `model`. Omit `effort` to leave it unset; `""`
 
 Put a Markdown file named after a phase in `.skill-bill/phases/` to add project-specific instructions to that phase's prompt. Every agent launched for that phase in this repository gets the text.
 
+You can also put phase files in the project store, under `~/.skill-bill/projects/<project-id>/phases/`. `skill-bill project path` prints the store. The store is keyed by the repository's history, so every clone and worktree of the project reads the same files, and nothing is committed. Use it for instructions that are yours rather than the team's, such as how to reach a device's debug settings.
+
 ```text
 .skill-bill/phases/
 ├── implement.md   # e.g. "Use the existing Result type; never throw from use cases."
@@ -374,9 +376,9 @@ Put a Markdown file named after a phase in `.skill-bill/phases/` to add project-
 
 Name the file after the phase step, not the stage: `implement.md`, not `implementation.md`. Valid names are `intake`, `preplan`, `plan`, `plan_subtasks`, `implement`, `simplify`, `audit`, `audit_plan_fix`, `audit_implement_fix`, `review`, `verify_findings`, `implement_fix`, `build`, `validate`, `qa`, `qa_fix`, `write_history`, `commit_push`, `pr`, `monitor`, `monitor_fix`, and `present_findings`. `code_review.md` is an alias for `review.md`; if both exist, `review.md` wins.
 
-The runtime reads the file at each launch and adds it as a "Project instructions for this phase" section after the briefing and before the required output. The text can steer how the agent works. It cannot change the phase's output or settlement contract. The launch briefing records the file path and its sha256, not its content.
+Naming and aliases are the same in both places. The runtime reads the files at each launch and adds them as a "Project instructions for this phase" section after the briefing and before the required output. When both places have a file for the phase, both are added, the repository file first, each under its own path. The text can steer how the agent works. It cannot change the phase's output or settlement contract. The launch briefing records each file's path and sha256, not its content.
 
-A bad file never blocks a run. Files over 16 KiB, blank files, invalid UTF-8, and unknown phase names are skipped with a warning, and the phase runs without them. Phases the runtime runs itself without launching an agent ignore their file.
+A bad file never blocks a run. Files over 16 KiB, blank files, invalid UTF-8, and unknown phase names are skipped with a warning, and the phase runs without them. A bad file in one place does not stop the other place's file from being added. Phases the runtime runs itself without launching an agent ignore their files.
 
 `./install.sh` adds `!.skill-bill/phases/` and `!.skill-bill/phases/**` to `.gitignore`, so the files are tracked and shared with the team. In an existing repository, re-run the installer or add those two lines by hand.
 

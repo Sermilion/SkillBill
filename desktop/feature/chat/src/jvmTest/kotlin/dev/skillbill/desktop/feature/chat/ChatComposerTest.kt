@@ -15,7 +15,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
-import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
@@ -37,6 +36,7 @@ import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.core.ui.shell.FloatingPane
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
 import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -49,7 +49,7 @@ class ChatComposerTest {
   @Test
   fun `reopening a busy chat focuses its draft and Enter queues without waiting for agent preparation`() = runTest {
     val workspace = ChatWorkspace(
-      FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(),
+      FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
       testNewTaskDraft(),
     )

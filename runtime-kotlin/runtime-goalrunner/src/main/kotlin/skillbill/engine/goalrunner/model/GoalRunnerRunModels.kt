@@ -86,6 +86,18 @@ public sealed interface GoalRunnerRunEvent {
     public val repairs: List<GoalRunnerAppliedRepair>,
   ) : GoalRunnerRunEvent
 
+  public data class LaunchingCheckoutDirty(
+    override val issueKey: String,
+    public val checkoutPath: String,
+    public val changedPathCount: Int,
+    public val revision: String,
+  ) : GoalRunnerRunEvent {
+    public val warning: String
+      get() =
+        "$changedPathCount uncommitted path(s) in $checkoutPath are not part of this goal, " +
+          "which runs from $revision in its own worktree."
+  }
+
   public data class Completed(
     override val issueKey: String,
     public val completedCount: Int,

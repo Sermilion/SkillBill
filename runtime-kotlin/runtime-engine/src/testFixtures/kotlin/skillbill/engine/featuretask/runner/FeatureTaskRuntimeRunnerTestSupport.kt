@@ -407,6 +407,7 @@ class RunnerHarness(
   val repository: InMemoryRuntimeWorkflowRepository get() = io.repository
   val gitOperations: RecordingWorkflowGitOperations get() = io.gitOperations
   val ledgerRows: List<UnaddressedFinding> get() = io.database.ledgerRows
+  val outcomeRows: List<ReviewFindingOutcomeRecord> get() = io.database.outcomeRows.toList()
 
   fun seedRawReviewResults(state: GoalSubtaskReviewState) {
     val artifacts = repository.taskRuntimeArtifacts(WORKFLOW_ID).toMutableMap()
@@ -1499,7 +1500,7 @@ private fun runnerExecutionEntry(
       fixture.admission,
       resolver,
       repositories,
-      FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
+      FeatureTaskExecutionIdentityResolver(database, repositories, RUNNER_TEST_PROJECT_STORE),
     )
   }
   val facts = runnerSelectionFacts(config)
@@ -1531,7 +1532,7 @@ private fun runnerExecutionEntry(
     fixture.admission,
     resolver,
     repositories,
-    FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
+    FeatureTaskExecutionIdentityResolver(database, repositories, RUNNER_TEST_PROJECT_STORE),
   )
 }
 
@@ -2787,6 +2788,8 @@ private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosi
     override fun optionalRealPath(path: Path): Path? = null
 
     override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
+
+    override fun primaryRepositoryIdentity(repoRoot: Path): String = repositoryIdentity
 
     override fun primaryRepositoryRoot(repoRoot: Path): Path = canonicalPath(repoRoot)
   }

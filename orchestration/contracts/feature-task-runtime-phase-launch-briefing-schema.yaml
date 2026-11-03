@@ -48,6 +48,16 @@ properties:
     type: array
     items: { type: string }
   project_instructions:
+    description: >-
+      The injected phase instruction files, repository file first, then the project store file. Rows written
+      before the project store source carry a single object.
+    oneOf:
+      - $ref: "#/$defs/project_instructions_file"
+      - type: array
+        minItems: 1
+        items: { $ref: "#/$defs/project_instructions_file" }
+$defs:
+  project_instructions_file:
     type: object
     additionalProperties: false
     required:

@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.slot.writehistory
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -9,9 +11,28 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraft
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftDisposition
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftPayloadKeys
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 internal object GoalChildHistoryDraftOutputPersistence {
+  fun completedOutputCheck(
+    run: PhaseRun,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): PhaseStepOutputCheck {
+    val continuation = run.request.goalContinuation ?: return PhaseStepOutputCheck.Accept
+    val parentId = continuation.parentWorkflowId?.takeIf(String::isNotBlank) ?: return PhaseStepOutputCheck.Accept
+    val produced = JsonCodec.anyToStringAnyMap(outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS])
+    val value = (produced?.get(SharedPayloadKeys.VALUE) as? String).orEmpty()
+    return try {
+      decodeDraft(outputPayload(value), parentId, continuation.subtaskId, run.request.workflowId).validate()
+      PhaseStepOutputCheck.Accept
+    } catch (failure: SkillBillRuntimeException) {
+      PhaseStepOutputCheck.Retry(failure.message.orEmpty())
+    } catch (failure: IllegalArgumentException) {
+      PhaseStepOutputCheck.Retry(failure.message.orEmpty())
+    }
+  }
+
   fun save(
     recorder: PhaseRunGoal,
     run: PhaseRun,
@@ -42,12 +63,12 @@ internal object GoalChildHistoryDraftOutputPersistence {
     val parentId =
       continuation.parentWorkflowId?.takeIf(String::isNotBlank)
         ?: throw invalid("Goal-child history draft is required, but parent workflow identity is missing.")
-    val payload = outputPayload(output)
+    val payload = outputPayload(output.output.value)
     return decodeDraft(payload, parentId, continuation.subtaskId, run.request.workflowId)
   }
 
-  private fun outputPayload(output: NormalizedFeatureTaskRuntimePhaseOutput): Map<String, Any?> {
-    return JsonCodec.parseObjectOrNull(output.output.value)
+  private fun outputPayload(value: String): Map<String, Any?> {
+    return JsonCodec.parseObjectOrNull(value)
       ?.let(JsonCodec::jsonElementToValue)?.let(JsonCodec::anyToStringAnyMap)
       ?: throw invalid("Goal-child history draft output must be one JSON object.")
   }

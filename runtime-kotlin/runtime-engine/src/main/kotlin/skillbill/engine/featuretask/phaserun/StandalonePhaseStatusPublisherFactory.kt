@@ -82,9 +82,10 @@ public class StandalonePhaseStatusPublisherFactory(
     issueKey: String?,
     workflowId: String,
     workBranch: String? = null,
+    goalScoped: Boolean = false,
   ) {
     catchingNonCancellation {
-      val registration = registrations.workflowRegistration(repoRoot, issueKey, workflowId, workBranch)
+      val registration = registrations.workflowRegistration(repoRoot, issueKey, workflowId, workBranch, goalScoped)
       database.transaction { unitOfWork -> unitOfWork.standalonePhaseStatuses.registerWorkflow(registration) }
     }.onFailure { error ->
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status workflow registration failed", error)

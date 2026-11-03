@@ -7,9 +7,11 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.toNewTaskKind
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -21,6 +23,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.ChatMessage
+import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,7 +39,19 @@ import kotlin.time.Clock
 
 data class NewTaskRepository(val root: String, val name: String)
 
-data class NewTaskOffer(val starting: Boolean = false, val prefixKind: NewTaskKind? = null, val choices: List<String> = emptyList(), val problem: String? = null)
+data class NewTaskOffer(
+  val starting: Boolean = false,
+  val prefixKind: NewTaskKind? = null,
+  val choices: List<String> = emptyList(),
+  val action: ChatSuggestedAction? = null,
+  val problem: String? = null,
+  val started: String? = null,
+)
+
+private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
+
+private fun NewTaskKind.startName(): String =
+  NewTaskActionKind.entries.firstOrNull { it.toNewTaskKind() == this }?.wire ?: name.lowercase()
 
 /** What the operator set up on New task, with its chat. It lives with the window, so navigation and session switches keep it. */
 @Inject
@@ -75,7 +90,7 @@ class NewTaskDraft(
   private fun canAdmitTurn(message: String): Boolean {
     val current = chatState.value
     return !closing && message.isNotBlank() && repository != null && selectedAgent != null && selectedAgent?.agentId == agentId &&
-      current?.thread?.busy?.value != true && current?.repositoryMissing != true && !offerState.value.starting
+      current?.repositoryMissing != true && !offerState.value.starting
   }
 
   /** Sends the typed text, opening the chat on the first message, and clears it. It does nothing unless [canSend] holds. */
@@ -92,62 +107,94 @@ class NewTaskDraft(
 
   private fun sendTurn(submitted: String, action: ChatSuggestedAction?) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, problem = null, started = null)
     current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
-  internal fun start(kind: NewTaskKind, keyChoice: String? = null, monitorIntake: String? = null) {
+  internal fun start(kind: NewTaskKind, keyChoice: String? = null, target: String? = null, action: ChatSuggestedAction? = null) {
     val current = chatState.value
     if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
-    if (current == null && kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) return
-    val agent = selectedAgent ?: return
-    val root = repository?.root ?: return
-    val requirements = current?.let { newTaskRequirements(it.thread.transcript.value) }.orEmpty()
-    val textAtStart = text
+    if (current == null && kind in RUN_KINDS) return
+    if (kind in RUN_KINDS && offerState.value.started != null) return
+    if (selectedAgent == null || repository == null) return
+    offerState.value = NewTaskOffer(starting = true, started = offerState.value.started)
+    startRequest(kind, keyChoice, target, action, current)
+  }
+
+  internal fun retryPrefix(keyChoice: String) {
+    val pending = offerState.value
+    val kind = pending.prefixKind ?: return
+    val current = chatState.value
+    if (kind !in GOAL_KINDS || closing || pending.starting || current?.thread?.busy?.value == true) return
+    if (current == null || pending.started != null) return
+    if (selectedAgent == null || repository == null) return
+    offerState.value = pending.copy(starting = true, problem = null)
+    startRequest(kind, keyChoice, null, pending.action, current)
+  }
+
+  private fun startRequest(
+    kind: NewTaskKind,
+    keyChoice: String?,
+    target: String?,
+    action: ChatSuggestedAction?,
+    current: NewTaskChat?,
+  ) {
+    val agent = checkNotNull(selectedAgent)
+    val root = checkNotNull(repository).root
+    val transcript = current?.thread?.transcript?.value.orEmpty()
+    val requirements = if (kind in GOAL_KINDS && action != null) action.instruction else {
+      listOfNotNull(action?.instruction, newTaskRequirements(transcript))
+        .filter(String::isNotBlank)
+        .joinToString("\n\n")
+    }
+    val title = if (kind in GOAL_KINDS && action != null) action.title else action?.title ?: current?.let { newTaskTitle(transcript) }
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
-    val startRequest =
-      NewTaskStart(
-        root,
-        requirements,
-        baseBranch.ifBlank { null },
-        agent.agentId,
-        kind,
-        keyChoice,
-        expectedSessionId,
-        monitorIntake?.trim()?.takeIf(String::isNotBlank),
-      )
-    offerState.value = offerState.value.copy(starting = true, problem = null)
+    val startRequest = NewTaskStart(
+      root,
+      requirements,
+      baseBranch.ifBlank { null },
+      agent.agentId,
+      kind,
+      keyChoice,
+      expectedSessionId,
+      title = title,
+      target = target?.trim()?.takeIf(String::isNotBlank) ?: action?.target?.trim()?.takeIf(String::isNotBlank),
+    )
     scope.launch {
       try {
         val outcome = workControls.startNewTask(startRequest)
         when (outcome) {
           is NewTaskStartOutcome.Started -> {
-            val message = when (outcome.kind) {
-              NewTaskKind.GoalRun -> "Started goal run ${outcome.issueKey}"
-              NewTaskKind.PlanOnly -> "Started plan ${outcome.issueKey}"
-              else -> "Started ${outcome.kind.name.lowercase()}"
-            }
-            toasts.show(ToastMessage(ToastTone.Confirmation, message))
-            if (kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly) && current != null && chatState.value === current) {
-              if (text == textAtStart) text = ""
-              discard()
+            if (kind in GOAL_KINDS) {
+              val message = when (outcome.kind) {
+                NewTaskKind.GoalRun -> "Started goal run ${outcome.issueKey}"
+                NewTaskKind.PlanOnly -> "Started plan ${outcome.issueKey}"
+                else -> "Started ${outcome.kind.name.lowercase()}"
+              }
+              toasts.show(ToastMessage(ToastTone.Confirmation, message))
+              if (kind in RUN_KINDS && ownsChat(current)) {
+                offerState.value = NewTaskOffer(started = message)
+              }
+            } else {
+              reportStandalone(current, kind, outcome)
             }
           }
-          is NewTaskStartOutcome.NeedsPrefix -> {
+          is NewTaskStartOutcome.NeedsKey -> {
             if (ownsChat(current)) {
-              offerState.value = offerState.value.copy(prefixKind = kind, choices = outcome.choices, problem = null)
+              offerState.value = NewTaskOffer(starting = true, prefixKind = kind, choices = outcome.choices, action = action)
             } else {
-              toasts.show(ToastMessage(ToastTone.Problem, "Choose an issue prefix to start this run."))
+              toasts.show(ToastMessage(ToastTone.Problem, "Choose an issue key to start this run."))
             }
           }
           is NewTaskStartOutcome.Refused -> {
             if (outcome.message == "The database changed. Try again." && current != null && ownsChat(current)) {
               current.databaseSessionId = (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
             }
-            showStartProblem(current, outcome.message)
+            showStartProblem(current, kind, outcome.message)
           }
-          is NewTaskStartOutcome.Failed -> showStartProblem(current, readProblemText(outcome.problem))
+          is NewTaskStartOutcome.Failed -> showStartProblem(current, kind, readProblemText(outcome.problem))
         }
       } finally {
         offerState.value = offerState.value.copy(starting = false)
@@ -178,6 +225,30 @@ class NewTaskDraft(
   }
 
   internal fun launch(block: suspend () -> Unit) = scope.launch { block() }
+
+  /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
+  internal fun rebindChat() {
+    val current = chatState.value ?: return
+    val agent = selectedAgent ?: return
+    val repo = repository ?: return
+    if (closing || current.repositoryMissing || current.thread.busy.value || offerState.value.starting) return
+    val branch = baseBranch.ifBlank { null }
+    if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
+    val lines = current.thread.transcript.value
+    val firstEnded = current.firstTurnEnded.value
+    val previousId = current.sessionId
+    current.end()
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, firstTurnEnded = firstEnded)
+    next.thread.replaceTranscript(lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}."))
+    scope.launch {
+      current.job.join()
+      chats.deleteSavedChat(previousId)
+      if (!next.persist() && chatState.value === next) {
+        next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+      }
+      refreshSaved()
+    }
+  }
 
   /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
   internal suspend fun resume(entry: ChatHistoryEntry): Boolean {
@@ -261,15 +332,32 @@ class NewTaskDraft(
 
   private fun ownsChat(current: NewTaskChat?): Boolean = current != null && chatState.value === current
 
-  private fun showStartProblem(current: NewTaskChat?, message: String) {
+  // A goal or plan problem belongs to the offer card; any other start reports in the chat that offered it.
+  private fun showStartProblem(current: NewTaskChat?, kind: NewTaskKind, message: String) {
+    when {
+      !ownsChat(current) -> toasts.show(ToastMessage(ToastTone.Problem, message))
+      kind in GOAL_KINDS -> offerState.value = offerState.value.copy(problem = message)
+      else -> checkNotNull(current).thread.append(ChatMessage.Notice(message))
+    }
+  }
+
+  private fun reportStandalone(current: NewTaskChat?, kind: NewTaskKind, outcome: NewTaskStartOutcome.Started) {
+    val name = kind.startName()
     if (ownsChat(current)) {
-      offerState.value = offerState.value.copy(problem = message)
+      checkNotNull(current).thread.append(ChatMessage.Notice("Started $name. Follow it in Work."))
     } else {
-      toasts.show(ToastMessage(ToastTone.Problem, message))
+      toasts.show(ToastMessage(ToastTone.Confirmation, "Started $name"))
+    }
+    val awaitFailure = outcome.awaitFailure ?: return
+    scope.launch {
+      val reason = awaitFailure() ?: return@launch
+      showStartProblem(current, kind, "$name stopped. $reason")
     }
   }
 
   private fun clearChatFeedback() {
-    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), problem = null)
+    offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, problem = null, started = null)
   }
 }
+
+private val RUN_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
