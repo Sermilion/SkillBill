@@ -61,8 +61,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
-  val onOfferStart = remember(draft) { { kind: NewTaskKind, keyChoice: String? -> draft.start(kind, keyChoice) } }
-  val chipStart = remember(host.onStart) { host.onStart?.let { start -> { wire: String -> start(wire, null) } } }
+  val onOfferStart = remember(draft) { { kind: NewTaskKind -> draft.start(kind) } }
   LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
