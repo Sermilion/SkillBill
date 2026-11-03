@@ -1,3 +1,11 @@
+## [2026-11-03] SKILL-471 Preserve suggested start input
+Areas: desktop/feature/chat
+- Suggested goal and plan clicks carry the selected action through the screen host to NewTaskStart, using its instruction and exact nullable title instead of transcript-derived values.
+- A pending prefix choice retains that action for retry. A new turn or launch clears or replaces it; Goal run card starts and retries use transcript-derived requirements and title.
+- Other start kinds retain target routing, home chips pass no action, and existing start guards and launch context remain in place.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-03] SKILL-521 Goal run card is contextual
 Areas: desktop/feature/chat
 - showGoalOfferCard replaces first-turn-plus-stands-aside. A finished first turn is not enough. The card appears when the operator asks to run a goal or plan, the latest reply offers start:goal or start:plan, or a prefix choice, start problem or started confirmation is pending.
