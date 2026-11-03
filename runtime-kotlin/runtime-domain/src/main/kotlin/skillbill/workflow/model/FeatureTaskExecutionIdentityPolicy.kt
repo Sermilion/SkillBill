@@ -13,6 +13,8 @@ object FeatureTaskExecutionIdentityPolicy {
 
   private const val MAX_ECHOED_VALUE_LENGTH = 120
 
+  private val WINDOWS_DRIVE_ABSOLUTE_PREFIX = Regex("^[A-Za-z]:[/\\\\]")
+
   fun validate(
     identity: FeatureTaskExecutionIdentity,
     sourceLabel: String = identity.workflowId,
@@ -83,7 +85,7 @@ object FeatureTaskExecutionIdentityPolicy {
   fun repositoryRootFromIdentity(identity: String): String? {
     if (!identity.startsWith(REPOSITORY_IDENTITY_PREFIX)) return null
     val root = identity.removePrefix(REPOSITORY_IDENTITY_PREFIX)
-    return root.takeIf { it.startsWith('/') && '\u0000' !in it }
+    return root.takeIf(::isAbsoluteRepositoryRoot)
   }
 
   fun validateLookupRequest(
@@ -129,9 +131,13 @@ object FeatureTaskExecutionIdentityPolicy {
 
   private fun validRepositoryIdentity(value: String): Boolean =
     value.startsWith(REPOSITORY_IDENTITY_PREFIX) &&
-      value.length > REPOSITORY_IDENTITY_PREFIX.length &&
-      value.substring(REPOSITORY_IDENTITY_PREFIX.length).startsWith('/') &&
+      isAbsoluteRepositoryRoot(value.removePrefix(REPOSITORY_IDENTITY_PREFIX)) &&
       value.none { it == '\r' || it == '\n' }
+
+  private fun isAbsoluteRepositoryRoot(root: String): Boolean {
+    if (root.isEmpty() || '\u0000' in root) return false
+    return root.startsWith('/') || WINDOWS_DRIVE_ABSOLUTE_PREFIX.containsMatchIn(root)
+  }
 
   private fun validGovernedSpecPath(value: String): Boolean =
     (
