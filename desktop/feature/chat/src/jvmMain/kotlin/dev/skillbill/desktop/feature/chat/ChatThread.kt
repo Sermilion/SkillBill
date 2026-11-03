@@ -38,10 +38,14 @@ internal class ChatThread(private val clock: Clock) {
     messages.value = transcript
   }
 
-  /** The latest [limit] operator messages and finished agent replies, as a resumed chat shows them again. */
+  /**
+   * The latest [limit] operator messages and finished agent replies, as a resumed chat shows them again. Images are never
+   * saved; an image-only message keeps its `[Image #N]` labels as text so it neither restores as an empty bubble nor
+   * leaves the saved chat untitled.
+   */
   fun historyLines(limit: Int = SAVED_LINES): List<ChatHistoryLine> = messages.value.mapNotNull { message ->
     when {
-      message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text, selectedAction = message.action)
+      message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
       message is ChatMessage.Agent && !message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty()) ->
         ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
       else -> null
@@ -100,6 +104,9 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
     }
   }
 }
+
+private fun ChatMessage.Operator.savedText(): String =
+  text.ifBlank { images.indices.joinToString(" ") { imageLabel(it + 1) } }
 
 /** The message a saved line shows as when a chat resumes. */
 internal fun restored(line: ChatHistoryLine): ChatMessage = when (line.role) {

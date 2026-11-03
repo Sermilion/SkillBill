@@ -179,13 +179,22 @@ private fun OperatorMessage(message: ChatMessage.Operator) {
   BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
     Column(Modifier.widthIn(max = maxWidth * 0.85f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
       val shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 4.dp)
-      SelectionContainer {
-        Column(
-          Modifier.border(1.dp, colors.border, shape).background(colors.bgOverlay, shape).padding(horizontal = 12.dp, vertical = 8.dp),
-          verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-          BasicText(action?.label ?: message.text, style = type.tBase.copy(color = colors.fg))
-          if (action != null && showInstruction) BasicText(message.text, style = type.tSm.copy(color = colors.fgMuted))
+      Column(
+        Modifier.border(1.dp, colors.border, shape).background(colors.bgOverlay, shape).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        if (action != null || message.text.isNotBlank()) {
+          SelectionContainer {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              BasicText(action?.label ?: message.text, style = type.tBase.copy(color = colors.fg))
+              if (action != null && showInstruction) BasicText(message.text, style = type.tSm.copy(color = colors.fgMuted))
+            }
+          }
+        }
+        if (message.images.isNotEmpty()) {
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            message.images.forEachIndexed { index, image -> ImagePreviewChip(index + 1, image) }
+          }
         }
       }
       if (action != null) {

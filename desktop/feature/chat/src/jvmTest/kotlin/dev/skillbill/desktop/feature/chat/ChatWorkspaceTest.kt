@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
@@ -106,6 +107,42 @@ class ChatWorkspaceTest {
     assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
       it.text == "$REMOVED_WORKTREE_CHAT_NOTICE /repo."
     })
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `an image-only message is queued and its images reach the turn request while text-only turns carry none`() = runTest {
+    val item = workItem("SKILL-450")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val session = workspace.session(item.id)!!
+    val image = ChatImage(byteArrayOf(1, 2, 3), "image/png")
+
+    workspace.send(item.id, "", listOf(image))
+    runCurrent()
+    assertEquals(listOf(image), chat.requests.last().images)
+    assertEquals(listOf(image), session.transcript.value.filterIsInstance<ChatMessage.Operator>().single().images)
+
+    workspace.send(item.id, "text only")
+    runCurrent()
+    assertEquals(emptyList(), chat.requests.last().images)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `an image that finishes normalizing after its chat closed is dropped`() = runTest {
+    val item = workItem("SKILL-450")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+
+    workspace.close(item.id)
+    workspace.addPastedImage(item.id, ChatImage(byteArrayOf(1), "image/png"))
+
+    assertNull(workspace.pastedImages[item.id])
     workspace.closeAll()
   }
 

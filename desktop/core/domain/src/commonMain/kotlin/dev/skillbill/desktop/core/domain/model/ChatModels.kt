@@ -26,7 +26,23 @@ sealed interface ChatScope {
   data class NewTask(override val repositoryRoot: String, val baseBranch: String?) : ChatScope
 }
 
-/** One operator message; [firstTurn] opens [sessionId], later turns resume it. */
+/**
+ * One image pasted into a chat message. [mediaType] is `"image/png"` or `"image/jpeg"`. An image's number in a message is its
+ * 1-based position in the list. [bytes] is not copied, so callers must not change it after construction.
+ */
+class ChatImage(val bytes: ByteArray, val mediaType: String) {
+  override fun equals(other: Any?): Boolean =
+    other is ChatImage && mediaType == other.mediaType && bytes.contentEquals(other.bytes)
+
+  override fun hashCode(): Int = 31 * mediaType.hashCode() + bytes.contentHashCode()
+
+  override fun toString(): String = "ChatImage($mediaType, ${bytes.size} bytes)"
+}
+
+/**
+ * One operator message; [firstTurn] opens [sessionId], later turns resume it. [images] live for the session only and are
+ * never saved.
+ */
 data class ChatTurnRequest(
   val sessionId: String,
   val firstTurn: Boolean,
@@ -34,6 +50,7 @@ data class ChatTurnRequest(
   val scope: ChatScope,
   val mode: ChatPermissionMode,
   val prompt: String,
+  val images: List<ChatImage> = emptyList(),
 )
 
 /** The run a new-task action starts when clicked; [wire] is its value in the action block and on the start chips. */

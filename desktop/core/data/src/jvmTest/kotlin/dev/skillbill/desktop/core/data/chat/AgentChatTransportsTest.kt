@@ -4,15 +4,22 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.util.UUID
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 
@@ -160,5 +167,112 @@ class AgentChatTransportsTest {
     val prompt = launcher.commands[1].argv.last()
     assertTrue("Operator:\noperator prompt\n\nYou:\nFirst answer" in prompt)
     assertTrue(prompt.endsWith("The operator's new message:\n\noperator prompt"))
+  }
+
+  // Codex reads images from files, so each pasted image must reach it as a real absolute path, and leave with the session.
+  @Test
+  fun `codex gets each pasted image as an absolute file path and end removes the files`() = runTest {
+    val sessionId = "images-" + UUID.randomUUID()
+    val launcher = ScriptedLauncher(listOf(lines("""{"type":"turn.completed"}""")))
+    val transport = CodexChatTransport(host, launcher, store, RecordingDiagnostics())
+    val images = listOf(ChatImage(byteArrayOf(1, 2, 3), "image/png"), ChatImage(byteArrayOf(4, 5), "image/jpeg"))
+    try {
+      transport.run(chatRequest(agent = ChatAgent("codex", null, null)).copy(sessionId = sessionId, images = images)).toList()
+
+      val stdin = launcher.commands.single().stdin
+      val footer = stdin.substringAfter("operator prompt\n\nAttached images (open each file to view it):\n").lines()
+      assertEquals(2, footer.size)
+      val paths = footer.mapIndexed { index, line ->
+        assertTrue(line.startsWith("[Image #${index + 1}] "))
+        Path.of(line.removePrefix("[Image #${index + 1}] "))
+      }
+      paths.forEachIndexed { index, path ->
+        assertTrue(path.isAbsolute)
+        assertEquals(path.toRealPath(), path)
+        assertContentEquals(images[index].bytes, Files.readAllBytes(path))
+      }
+      assertTrue(paths[0].toString().endsWith(".png") && paths[1].toString().endsWith(".jpg"))
+
+      transport.end(sessionId)
+
+      assertFalse(Files.exists(chatImageDirectory(sessionId)))
+    } finally {
+      transport.end(sessionId)
+    }
+  }
+
+  // Cursor reads the footer from stdin and Junie from argv; Junie's saved history must hold the typed text, not temp paths.
+  @Test
+  fun `cursor and junie carry the image footer and junie history keeps only the typed text`() = runTest {
+    val sessionId = "images-" + UUID.randomUUID()
+    val image = ChatImage(byteArrayOf(9, 8, 7), "image/png")
+    val cursorLauncher = ScriptedLauncher(listOf(lines("""{"type":"result","subtype":"success","is_error":false}""")))
+    val junieLauncher = ScriptedLauncher(listOf(lines("Seen"), lines("Next")))
+    val cursor = CursorChatTransport(host, cursorLauncher, store, RecordingDiagnostics())
+    val junie = JunieChatTransport(host, junieLauncher, store, RecordingDiagnostics())
+    try {
+      cursor.run(chatRequest(agent = ChatAgent("cursor", null, null)).copy(sessionId = sessionId, images = listOf(image))).toList()
+      junie.run(chatRequest(agent = ChatAgent("junie", null, null)).copy(sessionId = sessionId, images = listOf(image))).toList()
+
+      listOf(cursorLauncher.commands.single().stdin, junieLauncher.commands.single().argv.last()).forEach { text ->
+        val path = Path.of(text.substringAfter("[Image #1] ").lines().first())
+        assertTrue(path.isAbsolute)
+        assertContentEquals(image.bytes, Files.readAllBytes(path))
+      }
+
+      junie.run(chatRequest(agent = ChatAgent("junie", null, null), firstTurn = false).copy(sessionId = sessionId)).toList()
+
+      val prompt = junieLauncher.commands[1].argv.last()
+      assertTrue("Operator:\noperator prompt\n\nYou:" in prompt)
+      assertFalse("Attached images" in prompt)
+    } finally {
+      cursor.end(sessionId)
+    }
+  }
+
+  // A pasted image that cannot be saved must fail the turn before any agent starts, and not poison the next turn.
+  @Test
+  fun `an image that cannot be saved fails the turn without starting a process`() = runTest {
+    val sessionId = "images-" + UUID.randomUUID()
+    val launcher = ScriptedLauncher(listOf(lines("Fine")))
+    val junie = JunieChatTransport(host, launcher, store, RecordingDiagnostics())
+    Files.createDirectories(chatImageRoot())
+    val blocker = Files.createFile(chatImageDirectory(sessionId))
+    try {
+      val failed = junie.run(
+        chatRequest(agent = ChatAgent("junie", null, null)).copy(sessionId = sessionId, images = listOf(ChatImage(byteArrayOf(1), "image/png"))),
+      ).toList()
+
+      val failure = failed.single() as ChatEvent.Failed
+      assertEquals(ChatFailure.ProcessFailed, failure.failure)
+      assertTrue(failure.detail.orEmpty().startsWith("Could not save a pasted image: "))
+      assertTrue(launcher.commands.isEmpty())
+
+      junie.run(chatRequest(agent = ChatAgent("junie", null, null)).copy(sessionId = sessionId)).toList()
+
+      assertEquals(1, launcher.commands.size)
+      assertFalse("Attached images" in launcher.commands.single().argv.last())
+    } finally {
+      Files.deleteIfExists(blocker)
+    }
+  }
+
+  // The temp root can be shared, so a link planted as the session directory must be removed, never followed into its target.
+  @Test
+  fun `end removes a symlinked session directory without deleting the link target`() = runTest {
+    val sessionId = "images-" + UUID.randomUUID()
+    val outside = createTempDirectory("chat-images-outside")
+    val kept = Files.write(outside.resolve("kept.txt"), byteArrayOf(1))
+    Files.createDirectories(chatImageRoot())
+    val link = Files.createSymbolicLink(chatImageDirectory(sessionId), outside)
+    try {
+      CodexChatTransport(host, ScriptedLauncher(emptyList()), store, RecordingDiagnostics()).end(sessionId)
+
+      assertFalse(Files.exists(link, LinkOption.NOFOLLOW_LINKS))
+      assertTrue(Files.exists(kept))
+    } finally {
+      Files.deleteIfExists(link)
+      outside.toFile().deleteRecursively()
+    }
   }
 }

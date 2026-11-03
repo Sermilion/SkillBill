@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.WorkKind
@@ -20,8 +21,11 @@ sealed interface ChatMessage {
   /** The templated execution state shown before the agent answers; [detail] is the reason, stall time or progress. */
   data class StateLine(val text: String, val state: ExecutionState? = null, val phase: String? = null, val detail: String? = null) : ChatMessage
 
-  /** An operator message; [action] is the suggested action it came from, whose instruction is [text]. */
-  data class Operator(val text: String, val action: ChatSuggestedAction? = null) : ChatMessage
+  /**
+   * An operator message; [action] is the suggested action it came from, whose instruction is [text]. [images] were pasted with it
+   * and live in memory for the session only.
+   */
+  data class Operator(val text: String, val action: ChatSuggestedAction? = null, val images: List<ChatImage> = emptyList()) : ChatMessage
 
   /** An agent answer; [streaming] while its turn runs, [tools] in the order the agent used them. */
   data class Agent(

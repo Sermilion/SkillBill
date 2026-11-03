@@ -1,3 +1,19 @@
+## [2026-11-03] Keep pasted chat images in the session, not in chat history
+Context: Operator messages can carry pasted images, but ChatStore history lines hold text only and images are large.
+Decision: Images stay on QueuedChatMessage and ChatMessage.Operator for the running session. ChatThread.historyLines and restored name their fields explicitly and drop images. No persistence code or history contract change was added.
+Reason: Persisting bytes would grow the history file and need a legacy read path for old lines. The agent already receives the images on the turn.
+Revisit when: restored chats must show or resend earlier images.
+
+## [2026-11-03] Normalize pasted images before they reach the turn request
+Context: Clipboard images can be arbitrarily large and are sent to the agent CLI.
+Decision: normalizedChatImage scales to a 1568 px longest edge and encodes PNG; above 3,750,000 bytes it re-encodes as JPEG at 0.85 on white. ChatComposer takes encodeContext, defaulting to Dispatchers.Default, so tests encode inline without polling.
+Reason: Agent image limits are lower than raw screenshot sizes, and encoding on the UI thread would freeze the composer. The injectable context avoids timing-based tests.
+
+## [2026-11-03] Return focus to the input when a pasted image chip is removed
+Context: The remove button leaves composition with its chip, which dropped focus from the input, so the next paste shortcut never reached onPreviewKeyEvent.
+Decision: The chip's onRemove calls focus.requestFocus() after removePastedImage, as submit already does.
+Reason: Remove then paste again is a normal flow and must keep working from the keyboard.
+
 ## [2026-11-03] Footer Chats only flips pane visibility
 Context: Cmd/Ctrl+L and Work-detail Chat call toggleChat(item), which opens leftover SelectionHolder and can create a tab. Terminal toggle creates a tab when none exist. toggleChat(null) does not hide an already-open empty pane because shownId is null with no tabs.
 Decision: The footer calls ChatCommands.toggleChatPane, which only hides or setPaneOpen(true). It does not read SelectionHolder and does not call open, newChat, or openChat.

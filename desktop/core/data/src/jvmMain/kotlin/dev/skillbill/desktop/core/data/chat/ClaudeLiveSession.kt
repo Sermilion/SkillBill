@@ -3,14 +3,18 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import java.util.Base64
 
 /**
  * One `claude` process kept across a chat session's turns. Claude replays each operator message with the uuid the app gave
@@ -41,8 +45,8 @@ internal class ClaudeLiveSession(
     true
   }
 
-  fun send(uuid: String, text: String) {
-    input.trySend(userMessage(uuid, text))
+  fun send(uuid: String, text: String, images: List<ChatImage>) {
+    input.trySend(userMessage(uuid, text, images))
   }
 
   fun accept(output: ChatProcessOutput) {
@@ -124,11 +128,33 @@ internal class ClaudeLiveSession(
   }.also { input.close() }
 }
 
-private fun userMessage(uuid: String, text: String): String = buildJsonObject {
+private fun userMessage(uuid: String, text: String, images: List<ChatImage>): String = buildJsonObject {
   put("type", "user")
   put("uuid", uuid)
   putJsonObject("message") {
     put("role", "user")
-    put("content", text)
+    if (images.isEmpty()) {
+      put("content", text)
+    } else {
+      putJsonArray("content") {
+        if (text.isNotBlank()) {
+          addJsonObject {
+            put("type", "text")
+            put("text", text)
+          }
+        }
+        images.forEach { image ->
+          addJsonObject {
+            put("type", "image")
+            putJsonObject("source") {
+              put("type", "base64")
+              put("media_type", image.mediaType)
+              // The basic encoder is standard Base64 without line breaks; the MIME encoder would wrap lines.
+              put("data", Base64.getEncoder().encodeToString(image.bytes))
+            }
+          }
+        }
+      }
+    }
   }
 }.toString()

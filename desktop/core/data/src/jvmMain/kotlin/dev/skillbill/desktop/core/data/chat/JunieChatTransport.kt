@@ -27,11 +27,11 @@ class JunieChatTransport(
 ) : ChatTransport {
   override val agentId = "junie"
 
-  override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
+  override fun run(request: ChatTurnRequest): Flow<ChatEvent> = turnWithImages(request) { text ->
     val history = if (request.scope is dev.skillbill.desktop.core.domain.model.ChatScope.NewTask) {
       store.newTaskHistory(request.sessionId)
     } else if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
-    val prompt = juniePrompt(scopeSystemPrompt(request.scope, request.mode), history, request.prompt)
+    val prompt = juniePrompt(scopeSystemPrompt(request.scope, request.mode), history, text)
     val command = ChatCommand(
       argv = agentCommand("junie", junieArguments(request, prompt), host.variables["SHELL"]),
       workingDirectory = request.scope.repositoryRoot,
@@ -39,7 +39,7 @@ class JunieChatTransport(
       stdin = "",
     )
     val reply = StringBuilder()
-    return runChatTurn(launcher, diagnostics, command, JunieTextDecoder).onEach { event ->
+    runChatTurn(launcher, diagnostics, command, JunieTextDecoder).onEach { event ->
       when (event) {
         is ChatEvent.TextDelta -> reply.append(event.text)
         ChatEvent.Completed -> store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
@@ -47,6 +47,8 @@ class JunieChatTransport(
       }
     }
   }
+
+  override fun end(sessionId: String) = deleteChatImages(sessionId)
 }
 
 internal fun junieArguments(request: ChatTurnRequest, prompt: String): List<String> = buildList {

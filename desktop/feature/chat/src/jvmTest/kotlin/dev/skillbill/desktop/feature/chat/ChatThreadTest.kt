@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
@@ -29,5 +30,22 @@ class ChatThreadTest {
     )
     assertEquals(selected, (restored(lines[0]) as ChatMessage.Operator).action)
     assertEquals(suggested, (restored(lines[1]) as ChatMessage.Agent).actions)
+  }
+
+  @Test
+  fun `images stay in the session and a restored operator message has none`() {
+    val thread = ChatThread(Clock.System)
+    thread.append(ChatMessage.Operator("look", images = listOf(ChatImage(byteArrayOf(1), "image/png"))))
+
+    assertEquals(listOf(ChatMessage.Operator("look", null)), thread.historyLines().map(::restored))
+  }
+
+  @Test
+  fun `an image-only message is saved as its image labels and no image data`() {
+    val thread = ChatThread(Clock.System)
+    val image = ChatImage(byteArrayOf(1), "image/png")
+    thread.append(ChatMessage.Operator("", images = listOf(image, image)))
+
+    assertEquals(listOf(ChatMessage.Operator("[Image #1] [Image #2]", null)), thread.historyLines().map(::restored))
   }
 }

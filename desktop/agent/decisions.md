@@ -1,3 +1,9 @@
+## [2026-11-03] Give non-Claude agents pasted images as file paths, Claude as content blocks
+Context: Chat turns can carry pasted images. Claude's stream-json input accepts base64 image content blocks. Codex, Cursor and Junie take only text on stdin or argv.
+Decision: Claude receives image blocks in the user message. The other three save each image to a per-session temp directory and append a footer listing absolute file paths. Each deletes the directory in end(sessionId), and saved history keeps only the typed prompt.
+Reason: Inline bytes need a per-agent protocol the other CLIs lack, while a file path works for any agent that can read files. Keeping paths out of saved history stops later resends from pointing at deleted files.
+Revisit when: Codex, Cursor or Junie accept inline image input, or an agent cannot read files outside its checkout.
+
 ## [2026-11-03] Read removed goal changes from committed refs
 Context: A removed goal worktree cannot supply working-tree changes, but its branch commits remain accessible from the primary checkout.
 Decision: Read the goal branch range from the primary checkout and hide Uncommitted and Outside scopes. Keep All available and prevent opening files from the removed worktree.
