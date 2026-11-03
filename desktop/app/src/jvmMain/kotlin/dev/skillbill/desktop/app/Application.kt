@@ -12,6 +12,7 @@ import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.nucleusApplication
 import dev.skillbill.desktop.app.display.resolveDesktopUiScale
 import dev.skillbill.desktop.app.host.HostIntent
+import dev.skillbill.desktop.app.host.withShellPath
 import dev.skillbill.desktop.app.tray.TrayHost
 import dev.skillbill.desktop.app.motion.OsReducedMotionReader
 import dev.skillbill.desktop.app.motion.ReducedMotionRead
@@ -27,7 +28,8 @@ fun main() {
   val diagnostics = DiagnosticsSwitch(
     System.getenv("SKILL_BILL_DESKTOP_DIAGNOSTICS") == "1" || System.getProperty("skillbill.desktop.diagnostics") == "true",
   )
-  val host = HostEnvironment(System.getenv(), System.getProperty("user.home"), System.getProperty("user.dir"))
+  val environment = withShellPath(System.getenv(), System.getProperty("os.name", ""))
+  val host = HostEnvironment(environment, System.getProperty("user.home"), System.getProperty("user.dir"))
   val component = AppComponent::class.create(host, diagnostics)
   component.databaseSessionManager.start()
   component.startAtLoginSync.start()
