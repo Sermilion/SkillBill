@@ -14,7 +14,7 @@ import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.workflow.decomposition.runtime.isActiveGoalRuntime
+import skillbill.workflow.decomposition.runtime.isOccupyingActiveGoalRuntime
 import java.nio.file.Path
 
 internal data class ControlLive(
@@ -103,7 +103,10 @@ internal class SpecLiveGoalReader(
   ): String? =
     identities.firstNotNullOfOrNull { identity ->
       val candidates = unit.workList.goalParentCandidatePage(issueKey, identity, 0, WorkPaginationLimits.MAX_PAGE_SIZE)
-      val chosen = candidates.firstOrNull { isActiveGoalRuntime(it.manifestStatus, it.hasUnsettledSubtasks) }
+      val chosen =
+        candidates.firstOrNull {
+          isOccupyingActiveGoalRuntime(it.workflowStatus, it.manifestStatus, it.hasUnsettledSubtasks)
+        }
       (chosen ?: candidates.firstOrNull())?.workflowId
     }
 }

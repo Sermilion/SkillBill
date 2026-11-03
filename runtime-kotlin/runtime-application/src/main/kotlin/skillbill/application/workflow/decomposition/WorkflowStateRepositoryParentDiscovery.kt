@@ -17,6 +17,7 @@ import skillbill.workflow.decomposition.runtime.hasDecompositionPlan
 import skillbill.workflow.decomposition.runtime.hasDecompositionRuntimeArtifact
 import skillbill.workflow.decomposition.runtime.isActiveGoalRuntime
 import skillbill.workflow.decomposition.runtime.isGoalContinuationChildWorkflow
+import skillbill.workflow.decomposition.runtime.isOccupyingActiveGoalRuntime
 import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -228,7 +229,10 @@ private fun WorkflowStateRepository.decomposedParentCandidates(
 private fun List<DecomposedParentCandidate>.preferredDecomposedParent(
   normalizedIssueKey: String,
 ): WorkflowStateRecord? {
-  val activeCandidates = filter { candidate -> candidate.manifest.isActiveGoalRuntime() }
+  val activeCandidates =
+    filter { candidate ->
+      candidate.manifest.isOccupyingActiveGoalRuntime(candidate.record.workflowStatus)
+    }
   if (activeCandidates.size > 1) {
     error(
       "Ambiguous decomposed parent workflows for '$normalizedIssueKey': " +
