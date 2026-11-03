@@ -48,6 +48,149 @@
       }
     },
     {
+      "name": "diff_comment_add",
+      "description": "Add a local diff comment thread for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repo_root",
+          "body"
+        ],
+        "properties": {
+          "repo_root": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Repository root path."
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Agent comment body."
+          },
+          "path": {
+            "type": "string",
+            "description": "Repository-relative file path."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Line number for an inline anchor."
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "old",
+              "new"
+            ],
+            "description": "Diff side for a line anchor."
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "Agent identifier."
+          }
+        }
+      }
+    },
+    {
+      "name": "diff_comment_list",
+      "description": "List local diff comment threads for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repo_root"
+        ],
+        "properties": {
+          "repo_root": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Repository root path."
+          },
+          "branch": {
+            "type": "string",
+            "description": "Branch name; defaults to the current branch when omitted."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "open",
+              "resolved",
+              "declined"
+            ],
+            "description": "Filter threads by state."
+          }
+        }
+      }
+    },
+    {
+      "name": "diff_comment_reply",
+      "description": "Reply to a local diff comment thread for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "thread_id",
+          "body"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Diff comment thread id."
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Agent reply body."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "refuted",
+              "skipped",
+              "failed"
+            ],
+            "description": "Agent outcome for the reply."
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "Agent identifier."
+          }
+        }
+      }
+    },
+    {
+      "name": "diff_comment_set_state",
+      "description": "Change the state of a local diff comment thread for the skill-bill desktop Changes window. These are not GitHub PR comments.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "thread_id",
+          "state"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Diff comment thread id."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved",
+              "declined"
+            ],
+            "description": "New thread state."
+          }
+        }
+      }
+    },
+    {
       "name": "doctor",
       "description": "Check skill-bill installation health.",
       "inputSchema": {

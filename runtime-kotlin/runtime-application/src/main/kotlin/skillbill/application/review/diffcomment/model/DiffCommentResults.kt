@@ -57,3 +57,11 @@ data class DiffCommentAgentThreadRequest(
   val severity: String? = null,
   val findingRef: String? = null,
 )
+
+data class DiffCommentAgentThreadInput(
+  val path: String?,
+  val side: String?,
+  val line: Int?,
+  val body: String,
+  val agentId: String?,
+)
