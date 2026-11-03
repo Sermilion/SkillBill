@@ -1,3 +1,12 @@
+## [2026-11-03] SKILL-468 subtask 4: route desktop views by worktree state
+Areas: desktop, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-infra, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-goalrunner
+- Runtime projects and persists active, retained and removed goal worktree state. Desktop detail displays that state and launch warnings.
+- Active and retained goals route Changes, terminals and chat to the goal worktree. Removed goals route terminal and new chat turns to the primary checkout, and chat starts a new session when its checkout changes.
+- Removed goals read Changes from the committed goal branch range. Uncommitted and Outside scopes are hidden, and files cannot be opened from the removed worktree. A missing goal branch reports an unavailable baseline.
+- Limits: macOS and Windows desktop checks were not run on the Linux host. QA reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-31] SKILL-455 desktop change scope data
 Areas: desktop/core/domain, desktop/core/data
 - ChangeScope models and pure rules resolve All, subtask ranges, Outside and Uncommitted reads, selectable ranges, file touch counts and conservative hunk attribution. reusable
