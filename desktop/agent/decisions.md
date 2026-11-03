@@ -1,3 +1,13 @@
+## [2026-11-03] Scope and resolve favorites by database file identity
+Context: Run IDs can occur in different databases, files can be replaced at the same path, and saved runs can fall outside the Day board window.
+Decision: Persist the normalized observed path, file key and work ID in versioned, length-prefixed keys. Resolve matching keys through session detail reads fenced by file observations, and retain unavailable or unsupported entries.
+Reason: Board membership cannot establish whether an older run exists, and an ID alone cannot identify its database. File and session checks prevent stale results from opening the wrong run; retaining entries avoids data loss on transient failures or unsupported formats.
+
+## [2026-11-03] Confirm favorite changes against settings and the active session
+Context: A settings write can fail or finish as the user switches databases.
+Decision: Render membership from confirmed settings, serialize toggles, and cancel or invalidate pending results when the session changes.
+Reason: A failed write must not appear successful, and an old session's completion must not change the new session's control.
+
 ## [2026-11-03] Give non-Claude agents pasted images as file paths, Claude as content blocks
 Context: Chat turns can carry pasted images. Claude's stream-json input accepts base64 image content blocks. Codex, Cursor and Junie take only text on stdin or argv.
 Decision: Claude receives image blocks in the user message. The other three save each image to a per-session temp directory and append a footer listing absolute file paths. Each deletes the directory in end(sessionId), and saved history keeps only the typed prompt.

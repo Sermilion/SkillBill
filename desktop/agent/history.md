@@ -1,3 +1,13 @@
+## [2026-11-03] SKILL-476 add run favorites
+Areas: desktop/app, desktop/core/domain, desktop/core/data, desktop/core/datastore, desktop/core/designsystem, desktop/core/testing, desktop/feature/detail, desktop/feature/settings
+- FavoriteWorkKey identifies a run by normalized database path, file key and work ID. DataStore persists versioned, length-prefixed keys and preserves unsupported entries on updates. reusable
+- Detail headers expose an accessible favorite toggle backed by confirmed settings. Writes are serialized, failures show a toast, and session changes invalidate pending results.
+- The fixed-height sidebar resolves saved IDs through session detail reads beyond the board window. It opens resolved runs and keeps unavailable entries removable across database identities.
+- Window-scoped sidebar state orders keys, resolves up to four at a time, publishes results as they arrive and discards stale session or identity results. Refreshes during a batch coalesce into a follow-up pass. reusable
+- Limits: macOS and Windows desktop checks were not run on the Linux host. QA or validation reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented
+
 ## [2026-11-03] SKILL-450 subtask 1: deliver pasted images to chat agents
 Areas: desktop/core/domain, desktop/core/data
 - ChatImage (bytes, mediaType) is a plain class with content-based equals and hashCode. ChatTurnRequest gains images as its last, defaulted parameter, so existing callers are unchanged. (reusable)
