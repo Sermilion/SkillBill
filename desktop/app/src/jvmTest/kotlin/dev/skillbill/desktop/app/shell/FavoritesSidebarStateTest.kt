@@ -14,6 +14,8 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -76,7 +78,7 @@ class FavoritesSidebarStateTest {
       override fun reopen() = Unit
     }
     val pending = CompletableDeferred<WorkDetailResolution>()
-    val details = FakeWorkDetailRepository().apply { favoriteResolver = { pending.await() } }
+    val details = FakeWorkDetailRepository().apply { favoriteResolver = { withContext(NonCancellable) { pending.await() } } }
     val state = FavoritesSidebarState(settings, session, FakeWorkBoardRepository(), details, WindowCoroutineScope(backgroundScope), ToastQueue())
 
     runCurrent()
@@ -86,5 +88,73 @@ class FavoritesSidebarStateTest {
     advanceUntilIdle()
 
     assertIs<FavoriteSidebarEntry.OtherDatabase>(state.entries.value.single())
+  }
+
+  @Test
+  fun `completed favorites stay selectable while repeated refreshes coalesce into a newer pass`() = runTest {
+    val file = DatabaseFileIdentity("/tmp/current.db", "current-file")
+    val fast = FavoriteWorkKey(file, "fast")
+    val slow = FavoriteWorkKey(file, "slow")
+    val settings = FakeAppSettingsRepository(AppSettings.DEFAULT.copy(favoriteWork = setOf(fast, slow)))
+    val session = object : DatabaseSessionController {
+      override val state = MutableStateFlow<DatabaseSessionState>(DatabaseSessionState.Open(file.path, 1, file))
+      override fun reopen() = Unit
+    }
+    val reads = mutableMapOf<String, MutableList<CompletableDeferred<WorkDetailResolution>>>()
+    val details = FakeWorkDetailRepository().apply {
+      favoriteResolver = { id ->
+        val read = CompletableDeferred<WorkDetailResolution>()
+        reads.getOrPut(id) { mutableListOf() } += read
+        read.await()
+      }
+    }
+    val board = FakeWorkBoardRepository()
+    val state = FavoritesSidebarState(settings, session, board, details, WindowCoroutineScope(backgroundScope), ToastQueue())
+
+    runCurrent()
+    reads.getValue("fast").single().complete(WorkDetailResolution.Resolved(workItem("fast").copy(title = "Fast 1")))
+    runCurrent()
+    assertEquals("Fast 1", assertIs<FavoriteSidebarEntry.Resolved>(state.entries.value.first { it.key == fast }).item.title)
+
+    board.refresh()
+    board.refresh()
+    runCurrent()
+    assertEquals("Fast 1", assertIs<FavoriteSidebarEntry.Resolved>(state.entries.value.first { it.key == fast }).item.title)
+    assertEquals(1, reads.getValue("fast").size)
+
+    reads.getValue("slow").single().complete(WorkDetailResolution.Resolved(workItem("slow").copy(title = "Slow 1")))
+    runCurrent()
+    assertEquals(2, reads.getValue("fast").size)
+    assertEquals(2, reads.getValue("slow").size)
+
+    reads.getValue("fast")[1].complete(WorkDetailResolution.Resolved(workItem("fast").copy(title = "Fast 2")))
+    runCurrent()
+    assertEquals("Fast 2", assertIs<FavoriteSidebarEntry.Resolved>(state.entries.value.first { it.key == fast }).item.title)
+    reads.getValue("slow")[1].complete(WorkDetailResolution.Resolved(workItem("slow").copy(title = "Slow 2")))
+    runCurrent()
+    assertEquals("Slow 2", assertIs<FavoriteSidebarEntry.Resolved>(state.entries.value.first { it.key == slow }).item.title)
+  }
+
+  @Test
+  fun `a pending favorite removed before its read completes is not published`() = runTest {
+    val file = DatabaseFileIdentity("/tmp/current.db", "current-file")
+    val key = FavoriteWorkKey(file, "removed")
+    val settings = FakeAppSettingsRepository(AppSettings.DEFAULT.copy(favoriteWork = setOf(key)))
+    val session = object : DatabaseSessionController {
+      override val state = MutableStateFlow<DatabaseSessionState>(DatabaseSessionState.Open(file.path, 1, file))
+      override fun reopen() = Unit
+    }
+    val pending = CompletableDeferred<WorkDetailResolution>()
+    val details = FakeWorkDetailRepository().apply { favoriteResolver = { withContext(NonCancellable) { pending.await() } } }
+    val state = FavoritesSidebarState(settings, session, FakeWorkBoardRepository(), details, WindowCoroutineScope(backgroundScope), ToastQueue())
+
+    runCurrent()
+    state.remove(key)
+    runCurrent()
+    assertEquals(emptyList(), state.entries.value)
+    pending.complete(WorkDetailResolution.Resolved(workItem("removed").copy(title = "Removed after completion")))
+    advanceUntilIdle()
+
+    assertEquals(emptyList(), state.entries.value)
   }
 }

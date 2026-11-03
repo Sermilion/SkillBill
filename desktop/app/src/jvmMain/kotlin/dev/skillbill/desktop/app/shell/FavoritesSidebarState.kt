@@ -19,17 +19,19 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 
 sealed interface FavoriteSidebarEntry {
   val key: FavoriteWorkKey
@@ -55,42 +57,126 @@ class FavoritesSidebarState(
 
   init {
     scope.scope.launch {
-      var confirmedKeys: Set<FavoriteWorkKey> = emptySet()
-      combine(settings.favoriteWork, session.state, board.observeRefreshes(ShellBoard.query)) { keys, current, _ -> keys to current }
-        .collectLatest { (keysResult, current) ->
-          if (keysResult is Outcome.Success) confirmedKeys = keysResult.value
-          val keys = confirmedKeys.orderedFavorites(::normalized)
-          val open = current as? DatabaseSessionState.Open
-          val sessionId = open?.sessionId
-          val identity = open?.databaseFile?.normalized()
-          mutableEntries.value = keys.map { key ->
-            if (open == null || open.databaseFile == null) FavoriteSidebarEntry.Failed(key)
-            else if (identity == null || normalized(key.databaseFile.path) != identity.path || key.databaseFile.fileKey != identity.fileKey)
-              FavoriteSidebarEntry.OtherDatabase(key)
-            else FavoriteSidebarEntry.Loading(key)
+      val events = Channel<Event>(Channel.UNLIMITED)
+      val latestFavoriteKeys = AtomicReference<Set<FavoriteWorkKey>>(emptySet())
+      val refreshSession = AtomicReference<DatabaseSessionState?>(null)
+      launch {
+        combine(settings.favoriteWork, session.state) { keys, current -> keys to current }
+          .collect { (keys, current) ->
+            if (keys is Outcome.Success) latestFavoriteKeys.set(keys.value)
+            events.send(Event.Data(keys, current))
           }
+      }
+      launch {
+        board.observeRefreshes(ShellBoard.query).collect {
+          val current = session.state.value
+          if (refreshSession.getAndSet(current) == current) events.send(Event.Refresh)
+        }
+      }
+
+      var confirmedKeys: Set<FavoriteWorkKey> = emptySet()
+      var keys: List<FavoriteWorkKey> = emptyList()
+      var currentSession: DatabaseSessionState? = null
+      var initialized = false
+      var batchId = 0L
+      var batchJob: kotlinx.coroutines.Job? = null
+      var pendingRefresh = false
+      val resolved = linkedMapOf<FavoriteWorkKey, FavoriteSidebarEntry>()
+
+      fun publish() {
+        mutableEntries.value = keys.mapNotNull(resolved::get)
+      }
+
+      fun classify(key: FavoriteWorkKey, current: DatabaseSessionState): FavoriteSidebarEntry {
+        val open = current as? DatabaseSessionState.Open
+        val identity = open?.databaseFile?.normalized()
+        return when {
+          open == null || open.databaseFile == null -> FavoriteSidebarEntry.Failed(key)
+          identity == null || normalized(key.databaseFile.path) != identity.path || key.databaseFile.fileKey != identity.fileKey -> FavoriteSidebarEntry.OtherDatabase(key)
+          else -> FavoriteSidebarEntry.Loading(key)
+        }
+      }
+
+      fun startBatch() {
+        val open = currentSession as? DatabaseSessionState.Open
+        val sessionId = open?.sessionId
+        val identity = open?.databaseFile?.normalized()
+        val batchKeys = keys
+        val id = ++batchId
+        batchJob = launch {
           val semaphore = Semaphore(4)
-          val resolved = kotlinx.coroutines.coroutineScope {
-            keys.map { key -> async {
-              val currentIdentity = open?.databaseFile?.normalized()
-              if (open == null || open.databaseFile == null) {
-                FavoriteSidebarEntry.Failed(key)
-              } else if (currentIdentity == null || normalized(key.databaseFile.path) != currentIdentity.path || key.databaseFile.fileKey != currentIdentity.fileKey) {
-                FavoriteSidebarEntry.OtherDatabase(key)
-              } else semaphore.withPermit {
-                when (val result = try { details.resolve(key.workItemId) } catch (failure: CancellationException) { throw failure } catch (_: Exception) { null }) {
-                  is WorkDetailResolution.Resolved -> FavoriteSidebarEntry.Resolved(key, result.item)
-                  WorkDetailResolution.Missing -> FavoriteSidebarEntry.Missing(key)
-                  is WorkDetailResolution.Failed, null -> FavoriteSidebarEntry.Failed(key)
+          coroutineScope {
+            batchKeys.map { key -> async {
+              val entry = when {
+                open == null || open.databaseFile == null -> FavoriteSidebarEntry.Failed(key)
+                identity == null || normalized(key.databaseFile.path) != identity.path || key.databaseFile.fileKey != identity.fileKey -> FavoriteSidebarEntry.OtherDatabase(key)
+                else -> semaphore.withPermit {
+                  when (val result = try { details.resolve(key.workItemId) } catch (failure: CancellationException) { throw failure } catch (_: Exception) { null }) {
+                    is WorkDetailResolution.Resolved -> FavoriteSidebarEntry.Resolved(key, result.item)
+                    WorkDetailResolution.Missing -> FavoriteSidebarEntry.Missing(key)
+                    is WorkDetailResolution.Failed, null -> FavoriteSidebarEntry.Failed(key)
+                  }
                 }
               }
-            } }.awaitAll()
+              events.send(Event.Result(id, key, sessionId, identity, entry))
+            } }.forEach { it.await() }
           }
-          val currentOpen = session.state.value as? DatabaseSessionState.Open
-          if (currentOpen != null && currentOpen.sessionId == sessionId && currentOpen.databaseFile?.normalized() == identity) {
-            mutableEntries.value = resolved
+          events.send(Event.BatchFinished(id))
+        }
+      }
+
+      fun beginPass(resetResolved: Boolean) {
+        batchJob?.cancel()
+        if (resetResolved) {
+          resolved.clear()
+          keys.forEach { resolved[it] = classify(it, currentSession!!) }
+        } else {
+          val previous = resolved.toMap()
+          resolved.clear()
+          keys.forEach { key -> resolved[key] = previous[key]?.takeIf { it is FavoriteSidebarEntry.Resolved } ?: classify(key, currentSession!!) }
+        }
+        publish()
+        startBatch()
+      }
+
+      for (event in events) {
+        when (event) {
+          is Event.Data -> {
+            if (event.keys is Outcome.Success) confirmedKeys = event.keys.value
+            val nextKeys = confirmedKeys.orderedFavorites(::normalized)
+            val sessionChanged = !initialized || event.current != currentSession
+            val keysChanged = nextKeys != keys
+            if (sessionChanged || keysChanged) {
+              initialized = true
+              currentSession = event.current
+              keys = nextKeys
+              pendingRefresh = false
+              beginPass(resetResolved = sessionChanged)
+            }
+          }
+          Event.Refresh -> {
+            if (batchJob?.isActive == true) {
+              pendingRefresh = true
+            } else if (initialized) {
+              beginPass(resetResolved = false)
+            }
+          }
+          is Event.Result -> {
+            val currentOpen = session.state.value as? DatabaseSessionState.Open
+            if (event.batchId == batchId && event.key in keys && event.key in latestFavoriteKeys.get() && currentOpen != null && currentOpen.sessionId == event.sessionId && currentOpen.databaseFile?.normalized() == event.identity) {
+              resolved[event.key] = event.entry
+              publish()
+            }
+          }
+          is Event.BatchFinished -> if (event.batchId == batchId) {
+            batchJob = null
+            if (pendingRefresh) {
+              pendingRefresh = false
+              beginPass(resetResolved = false)
+            }
           }
         }
+      }
     }
   }
 
@@ -101,6 +187,13 @@ class FavoritesSidebarState(
         false -> toasts.show(ToastMessage(ToastTone.Problem, "Favorite could not be removed. It remains saved."))
       }
     }
+  }
+
+  private sealed interface Event {
+    data class Data(val keys: Outcome<Set<FavoriteWorkKey>, *>, val current: DatabaseSessionState) : Event
+    data object Refresh : Event
+    data class Result(val batchId: Long, val key: FavoriteWorkKey, val sessionId: Long?, val identity: DatabaseFileIdentity?, val entry: FavoriteSidebarEntry) : Event
+    data class BatchFinished(val batchId: Long) : Event
   }
 
   private fun normalized(path: String): String = runCatching { Path.of(path).toAbsolutePath().normalize().toString() }.getOrDefault(path)
