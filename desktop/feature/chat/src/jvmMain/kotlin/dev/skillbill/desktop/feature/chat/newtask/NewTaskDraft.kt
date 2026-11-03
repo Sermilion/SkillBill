@@ -25,6 +25,7 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
+import dev.skillbill.desktop.feature.chat.restoredDraft
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -103,6 +104,15 @@ class NewTaskDraft(
     if (!canAdmitTurn(action.instruction) || chatState.value == null) return false
     sendTurn(action.instruction, action)
     return true
+  }
+
+  internal fun stop() {
+    val returned = chatState.value?.stop().orEmpty()
+    if (returned.isNotEmpty()) text = restoredDraft(returned, text)
+  }
+
+  internal fun sendNow() {
+    chatState.value?.sendNow()
   }
 
   private fun sendTurn(submitted: String, action: ChatSuggestedAction?) {

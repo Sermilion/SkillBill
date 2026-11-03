@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChatEvent
@@ -43,6 +46,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 @OptIn(ExperimentalTestApi::class)
 class NewTaskComposerTest {
@@ -322,6 +327,58 @@ class NewTaskComposerTest {
       waitForIdle()
       assertChipsDisabled("This draft's repository is missing")
     }
+  }
+
+  @Test
+  fun `stop and send now follow stoppable state and the send now gate`() = runComposeUiTest {
+    val chat = FakeExecutionChatRepository()
+    val events = Channel<ChatEvent>(Channel.UNLIMITED)
+    chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
+    val repository = NewTaskRepository(
+      createTempDirectory("new-task-repo").also { it.toFile().deleteOnExit() }.toString(),
+      "repo",
+    )
+    val draft = NewTaskDraft(
+      chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
+      WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
+    ).apply {
+      chatDispatcher = Dispatchers.Unconfined
+      this.repository = repository
+      agentId = "claude"
+      selectedAgent = chat.agent
+      text = "Add a button"
+    }
+    var instant = Instant.fromEpochMilliseconds(0)
+    val actions = mutableListOf<NewTaskAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(NewTaskUiState(agent = chat.agent, agents = listOf("claude")), draft, now = { instant }) { action ->
+            actions += action
+            if (action == NewTaskAction.Send) draft.send()
+          }
+        }
+      }
+    }
+    onNodeWithText("Stop", substring = false).assertDoesNotExist()
+    runOnIdle { draft.send() }
+    waitForIdle()
+    onNodeWithText("Stop", substring = false).assertExists()
+    onNodeWithText("Queue", substring = false).assertExists()
+    runOnIdle { draft.text = "follow-up" }
+    waitForIdle()
+    onNodeWithText("Queue", substring = false).performClick()
+    waitForIdle()
+    onNodeWithText("Send now", substring = false).assertExists()
+    instant = instant + 100.milliseconds
+    onNodeWithText("Send now", substring = false).performClick()
+    assertFalse(actions.contains(NewTaskAction.SendNow))
+    instant = instant + 700.milliseconds
+    onNodeWithText("Send now", substring = false).performClick()
+    assertEquals(listOf(NewTaskAction.SendNow), actions.filter { it == NewTaskAction.SendNow })
+    instant = instant + 700.milliseconds
+    onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
+    assertEquals(2, actions.count { it == NewTaskAction.SendNow })
   }
 
   private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {

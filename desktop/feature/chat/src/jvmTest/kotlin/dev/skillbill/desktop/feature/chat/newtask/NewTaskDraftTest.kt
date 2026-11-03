@@ -2,11 +2,13 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
@@ -18,11 +20,13 @@ import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
+import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +35,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.coroutineContext
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,7 +64,7 @@ class NewTaskDraftTest {
   private val chat = FakeExecutionChatRepository()
   private val root = createTempDirectory("new-task-repo").toString()
 
-  private fun TestScope.draft() = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
+  private fun TestScope.draft(chats: ExecutionChatRepository = chat) = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
     chatDispatcher = StandardTestDispatcher(testScheduler)
     repository = NewTaskRepository(root, "repo")
     baseBranch = "main"
@@ -416,5 +421,183 @@ class NewTaskDraftTest {
     runCurrent()
     assertNull(draft.chat.value)
     assertEquals(1, chat.requests.size)
+  }
+
+  @Test
+  fun `stop with a cancelling save still saves the partial reply and drains the queue`() = runTest {
+    val cancelling = object : ExecutionChatRepository by chat {
+      override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean {
+        coroutineContext.ensureActive()
+        return chat.saveNewTaskDraft(entry)
+      }
+    }
+    val replies = mutableListOf<Channel<ChatEvent>>()
+    chat.events = {
+      val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+      replies += reply
+      flow { for (event in reply) emit(event) }
+    }
+    val draft = draft(cancelling)
+    draft.say("first")
+    runCurrent()
+    val sessionId = chat.requests.single().sessionId
+    replies[0].send(ChatEvent.TextDelta("part"))
+    runCurrent()
+    draft.say("queued")
+    runCurrent()
+    draft.stop()
+    runCurrent()
+    val transcript = checkNotNull(draft.chat.value).thread.transcript.value
+    assertEquals("part", transcript.filterIsInstance<ChatMessage.Agent>().single().text)
+    assertEquals(ChatMessage.Notice(STOPPED_NOTICE), transcript.last())
+    assertFalse(draft.chat.value!!.thread.busy.value)
+    assertTrue(sessionId in chat.saved)
+    chat.events = { flowOf(ChatEvent.Completed) }
+    draft.say("next")
+    runCurrent()
+    assertEquals(sessionId, chat.requests.last().sessionId)
+    assertFalse(chat.requests.last().firstTurn)
+    draft.close()
+  }
+
+  @Test
+  fun `stop right after send clears busy when the turn body never ran`() = runTest {
+    chat.events = { flow { awaitCancellation() } }
+    val draft = draft()
+    draft.say("one")
+    draft.stop()
+    runCurrent()
+    assertFalse(checkNotNull(draft.chat.value).thread.busy.value)
+    chat.events = { flowOf(ChatEvent.Completed) }
+    draft.say("two")
+    runCurrent()
+    assertEquals("two", chat.requests.last().prompt)
+    draft.close()
+  }
+
+  @Test
+  fun `stop before output rotates the session for the next turn`() = runTest {
+    chat.events = { flow { awaitCancellation() } }
+    val draft = draft()
+    draft.say("one")
+    runCurrent()
+    val oldId = chat.requests.single().sessionId
+    draft.stop()
+    runCurrent()
+    assertFalse(oldId in chat.saved)
+    val newId = checkNotNull(draft.chat.value).sessionId
+    assertNotEquals(oldId, newId)
+    assertFalse(chat.saved.getValue(newId).newTask!!.sessionEstablished)
+    chat.events = { flowOf(ChatEvent.Completed) }
+    draft.say("two")
+    runCurrent()
+    assertEquals(newId, chat.requests.last().sessionId)
+    assertTrue(chat.requests.last().firstTurn)
+    draft.close()
+  }
+
+  @Test
+  fun `stop on an unprompted reply returns the queue and ignores a late event`() = runTest {
+    chat.events = { flowOf(ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("start")
+    runCurrent()
+    val sessionId = chat.requests.single().sessionId
+    chat.unpromptedEvents.emit(sessionId to ChatEvent.TextDelta("bg"))
+    runCurrent()
+    draft.say("queued")
+    runCurrent()
+    draft.text = "held"
+    assertEquals(1, chat.requests.size)
+    draft.stop()
+    runCurrent()
+    assertEquals(listOf(sessionId), chat.ended)
+    assertEquals(1, chat.requests.size)
+    assertEquals("queued\n\nheld", draft.text)
+    val beforeLate = checkNotNull(draft.chat.value).thread.transcript.value.size
+    chat.unpromptedEvents.emit(sessionId to ChatEvent.TextDelta("late"))
+    runCurrent()
+    assertFalse(draft.chat.value!!.thread.busy.value)
+    assertEquals(beforeLate, draft.chat.value!!.thread.transcript.value.size)
+    draft.close()
+  }
+
+  @Test
+  fun `stop with a queue restores queued text before existing draft text`() = runTest {
+    val replies = mutableListOf<Channel<ChatEvent>>()
+    chat.events = {
+      val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+      replies += reply
+      flow { for (event in reply) emit(event) }
+    }
+    val draft = draft()
+    draft.say("first")
+    runCurrent()
+    draft.say("q1")
+    draft.say("q2")
+    runCurrent()
+    draft.text = "existing"
+    draft.stop()
+    runCurrent()
+    assertEquals(1, chat.requests.size)
+    assertEquals("q1\n\nq2\n\nexisting", draft.text)
+    replies[0].close()
+    runCurrent()
+    draft.close()
+  }
+
+  @Test
+  fun `send now stops the running reply and sends queued messages in order`() = runTest {
+    val replies = mutableListOf<Channel<ChatEvent>>()
+    chat.events = {
+      val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+      replies += reply
+      flow { for (event in reply) emit(event) }
+    }
+    val draft = draft()
+    draft.say("first")
+    runCurrent()
+    draft.say("second")
+    draft.say("third")
+    runCurrent()
+    draft.sendNow()
+    runCurrent()
+    replies[0].close()
+    runCurrent()
+    replies[1].send(ChatEvent.Completed)
+    replies[1].close()
+    runCurrent()
+    replies[2].send(ChatEvent.Completed)
+    replies[2].close()
+    runCurrent()
+    val transcript = checkNotNull(draft.chat.value).thread.transcript.value
+    val stoppedAt = transcript.indexOfFirst { it is ChatMessage.Notice && it.text == STOPPED_NOTICE }
+    val secondOperator = transcript.indexOfFirst { it is ChatMessage.Operator && it.text == "second" }
+    assertTrue(stoppedAt >= 0 && secondOperator > stoppedAt)
+    assertEquals(listOf("first", "second", "third"), chat.requests.map { it.prompt })
+    draft.close()
+  }
+
+  @Test
+  fun `send now during an unprompted reply drops a late event and stops before the queued turn`() = runTest {
+    chat.events = { flowOf(ChatEvent.Completed) }
+    val draft = draft()
+    draft.say("start")
+    runCurrent()
+    val sessionId = chat.requests.single().sessionId
+    chat.unpromptedEvents.emit(sessionId to ChatEvent.TextDelta("bg"))
+    runCurrent()
+    draft.say("queued")
+    runCurrent()
+    draft.sendNow()
+    chat.unpromptedEvents.emit(sessionId to ChatEvent.TextDelta("late"))
+    runCurrent()
+    val transcript = checkNotNull(draft.chat.value).thread.transcript.value
+    val stoppedAt = transcript.indexOfFirst { it is ChatMessage.Notice && it.text == STOPPED_NOTICE }
+    val queuedOperator = transcript.indexOfFirst { it is ChatMessage.Operator && it.text == "queued" }
+    assertTrue(stoppedAt >= 0 && queuedOperator > stoppedAt)
+    assertFalse(transcript.filterIsInstance<ChatMessage.Agent>().any { it.text == "late" })
+    assertFalse(checkNotNull(draft.chat.value).thread.busy.value)
+    draft.close()
   }
 }
