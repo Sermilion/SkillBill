@@ -5,6 +5,7 @@ import skillbill.infrastructure.sqlite.SQLiteUnitOfWork
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.GoalArchiveSnapshotPort
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.persistence.model.GoalPurgeTarget
 
 @Inject
@@ -16,4 +17,10 @@ class SqliteGoalArchiveSnapshotPort(
       require(unitOfWork is SQLiteUnitOfWork) { "Goal archive snapshot requires SQLite persistence." }
       unitOfWork.snapshotOwnedGoal(target)
     }
+
+  override fun restoreOwnedTables(ownedTables: GoalArchiveOwnedTables) {
+    database.transaction { unitOfWork ->
+      unitOfWork.restoreGoalArchiveOwnedTables(ownedTables)
+    }
+  }
 }

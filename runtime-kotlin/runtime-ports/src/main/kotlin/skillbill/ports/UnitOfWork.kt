@@ -12,6 +12,7 @@ import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
@@ -57,4 +58,6 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
 
   fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts
+
+  fun restoreGoalArchiveOwnedTables(ownedTables: GoalArchiveOwnedTables)
 }

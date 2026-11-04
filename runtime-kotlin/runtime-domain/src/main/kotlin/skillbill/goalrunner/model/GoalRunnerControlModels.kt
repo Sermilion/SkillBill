@@ -77,6 +77,8 @@ const val GOAL_PAUSE_REASON_OPERATOR_STOP: String = "operator_stop"
 
 const val GOAL_PAUSE_REASON_RUNNER_INTERRUPTED: String = "runner_interrupted"
 
+const val GOAL_PAUSE_REASON_IMPORTED: String = "imported"
+
 const val GOAL_ACTIVE_HEARTBEAT_GAP_LIMIT_MS: Long = 20_000
 
 data class GoalRunnerControlState(

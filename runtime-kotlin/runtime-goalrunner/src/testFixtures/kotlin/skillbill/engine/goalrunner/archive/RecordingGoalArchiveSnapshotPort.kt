@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.archive
 
 import skillbill.ports.goalrunner.GoalArchiveSnapshotPort
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.persistence.model.GoalPurgeTarget
 
 class RecordingGoalArchiveSnapshotPort(
@@ -15,4 +16,6 @@ class RecordingGoalArchiveSnapshotPort(
     targets += target
     return snapshotProvider(target)
   }
+
+  override fun restoreOwnedTables(ownedTables: GoalArchiveOwnedTables) = Unit
 }

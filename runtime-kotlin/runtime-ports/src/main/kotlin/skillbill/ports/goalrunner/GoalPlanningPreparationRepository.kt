@@ -5,9 +5,12 @@ import skillbill.goalrunner.model.GoalPlanningStatusState.BLOCKED
 import skillbill.goalrunner.model.GoalPlanningStatusState.NOT_STARTED
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationCountResult
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
+import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 
 interface GoalPlanningStatusReadRepository {
@@ -27,6 +30,8 @@ interface SharedGoalPreplanRepository : GoalPlanningStatusReadRepository {
   fun hasPreparedSharedPreplan(parentGoalWorkflowId: String): Boolean
 
   fun sharedPreplanPayloadSha256(parentGoalWorkflowId: String): String?
+
+  fun saveSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint)
 }
 
 interface GoalSubtaskPlanRepository {
@@ -65,10 +70,14 @@ interface GoalSubtaskPlanRepository {
     expectedIdentity: GoalPlanningIdentity,
     orderedDescriptors: List<GovernedGoalSubtaskDescriptor>,
   ): GoalPlanningPreparationCountResult
+
+  fun saveSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint)
 }
 
 interface LegacyGoalPlanningPreparationRepository {
   fun deleteByGoal(parentGoalWorkflowId: String): Int
+
+  fun saveLegacyPreparation(record: GoalPlanningPreparationRecord)
 }
 
 interface GoalPlanningPreparationRepository :

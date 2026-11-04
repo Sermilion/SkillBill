@@ -23,6 +23,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.occupiesGoalIssueKey
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -123,6 +124,24 @@ fun WorkflowStateRecord.isPlanWorkflow(): Boolean =
     false
   }
 
+fun WorkflowStateRecord.matchesIssueKeyForFeatureTaskDiscovery(normalizedIssueKey: String): Boolean {
+  val trimmedIssueKey = issueKey?.trim()
+  if (!trimmedIssueKey.isNullOrEmpty()) {
+    return trimmedIssueKey.uppercase() == normalizedIssueKey
+  }
+  val snapshot =
+    try {
+      toSnapshot()
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+      return false
+    }
+  val artifactIssueKey =
+    snapshot.artifacts.decompositionRuntime()?.issueKey?.trim()?.uppercase()
+      ?: snapshot.artifacts.goalContinuationArtifact()?.issueKey?.trim()?.uppercase()
+  return artifactIssueKey == normalizedIssueKey
+}
+
 fun WorkflowStateRepository.listPlanWorkflowsForPurge(
   issueKey: String,
   repositoryIdentity: String,
@@ -161,14 +180,13 @@ fun WorkflowStateRepository.findLatestPlanWorkflowId(
 private fun WorkflowStateRecord.hasPlanSubtasksStep(): Boolean =
   toSnapshot().steps.any { it.stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS }
 
-fun WorkflowStateRepository.listDecomposedParentsForPurge(
-  issueKey: String,
-  repositoryIdentity: String,
+fun decomposedParentsForPurgeFromRecords(
+  rows: List<WorkflowStateRecord>,
+  normalizedIssueKey: String,
 ): DecomposedParentsForPurge {
-  val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
   val unclassified = mutableListOf<UnclassifiedPurgeRow>()
   val parents =
-    listFeatureTaskWorkflowsForParentDiscovery(normalizedIssueKey, repositoryIdentity).mapNotNull { row ->
+    rows.mapNotNull { row ->
       val snapshot =
         try {
           row.toSnapshot()
@@ -184,6 +202,17 @@ fun WorkflowStateRepository.listDecomposedParentsForPurge(
       if (manifest != null && manifest.issueKey != normalizedIssueKey) null else DecomposedParentForPurge(row, manifest)
     }
   return DecomposedParentsForPurge(parents, unclassified)
+}
+
+fun WorkflowStateRepository.listDecomposedParentsForPurge(
+  issueKey: String,
+  repositoryIdentity: String,
+): DecomposedParentsForPurge {
+  val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
+  return decomposedParentsForPurgeFromRecords(
+    listFeatureTaskWorkflowsForParentDiscovery(normalizedIssueKey, repositoryIdentity),
+    normalizedIssueKey,
+  )
 }
 
 fun WorkflowStateRepository.findDecomposedParentWorkflow(

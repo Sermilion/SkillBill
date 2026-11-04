@@ -2,9 +2,12 @@ package skillbill.ports.goalrunner
 
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationCountResult
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
+import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 
 abstract class GoalPlanningPreparationRepositoryDefaults : GoalPlanningPreparationRepository {
@@ -34,4 +37,10 @@ abstract class GoalPlanningPreparationRepositoryDefaults : GoalPlanningPreparati
   ): GoalPlanningPreparationCountResult = GoalPlanningPreparationCountResult.Applied(0)
 
   open override fun deleteByGoal(parentGoalWorkflowId: String): Int = 0
+
+  open override fun saveSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) = Unit
+
+  open override fun saveSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) = Unit
+
+  open override fun saveLegacyPreparation(record: GoalPlanningPreparationRecord) = Unit
 }

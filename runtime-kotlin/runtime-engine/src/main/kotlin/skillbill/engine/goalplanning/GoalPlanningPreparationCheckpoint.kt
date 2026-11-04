@@ -58,6 +58,14 @@ public class GoalPlanningPreparationCheckpoint(
     database.read {
       it.goalPlanningPreparations.findSubtaskPlan(identity, subtaskId, governedSubSpecPath)
     }.planOrThrow()?.also(gate::validateSubtaskPlan)
+
+  public fun validateSharedPreplanForWrite(checkpoint: SharedGoalPreplanCheckpoint) {
+    gate.validateSharedPreplan(checkpoint)
+  }
+
+  public fun validateSubtaskPlanForWrite(checkpoint: GoalSubtaskPlanCheckpoint) {
+    gate.validateSubtaskPlan(checkpoint)
+  }
 }
 
 internal class GoalPlanningPreparationProjectionGate(
