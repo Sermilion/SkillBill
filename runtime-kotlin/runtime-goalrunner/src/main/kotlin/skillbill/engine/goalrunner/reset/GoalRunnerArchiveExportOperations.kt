@@ -11,6 +11,7 @@ import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalArchiveEnvelopeKeys
 import skillbill.contracts.workflow.goal.GoalArchiveRecordKeys
 import skillbill.contracts.workflow.goal.goalArchiveEnvelopeWireMap
+import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.goalplanning.toEnvelopeMap
 import skillbill.engine.goalrunner.archive.toGoalArchiveFieldMap
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -34,6 +35,9 @@ import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.ProjectStoreLocation
+import skillbill.ports.projectstore.model.SpecPathLocation
+import skillbill.ports.projectstore.model.classifySpecPath
 import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -336,6 +340,7 @@ public class GoalRunnerArchiveExportOperations(
     val specsRoot = store.specsRoot.toAbsolutePath().normalize()
     val resolvedManifestPath = (manifestPath ?: derivedManifestPath(repoRoot, manifest)).toAbsolutePath().normalize()
     val traceabilityPath = resolvedManifestPath.resolveSibling("traceability.md")
+    val portableManifest = manifest.withPortableSpecPaths(repoRoot, store)
     val paths =
       linkedSetOf(
         resolvedManifestPath,
@@ -354,9 +359,42 @@ public class GoalRunnerArchiveExportOperations(
         return SpecBundleRead.UnsupportedPath(repoRelativePath(repoRoot, store, path))
       }
       val relative = specsRoot.relativize(absolutePath).toString().replace('\\', '/')
-      entries += archiveSpecEntryName(relative) to manifestFileStore.readText(path).encodeToByteArray()
+      val content =
+        if (path == resolvedManifestPath && portableManifest != manifest) {
+          encodeDecompositionManifestYaml(
+            portableManifest,
+            manifestValidator,
+            manifestFileStore,
+          )
+        } else {
+          manifestFileStore.readText(path)
+        }
+      entries += archiveSpecEntryName(relative) to content.encodeToByteArray()
     }
     return SpecBundleRead.Ready(entries)
+  }
+
+  private fun DecompositionManifest.withPortableSpecPaths(
+    repoRoot: Path,
+    store: ProjectStoreLocation,
+  ): DecompositionManifest =
+    copy(
+      parentSpecPath = portableSpecPath(parentSpecPath, repoRoot, store),
+      subtasks =
+        subtasks.map { subtask ->
+          subtask.copy(specPath = portableSpecPath(subtask.specPath, repoRoot, store))
+        },
+    )
+
+  private fun portableSpecPath(
+    specPath: String,
+    repoRoot: Path,
+    store: ProjectStoreLocation,
+  ): String {
+    val path = Path.of(specPath)
+    if (!path.isAbsolute) return specPath
+    val location = store.classifySpecPath(path.toAbsolutePath().normalize(), repoRoot.toAbsolutePath().normalize())
+    return (location as? SpecPathLocation.Store)?.relative ?: specPath
   }
 
   private fun archiveSpecEntryName(storeRelativePath: String): String {

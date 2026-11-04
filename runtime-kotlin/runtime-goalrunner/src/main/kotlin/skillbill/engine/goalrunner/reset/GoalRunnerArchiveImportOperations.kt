@@ -42,6 +42,7 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -65,6 +66,7 @@ public class GoalRunnerArchiveImportOperations(
   private val planningCheckpoint: GoalPlanningPreparationCheckpoint,
   private val envelopeValidator: GoalArchiveEnvelopeValidator,
   private val workflowArtifactWireEncoder: WorkflowArtifactWireEncoder,
+  private val manifestValidator: DecompositionManifestValidator,
 ) {
   private val changedSummary = "Database file changed during import; no rows were restored."
 
@@ -147,13 +149,31 @@ public class GoalRunnerArchiveImportOperations(
           "expected '$GOAL_ARCHIVE_CONTRACT_VERSION'.",
       )
     }
-    validateSpecEntries(bundle, projectStore.resolve(repoRoot).specsRoot.normalize())
+    val normalizedBundle =
+      normalizeSpecReferences(
+        bundle,
+        goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort),
+        issueKey,
+      )
+        ?: return GoalRunnerImportResult.Refused(
+          issueKey,
+          "Goal archive contains a spec reference that cannot be mapped to an archived spec entry; " +
+            "import made no changes.",
+        )
+    validateSpecEntries(normalizedBundle, projectStore.resolve(repoRoot).specsRoot.normalize())
     val archiveParentIds = archiveParentWorkflowIds(issueKey, bundle)
     return headRefusal(bundle.envelope, repoRoot)?.copy(issueKey = issueKey)
       ?: collisionRefusal(issueKey, repoRoot, archiveParentIds)
-      ?: archiveContentRefusal(issueKey, bundle)
-      ?: restoreAdmitted(repoRoot, archivePath, bundle, archiveParentIds, expectedObservation)
+      ?: archiveContentRefusal(issueKey, normalizedBundle)
+      ?: restoreAdmitted(repoRoot, archivePath, normalizedBundle, archiveParentIds, expectedObservation)
   }
+
+  private fun normalizeSpecReferences(
+    bundle: ParsedGoalArchiveBundle,
+    destIdentity: String,
+    issueKey: String,
+  ): ParsedGoalArchiveBundle? =
+    GoalArchiveSpecNormalizer(manifestValidator, manifestFileStore, destIdentity, issueKey).normalize(bundle)
 
   private fun restoreAdmitted(
     repoRoot: Path,
@@ -323,7 +343,7 @@ public class GoalRunnerArchiveImportOperations(
     issueKey: String,
     workflowStates: WorkflowStateRepository,
   ) {
-    val rows = bundle.snapshot.ownedTables.rows("feature_task_execution_identities").orEmpty()
+    val rows = bundle.snapshot.ownedTables.rows(GoalArchiveSpecReferenceKeys.EXECUTION_IDENTITIES_TABLE).orEmpty()
     if (rows.isNotEmpty()) {
       rows.forEach { row ->
         workflowStates.saveFeatureTaskExecutionIdentity(row.toExecutionIdentity(destIdentity, issueKey))
@@ -574,6 +594,14 @@ private fun GoalPlanningPreparationRecord.rewriteLegacy(
   issueKey: String,
 ): GoalPlanningPreparationRecord = copy(repositoryIdentity = destIdentity, normalizedIssueKey = issueKey)
 
+internal object GoalArchiveSpecReferenceKeys {
+  const val EXECUTION_IDENTITIES_TABLE = "feature_task_execution_identities"
+  const val GOVERNED_SPEC_PATH = "governed_spec_path"
+  const val GOVERNED_SUB_SPEC_PATH = "governed_sub_spec_path"
+  const val SUBTASK_SPEC_PATHS = "subtask_spec_paths"
+  const val INTEGRITY_SHA256 = "integrity_sha256"
+}
+
 private fun GoalArchiveTableRow.toExecutionIdentity(
   destIdentity: String,
   issueKey: String,
@@ -582,7 +610,7 @@ private fun GoalArchiveTableRow.toExecutionIdentity(
   val workflowId = columns[SharedPayloadKeys.WORKFLOW_ID]?.toString().orEmpty()
   if (workflowId.isBlank()) {
     throw invalidGoalArchiveSchemaError(
-      "feature_task_execution_identities",
+      GoalArchiveSpecReferenceKeys.EXECUTION_IDENTITIES_TABLE,
       SharedPayloadKeys.WORKFLOW_ID,
       "workflow_id is required",
     )
@@ -591,7 +619,7 @@ private fun GoalArchiveTableRow.toExecutionIdentity(
     workflowId = workflowId,
     normalizedIssueKey = issueKey,
     repositoryIdentity = destIdentity,
-    governedSpecPath = columns["governed_spec_path"]?.toString().orEmpty(),
+    governedSpecPath = columns[GoalArchiveSpecReferenceKeys.GOVERNED_SPEC_PATH]?.toString().orEmpty(),
     mode = identityMode(columns[WorkflowWirePayloadKeys.MODE]?.toString().orEmpty()),
     routeScope = identityRouteScope(columns["route_scope"]?.toString().orEmpty()),
     contractVersion =
@@ -605,7 +633,7 @@ private fun identityMode(wire: String): FeatureTaskWorkflowMode {
   if (wire.isBlank()) return FeatureTaskWorkflowMode.RUNTIME
   return FeatureTaskWorkflowMode.fromWireValue(wire)
     ?: throw invalidGoalArchiveSchemaError(
-      "feature_task_execution_identities",
+      GoalArchiveSpecReferenceKeys.EXECUTION_IDENTITIES_TABLE,
       WorkflowWirePayloadKeys.MODE,
       "unsupported value '$wire'",
     )
@@ -615,7 +643,7 @@ private fun identityRouteScope(wire: String): FeatureTaskRouteScope {
   if (wire.isBlank()) return FeatureTaskRouteScope.STANDALONE
   return FeatureTaskRouteScope.entries.firstOrNull { it.wireValue == wire }
     ?: throw invalidGoalArchiveSchemaError(
-      "feature_task_execution_identities",
+      GoalArchiveSpecReferenceKeys.EXECUTION_IDENTITIES_TABLE,
       "route_scope",
       "unsupported value '$wire'",
     )

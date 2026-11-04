@@ -253,6 +253,7 @@ fun testGoalRunnerStatusService(
               GoalPlanningPreparationCheckpoint(database, AcceptingFeatureTaskRuntimeWireArtifactValidator),
             envelopeValidator = ClasspathGoalArchiveEnvelopeValidator(),
             workflowArtifactWireEncoder = SqliteWorkflowArtifactWireEncoder(),
+            manifestValidator = testDecompositionManifestValidator,
           ),
       ),
     freshQualityCoordinator =

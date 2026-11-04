@@ -29,6 +29,9 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -38,8 +41,53 @@ import kotlin.test.assertNull
 
 class GoalRunnerImportCoordinatorTest {
   @Test
-  fun `exported archive restores manifest parent and subtasks at recorded paths`() {
+  fun `unmappable absolute archive reference refuses before restoring rows or specs`() {
     val fixture = importFixture(bundleName = "specs")
+    val archive = fixture.root.resolve("archive.zip")
+    val exportService =
+      testGoalRunnerStatusService(
+        manifestStore = fixture.store,
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = fixture.port,
+            archiveSnapshotPort = parentSnapshot(),
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
+      )
+    assertIs<GoalRunnerExportResult.Exported>(
+      exportService.export(GoalRunnerExportRequest("SKILL-245", fixture.root, archive)),
+    )
+    rewriteArchiveEntry(archive, "specs/specs/decomposition-manifest.yaml") { content ->
+      content.replace("specs/specs/spec.md", "/outside/specs/missing.md")
+    }
+    val destinationRoot = Files.createTempDirectory("goal-import-unmappable-dest")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val states = InMemoryWorkflowStates()
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        database = FakeDatabaseSessionFactory(states),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(destinationPort),
+      )
+
+    assertIs<GoalRunnerImportResult.Refused>(importService.import(GoalRunnerImportRequest(archive, destinationRoot)))
+    assertNull(states.getFeatureTaskWorkflow("wfl-parent"))
+    assertFalse(Files.exists(destinationPort.root.resolve("specs/specs/decomposition-manifest.yaml")))
+  }
+
+  @Test
+  fun `exported archive restores manifest parent and subtasks at recorded paths`() {
+    val fixture = importFixture(bundleName = "specs", absolutePaths = true)
     val archive = fixture.root.resolve("archive.zip")
     val exportService =
       testGoalRunnerStatusService(
@@ -81,6 +129,10 @@ class GoalRunnerImportCoordinatorTest {
     assertContains(
       Files.readString(destinationPort.root.resolve("specs/specs/decomposition-manifest.yaml")),
       "specs/specs/spec.md",
+    )
+    assertFalse(
+      Files.readString(destinationPort.root.resolve("specs/specs/decomposition-manifest.yaml"))
+        .contains(fixture.port.root.toString()),
     )
     assertEquals("body of spec.md", Files.readString(destinationPort.root.resolve("specs/specs/spec.md")))
     assertEquals(
@@ -279,7 +331,10 @@ private data class ImportFixture(
   val store: InMemoryGoalManifestStore,
 )
 
-private fun importFixture(bundleName: String = "SKILL-245-goal"): ImportFixture {
+private fun importFixture(
+  bundleName: String = "SKILL-245-goal",
+  absolutePaths: Boolean = false,
+): ImportFixture {
   val root = Files.createTempDirectory("goal-import-root")
   val storeRoot = Files.createTempDirectory("goal-import-store")
   val bundle = storeRoot.resolve("specs/$bundleName")
@@ -291,11 +346,16 @@ private fun importFixture(bundleName: String = "SKILL-245-goal"): ImportFixture 
     manifest(subtaskCount = 2).copy(
       issueKey = "SKILL-245",
       featureBranch = "feat/SKILL-245-goal",
-      parentSpecPath = "specs/$bundleName/spec.md",
+      parentSpecPath = if (absolutePaths) bundle.resolve("spec.md").toString() else "specs/$bundleName/spec.md",
       subtasks =
         manifest(2).subtasks.mapIndexed { index, subtask ->
           subtask.copy(
-            specPath = "specs/$bundleName/spec_subtask_${index + 1}.md",
+            specPath =
+              if (absolutePaths) {
+                bundle.resolve("spec_subtask_${index + 1}.md").toString()
+              } else {
+                "specs/$bundleName/spec_subtask_${index + 1}.md"
+              },
             branch = "feat/SKILL-245-goal",
           )
         },
@@ -330,5 +390,28 @@ private fun parentSnapshot(): RecordingGoalArchiveSnapshotPort {
   val parent = requireNotNull(states.getFeatureTaskWorkflow("wfl-parent")).copy(issueKey = "SKILL-245")
   return RecordingGoalArchiveSnapshotPort {
     GoalArchiveOwnedSnapshot(listOf(parent), emptyList(), emptyList(), emptyList())
+  }
+}
+
+private fun rewriteArchiveEntry(
+  archive: Path,
+  entryName: String,
+  rewrite: (String) -> String,
+) {
+  val entries = mutableListOf<Pair<String, ByteArray>>()
+  ZipInputStream(Files.newInputStream(archive)).use { input ->
+    while (true) {
+      val entry = input.nextEntry ?: break
+      val bytes = input.readBytes()
+      entries += entry.name to
+        if (entry.name == entryName) rewrite(bytes.decodeToString()).encodeToByteArray() else bytes
+    }
+  }
+  ZipOutputStream(Files.newOutputStream(archive)).use { output ->
+    entries.forEach { (name, bytes) ->
+      output.putNextEntry(ZipEntry(name))
+      output.write(bytes)
+      output.closeEntry()
+    }
   }
 }

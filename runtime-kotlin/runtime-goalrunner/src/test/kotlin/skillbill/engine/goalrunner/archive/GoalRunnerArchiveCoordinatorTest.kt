@@ -47,6 +47,31 @@ import kotlin.test.assertTrue
 
 class GoalRunnerArchiveCoordinatorTest {
   @Test
+  fun `absolute source store paths become portable in archived manifest`() {
+    val fixture = storeBundleFixture(absolutePaths = true)
+    val output = fixture.root.resolve("archive.zip")
+    val service =
+      exportService(
+        manifestStore = fixture.store,
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGitOperations("feat/SKILL-245-goal", "deadbeef"),
+            projectStore = fixture.port,
+            workerSupervisor = IdleWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
+      )
+
+    assertIs<GoalRunnerExportResult.Exported>(
+      service.export(GoalRunnerExportRequest("SKILL-245", fixture.root, output)),
+    )
+
+    val archivedManifest = readZipEntry(output, "specs/SKILL-245-goal/decomposition-manifest.yaml").decodeToString()
+    assertContains(archivedManifest, "specs/SKILL-245-goal/spec.md")
+    assertFalse(archivedManifest.contains(fixture.port.root.toString()))
+  }
+
+  @Test
   fun `live parent execution lease refuses export without writing output`() {
     val goalManifest = manifest(subtaskCount = 1).copy(issueKey = "SKILL-245")
     val store =
@@ -357,7 +382,7 @@ class GoalRunnerArchiveCoordinatorTest {
     decompositionManifestStore = decompositionManifestStore,
   )
 
-  private fun storeBundleFixture(): ExportStoreBundleFixture {
+  private fun storeBundleFixture(absolutePaths: Boolean = false): ExportStoreBundleFixture {
     val root = Files.createTempDirectory("goal-export-store-root")
     val storeRoot = Files.createTempDirectory("goal-export-store-bundle")
     val bundle = storeRoot.resolve("specs/SKILL-245-goal")
@@ -369,11 +394,17 @@ class GoalRunnerArchiveCoordinatorTest {
       manifest(subtaskCount = 2).copy(
         issueKey = "SKILL-245",
         featureBranch = "feat/SKILL-245-goal",
-        parentSpecPath = "specs/SKILL-245-goal/spec.md",
+        parentSpecPath =
+          if (absolutePaths) bundle.resolve("spec.md").toString() else "specs/SKILL-245-goal/spec.md",
         subtasks =
           manifest(2).subtasks.mapIndexed { index, subtask ->
             subtask.copy(
-              specPath = "specs/SKILL-245-goal/spec_subtask_${index + 1}.md",
+              specPath =
+                if (absolutePaths) {
+                  bundle.resolve("spec_subtask_${index + 1}.md").toString()
+                } else {
+                  "specs/SKILL-245-goal/spec_subtask_${index + 1}.md"
+                },
               branch = "feat/SKILL-245-goal",
             )
           },
