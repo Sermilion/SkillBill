@@ -248,7 +248,7 @@ class DiffCommentServiceTest {
   }
 
   @Test
-  fun `deleting the first comment removes the thread while a later comment goes alone`() {
+  fun `deleting a reply keeps the thread and deleting a lone root removes it`() {
     val fixture = Fixture()
     val thread = fixture.openUserThread()
     val reply =
@@ -264,6 +264,24 @@ class DiffCommentServiceTest {
     val first = assertIs<DiffCommentDeleteResult.Deleted>(fixture.service.deleteComment(thread.comments.first().id))
 
     assertTrue(first.threadRemoved)
+    assertTrue(fixture.storedThreads("main").isEmpty())
+  }
+
+  @Test
+  fun `deleting the root removes its thread while replies remain`() {
+    val fixture = Fixture()
+    val thread = fixture.openUserThread()
+    val reply =
+      assertIs<DiffCommentThreadResult.Saved>(
+        fixture.service.reply(thread.id, DiffCommentAuthor.USER, body = "follow-up"),
+      ).thread.comments.last()
+    val stored = fixture.storedThreads("main").single()
+
+    assertEquals(listOf(thread.comments.first().id, reply.id), stored.comments.map { it.id })
+
+    val deleted = assertIs<DiffCommentDeleteResult.Deleted>(fixture.service.deleteComment(thread.comments.first().id))
+
+    assertTrue(deleted.threadRemoved)
     assertTrue(fixture.storedThreads("main").isEmpty())
   }
 
