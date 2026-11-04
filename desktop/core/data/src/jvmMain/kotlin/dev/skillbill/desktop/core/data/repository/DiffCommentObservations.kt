@@ -15,13 +15,14 @@ import dev.skillbill.desktop.core.domain.model.CommentState
 import dev.skillbill.desktop.core.domain.model.CommentThread
 import dev.skillbill.desktop.core.domain.model.DiffCommentsState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import skillbill.application.review.diffcomment.model.DiffCommentDeleteResult
 import skillbill.application.review.diffcomment.model.DiffCommentCountResult
@@ -37,17 +38,24 @@ import skillbill.review.diffcomment.model.DiffCommentThreadState as RuntimeState
 import java.nio.file.Path
 import kotlin.time.toKotlinInstant
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class DiffCommentObservations internal constructor(
   private val signals: StateFlow<SignalSnapshot>,
   private val reads: RuntimeReads,
   private val runtime: RuntimeComponent,
   private val diagnostics: Diagnostics,
 ) {
-  fun observe(baseline: ChangeBaseline): Flow<DiffCommentsState> = revisionChanges(DesktopReadSchema.DIFF_COMMENTS_TOPIC)
+  fun observe(baseline: ChangeBaseline): Flow<DiffCommentsState> = merge(
+    revisionChanges(DesktopReadSchema.DIFF_COMMENTS_TOPIC),
+    flow {
+      while (true) {
+        delay(CHANGE_REFRESH_INTERVAL)
+        emit(Unit)
+      }
+    },
+  )
     .onStart { emit(Unit) }
     .conflate()
-    .mapLatest { list(baseline) }
+    .map { list(baseline) }
     .onStart { emit(DiffCommentsState.Loading) }
     .distinctUntilChanged()
 
