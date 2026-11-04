@@ -135,9 +135,15 @@ public class GoalRunnerArchiveExportOperations(
     request: GoalRunnerExportRequest,
     expectedObservation: DatabaseFileObservation? = null,
   ): GoalRunnerExportResult {
-    val repoRoot = request.repoRoot ?: error("repoRoot is required to export goal '${request.issueKey}'.")
     val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey)
     val outputPath = request.outputPath.toAbsolutePath().normalize()
+    if (!outputPath.toString().endsWith(".zip")) {
+      return GoalRunnerExportResult.Refused(
+        issueKey,
+        "Archive destination must end with lowercase .zip: $outputPath. Choose a path ending in .zip.",
+      )
+    }
+    val repoRoot = request.repoRoot ?: error("repoRoot is required to export goal '${request.issueKey}'.")
     val protection =
       when (val result = database.acquireDatabasePathProtection()) {
         is DatabasePathProtectionResult.Acquired -> result.protection

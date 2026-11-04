@@ -47,6 +47,34 @@ import kotlin.test.assertTrue
 
 class GoalRunnerArchiveCoordinatorTest {
   @Test
+  fun `export refuses destinations without lowercase zip suffix without changing them`() {
+    val fixture = storeBundleFixture()
+    val service =
+      exportService(
+        manifestStore = fixture.store,
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGitOperations("feat/SKILL-245-goal", "deadbeef"),
+            projectStore = fixture.port,
+            workerSupervisor = IdleWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
+      )
+    val originalContent = "keep this destination unchanged"
+
+    listOf("archive", "archive.ZIP").forEach { name ->
+      val output = fixture.root.resolve(name)
+      Files.writeString(output, originalContent)
+
+      val result = service.export(GoalRunnerExportRequest("SKILL-245", fixture.root, output))
+
+      assertIs<GoalRunnerExportResult.Refused>(result)
+      assertContains(result.reason, "lowercase .zip")
+      assertEquals(originalContent, Files.readString(output))
+    }
+  }
+
+  @Test
   fun `absolute source store paths become portable in archived manifest`() {
     val fixture = storeBundleFixture(absolutePaths = true)
     val output = fixture.root.resolve("archive.zip")
