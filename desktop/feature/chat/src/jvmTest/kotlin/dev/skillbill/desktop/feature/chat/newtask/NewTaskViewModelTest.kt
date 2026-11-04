@@ -9,11 +9,14 @@ import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.RepositoryBranches
+import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
 import dev.skillbill.desktop.core.domain.model.SpecProject
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
+import dev.skillbill.desktop.core.domain.repository.RepositoryBranchesRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
@@ -24,10 +27,12 @@ import dev.skillbill.desktop.core.testing.loadedBoard
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
 import dev.skillbill.desktop.feature.chat.chipText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -59,8 +64,8 @@ class NewTaskViewModelTest {
   @AfterTest
   fun tearDown() = Dispatchers.resetMain()
 
-  private fun viewModel(board: FakeWorkBoardRepository, draft: NewTaskDraft, specs: SpecRepository = FakeSpecs()) =
-    NewTaskViewModel(draft, board, specs, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK)
+  private fun viewModel(board: FakeWorkBoardRepository, draft: NewTaskDraft, specs: SpecRepository = FakeSpecs(), branches: RepositoryBranchesRepository = FakeBranches()) =
+    NewTaskViewModel(draft, board, specs, branches, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK)
 
   // View models die on sidebar navigation, so state kept in one would lose the chat.
   @Test
@@ -171,7 +176,7 @@ class NewTaskViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val draft = testNewTaskDraft()
     val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
-    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chat, detecting("Codex"), FIXED_CLOCK)
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), chat, detecting("Codex"), FIXED_CLOCK)
     advanceUntilIdle()
 
     assertEquals("codex", draft.agentId)
@@ -183,7 +188,7 @@ class NewTaskViewModelTest {
   fun `the home follows the board after the default repository is chosen`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val board = FakeWorkBoardRepository(BoardState.Loading)
-    val model = NewTaskViewModel(testNewTaskDraft(), board, FakeSpecs(listed = listOf(SpecProject("p", "p", "/specs/p", "/work/p"))), FakeExecutionChatRepository(), detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(testNewTaskDraft(), board, FakeSpecs(listed = listOf(SpecProject("p", "p", "/specs/p", "/work/p"))), FakeBranches(), FakeExecutionChatRepository(), detecting("claude"), FIXED_CLOCK)
     advanceUntilIdle()
     assertEquals(NewTaskHome.Pending, model.state.value.home)
 
@@ -209,7 +214,7 @@ class NewTaskViewModelTest {
       selectedAgent = chatRepo.agent
       text = "add export"
     }
-    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chatRepo, detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), chatRepo, detecting("claude"), FIXED_CLOCK)
     advanceUntilIdle()
     model.onAction(NewTaskAction.Send)
     runCurrent()
@@ -231,32 +236,47 @@ class NewTaskViewModelTest {
   }
 
   @Test
-  fun `choosing another repository after a chat rebinds that chat`() = runTest {
+  fun `a branch read for an earlier repository does not replace the current one`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    val chatRepo = FakeExecutionChatRepository()
-    val firstRoot = createTempDirectory("first-repo").toString()
-    val draft = NewTaskDraft(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK).apply {
-      chatDispatcher = StandardTestDispatcher(testScheduler)
-      repository = NewTaskRepository(firstRoot, "first")
-      agentId = "claude"
-      selectedAgent = chatRepo.agent
-      text = "add export"
+    val gate = CompletableDeferred<Unit>()
+    val draft = testNewTaskDraft().apply { repository = NewTaskRepository("/work/a", "a") }
+    val branches = FakeBranches { path ->
+      if (path == "/work/a") gate.await()
+      listed(path)
     }
-    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chatRepo, detecting("claude"), FIXED_CLOCK)
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), draft, branches = branches)
+    runCurrent()
+
+    model.onAction(NewTaskAction.ChooseRepository(NewTaskRepository("/work/b", "b")))
     advanceUntilIdle()
-    model.onAction(NewTaskAction.Send)
-    runCurrent()
-    val firstSession = chatRepo.requests.single().sessionId
-    val other = NewTaskRepository(createTempDirectory("other-repo").toString(), "other")
+    gate.complete(Unit)
+    advanceUntilIdle()
 
-    model.onAction(NewTaskAction.ChooseRepository(other))
-    runCurrent()
-
-    assertEquals(other, draft.repository)
-    assertNotEquals(firstSession, draft.chat.value?.sessionId)
-    assertEquals(other.root, draft.chat.value?.repositoryRoot)
+    assertEquals(BranchReadState.Loaded("/work/b", listed("/work/b").branches), model.state.value.branchRead)
     model.viewModelScope.cancel()
-    draft.close()
+  }
+
+  @Test
+  fun `a failed branch read reports failed and reopening reads again`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val problem = ReadProblem.Runtime("git failed")
+    val reads = ArrayDeque(listOf(RepositoryBranchesRead.Unavailable(problem), listed("/work/app"), RepositoryBranchesRead.NotARepository("/work/app")))
+    val draft = testNewTaskDraft().apply { repository = NewTaskRepository("/work/app", "app") }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), draft, branches = FakeBranches { reads.removeFirst() })
+    advanceUntilIdle()
+    assertEquals(BranchReadState.Failed("/work/app", readProblemText(problem)), model.state.value.branchRead)
+
+    model.onAction(NewTaskAction.OpenRepositoryPicker)
+    assertEquals(BranchReadState.Reading("/work/app"), model.state.value.branchRead)
+    advanceUntilIdle()
+    val loaded = BranchReadState.Loaded("/work/app", listed("/work/app").branches)
+    assertEquals(loaded, model.state.value.branchRead)
+
+    model.onAction(NewTaskAction.OpenRepositoryPicker)
+    assertEquals(loaded, model.state.value.branchRead)
+    advanceUntilIdle()
+    assertEquals(BranchReadState.Failed("/work/app", "/work/app is not a git repository."), model.state.value.branchRead)
+    model.viewModelScope.cancel()
   }
 
   @Test
@@ -275,7 +295,7 @@ class NewTaskViewModelTest {
       agentId = "claude"
       selectedAgent = chatRepo.agent
     }
-    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), chatRepo, detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), chatRepo, detecting("claude"), FIXED_CLOCK)
     advanceUntilIdle()
     draft.text = "first"
     model.onAction(NewTaskAction.Send)
@@ -315,9 +335,15 @@ class NewTaskViewModelTest {
   } as RuntimeConfigRepository
 
   private companion object {
+    fun listed(root: String) = RepositoryBranchesRead.Listed(RepositoryBranches(root, "main", emptyList(), emptyList()))
+
     val FIXED_CLOCK = object : Clock {
       override fun now() = Instant.fromEpochMilliseconds(0)
     }
+  }
+
+  private class FakeBranches(private val read: suspend (String) -> RepositoryBranchesRead = { listed(it) }) : RepositoryBranchesRepository {
+    override suspend fun branches(path: String): RepositoryBranchesRead = read(path)
   }
 
   private class FakeSpecs(

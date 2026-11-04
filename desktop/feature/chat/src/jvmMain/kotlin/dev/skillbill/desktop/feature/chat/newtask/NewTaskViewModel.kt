@@ -8,7 +8,10 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
+import dev.skillbill.desktop.core.domain.model.RepositoryBranches
+import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import dev.skillbill.desktop.core.domain.repository.RepositoryBranchesRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
@@ -25,6 +28,13 @@ import me.tatarka.inject.annotations.Inject
 import kotlin.time.Clock
 import kotlin.time.Instant
 
+sealed interface BranchReadState {
+  data object Idle : BranchReadState
+  data class Reading(val root: String) : BranchReadState
+  data class Loaded(val root: String, val branches: RepositoryBranches) : BranchReadState
+  data class Failed(val root: String, val message: String) : BranchReadState
+}
+
 data class NewTaskUiState(
   val repositories: List<NewTaskRepository> = emptyList(),
   val repositoryError: String? = null,
@@ -34,6 +44,7 @@ data class NewTaskUiState(
   val home: NewTaskHome = NewTaskHome.Pending,
   val detectedAgents: DetectedAgentsRead? = null,
   val resumePickerOpen: Boolean = false,
+  val branchRead: BranchReadState = BranchReadState.Idle,
 )
 
 sealed interface NewTaskAction {
@@ -60,6 +71,7 @@ class NewTaskViewModel(
   val draft: NewTaskDraft,
   private val board: WorkBoardRepository,
   private val specs: SpecRepository,
+  private val branches: RepositoryBranchesRepository,
   private val chat: ExecutionChatRepository,
   private val config: RuntimeConfigRepository,
   private val clock: Clock,
@@ -69,9 +81,11 @@ class NewTaskViewModel(
 
   private var pathCheck: Job? = null
   private var agentRead: Job? = null
+  private var branchReadJob: Job? = null
   private var readinessRequested = false
 
   init {
+    readBranches()
     viewModelScope.launch { observeBoard(loadRepositories()) }
     agentRead = viewModelScope.launch { resolveAgent(draft.agentId ?: defaultAgentId()) }
   }
@@ -85,8 +99,8 @@ class NewTaskViewModel(
       is NewTaskAction.ChooseRepository -> {
         pathCheck?.cancel()
         draft.repository = action.repository
-        draft.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
+        readBranches()
       }
       is NewTaskAction.SubmitRepositoryPath -> submitPath(action.path)
       is NewTaskAction.ChooseAgent -> {
@@ -94,10 +108,12 @@ class NewTaskViewModel(
         draft.agentId = action.agentId
         agentRead = viewModelScope.launch { resolveAgent(action.agentId) }
       }
-      NewTaskAction.OpenRepositoryPicker -> mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
+      NewTaskAction.OpenRepositoryPicker -> {
+        mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
+        readBranches()
+      }
       NewTaskAction.CloseRepositoryPicker -> {
         pathCheck?.cancel()
-        draft.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
       NewTaskAction.Send -> send()
@@ -109,7 +125,10 @@ class NewTaskViewModel(
       is NewTaskAction.ResumeDraft -> {
         agentRead?.cancel()
         draft.launch {
-          if (draft.resume(action.entry)) mutableState.update { it.copy(agent = action.entry.agent, resumePickerOpen = false) }
+          if (draft.resume(action.entry)) {
+            mutableState.update { it.copy(agent = action.entry.agent, resumePickerOpen = false) }
+            readBranches()
+          }
         }
       }
       is NewTaskAction.RunSuggestedAction -> draft.sendSuggestedAction(action.action)
@@ -138,6 +157,7 @@ class NewTaskViewModel(
       if (read !is BoardState.Loading && draft.repository == null) {
         val row = (read as? BoardState.Loaded)?.items?.firstOrNull()
         draft.repository = row?.let { NewTaskRepository(it.repositoryRoot, it.repositoryName) } ?: listed.firstOrNull()
+        readBranches()
       }
       val home = newTaskHome(read)
       mutableState.update { it.copy(home = home) }
@@ -171,6 +191,27 @@ class NewTaskViewModel(
     draft.rebindChat()
   }
 
+  private fun readBranches() {
+    branchReadJob?.cancel()
+    val root = draft.repository?.root
+    if (root == null) {
+      mutableState.update { it.copy(branchRead = BranchReadState.Idle) }
+      return
+    }
+    mutableState.update { current ->
+      val loaded = (current.branchRead as? BranchReadState.Loaded)?.root == root
+      if (loaded) current else current.copy(branchRead = BranchReadState.Reading(root))
+    }
+    branchReadJob = viewModelScope.launch {
+      val read = when (val result = branches.branches(root)) {
+        is RepositoryBranchesRead.Listed -> BranchReadState.Loaded(root, result.branches)
+        is RepositoryBranchesRead.NotARepository -> BranchReadState.Failed(root, "${result.path} is not a git repository.")
+        is RepositoryBranchesRead.Unavailable -> BranchReadState.Failed(root, readProblemText(result.problem))
+      }
+      if (draft.repository?.root == root) mutableState.update { it.copy(branchRead = read) }
+    }
+  }
+
   private fun submitPath(path: String) {
     if (path.isBlank()) return
     pathCheck?.cancel()
@@ -178,8 +219,8 @@ class NewTaskViewModel(
       when (val project = specs.projectFor(path)) {
         is Outcome.Success -> {
           draft.repository = NewTaskRepository(project.value.repoRoot ?: path, project.value.displayName)
-          draft.rebindChat()
           mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
+          readBranches()
         }
         is Outcome.Failure -> mutableState.update { it.copy(repositoryError = readProblemText(project.error)) }
       }

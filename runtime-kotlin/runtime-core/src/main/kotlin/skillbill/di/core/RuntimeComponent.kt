@@ -90,6 +90,7 @@ import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
 import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
+import skillbill.infrastructure.workflow.git.branches.GitRepositoryBranchesAdapter
 import skillbill.infrastructure.workflow.git.changes.GitWorkChangesAdapter
 import skillbill.infrastructure.workflow.git.lineage.GitRepositoryLineage
 import skillbill.model.EnvironmentContext
@@ -133,6 +134,7 @@ import skillbill.ports.validation.RepoValidationGateway
 import skillbill.ports.workchanges.WorkChangesPort
 import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.WorkflowSnapshotValidator
+import skillbill.ports.workflow.gitops.RepositoryBranchesPort
 import java.time.Clock
 
 @RuntimeSingleton
@@ -252,6 +254,9 @@ abstract class RuntimeComponent(
   @Provides
   fun workChangesPort(adapter: GitWorkChangesAdapter): WorkChangesPort = adapter
 
+  @Provides
+  fun repositoryBranchesPort(adapter: GitRepositoryBranchesAdapter): RepositoryBranchesPort = adapter
+
   @Provides @RuntimeSingleton
   internal fun sqliteDatabaseSessionFactory(
     context: EnvironmentContext,
@@ -309,6 +314,7 @@ abstract class RuntimeComponent(
   abstract val workChangeScopesService: WorkChangeScopesService
   abstract val workActivityService: WorkActivityService
   abstract val workChangesPort: WorkChangesPort
+  abstract val repositoryBranchesPort: RepositoryBranchesPort
   abstract val checkedOutBranchSource: CheckedOutBranchSource
 
   abstract val featureTaskContinuationLookupService: FeatureTaskContinuationLookupService

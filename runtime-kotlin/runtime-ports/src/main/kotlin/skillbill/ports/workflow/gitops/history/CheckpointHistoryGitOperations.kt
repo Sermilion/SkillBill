@@ -1,4 +1,4 @@
-package skillbill.ports.workflow.gitops
+package skillbill.ports.workflow.gitops.history
 
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult

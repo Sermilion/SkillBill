@@ -1,6 +1,9 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalFocusManager
@@ -10,10 +13,13 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -122,7 +128,7 @@ class NewTaskComposerTest {
   }
 
   @Test
-  fun `repository and agent chips stay clickable after the first reply`() = runComposeUiTest {
+  fun `the repository pill turns static once a chat starts and the agent chip stays clickable after the first reply`() = runComposeUiTest {
     val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
     val events = Channel<ChatEvent>(Channel.UNLIMITED)
     chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
@@ -152,17 +158,21 @@ class NewTaskComposerTest {
       }
     }
 
+    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
+    assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
+
     runOnIdle { draft.send() }
     waitForIdle()
-    onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled()
+    onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertDoesNotExist()
     onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
 
     events.trySend(ChatEvent.Completed)
     waitUntil { draft.chat.value?.thread?.busy?.value == false }
     waitForIdle()
 
-    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
-    assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
+    onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertDoesNotExist()
     onNode(hasClickLabel("Change agent")).assertIsEnabled().performClick()
     onNodeWithText("codex").assertExists()
   }
@@ -220,7 +230,7 @@ class NewTaskComposerTest {
   }
 
   @Test
-  fun `disabled repository and agent chips expose why and stay off while busy starting or missing repository`() = runTest {
+  fun `the repository pill is static with a chat and disabled while starting and the agent chip stays off`() = runTest {
     val repository = NewTaskRepository(
       createTempDirectory("new-task-repo").also { it.toFile().deleteOnExit() }.toString(),
       "repo",
@@ -265,13 +275,6 @@ class NewTaskComposerTest {
           }
         }
       }
-      fun assertChipsDisabled(why: String) {
-        onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled()
-          .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, why))
-        onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
-          .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, why))
-      }
-
       val busyChat = FakeExecutionChatRepository()
       val busyEvents = Channel<ChatEvent>(Channel.UNLIMITED)
       busyChat.events = { busyEvents.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
@@ -288,7 +291,9 @@ class NewTaskComposerTest {
       compose(busyDraft)
       runOnIdle { busyDraft.send() }
       waitForIdle()
-      assertChipsDisabled("Wait for the current reply to finish")
+      onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+      onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
+        .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Wait for the current reply to finish"))
       busyEvents.trySend(ChatEvent.Completed)
       waitForIdle()
 
@@ -312,12 +317,12 @@ class NewTaskComposerTest {
         text = "Add a button"
       }
       compose(startDraft)
-      runOnIdle { startDraft.send() }
-      waitForIdle()
-      runOnIdle { startDraft.start(NewTaskKind.GoalRun) }
+      runOnIdle { startDraft.start(NewTaskKind.Review) }
       waitForIdle()
       try {
-        assertChipsDisabled("Wait for the start to finish")
+        val startingWhy = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Wait for the start to finish")
+        onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled().assert(startingWhy)
+        onNode(hasClickLabel("Change agent")).assertIsNotEnabled().assert(startingWhy)
       } finally {
         startGate.complete(NewTaskStartOutcome.Refused("done"))
         waitForIdle()
@@ -325,7 +330,10 @@ class NewTaskComposerTest {
 
       compose(missingDraft)
       waitForIdle()
-      assertChipsDisabled("This draft's repository is missing")
+      onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+      val missingWhy = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "This draft's repository is missing")
+      onAllNodes(missingWhy).assertCountEquals(2)
+      onNode(missingWhy and hasText("removed")).assertExists()
     }
   }
 
@@ -379,6 +387,49 @@ class NewTaskComposerTest {
     instant = instant + 700.milliseconds
     onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
     assertEquals(2, actions.count { it == NewTaskAction.SendNow })
+  }
+
+  @Test
+  fun `a long branch shrinks before the repository name and the chevron stays`() = runComposeUiTest {
+    val draft = testNewTaskDraft().apply {
+      repository = NewTaskRepository("/work/repository", "repository")
+      baseBranch = "short"
+    }
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(NewTaskUiState(), draft) {}
+        }
+      }
+    }
+    fun repositoryWidth() = onNodeWithText("repository", useUnmergedTree = true).fetchSemanticsNode().size.width
+    val shortBranchWidth = repositoryWidth()
+
+    runOnIdle { draft.baseBranch = "b".repeat(200) }
+    waitForIdle()
+
+    assertEquals(shortBranchWidth, repositoryWidth())
+    assertTrue(onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).fetchSemanticsNode().size.width > 0)
+  }
+
+  @Test
+  fun `with no repository the pill offers the choice and opens the picker`() = runComposeUiTest {
+    val draft = testNewTaskDraft()
+    var state by mutableStateOf(NewTaskUiState())
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(state, draft) { if (it == NewTaskAction.OpenRepositoryPicker) state = state.copy(repositoryPickerOpen = true) }
+        }
+      }
+    }
+
+    onNodeWithText("Choose repository", useUnmergedTree = true).assertExists()
+    onNodeWithText(" / ", useUnmergedTree = true).assertDoesNotExist()
+    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
+    waitForIdle()
+
+    onNodeWithText("Repository path", useUnmergedTree = true).assertExists()
   }
 
   private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {
