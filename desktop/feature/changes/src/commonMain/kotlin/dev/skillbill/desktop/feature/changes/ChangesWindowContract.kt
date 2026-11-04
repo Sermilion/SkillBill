@@ -64,7 +64,7 @@ data class ChangesWindowUiState(
   }
 }
 
-data class CommentComposerUi(val path: String, val side: CommentSide?, val line: Int?, val text: String = "", val saving: Boolean = false, val problem: String? = null)
+data class CommentComposerUi(val path: String, val side: CommentSide?, val line: Int?, val branch: String, val text: String = "", val saving: Boolean = false, val problem: String? = null)
 data class CommentEditUi(val threadId: String, val commentId: String, val text: String, val saving: Boolean = false, val problem: String? = null)
 data class ReviewBarUi(val submitting: Boolean = false, val confirmingDiscard: Boolean = false, val problem: String? = null)
 

@@ -461,14 +461,14 @@ class ChangesWindowViewModelTest {
     override suspend fun reply(threadId: String, body: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
     override suspend fun setState(threadId: String, state: CommentState): Outcome<Unit, CommentRejection> = stateChange
     override suspend fun deleteComment(commentId: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
-    override suspend fun addPending(baseline: ChangeBaseline, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = pendingWrite?.await() ?: Outcome.Success(Unit)
+    override suspend fun addPending(baseline: ChangeBaseline, branch: String, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = pendingWrite?.await() ?: Outcome.Success(Unit)
     override suspend fun editComment(commentId: String, body: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
-    override suspend fun submitReview(baseline: ChangeBaseline): Outcome<Int, CommentRejection> {
+    override suspend fun submitReview(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> {
       reviewWrite?.let { return it.await() }
       if (submitResult is Outcome.Success) state.value = availablePending().copy(threads = availablePending().threads.map { it.copy(state = CommentState.Open) })
       return submitResult
     }
-    override suspend fun discardPending(baseline: ChangeBaseline): Outcome<Int, CommentRejection> = Outcome.Success(0)
+    override suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> = Outcome.Success(0)
   }
 
   private fun detailOf(item: WorkItem): MutableStateFlow<DetailState> {

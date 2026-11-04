@@ -105,14 +105,14 @@ class DiffCommentObservations internal constructor(
     ::deleteWriteOutcome,
   )
 
-  suspend fun addPending(baseline: ChangeBaseline, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = write(
+  suspend fun addPending(baseline: ChangeBaseline, branch: String, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = write(
     "add_pending",
     {
       it.diffCommentService.addPending(
         Path.of(baseline.worktreeRoot),
         DiffCommentPendingThreadRequest(
           path, side?.toRuntime() ?: RuntimeSide.NEW, line, body,
-          expectedBranch = (baseline as? ChangeBaseline.CommittedBranchRange)?.headBranch,
+          expectedBranch = branch,
         ),
       )
     },
@@ -125,23 +125,23 @@ class DiffCommentObservations internal constructor(
     ::threadWriteOutcome,
   )
 
-  suspend fun submitReview(baseline: ChangeBaseline): Outcome<Int, CommentRejection> = write(
+  suspend fun submitReview(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> = write(
     "submit_review",
     {
       it.diffCommentService.submitReview(
         Path.of(baseline.worktreeRoot),
-        branch = (baseline as? ChangeBaseline.CommittedBranchRange)?.headBranch,
+        branch = branch,
       )
     },
     ::countWriteOutcome,
   )
 
-  suspend fun discardPending(baseline: ChangeBaseline): Outcome<Int, CommentRejection> = write(
+  suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> = write(
     "discard_pending",
     {
       it.diffCommentService.discardPending(
         Path.of(baseline.worktreeRoot),
-        branch = (baseline as? ChangeBaseline.CommittedBranchRange)?.headBranch,
+        branch = branch,
       )
     },
     ::countWriteOutcome,

@@ -20,7 +20,9 @@ internal class DiffCommentAuthoringActions(
 
   fun handle(action: ChangesWindowAction) {
     when (action) {
-      is ChangesWindowAction.OpenComposer -> if (state().canAuthor) update { it.copy(composer = CommentComposerUi(action.path, action.side, action.line), editing = null) }
+      is ChangesWindowAction.OpenComposer -> (state().comments as? DiffCommentsState.Available)?.takeIf { it.canAuthor }?.let { comments ->
+        update { it.copy(composer = CommentComposerUi(action.path, action.side, action.line, comments.branch), editing = null) }
+      }
       is ChangesWindowAction.ComposerText -> update { old ->
         if (old.composer?.saving == true) old else old.copy(composer = old.composer?.copy(text = action.text, problem = null))
       }
@@ -54,11 +56,12 @@ internal class DiffCommentAuthoringActions(
     val composer = current.composer ?: return
     val body = composer.text.trim()
     val baseline = current.target?.allBaseline ?: return
+    val branch = composer.branch
     if (body.isBlank() || composer.saving || !current.canAuthor) return
     val saving = composer.copy(saving = true, problem = null)
     update { it.copy(composer = saving) }
     scope.launch {
-      when (val result = comments.addPending(baseline, composer.path, composer.side, composer.line, body)) {
+      when (val result = comments.addPending(baseline, branch, composer.path, composer.side, composer.line, body)) {
         is Outcome.Success -> update { if (it.composer === saving) it.copy(composer = null) else it }
         is Outcome.Failure -> update {
           if (it.composer === saving) it.copy(composer = saving.copy(saving = false, problem = result.error.reason)) else it
@@ -93,11 +96,13 @@ internal class DiffCommentAuthoringActions(
   private fun submitReview() {
     val current = state()
     val baseline = current.target?.allBaseline ?: return
-    if (current.pendingCount == 0 || current.review.submitting) return
+    val snapshot = current.comments as? DiffCommentsState.Available ?: return
+    val branch = snapshot.branch
+    if (snapshot.threads.none { it.state == CommentState.Pending } || current.review.submitting) return
     val submitting = ReviewBarUi(submitting = true)
     update { it.copy(review = submitting) }
     scope.launch {
-      val result = comments.submitReview(baseline)
+      val result = comments.submitReview(baseline, branch)
       if (state().review !== submitting) return@launch
       when (result) {
         is Outcome.Success -> {
@@ -114,12 +119,14 @@ internal class DiffCommentAuthoringActions(
   private fun discardPending() {
     val current = state()
     val baseline = current.target?.allBaseline ?: return
+    val snapshot = current.comments as? DiffCommentsState.Available ?: return
+    val branch = snapshot.branch
     if (current.review.submitting || !current.review.confirmingDiscard) return
     val discarding = ReviewBarUi(submitting = true)
     val editing = current.editing
     update { it.copy(review = discarding) }
     scope.launch {
-      val result = comments.discardPending(baseline)
+      val result = comments.discardPending(baseline, branch)
       if (state().review !== discarding) return@launch
       when (result) {
         is Outcome.Success -> update { it.copy(review = ReviewBarUi(), editing = it.editing?.takeUnless { edit -> edit === editing }) }

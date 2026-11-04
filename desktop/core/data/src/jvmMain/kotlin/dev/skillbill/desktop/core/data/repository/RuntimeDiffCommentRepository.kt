@@ -39,17 +39,17 @@ class RuntimeDiffCommentRepository(
   override suspend fun deleteComment(commentId: String): Outcome<Unit, CommentRejection> =
     sessions.sessions.value?.diffComments?.deleteComment(commentId) ?: noSession()
 
-  override suspend fun addPending(baseline: ChangeBaseline, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> =
-    sessions.sessions.value?.diffComments?.addPending(baseline, path, side, line, body) ?: noSession()
+  override suspend fun addPending(baseline: ChangeBaseline, branch: String, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> =
+    sessions.sessions.value?.diffComments?.addPending(baseline, branch, path, side, line, body) ?: noSession()
 
   override suspend fun editComment(commentId: String, body: String): Outcome<Unit, CommentRejection> =
     sessions.sessions.value?.diffComments?.editComment(commentId, body) ?: noSession()
 
-  override suspend fun submitReview(baseline: ChangeBaseline): Outcome<Int, CommentRejection> =
-    sessions.sessions.value?.diffComments?.submitReview(baseline) ?: noSession()
+  override suspend fun submitReview(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> =
+    sessions.sessions.value?.diffComments?.submitReview(baseline, branch) ?: noSession()
 
-  override suspend fun discardPending(baseline: ChangeBaseline): Outcome<Int, CommentRejection> =
-    sessions.sessions.value?.diffComments?.discardPending(baseline) ?: noSession()
+  override suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> =
+    sessions.sessions.value?.diffComments?.discardPending(baseline, branch) ?: noSession()
 
   private fun <T> noSession(): Outcome<T, CommentRejection> {
     diagnostics.record("desktop_diff_comment_write_rejected")
