@@ -1,3 +1,18 @@
+## [2026-11-04] Place diff comment threads at layout time
+Context: A thread can anchor to a line, file separator, or General block depending on its path, side, line, outdated state, and scope.
+Decision: `ThreadPlacement` runs while `FileDiffStream` renders from the current thread list; `LoadedDiff` remains hunks only.
+Reason: Cached diffs move across scopes and baselines, so storing threads in `LoadedDiff` would reload files when comments or scope change.
+
+## [2026-11-04] Keep interleaved diff row counts aligned
+Context: Inline threads add LazyColumn items, while jump-to-file and visible-row tracking use file indexes and row counts.
+Decision: `diffRows` and `FileDiffStream` use the same per-line thread slots; file indexes account for General and file thread rows.
+Reason: A separate scroll row model let file positions disagree with the rendered list.
+
+## [2026-11-04] Animate thread cards with visibility transitions
+Context: The approved mock calls for fade-and-slide motion, while the current Compose Desktop version lacks `Modifier.animateItem`.
+Decision: Use `AnimatedVisibility` with fade and vertical expansion, disabled when reduced motion is enabled.
+Reason: This provides the requested motion without a Compose upgrade.
+
 ## [2026-11-01] Show the scope's diffs as one continuous stream
 Context: The operator wants to keep scrolling from the end of one file into the next instead of picking each file.
 Decision: The diff pane is one LazyColumn over every visible file. The view model keeps loaded diffs per path for the scope and reads what the stream asks for, the files on screen plus two ahead, one at a time. A user scroll selects the file at the top; a file click, j and k jump to it. Scrolling never bumps `scrollRequest`, so the two cannot fight. A refreshed list drops only diffs whose ChangedFile changed.

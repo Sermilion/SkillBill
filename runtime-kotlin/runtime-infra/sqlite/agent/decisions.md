@@ -99,3 +99,8 @@ Reason: One status request needs a consistent snapshot and bounded connection li
 Context: Desktop control admission validates the durable goal and lease before invoking the existing control service. A second SQLite connection cannot write while admission owns the write lock.
 Decision: Nested reads, transactions, and self-managed writes on the same factory and thread join the outer write unit. The outer transaction owns commit and rollback. Thread state clears in finally. An independent write within a read snapshot keeps its existing ownership.
 Reason: Validation and the admitted control must see one durable identity and commit together. The nested-write regression proves rollback and reuse after failure. Desktop status projection joins readIfPresent, which refuses missing or incompatible stores without initialization. CLI read retains its fresh-store initialization contract.
+
+## [2026-11-04] Allocate migration 101 to diff comments
+Context: The spec requested migration 100, which already belongs to `drop-goal-shared-preplans-issue-key-unique`.
+Decision: Add `record-diff-comments` as migration 101 and set `DesktopReadSchema.VERSION` to 101.
+Reason: The next free migration number avoids colliding with the existing migration.

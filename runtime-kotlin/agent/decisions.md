@@ -1,3 +1,8 @@
+## [2026-11-04] Keep review comment writes outside settlement
+Context: Review findings and repair receipts are authoritative workflow evidence; diff comments are an auxiliary projection.
+Decision: Write finding threads and outcome replies beside the owning review or receipt mutation, treating failures as best-effort and diagnostic.
+Reason: Comment failures must leave review envelopes, verdicts, receipts, and step outcomes unchanged.
+
 ## [2026-11-02] Keep standalone QA progress separate from verdict settlement
 Context: A running standalone QA agent needs durable progress while its prose report remains the source of the verdict.
 Decision: Store a bounded checklist on the active standalone status row, update it transactionally, and treat seed and progress failures as non-blocking. Keep prose report settlement unchanged.

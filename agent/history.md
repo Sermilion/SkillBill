@@ -1,3 +1,12 @@
+## [2026-11-04] SKILL-451 local inline diff comments
+Areas: runtime-kotlin, desktop/core/{data,domain,ui}, desktop/feature/changes, orchestration/contracts, docs, skills/skill-bill
+- Added persistent branch-scoped diff comment threads and replies, a shared DiffCommentService, CLI and MCP access, desktop inline threads and draft publishing, and agent review outcome replies.
+- Added local `pr-review-fix` as the default and preserved GitHub handling under `mode:remote`; local confirmation checks anchors and branch/worktree state, validates selected fixes, replies, and commits without pushing.
+- Reusable: the service owns comment rules and idempotent agent-thread operations; CLI/MCP map through shared contracts; desktop computes thread placement from current thread and scope state while row accounting uses the same interleaved slots.
+- Limits: comments remain local to a repository branch; no GitHub synchronization, multi-user support, mentions, or feature flag. Desktop consumers must support schema version 101.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-02] SKILL-459 new-task home screen
 Areas: desktop/app, desktop/core, desktop/feature/chat, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-goalrunner, docs
 - New task is the default desktop route, with a composer, route preview, board-based home content, and a stationary amber dot under reduced motion. The preview never selects the launch path.
