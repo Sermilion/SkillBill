@@ -208,13 +208,17 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         contributions = window.entries.flatMap { it.sidebarItems },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,
-        onToggleSpecs = { panes.specsOpen = !panes.specsOpen },
+        onToggleSpecs = {
+          if (!panes.specsOpen) panes.drawerOpen = false
+          panes.specsOpen = !panes.specsOpen
+        },
         onToggleTerminal = window.terminal::toggle,
         onToggleChat = window.chat::toggleChatPane,
         onShowShortcuts = { panes.shortcutsOpen = true },
         onRemoveFavorite = window.favorites::remove,
         onRemoveSpecFavorite = window.favorites::removeSpec,
         onOpenSpecFavorite = { projectId, path ->
+          panes.drawerOpen = false
           window.specsPane.open()
           panes.specsOpen = true
           window.specsPane.revealFavorite(projectId, path)
