@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.monitor
 import skillbill.infrastructure.workflow.git.git
 import skillbill.infrastructure.workflow.git.runGit
 import skillbill.model.EnvironmentContext
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.monitor.model.MonitorAcquireRequest
 import skillbill.ports.monitor.model.MonitorAcquisition
@@ -98,7 +99,12 @@ internal class MonitorRepoFixture(root: Path) {
 
   fun context(from: Path = caller): MonitorRepositoryContext =
     assertIs<MonitorContextResolution.Resolved>(
-      GitMonitorResources(FakeMonitorProcessInspector(), Clock.systemUTC(), monitorStateEnvironment(caller.parent))
+      GitMonitorResources(
+        FakeMonitorProcessInspector(),
+        Clock.systemUTC(),
+        monitorStateEnvironment(caller.parent),
+        NoopRuntimeDiagnostics,
+      )
         .resolveContext(from),
     ).context
 

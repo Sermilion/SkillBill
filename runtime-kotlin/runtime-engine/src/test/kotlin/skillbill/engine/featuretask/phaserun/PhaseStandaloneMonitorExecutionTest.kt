@@ -532,6 +532,7 @@ class PhaseStandaloneMonitorExecutionTest {
           LiveProcessInspector,
           clock,
           EnvironmentContext(environment = mapOf(STATE_DIR_ENVIRONMENT_KEY to home.toString()), userHome = home),
+          NoopRuntimeDiagnostics,
         ),
         NoopRuntimeDiagnostics,
         IgnoredShutdownHooks,
