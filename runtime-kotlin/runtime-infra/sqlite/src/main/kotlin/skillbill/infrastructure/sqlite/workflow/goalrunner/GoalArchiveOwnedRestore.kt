@@ -47,7 +47,15 @@ internal fun restoreOwnedGoalTables(
     }
     if (table in RESTORE_SKIP_TABLES || rows.isEmpty()) return@forEach
     val blobColumns = blobColumnNames(connection, table)
-    rows.forEach { row -> insertOrReplaceArchiveRow(connection, table, row, blobColumns) }
+    val rowsToRestore =
+      if (table == "worktree_edit_journal") {
+        rows.sortedBy(::archivedJournalId)
+      } else {
+        rows
+      }
+    rowsToRestore.forEach { row ->
+      insertOrReplaceArchiveRow(connection, table, row, blobColumns, omitJournalId = table == "worktree_edit_journal")
+    }
   }
 }
 
@@ -56,13 +64,15 @@ private fun insertOrReplaceArchiveRow(
   table: String,
   row: GoalArchiveTableRow,
   blobColumns: Set<String>,
+  omitJournalId: Boolean,
 ) {
-  val entries = row.orderedEntries()
+  val entries = row.orderedEntries().filterNot { (name, _) -> omitJournalId && name == "id" }
   if (entries.isEmpty()) return
   val columns = entries.joinToString(", ") { (name, _) -> quotedIdentifier(name) }
   val values = entries.joinToString(", ") { "?" }
+  val insertMode = if (omitJournalId) "INSERT" else "INSERT OR REPLACE"
   connection.prepareStatement(
-    "INSERT OR REPLACE INTO ${quotedIdentifier(table)} ($columns) VALUES ($values)",
+    "$insertMode INTO ${quotedIdentifier(table)} ($columns) VALUES ($values)",
   ).use { statement ->
     entries.forEachIndexed { index, (name, value) ->
       bindArchiveRestoreValue(statement, index + 1, value, name in blobColumns)
@@ -70,6 +80,14 @@ private fun insertOrReplaceArchiveRow(
     statement.executeUpdate()
   }
 }
+
+private fun archivedJournalId(row: GoalArchiveTableRow): Long =
+  (row.orderedEntries().firstOrNull { (name, _) -> name == "id" }?.second as? Number)?.toLong()
+    ?: throw invalidGoalArchiveSchemaError(
+      GoalArchiveEnvelopeKeys.OWNED_TABLES_JSON,
+      "worktree_edit_journal.id",
+      "is missing or is not numeric",
+    )
 
 private fun bindArchiveRestoreValue(
   statement: PreparedStatement,

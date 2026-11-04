@@ -1,6 +1,8 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.infrastructure.sqlite.workflow.goalrunner.archive.SqliteGoalArchiveSnapshotPort
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
+import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -9,10 +11,95 @@ import java.sql.Connection
 import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class GoalArchiveSnapshotPersistenceTest {
+  @Test
+  fun `restore assigns local journal ids and preserves archived id order`() {
+    val tempDir = Files.createTempDirectory("goal-archive-journal-restore")
+    val dbPath = tempDir.resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      insertJournalRow(connection, 1, "wftr-destination", "destination.txt", 9 to 4)
+    }
+    val factory =
+      sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap())
+    val archive =
+      GoalArchiveOwnedTables.of(
+        mapOf(
+          "worktree_edit_journal" to
+            listOf(
+              journalArchiveRow(2, "wftr-imported", "second.txt", 2 to 1),
+              journalArchiveRow(1, "wftr-imported", "first.txt", 5 to 3),
+            ),
+        ),
+      )
+
+    SqliteGoalArchiveSnapshotPort(factory).restoreOwnedTables(archive)
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(
+        listOf(
+          JournalRow(
+            1,
+            "wftr-destination",
+            "implement",
+            "2026-01-01T00:00:00Z",
+            "destination.txt",
+            9,
+            4,
+            "worktree_probe",
+          ),
+          JournalRow(2, "wftr-imported", "implement", "2026-01-01T00:00:00Z", "first.txt", 5, 3, "worktree_probe"),
+          JournalRow(3, "wftr-imported", "implement", "2026-01-01T00:00:00Z", "second.txt", 2, 1, "worktree_probe"),
+        ),
+        readJournalRows(connection),
+      )
+    }
+  }
+
+  @Test
+  fun `failed journal restore rolls back earlier inserted rows`() {
+    val tempDir = Files.createTempDirectory("goal-archive-journal-rollback")
+    val dbPath = tempDir.resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      insertJournalRow(connection, 1, "wftr-destination", "destination.txt", 9 to 4)
+    }
+    val factory =
+      sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap())
+    val archive =
+      GoalArchiveOwnedTables.of(
+        mapOf(
+          "worktree_edit_journal" to
+            listOf(
+              journalArchiveRow(2, "wftr-imported", "would-be-partial.txt", 2 to 1),
+              journalArchiveRow(3, "wftr-imported", "invalid.txt", 1 to 0, source = "invalid"),
+            ),
+        ),
+      )
+
+    assertFails { SqliteGoalArchiveSnapshotPort(factory).restoreOwnedTables(archive) }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(
+        listOf(
+          JournalRow(
+            1,
+            "wftr-destination",
+            "implement",
+            "2026-01-01T00:00:00Z",
+            "destination.txt",
+            9,
+            4,
+            "worktree_probe",
+          ),
+        ),
+        readJournalRows(connection),
+      )
+    }
+  }
+
   @Test
   fun `snapshot returns purge-owned planning and evidence rows for every counted table`() {
     val tempDir = Files.createTempDirectory("goal-archive-snapshot")
@@ -75,6 +162,74 @@ class GoalArchiveSnapshotPersistenceTest {
     }
   }
 
+  private fun insertJournalRow(
+    connection: Connection,
+    id: Long,
+    workflowId: String,
+    path: String,
+    linesChanged: Pair<Int, Int>,
+  ) {
+    connection.prepareStatement(
+      """
+      INSERT INTO worktree_edit_journal (
+        id, workflow_id, phase_id, recorded_at, path, lines_added, lines_removed, source
+      ) VALUES (?, ?, 'implement', '2026-01-01T00:00:00Z', ?, ?, ?, 'worktree_probe')
+      """.trimIndent(),
+    ).use { statement ->
+      statement.setLong(1, id)
+      statement.setString(2, workflowId)
+      statement.setString(3, path)
+      statement.setInt(4, linesChanged.first)
+      statement.setInt(5, linesChanged.second)
+      statement.executeUpdate()
+    }
+  }
+
+  private fun readJournalRows(connection: Connection): List<JournalRow> =
+    connection.createStatement().use { statement ->
+      statement.executeQuery(
+        "SELECT id, workflow_id, phase_id, recorded_at, path, lines_added, lines_removed, source " +
+          "FROM worktree_edit_journal ORDER BY id",
+      ).use { rows ->
+        buildList {
+          while (rows.next()) {
+            add(
+              JournalRow(
+                rows.getLong("id"),
+                rows.getString("workflow_id"),
+                rows.getString("phase_id"),
+                rows.getString("recorded_at"),
+                rows.getString("path"),
+                rows.getInt("lines_added"),
+                rows.getInt("lines_removed"),
+                rows.getString("source"),
+              ),
+            )
+          }
+        }
+      }
+    }
+
+  private fun journalArchiveRow(
+    id: Long,
+    workflowId: String,
+    path: String,
+    linesChanged: Pair<Int, Int>,
+    source: String = "worktree_probe",
+  ): GoalArchiveTableRow =
+    GoalArchiveTableRow(
+      linkedMapOf(
+        "id" to id,
+        "workflow_id" to workflowId,
+        "phase_id" to "implement",
+        "recorded_at" to "2026-01-01T00:00:00Z",
+        "path" to path,
+        "lines_added" to linesChanged.first,
+        "lines_removed" to linesChanged.second,
+        "source" to source,
+      ),
+    )
+
   private fun seedPlanningAndEvidence(
     connection: Connection,
     parentId: String,
@@ -99,6 +254,17 @@ class GoalArchiveSnapshotPersistenceTest {
     }
   }
 }
+
+private data class JournalRow(
+  val id: Long,
+  val workflowId: String,
+  val phaseId: String,
+  val recordedAt: String,
+  val path: String,
+  val linesAdded: Int,
+  val linesRemoved: Int,
+  val source: String,
+)
 
 private const val SHARED_PREPLAN_INSERT =
   """
