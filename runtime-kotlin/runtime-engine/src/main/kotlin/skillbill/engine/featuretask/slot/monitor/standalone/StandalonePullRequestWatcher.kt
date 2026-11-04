@@ -27,6 +27,7 @@ internal class StandalonePullRequestWatcher(
   private val cancelled: () -> Boolean,
   private val pollInterval: Duration = DEFAULT_POLL_INTERVAL,
   private val startTimeout: Duration = DEFAULT_START_TIMEOUT,
+  private val noChecksGrace: Duration = DEFAULT_NO_CHECKS_GRACE,
   private val progressInterval: Duration = DEFAULT_PROGRESS_INTERVAL,
   private val refreshGrace: Duration = DEFAULT_REFRESH_GRACE,
 ) {
@@ -52,6 +53,8 @@ internal class StandalonePullRequestWatcher(
     val adoptHead: (String) -> String?,
     val refreshGraceEndsAt: Instant,
     var ciStarted: Boolean = false,
+    var emptyObservedAt: Instant? = null,
+    val seenCheckHeads: MutableSet<String> = mutableSetOf(),
     val progress: StandaloneWatchProgress,
   )
 
@@ -84,7 +87,14 @@ internal class StandalonePullRequestWatcher(
   ): PollRound =
     when (val observation = observe(pullRequest, state.heads)) {
       is Observation.Settled -> PollRound(observation.outcome)
-      Observation.NotYetVisible, Observation.Unknown -> PollRound()
+      Observation.NotYetVisible -> {
+        state.emptyObservedAt = null
+        PollRound()
+      }
+      Observation.Unknown -> {
+        state.emptyObservedAt = null
+        PollRound()
+      }
       is Observation.Moved -> PollRound(adopt(observation.headSha, state))
       is Observation.Open -> pollChecks(pullRequest, observation, onCiRunning, state)
     }
@@ -100,6 +110,7 @@ internal class StandalonePullRequestWatcher(
       )
     }
     state.heads = StandaloneWatchHeads(headSha, state.heads.superseded + state.heads.expected)
+    state.emptyObservedAt = null
     return null
   }
 
@@ -111,15 +122,24 @@ internal class StandalonePullRequestWatcher(
   ): PollRound {
     val reported = checks.checks(pullRequest)
     if (reported is PullRequestChecks.Unavailable) {
+      state.emptyObservedAt = null
       return confirmUnavailable(pullRequest, state.heads)
     }
     val reportedChecks = (reported as? PullRequestChecks.Reported)?.checks.orEmpty()
-    if (reportedChecks.isNotEmpty()) state.ciStarted = true
+    if (reportedChecks.isNotEmpty()) {
+      state.ciStarted = true
+      state.seenCheckHeads += open.headSha
+      state.emptyObservedAt = null
+    }
     val verdict =
       standaloneVerdictFor(reportedChecks, open.headSha, open.pullRequest.editableFieldsDigest)
         ?.takeUnless { it is PullRequestCiOutcome.Failed && !refreshed(reportedChecks, state) }
     if (verdict == null) {
       state.progress.report(pullRequest.url, reportedChecks, onCiRunning)
+      if (reportedChecks.isEmpty()) {
+        val outcome = confirmEmpty(pullRequest, open, state)
+        if (outcome != null) return outcome
+      }
       return PollRound(startTimeoutEligible = reportedChecks.isEmpty())
     }
     return when (val confirmation = observe(pullRequest, state.heads)) {
@@ -131,6 +151,42 @@ internal class StandalonePullRequestWatcher(
       Observation.Unknown -> PollRound()
       is Observation.Moved -> PollRound()
       is Observation.Open -> PollRound(verdict)
+    }
+  }
+
+  private fun confirmEmpty(
+    pullRequest: MonitorPullRequestIdentity,
+    open: Observation.Open,
+    state: WatchState,
+  ): PollRound? {
+    if (open.headSha in state.seenCheckHeads) {
+      state.emptyObservedAt = null
+      return null
+    }
+    val firstEmptyAt = state.emptyObservedAt
+    if (firstEmptyAt == null) {
+      state.emptyObservedAt = now()
+      return null
+    }
+    if (Duration.between(firstEmptyAt, now()) < noChecksGrace) return null
+    return when (val confirmation = observe(pullRequest, state.heads)) {
+      is Observation.Settled -> PollRound(confirmation.outcome)
+      Observation.Unknown, Observation.NotYetVisible -> {
+        state.emptyObservedAt = null
+        null
+      }
+      is Observation.Moved -> {
+        state.emptyObservedAt = null
+        PollRound(adopt(confirmation.headSha, state))
+      }
+      is Observation.Open -> {
+        if (confirmation.headSha == open.headSha) {
+          PollRound(PullRequestCiOutcome.NoChecksReported)
+        } else {
+          state.emptyObservedAt = null
+          null
+        }
+      }
     }
   }
 
@@ -174,7 +230,8 @@ internal class StandalonePullRequestWatcher(
       pullRequest.state == MonitorPullRequestState.MERGED -> Observation.Settled(PullRequestCiOutcome.Merged)
       pullRequest.state == MonitorPullRequestState.CLOSED ->
         Observation.Settled(PullRequestCiOutcome.Blocked("The pull request was closed without merging."))
-      headSha == null -> Observation.Settled(PullRequestCiOutcome.Unavailable("The pull request head is unavailable."))
+      headSha.isNullOrBlank() ->
+        Observation.Settled(PullRequestCiOutcome.Unavailable("The pull request head is unavailable."))
       headSha == heads.expected && pullRequest.conflicting -> Observation.Settled(PullRequestCiOutcome.Conflicted)
       headSha == heads.expected -> Observation.Open(pullRequest, headSha)
       headSha in heads.superseded -> Observation.NotYetVisible

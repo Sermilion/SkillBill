@@ -543,9 +543,13 @@ does not register a standalone phase execution. Both goal and standalone
 monitoring start repair on the first poll reporting a failed check,
 even while other checks are pending, and on the first poll reporting a merge
 conflict, even when no checks are listed. The repair agent runs the project's local checks, as validation does, and settles completed only when they pass; the runtime commits and pushes only a completed repair. Reported checks must all pass, be skipped, or be cancelled with none pending.
-Goal monitoring also completes with a no-checks-reported result after two successful
-empty observations for the same PR head at least two minutes apart. Delayed or
-conditional checks may appear after completion. A missing pull request, wrong
+Goal monitoring completes with a no-checks-reported result only after two
+successful empty check observations at least two minutes apart and a fresh lookup
+confirms the same nonconflicting PR number and nonblank head. A failed or
+unavailable identity or check read is unknown and cannot confirm the result. A
+changed PR or head starts a new window. Checks that appear during the window use
+the normal pending, failure, and success paths. Conditional or delayed checks may
+appear after completion. Inspect the PR again if those checks matter. A missing pull request, wrong
 branch, or exhausted repair loop stops the goal at the failing finalization step. A failed GitHub identity or CI
 checks read is recorded as unknown for that round and retried; a failed read cannot establish that no checks were reported. A later goal run reuses completed subtasks and the existing PR
 and monitors again. Accepted no-change goals create no PR and skip monitoring.
@@ -575,9 +579,38 @@ trying to publish another pull request, including after deletion of the remote
 feature branch. Before returning a failed check or conflict, monitoring refreshes
 the pull request state so an observed merge completes the run. Repair-limit
 reports label the retained failure as the last observation.
-An empty check report keeps goal monitoring active until checks arrive and pass
-or the monitor reaches its timeout. It never counts as CI success. A timeout or
-exhausted repair loop reports a blocked goal rather than completion.
+An empty check report starts the two-observation window only for a known current
+PR head. A prior check for that PR and head prevents a later empty response from
+being treated as no checks. Failed reads and changed heads do not confirm the
+window. A no-check result records that no checks were reported during the
+observation window, not that CI is unconfigured or that no later check can run.
+
+### Recovering an existing monitor workflow
+
+Before resuming a blocked, active, or legacy monitor workflow, inspect its child
+and parent status. Match the child and parent IDs, repository, issue key, PR
+number, and current head. Read the current owner and lease, then refresh the PR
+and check evidence. Old status output, saved check data, or an earlier process
+observation is not proof of present ownership.
+
+Use `skill-bill feature-task status <child-workflow-id>` and
+`skill-bill goal status <issue-key>` to inspect the child and parent. Use
+`skill-bill goal watch <issue-key> --verbose` when live process and incident
+evidence are needed. If normal admission allows a resume, run
+`skill-bill goal <issue-key>`. For a supported incident action, preview it with
+`skill-bill work recover <work-id> --incident <token> --preview`, then apply the
+same action with the preview's revision using
+`skill-bill work recover <work-id> --incident <token> --revision <revision>`.
+Do not take over a live or unverifiable owner, edit database rows, or mark the
+workflow complete outside the runtime. Keep completed subtasks and the existing
+PR. If identity, ownership, or the supported recovery action is ambiguous, stop
+and report the evidence gap.
+
+The historical IDs `wftr-20261104-162307-wmha` and
+`wftr-20261104-162305-ggjh`, issue `TSW-1`, and branch
+`feat/TSW-1-replace-landing-page-design` are leads from an earlier investigation.
+Recheck every identity and the live lease before acting. They do not establish
+that a workflow belongs to the current issue or authorize mutation.
 
 A long-running child's phase ledger retains recent entries and the retry and
 settlement entries needed to preserve repair budgets. Those older entries can

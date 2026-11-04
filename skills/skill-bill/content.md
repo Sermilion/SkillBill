@@ -470,6 +470,14 @@ only if that result fails. Merge-only work does not spend a CI repair attempt.
 The cap report names failed repair commits and their check links from recorded
 evidence.
 
+For a pull request with a known nonblank head, two successful empty check
+observations at least two minutes apart and a fresh lookup confirming the same PR
+number and head complete with a no-checks-reported result. Failed reads cannot
+confirm it, a changed head starts a new window, and checks that appear during the
+window use the normal pending, failure, and success paths. Conditional or delayed
+checks may appear after completion. Inspect the PR again if those checks matter.
+Branch targets keep their separate one-hour no-check policy.
+
 Admission allows one monitor per pull request or named branch target. A second monitor for the same
 target with a live owner blocks and names that owner. A stale owner blocks and reports its owner
 token. After confirming the process is gone, rerun with the exact PR URL or `branch:<name>` and

@@ -101,13 +101,27 @@ class StandalonePullRequestWatcherTest {
   private fun reports(vararg checks: PullRequestCheck) = PullRequestChecks.Reported(checks.toList())
 
   @Test
-  fun `a pull request that never reports a check stops at the one hour obstacle`() {
+  fun `two empty observations complete a pull request after the grace period`() {
     heads += PUBLISHED
 
     val outcome = watch()
 
-    assertEquals(PullRequestCiOutcome.Blocked("CI did not start within 60 minutes."), outcome)
-    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofHours(1))
+    assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
+    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofMinutes(2))
+    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) < Duration.ofHours(1))
+  }
+
+  @Test
+  fun `a check observed for the head prevents a later empty result from completing`() {
+    heads += PUBLISHED
+    reportedSequence += reports(check("build", CheckBucket.PENDING))
+    repeat(5) { reportedSequence += reports() }
+    reportedSequence += reports(check("build", CheckBucket.PASS))
+
+    val outcome = watch()
+
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), outcome)
+    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofMinutes(2))
   }
 
   @Test

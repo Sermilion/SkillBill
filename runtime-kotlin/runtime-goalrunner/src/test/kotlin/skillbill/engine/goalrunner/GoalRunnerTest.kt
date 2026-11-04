@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner
 
+import skillbill.agent.model.PhaseOutput
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.application.FakeDatabaseSessionFactory
@@ -225,6 +226,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeCrit
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeReason
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -2000,16 +2002,36 @@ class GoalRunnerLinearScratchFinalizeTest {
               assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
               assertNull(store.controlState(state.parentWorkflowId).goalCompletedAt)
               monitored = true
-              PhaseRunResult.Completed("goal-monitor", listOf("monitor"), null, "CI passed")
+              PhaseRunResult.Completed(
+                "goal-monitor",
+                listOf("monitor"),
+                null,
+                "No checks were reported for the pull request after two successful empty observations.",
+                completedOutputs =
+                  listOf(
+                    NormalizedFeatureTaskRuntimePhaseOutput(
+                      phaseId = "monitor",
+                      status = "completed",
+                      summary = "No checks reported",
+                      output =
+                        PhaseOutput(
+                          value =
+                            "No checks were reported for the pull request after two successful empty observations.",
+                        ),
+                    ).canonicalJson,
+                  ),
+              )
             },
         ),
       )
 
     val result = runner.run(linearRunRequest(repoRoot).copy(eventSink = GoalRunnerEventSink(events::add)))
 
-    assertIs<GoalRunnerRunReport.Completed>(result)
+    val completed = assertIs<GoalRunnerRunReport.Completed>(result)
     assertTrue(monitored)
     assertEquals(1, events.filterIsInstance<GoalRunnerRunEvent.Completed>().size)
+    assertContains(completed.monitoringSummary.orEmpty(), "Monitoring result: No checks were reported")
+    assertFalse(completed.monitoringSummary.orEmpty().contains("all checks passed"))
   }
 
   @Test
