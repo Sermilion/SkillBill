@@ -183,7 +183,7 @@ class AgentRunCommandBuildersTest {
         "--dangerously-skip-permissions",
         "--add-dir",
         "/tmp/skillbill-agent-run",
-      ),
+      ) + defaultClaudeWriteSettings,
       streamed.command,
     )
     assertEquals(AgentRunOutputDecoder.CLAUDE_STREAM_JSON, streamed.outputDecoder)
@@ -229,7 +229,7 @@ class AgentRunCommandBuildersTest {
         "--dangerously-skip-permissions",
         "--add-dir",
         "/tmp/skillbill-agent-run",
-      ),
+      ) + defaultClaudeWriteSettings,
       builder.build(request(model = "claude-opus", effort = "high")).command,
     )
     assertEquals(
@@ -243,7 +243,7 @@ class AgentRunCommandBuildersTest {
         "--dangerously-skip-permissions",
         "--add-dir",
         "/tmp/skillbill-agent-run",
-      ),
+      ) + defaultClaudeWriteSettings,
       builder.build(request(model = "claude-opus")).command,
     )
     assertEquals(
@@ -255,7 +255,7 @@ class AgentRunCommandBuildersTest {
         "--dangerously-skip-permissions",
         "--add-dir",
         "/tmp/skillbill-agent-run",
-      ),
+      ) + defaultClaudeWriteSettings,
       builder.build(request()).command,
     )
   }
@@ -269,8 +269,8 @@ class AgentRunCommandBuildersTest {
     val codex = CodexAgentRunCommandBuilder().build(qaLaunch).command
 
     assertEquals(
-      listOf("--add-dir", "/tmp/skillbill-agent-run", "--add-dir", invocation.toString()),
-      claude.takeLast(4),
+      listOf("/tmp/skillbill-agent-run", invocation.toString()),
+      claude.windowed(2).filter { it.first() == "--add-dir" }.map { it.last() },
     )
     assertEquals(listOf("--add-dir", invocation.toString()), codex.windowed(2).single { it.first() == "--add-dir" })
   }
@@ -648,4 +648,43 @@ class AgentRunCommandBuildersTest {
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, CodexAgentRunCommandBuilder().build(request()).idlePolicy)
     assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, JunieAgentRunCommandBuilder().build(request()).idlePolicy)
   }
+
+  @Test
+  fun `a claude write launch allows agent config writes in every writable directory without bypass mode`() {
+    val store = Path.of("/home/dev/.skill-bill/projects/l-0123")
+    val launch = request().copy(additionalWritableDirectories = listOf(store))
+    val command = ClaudeAgentRunCommandBuilder(emptyMap()).build(launch).command
+    val settings = command[command.indexOf("--settings") + 1]
+    val allow =
+      structuredOutputMapper.readTree(settings).path("permissions").path("allow").map { it.asText() }
+
+    listOf("/tmp/skillbill-agent-run", store.toString()).forEach { root ->
+      listOf("agents", "commands", "skills").forEach { folder ->
+        assertContains(allow, "Edit(/$root/.claude/$folder/**)")
+        assertContains(allow, "Bash(mkdir -p $root/.claude/$folder*)")
+        assertContains(allow, "Bash(cp * $root/.claude/$folder/*)")
+      }
+    }
+    assertContains(allow, "Bash(mkdir -p .claude/agents*)")
+    assertContains(allow, "Bash(cp * .claude/agents/*)")
+    assertFalse(allow.any { it.contains(".claude/settings") })
+  }
+
+  @Test
+  fun `read-only and governed review claude launches carry no write settings`() {
+    val builder = ClaudeAgentRunCommandBuilder(emptyMap())
+
+    assertFalse(builder.build(request().copy(readOnlyPhase = true)).command.contains("--settings"))
+    assertFalse(
+      builder.build(
+        request().copy(
+          reviewEvidenceBroker = NoOpReviewEvidenceBroker,
+          reviewEvidenceEndpoint = StubReviewEvidenceEndpoint,
+        ),
+      ).command.contains("--settings"),
+    )
+  }
+
+  private val defaultClaudeWriteSettings =
+    listOf("--settings", claudeAgentConfigWriteSettings(listOf(Path.of("/tmp/skillbill-agent-run"))))
 }
