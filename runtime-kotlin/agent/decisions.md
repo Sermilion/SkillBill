@@ -3480,3 +3480,7 @@ the launcher's wall-clock rejection. Import aliases retain the same scope.
 ## [2026-11-03] GitGoalWorktreeResources add and wait rules
 
 The goal worktree add pins `LC_ALL=C` because git translates the `locked initializing` reason, and the adapter matches that exact field. `ADD_WAIT_POLLS` is the git add deadline divided by the poll interval. Every poll sleeps at least that interval, so a waiter outlasts the deadline of any add still running. A revision starting with `-` fails before the add because git would read it as an option. A concurrent winner makes the losing add exit with an error, so a timed-out add is always this launch's own process. After a failed add the adapter reads the list once more for a path another launch may own. `awaitInitializing` removes nothing, and an abandoned add's record ends in `Failed`.
+
+## [2026-11-04] Test temp dirs live under the Gradle user home
+
+Each Test task sets `java.io.tmpdir` to `<gradle-user-home>/sbt-<hash>`. `/tmp` is a RAM-backed tmpfs on developer machines, and leaked fixture dirs filled it and pushed other memory into swap. A module `build/` directory is not an option because tests need paths outside any git repository, and Unix socket tests need a short root for the 104-byte macOS path limit. The task deletes the directory on success and keeps it on failure for debugging. A later test task removes any `sbt-*` directory untouched for 24 hours, which covers failed runs from checkouts that no longer exist. `desktop/build-logic` carries the same rule because the two builds share no convention code.
