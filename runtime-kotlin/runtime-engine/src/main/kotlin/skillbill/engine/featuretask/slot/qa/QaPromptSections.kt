@@ -100,10 +100,13 @@ internal object QaPromptSections {
     |
     |- QA may build and install the app artifact the pack guidance names, and may run device or instrumentation
     |  tests for the flows the acceptance criteria cover.
-    |- QA may edit any file in the QA checkout to reach a state the criteria need but the environment cannot
-    |  produce: inject a fault, force an error response, add a debug hook, or shorten a timeout. Rebuild after such
-    |  an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit, push, or open
-    |  a pull request. QA reports findings; it does not repair them.
+    |- When a criterion or changed behavior needs a state the environment does not produce on its own, QA forces
+    |  it. Edit any file in the QA checkout to inject a fault, force an error response, add a debug hook, or shorten
+    |  a timeout, or change the environment, for example by cutting the network while a response streams. Rebuild
+    |  after such an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit,
+    |  push, or open a pull request. QA reports findings; it does not repair them.
+    |- That the environment could not produce a state is never a reason to leave a flow unexercised. Report a flow
+    |  as not exercised only when a forced attempt failed, and name what you tried and why it failed.
     |- For device QA, build, install, launch, and sign in as needed. An existing signed-in session may be used;
     |  synthetic account provenance is not a prerequisite. Every in-app action needed by the acceptance criteria
     |  is allowed, including creating, editing, deleting records, and logging out.

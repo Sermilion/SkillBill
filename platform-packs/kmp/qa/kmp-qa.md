@@ -16,7 +16,8 @@ Desktop UI is user-facing UI. Criteria that describe only a desktop app still ha
 
 - Write generated scripts, screenshots, UI dumps, and log excerpts only under the invocation directory the briefing names, outside the QA checkout. Nothing goes in the working tree.
 - Build, install, and test from the QA checkout the briefing names. It is a temporary worktree of the tree under test, and the runtime deletes it when QA ends.
-- You may edit any file in the QA checkout to reach a state the criteria need but the environment cannot produce, such as an injected fault, a forced error response, a debug hook, or a shorter timeout. Rebuild after the edit, and list every such edit, with the flows it made possible, under `## Temporary edits` in the report.
+- When a criterion or changed behavior needs a state the environment does not produce on its own, force it. Edit any file in the QA checkout to inject a fault, force an error response, add a debug hook, or shorten a timeout, or change the environment, for example by cutting the network while a response streams. Rebuild after an edit, and list every such edit, with the flows it made possible, under `## Temporary edits` in the report.
+- That the environment could not produce a state is never a reason to leave a flow unexercised. Report a flow as not exercised only when a forced attempt failed, and name what you tried and why it failed.
 - Edit nothing outside the QA checkout and the invocation directory. Never commit, push, or open a pull request.
 - Never paste log bodies, raw device serials, credentials, or tokens into the report. Evidence is a path under the invocation directory.
 - Write the report to the exact `report.md` path the briefing names. An app launch alone is never a pass.
