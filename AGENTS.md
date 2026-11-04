@@ -2,7 +2,7 @@
 
 ## Project Context
 
-skill-bill governs agent skill authoring, routing, validation, installation, and measurement. It ships orchestration, tooling, telemetry, workflow state, and shells for review, quality checks, feature work, verification, and PRs.
+skill-bill governs skill authoring, routing, validation, installation, and measurement. It provides orchestration, telemetry, workflow state, and shells for review, checks, feature work, verification, and PRs.
 
 Non-negotiable contracts:
 

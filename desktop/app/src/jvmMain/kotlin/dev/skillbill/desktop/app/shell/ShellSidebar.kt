@@ -49,6 +49,7 @@ fun ShellSidebar(
   topRoute: AppRoute,
   sectionSizes: Map<BoardSectionKind, Int>?,
   favorites: List<FavoriteSidebarEntry>,
+  specFavorites: List<FavoriteSpecSidebarEntry>,
   specsOpen: Boolean,
   terminalOpen: Boolean,
   chatOpen: Boolean,
@@ -61,6 +62,8 @@ fun ShellSidebar(
   onToggleChat: () -> Unit,
   onShowShortcuts: () -> Unit,
   onRemoveFavorite: (dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey) -> Unit,
+  onRemoveSpecFavorite: (dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey) -> Unit,
+  onOpenSpecFavorite: (projectId: String, path: String) -> Unit,
 ) {
   var boardExpanded by rememberSaveable { mutableStateOf(true) }
   Sidebar(
@@ -111,6 +114,18 @@ fun ShellSidebar(
             else -> FavoriteUnavailable(entry, onRemoveFavorite)
           }
         }
+        specFavorites.forEach { entry ->
+          when (entry) {
+            is FavoriteSpecSidebarEntry.Resolved -> SidebarItem(
+              entry.title,
+              { onOpenSpecFavorite(entry.key.projectId, entry.key.path) },
+              icon = LucideIcons.star,
+              tooltip = "${entry.title}, ${entry.issueKey.orEmpty()}",
+              trailingText = entry.issueKey.orEmpty(),
+            )
+            else -> SpecFavoriteUnavailable(entry, onRemoveSpecFavorite)
+          }
+        }
       }
     }
     SidebarSection("Board", boardExpanded, onToggle = { boardExpanded = !boardExpanded }) {
@@ -149,6 +164,25 @@ private fun FavoriteUnavailable(
   val identity = "${key.databaseFile.path} · ${key.workItemId}"
   Row(Modifier.fillMaxWidth().height(28.dp).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
     BasicText("$status · ${key.workItemId}", Modifier.weight(1f), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 1)
+    SbIconButton(LucideIcons.trash, "Remove $status favorite $identity", { onRemove(key) }, size = SbControlSize.Small)
+  }
+}
+
+@Composable
+private fun SpecFavoriteUnavailable(
+  entry: FavoriteSpecSidebarEntry,
+  onRemove: (dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey) -> Unit,
+) {
+  val key = entry.key
+  val status = when (entry) {
+    is FavoriteSpecSidebarEntry.Loading -> "Loading"
+    is FavoriteSpecSidebarEntry.Missing -> "Missing"
+    is FavoriteSpecSidebarEntry.Failed -> "Could not load"
+    is FavoriteSpecSidebarEntry.Resolved -> return
+  }
+  val identity = "${key.projectId} · ${key.path}"
+  Row(Modifier.fillMaxWidth().height(28.dp).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    BasicText("$status · ${key.path.substringAfterLast('/')}", Modifier.weight(1f), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 1)
     SbIconButton(LucideIcons.trash, "Remove $status favorite $identity", { onRemove(key) }, size = SbControlSize.Small)
   }
 }

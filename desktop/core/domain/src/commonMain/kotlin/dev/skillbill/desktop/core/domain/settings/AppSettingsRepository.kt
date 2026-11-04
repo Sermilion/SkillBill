@@ -10,6 +10,9 @@ interface AppSettingsRepository {
   /** The persisted favorite membership, with read failures kept distinct from an empty set. */
   val favoriteWork: Flow<Outcome<Set<FavoriteWorkKey>, SettingsRejection>>
 
+  /** The persisted spec-bundle favorite membership, with read failures kept distinct from an empty set. */
+  val favoriteSpecs: Flow<Outcome<Set<FavoriteSpecKey>, SettingsRejection>>
+
   /** Null or empty restores the runtime default; a path of only spaces is refused with [SettingsRejection.BlankDatabasePath]. */
   suspend fun setDatabasePath(path: String?): Outcome<Unit, SettingsRejection>
 
@@ -28,6 +31,8 @@ interface AppSettingsRepository {
   suspend fun setTrayLastTab(tab: TrayTab): Outcome<Unit, SettingsRejection>
 
   suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
+
+  suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
 }
 
 sealed interface SettingsRejection {

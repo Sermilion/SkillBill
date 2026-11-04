@@ -1,3 +1,8 @@
+## [2026-11-04] Keep spec favorite reveals pending through project loading
+Context: Selecting a bundle immediately after switching projects can be dropped while the new tree loads. A favorite can also refer to a project other than the one currently followed.
+Decision: Keep the requested project and bundle path pending until the matching tree loads, and give that request precedence over automatic project following. Open the Specs pane for the selection rather than navigating to a run detail.
+Reason: The loaded tree is needed to reconcile the bundle selection, and a spec favorite identifies a bundle independently of any live run.
+
 ## [2026-11-04] Start chat actions in the chat's checkout or on the named branch
 Context: An execution chat's agent works in the goal worktree, but start actions ran in the repository root, and a start for another branch ran against whatever the chat's checkout had checked out.
 Decision: Chat actions carry an optional `branch`. `NewTaskStart` keeps `repoRoot` as the main repository for identity and reservations, and adds `checkoutRoot` and `branch` for where a standalone phase or operation runs; the runtime resolves the branch to a checkout. The execution chat passes its `checkoutRoot`. Standalone reservation keys include the branch so starts for different branches do not block each other. Monitor drops the branch and keeps `target` `branch:<name>`.

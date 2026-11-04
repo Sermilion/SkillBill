@@ -316,15 +316,16 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         val pending = assertNotNull(scope.snapshot)
         assertEquals(AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED, pending.stage)
         assertEquals(listOf("AC-001"), pending.interactionTrace.pendingRechecks)
+        assertEquals(emptyList(), pending.interactionTrace.pendingScenarioRefs)
 
         val reason =
           AcceptanceCriterionInteractionTraceRound.reaskRejection(
             scope,
-            "The completeness audit is settled as satisfied. Recheck AC-001: holds on the current tree.",
+            "The completeness audit is settled as satisfied.",
           )
         assertNotNull(reason)
         assertTrue(FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_TRACE_AUDIT_OUTPUT.name in reason)
-        assertTrue("evidence" in reason)
+        assertTrue("Recheck AC-001" in reason)
         assertTrue(AcceptanceCriterionInteractionTraceRound.shouldRelaunch(scope, outputGateFailures = 0))
         assertFalse(AcceptanceCriterionInteractionTraceRound.shouldRelaunch(scope, outputGateFailures = 1))
         assertFalse(AcceptanceCriterionInteractionTraceRound.shouldRelaunch(null, outputGateFailures = 0))
