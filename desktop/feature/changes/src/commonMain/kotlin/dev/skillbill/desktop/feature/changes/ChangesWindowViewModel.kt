@@ -24,6 +24,8 @@ import dev.skillbill.desktop.core.domain.model.executionScopeTarget
 import dev.skillbill.desktop.core.domain.model.goalScopeTarget
 import dev.skillbill.desktop.core.domain.model.kind
 import dev.skillbill.desktop.core.domain.model.normalizeRange
+import dev.skillbill.desktop.core.domain.model.selectableSubtaskIds
+import dev.skillbill.desktop.core.domain.model.selectedSubtaskIds
 import dev.skillbill.desktop.core.domain.model.subtasksTouching
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
@@ -206,7 +208,7 @@ class ChangesWindowViewModel(
     stats: Map<Int, SubtaskStats> = state.stats,
   ): ChangesWindowUiState {
     val groups = (list as? ScopeListUi.Listed)?.changes?.files?.let { files ->
-      groupFiles(files, filter) { path -> scopeTouchCount(path, scope, stats) }
+      groupFiles(files, filter) { path -> scopeTouchCount(path, scope, stats, state.subtasks) }
     }.orEmpty()
     val visible = groups.flatMap { it.rows }.map { it.file.path }
     val selected = if (list !is ScopeListUi.Listed) state.selectedPath
@@ -239,7 +241,7 @@ class ChangesWindowViewModel(
     return subtasksTouching(file.path, stats).mapNotNull { id ->
       val subtask = target.subtasks.firstOrNull { it.id == id } ?: return@mapNotNull null
       val inScope = when (scope) {
-        is ChangeScope.Subtasks -> id in scope.from..scope.to
+        is ChangeScope.Subtasks -> id in selectedSubtaskIds(target.subtasks, scope)
         ChangeScope.All, ChangeScope.Operator, ChangeScope.Uncommitted -> false
       }
       SubtaskChipUi(id, subtask.name, inScope, normalizeRange(target, id, id) != null)
@@ -500,7 +502,7 @@ class ChangesWindowViewModel(
 
   private fun pickSubtask(action: ChangesWindowAction.PickSubtask) {
     val target = subtaskTarget() ?: return
-    if (target.subtasks.none { it.id == action.id && it.selectable }) return
+    if (action.id !in selectableSubtaskIds(target.subtasks)) return
     if (!action.extend) {
       if (action.fromPicker) closePicker()
       selectSubtask(action.id)

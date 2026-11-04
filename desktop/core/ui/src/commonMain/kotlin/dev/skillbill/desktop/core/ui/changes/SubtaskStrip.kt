@@ -72,9 +72,10 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
-import dev.skillbill.desktop.core.domain.model.TimelineProblem
-import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
+import dev.skillbill.desktop.core.domain.model.TimelineProblem
+import dev.skillbill.desktop.core.domain.model.subtaskColumns
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -111,18 +112,19 @@ fun SubtaskStrip(
   barsFooter: (@Composable () -> Unit)? = null,
 ) {
   if (subtasks.isEmpty()) return
+  val entries = remember(subtasks, stats) { stripEntries(subtasks, stats) }
   val colors = SkillBillTheme.colors
   val maxLines = stats.values.maxOfOrNull { it.insertions + it.deletions }?.coerceAtLeast(1) ?: 1
   val pick by rememberUpdatedState(onPick)
   val drag by rememberUpdatedState(onDrag)
   var hover by remember { mutableStateOf<StripHover?>(null) }
   BoxWithConstraints(modifier.fillMaxWidth()) {
-    val natural = (maxWidth + COLUMN_GAP) / subtasks.size
+    val natural = (maxWidth + COLUMN_GAP) / entries.size
     val cards = natural >= CARD_MIN_PITCH
     val pitch = if (cards) minOf(natural, CARD_MAX_WIDTH + COLUMN_GAP) else maxOf(MIN_COLUMN + COLUMN_GAP, natural)
     val column = pitch - COLUMN_GAP
-    val scrolls = pitch * subtasks.size - COLUMN_GAP > maxWidth
-    val labelAll = maxWidth / subtasks.size >= LABEL_EVERY_COLUMN
+    val scrolls = pitch * entries.size - COLUMN_GAP > maxWidth
+    val labelAll = maxWidth / entries.size >= LABEL_EVERY_COLUMN
     Column(if (scrolls) Modifier.horizontalScroll(rememberScrollState()) else Modifier) {
       Box {
         Row(
@@ -134,18 +136,18 @@ fun SubtaskStrip(
                   val event = awaitPointerEvent(PointerEventPass.Initial)
                   val change = event.changes.firstOrNull() ?: continue
                   hover = if (event.type == PointerEventType.Exit) null else {
-                    StripHover((change.position.x / pitchPx).toInt().coerceIn(0, subtasks.lastIndex), change.position)
+                    StripHover((change.position.x / pitchPx).toInt().coerceIn(0, entries.lastIndex), change.position)
                   }
                 }
               }
             }
             .pointerInput(subtasks, pitch) {
               val pitchPx = pitch.toPx()
-              fun indexAt(x: Float) = (x / pitchPx).toInt().coerceIn(0, subtasks.lastIndex)
+              fun indexAt(x: Float) = (x / pitchPx).toInt().coerceIn(0, entries.lastIndex)
               awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val pressIndex = indexAt(down.position.x)
-                val press = subtasks[pressIndex]
+                val press = entries[pressIndex].subtask
                 if (!press.selectable) return@awaitEachGesture
                 val extend = currentEvent.keyboardModifiers.isShiftPressed
                 val follow = drag
@@ -175,37 +177,55 @@ fun SubtaskStrip(
                   val index = indexAt(change.position.x)
                   if (index != last) {
                     last = index
-                    follow(press.id, subtasks[index].id)
+                    follow(press.id, entries[index].subtask.id)
                   }
                 }
               }
             },
           horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
         ) {
-          subtasks.forEachIndexed { index, subtask ->
-            key(subtask.id) {
-              val inRange = selected != null && subtask.id in selected
-              val description = subtaskTooltip(subtask, stats[subtask.id])
+          entries.forEachIndexed { index, entry ->
+            key(entry.ids) {
+              val inRange = selected != null && entry.ids.any { it in selected }
+              val description = subtaskTooltip(entry.subtask, entry.stats)
               val hovered = hover?.index == index
               val columnModifier = Modifier.width(column).fillMaxHeight()
               if (cards) {
-                StripCard(subtask, stats[subtask.id], inRange, hovered, description, { pick(subtask.id, false) }, columnModifier)
+                StripCard(
+                  entry.subtask,
+                  entry.stats,
+                  inRange,
+                  hovered,
+                  description,
+                  { pick(entry.subtask.id, false) },
+                  columnModifier,
+                  entry.number,
+                )
               } else {
-                StripColumn(subtask, inRange, hovered, subtaskBarFraction(subtask, stats[subtask.id], maxLines), description, { pick(subtask.id, false) }, columnModifier)
+                StripColumn(
+                  entry.subtask,
+                  inRange,
+                  hovered,
+                  subtaskBarFraction(entry.subtask, entry.stats, maxLines),
+                  description,
+                  { pick(entry.subtask.id, false) },
+                  columnModifier,
+                )
               }
             }
           }
         }
-        hover?.let { StripTip(subtasks[it.index], stats[subtasks[it.index].id], it.position) }
+        hover?.let { tip ->
+          entries.getOrNull(tip.index)?.let { entry -> StripTip(entry.subtask, entry.stats, tip.position) }
+        }
       }
       if (!cards) Row(Modifier.padding(top = 4.dp).height(9.5.dp), horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP)) {
-        subtasks.forEachIndexed { index, subtask ->
-          val labelled = index == 0 || subtask.id % (if (labelAll) 1 else 5) == 0
-          val color = if (selected != null && subtask.id in selected) colors.accentText else colors.fgFaint
+        entries.forEachIndexed { index, entry ->
+          val labelled = index == 0 || entry.ids.any { id -> id % (if (labelAll) 1 else 5) == 0 }
+          val color = if (selected != null && entry.ids.any { it in selected }) colors.accentText else colors.fgFaint
           Box(Modifier.width(column).fillMaxHeight(), contentAlignment = Alignment.Center) {
-            // A label wider than a narrow column overflows it on both sides.
             BasicText(
-              if (labelled) "${subtask.id}" else "",
+              if (labelled) entry.number else "",
               Modifier.wrapContentSize(unbounded = true),
               style = changesMono(9.5f, FontWeight.Medium, color),
               maxLines = 1,
@@ -229,6 +249,7 @@ private fun StripCard(
   description: String,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
+  number: String = "${subtask.id}",
 ) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(7.dp)
@@ -273,7 +294,7 @@ private fun StripCard(
     Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
       ScopeStateDot(subtask.state)
       BasicText(
-        "${subtask.id}",
+        number,
         style = changesMono(11f, FontWeight.SemiBold, if (running || inRange) colors.accentText else colors.fgFaint),
         maxLines = 1,
         softWrap = false,
@@ -458,4 +479,35 @@ fun timelineProblemText(problem: TimelineProblem): String = when (problem) {
   is TimelineProblem.BaseUnavailable -> "Base commit unavailable: ${problem.reason}"
   is TimelineProblem.NotARepository -> "${problem.worktreeRoot} is not a git repository."
   is TimelineProblem.Unavailable -> readProblemText(problem.problem)
+}
+
+internal data class StripEntry(val ids: List<Int>, val subtask: ScopeSubtask, val stats: SubtaskStats?) {
+  val number: String get() = ids.joinToString(" + ")
+}
+
+private val STRIP_STATE_ORDER = listOf(
+  ScopeSubtaskState.RUNNING,
+  ScopeSubtaskState.INTERRUPTED,
+  ScopeSubtaskState.DONE,
+  ScopeSubtaskState.NOT_STARTED,
+)
+
+internal fun stripEntries(subtasks: List<ScopeSubtask>, stats: Map<Int, SubtaskStats>): List<StripEntry> {
+  val byId = subtasks.associateBy { it.id }
+  return subtaskColumns(subtasks).map { column ->
+    val members = column.ids.map { byId.getValue(it) }
+    val representative = members.maxByOrNull { member -> stats[member.id]?.let { it.insertions + it.deletions } ?: -1 } ?: members.first()
+    val subtask = if (members.size == 1) members.single() else ScopeSubtask(
+      id = column.ids.first(),
+      name = members.joinToString(" + ") { it.name },
+      state = STRIP_STATE_ORDER.first { state -> members.any { it.state == state } },
+      recordedSha = representative.recordedSha,
+      commitShas = members.flatMap { it.commitShas }.distinct(),
+      changedAfterFinish = members.any { it.changedAfterFinish },
+      baselineUntrackedPaths = representative.baselineUntrackedPaths,
+      reviewBaseSha = representative.reviewBaseSha,
+      completedNoChange = representative.completedNoChange,
+    )
+    StripEntry(column.ids, subtask, stats[representative.id])
+  }
 }

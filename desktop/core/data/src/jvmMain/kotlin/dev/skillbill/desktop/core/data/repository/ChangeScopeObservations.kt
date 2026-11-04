@@ -26,6 +26,7 @@ import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.TimelineProblem
 import dev.skillbill.desktop.core.domain.model.goalScopeTarget
 import dev.skillbill.desktop.core.domain.model.resolveScope
+import dev.skillbill.desktop.core.domain.model.selectedEndSubtask
 import dev.skillbill.desktop.core.domain.model.workingBaseSha
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -72,7 +73,7 @@ class ChangeScopeObservations internal constructor(
   private val baseShas = ConcurrentHashMap<ListedBaseKey, String>()
   private val latestSubtaskStates = ConcurrentHashMap<String, SubtaskScopesState.Listed>()
   private val interruptedStats = ConcurrentHashMap<InterruptedStatsKey, SubtaskStats>()
-  private val diffs = ChangeScopeDiffs(runtime, diagnostics, port, io, baseShas, ::readAttributionStats, ::readPerCommit)
+  private val diffs = ChangeScopeDiffs(runtime, diagnostics, port, io, baseShas, ::readPerCommit)
 
   fun observeScope(
     target: ChangeScopeTarget,
@@ -231,13 +232,6 @@ class ChangeScopeObservations internal constructor(
     IndividualStatsRead.Unavailable -> null
   }
 
-  private suspend fun readAttributionStats(
-    target: ChangeScopeTarget,
-    subtask: ScopeSubtask,
-    lock: Mutex,
-    cache: CommittedChangeCache,
-  ): SubtaskStats? = readSubtaskStats(target, subtask, individualStatsRead(target, subtask), lock, cache)
-
   private suspend fun readScope(
     target: ChangeScopeTarget,
     scope: ChangeScope,
@@ -386,9 +380,9 @@ internal fun runningWorkingBaseline(target: ChangeScopeTarget, scope: ChangeScop
   if (target.committedOnly || scope !is ChangeScope.Subtasks) return null
   val timeline = target.timeline ?: return null
   val subtasks = target.subtasks
-  val endIndex = subtasks.indexOfFirst { it.id == scope.to }
+  val end = selectedEndSubtask(subtasks, scope) ?: return null
+  val endIndex = subtasks.indexOf(end)
   if (endIndex < 0) return null
-  val end = subtasks[endIndex]
   if (end.recordedSha != null || end.state !in setOf(ScopeSubtaskState.RUNNING, ScopeSubtaskState.INTERRUPTED) ||
     subtasks.drop(endIndex + 1).any { it.state != ScopeSubtaskState.NOT_STARTED }
   ) return null

@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.selectedSubtaskIds
 import dev.skillbill.desktop.core.domain.model.touchCount
 
 data class FileGroupUi(val module: String, val insertions: Int, val deletions: Int, val rows: List<FileRowUi>)
@@ -26,13 +27,23 @@ internal fun groupFiles(files: List<ChangedFile>, filter: String, touchCount: (S
       FileGroupUi(module, rows.sumOf { it.insertions ?: 0 }, rows.sumOf { it.deletions ?: 0 }, rows.map { FileRowUi(it, touchCount(it.path)) })
     }
 
-internal fun scopeTouchCount(path: String, scope: ChangeScope, stats: Map<Int, SubtaskStats>): Int = touchCount(path, scope, stats) ?: 0
+internal fun scopeTouchCount(path: String, scope: ChangeScope, stats: Map<Int, SubtaskStats>, subtasks: List<ScopeSubtask>): Int =
+  touchCount(path, scope, stats, subtasks) ?: 0
 
 internal fun scopeLabel(scope: ChangeScope, subtasks: List<ScopeSubtask>): String = when (scope) {
   ChangeScope.All -> "All changes"
   ChangeScope.Operator -> "Operator commits"
   ChangeScope.Uncommitted -> "Uncommitted"
-  is ChangeScope.Subtasks -> if (scope.from == scope.to) subtasks.firstOrNull { it.id == scope.from }?.let { "${it.id} · ${it.name}" } ?: "Subtask ${scope.from}" else "Subtasks ${scope.from}–${scope.to}"
+  is ChangeScope.Subtasks -> {
+    val selected = selectedSubtaskIds(subtasks, scope).filter { id -> subtasks.any { it.id == id } }
+    when {
+      selected.size == 1 -> subtasks.firstOrNull { it.id == selected.single() }?.let { "${it.id} · ${it.name}" } ?: "Subtask ${selected.single()}"
+      selected.size > 1 && selected.max() - selected.min() + 1 == selected.size ->
+        "Subtasks ${selected.min()}–${selected.max()}"
+      selected.size > 1 -> "Subtasks ${selected.sorted().joinToString(" + ")}"
+      else -> subtasks.firstOrNull { it.id == scope.from }?.let { "${it.id} · ${it.name}" } ?: "Subtask ${scope.from}"
+    }
+  }
 }
 
 fun changesWindowTitle(item: WorkItem): String =

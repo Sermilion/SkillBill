@@ -20,4 +20,14 @@ class SubtaskStripTest {
     assertTrue(subtaskTooltip(done.copy(changedAfterFinish = true), null).contains("changed after finish"))
     assertTrue(!subtaskTooltip(done, null).contains("changed after finish"))
   }
+
+  @Test
+  fun `strip entries merge a squash into one column`() {
+    val two = ScopeSubtask(2, "b", ScopeSubtaskState.DONE, "s", listOf("s"), false, emptyList())
+    val three = ScopeSubtask(3, "c", ScopeSubtaskState.DONE, "s", listOf("s"), false, emptyList())
+    val entry = stripEntries(listOf(two, three), emptyMap()).single()
+    assertEquals("2 + 3", entry.number)
+    assertEquals("b + c", entry.subtask.name)
+    assertEquals(ScopeSubtaskState.DONE, entry.subtask.state)
+  }
 }

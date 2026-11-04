@@ -5,6 +5,9 @@ import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTimeline
+import dev.skillbill.desktop.core.domain.model.ChangeStatus
+import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
@@ -42,6 +45,7 @@ import kotlin.test.assertIs
 
 class ChangeScopeObservationsTest {
   private val root = Files.createTempDirectory("change-scope-observations")
+  private val spanFile = ChangedFile("shared.kt", null, ChangeStatus.Modified, 1, 0)
   private val runtime = RuntimeComponent::class.create(
     RuntimeContext(
       EnvironmentContext(root.resolve("work.db").toString(), environment = emptyMap(), userHome = root, repositoryRoot = root),
@@ -184,6 +188,54 @@ class ChangeScopeObservationsTest {
     assertEquals(listOf("commit-3"), port.workingBases)
   }
 
+  @Test
+  fun `range diff labels a subtask that spans an operator commit`() = runTest {
+    val diagnostics = RecordingDiagnostics()
+    val port = operatorSpanPort(WorkFileDiffResult.Patch("@@ -2,0 +2 @@\n+from operator"))
+    val diff = observations(port, listed(), diagnostics) { WorkGoalTimelineResult.Failed("unused") }
+      .fileDiff(operatorSpanTarget(), ChangeScope.Subtasks(1, 1), spanFile, Mutex(), CommittedChangeCache())
+    val shown = assertIs<FileDiffState.Shown>(diff)
+    assertEquals(listOf("subtask 1 · one", "op"), shown.diff.hunks.map { it.source })
+    assertEquals(emptyList(), diagnostics.records)
+  }
+
+  @Test
+  fun `failed operator patch returns the unlabelled range diff`() = runTest {
+    val diagnostics = RecordingDiagnostics()
+    val port = operatorSpanPort(WorkFileDiffResult.Failed("missing"))
+    val diff = observations(port, listed(), diagnostics) { WorkGoalTimelineResult.Failed("unused") }
+      .fileDiff(operatorSpanTarget(), ChangeScope.Subtasks(1, 1), spanFile, Mutex(), CommittedChangeCache())
+    val shown = assertIs<FileDiffState.Shown>(diff)
+    assertEquals(listOf(null, null), shown.diff.hunks.map { it.source })
+    assertEquals(listOf(SCOPES_READ_FAILED), diagnostics.records)
+  }
+
+  private fun operatorSpanTarget() = ChangeScopeTarget(
+    "goal",
+    root.toString(),
+    ChangeBaseline.TargetMergeBase(root.toString(), "main"),
+    listOf(ScopeSubtask(1, "one", ScopeSubtaskState.DONE, "s2", listOf("s1", "s2"), false, emptyList())),
+    rangesSupported = true,
+    timeline = ChangeScopeTimeline(
+      "base",
+      "s2",
+      listOf(
+        ScopeCommit("s1", "base", "one", listOf(1)),
+        ScopeCommit("op", "s1", "operator", emptyList()),
+        ScopeCommit("s2", "op", "two", listOf(1)),
+      ),
+    ),
+  )
+
+  private fun operatorSpanPort(operatorPatch: WorkFileDiffResult) = CountingPort().apply {
+    val file = WorkChangedFile("shared.kt", null, WorkChangeStatus.MODIFIED, 1, 0)
+    committedFilesByRange["base" to "s1"] = listOf(file)
+    committedFilesByRange["s1" to "op"] = listOf(file)
+    patches["base" to "s2"] = WorkFileDiffResult.Patch("@@ -1,0 +1 @@\n+from subtask\n@@ -2,0 +2 @@\n+from operator")
+    patches["base" to "s1"] = WorkFileDiffResult.Patch("@@ -1,0 +1 @@\n+from subtask")
+    patches["s1" to "op"] = operatorPatch
+  }
+
   private fun listed(rangesSupported: Boolean = true) = WorkGoalScopesResult.Listed(
     worktreeRoot = root.toString(),
     targetBranch = "main",
@@ -206,6 +258,7 @@ class ChangeScopeObservationsTest {
     val workingBases = mutableListOf<String>()
     var workingFiles = emptyList<WorkChangedFile>()
     val committedFilesByRange = mutableMapOf<Pair<String, String>, List<WorkChangedFile>>()
+    val patches = mutableMapOf<Pair<String, String>, WorkFileDiffResult>()
     override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
       workingBases += (baseline as WorkChangeBaseline.SubtaskStart).baseSha
       return WorkChangeListResult.Listed(
@@ -222,7 +275,8 @@ class ChangeScopeObservationsTest {
       val files = committedFilesByRange[fromSha to toSha].orEmpty()
       return WorkChangeListResult.Listed(toSha, files, files.sumOf { it.insertions ?: 0 }, files.sumOf { it.deletions ?: 0 })
     }
-    override fun committedFileDiff(worktreeRoot: String, fromSha: String, toSha: String, file: WorkChangedFile) = WorkFileDiffResult.Failed("unused")
+    override fun committedFileDiff(worktreeRoot: String, fromSha: String, toSha: String, file: WorkChangedFile): WorkFileDiffResult =
+      patches[fromSha to toSha] ?: WorkFileDiffResult.Failed("missing")
     override fun uncommittedChanges(worktreeRoot: String) = WorkChangeListResult.Failed("unused")
     override fun commitTimeline(worktreeRoot: String, targetBranch: String?, recordedShas: List<String>, headBranch: String?) =
       WorkCommitTimelineResult.Failed("unused")

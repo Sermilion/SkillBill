@@ -66,6 +66,7 @@ import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
+import dev.skillbill.desktop.core.domain.model.selectedSubtaskIds
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
@@ -132,13 +133,13 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
       if (rows.isEmpty()) {
         PaneMessage("No subtask matches.")
       } else {
-        val range = (state.scope as? ChangeScope.Subtasks)?.let { it.from..it.to }
+        val inScopeIds = (state.scope as? ChangeScope.Subtasks)?.let { selectedSubtaskIds(state.subtasks, it) }
         LazyColumn(Modifier.heightIn(max = PICKER_LIST_MAX), state = listState, contentPadding = PaddingValues(4.dp)) {
           items(rows, key = { it.id }) { subtask ->
             PickerRow(
               subtask,
               state.stats[subtask.id],
-              inScope = range != null && subtask.id in range,
+              inScope = inScopeIds != null && subtask.id in inScopeIds,
               keyboard = keyboardId == subtask.id,
             ) { extend -> onAction(ChangesWindowAction.PickSubtask(subtask.id, extend, fromPicker = true)) }
           }

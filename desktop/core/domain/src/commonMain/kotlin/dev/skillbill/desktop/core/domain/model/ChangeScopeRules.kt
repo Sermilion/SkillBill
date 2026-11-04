@@ -32,11 +32,63 @@ fun availableScopes(target: ChangeScopeTarget): Set<ScopeKind> {
   return if (target.committedOnly) scopes - ScopeKind.Uncommitted else scopes
 }
 
+data class SubtaskColumn(val ids: List<Int>)
+
+fun subtaskColumns(subtasks: List<ScopeSubtask>): List<SubtaskColumn> {
+  val groups = mutableListOf<MutableSet<Int>>()
+  val shasById = subtasks.associate { it.id to it.commitShas.toSet() }
+  for (subtask in subtasks) {
+    val shas = shasById.getValue(subtask.id)
+    val matches = groups.filter { group ->
+      group.any { id -> shasById.getValue(id).any { sha -> sha in shas } }
+    }
+    val merged = mutableSetOf(subtask.id)
+    matches.forEach(merged::addAll)
+    groups.removeAll(matches)
+    groups += merged
+  }
+  return groups.map { SubtaskColumn(it.sorted()) }.sortedBy { it.ids.first() }
+}
+
+fun selectableSubtaskIds(subtasks: List<ScopeSubtask>): Set<Int> {
+  val byId = subtasks.associateBy { it.id }
+  return subtaskColumns(subtasks)
+    .filter { column -> column.ids.any { byId[it]?.selectable == true } }
+    .flatMap { it.ids }
+    .toSet()
+}
+
+fun selectedSubtaskIds(subtasks: List<ScopeSubtask>, scope: ChangeScope.Subtasks): Set<Int> {
+  val selected = (scope.from..scope.to).toMutableSet()
+  for (column in subtaskColumns(subtasks)) {
+    if (column.ids.any { it in selected }) selected.addAll(column.ids)
+  }
+  return selected
+}
+
+fun selectedEndSubtask(subtasks: List<ScopeSubtask>, scope: ChangeScope.Subtasks): ScopeSubtask? {
+  val byId = subtasks.associateBy { it.id }
+  return selectedSubtaskIds(subtasks, scope)
+    .sortedDescending()
+    .firstNotNullOfOrNull { id -> byId[id]?.takeIf(ScopeSubtask::selectable) }
+}
+
 fun normalizeRange(target: ChangeScopeTarget, a: Int, b: Int): ChangeScope.Subtasks? {
   if (ScopeKind.Subtasks !in availableScopes(target)) return null
-  val first = target.subtasks.firstOrNull { it.id == a && it.selectable } ?: return null
-  val second = target.subtasks.firstOrNull { it.id == b && it.selectable } ?: return null
-  return ChangeScope.Subtasks(minOf(first.id, second.id), maxOf(first.id, second.id))
+  val selectable = selectableSubtaskIds(target.subtasks)
+  if (a !in selectable || b !in selectable) return null
+  val columns = subtaskColumns(target.subtasks)
+  val low = minOf(a, b)
+  val high = maxOf(a, b)
+  val lowColumn = columns.firstOrNull { low in it.ids } ?: return null
+  val highColumn = columns.firstOrNull { high in it.ids } ?: return null
+  val newLow = lowColumn.ids.first()
+  val newHigh = if (highColumn.ids.last() - highColumn.ids.first() + 1 == highColumn.ids.size) {
+    highColumn.ids.last()
+  } else {
+    highColumn.ids.first()
+  }
+  return ChangeScope.Subtasks(minOf(newLow, newHigh), maxOf(newLow, newHigh))
 }
 
 fun resolveScope(target: ChangeScopeTarget, scope: ChangeScope): ScopeRead {
@@ -54,12 +106,15 @@ fun workingBaseSha(timeline: ChangeScopeTimeline, subtask: ScopeSubtask): String
 
 private fun resolveSubtasks(target: ChangeScopeTarget, scope: ChangeScope.Subtasks): ScopeRead {
   if (scope.from > scope.to) return ScopeRead.Unavailable("scope not available")
+  val selectable = selectableSubtaskIds(target.subtasks)
+  if (scope.from !in selectable || scope.to !in selectable) return ScopeRead.Unavailable("scope not available")
   val subtasks = target.subtasks.associateBy(ScopeSubtask::id)
-  val start = subtasks[scope.from]?.takeIf(ScopeSubtask::selectable) ?: return ScopeRead.Unavailable("no end commit")
-  val end = subtasks[scope.to]?.takeIf(ScopeSubtask::selectable) ?: return ScopeRead.Unavailable("scope not available")
+  val start = subtasks[scope.from] ?: return ScopeRead.Unavailable("no end commit")
+  val end = selectedEndSubtask(target.subtasks, scope) ?: return ScopeRead.Unavailable("scope not available")
   val timeline = target.timeline ?: return ScopeRead.Unavailable("scope not available")
+  val selectedIds = selectedSubtaskIds(target.subtasks, scope)
   val ownedIndices = timeline.commits.indices.filter { index ->
-    timeline.commits[index].ownerIds.any { it in scope.from..scope.to }
+    timeline.commits[index].ownerIds.any { it in selectedIds }
   }
   val lastStarted = end.isLastStarted(target.subtasks)
   if (ownedIndices.isEmpty()) {
@@ -73,10 +128,10 @@ private fun resolveSubtasks(target: ChangeScopeTarget, scope: ChangeScope.Subtas
   val lastIndex = ownedIndices.last()
   val span = timeline.commits.subList(firstIndex, lastIndex + 1)
   val selected = span.filter { commit ->
-    commit.operator || commit.ownerIds.any { it in scope.from..scope.to }
+    commit.operator || commit.ownerIds.any { it in selectedIds }
   }
   val includesOtherOwner = span.any { commit ->
-    commit.ownerIds.isNotEmpty() && commit.ownerIds.none { it in scope.from..scope.to }
+    commit.ownerIds.isNotEmpty() && commit.ownerIds.none { it in selectedIds }
   }
   if (includesOtherOwner) return ScopeRead.PerCommit(selected)
   if (!target.committedOnly && end.recordedSha == null && lastStarted) {
@@ -99,17 +154,17 @@ fun subtasksTouching(path: String, stats: Map<Int, SubtaskStats>): List<Int> = s
   .map { it.key }
   .sorted()
 
-fun touchCount(path: String, scope: ChangeScope, stats: Map<Int, SubtaskStats>): Int? {
+fun touchCount(path: String, scope: ChangeScope, stats: Map<Int, SubtaskStats>, subtasks: List<ScopeSubtask>): Int? {
   val ids = subtasksTouching(path, stats)
   return when (scope) {
     ChangeScope.All -> ids.size
-    is ChangeScope.Subtasks -> ids.count { it in scope.from..scope.to }
+    is ChangeScope.Subtasks -> ids.count { it in selectedSubtaskIds(subtasks, scope) }
     ChangeScope.Operator, ChangeScope.Uncommitted -> null
   }
 }
 
-fun attributeHunks(rangeDiff: FileDiff, perSubtask: Map<Int, FileDiff>): List<Int?> {
-  val linesBySubtask = perSubtask.mapValues { (_, diff) ->
+fun <K> attributeHunks(rangeDiff: FileDiff, perOwner: Map<K, FileDiff>): List<K?> {
+  val linesByOwner = perOwner.mapValues { (_, diff) ->
     val lines = diff.hunks.flatMap { it.lines }
     lines.filter { it.kind == DiffLineKind.Added }.map { it.text }.toSet() to
       lines.filter { it.kind == DiffLineKind.Removed }.map { it.text }.toSet()
@@ -118,15 +173,82 @@ fun attributeHunks(rangeDiff: FileDiff, perSubtask: Map<Int, FileDiff>): List<In
     val added = hunk.lines.filter { it.kind == DiffLineKind.Added }.map { it.text }.toSet()
     val removed = hunk.lines.filter { it.kind == DiffLineKind.Removed }.map { it.text }.toSet()
     if (added.isEmpty() && removed.isEmpty()) return@map null
-    val matches = linesBySubtask.filter { (id, lines) ->
+    val matches = linesByOwner.filter { (owner, lines) ->
       val (theirAdded, theirRemoved) = lines
       added.all { it in theirAdded } && removed.all { it in theirRemoved } &&
-        linesBySubtask.all { (otherId, otherLines) ->
-          otherId == id || (added.none { it in otherLines.first } && removed.none { it in otherLines.second })
+        linesByOwner.all { (otherOwner, otherLines) ->
+          otherOwner == owner || (added.none { it in otherLines.first } && removed.none { it in otherLines.second })
         }
     }.keys
     matches.singleOrNull()
   }
+}
+
+sealed interface ScopeHunkOwner {
+  data class Subtasks(val ids: List<Int>) : ScopeHunkOwner
+  data class OperatorCommit(val sha: String) : ScopeHunkOwner
+}
+
+fun hunkOwnerLabel(owner: ScopeHunkOwner, subtasks: List<ScopeSubtask>): String = when (owner) {
+  is ScopeHunkOwner.OperatorCommit -> owner.sha.take(7)
+  is ScopeHunkOwner.Subtasks -> {
+    val byId = subtasks.associateBy { it.id }
+    owner.ids.mapNotNull { id -> byId[id]?.let(::scopeSubtaskLabel) }.joinToString(" + ")
+  }
+}
+
+fun spannedCommits(target: ChangeScopeTarget, scope: ChangeScope.Subtasks): List<ScopeCommit> {
+  val timeline = target.timeline ?: return emptyList()
+  val selected = selectedSubtaskIds(target.subtasks, scope)
+  val ownedIndices = timeline.commits.indices.filter { index ->
+    timeline.commits[index].ownerIds.any { it in selected }
+  }
+  if (ownedIndices.isEmpty()) return emptyList()
+  val firstIndex = ownedIndices.first()
+  return when (resolveScope(target, scope)) {
+    is ScopeRead.Baseline -> timeline.commits.subList(firstIndex, timeline.commits.size)
+    is ScopeRead.Committed -> {
+      val lastIndex = ownedIndices.last()
+      timeline.commits.subList(firstIndex, lastIndex + 1).filter { commit ->
+        commit.operator || commit.ownerIds.any { it in selected }
+      }
+    }
+    else -> emptyList()
+  }
+}
+
+data class ScopeHunkGroup(val owner: ScopeHunkOwner, val commits: List<ScopeCommit>, val workingTree: Boolean)
+
+fun scopeHunkGroups(target: ChangeScopeTarget, scope: ChangeScope.Subtasks): List<ScopeHunkGroup> {
+  val read = resolveScope(target, scope)
+  if (read !is ScopeRead.Committed && read !is ScopeRead.Baseline) return emptyList()
+  val groups = linkedMapOf<ScopeHunkOwner, ScopeHunkGroup>()
+  for (commit in spannedCommits(target, scope)) {
+    val owner = if (commit.operator) {
+      ScopeHunkOwner.OperatorCommit(commit.sha)
+    } else {
+      ScopeHunkOwner.Subtasks(commit.ownerIds.sorted())
+    }
+    val existing = groups[owner]
+    groups[owner] = if (existing == null) {
+      ScopeHunkGroup(owner, listOf(commit), workingTree = false)
+    } else {
+      existing.copy(commits = existing.commits + commit)
+    }
+  }
+  if (read is ScopeRead.Baseline) {
+    val end = selectedEndSubtask(target.subtasks, scope)
+    if (end != null) {
+      val owner = ScopeHunkOwner.Subtasks(listOf(end.id))
+      val existing = groups[owner]
+      groups[owner] = if (existing == null) {
+        ScopeHunkGroup(owner, emptyList(), workingTree = true)
+      } else {
+        existing.copy(workingTree = true)
+      }
+    }
+  }
+  return groups.values.toList()
 }
 
 fun scopeSubtaskLabel(subtask: ScopeSubtask): String = "subtask ${subtask.id} · ${subtask.name}"

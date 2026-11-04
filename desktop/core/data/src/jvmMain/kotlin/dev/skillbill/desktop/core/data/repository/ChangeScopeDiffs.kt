@@ -4,26 +4,25 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.data.runtime.parseUnifiedDiff
 import dev.skillbill.desktop.core.data.runtime.readOrProblem
+import dev.skillbill.desktop.core.data.runtime.toDomain
 import dev.skillbill.desktop.core.data.runtime.toPort
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScope.Subtasks
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
+import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
-import dev.skillbill.desktop.core.domain.model.CommitChanges
 import dev.skillbill.desktop.core.domain.model.ScopeCommit
-import dev.skillbill.desktop.core.domain.model.workingBaseSha
 import dev.skillbill.desktop.core.domain.model.FileDiff
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeRead
-import dev.skillbill.desktop.core.domain.model.ScopeSubtask
-import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
-import dev.skillbill.desktop.core.domain.model.SubtaskStats
+import dev.skillbill.desktop.core.domain.model.ScopeHunkOwner
 import dev.skillbill.desktop.core.domain.model.attributeHunks
+import dev.skillbill.desktop.core.domain.model.hunkOwnerLabel
 import dev.skillbill.desktop.core.domain.model.resolveScope
-import dev.skillbill.desktop.core.domain.model.scopeSubtaskLabel
+import dev.skillbill.desktop.core.domain.model.scopeHunkGroups
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -42,7 +41,6 @@ internal class ChangeScopeDiffs(
   private val port: WorkChangesPort,
   private val io: CoroutineDispatcher,
   private val baseShas: ConcurrentHashMap<ListedBaseKey, String>,
-  private val readAttributionStats: suspend (ChangeScopeTarget, ScopeSubtask, Mutex, CommittedChangeCache) -> SubtaskStats?,
   private val readPerCommit: suspend (ChangeScopeTarget, List<ScopeCommit>, Mutex, CommittedChangeCache) -> ScopeChangesState,
 ) {
   suspend fun fileDiff(
@@ -78,7 +76,9 @@ internal class ChangeScopeDiffs(
       }
       is ScopeRead.Unavailable -> FileDiffState.Unavailable(ReadProblem.Runtime(resolved.reason))
     }
-    if (scope is Subtasks && scope.to > scope.from && result is FileDiffState.Shown) {
+    if (scope is Subtasks && result is FileDiffState.Shown &&
+      (resolved is ScopeRead.Committed || resolved is ScopeRead.Baseline)
+    ) {
       return attributeRangeDiff(target, scope, file, result.diff, lock, cache)
     }
     return result
@@ -195,9 +195,7 @@ internal class ChangeScopeDiffs(
     }
     if (perCommit !is ScopeChangesState.Listed) return perCommit.toFileDiffState()
     val matching = perCommit.perCommit.mapNotNull { change ->
-      change.files.firstOrNull { entry ->
-        entry.path == file.path || entry.path == file.oldPath || entry.oldPath == file.path
-      }?.let { change.commit to it }
+      change.files.firstOrNull { entry -> matchesCommittedFile(entry, file) }?.let { change.commit to it }
     }
     if (matching.isEmpty()) return FileDiffState.Shown(FileDiff(emptyList(), 0, 0))
     val patches = matching.map { (commit, entry) ->
@@ -245,6 +243,33 @@ internal class ChangeScopeDiffs(
     }
   }
 
+  private fun matchesCommittedFile(entry: ChangedFile, file: ChangedFile): Boolean =
+    entry.path == file.path || entry.path == file.oldPath || entry.oldPath == file.path
+
+  private suspend fun readCommittedFileList(
+    worktreeRoot: String,
+    fromSha: String,
+    toSha: String,
+    lock: Mutex,
+    cache: CommittedChangeCache,
+  ): Outcome<ChangeSet, FileDiffState> {
+    val key = CommittedListKey(worktreeRoot, fromSha, toSha)
+    cache.list(key)?.let { return Outcome.Success(it) }
+    return when (val result = git(lock) { port.committedChanges(worktreeRoot, fromSha, toSha) }) {
+      is Outcome.Failure -> Outcome.Failure(FileDiffState.Unavailable(result.error))
+      is Outcome.Success -> when (val listed = result.value) {
+        is WorkChangeListResult.Listed -> {
+          val changeSet = ChangeSet(listed.baseSha, listed.files.map { it.toDomain() }, listed.insertions, listed.deletions)
+          cache.putList(key, changeSet)
+          Outcome.Success(changeSet)
+        }
+        is WorkChangeListResult.BaseUnavailable -> Outcome.Failure(FileDiffState.BaseUnavailable(listed.reason))
+        is WorkChangeListResult.NotARepository -> Outcome.Failure(FileDiffState.Unavailable(ReadProblem.Runtime("${listed.worktreeRoot} is not a repository.")))
+        is WorkChangeListResult.Failed -> Outcome.Failure(FileDiffState.Unavailable(ReadProblem.Runtime(listed.message)))
+      }
+    }
+  }
+
   private suspend fun attributeRangeDiff(
     target: ChangeScopeTarget,
     scope: ChangeScope.Subtasks,
@@ -253,82 +278,54 @@ internal class ChangeScopeDiffs(
     lock: Mutex,
     cache: CommittedChangeCache,
   ): FileDiffState {
-    val subtasks = target.subtasks.filter { it.selectable && it.id in scope.from..scope.to }
-    val ordered = subtasks.filter { it.state == ScopeSubtaskState.RUNNING } +
-      subtasks.filter { it.state != ScopeSubtaskState.RUNNING }.sortedBy { it.id }
-    val stats = linkedMapOf<Int, SubtaskStats>()
-    for (subtask in ordered) {
-      val subtaskStats = readAttributionStats(target, subtask, lock, cache) ?: return FileDiffState.Shown(diff)
-      stats[subtask.id] = subtaskStats
+    val groups = scopeHunkGroups(target, scope)
+    if (groups.size < 2) return FileDiffState.Shown(diff)
+    fun failedRead(): FileDiffState {
+      diagnostics.record(SCOPES_READ_FAILED)
+      return FileDiffState.Shown(diff)
     }
-    val paths = setOfNotNull(file.path, file.oldPath)
-    val ids = stats.filterValues { subtaskStats ->
-      subtaskStats.files.any { entry -> paths.any { it == entry.path || it == entry.oldPath } }
-    }.keys.sorted()
-    if (ids.isEmpty()) return FileDiffState.Shown(diff)
-    if (ids.size == 1) {
-      val owner = target.subtasks.firstOrNull { it.id == ids.single() } ?: return FileDiffState.Shown(diff)
-      return FileDiffState.Shown(diff.copy(hunks = diff.hunks.map { it.copy(source = scopeSubtaskLabel(owner)) }))
-    }
-    val ownDiffs = linkedMapOf<Int, FileDiff>()
-    for (id in ids) {
-      val ownFile = stats[id]?.files?.firstOrNull { entry ->
-        paths.any { it == entry.path || it == entry.oldPath }
-      } ?: file
-      val ownScope = ChangeScope.Subtasks(id, id)
-      val own = fileDiffWithoutAttribution(target, ownScope, ownFile, lock, cache)
-      if (own !is FileDiffState.Shown) return FileDiffState.Shown(diff)
-      ownDiffs[id] = own.diff
-    }
-    val owners = attributeHunks(diff, ownDiffs)
-    val names = target.subtasks.associateBy { it.id }
-    return FileDiffState.Shown(diff.copy(hunks = diff.hunks.mapIndexed { index, hunk ->
-      owners[index]?.let(names::get)?.let { hunk.copy(source = scopeSubtaskLabel(it)) } ?: hunk
-    }))
-  }
-
-  private suspend fun fileDiffWithoutAttribution(
-    target: ChangeScopeTarget,
-    scope: ChangeScope,
-    file: ChangedFile,
-    lock: Mutex,
-    cache: CommittedChangeCache,
-  ): FileDiffState {
-    val resolved = resolveScope(target, scope)
-    if (resolved is ScopeRead.PerCommit) {
-      val baseline = runningWorkingBaseline(target, scope)
-      if (baseline != null) {
-        return perCommitFileDiffWithWorking(target, resolved.commits, baseline, file, lock, cache)
-      }
-    }
-    if (!target.committedOnly && scope is Subtasks && scope.from == scope.to) {
-      val subtask = target.subtasks.firstOrNull { it.id == scope.from }
-      val workingSubtask = subtask?.takeIf {
-        it.state == ScopeSubtaskState.RUNNING ||
-          (it.state == ScopeSubtaskState.INTERRUPTED && it.recordedSha == null)
-      }
-      if (workingSubtask != null) {
-        val baseline = if (!target.rangesSupported) {
-          workingSubtask.reviewBaseSha
-        } else {
-          target.timeline?.let { workingBaseSha(it, workingSubtask) }
-        } ?: return FileDiffState.Unavailable(ReadProblem.Runtime("scope not available"))
-        return readWorkingPatch(target.worktreeRoot, baseline, file, lock)
-      }
-    }
-    return when (val read = resolved) {
-      is ScopeRead.Committed -> readCommittedPatch(target.worktreeRoot, read.fromSha, read.toSha, file, lock, cache)
-      is ScopeRead.PerCommit -> perCommitFileDiff(target, read.commits, file, lock, cache)
-      is ScopeRead.Baseline -> when (val base = baselineFileBase(target.worktreeRoot, read, lock)) {
-        is Outcome.Failure -> base.error
-        is Outcome.Success ->
-          when (val baseline = read.baseline) {
-            is ChangeBaseline.CommittedBranchRange -> readBranchRangePatch(target.worktreeRoot, base.value, baseline, file, lock)
-            else -> readWorkingPatch(target.worktreeRoot, base.value, file, lock)
+    if (groups.sumOf { it.commits.size } > PER_COMMIT_READ_LIMIT) return failedRead()
+    val perOwner = linkedMapOf<ScopeHunkOwner, FileDiff>()
+    for (group in groups) {
+      val patches = mutableListOf<FileDiff>()
+      for (commit in group.commits) {
+        when (val listed = readCommittedFileList(target.worktreeRoot, commit.parentSha, commit.sha, lock, cache)) {
+          is Outcome.Failure -> return failedRead()
+          is Outcome.Success -> {
+            val entry = listed.value.files.firstOrNull { matchesCommittedFile(it, file) } ?: continue
+            when (val patch = readCommittedPatch(target.worktreeRoot, commit.parentSha, commit.sha, entry, lock, cache)) {
+              is FileDiffState.Shown -> patches += patch.diff
+              is FileDiffState.Unavailable -> return FileDiffState.Shown(diff)
+              else -> return failedRead()
+            }
           }
+        }
       }
-      else -> FileDiffState.Unavailable(ReadProblem.Runtime("scope not available"))
+      if (group.workingTree) {
+        val headSha = target.timeline?.headSha ?: return failedRead()
+        when (val working = readWorkingPatch(target.worktreeRoot, headSha, file, lock)) {
+          is FileDiffState.Shown -> patches += working.diff
+          is FileDiffState.Unavailable -> return FileDiffState.Shown(diff)
+          else -> return failedRead()
+        }
+      }
+      if (patches.isEmpty()) continue
+      val merged = FileDiff(
+        patches.flatMap { it.hunks },
+        patches.sumOf { it.insertions },
+        patches.sumOf { it.deletions },
+      )
+      if (merged.hunks.isNotEmpty()) perOwner[group.owner] = merged
     }
+    if (perOwner.isEmpty()) return FileDiffState.Shown(diff)
+    if (perOwner.size == 1) {
+      val label = hunkOwnerLabel(perOwner.keys.single(), target.subtasks)
+      return FileDiffState.Shown(diff.copy(hunks = diff.hunks.map { it.copy(source = label) }))
+    }
+    val owners = attributeHunks(diff, perOwner)
+    return FileDiffState.Shown(diff.copy(hunks = diff.hunks.mapIndexed { index, hunk ->
+      owners[index]?.let { owner -> hunk.copy(source = hunkOwnerLabel(owner, target.subtasks)) } ?: hunk
+    }))
   }
 
   private fun WorkFileDiffResult.toFileDiffState(): FileDiffState = when (this) {
@@ -346,6 +343,7 @@ internal class ChangeScopeDiffs(
     is ScopeChangesState.TooManyCommits -> FileDiffState.Unavailable(ReadProblem.Runtime("More than $limit commits to read one by one."))
     else -> FileDiffState.Unavailable(ReadProblem.Runtime("Unable to read the commits one by one."))
   }
+
   private suspend fun readChanges(baseline: ChangeBaseline, lock: Mutex): Outcome<WorkChangeListResult, ReadProblem> =
     git(lock) { port.changes(baseline.toPort()) }
 
