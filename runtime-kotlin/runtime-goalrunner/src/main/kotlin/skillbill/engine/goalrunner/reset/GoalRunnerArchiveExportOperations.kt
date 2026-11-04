@@ -14,6 +14,7 @@ import skillbill.contracts.workflow.goal.goalArchiveEnvelopeWireMap
 import skillbill.engine.goalplanning.toEnvelopeMap
 import skillbill.engine.goalrunner.archive.toGoalArchiveFieldMap
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerExportPreflightResult
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
@@ -63,6 +64,63 @@ public class GoalRunnerArchiveExportOperations(
   private val workflowArtifactWireEncoder: WorkflowArtifactWireEncoder,
 ) {
   private val changedSummary = "Database file changed during export; no archive was written."
+
+  public fun preflight(
+    issueKey: String,
+    repoRoot: Path,
+    expectedObservation: DatabaseFileObservation? = null,
+  ): GoalRunnerExportPreflightResult {
+    val canonicalKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
+    val protection =
+      when (val result = database.acquireDatabasePathProtection()) {
+        is DatabasePathProtectionResult.Acquired -> result.protection
+        is DatabasePathProtectionResult.Unavailable ->
+          return GoalRunnerExportPreflightResult.Refused(
+            canonicalKey,
+            "Database path protection is unavailable; export made no changes. ${result.reason}",
+          )
+      }
+    return protection.use { preflightProtected(canonicalKey, repoRoot, expectedObservation) }
+  }
+
+  private fun preflightProtected(
+    canonicalKey: String,
+    repoRoot: Path,
+    expectedObservation: DatabaseFileObservation?,
+  ): GoalRunnerExportPreflightResult {
+    val observation =
+      expectedObservation ?: if (database.databaseExists()) database.read { it.databaseFileObservation } else null
+    preflightObservationRefusal(canonicalKey, observation)?.let { return it }
+    requireNotNull(observation)
+    val plan =
+      when (val admission = database.transactionFenced(observation) { discover(repoRoot, canonicalKey) }) {
+        FencedTransactionResult.ChangedTarget ->
+          return GoalRunnerExportPreflightResult.Refused(canonicalKey, changedSummary)
+        is FencedTransactionResult.Committed -> admission.value
+      }
+    plan.refusalReason?.let { return GoalRunnerExportPreflightResult.Refused(canonicalKey, it) }
+    return when (val git = branchHeadAdmission(repoRoot, plan)) {
+      is BranchHeadAdmission.Refused -> GoalRunnerExportPreflightResult.Refused(canonicalKey, git.reason)
+      is BranchHeadAdmission.Ready ->
+        GoalRunnerExportPreflightResult.Ready(canonicalKey, git.featureBranch, git.commitSha)
+    }
+  }
+
+  private fun preflightObservationRefusal(
+    issueKey: String,
+    observation: DatabaseFileObservation?,
+  ): GoalRunnerExportPreflightResult.Refused? {
+    val selectedPath = database.resolveDbPath().toAbsolutePath().normalize()
+    val reason =
+      when {
+        !database.databaseExists() -> "Selected database does not exist; export made no changes."
+        observation == null -> "Database file identity is unavailable; export made no changes."
+        observation.path.toAbsolutePath().normalize() != selectedPath ->
+          "Database observation does not match the selected database path; export made no changes."
+        else -> null
+      }
+    return reason?.let { GoalRunnerExportPreflightResult.Refused(issueKey, it) }
+  }
 
   public fun export(
     request: GoalRunnerExportRequest,

@@ -5,6 +5,11 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
+import dev.skillbill.desktop.core.domain.model.ImportOutcome
+import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecBundleControlView
@@ -17,6 +22,7 @@ import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
+import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.di.WindowScope
@@ -139,6 +145,8 @@ class SpecsPaneModel(
   private val toasts: ToastQueue,
   dispatchers: AppDispatchers,
   private val session: DatabaseSessionController = DirectSessionController,
+  private val archiveChooser: ArchiveFileChooser,
+  private val board: WorkBoardRepository,
 ) {
   private val scope = CoroutineScope(SupervisorJob() + dispatchers.ui)
   private val local = MutableStateFlow(SpecsUiState())
@@ -161,6 +169,7 @@ class SpecsPaneModel(
   private var controlJob: Job? = null
   private var resolutionJob: Job? = null
   private var retryJob: Job? = null
+  private var importContext: Pair<DatabaseSessionState.Open, SpecProject>? = null
   private var treeGeneration = 0
   val state = combine(local, controls.reservations) { current, reservations ->
     val key = selectedBundleKey(current)
@@ -321,6 +330,14 @@ class SpecsPaneModel(
         setToolbar { copy(purgeDialogOpen = false) }
       }
       SpecsAction.ConfirmPurge -> purge()
+      SpecsAction.RequestExport -> export()
+      SpecsAction.DismissExportLive -> setToolbar { copy(exportLiveDialogOpen = false) }
+      SpecsAction.RequestImport -> importArchive()
+      SpecsAction.DismissImport -> {
+        importContext = null
+        local.value = local.value.copy(importDialog = null)
+      }
+      SpecsAction.ConfirmImport -> confirmImport()
       is SpecsAction.OpenRowMenu -> if (findNode(roots(), action.path) is SpecNode.Bundle) {
         local.value = local.value.copy(rowMenuPath = action.path)
       }
@@ -529,6 +546,7 @@ class SpecsPaneModel(
         agentMenuOpen = sameIdentity && previous.agentMenuOpen,
         confirmingCancel = sameIdentity && previous.confirmingCancel,
         purgeDialogOpen = sameIdentity && previous.purgeDialogOpen,
+        exportLiveDialogOpen = sameIdentity && previous.exportLiveDialogOpen,
         inFlight = activeOperations.isNotEmpty(),
       ),
     )
@@ -569,6 +587,7 @@ class SpecsPaneModel(
           agentMenuOpen = toolbar.agentMenuOpen && accepted != null,
           confirmingCancel = toolbar.confirmingCancel && keepCancel,
           purgeDialogOpen = toolbar.purgeDialogOpen && keepPurge,
+          exportLiveDialogOpen = toolbar.exportLiveDialogOpen,
         ))
       }
     }
@@ -755,6 +774,98 @@ class SpecsPaneModel(
       }
     }
   }
+
+  private fun export() {
+    val target = controlContext() ?: return
+    val selectedSession = session.state.value as? DatabaseSessionState.Open ?: return
+    val key = target.control.issueKey ?: return
+    if (target.project.repoRoot.isNullOrBlank()) {
+      problem(NO_CHECKOUT)
+      return
+    }
+    scope.launch {
+      if (session.state.value != selectedSession || !isCurrentTarget(target)) return@launch
+      when (val preflight = controls.preflightExport(key, target.project.repoRoot)) {
+        is ExportPreflightOutcome.Ready -> if (session.state.value == selectedSession && isCurrentTarget(target)) archiveChooser.saveArchive("$key-archive.zip") { path ->
+          if (path != null && session.state.value == selectedSession && isCurrentTarget(target)) scope.launch {
+            if (session.state.value != selectedSession || !isCurrentTarget(target)) return@launch
+            when (val result = controls.export(key, target.project.repoRoot, path)) {
+              is ExportOutcome.Exported -> toasts.show(
+                ToastMessage(ToastTone.Confirmation, "Exported ${result.issueKey} to ${result.archivePath}"),
+              )
+              is ExportOutcome.Refused -> if (requiresPause(result.reason)) {
+                setToolbar { copy(exportLiveDialogOpen = true) }
+              } else problem(result.reason)
+              is ExportOutcome.Failed -> problem(readProblemText(result.problem))
+            }
+          }
+        }
+        is ExportPreflightOutcome.Refused -> if (requiresPause(preflight.reason)) {
+          setToolbar { copy(exportLiveDialogOpen = true) }
+        } else problem(preflight.reason)
+        is ExportPreflightOutcome.Failed -> problem(readProblemText(preflight.problem))
+      }
+    }
+  }
+
+  private fun importArchive() {
+    val project = local.value.project ?: return
+    val selectedSession = session.state.value as? DatabaseSessionState.Open ?: return
+    if (project.repoRoot.isNullOrBlank()) {
+      problem(NO_CHECKOUT)
+      return
+    }
+    archiveChooser.openArchive { path ->
+      if (path != null && session.state.value == selectedSession && local.value.project == project) scope.launch {
+        if (session.state.value != selectedSession || local.value.project != project) return@launch
+        when (val inspected = controls.inspectArchive(path, project.repoRoot)) {
+          is ArchiveInspectOutcome.Ready -> if (session.state.value == selectedSession && local.value.project == project) {
+            importContext = selectedSession to project
+            local.value = local.value.copy(
+              importDialog = ImportConfirmation(
+                path,
+                inspected.fingerprint,
+                inspected.issueKey,
+                inspected.featureBranch,
+                inspected.commitSha,
+              ),
+            )
+          }
+          is ArchiveInspectOutcome.Refused -> problem(inspected.reason)
+          is ArchiveInspectOutcome.Failed -> problem(readProblemText(inspected.problem))
+        }
+      }
+    }
+  }
+
+  private fun confirmImport() {
+    val target = local.value.importDialog ?: return
+    val context = importContext ?: return
+    importContext = null
+    local.value = local.value.copy(importDialog = null)
+    if (session.state.value != context.first || local.value.project != context.second) return
+    val repoRoot = context.second.repoRoot ?: return
+    scope.launch {
+      if (session.state.value != context.first || local.value.project != context.second) return@launch
+      when (val result = controls.import(target.archivePath, repoRoot, target.fingerprint)) {
+        is ImportOutcome.Imported -> {
+          local.value.project?.projectId?.let(specs::refreshTree)
+          board.refresh()
+        }
+        is ImportOutcome.Incomplete ->
+          problem(
+            "Import is incomplete. Missing specs: ${result.leftovers.joinToString()}. " +
+              "Run Import work… again to retry.",
+          )
+        is ImportOutcome.Refused ->
+          problem("${result.reason} Recorded branch ${target.featureBranch}, commit ${target.commitSha}.")
+        is ImportOutcome.Failed -> problem(readProblemText(result.problem))
+      }
+    }
+  }
+
+  private fun requiresPause(reason: String): Boolean =
+    listOf("live", "running", "liveness", "ownership").any { reason.contains(it, ignoreCase = true) }
 
   private fun dropVanishedBundleTargets(roots: List<SpecNode>) {
     val current = local.value

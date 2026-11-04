@@ -14,6 +14,7 @@ import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.archive.GoalArchiveBundleReader
 import skillbill.engine.goalrunner.archive.ParsedGoalArchiveBundle
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerArchiveInspectResult
 import skillbill.engine.goalrunner.model.GoalRunnerImportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerImportResult
 import skillbill.error.core.SkillBillRuntimeException
@@ -63,7 +64,33 @@ public class GoalRunnerArchiveImportOperations(
 ) {
   private val changedSummary = "Database file changed during import; no rows were restored."
 
-  public fun import(request: GoalRunnerImportRequest): GoalRunnerImportResult {
+  public fun inspect(archivePath: Path): GoalRunnerArchiveInspectResult {
+    val normalized = archivePath.toAbsolutePath().normalize()
+    val bundle =
+      catchingNonCancellation { GoalArchiveBundleReader.read(normalized, workflowArtifactWireEncoder) }
+        .getOrElse { error ->
+          if (error is SkillBillRuntimeException) throw error
+          return GoalRunnerArchiveInspectResult.Failed(error.message ?: error::class.simpleName.orEmpty())
+        }
+    envelopeValidator.validate(bundle.envelope)
+    if (bundle.envelope.contractVersion != GOAL_ARCHIVE_CONTRACT_VERSION) {
+      return GoalRunnerArchiveInspectResult.Refused(
+        "Goal archive contract version '${bundle.envelope.contractVersion}' is not supported; " +
+          "expected '$GOAL_ARCHIVE_CONTRACT_VERSION'.",
+      )
+    }
+    return GoalRunnerArchiveInspectResult.Ready(
+      bundle.fingerprint,
+      FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(bundle.envelope.issueKey),
+      bundle.envelope.featureBranch,
+      bundle.envelope.commitSha,
+    )
+  }
+
+  public fun import(
+    request: GoalRunnerImportRequest,
+    expectedObservation: DatabaseFileObservation? = null,
+  ): GoalRunnerImportResult {
     val repoRoot = request.repoRoot ?: error("repoRoot is required to import a goal archive.")
     val archivePath = request.archivePath.toAbsolutePath().normalize()
     val protection =
@@ -75,12 +102,14 @@ public class GoalRunnerArchiveImportOperations(
             reason = "Database path protection is unavailable; import made no changes. ${result.reason}",
           )
       }
-    return protection.use { importProtected(repoRoot, archivePath) }
+    return protection.use { importProtected(repoRoot, archivePath, expectedObservation, request.expectedFingerprint) }
   }
 
   private fun importProtected(
     repoRoot: Path,
     archivePath: Path,
+    expectedObservation: DatabaseFileObservation?,
+    expectedFingerprint: String?,
   ): GoalRunnerImportResult {
     val bundle =
       catchingNonCancellation {
@@ -90,8 +119,14 @@ public class GoalRunnerArchiveImportOperations(
         return GoalRunnerImportResult.Failed("", error.message ?: error::class.simpleName.orEmpty())
       }
     envelopeValidator.validate(bundle.envelope)
+    if (expectedFingerprint != null && bundle.fingerprint != expectedFingerprint) {
+      return GoalRunnerImportResult.Refused(
+        FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(bundle.envelope.issueKey),
+        "The archive changed after inspection; inspect it again before importing.",
+      )
+    }
     val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(bundle.envelope.issueKey)
-    return admitImport(repoRoot, archivePath, bundle, issueKey)
+    return admitImport(repoRoot, archivePath, bundle, issueKey, expectedObservation)
   }
 
   private fun admitImport(
@@ -99,6 +134,7 @@ public class GoalRunnerArchiveImportOperations(
     archivePath: Path,
     bundle: ParsedGoalArchiveBundle,
     issueKey: String,
+    expectedObservation: DatabaseFileObservation?,
   ): GoalRunnerImportResult {
     if (bundle.envelope.contractVersion != GOAL_ARCHIVE_CONTRACT_VERSION) {
       return GoalRunnerImportResult.Refused(
@@ -112,18 +148,19 @@ public class GoalRunnerArchiveImportOperations(
     return headRefusal(bundle.envelope, repoRoot)?.copy(issueKey = issueKey)
       ?: collisionRefusal(issueKey, repoRoot, archiveParentIds)
       ?: archiveContentRefusal(issueKey, bundle)
-      ?: restoreAdmitted(repoRoot, archivePath, bundle, issueKey, archiveParentIds)
+      ?: restoreAdmitted(repoRoot, archivePath, bundle, archiveParentIds, expectedObservation)
   }
 
   private fun restoreAdmitted(
     repoRoot: Path,
     archivePath: Path,
     bundle: ParsedGoalArchiveBundle,
-    issueKey: String,
     archiveParentIds: Set<String>,
+    expectedObservation: DatabaseFileObservation?,
   ): GoalRunnerImportResult {
+    val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(bundle.envelope.issueKey)
     val observation =
-      if (database.databaseExists()) {
+      expectedObservation ?: if (database.databaseExists()) {
         database.read { it.databaseFileObservation }
       } else {
         null

@@ -18,6 +18,8 @@ import dev.skillbill.desktop.core.domain.model.SpecTree
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
+import dev.skillbill.desktop.core.testing.FakeArchiveFileChooser
+import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -240,6 +242,8 @@ class SpecsPaneModelTest {
     SelectionHolder(),
     toasts,
     AppDispatchers(dispatcher, dispatcher, dispatcher),
+    archiveChooser = FakeArchiveFileChooser(),
+    board = FakeWorkBoardRepository(),
   ).also(models::add)
 
   private fun control(

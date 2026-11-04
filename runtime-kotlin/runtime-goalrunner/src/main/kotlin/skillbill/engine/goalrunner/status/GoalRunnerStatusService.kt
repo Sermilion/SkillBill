@@ -10,8 +10,10 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerAcceptanceCoordinato
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
+import skillbill.engine.goalrunner.model.GoalRunnerArchiveInspectResult
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
 import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
+import skillbill.engine.goalrunner.model.GoalRunnerExportPreflightResult
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest
@@ -124,10 +126,27 @@ public class GoalRunnerStatusService(
       expectedObservation,
     )
 
-  public fun import(request: GoalRunnerImportRequest): GoalRunnerImportResult =
+  public fun import(
+    request: GoalRunnerImportRequest,
+    expectedObservation: DatabaseFileObservation? = null,
+  ): GoalRunnerImportResult =
     archiveCoordinator.import(
       request.copy(repoRoot = request.repoRoot ?: repositoryRoot.path),
+      expectedObservation,
     )
+
+  public fun preflightExport(
+    issueKey: String,
+    repoRoot: Path?,
+    expectedObservation: DatabaseFileObservation?,
+  ): GoalRunnerExportPreflightResult =
+    archiveCoordinator.preflightExport(
+      issueKey,
+      effectiveGoalRepoRoot(repoRoot, repositoryRoot),
+      expectedObservation,
+    )
+
+  public fun inspectArchive(archivePath: Path): GoalRunnerArchiveInspectResult = archiveCoordinator.inspect(archivePath)
 
   public fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? = resetReplanCoordinator.replan(request)
 

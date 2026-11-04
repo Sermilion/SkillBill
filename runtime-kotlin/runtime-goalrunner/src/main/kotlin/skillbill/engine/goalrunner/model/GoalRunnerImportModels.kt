@@ -5,6 +5,7 @@ import java.nio.file.Path
 public data class GoalRunnerImportRequest(
   public val archivePath: Path,
   public val repoRoot: Path? = null,
+  public val expectedFingerprint: String? = null,
 ) {
   init {
     require(archivePath.toString().isNotBlank()) { "archivePath is required." }
@@ -42,4 +43,17 @@ public sealed interface GoalRunnerImportResult {
     public val archivePath: Path,
     public val retryHint: String,
   ) : GoalRunnerImportResult
+}
+
+public sealed interface GoalRunnerArchiveInspectResult {
+  public data class Ready(
+    public val fingerprint: String,
+    public val issueKey: String,
+    public val featureBranch: String,
+    public val commitSha: String,
+  ) : GoalRunnerArchiveInspectResult
+
+  public data class Refused(public val reason: String) : GoalRunnerArchiveInspectResult
+
+  public data class Failed(public val message: String) : GoalRunnerArchiveInspectResult
 }

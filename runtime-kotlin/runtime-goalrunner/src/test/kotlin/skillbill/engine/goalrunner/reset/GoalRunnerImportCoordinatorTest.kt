@@ -63,6 +63,11 @@ class GoalRunnerImportCoordinatorTest {
         database = FakeDatabaseSessionFactory(destStates),
         decompositionManifestStore = storeAwareTestDecompositionManifestStore(destPort),
       )
+    val changed = importService.import(GoalRunnerImportRequest(archive, destRoot, "different fingerprint"))
+    assertIs<GoalRunnerImportResult.Refused>(changed)
+    assertContains(changed.reason, "changed after inspection")
+    assertFalse(Files.exists(destPort.root.resolve("specs/SKILL-245-goal/spec.md")))
+    assertNull(destStates.getFeatureTaskWorkflow("wfl-parent"))
     val result = importService.import(GoalRunnerImportRequest(archive, destRoot))
     assertIs<GoalRunnerImportResult.Refused>(result)
     assertContains(result.reason, "feat/SKILL-245-goal")

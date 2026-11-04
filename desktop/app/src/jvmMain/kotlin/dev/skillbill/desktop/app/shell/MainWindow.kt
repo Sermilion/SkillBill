@@ -214,7 +214,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   ShellFrame(sidebar, drawerMode, panes.drawerOpen, onDismissDrawer = { panes.drawerOpen = false }) {
     WorkArea(drawerMode, right, bottom) {
       Box(Modifier.fillMaxSize()) {
-        AppNavHost(navigator, window.entries, shellProblem(session, board)) { problem ->
+        AppNavHost(navigator, window.entries, window.workImportRequests, shellProblem(session, board)) { problem ->
           ProblemStatePanel(
             problem,
             onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },

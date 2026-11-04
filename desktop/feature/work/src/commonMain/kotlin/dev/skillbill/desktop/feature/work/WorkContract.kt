@@ -22,6 +22,8 @@ data class WorkUiState(
   val reserved: Set<String> = emptySet(),
   val menu: WorkItem? = null,
   val renderedAt: Instant? = null,
+  val exportLiveTarget: WorkItem? = null,
+  val importDialog: WorkImportConfirmation? = null,
 ) {
   /** Every section when none is chosen, else only the chosen one, in display order. */
   val shownSections: List<BoardSection>
@@ -42,6 +44,14 @@ data class WorkUiState(
   fun canCancel(item: WorkItem): Boolean = runOptions[item.id]?.canCancel == true && !isReserved(item)
 }
 
+data class WorkImportConfirmation(
+  val archivePath: String,
+  val fingerprint: String,
+  val issueKey: String,
+  val featureBranch: String,
+  val commitSha: String,
+)
+
 /** The single-key row controls, acting on the focused row as its context menu entry would. */
 enum class RowKey { Pause, PauseNow, Launch }
 
@@ -61,6 +71,11 @@ sealed interface WorkAction {
   data class PauseNow(val item: WorkItem) : WorkAction
   data class Launch(val item: WorkItem) : WorkAction
   data class Cancel(val item: WorkItem) : WorkAction
+  data class RequestExport(val item: WorkItem) : WorkAction
+  data object DismissExportLive : WorkAction
+  data object RequestImport : WorkAction
+  data object DismissImport : WorkAction
+  data object ConfirmImport : WorkAction
   data class FocusedKey(val key: RowKey) : WorkAction
 }
 

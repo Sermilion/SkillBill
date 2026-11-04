@@ -11,12 +11,19 @@ import dev.skillbill.desktop.core.designsystem.overlay.CommandItem
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ControlAction
 import dev.skillbill.desktop.core.ui.feedback.FeedbackSubject
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.controlFeedback
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.CommandContext
 import dev.skillbill.desktop.core.ui.navigation.CommandSection
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -35,6 +42,8 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 class CommandCatalog(
   private val entries: Set<FeatureEntry>,
   private val controls: WorkControlRepository,
+  private val archiveChooser: ArchiveFileChooser,
+  private val session: DatabaseSessionController,
   private val toasts: ToastQueue,
   private val navigator: WindowNavigator,
   private val terminal: TerminalTriggers,
@@ -56,6 +65,44 @@ class CommandCatalog(
       }
       if (item.pauseEligible && !item.pauseRequested) {
         add(control("pause-soft", "Pause after subtask", LucideIcons.pause, "P", ControlAction.PauseAfterSubtask, subject) { controls.pauseAfterSubtask(item) })
+      }
+      if (item.kind == WorkKind.Goal) {
+        add(ShellCommand(CommandItem("export", "Export work", LucideIcons.file)) {
+          val selectedSession = session.state.value as? DatabaseSessionState.Open ?: return@ShellCommand
+          scope.scope.launch {
+            if (session.state.value != selectedSession) return@launch
+            when (val preflight = controls.preflightExport(item.issueKey ?: item.id, item.repositoryRoot)) {
+              is ExportPreflightOutcome.Ready -> if (session.state.value == selectedSession) archiveChooser.saveArchive(
+                "${item.issueKey ?: item.id}-archive.zip",
+              ) { path ->
+                if (path != null && session.state.value == selectedSession) scope.scope.launch {
+                  if (session.state.value != selectedSession) return@launch
+                  when (val outcome = controls.export(item.issueKey ?: item.id, item.repositoryRoot, path)) {
+                    is ExportOutcome.Exported -> toasts.show(
+                      ToastData("Exported", outcome.archivePath, ToastLead.Icon(LucideIcons.file)),
+                    )
+                    is ExportOutcome.Refused -> toasts.show(
+                      ToastData(
+                        "Export refused",
+                        if (requiresPause(outcome.reason)) "Pause the goal before exporting it." else outcome.reason,
+                      ),
+                    )
+                    is ExportOutcome.Failed -> toasts.show(ToastData("Export failed", readProblemText(outcome.problem)))
+                  }
+                }
+              }
+              is ExportPreflightOutcome.Refused -> toasts.show(
+                ToastData(
+                  "Export refused",
+                  if (requiresPause(preflight.reason)) "Pause the goal before exporting it." else preflight.reason,
+                ),
+              )
+              is ExportPreflightOutcome.Failed -> toasts.show(
+                ToastData("Export failed", readProblemText(preflight.problem)),
+              )
+            }
+          }
+        })
       }
       if (item.controlEligible) {
         add(control("pause-now", "Pause now", LucideIcons.stop, "⇧ P", ControlAction.PauseNow, subject) { controls.pauseNow(item) })
@@ -90,6 +137,9 @@ class CommandCatalog(
   ) = ShellCommand(CommandItem(id, label, icon, shortcut)) {
     scope.scope.launch { toasts.show(controlFeedback(action, request(), subject)) }
   }
+
+  private fun requiresPause(reason: String): Boolean =
+    listOf("live", "running", "liveness", "ownership").any { reason.contains(it, ignoreCase = true) }
 }
 
 /** Keeps the entries whose label and group head hold every typed term, as the prototype's filter does. */

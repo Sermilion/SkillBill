@@ -45,6 +45,8 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.RepoIcon
 import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbDialog
+import dev.skillbill.desktop.core.designsystem.component.SbDialogText
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
@@ -97,6 +99,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     },
     actions = {
       SbIconButton(LucideIcons.chevronUp, COLLAPSE_ALL, { onAction(SpecsAction.CollapseAll) }, size = SbControlSize.Small)
+      SbButton("Import work…", { onAction(SpecsAction.RequestImport) }, size = SbControlSize.Small)
       SbIconButton(LucideIcons.x, CLOSE_SPECS, onClose, size = SbControlSize.Small)
     },
   ) {
@@ -150,6 +153,21 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
         // `.sb-pane-foot`: 10.5 px mono at weight 400 and 1.3 line height.
         BasicText(path, Modifier.weight(1f), style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 13.65.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         SbButton("Reveal", { onAction(SpecsAction.Reveal) }, size = SbControlSize.Small, variant = SbButtonVariant.Ghost)
+      }
+    }
+    state.importDialog?.let { target ->
+      ShellLayer { onAction(SpecsAction.DismissImport) }
+      SbDialog(
+        title = "Import ${target.issueKey}?",
+        onDismissRequest = { onAction(SpecsAction.DismissImport) },
+        actions = {
+          SbButton("Cancel", { onAction(SpecsAction.DismissImport) }, variant = SbButtonVariant.Ghost)
+          SbButton("Import work", { onAction(SpecsAction.ConfirmImport) })
+        },
+      ) {
+        SbDialogText("Issue key: ${target.issueKey}")
+        SbDialogText("Branch: ${target.featureBranch}")
+        SbDialogText("Commit: ${target.commitSha}")
       }
     }
   }

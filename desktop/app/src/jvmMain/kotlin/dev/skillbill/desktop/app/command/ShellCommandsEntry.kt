@@ -14,6 +14,8 @@ import dev.skillbill.desktop.core.ui.status.boardSectionLead
 import dev.skillbill.desktop.core.ui.status.boardSectionLeadFill
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.CommandContext
@@ -26,6 +28,8 @@ import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.navigation.ShellCommand
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.navigation.WorkImportRequest
+import dev.skillbill.desktop.core.ui.navigation.WorkImportRequests
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.core.ui.status.statusKind
 import me.tatarka.inject.annotations.Inject
@@ -43,6 +47,8 @@ class ShellCommandsEntry(
   private val terminal: TerminalTriggers,
   private val board: WorkBoardRepository,
   private val boardState: ShellBoardState,
+  private val session: DatabaseSessionController,
+  private val workImportRequests: WorkImportRequests,
 ) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = false
 
@@ -66,6 +72,13 @@ class ShellCommandsEntry(
       ShellCommand(CommandItem("term", if (terminal.open) "Close terminal" else "Open terminal", LucideIcons.terminal, "⌃ `"), terminal::toggle),
       ShellCommand(CommandItem("term-new", "New terminal tab", LucideIcons.plus, "⌃ ⇧ `"), terminal::newTab),
       ShellCommand(CommandItem("refresh", "Refresh", LucideIcons.refresh), board::refresh),
+      ShellCommand(CommandItem("import-work", "Import work…", LucideIcons.file)) {
+        val sessionId = (session.state.value as? DatabaseSessionState.Open)?.sessionId
+        if (sessionId != null) {
+          if (navigator.top.route !is WorkRoute || navigator.top.sessionId != sessionId) navigator.navigate(WorkRoute(null))
+          workImportRequests.submit(WorkImportRequest(sessionId, navigator.top.entryToken))
+        }
+      },
     )
     val work = boardState.view.value.lastLoaded?.items.orEmpty().map { item ->
       val key = rowKey(item)

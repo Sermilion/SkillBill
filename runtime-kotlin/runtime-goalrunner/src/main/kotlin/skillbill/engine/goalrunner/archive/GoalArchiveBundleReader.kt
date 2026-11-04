@@ -24,11 +24,14 @@ import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.artifact.decodePhaseOutputRepairEvidenceFromArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
+import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 internal data class ParsedGoalArchiveBundle(
+  val fingerprint: String,
   val envelope: GoalArchiveEnvelope,
   val specEntries: List<Pair<String, ByteArray>>,
   val snapshot: GoalArchiveOwnedSnapshot,
@@ -57,6 +60,7 @@ internal object GoalArchiveBundleReader {
         name.removePrefix(GoalArchiveEnvelopeKeys.SPECS_PREFIX) to bytes
       }
     return ParsedGoalArchiveBundle(
+      fingerprint = archiveFingerprint(entries),
       envelope = envelope,
       specEntries = specEntries,
       snapshot =
@@ -78,6 +82,18 @@ internal object GoalArchiveBundleReader {
         ),
     )
   }
+}
+
+private fun archiveFingerprint(entries: Map<String, ByteArray>): String {
+  val digest = MessageDigest.getInstance("SHA-256")
+  entries.toSortedMap().forEach { (name, bytes) ->
+    val nameBytes = name.toByteArray(Charsets.UTF_8)
+    digest.update(ByteBuffer.allocate(Int.SIZE_BYTES).putInt(nameBytes.size).array())
+    digest.update(nameBytes)
+    digest.update(ByteBuffer.allocate(Int.SIZE_BYTES).putInt(bytes.size).array())
+    digest.update(bytes)
+  }
+  return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
 private fun readZipEntries(absolute: Path): Map<String, ByteArray> {

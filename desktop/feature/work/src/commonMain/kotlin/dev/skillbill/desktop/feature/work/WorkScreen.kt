@@ -25,6 +25,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbDialog
+import dev.skillbill.desktop.core.designsystem.component.SbDialogText
+import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -40,6 +44,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
+import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import kotlin.math.roundToInt
 
@@ -97,6 +102,7 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(WorkAction.Refresh) })
         SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
+        SbButton("Import work…", { onAction(WorkAction.RequestImport) }, size = SbControlSize.Small)
       },
     )
     Box(Modifier.weight(1f)) {
@@ -104,6 +110,43 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
         BoardState.Loading -> ScrollBody { EmptyState("Loading your work", LucideIcons.inbox) }
         is BoardState.Failed -> ScrollBody { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
         is BoardState.Loaded -> WorkBody(state, board, host, narrow, onAction)
+      }
+    }
+    state.exportLiveTarget?.let { item ->
+      ShellLayer { onAction(WorkAction.DismissExportLive) }
+      SbDialog(
+        title = "Pause before exporting",
+        onDismissRequest = { onAction(WorkAction.DismissExportLive) },
+        actions = {
+          SbButton("Dismiss", { onAction(WorkAction.DismissExportLive) }, variant = SbButtonVariant.Ghost)
+          if (state.canPauseNow(item)) {
+            SbButton("Pause", {
+              onAction(WorkAction.PauseNow(item))
+              onAction(WorkAction.DismissExportLive)
+            })
+          }
+          if (state.canPauseAfterSubtask(item)) {
+            SbButton("Pause after subtask", {
+              onAction(WorkAction.PauseAfterSubtask(item))
+              onAction(WorkAction.DismissExportLive)
+            })
+          }
+        },
+      ) { SbDialogText("This goal must be paused before it can be exported.") }
+    }
+    state.importDialog?.let { target ->
+      ShellLayer { onAction(WorkAction.DismissImport) }
+      SbDialog(
+        title = "Import ${target.issueKey}?",
+        onDismissRequest = { onAction(WorkAction.DismissImport) },
+        actions = {
+          SbButton("Cancel", { onAction(WorkAction.DismissImport) }, variant = SbButtonVariant.Ghost)
+          SbButton("Import work", { onAction(WorkAction.ConfirmImport) })
+        },
+      ) {
+        SbDialogText("Issue key: ${target.issueKey}")
+        SbDialogText("Branch: ${target.featureBranch}")
+        SbDialogText("Commit: ${target.commitSha}")
       }
     }
   }

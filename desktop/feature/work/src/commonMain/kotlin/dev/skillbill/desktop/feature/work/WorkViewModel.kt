@@ -5,15 +5,26 @@ import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
+import dev.skillbill.desktop.core.domain.model.ImportOutcome
+import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
 import dev.skillbill.desktop.core.domain.model.LoadMoreOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.ControlAction
 import dev.skillbill.desktop.core.ui.feedback.FeedbackSubject
 import dev.skillbill.desktop.core.ui.feedback.controlFeedback
+import dev.skillbill.desktop.core.ui.feedback.ToastMessage
+import dev.skillbill.desktop.core.ui.feedback.ToastTone
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -43,7 +54,10 @@ class WorkViewModel(
   private val controls: WorkControlRepository,
   private val selection: SelectionHolder,
   private val clock: Clock,
+  private val archiveChooser: ArchiveFileChooser,
+  private val session: DatabaseSessionController,
 ) : ViewModel() {
+  private var importSession: DatabaseSessionState.Open? = null
   private val mutableState = MutableStateFlow(WorkUiState())
   val state: StateFlow<WorkUiState> = mutableState.asStateFlow()
 
@@ -88,6 +102,14 @@ class WorkViewModel(
       is WorkAction.PauseNow -> pauseNow(action.item)
       is WorkAction.Launch -> launch(action.item)
       is WorkAction.Cancel -> cancel(action.item)
+      is WorkAction.RequestExport -> requestExport(action.item)
+      WorkAction.DismissExportLive -> mutableState.update { it.copy(exportLiveTarget = null) }
+      WorkAction.RequestImport -> requestImport()
+      WorkAction.DismissImport -> {
+        importSession = null
+        mutableState.update { it.copy(importDialog = null) }
+      }
+      WorkAction.ConfirmImport -> confirmImport()
       is WorkAction.FocusedKey -> focusedRow()?.let { item ->
         when (action.key) {
           RowKey.Pause -> pauseAfterSubtask(item)
@@ -141,6 +163,92 @@ class WorkViewModel(
   private fun cancel(item: WorkItem) {
     if (state.value.canCancel(item)) control(item, ControlAction.Cancel) { controls.cancel(item) }
   }
+
+  private fun requestExport(item: WorkItem) {
+    if (item.kind != WorkKind.Goal) return
+    val selectedSession = session.state.value as? DatabaseSessionState.Open ?: return
+    viewModelScope.launch {
+      if (session.state.value != selectedSession) return@launch
+      when (val preflight = controls.preflightExport(item.issueKey ?: item.id, item.repositoryRoot)) {
+        is ExportPreflightOutcome.Ready -> if (session.state.value == selectedSession) archiveChooser.saveArchive(
+          "${item.issueKey ?: item.id}-archive.zip",
+        ) { path ->
+          if (path != null && session.state.value == selectedSession) viewModelScope.launch {
+            if (session.state.value != selectedSession) return@launch
+            when (val result = controls.export(item.issueKey ?: item.id, item.repositoryRoot, path)) {
+              is ExportOutcome.Exported ->
+                showToast(ToastTone.Confirmation, "Exported ${result.issueKey} to ${result.archivePath}")
+              is ExportOutcome.Refused -> if (requiresPause(result.reason)) {
+                mutableState.update { it.copy(exportLiveTarget = item) }
+              } else showToast(ToastTone.Problem, result.reason)
+              is ExportOutcome.Failed -> showToast(ToastTone.Problem, readProblemText(result.problem))
+            }
+          }
+        }
+        is ExportPreflightOutcome.Refused -> if (requiresPause(preflight.reason)) {
+          mutableState.update { it.copy(exportLiveTarget = item) }
+        } else showToast(ToastTone.Problem, preflight.reason)
+        is ExportPreflightOutcome.Failed -> showToast(ToastTone.Problem, readProblemText(preflight.problem))
+      }
+    }
+  }
+
+  private fun requestImport() {
+    val selectedSession = session.state.value as? DatabaseSessionState.Open ?: return
+    archiveChooser.openArchive { path ->
+      if (path != null && session.state.value == selectedSession) viewModelScope.launch {
+        if (session.state.value != selectedSession) return@launch
+        when (val inspected = controls.inspectArchive(path, null)) {
+          is ArchiveInspectOutcome.Ready -> if (session.state.value == selectedSession) {
+            importSession = selectedSession
+            mutableState.update {
+              it.copy(
+                importDialog = WorkImportConfirmation(
+                  path,
+                  inspected.fingerprint,
+                  inspected.issueKey,
+                  inspected.featureBranch,
+                  inspected.commitSha,
+                ),
+              )
+            }
+          }
+          is ArchiveInspectOutcome.Refused -> showToast(ToastTone.Problem, inspected.reason)
+          is ArchiveInspectOutcome.Failed -> showToast(ToastTone.Problem, readProblemText(inspected.problem))
+        }
+      }
+    }
+  }
+
+  private fun confirmImport() {
+    val target = state.value.importDialog ?: return
+    val selectedSession = importSession ?: return
+    importSession = null
+    mutableState.update { it.copy(importDialog = null) }
+    if (session.state.value != selectedSession) return
+    viewModelScope.launch {
+      if (session.state.value != selectedSession) return@launch
+      when (val result = controls.import(target.archivePath, null, target.fingerprint)) {
+        is ImportOutcome.Imported -> board.refresh()
+        is ImportOutcome.Incomplete -> showToast(
+          ToastTone.Problem,
+          "Import is incomplete. Missing specs: ${result.leftovers.joinToString()}. Run Import work… again to retry.",
+        )
+        is ImportOutcome.Refused -> showToast(
+          ToastTone.Problem,
+          "${result.reason} Recorded branch ${target.featureBranch}, commit ${target.commitSha}.",
+        )
+        is ImportOutcome.Failed -> showToast(ToastTone.Problem, readProblemText(result.problem))
+      }
+    }
+  }
+
+  private fun showToast(tone: ToastTone, message: String) {
+    effectChannel.trySend(WorkEffect.ShowToast(ToastMessage(tone, message)))
+  }
+
+  private fun requiresPause(reason: String): Boolean =
+    listOf("live", "running", "liveness", "ownership").any { reason.contains(it, ignoreCase = true) }
 
   private fun control(item: WorkItem, action: ControlAction, request: suspend () -> ControlOutcome) {
     val options = state.value.runOptions[item.id]

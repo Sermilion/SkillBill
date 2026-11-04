@@ -123,6 +123,36 @@ sealed interface PurgeOutcome {
   data class Failed(val problem: ReadProblem) : PurgeOutcome
 }
 
+sealed interface ExportPreflightOutcome {
+  data class Ready(val featureBranch: String, val commitSha: String) : ExportPreflightOutcome
+  data class Refused(val reason: String) : ExportPreflightOutcome
+  data class Failed(val problem: ReadProblem) : ExportPreflightOutcome
+}
+
+sealed interface ArchiveInspectOutcome {
+  data class Ready(val issueKey: String, val featureBranch: String, val commitSha: String, val fingerprint: String) : ArchiveInspectOutcome
+  data class Refused(val reason: String) : ArchiveInspectOutcome
+  data class Failed(val problem: ReadProblem) : ArchiveInspectOutcome
+}
+
+sealed interface ExportOutcome {
+  data class Exported(
+    val issueKey: String,
+    val featureBranch: String,
+    val commitSha: String,
+    val archivePath: String,
+  ) : ExportOutcome
+  data class Refused(val reason: String) : ExportOutcome
+  data class Failed(val problem: ReadProblem) : ExportOutcome
+}
+
+sealed interface ImportOutcome {
+  data class Imported(val issueKey: String, val featureBranch: String, val commitSha: String) : ImportOutcome
+  data class Incomplete(val leftovers: List<String>) : ImportOutcome
+  data class Refused(val reason: String) : ImportOutcome
+  data class Failed(val problem: ReadProblem) : ImportOutcome
+}
+
 enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr, Monitor, Verify, PrReviewFix }
 
 data class NewTaskStart(

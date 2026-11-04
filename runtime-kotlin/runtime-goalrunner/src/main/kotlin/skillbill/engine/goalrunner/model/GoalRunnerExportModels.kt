@@ -30,3 +30,17 @@ public sealed interface GoalRunnerExportResult {
     public val message: String,
   ) : GoalRunnerExportResult
 }
+
+public sealed interface GoalRunnerExportPreflightResult {
+  public val issueKey: String
+
+  public data class Ready(
+    override val issueKey: String,
+    public val featureBranch: String,
+    public val commitSha: String,
+  ) : GoalRunnerExportPreflightResult
+
+  public data class Refused(override val issueKey: String, public val reason: String) : GoalRunnerExportPreflightResult
+
+  public data class Failed(override val issueKey: String, public val message: String) : GoalRunnerExportPreflightResult
+}
