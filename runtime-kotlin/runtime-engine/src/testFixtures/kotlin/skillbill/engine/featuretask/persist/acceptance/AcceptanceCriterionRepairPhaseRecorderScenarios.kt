@@ -268,6 +268,11 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
 
           val trace = phase(f, "audit", 4)
           assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(trace))
+          if (verdict == "holds") {
+            scope.recordTraceReask(AcceptanceCriterionInteractionTraceRound.scopeKey(pending))
+            assertIs<RequiredPhaseWrite.Rejected>(recorder.complete(output(trace, "advance", "No decision given.")))
+            assertEquals(listOf("AC-001"), assertNotNull(scope.snapshot).interactionTrace.pendingRechecks)
+          }
           val settled =
             recorder.complete(
               output(

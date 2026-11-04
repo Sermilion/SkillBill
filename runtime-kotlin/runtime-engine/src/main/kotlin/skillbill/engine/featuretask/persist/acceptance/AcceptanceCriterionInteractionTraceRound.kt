@@ -29,14 +29,14 @@ public object AcceptanceCriterionInteractionTraceRound {
   private const val SCOPE_KEY_LENGTH = 16
   public const val LINE_GRAMMAR: String =
     "Answer with exactly one line per listed scenario, in the form " +
-      "`Interaction <ref>: holds trace <path:line citations>`, " +
-      "`Interaction <ref>: broken owner AC-NNN trace <path:line citations>` or " +
-      "`Interaction <ref>: unknown trace <reason>`."
+      "`Interaction <ref>: holds`, " +
+      "`Interaction <ref>: broken owner AC-NNN` or " +
+      "`Interaction <ref>: unknown`. Add explanations in ordinary prose."
 
   internal const val RECHECK_GRAMMAR =
     "For each listed re-check, answer with exactly one line of the form " +
-      "`Recheck AC-NNN: holds evidence <path:line, path:line>` or " +
-      "`Recheck AC-NNN: regressed evidence <path:line, path:line>`."
+      "`Recheck AC-NNN: holds` or " +
+      "`Recheck AC-NNN: regressed`. Add explanations in ordinary prose."
 
   public fun scopeKey(state: AcceptanceCriterionRepairState): String =
     sha256Hex(

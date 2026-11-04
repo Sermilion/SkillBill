@@ -28,18 +28,19 @@ internal object AcceptanceCriterionRecheckParser {
     return when {
       duplicated != null -> rejected("Recheck ${duplicated.key} appears more than once.")
       missing != null -> rejected("Recheck $missing has no line.")
-      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } }, ignored)
+      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } }, ignored, prose)
     }
   }
 
   private fun entriesOf(
     lines: List<RecheckLine>,
     ignoredRefs: List<String>,
+    prose: String,
   ): AcceptanceCriterionRecheckParse {
     val entries =
       lines.map { line ->
         val citations =
-          citationsOf(line.rest) ?: return rejected("Recheck ${line.ref} needs `evidence <path:line list>`.")
+          citationsOf(line.rest) ?: line.rest.removePrefix("evidence").trim().takeIf { it.isNotBlank() } ?: prose
         AcceptanceCriterionRecheckEntry(line.ref, line.verdict, citations)
       }
     return AcceptanceCriterionRecheckParse.Parsed(entries, ignoredRefs)
@@ -77,8 +78,7 @@ internal object AcceptanceCriterionRecheckParser {
       AcceptanceCriterionRecheckVerdict.entries.first {
         it.wireValue.equals(match.groupValues[VERDICT_GROUP], ignoreCase = true)
       }
-    val citations = CITATION.findAll(match.groupValues[REST_GROUP]).map { it.value }.toList()
-    return RecheckLine(match.groupValues[REF_GROUP].uppercase(), verdict, "evidence ${citations.joinToString(", ")}")
+    return RecheckLine(match.groupValues[REF_GROUP].uppercase(), verdict, match.groupValues[REST_GROUP])
   }
 
   private data class RecheckLine(

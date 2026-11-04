@@ -65,12 +65,12 @@ internal object AcceptanceAuditPromptSections {
     "Report the trace and the re-check in ordinary prose and end with exactly one Interaction line per " +
       "pending ref and exactly one Recheck line per listed criterion, in the grammar given at the end of the " +
       "scope. There is no Open criteria line and no criterion list. Do not repair anything. Malformed output " +
-      "is re-asked once, then pending scenarios are recorded as unknown and every re-check as holding."
+      "is re-asked once. An unresolved re-check cannot be recorded as holding."
 
   private const val RECHECK_ONLY_VALUE_CONTENT: String =
     "Report the re-check in ordinary prose and end with exactly one Recheck line per listed criterion, in the " +
       "grammar given at the end of the scope. There is no Open criteria line and no criterion list. Do not " +
-      "repair anything. Malformed output is re-asked once and then every re-check is recorded as holding."
+      "repair anything. Malformed output is re-asked once. An unresolved re-check cannot be recorded as holding."
 
   private fun traceDirective(trace: AcceptanceAuditInteractionTraceScope): String {
     val scenarios = trace.pendingRefs.isNotEmpty()
