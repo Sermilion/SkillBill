@@ -17,6 +17,7 @@ import skillbill.ports.featuretask.UnavailableFeatureTaskPhaseSettlementReposito
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.UnavailableUnaddressedFindingsRepository
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyAgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
@@ -119,6 +120,8 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
 
   override fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
+
+  override fun restoreGoalArchiveOwnedTables(ownedTables: GoalArchiveOwnedTables) = Unit
 }
 
 private class EmptyBoardReadModel : WorkBoardReadModelRepository {

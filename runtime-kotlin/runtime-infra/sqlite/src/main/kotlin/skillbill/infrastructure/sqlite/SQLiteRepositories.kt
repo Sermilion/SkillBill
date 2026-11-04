@@ -28,6 +28,7 @@ import skillbill.infrastructure.sqlite.workflow.featuretask.AgentActivityStampSt
 import skillbill.infrastructure.sqlite.workflow.featuretask.StandalonePhaseStatusStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.GoalPlanningPreparationStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationLegacySql
+import skillbill.infrastructure.sqlite.workflow.goalrunner.restoreOwnedGoalTables
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanSql
@@ -179,6 +180,10 @@ internal class SQLiteUnitOfWork(
     counts[WORKFLOWS_TABLE] = countWhereIn(WORKFLOWS_TABLE, "workflow_id", scope.workflowIds)
     counts[RUNTIME_SESSIONS_TABLE] = countMatching(RUNTIME_SESSIONS_TABLE, runtimeSessionsFilter(scope))
     return GoalPurgeTableCounts(counts)
+  }
+
+  override fun restoreGoalArchiveOwnedTables(ownedTables: GoalArchiveOwnedTables) {
+    restoreOwnedGoalTables(connection, ownedTables)
   }
 
   fun snapshotOwnedGoal(target: GoalPurgeTarget): GoalArchiveOwnedSnapshot =

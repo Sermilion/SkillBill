@@ -16,6 +16,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
+import skillbill.engine.goalrunner.model.GoalRunnerImportRequest
+import skillbill.engine.goalrunner.model.GoalRunnerImportResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
 import skillbill.engine.goalrunner.model.GoalRunnerRepairRequest
@@ -120,6 +122,11 @@ public class GoalRunnerStatusService(
     archiveCoordinator.export(
       request.copy(repoRoot = request.repoRoot ?: repositoryRoot.path),
       expectedObservation,
+    )
+
+  public fun import(request: GoalRunnerImportRequest): GoalRunnerImportResult =
+    archiveCoordinator.import(
+      request.copy(repoRoot = request.repoRoot ?: repositoryRoot.path),
     )
 
   public fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? = resetReplanCoordinator.replan(request)

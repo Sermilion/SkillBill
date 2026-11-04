@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.archive.RecordingGoalArchiveSnapshotPort
 import skillbill.engine.goalrunner.assessment.GoalAssessmentRoundResult
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
@@ -41,6 +42,8 @@ import skillbill.engine.goalrunner.repair.GoalRunnerFreshQualityCoordinator
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.repair.NoopGoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.reset.GoalRunnerArchiveCoordinator
+import skillbill.engine.goalrunner.reset.GoalRunnerArchiveExportOperations
+import skillbill.engine.goalrunner.reset.GoalRunnerArchiveImportOperations
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.engine.goalrunner.status.GoalRunnerStatusControlVerbs
@@ -223,17 +226,34 @@ fun testGoalRunnerStatusService(
       ),
     archiveCoordinator =
       GoalRunnerArchiveCoordinator(
-        manifestStore = manifestStore,
-        gitOperations = ports.gitOperations,
-        projectionAssembler = projectionAssembler,
-        manifestFileStore = decompositionManifestStore,
-        manifestValidator = testDecompositionManifestValidator,
-        database = database,
-        projectStore = ports.projectStore,
-        clock = clock,
-        archiveSnapshotPort = ports.archiveSnapshotPort,
-        envelopeValidator = ClasspathGoalArchiveEnvelopeValidator(),
-        workflowArtifactWireEncoder = SqliteWorkflowArtifactWireEncoder(),
+        exportOperations =
+          GoalRunnerArchiveExportOperations(
+            manifestStore = manifestStore,
+            gitOperations = ports.gitOperations,
+            projectionAssembler = projectionAssembler,
+            manifestFileStore = decompositionManifestStore,
+            manifestValidator = testDecompositionManifestValidator,
+            database = database,
+            projectStore = ports.projectStore,
+            clock = clock,
+            archiveSnapshotPort = ports.archiveSnapshotPort,
+            envelopeValidator = ClasspathGoalArchiveEnvelopeValidator(),
+            workflowArtifactWireEncoder = SqliteWorkflowArtifactWireEncoder(),
+          ),
+        importOperations =
+          GoalRunnerArchiveImportOperations(
+            manifestStore = manifestStore,
+            gitOperations = ports.gitOperations,
+            manifestFileStore = decompositionManifestStore,
+            database = database,
+            projectStore = ports.projectStore,
+            repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+            clock = clock,
+            planningCheckpoint =
+              GoalPlanningPreparationCheckpoint(database, AcceptingFeatureTaskRuntimeWireArtifactValidator),
+            envelopeValidator = ClasspathGoalArchiveEnvelopeValidator(),
+            workflowArtifactWireEncoder = SqliteWorkflowArtifactWireEncoder(),
+          ),
       ),
     freshQualityCoordinator =
       GoalRunnerFreshQualityCoordinator(

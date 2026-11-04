@@ -56,4 +56,5 @@ object GoalPlanningPreparationPayloadKeys {
   const val PLANNING_CONTRACT_VERSION = "planning_contract_version"
   const val PHASE_OUTPUT_CONTRACT_ID = "phase_output_contract_id"
   const val PHASE_OUTPUT_CONTRACT_VERSION = "phase_output_contract_version"
+  const val CREATED_AT = "created_at"
 }

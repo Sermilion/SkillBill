@@ -96,8 +96,12 @@ internal object WireVocabularyGovernedSeamInventory {
             "contracts/workflow/goal/GoalArchiveEnvelopeKeys",
             "contracts/workflow/goal/GoalArchiveRecordKeys",
             "engine/goalrunner/reset/GoalRunnerArchiveCoordinator",
+            "engine/goalrunner/reset/GoalRunnerArchiveExportOperations",
             "engine/goalrunner/archive/GoalArchiveWorkflowEncoding",
+            "engine/goalrunner/archive/GoalArchiveBundleReader",
+            "engine/goalrunner/reset/GoalRunnerArchiveImportOperations",
             "cli/goal/export/",
+            "cli/goal/import/",
           ),
       ),
       GovernedPayloadSeam(

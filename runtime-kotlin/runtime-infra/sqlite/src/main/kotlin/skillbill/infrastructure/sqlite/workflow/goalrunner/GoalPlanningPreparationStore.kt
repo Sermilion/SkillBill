@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner
 
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationLegacySql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningStatusProjectionSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanSql
@@ -9,6 +10,7 @@ import skillbill.infrastructure.sqlite.workflow.shared.SharedGoalPreplanStore
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalSubtaskPlanRepository
 import skillbill.ports.goalrunner.SharedGoalPreplanRepository
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import java.sql.Connection
 
 internal class GoalPlanningPreparationStore(
@@ -24,6 +26,11 @@ internal class GoalPlanningPreparationStore(
   ) {
   private val sharedPreplan = GoalSharedPreplanSql(connection)
   private val subtaskPlan = GoalSubtaskPlanSql(connection)
+  private val legacyPreparation = GoalPlanningPreparationLegacySql(connection)
+
+  override fun saveLegacyPreparation(record: GoalPlanningPreparationRecord) {
+    legacyPreparation.insertOrReplace(record)
+  }
 
   override fun deleteByGoal(parentGoalWorkflowId: String): Int {
     val plans = subtaskPlan.deleteAllByGoal(parentGoalWorkflowId)

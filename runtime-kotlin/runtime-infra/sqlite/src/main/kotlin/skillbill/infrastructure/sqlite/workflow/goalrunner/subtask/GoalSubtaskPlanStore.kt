@@ -7,6 +7,7 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.translateSql
 import skillbill.ports.goalrunner.GoalSubtaskPlanRepository
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationCountResult
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
@@ -63,4 +64,10 @@ internal class GoalSubtaskPlanStore(
       is GoalSubtaskPlanListResult.Found -> GoalPlanningPreparationCountResult.Applied(listed.plans.size)
       is GoalSubtaskPlanListResult.Conflicted -> GoalPlanningPreparationCountResult.Conflicted(listed.conflict)
     }
+
+  override fun saveSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
+    translateSqlFailure(checkpoint.identity.parentGoalWorkflowId, checkpoint.subtaskId) {
+      subtaskPlan.insertOrReplace(checkpoint)
+    }
+  }
 }

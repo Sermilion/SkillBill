@@ -27,7 +27,7 @@ public fun GoalPlanningPreparationRecord.toEnvelopeMap(): Map<String, Any?> =
     "plan_payload" to planPayload,
   )
 
-internal fun Map<String, Any?>.toGoalPlanningPreparationRecord(): GoalPlanningPreparationRecord {
+public fun Map<String, Any?>.toGoalPlanningPreparationRecord(): GoalPlanningPreparationRecord {
   val provenanceMap = (this["provenance"] as? Map<*, *>).orEmpty()
   val preparationStatusValue = stringValue("preparation_status")
   val preparationStatus =

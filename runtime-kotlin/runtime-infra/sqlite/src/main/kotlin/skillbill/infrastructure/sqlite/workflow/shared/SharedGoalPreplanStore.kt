@@ -6,6 +6,7 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.translateSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
 import skillbill.ports.goalrunner.SharedGoalPreplanRepository
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 
 internal class SharedGoalPreplanStore(
@@ -52,4 +53,10 @@ internal class SharedGoalPreplanStore(
     translateSqlFailure(parentGoalWorkflowId, 0) {
       sharedPreplan.sharedPreplanPayloadSha256(parentGoalWorkflowId)
     }
+
+  override fun saveSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
+    translateSqlFailure(checkpoint.identity.parentGoalWorkflowId, 0) {
+      sharedPreplan.insertOrReplace(checkpoint)
+    }
+  }
 }
