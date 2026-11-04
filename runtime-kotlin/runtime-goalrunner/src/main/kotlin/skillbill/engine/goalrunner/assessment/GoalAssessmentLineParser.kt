@@ -67,6 +67,7 @@ internal object GoalAssessmentLineParser {
     val rejected = mutableListOf<String>()
     var valid = 0
     recordLines(text).forEach { line ->
+      if (ASSESSOR_RECORDS.any { it.matches(line) }) return@forEach
       val parsed = verdictOf(line)?.let(verdicts::add) ?: VERIFY_NONE.matches(line).takeIf { it }
       if (parsed == null) rejected += line.take(MAX_REJECTED_LINE) else valid++
     }
@@ -165,4 +166,5 @@ internal object GoalAssessmentLineParser {
   private val VERIFY =
     Regex("""^Verify\s+(GA-\d{3}):\s*(confirmed|refuted)\s+evidence\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val VERIFY_NONE = Regex("""^Verify:\s*none\.?$""", RegexOption.IGNORE_CASE)
+  private val ASSESSOR_RECORDS = listOf(FINDING, FINDING_NONE, TEST_VALUE, SCENARIO, REGRESSION)
 }
