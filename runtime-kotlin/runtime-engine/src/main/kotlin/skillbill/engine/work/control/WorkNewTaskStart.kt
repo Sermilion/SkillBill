@@ -220,9 +220,18 @@ public class WorkNewTaskStart(
     agentId: String,
   ): NewTaskStartResult {
     val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
-    if (launchTarget?.startsWith("-") == true) {
+    val splitPrReviewMode =
+      if (verb == "operation" && id == "pr-review-fix") {
+        PR_REVIEW_FIX_MODE_TARGET.matchEntire(launchTarget.orEmpty())
+      } else {
+        null
+      }
+    val argvTarget =
+      splitPrReviewMode?.groupValues?.getOrNull(2)?.trim()?.takeIf(String::isNotBlank)
+        ?: launchTarget.takeUnless { splitPrReviewMode != null }
+    if (argvTarget?.startsWith("-") == true) {
       return NewTaskStartResult.Refused(
-        "The target '$launchTarget' starts with a dash, so the CLI would parse it as an option.",
+        "The target '$argvTarget' starts with a dash, so the CLI would parse it as an option.",
       )
     }
     if (agentId !in SupportedAgent.supportedIds) {
@@ -246,7 +255,12 @@ public class WorkNewTaskStart(
       buildList {
         add(verb)
         add(id)
-        launchTarget?.let(::add)
+        if (splitPrReviewMode != null) {
+          add("mode:${splitPrReviewMode.groupValues[1]}")
+          argvTarget?.let(::add)
+        } else {
+          launchTarget?.let(::add)
+        }
         add("--agent")
         add(agentId)
       }
@@ -382,3 +396,6 @@ public class WorkNewTaskStart(
     const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
   }
 }
+
+private val PR_REVIEW_FIX_MODE_TARGET =
+  Regex("""mode:(local|remote)(?:\s+(.+))?""", RegexOption.DOT_MATCHES_ALL)

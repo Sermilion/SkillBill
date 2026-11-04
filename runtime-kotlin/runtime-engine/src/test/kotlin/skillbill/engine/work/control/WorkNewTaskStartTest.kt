@@ -80,16 +80,27 @@ class WorkNewTaskStartTest {
 
   @Test
   fun `startOperation pr-review-fix passes positional only when target is nonblank`() {
-    val withPr = subject.startOperation(repoRoot, "pr-review-fix", "https://github.com/org/repo/pull/3", "claude")
+    val withPr =
+      subject.startOperation(repoRoot, "pr-review-fix", "mode:remote https://github.com/org/repo/pull/3", "claude")
     assertEquals(NewTaskStartResult.Started, withPr)
     assertEquals(
-      listOf("operation", "pr-review-fix", "https://github.com/org/repo/pull/3", "--agent", "claude"),
+      listOf("operation", "pr-review-fix", "mode:remote", "https://github.com/org/repo/pull/3", "--agent", "claude"),
       launcher.lastArgs(),
     )
 
     val missing = subject.startOperation(repoRoot, "pr-review-fix", null, "claude")
     assertEquals(NewTaskStartResult.Started, missing)
     assertEquals(listOf("operation", "pr-review-fix", "--agent", "claude"), launcher.lastArgs())
+  }
+
+  @Test
+  fun `startOperation pr-review-fix splits remote mode from its PR target`() {
+    val result = subject.startOperation(repoRoot, "pr-review-fix", "mode:remote #42", "claude")
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(
+      listOf("operation", "pr-review-fix", "mode:remote", "#42", "--agent", "claude"),
+      launcher.lastArgs(),
+    )
   }
 
   @Test

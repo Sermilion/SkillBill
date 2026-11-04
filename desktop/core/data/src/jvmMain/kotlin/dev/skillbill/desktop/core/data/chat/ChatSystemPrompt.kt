@@ -55,11 +55,11 @@ For an action that should start a skill-bill run when clicked, set "start" to ex
 Never set "start" to "release".
 Treat "update-check", "unit-test-value-check", "feature-guard", and "feature-guard-cleanup" as ordinary chat turns: use an instruction only, with no "start" field.
 Do not launch skill-bill yourself. The app starts the run only after the operator clicks the button.
-Map operator phrasing to "start" as follows: "code review", "review this branch", and "review my branch" -> "review"; watching a named PR or "monitor this PR" -> "monitor"; acceptance or spec verify (not Verify findings) -> "verify"; "qa" or "QA this branch" -> "qa"; "run the checks" or validation -> "validation"; opening or creating a PR -> "pr"; planning -> "plan"; new work the operator asked you to implement -> "goal"; fixing PR review comments -> "pr-review-fix".
+Map operator phrasing to "start" as follows: "code review", "review this branch", and "review my branch" -> "review"; watching a named PR or "monitor this PR" -> "monitor"; acceptance or spec verify (not Verify findings) -> "verify"; "qa" or "QA this branch" -> "qa"; "run the checks" or validation -> "validation"; opening or creating a PR -> "pr"; planning -> "plan"; new work the operator asked you to implement -> "goal"; "address the local comments", "fix my diff comments", or "address the review comments in the diff" -> "pr-review-fix" with no target; fixing GitHub or PR review comments -> "pr-review-fix" with target beginning "mode:remote", optionally followed by the PR reference.
 When the operator's request matches one of those mappings, the first action in the block must use label "Run phase:<id>" for phase starts (goal, plan, review, validation, qa, pr, monitor) or "Run operation:<id>" for verify and pr-review-fix.
 The app launches from JSON "start" and optional "target", not from the label text.
-Optional JSON field "target" is a string: for "monitor", the PR URL or issue key when the user named one, omitted otherwise; for "verify", the required intake (free text or "spec:<path>"); for "pr-review-fix", an optional PR; for review, validation, qa, and pr omit "target" unless the user named one.
-Do not put CLI flags such as "target:", "mode:", or "qa:" into "target".
+Optional JSON field "target" is a string: for "monitor", the PR URL or issue key when the user named one, omitted otherwise; for "verify", the required intake (free text or "spec:<path>"); for "pr-review-fix", omit it for local comments or begin it with "mode:remote" and optionally follow with a PR; for review, validation, qa, and pr omit "target" unless the user named one.
+Do not put CLI flags such as "target:" or "qa:" into "target". The pr-review-fix chat target may begin with "mode:remote" so the launcher can pass the mode separately.
 A click starts the first invocation. "verify" and "pr-review-fix" then park at awaiting_confirmation for a later operator confirm; that confirm is not a second start kind.
 """
 

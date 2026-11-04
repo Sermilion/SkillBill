@@ -39,10 +39,12 @@ class OperationCommand(
     name = "args",
     help =
       "key:value pairs (${OperationInvocationParser.KEYS.joinToString(", ") { "$it:" }}); any other text is " +
-        "operator instructions for the operation's agent step. pr-review-fix reads a leading #<number> or PR " +
-        "URL, or a lone PR number (default: the current branch's PR) and alone accepts push:on|off and " +
-        "replies:post|draft. verify reads its intake from the free text (a Linear issue key or URL, or the " +
-        "requirements) or spec:<path>, and alone accepts spec:, target:<pr-number|branch|base..head> (default: " +
+        "operator instructions for the operation's agent step. pr-review-fix accepts mode:local|remote (default " +
+        "local: the current branch's open local diff comments; " +
+        "push:/replies: and a PR need mode:remote), and push:on|off and replies:post|draft. " +
+        "verify reads its intake from the free text (a Linear issue key or URL, " +
+        "or the requirements) or spec:<path>, and alone accepts spec:, " +
+        "target:<pr-number|branch|base..head> (default: " +
         "HEAD against origin/HEAD), mode:inline|delegated, and qa:on|off (default off; a confirm may repeat " +
         "but not change it); its confirm:<token> is the verify workflow id.",
   ).multiple()
@@ -104,14 +106,14 @@ object OperationInvocationParser {
   private const val UPDATE_CHECK = "update-check"
   private const val KEY_SEPARATOR = ':'
 
-  private val OPERATION_ONLY_KEYS: Map<String, String> =
+  private val OPERATION_ONLY_KEYS: Map<String, Set<String>> =
     mapOf(
-      PUSH to "pr-review-fix",
-      REPLIES to "pr-review-fix",
-      MODE to "verify",
-      SPEC to "verify",
-      TARGET to "verify",
-      QA to "verify",
+      PUSH to setOf("pr-review-fix"),
+      REPLIES to setOf("pr-review-fix"),
+      MODE to setOf("verify", "pr-review-fix"),
+      SPEC to setOf("verify"),
+      TARGET to setOf("verify"),
+      QA to setOf("verify"),
     )
 
   fun parse(
@@ -124,8 +126,10 @@ object OperationInvocationParser {
     if (values[CONFIRM]?.isBlank() == true) {
       throw UsageError("confirm: needs the token from the proposal's status line.")
     }
-    OPERATION_ONLY_KEYS.forEach { (key, owner) ->
-      if (key in values && name != owner) throw UsageError("$key: is accepted only by operation $owner.")
+    OPERATION_ONLY_KEYS.forEach { (key, owners) ->
+      if (key in values && name !in owners) {
+        throw UsageError("$key: is accepted only by operation ${owners.joinToString(" or ")}.")
+      }
     }
     requireSingleQa(pairs)
     requireUpdateCheckFlagsOwner(name, flags)

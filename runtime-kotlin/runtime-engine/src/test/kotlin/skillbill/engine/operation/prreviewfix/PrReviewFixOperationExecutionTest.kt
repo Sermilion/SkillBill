@@ -2,6 +2,7 @@ package skillbill.engine.operation.prreviewfix
 
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.review.diffcomment.model.DiffCommentThreadState
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -11,6 +12,92 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class PrReviewFixOperationExecutionTest {
+  @Test
+  fun `local confirmation applies fixes replies with outcome and commits without pushing`() {
+    PrReviewFixHarness().use { harness ->
+      val threadId = harness.addLocalThread()
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.invokeLocal()).token
+
+      val completed =
+        assertIs<OperationOutcome.Completed>(
+          harness.invokeLocal(OperationArguments(confirm = token, select = "T1=1")),
+        )
+
+      assertContains(completed.text, "Commit: ")
+      assertContains(completed.text, "(not pushed)")
+      assertEquals(DiffCommentThreadState.RESOLVED, harness.localThreadState(threadId))
+      assertEquals("Address local diff comments T1 on ${PrReviewFixHarness.PR_BRANCH}", harness.latestCommitMessage())
+      assertEquals(emptyList(), harness.pushes)
+      assertEquals(emptyList(), harness.warnings)
+    }
+  }
+
+  @Test
+  fun `a saved failed outcome leaves the thread open and fails the operation`() {
+    PrReviewFixHarness().use { harness ->
+      val threadId = harness.addLocalThread()
+      harness.runner.localReply = "outcome: failed\nThe requested fix could not be completed."
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.invokeLocal()).token
+
+      val failed =
+        assertIs<OperationOutcome.Failed>(
+          harness.invokeLocal(OperationArguments(confirm = token, select = "T1=1")),
+        )
+
+      assertContains(failed.reason, "replied (failed -> open)")
+      assertEquals(DiffCommentThreadState.OPEN, harness.localThreadState(threadId))
+      assertContains(failed.reason, "(not pushed)")
+      assertEquals(emptyList(), harness.pushes)
+    }
+  }
+
+  @Test
+  fun `an inferred local outcome records why the reply changes thread state`() {
+    listOf(
+      "Addressed the local comment." to "missing_outcome",
+      "outcome: unknown\nAddressed the local comment." to "unknown_outcome",
+    ).forEach { (reply, cause) ->
+      PrReviewFixHarness().use { harness ->
+        val threadId = harness.addLocalThread()
+        harness.runner.localReply = reply
+        val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.invokeLocal()).token
+
+        assertIs<OperationOutcome.Completed>(
+          harness.invokeLocal(OperationArguments(confirm = token, select = "T1=1")),
+        )
+
+        assertEquals(DiffCommentThreadState.RESOLVED, harness.localThreadState(threadId))
+        assertEquals(
+          listOf(
+            "seam=local_review_reply_outcome value_expected=declared_outcome value_used=fixed cause=$cause",
+          ),
+          harness.warnings,
+        )
+      }
+    }
+  }
+
+  @Test
+  fun `a thread closed after admission is not edited or replied to`() {
+    PrReviewFixHarness().use { harness ->
+      val threadId = harness.addLocalThread()
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.invokeLocal()).token
+      harness.afterWorktreeStatus = { harness.closeLocalThread(threadId) }
+
+      val blocked =
+        assertIs<OperationOutcome.Blocked>(
+          harness.invokeLocal(OperationArguments(confirm = token, select = "T1=1")),
+        )
+
+      assertContains(blocked.reason, "is no longer open")
+      assertEquals(listOf(ANALYSIS_STEP), harness.runner.inputs.map { it.stepName })
+      assertEquals(DiffCommentThreadState.DECLINED, harness.localThreadState(threadId))
+      assertEquals(emptyList(), harness.validations)
+      assertEquals("initial", harness.latestCommitMessage())
+      assertEquals("", harness.status())
+    }
+  }
+
   @Test
   fun `confirming one thread fixes and replies to only that thread and pushes nothing without push on`() {
     PrReviewFixHarness().use { harness ->

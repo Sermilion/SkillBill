@@ -1,5 +1,9 @@
 package skillbill.engine.operation.prreviewfix
 
+import skillbill.application.review.diffcomment.DiffCommentService
+import skillbill.application.review.diffcomment.model.DiffCommentAgentThreadRequest
+import skillbill.application.review.diffcomment.model.DiffCommentListResult
+import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -18,8 +22,14 @@ import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.operation.model.OperationProposal
+import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.review.diffcomment.DiffCommentWorktreeFiles
+import skillbill.ports.review.diffcomment.model.DiffCommentLineObservation
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
@@ -29,10 +39,12 @@ import skillbill.ports.review.pullrequest.model.ReviewThreadListing
 import skillbill.ports.review.pullrequest.model.ReviewThreadReplyResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.review.diffcomment.model.DiffCommentThreadState
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
 import java.time.Clock
+import java.util.UUID
 import kotlin.io.path.appendText
 import kotlin.io.path.exists
 import kotlin.io.path.writeText
@@ -44,10 +56,29 @@ internal class PrReviewFixHarness : AutoCloseable {
   val runner = ScriptedPrReviewFixRunner(repo)
   val validations = mutableListOf<PhaseRunRequest>()
   val pushes = mutableListOf<String>()
+  val warnings = mutableListOf<String>()
   var validationBlocks: Boolean = false
+  var afterWorktreeStatus: (() -> Unit)? = null
+  private val diagnostics =
+    object : RuntimeDiagnostics by NoopRuntimeDiagnostics {
+      override fun warning(
+        message: String,
+        error: Throwable?,
+      ) {
+        warnings += message
+      }
+    }
   private val realGit = GitWorkflowGitOperations()
   private val git =
     object : WorkflowGitOperations by realGit {
+      override fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult {
+        val result = realGit.worktreeStatus(repoRoot)
+        val afterStatus = afterWorktreeStatus
+        afterWorktreeStatus = null
+        afterStatus?.invoke()
+        return result
+      }
+
       override fun pushBranch(
         repoRoot: Path,
         branch: String,
@@ -56,19 +87,35 @@ internal class PrReviewFixHarness : AutoCloseable {
         return WorkflowGitOperationResult.Ok()
       }
     }
-  private val proposals =
-    SqliteOperationProposalRepository(
-      sqliteSessionFactoryForTests(
-        userHome = root,
-        dbPathOverride = root.resolve("metrics.db").toString(),
-        environment = emptyMap(),
-      ),
+  private val database =
+    sqliteSessionFactoryForTests(
+      userHome = root,
+      dbPathOverride = root.resolve("metrics.db").toString(),
+      environment = emptyMap(),
     )
+  private val diffComments =
+    DiffCommentService(
+      database = database,
+      git = git,
+      repositories = TestRepositoryRoot,
+      worktreeFiles =
+        object : DiffCommentWorktreeFiles {
+          override fun lineText(
+            worktreeRoot: Path,
+            path: String,
+            line: Int,
+          ): DiffCommentLineObservation = DiffCommentLineObservation.Missing
+        },
+      clock = Clock.systemUTC(),
+      ids = IdentifierGeneratorPort { UUID.randomUUID().toString() },
+      diagnostics = diagnostics,
+    )
+  private val proposals = SqliteOperationProposalRepository(database)
   private val executor =
     OperationExecutor(
       OperationRegistry(
         listOf(
-          PrReviewFixOperation(github, git, runPhase = { request ->
+          PrReviewFixOperation(github, diffComments, git, diagnostics, runPhase = { request ->
             validations += request
             if (validationBlocks) {
               PhaseRunResult.Blocked("phr-validation", emptyList(), null, "validation", "check failed")
@@ -98,11 +145,49 @@ internal class PrReviewFixHarness : AutoCloseable {
     arguments: OperationArguments = OperationArguments(),
     instructions: String? = null,
   ): OperationOutcome =
+    executor.execute(
+      OperationRequest("pr-review-fix", repo, "codex", arguments.copy(mode = arguments.mode ?: "remote"), instructions),
+    ).outcome
+
+  fun invokeLocal(
+    arguments: OperationArguments = OperationArguments(),
+    instructions: String? = null,
+  ): OperationOutcome =
     executor.execute(OperationRequest("pr-review-fix", repo, "codex", arguments, instructions)).outcome
 
   fun proposal(token: String): OperationProposal? = proposals.find(token)
 
+  fun addLocalThread(): String =
+    when (
+      val result =
+        diffComments.addAgentThread(
+          repo,
+          DiffCommentAgentThreadRequest(
+            path = null,
+            side = null,
+            line = null,
+            body = "Please address this local comment.",
+            sourceRef = "test-local-thread",
+          ),
+        )
+    ) {
+      is DiffCommentThreadResult.Saved -> result.thread.id
+      else -> error("Unable to create fixture local comment: $result")
+    }
+
+  fun localThreadState(threadId: String): DiffCommentThreadState? =
+    when (val result = diffComments.list(repo)) {
+      is DiffCommentListResult.Listed -> result.threads.firstOrNull { it.id == threadId }?.state
+      is DiffCommentListResult.Unavailable -> error("Unable to list fixture local comments: ${result.reason}")
+    }
+
+  fun closeLocalThread(threadId: String) {
+    check(diffComments.setState(threadId, DiffCommentThreadState.DECLINED) is DiffCommentThreadResult.Saved)
+  }
+
   fun status(): String = git("status", "--porcelain")
+
+  fun latestCommitMessage(): String = git("log", "-1", "--format=%s")
 
   fun checkoutNewBranch(branch: String) {
     git("checkout", "--quiet", "-b", branch)
@@ -138,6 +223,20 @@ internal class PrReviewFixHarness : AutoCloseable {
   companion object {
     const val PR_BRANCH = "feat/review"
   }
+}
+
+private object TestRepositoryRoot : RepositoryEnclosingRootPort {
+  override fun enclosingRepositoryRoot(start: Path): Path = start
+
+  override fun canonicalPath(path: Path): Path = path.toAbsolutePath().normalize()
+
+  override fun optionalRealPath(path: Path): Path? = path.toRealPath()
+
+  override fun repositoryIdentity(repoRoot: Path): String = repoRoot.toRealPath().toString()
+
+  override fun primaryRepositoryIdentity(repoRoot: Path): String = repositoryIdentity(repoRoot)
+
+  override fun primaryRepositoryRoot(repoRoot: Path): Path = repoRoot.toRealPath()
 }
 
 internal class FakeReviewThreads : PullRequestReviewThreadOperations {
@@ -209,6 +308,7 @@ internal class ScriptedPrReviewFixRunner(
 ) : PhaseRunner {
   val inputs = mutableListOf<PhaseStepInput>()
   var matrix: String = "Thread T1 — a.kt:9\nVerdict: agree\n"
+  var localReply: String = "outcome: fixed\nAddressed the local comment.\n"
   var editDuringAnalysis: Boolean = false
   var editSharedFile: Boolean = false
 
@@ -233,7 +333,13 @@ internal class ScriptedPrReviewFixRunner(
       } else {
         PhaseStepFileManifest(emptyList(), listOf(path))
       }
-    return reviewStepOutput("Renamed as asked in $ordinal.\n").copy(fileManifest = manifest)
+    val reply =
+      if ("outcome: fixed|refuted|skipped|failed" in input.directive) {
+        localReply
+      } else {
+        "Renamed as asked in $ordinal.\n"
+      }
+    return reviewStepOutput(reply).copy(fileManifest = manifest)
   }
 
   companion object {

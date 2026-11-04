@@ -1,5 +1,6 @@
 package skillbill.engine.operation.prreviewfix
 
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
@@ -7,7 +8,6 @@ import skillbill.engine.operation.core.ConfirmAdmission
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
 import skillbill.engine.operation.core.CurrentOperationAnchors
-import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationPrecheck
@@ -19,6 +19,7 @@ import skillbill.engine.operation.core.gitValueOr
 import skillbill.engine.operation.core.invalidArgument
 import skillbill.engine.operation.core.invalidSelection
 import skillbill.engine.operation.core.pullRequestNotFound
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
@@ -29,7 +30,9 @@ import skillbill.workflow.gitops.ProtectedBranches
 
 public class PrReviewFixOperation(
   private val reviewThreads: PullRequestReviewThreadOperations,
+  private val diffComments: DiffCommentService,
   private val gitOperations: WorkflowGitOperations,
+  diagnostics: RuntimeDiagnostics,
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
   private val modelAssignmentSource: () -> FeatureTaskRuntimeModelAssignment,
 ) : ConfirmableOperation,
@@ -37,34 +40,56 @@ public class PrReviewFixOperation(
   ConfirmAdmission {
   public constructor(
     reviewThreads: PullRequestReviewThreadOperations,
+    diffComments: DiffCommentService,
     gitOperations: WorkflowGitOperations,
+    diagnostics: RuntimeDiagnostics,
     runPhase: (PhaseRunRequest) -> PhaseRunResult,
     modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
-  ) : this(reviewThreads, gitOperations, runPhase, { modelAssignment })
+  ) : this(reviewThreads, diffComments, gitOperations, diagnostics, runPhase, { modelAssignment })
 
   private val modelAssignment: FeatureTaskRuntimeModelAssignment by lazy(modelAssignmentSource)
+  private val localFlow = LocalReviewFixFlow(diffComments, gitOperations, runPhase, { modelAssignment }, diagnostics)
   override val id: String = "pr-review-fix"
 
-  override fun pre(context: OperationContext): OperationRefusal? = usageError(context.arguments, context.confirming)
+  override fun pre(context: OperationContext): OperationRefusal? = usageError(context)
 
-  private fun usageError(
-    arguments: OperationArguments,
-    confirming: Boolean,
-  ): OperationOutcome.Usage? =
-    with(arguments) {
+  private fun usageError(context: OperationContext): OperationOutcome.Usage? =
+    modeUsageError(context) ?: argumentUsageError(context)
+
+  private fun modeUsageError(context: OperationContext): OperationOutcome.Usage? {
+    val parsedMode = PrReviewFixMode.from(context.arguments.mode)
+    val reference = prReviewFixTarget(context.instructions).reference
+    val displayedReference = context.instructions.orEmpty().trim().substringBefore(' ')
+    return with(context.arguments) {
+      when {
+        mode != null && parsedMode == null -> invalidArgument("mode", mode, "local|remote")
+        parsedMode == PrReviewFixMode.LOCAL && (push != null || replies != null) ->
+          OperationOutcome.Usage("push: and replies: apply only to mode:remote")
+        parsedMode == PrReviewFixMode.LOCAL && reference != null ->
+          OperationOutcome.Usage(
+            "mode:local fixes local diff comments; pass mode:remote to fix PR $displayedReference",
+          )
+        else -> null
+      }
+    }
+  }
+
+  private fun argumentUsageError(context: OperationContext): OperationOutcome.Usage? =
+    with(context.arguments) {
       when {
         scope != null && scope != ANALYZE_ONLY -> invalidArgument("scope", scope, "scope:$ANALYZE_ONLY")
         push != null && push !in PUSH_VALUES -> invalidArgument("push", push, "on|off")
         replies != null && replies !in REPLY_VALUES -> invalidArgument("replies", replies, "post|draft")
-        confirming && select.isNullOrBlank() ->
+        context.confirming && select.isNullOrBlank() ->
           OperationOutcome.Usage("Operation '$id' needs a selection with confirm:; pass $SELECTION_FORMS.")
-        !confirming && select != null ->
+        !context.confirming && select != null ->
           invalidSelection(select, "select: goes with the confirm:<token> an analysis printed.")
         else -> null
       }
     }
 
   override fun run(context: OperationContext): OperationRunResult {
+    if (mode(context) == PrReviewFixMode.LOCAL) return localFlow.run(context)
     val target = prReviewFixTarget(context.instructions)
     val pullRequest = pullRequest(context, target.reference) { return OperationRunResult.Finished(it) }
     if (context.arguments.scope != ANALYZE_ONLY) {
@@ -120,6 +145,7 @@ public class PrReviewFixOperation(
   }
 
   override fun currentAnchors(context: OperationContext): CurrentOperationAnchors {
+    if (mode(context) == PrReviewFixMode.LOCAL) return localFlow.currentAnchors(context)
     val reference = prReviewFixTarget(context.instructions).reference
     val pullRequest = pullRequest(context, reference) { return CurrentOperationAnchors.Unreadable(it) }
     val listed = listThreads(context, pullRequest) { return CurrentOperationAnchors.Unreadable(it) }
@@ -129,6 +155,17 @@ public class PrReviewFixOperation(
   }
 
   override fun admit(
+    context: OperationContext,
+    proposal: ConfirmedOperationProposal,
+  ): OperationRefusal? {
+    return if (mode(context) == PrReviewFixMode.LOCAL) {
+      localFlow.admit(context, proposal)
+    } else {
+      admitRemote(context, proposal)
+    }
+  }
+
+  private fun admitRemote(
     context: OperationContext,
     proposal: ConfirmedOperationProposal,
   ): OperationRefusal? {
@@ -155,6 +192,17 @@ public class PrReviewFixOperation(
   }
 
   override fun execute(
+    context: OperationContext,
+    proposal: ConfirmedOperationProposal,
+  ): OperationOutcome {
+    return if (mode(context) == PrReviewFixMode.LOCAL) {
+      localFlow.execute(context, proposal)
+    } else {
+      executeRemote(context, proposal)
+    }
+  }
+
+  private fun executeRemote(
     context: OperationContext,
     proposal: ConfirmedOperationProposal,
   ): OperationOutcome {
@@ -221,6 +269,9 @@ public class PrReviewFixOperation(
   ): PrReviewFixAnchors =
     PrReviewFixAnchors.from(proposal.operationValues)
       ?: refuse(anchorUnreadable("pr-review-fix proposal", "proposal '${proposal.token}' carries no PR."))
+
+  private fun mode(context: OperationContext): PrReviewFixMode =
+    requireNotNull(PrReviewFixMode.from(context.arguments.mode))
 }
 
 internal const val ANALYSIS_STEP: String = "operation.pr-review-fix.analysis"
