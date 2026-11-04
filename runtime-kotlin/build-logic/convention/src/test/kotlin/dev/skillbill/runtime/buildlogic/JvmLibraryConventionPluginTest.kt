@@ -47,7 +47,7 @@ class JvmLibraryConventionPluginTest {
       testTask.jvmArgumentProviders.flatMap { it.asArguments() }.filter { it.startsWith("-Djava.io.tmpdir=") }
     assertEquals(1, tmpdirArgs.size, "Expected exactly one java.io.tmpdir override, got $tmpdirArgs")
     val tempDir = File(tmpdirArgs.single().removePrefix("-Djava.io.tmpdir="))
-    assertEquals(gradleHome.absoluteFile, tempDir.parentFile.absoluteFile)
+    assertEquals(gradleHome.canonicalFile, tempDir.parentFile.canonicalFile)
     assertTrue(tempDir.name.startsWith(TEST_TEMP_PREFIX), "Unexpected temp dir name ${tempDir.name}")
     assertTrue(
       tempDir.name.length <= MAX_TEMP_DIR_GROWTH,
