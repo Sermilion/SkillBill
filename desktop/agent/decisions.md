@@ -1,3 +1,8 @@
+## [2026-11-04] Keep archive admission and inspection in the runtime
+Context: Desktop needs to refuse live export before file selection and show archive identity before import confirmation.
+Decision: Delegate preflight and inspection through WorkControlRepository. Recheck export admission and bind import to the inspected fingerprint and selected database observation.
+Reason: The runtime owns liveness and restore rules. The fingerprint prevents confirmation of one archive from authorizing a changed archive.
+
 ## [2026-11-03] Give non-Claude agents pasted images as file paths, Claude as content blocks
 Context: Chat turns can carry pasted images. Claude's stream-json input accepts base64 image content blocks. Codex, Cursor and Junie take only text on stdin or argv.
 Decision: Claude receives image blocks in the user message. The other three save each image to a per-session temp directory and append a footer listing absolute file paths. Each deletes the directory in end(sessionId), and saved history keeps only the typed prompt.

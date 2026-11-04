@@ -1,5 +1,14 @@
 # goalrunner boundary history
 
+## [2026-11-04] SKILL-474: transfer paused goals by archive
+Areas: runtime-goalrunner, runtime-cli, runtime-contracts, runtime-ports, runtime-infra/sqlite, orchestration/contracts, desktop
+- Goal export writes a versioned zip containing specs and purge-owned workflow and planning state. It refuses non-idle work, branch mismatches, sibling worktrees and unclassified rows.
+- Goal import checks the contract, branch, paths and collisions before restoring DB state and specs. Imported goals land paused and idle; an incomplete spec write can be retried.
+- reusable: GoalArchiveSnapshotPort, GoalArchiveEnvelopeValidator and archive import and export operations share runtime policy with CLI and desktop.
+- Archives exclude worktrees, unpublished git objects and telemetry. Import does not check out git or replace a different existing parent.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-03] SKILL-472: reuse completed and cancelled keys for independent goals
 Areas: runtime-goalrunner, runtime-application/workflow/decomposition, runtime-domain, runtime-infra/sqlite
 - A key is reusable for new work only when every matching decomposed parent is completed or abandoned. Occupancy uses parent workflowStatus, not isActiveGoalRuntime. FAILED, RUNNING, PAUSED, BLOCKED, PENDING, and TIMED_OUT still occupy.

@@ -1,5 +1,30 @@
 # goalrunner boundary decisions
 
+## [2026-11-04] Keep archive coordination beside purge
+Context: Archive export shares the goalrunner ownership census with purge. A separate coordinator package introduced a dependency cycle.
+Decision: Keep GoalRunnerArchiveCoordinator beside purge and delegate archive work to import and export operations. Validate envelopes through a ports interface implemented by infra-contracts.
+Reason: This preserves the census dependency direction and keeps schema validation out of CLI and the goalrunner implementation dependencies.
+
+## [2026-11-04] Export planning rows by parent ownership
+Context: A saved subtask plan can refer to descriptors absent from the current governed list.
+Decision: Snapshot planning rows by parent goal workflow id and reuse their existing payload encodings.
+Reason: The normal plan read can classify descriptor drift as a conflict, while purge still owns those rows and import needs them.
+
+## [2026-11-04] Let git carry unpublished work separately
+Context: Purge protects worktree contents, but an archive contains neither the worktree nor unpublished git objects.
+Decision: Export does not apply purge's unpublished-work retention refusal. It requires the recorded feature branch and rejects sibling-worktree state.
+Reason: The operator must push or stash local work separately; the archive records the branch and HEAD commit rather than transferring git objects.
+
+## [2026-11-04] Commit imported state before writing specs
+Context: SQLite and the filesystem cannot share a transaction. A spec write can fail after database restore commits.
+Decision: Commit DB state first, then write specs. Report an incomplete import and permit a matching retry to finish the spec write without duplicating rows.
+Reason: The committed database state is authoritative, and a retry must not be mistaken for a collision with a different parent.
+
+## [2026-11-04] Land imported goals paused under the destination identity
+Context: Source identities name another machine, and restoring a worker lease or an auto-cleared pause would make the imported goal appear in flight.
+Decision: Rewrite imported identities for the destination, skip worker leases and persist the imported pause reason with no execution lease.
+Reason: Destination lookups need the destination identity. An absent worker lease and a durable pause leave the goal idle until the operator resumes it. Ordinary binding of existing local records retains its separate identity rule.
+
 ## [2026-11-03] Occupying lookup skips completed and abandoned parents
 Context: skill-bill goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
 Decision: Occupancy is parent workflowStatus not completed or abandoned. Run admission and preflight use a dedicated occupying lookup. Shared discovery, loadDurableByIssueKey, purge listing, and status newest-fallback still return completed parents.

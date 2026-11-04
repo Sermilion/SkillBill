@@ -1,3 +1,11 @@
+## [2026-11-04] SKILL-474: export and import goal archives
+Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/feature/specs, desktop/feature/work, runtime-goalrunner
+- Specs and Work offer export and global import with native file selection. Live export opens a pause-first dialog before file selection.
+- WorkControlRepository delegates archive operations to the runtime. Import confirmation names the issue, branch and commit; the runtime checks the inspected archive fingerprint before restore.
+- Archives do not include worktrees or unpublished git objects. Import does not check out a branch.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-03] SKILL-450 subtask 1: deliver pasted images to chat agents
 Areas: desktop/core/domain, desktop/core/data
 - ChatImage (bytes, mediaType) is a plain class with content-based equals and hashCode. ChatTurnRequest gains images as its last, defaulted parameter, so existing callers are unchanged. (reusable)
