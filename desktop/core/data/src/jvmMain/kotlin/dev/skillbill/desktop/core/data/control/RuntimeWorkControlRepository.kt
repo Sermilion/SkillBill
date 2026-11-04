@@ -49,10 +49,11 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
-import skillbill.engine.work.control.model.WorkControlAction
+import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
+import skillbill.engine.work.control.model.WorkControlAction
 import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.StandaloneCheckout
@@ -244,6 +245,8 @@ class RuntimeWorkControlRepository(
               request.baseBranch,
               request.keyChoice,
               launches.keys.value + triedKeys,
+              request.reuseRequested,
+              NewTaskIdentityPolicy.RESOLVED_DESKTOP_IDENTITY,
             ),
           ),
         )

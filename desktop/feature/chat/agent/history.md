@@ -1,3 +1,14 @@
+## [2026-11-04] SKILL-479 subtask 2: desktop identity, offer card, and prompt
+Areas: desktop/feature/chat newtask, desktop/core/data chat and control, runtime-engine work/control
+- Goal/Plan identity comes from the offer-card complete-key field first, then a dedicated operator key or URL token. Agent lines, titles, chip starts, and in-sentence mentions are not identity. The raw token is passed; nothing mints prefix-(n+1).
+- The offer card always shows a complete-key field, rejects prefixes such as NEWS, and does not start from suggested prefix choices. Empty Start asks via NeedsKey. IssuePrefixPicker remains for execution-chat retry only.
+- reuseRequested is true only for a typed complete key plus reuse wording; a pasted used URL stays false. Occupied in-flight keys stay unbindable in the runtime.
+- New Task prompt inspects local inventory and existing runs, suggests a next free key in prose only, and waits for operator acceptance. Start chips stay keyless.
+- Desktop start uses RESOLVED_DESKTOP_IDENTITY so prepare binds only the resolved keyChoice and does not re-admit from composed requirements.
+- Limits: prefix choices still populate the offer after NeedsKey but do not start a run. No next-key API; placeholder is static SKILL-12.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-03] SKILL-469 new-task chat Stop and Send now
 Areas: desktop/feature/chat
 - NewTaskChat.stop ends a running or unprompted reply, keeps the partial, appends Stopped, and always releases busy and the turn job. A cancelled save still writes under NonCancellable so drainQueue is not stuck after a cancelled IO save.

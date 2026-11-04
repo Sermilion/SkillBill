@@ -6,6 +6,9 @@ import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class NewTaskRequirementsTest {
   @Test
@@ -39,5 +42,30 @@ class NewTaskRequirementsTest {
     )
 
     assertEquals("Add dark mode setting", newTaskTitle(messages))
+  }
+
+  @Test
+  fun `operator identity accepts dedicated keys and URLs but ignores mentions and suggested actions`() {
+    val suggested = ChatSuggestedAction("Start", "Start this", ChatPermissionMode.Act, NewTaskActionKind.Goal)
+
+    assertEquals("SKILL-479", newTaskOperatorIdentity(listOf(ChatMessage.Operator("SKILL-479"))))
+    assertEquals("SKILL-479", newTaskOperatorIdentity(listOf(ChatMessage.Operator("SKILL-479 Add export"))))
+    val url = "https://linear.app/team/issue/SKILL-479/export?view=full"
+    assertEquals(url, newTaskOperatorIdentity(listOf(ChatMessage.Operator(url))))
+    assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Operator("Please fix SKILL-476 while adding export"))))
+    assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Agent("SKILL-477", false, emptyList()))))
+    assertNull(newTaskOperatorIdentity(listOf(ChatMessage.Operator("SKILL-478", suggested))))
+    assertNull(newTaskCompleteKeyOrUrl("NEWS"))
+    assertEquals("news-12", newTaskCompleteKeyOrUrl("news-12"))
+  }
+
+  @Test
+  fun `reuse requires a typed complete key and reuse wording`() {
+    val reuse = listOf(ChatMessage.Operator("Please reuse SKILL-470"))
+
+    assertTrue(newTaskReuseRequested(reuse, "SKILL-470", null, null, null, null))
+    assertFalse(newTaskReuseRequested(listOf(ChatMessage.Operator("reuse the old item")), "SKILL-470", null, null, null, null))
+    assertFalse(newTaskReuseRequested(reuse, "https://linear.app/issue/SKILL-470", null, null, null, null))
+    assertFalse(newTaskReuseRequested(listOf(ChatMessage.Operator("SKILL-470")), "SKILL-470", null, null, null, null))
   }
 }

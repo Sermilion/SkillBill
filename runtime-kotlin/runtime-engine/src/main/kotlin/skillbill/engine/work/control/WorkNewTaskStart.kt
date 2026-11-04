@@ -1,16 +1,18 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.issuekey.GOAL_INTAKE_URL_MARKER
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
+import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
-import skillbill.engine.work.control.model.NewTaskKeyAllocation
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
@@ -31,6 +33,8 @@ import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.workflowStatus
 import java.nio.file.Path
 import java.util.concurrent.CompletionStage
 
@@ -50,6 +54,16 @@ public class WorkNewTaskStart(
   public fun prepareNewTask(
     repoRoot: Path,
     request: NewTaskIntakeRequest,
+  ): NewTaskPreparation =
+    if (request.identityPolicy == NewTaskIdentityPolicy.RESOLVED_DESKTOP_IDENTITY) {
+      prepareResolvedDesktopIdentity(repoRoot, request)
+    } else {
+      prepareLegacyIdentity(repoRoot, request)
+    }
+
+  private fun prepareLegacyIdentity(
+    repoRoot: Path,
+    request: NewTaskIntakeRequest,
   ): NewTaskPreparation {
     val requirements = request.requirements
     val agentTitle = usableTitle(request.title)
@@ -62,64 +76,68 @@ public class WorkNewTaskStart(
           } else {
             requirements
           }
-        return readyOrRefused(repoRoot, first.issueKey, intake, allocated = false)
+        val firstToken = requirements.trim().split(WHITESPACE).firstOrNull().orEmpty()
+        val origin =
+          if (firstToken.contains(GOAL_INTAKE_URL_MARKER)) {
+            IdentityOrigin.URL
+          } else {
+            IdentityOrigin.TYPED
+          }
+        return readyOrRefused(repoRoot, request, first.issueKey, intake, origin)
       }
       is GoalNewWorkAdmission.Refused -> return NewTaskPreparation.Refused(first.reason)
       GoalNewWorkAdmission.NoIssueKey -> Unit
     }
 
-    val chosen =
-      when (val choice = chooseKey(repoRoot, requirements, request.keyChoice, request.occupiedKeys)) {
-        is KeyChoice.Ask -> return NewTaskPreparation.NeedsKey(choice.choices)
-        is KeyChoice.Chosen -> choice
-      }
+    val choice = request.keyChoice?.trim().orEmpty()
+    val selected =
+      when {
+        choice.contains(GOAL_INTAKE_URL_MARKER) ->
+          extractUrlKey(choice)?.let { it to IdentityOrigin.URL }
+        ISSUE_KEY.matches(choice.uppercase()) -> choice.uppercase() to IdentityOrigin.TYPED
+        else -> null
+      } ?: return NewTaskPreparation.NeedsKey(allocator.prefixes(repoRoot))
     val titleLine = parsingText.lineSequence().firstOrNull(String::isNotBlank).orEmpty()
     val title = agentTitle ?: titleLine.takeIf(ASCII_WORD::containsMatchIn) ?: "New task from desktop"
-    val intake = appendBase("${chosen.key}\n$title\n\n$requirements", request.baseBranch)
-    return readyOrRefused(repoRoot, chosen.key, intake, chosen.allocated)
+    val intake = appendBase("${selected.first}\n$title\n\n$requirements", request.baseBranch)
+    return readyOrRefused(repoRoot, request, selected.first, intake, selected.second)
   }
 
-  private fun chooseKey(
+  private fun prepareResolvedDesktopIdentity(
     repoRoot: Path,
-    requirements: String,
-    keyChoice: String?,
-    occupiedKeys: Set<String>,
-  ): KeyChoice {
-    val normalizedChoice = keyChoice?.trim()?.uppercase()?.takeIf(String::isNotBlank)
-    if (normalizedChoice != null && ISSUE_KEY.matches(normalizedChoice)) {
-      return KeyChoice.Chosen(normalizedChoice, false)
-    }
-    val prefixes = allocator.prefixes(repoRoot)
-    if (normalizedChoice != null) {
-      val allocation = allocator.allocate(repoRoot, normalizedChoice, occupiedKeys)
-      if (allocation is NewTaskKeyAllocation.Allocated) return KeyChoice.Chosen(allocation.key, true)
-    }
-    val linked = linkedKeys(requirements)
-    val named = namedKeys(requirements, prefixes)
-    val inferred = linked.singleOrNull() ?: named.singleOrNull()?.takeIf { linked.isEmpty() }
-    if (normalizedChoice == null && inferred != null) return KeyChoice.Chosen(inferred, false)
-    val nextFree =
-      prefixes.mapNotNull { prefix ->
-        (allocator.allocate(repoRoot, prefix, occupiedKeys) as? NewTaskKeyAllocation.Allocated)?.key
-      }
-    return KeyChoice.Ask((linked + named + nextFree).distinct())
+    request: NewTaskIntakeRequest,
+  ): NewTaskPreparation {
+    val choice = request.keyChoice?.trim().orEmpty()
+    val selected =
+      when {
+        choice.contains(GOAL_INTAKE_URL_MARKER) -> extractDesktopUrlKey(choice)?.let { it to IdentityOrigin.URL }
+        ISSUE_KEY.matches(choice) -> choice.uppercase() to IdentityOrigin.TYPED
+        else -> null
+      } ?: return NewTaskPreparation.NeedsKey(allocator.prefixes(repoRoot))
+    val requirements = request.requirements
+    val agentTitle = usableTitle(request.title)
+    val titleLine = requirements.trim().lineSequence().firstOrNull(String::isNotBlank).orEmpty()
+    val title = agentTitle ?: titleLine.takeIf(ASCII_WORD::containsMatchIn) ?: "New task from desktop"
+    val intake = appendBase("${selected.first}\n$title\n\n$requirements", request.baseBranch)
+    return readyOrRefused(repoRoot, request, selected.first, intake, selected.second)
   }
 
-  private fun linkedKeys(text: String): List<String> =
-    URL.findAll(text)
-      .flatMap { url -> url.value.split('/', '?', '#', '&', '=').asSequence() }
-      .filter(MENTIONED_KEY::matches)
-      .distinct()
-      .toList()
+  private fun extractUrlKey(value: String): String? =
+    value.substringAfter(GOAL_INTAKE_URL_MARKER)
+      .substringBefore('?')
+      .substringBefore('#')
+      .split('/')
+      .firstOrNull { ISSUE_KEY.matches(it) }
+      ?.uppercase()
 
-  private fun namedKeys(
-    text: String,
-    prefixes: List<String>,
-  ): List<String> =
-    text.split(WHITESPACE)
-      .map { token -> token.trim { it in TOKEN_PUNCTUATION } }
-      .filter { MENTIONED_KEY.matches(it) && it.substringBeforeLast('-') in prefixes }
-      .distinct()
+  private fun extractDesktopUrlKey(value: String): String? =
+    value.substringAfter(GOAL_INTAKE_URL_MARKER)
+      .substringBefore('?')
+      .substringBefore('#')
+      .split('/')
+      .drop(1)
+      .firstOrNull { ISSUE_KEY.matches(it) }
+      ?.uppercase()
 
   public fun startNewTask(
     repoRoot: Path,
@@ -141,7 +159,7 @@ public class WorkNewTaskStart(
           environment = environment.environment,
         ),
       )
-    val refusal = goalStartRefusal(checked)
+    val refusal = startRefusal(checked, prepared)
     if (refusal != null) {
       val occupied =
         checked.verdict in
@@ -194,6 +212,20 @@ public class WorkNewTaskStart(
       }
     }
   }
+
+  private fun startRefusal(
+    checked: GoalPreflightResult,
+    prepared: NewTaskPreparation.Ready,
+  ): String? =
+    if (
+      checked.verdict == GoalPreflightVerdict.TERMINAL_ONLY && prepared.reuseRequested &&
+      checked.candidates.lastOrNull()?.status.workflowStatus() in
+      setOf(WorkflowStatus.COMPLETED, WorkflowStatus.ABANDONED)
+    ) {
+      null
+    } else {
+      goalStartRefusal(checked)
+    }
 
   public fun startStandalone(
     repoRoot: Path,
@@ -376,10 +408,21 @@ public class WorkNewTaskStart(
 
   private fun readyOrRefused(
     repoRoot: Path,
+    request: NewTaskIntakeRequest,
     key: String,
     intake: String,
-    allocated: Boolean,
+    origin: IdentityOrigin,
   ): NewTaskPreparation {
+    if (request.occupiedKeys.any { it.equals(key, ignoreCase = true) }) {
+      return NewTaskPreparation.Refused("$key is already in use. Choose another key.")
+    }
+    if (allocator.holds(repoRoot, key)) {
+      if (origin == IdentityOrigin.URL || !request.reuseRequested) {
+        return NewTaskPreparation.Refused(
+          if (origin == IdentityOrigin.URL) "$key is already used." else "$key already has a spec.",
+        )
+      }
+    }
     if (intake.toByteArray(Charsets.UTF_8).size > MAX_INTAKE_BYTES) {
       return NewTaskPreparation.Refused(
         "This chat is too long to start a run from. Discard it and describe the work in one message.",
@@ -388,7 +431,12 @@ public class WorkNewTaskStart(
     return when (val checked = admission.admit(intake, repoRoot)) {
       is GoalNewWorkAdmission.Admitted ->
         if (checked.issueKey == key) {
-          NewTaskPreparation.Ready(key, intake, allocated)
+          NewTaskPreparation.Ready(
+            key,
+            intake,
+            allocated = false,
+            reuseRequested = request.reuseRequested && origin == IdentityOrigin.TYPED,
+          )
         } else {
           NewTaskPreparation.Refused("The composed intake resolved to ${checked.issueKey}, not $key.")
         }
@@ -418,6 +466,8 @@ public class WorkNewTaskStart(
     intake: String,
     baseBranch: String?,
   ): String = baseBranch?.takeIf(String::isNotBlank)?.let { "$intake\n\nUse $it as the base branch." } ?: intake
+
+  private enum class IdentityOrigin { TYPED, URL }
 
   private data class StandaloneRun(
     val verb: String,
@@ -452,10 +502,7 @@ public class WorkNewTaskStart(
 
   private companion object {
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
-    val MENTIONED_KEY = Regex("[A-Z][A-Z0-9]*-\\d+(?:\\.\\d+)?")
-    val URL = Regex("https?://[^\\s<>()\"'`\\]]+")
     val WHITESPACE = Regex("\\s+")
-    const val TOKEN_PUNCTUATION = "()[]{}<>.,;:!?\"'`*_"
     val ASCII_WORD = Regex("[A-Za-z0-9]")
     val STOP_LINE = Regex("^(?:Phase '[^']+' blocked at |Operation '[^']+' (?:blocked|failed): )")
     const val MAX_INTAKE_BYTES = 30_000

@@ -1,3 +1,19 @@
+## [2026-11-04] Bind only desktop-resolved identity on desktop Goal/Plan start
+Context: Desktop already resolved identity from the offer field or dedicated operator tokens. Re-running admission on composed chat requirements would bind an in-sentence key or an agent-suggested key that leaked into the transcript.
+Decision: Desktop prepare uses identity policy RESOLVED_DESKTOP_IDENTITY and binds only keyChoice. REQUIREMENTS_FIRST remains the default for other callers.
+Reason: Sentence mentions must not become identity, and GoalIntake.parseOrNull stays unchanged. Scanning requirements again would undo the desktop helpers.
+
+## [2026-11-04] Reuse only typed complete keys, never pasted URLs
+Context: An inventory-held complete or cancelled spec key may bind again, but a pasted used tracker URL must stay refused even if the operator also said reuse.
+Decision: NewTaskDraft sets reuseRequested only when identity is a typed complete key and an operator message contains reuse wording with that key as a whitespace token, including when that key is then typed in the offer field. URL identity always leaves the flag false.
+Reason: Subtask 1 occupancy treats a used URL as not reusable. Forcing reuse around occupied in-flight keys would steal a running run.
+
+## [2026-11-04] Keep IssuePrefixPicker for execution-chat retry
+Context: New Task Goal and Plan starts must not mint from a prefix menu, but execution chats still retry a missing key through ChatComposer.
+Decision: Remove prefix-menu starts from the Goal run card. Keep IssuePrefixPicker as a sibling composable that ChatComposer still imports.
+Reason: Deleting the picker would break execution-chat retry. The Goal run card now takes a complete key only.
+Supersedes: Show the Goal run card only when the operator is asking to run a goal.
+
 ## [2026-11-04] Drop the Goal run card and keep start feedback in the transcript
 Context: The Goal run card duplicated agent start:goal / start:plan buttons and held the success banner, prefix picker, and start errors outside the conversation.
 Decision: Remove the card. Goal and plan start from the agent's in-chat actions. A successful start keeps the chat and appends a confirmation notice that restores as a success callout. Goal refusals append as Error. A pending prefix choice is a transcript footer, not a card. Home chips for review, validation, QA, and PR stay.

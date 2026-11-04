@@ -139,6 +139,7 @@ data class NewTaskStart(
   val expectedDatabaseSessionId: Long?,
   val title: String? = null,
   val target: String? = null,
+  val reuseRequested: Boolean = false,
   val branch: String? = null,
   val checkoutRoot: String? = null,
 )
