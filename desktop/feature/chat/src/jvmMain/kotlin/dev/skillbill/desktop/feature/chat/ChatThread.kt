@@ -15,6 +15,13 @@ import kotlin.time.Clock
 
 private const val SAVED_LINES = 10
 
+internal const val STOPPED_NOTICE = "Stopped"
+
+internal const val START_AGAIN_SUFFIX = "Send another message to start again."
+
+internal fun restoredDraft(queued: List<QueuedChatMessage>, draft: String): String =
+  (queued.map { it.text } + listOf(draft).filter { it.isNotBlank() }).joinToString("\n\n")
+
 /** One chat's messages and turn state, with or without an execution behind it. */
 internal class ChatThread(private val clock: Clock) {
   private val messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -28,6 +35,12 @@ internal class ChatThread(private val clock: Clock) {
 
   val busyState = MutableStateFlow(false)
   val busy: StateFlow<Boolean> = busyState.asStateFlow()
+
+  val stoppableState = MutableStateFlow(false)
+  val stoppable: StateFlow<Boolean> = stoppableState.asStateFlow()
+
+  @Volatile
+  var dropUnprompted = false
 
   val queuedState = MutableStateFlow<List<QueuedChatMessage>>(emptyList())
   val queued: StateFlow<List<QueuedChatMessage>> = queuedState.asStateFlow()
@@ -112,6 +125,6 @@ private fun ChatMessage.Operator.savedText(): String =
 internal fun restored(line: ChatHistoryLine): ChatMessage = when (line.role) {
   ChatHistoryRole.Operator -> ChatMessage.Operator(line.text, line.selectedAction)
   ChatHistoryRole.Agent -> ChatMessage.Agent(line.text, streaming = false, tools = emptyList(), actions = line.actions)
-  ChatHistoryRole.Notice -> ChatMessage.Notice(line.text)
+  ChatHistoryRole.Notice -> ChatMessage.Notice(line.text, confirmation = line.text.endsWith(START_AGAIN_SUFFIX))
   ChatHistoryRole.Error -> ChatMessage.Error(line.failure, line.text)
 }

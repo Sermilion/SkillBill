@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
+import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -28,8 +29,10 @@ import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
@@ -45,6 +48,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
@@ -53,6 +57,7 @@ import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 // How long pause-and-act waits for a running execution to stop, control call included.
 private val PAUSE_WAIT = 5.minutes
@@ -190,6 +195,7 @@ class ChatWorkspace(
     followUnprompted(session)
     session.append(stateCard(item))
     session.busyState.value = true
+    session.stoppableState.value = opening
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
       if (opening) {
@@ -301,6 +307,8 @@ class ChatWorkspace(
           keyChoice = keyChoice,
           expectedDatabaseSessionId = open.sessionId,
           target = action.target,
+          branch = action.branch,
+          checkoutRoot = session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot,
         ),
       )
       when (outcome) {
@@ -328,6 +336,7 @@ class ChatWorkspace(
   }
 
   private fun send(session: ChatSession, text: String, images: List<ChatImage>) {
+    session.stoppableState.value = true
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       turns.turn(session, read, modeFor(read.header), text, images = images)
@@ -347,7 +356,43 @@ class ChatWorkspace(
     enqueue(id, QueuedChatMessage(text, action, pauseAndAct = true))
   }
 
+  /** Ends the running reply and sends nothing: queued text returns to the draft, and the operator decides what to send next. */
+  fun stop(id: String) {
+    val session = sessions[id] ?: return
+    if (!session.stoppableState.value) return
+    val queued = session.queuedState.value
+    if (queued.isNotEmpty()) {
+      session.queuedState.value = emptyList()
+      drafts[id] = restoredDraft(queued, drafts[id].orEmpty())
+    }
+    interrupt(session)
+  }
+
+  /** Ends the running reply; the completion drain then sends the first queued message. */
+  fun sendNow(id: String) {
+    val session = sessions[id] ?: return
+    if (!session.stoppableState.value || session.queuedState.value.isEmpty()) return
+    interrupt(session)
+  }
+
+  private fun interrupt(session: ChatSession) {
+    session.stoppableState.value = false
+    session.thread.dropUnprompted = true
+    val running = session.turnJob
+    if (running != null) {
+      session.stoppedTurn = running
+      running.cancel()
+    } else {
+      // No turn collects an unprompted reply, so ending the process is this path's job.
+      launchTurn(session) {
+        endAgent(session)
+        turns.finishStopped(session)
+      }
+    }
+  }
+
   private fun pauseAndAct(session: ChatSession, text: String, images: List<ChatImage>) {
+    session.stoppableState.value = true
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       if (modeFor(read.header) == ChatPermissionMode.Act) {
@@ -356,29 +401,31 @@ class ChatWorkspace(
       }
       val deadline = clock.now() + PAUSE_WAIT
       val header = read.header
-      val outcome = when {
-        header.pauseEligible -> controls.pauseNow(header)
-        header.controlEligible -> controls.cancel(header)
-        else -> {
-          session.append(ChatMessage.Notice(CANNOT_PAUSE_NOTICE))
-          return@launchTurn
-        }
+      if (!header.pauseEligible && !header.controlEligible) {
+        session.append(ChatMessage.Notice(CANNOT_PAUSE_NOTICE))
+        return@launchTurn
+      }
+      val outcome = withContext(NonCancellable) {
+        if (header.pauseEligible) controls.pauseNow(header) else controls.cancel(header)
       }
       if (outcome is ControlOutcome.Refused || outcome is ControlOutcome.Failed) {
         session.append(ChatMessage.Error(null, outcome.problemDetail().orEmpty()))
         return@launchTurn
       }
-      val stopped = withTimeoutOrNull((deadline - clock.now()).coerceAtLeast(Duration.ZERO)) {
-        details.observe(header).firstOrNull {
-          it.sections is DetailSections.Gone || (it.sections !is DetailSections.Pending && modeFor(it.header) == ChatPermissionMode.Act)
-        }
+      val turn = currentCoroutineContext().job
+      val stopped = try {
+        awaitExecutionStopped(header, deadline)
+      } catch (cancelled: CancellationException) {
+        if (session.stoppedTurn === turn) watchStoppedPause(session.id, header, deadline)
+        throw cancelled
       }
       if (stopped == null) {
         session.append(ChatMessage.Notice(PAUSE_TIMEOUT_NOTICE))
         return@launchTurn
       }
       val stoppedRead = turns.accept(session, stopped) ?: return@launchTurn
-      resumeAfter(currentCoroutineContext().job, session.id, stoppedRead.header)
+      session.pauseWatch?.cancel()
+      if (session.resumeJob?.isActive != true) resumeAfter(turn, session.id, stoppedRead.header)
       turns.turn(session, stoppedRead, ChatPermissionMode.Act, text, prefix = ACT_PREFIX, images = images)
     }
   }
@@ -391,6 +438,7 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (session.busyState.value || session.agentState.value?.agentId == agentId) return
     session.busyState.value = true
+    session.stoppableState.value = false
     launchTurn(session) {
       val agent = chat.agentFor(agentId)
       session.agentState.value = agent
@@ -415,6 +463,7 @@ class ChatWorkspace(
     session.queuedState.value = emptyList()
     val running = session.turnJob
     session.busyState.value = true
+    session.stoppableState.value = false
     launchTurn(session) {
       running?.cancelAndJoin()
       endAgent(session)
@@ -448,6 +497,7 @@ class ChatWorkspace(
     session.queuedState.value = emptyList()
     val running = session.turnJob
     session.busyState.value = true
+    session.stoppableState.value = false
     launchTurn(session) {
       running?.cancelAndJoin()
       val lines = chat.openSavedChat(entry)
@@ -481,23 +531,64 @@ class ChatWorkspace(
     if (next.pauseAndAct) pauseAndAct(session, next.text, next.images) else send(session, next.text, next.images)
   }
 
-  // Only the session's current turn clears busy, so a turn that a resume cancelled cannot unlock the composer mid-swap.
   private fun launchTurn(session: ChatSession, block: suspend () -> Unit) {
     val turn = scope.launch(session.job, start = CoroutineStart.LAZY) {
       try {
         block()
       } finally {
-        if (session.turnJob === coroutineContext.job) {
-          session.turnJob = null
-          session.busyState.value = session.resumeJob?.isActive == true
-        }
+        settleTurn(session, coroutineContext.job)
       }
     }
     session.turnJob = turn
     turn.invokeOnCompletion {
-      scope.launch(session.job) { drainQueue(session) }
+      scope.launch(session.job) {
+        settleTurn(session, turn)
+        drainQueue(session)
+      }
     }
     turn.start()
+  }
+
+  // Only the session's current turn clears busy, so a turn that a resume cancelled cannot unlock the composer mid-swap.
+  private suspend fun settleTurn(session: ChatSession, turn: Job) {
+    if (session.turnJob !== turn) return
+    try {
+      if (session.stoppedTurn === turn && turn.isCancelled) withContext(NonCancellable) { turns.finishStopped(session) }
+    } finally {
+      if (session.turnJob === turn) {
+        session.turnJob = null
+        session.stoppedTurn = null
+        session.busyState.value = session.resumeJob?.isActive == true
+        session.stoppableState.value = false
+      }
+    }
+  }
+
+  private suspend fun awaitExecutionStopped(header: WorkItem, deadline: Instant): DetailState? =
+    withTimeoutOrNull((deadline - clock.now()).coerceAtLeast(Duration.ZERO)) {
+      details.observe(header).firstOrNull {
+        it.sections is DetailSections.Gone || (it.sections !is DetailSections.Pending && modeFor(it.header) == ChatPermissionMode.Act)
+      }
+    }
+
+  // A window-scope job, like resumeAfter: the operator stopped the turn, but the execution still pauses and still needs its relaunch.
+  private fun watchStoppedPause(id: String, header: WorkItem, deadline: Instant) {
+    sessions[id]?.pauseWatch?.cancel()
+    val watch = scope.launch {
+      val stopped = awaitExecutionStopped(header, deadline)
+      val session = sessions[id]
+      when {
+        stopped == null -> session?.append(ChatMessage.Notice(PAUSE_TIMEOUT_NOTICE))
+        stopped.sections is DetailSections.Gone -> session?.let(turns::markGone)
+        else -> {
+          session?.busyState?.value = true
+          resumeAfter(session?.turnJob ?: Job().apply { complete() }, id, stopped.header)
+        }
+      }
+    }
+    sessions[id]?.pauseWatch = watch
+    resumeJobs += watch
+    watch.invokeOnCompletion { resumeJobs -= watch }
   }
 
   // A window-scope job, so closing the tab does not cancel it; only closeAll does. It re-reads the execution after the turn,

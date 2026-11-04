@@ -20,6 +20,7 @@ import skillbill.review.context.model.launch.ReviewConversationIsolation
 import java.net.URI
 import java.net.URISyntaxException
 import java.nio.file.Path
+import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.time.Duration
 
 internal data class AgentRunCommand(
@@ -209,10 +210,12 @@ internal class ClaudeAgentRunCommandBuilder(
           }
           addAll(claudeRuntimeMcpArguments(request, runtimeMcpBin, databasePath))
           add("--dangerously-skip-permissions")
-          (listOf(request.repoRoot) + request.additionalWritableDirectories).forEach { directory ->
+          val writableDirectories = listOf(request.repoRoot) + request.additionalWritableDirectories
+          writableDirectories.forEach { directory ->
             add("--add-dir")
             add(directory.toString())
           }
+          addAll(claudeWriteSettingsArguments(request, writableDirectories))
         },
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
@@ -234,6 +237,37 @@ internal class ClaudeAgentRunCommandBuilder(
     )
   }
 }
+
+private fun claudeWriteSettingsArguments(
+  request: SkillRunRequest,
+  writableDirectories: List<Path>,
+): List<String> =
+  if (request.reviewEvidenceEndpoint == null && !request.readOnlyPhase) {
+    listOf("--settings", claudeAgentConfigWriteSettings(writableDirectories))
+  } else {
+    emptyList()
+  }
+
+internal fun claudeAgentConfigWriteSettings(writableDirectories: List<Path>): String {
+  val rules =
+    buildList {
+      writableDirectories.distinct().forEach { directory ->
+        val root = directory.toAbsolutePath().normalize().invariantSeparatorsPathString.trimEnd('/')
+        CLAUDE_AGENT_CONFIG_FOLDERS.forEach { folder ->
+          add("Edit(//${root.removePrefix("/")}/.claude/$folder/**)")
+          add("Bash(mkdir -p $root/.claude/$folder*)")
+          add("Bash(cp * $root/.claude/$folder/*)")
+        }
+      }
+      CLAUDE_AGENT_CONFIG_FOLDERS.forEach { folder ->
+        add("Bash(mkdir -p .claude/$folder*)")
+        add("Bash(cp * .claude/$folder/*)")
+      }
+    }
+  return structuredOutputMapper.writeValueAsString(mapOf("permissions" to mapOf("allow" to rules)))
+}
+
+private val CLAUDE_AGENT_CONFIG_FOLDERS = listOf("agents", "commands", "skills")
 
 internal class CodexAgentRunCommandBuilder(
   override val governedReviewLaunchCapability: GovernedReviewLaunchCapability =

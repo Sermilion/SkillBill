@@ -52,6 +52,8 @@ import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
+import dev.skillbill.desktop.core.domain.model.ScopeKind
+import dev.skillbill.desktop.core.domain.model.availableScopes
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
@@ -81,10 +83,32 @@ internal fun ScopeToolbar(
         PickerButton(scopeLabel(state.scope, state.subtasks), state.pickerOpen) { onAction(ChangesWindowAction.TogglePicker) }
         if (state.pickerOpen) ScopePicker(state, onAction, pickerSearch)
       }
+      if (ScopeKind.Commits in (state.target?.let(::availableScopes).orEmpty())) {
+        ViewToggle(state.view) { onAction(ChangesWindowAction.SetView(it)) }
+      }
     }
     QuickScopes(state.quick, onAction)
     Spacer(Modifier.weight(1f))
     FilterBox(state.filter, { onAction(ChangesWindowAction.SetFilter(it)) }, filterFocus, onFilterFocused)
+  }
+}
+
+@Composable
+private fun ViewToggle(view: ChangesView, onChange: (ChangesView) -> Unit) {
+  val colors = SkillBillTheme.colors
+  Row(Modifier.clip(CONTROL_SHAPE).border(1.dp, colors.borderStrong, CONTROL_SHAPE).padding(1.dp)) {
+    ChangesView.entries.forEach { option ->
+      val selected = option == view
+      val interaction = remember { MutableInteractionSource() }
+      Box(
+        Modifier.height(28.dp).background(if (selected) colors.bgOverlay else Color.Transparent)
+          .clickable(interaction, indication = null, role = Role.Button) { onChange(option) }
+          .semantics { this.selected = selected }.padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+      ) {
+        BasicText(option.name, style = changesSans(12f, FontWeight.Medium, if (selected) colors.fg else colors.fgMuted), maxLines = 1, softWrap = false)
+      }
+    }
   }
 }
 

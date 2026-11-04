@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -44,6 +46,7 @@ class ClaudeChatTransport(
 
   private val scope = appScope.scope
   private val sessions = ConcurrentHashMap<String, ClaudeLiveSession>()
+  private val stopping = ConcurrentHashMap<String, Job>()
   private val unpromptedEvents = MutableSharedFlow<Pair<String, ChatEvent>>(extraBufferCapacity = UNPROMPTED_BUFFER)
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
@@ -56,6 +59,7 @@ class ClaudeChatTransport(
     )
     val uuid = UUID.randomUUID().toString()
     val sink = Channel<ChatEvent>(Channel.UNLIMITED)
+    awaitStopped(request.sessionId)
     val session = registered(request.sessionId, command, uuid, sink)
     session.send(uuid, claudeMessage(request), request.images)
     var answered = false
@@ -102,12 +106,21 @@ class ClaudeChatTransport(
   }
 
   private fun stop(sessionId: String, session: ClaudeLiveSession) {
+    val job = session.job
+    stopping[sessionId] = job
+    job.invokeOnCompletion { stopping.remove(sessionId, job) }
     sessions.remove(sessionId, session)
-    session.job.cancel()
+    job.cancel()
+  }
+
+  private suspend fun awaitStopped(sessionId: String) {
+    val ending = stopping[sessionId] ?: return
+    if (withTimeoutOrNull(STOP_WAIT_MS) { ending.join() } == null) diagnostics.record("chat.stop_wait_expired")
   }
 
   private companion object {
     const val UNPROMPTED_BUFFER = 1024
+    const val STOP_WAIT_MS = 5000L
   }
 }
 

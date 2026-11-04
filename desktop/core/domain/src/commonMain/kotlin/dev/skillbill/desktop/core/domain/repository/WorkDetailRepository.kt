@@ -3,12 +3,14 @@ package dev.skillbill.desktop.core.domain.repository
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailState
+import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.flow.Flow
 
 /** One item's detail: the header paints from the row at once, the sections load once and then refresh in place. */
 interface WorkDetailRepository {
+  suspend fun resolve(id: String): WorkDetailResolution
   fun observe(item: WorkItem): Flow<DetailState>
 
   suspend fun refresh(id: String)
@@ -18,4 +20,10 @@ interface WorkDetailRepository {
 
   /** Runs the first load for a focused row ahead of opening it, and returns its run options for the context menu. */
   suspend fun prefetch(id: String): RunOptions?
+}
+
+sealed interface WorkDetailResolution {
+  data class Resolved(val item: WorkItem) : WorkDetailResolution
+  data object Missing : WorkDetailResolution
+  data class Failed(val problem: ReadProblem) : WorkDetailResolution
 }

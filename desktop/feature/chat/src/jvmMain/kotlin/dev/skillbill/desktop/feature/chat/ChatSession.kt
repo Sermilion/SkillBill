@@ -59,6 +59,8 @@ class ChatSession internal constructor(
   internal var worktreeRemovedNoticed: Boolean = false
   internal var turnJob: Job? = null
   internal var resumeJob: Job? = null
+  internal var stoppedTurn: Job? = null
+  internal var pauseWatch: Job? = null
 
   /** The next turn opens [newSessionId] and sends the full snapshot, as a first turn does. */
   internal fun restart(newSessionId: String) {
@@ -88,6 +90,9 @@ class ChatSession internal constructor(
 
   internal val busyState get() = thread.busyState
   val busy: StateFlow<Boolean> get() = thread.busy
+
+  internal val stoppableState get() = thread.stoppableState
+  val stoppable: StateFlow<Boolean> get() = thread.stoppable
 
   internal val queuedState get() = thread.queuedState
   internal val queued: StateFlow<List<QueuedChatMessage>> get() = thread.queued

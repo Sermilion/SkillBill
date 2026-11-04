@@ -19,6 +19,7 @@ import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.filesLabel
+import dev.skillbill.desktop.core.ui.changes.timelineProblemText
 import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 
 /** The scope label and commit range; for a subtask range the previous, next and Show all links; the visible files' totals. */
@@ -36,13 +37,19 @@ internal fun ScopeBar(state: ChangesWindowUiState, onAction: (ChangesWindowActio
     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
       BasicText(scopeLabel(state.scope, state.subtasks), style = changesSans(12f, FontWeight.SemiBold, colors.fg2), maxLines = 1, softWrap = false)
       BasicText(
-        commitRangeText(target, state.scope, state.outsideCommits),
+        state.target?.timelineProblem?.let(::timelineProblemText) ?: commitRangeText(target, state.scope),
         Modifier.weight(1f, fill = false),
         style = mono,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
-      if (state.scope is ChangeScope.Subtasks) {
+      if (state.view == ChangesView.Commits) {
+        val previous = commitStepTarget(state.commits, state.scope, forward = false)
+        val next = commitStepTarget(state.commits, state.scope, forward = true)
+        ChangesLink("← ${previous?.take(7).orEmpty()}", { onAction(ChangesWindowAction.Step(forward = false)) })
+        ChangesLink("${next?.take(7).orEmpty()} →", { onAction(ChangesWindowAction.Step(forward = true)) })
+        if (state.scope is ChangeScope.Commits) ChangesLink("All commits", { onAction(ChangesWindowAction.PickAll) })
+      } else if (state.scope is ChangeScope.Subtasks) {
         val previous = stepTarget(state.subtasks, state.scope, forward = false)
         val next = stepTarget(state.subtasks, state.scope, forward = true)
         ChangesLink("← ${previous ?: ""}", { onAction(ChangesWindowAction.Step(forward = false)) })

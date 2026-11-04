@@ -3,9 +3,11 @@ package skillbill.infrastructure.workflow.monitor
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.host.resolveTelemetryStateDir
+import skillbill.infrastructure.workflow.git.standard.GitStandardWorkflowGitWorktreeOperations
 import skillbill.infrastructure.workflow.process.RecordedProcessLiveness
 import skillbill.infrastructure.workflow.process.livenessOf
 import skillbill.model.EnvironmentContext
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorAcquireRequest
@@ -31,6 +33,8 @@ import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
 import skillbill.ports.monitor.model.MonitorWorktree
 import skillbill.ports.monitor.model.redactedMonitorDetail
 import skillbill.ports.taskruntime.model.isConfirmedDead
+import skillbill.ports.workflow.gitops.model.WorkflowIgnoredFilesCopyResult
+import skillbill.ports.workflow.gitops.worktree.MAX_IGNORED_FILE_BYTES
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -53,6 +57,7 @@ class GitMonitorResources(
   private val inspector: MonitorProcessInspector,
   private val clock: Clock,
   private val environment: EnvironmentContext,
+  private val diagnostics: RuntimeDiagnostics,
 ) : StandaloneMonitorResources {
   private val held = ConcurrentHashMap<Path, HeldOwnership>()
   private val cleanup = MonitorOwnedCleanup(clock)
@@ -202,7 +207,29 @@ class GitMonitorResources(
         "The owned worktree $path maps to $checkedOut@$head instead of $branch@${target.head.tip.sha}.",
       )
     }
+    copyIgnoredFiles(Path.of(record.callerRoot), path)
     return MonitorWorktree(path, branch)
+  }
+
+  private fun copyIgnoredFiles(
+    callerRoot: Path,
+    worktree: Path,
+  ) {
+    val copied = GitStandardWorkflowGitWorktreeOperations.copyIgnoredFiles(callerRoot, worktree, MAX_IGNORED_FILE_BYTES)
+    when (copied) {
+      is WorkflowIgnoredFilesCopyResult.Copied ->
+        if (copied.skippedPaths.isNotEmpty()) {
+          diagnostics.info(
+            "seam=monitor_worktree.ignored_files outcome=skipped worktree=$worktree " +
+              "paths=${copied.skippedPaths.take(MAX_LISTED_PATHS).joinToString(",")}",
+          )
+        }
+      is WorkflowIgnoredFilesCopyResult.Failed ->
+        diagnostics.warning(
+          "seam=monitor_worktree.ignored_files outcome=failed worktree=$worktree; a build that reads local " +
+            "configuration such as local.properties may fail: ${copied.error.take(MAX_RECORD_REASON)}",
+        )
+    }
   }
 
   override fun markPrepared(
@@ -526,6 +553,9 @@ class GitMonitorResources(
   private fun MonitorOwnershipRecord.isOwnedBy(fence: MonitorFence): Boolean =
     ownerToken == fence.ownerToken && generation == fence.generation
 }
+
+private const val MAX_LISTED_PATHS = 20
+private const val MAX_RECORD_REASON = 200
 
 private val monitorResourcesLog: Logger =
   Logger.getLogger("skillbill.infrastructure.workflow.monitor.GitMonitorResources")

@@ -57,6 +57,9 @@ data class SpecToolbarState(
   val exportLiveDialogOpen: Boolean = false,
   val inFlight: Boolean = false,
   val reserved: Boolean = false,
+  val favorite: Boolean = false,
+  val favoriteAvailable: Boolean = false,
+  val favoriteInFlight: Boolean = false,
 )
 
 sealed interface SpecsAction {
@@ -96,6 +99,7 @@ sealed interface SpecsAction {
   data class RequestDelete(val path: String) : SpecsAction
   data object KeepSpecFiles : SpecsAction
   data object ConfirmDelete : SpecsAction
+  data object ToggleFavorite : SpecsAction
 }
 
 internal const val HINT_SELECT_FOLDER = "Select a spec folder to start, pause or cancel it."

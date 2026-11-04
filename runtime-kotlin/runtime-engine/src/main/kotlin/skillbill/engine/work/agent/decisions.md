@@ -1,3 +1,8 @@
+## [2026-11-04] Bind operator-supplied task identity without allocation
+Context: Goal and plan starts could mint a new key from a prefix or bind a key mentioned elsewhere in requirements, even when the operator had not supplied that identity.
+Decision: Bind only an admitted first token, a complete typed key, or a tracker key extracted from a URL. Ask for identity when none is available. Allow explicit typed reuse only for completed or abandoned terminal runs, while refusing used URLs and in-flight or resumable runs.
+Reason: The supplied identity must identify the work the operator intends to start. A URL already tied to a spec and a run that can still resume must not silently become a new launch.
+
 ## [2026-10-31] Name the unblock step in the incident's next action
 Context: An incident that matched no classification rule showed "No known workaround." even when the runtime knew the command that unblocks the goal, or when the block looked like a skill-bill defect.
 Decision: The current incident's next action names a typed recovery command when one exists. The command comes from blocked_recovery_command on the blocked goal parent, or from a parent whose quality record is historical_ambiguity, which gets goal fresh-quality. Otherwise an unreported skill-bill defect, or an unresolved incident with no workaround, points to the product repository's new-issue page with the incident token. Runtime eligibility still wins over these suggestions.

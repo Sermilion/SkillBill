@@ -1,3 +1,43 @@
+## [2026-11-04] Attribute timeline commits by trailer then recorded SHA
+Context: Recorded subtask ranges can point to pruned commits after an amend or rebase and can credit operator work to a subtask.
+Decision: Attribute merge-base..HEAD commits to valid goal subtask trailers, then match recorded SHA only when no valid trailer exists. Other commits are operator commits.
+Reason: The manifest supplies subtask names and statuses without determining ownership by range. The five trailer-less runtime commit paths remain operator commits to keep this change out of those paths.
+
+## [2026-11-04] Withhold attribution outside the goal branch
+Context: The timeline reads the current checkout, which can be on a different branch or detached.
+Decision: When a non-blank goal branch differs from the checkout, report OnOtherBranch and hide subtask scopes and Operator. All and Uncommitted continue to read HEAD.
+Reason: Attributing another branch would show false changed-after-finish badges.
+
+## [2026-11-04] Keep stacked goals on the child review base
+Context: Stacked-branch goals have no subtask ranges; the approved scope leaves them that way.
+Decision: Skip their timeline and retain the child review base for stacked reads, including completed and no-change work.
+Reason: The approved scope excludes a stacked timeline, subtask ranges and commit view.
+
+## [2026-11-04] Expand non-adjacent squash members at read time
+Context: A squash can join subtasks 1 and 3 while subtask 2 remains separate, but ChangeScope.Subtasks stores a contiguous range.
+Decision: Store the lowest id for a non-adjacent squash pick and expand touched columns to their members when reading.
+Reason: Storing 1..3 would also select subtask 2.
+
+## [2026-11-04] Attribute hunks by owner group
+Context: A squash can have multiple subtask owners, and a baseline read can span later operator commits.
+Decision: Attribute patches by commit owner set or operator SHA. If a group patch fails or exceeds the per-commit limit, return the unlabelled range and record a diagnostic.
+Reason: Exclusive matching per subtask cannot label a squash. Including later operator commits preserves their hunks, while the fallback keeps the range readable.
+
+## [2026-11-04] Keep Uncommitted and Operator observed for quick-button counts
+Context: Quick buttons show file counts regardless of the selected scope.
+Decision: Observe Uncommitted and, when offered, Operator for the window's lifetime. Reuse the observation when its scope is selected.
+Reason: Counts stay current without polling the same scope twice through the shared git lock.
+
+## [2026-11-04] Retain commit statistics across timeline refreshes
+Context: Commit statistics are immutable for an unchanged commit SHA, while the goal timeline can refresh during the view.
+Decision: Keep observed statistics for SHAs that remain on the refreshed timeline and merge each new per-commit emission into that map.
+Reason: The strip keeps its bars while the repository reads the next commit.
+
+## [2026-11-04] Validate subtask view switches after range normalization
+Context: Normalizing a selected subtask range can expand it to include squash partners.
+Decision: After mapping selected commits to covered subtasks, normalize the range and require every selectable id in the expanded range to be covered by the selected commits.
+Reason: The subtask view must not display commits the commit view did not select.
+
 ## [2026-11-01] Show the scope's diffs as one continuous stream
 Context: The operator wants to keep scrolling from the end of one file into the next instead of picking each file.
 Decision: The diff pane is one LazyColumn over every visible file. The view model keeps loaded diffs per path for the scope and reads what the stream asks for, the files on screen plus two ahead, one at a time. A user scroll selects the file at the top; a file click, j and k jump to it. Scrolling never bumps `scrollRequest`, so the two cannot fight. A refreshed list drops only diffs whose ChangedFile changed.
@@ -20,11 +60,6 @@ Context: `design/App/Changes Window.html` is drawn for 33 subtasks. Bars for 1 t
 Decision: `SubtaskStrip` draws a card per subtask (state, number, name, files, +N/-N) when the width gives each at least 140 dp, capped at 320 dp wide, and bars otherwise. Cards keep the strip's height and its click, Shift-click and drag gestures. The detail screen's running row shows under bars only, since a card already names its subtask.
 Reason: The switch follows available width, so the same run reads well in both the narrow detail column and the wide panel.
 Revisit when: A designed few-subtask state replaces this one.
-
-## [2026-11-01] Keep Uncommitted and Outside observed for quick-button counts
-Context: The quick buttons show file counts for Uncommitted and Outside subtasks whatever the current scope is, and a button with zero files is disabled.
-Decision: ChangesWindowViewModel observes Uncommitted, and Outside when availableScopes offers it, for the window's lifetime, keyed on target and running. When the shown scope is one of those two, the shown list reuses that read instead of starting a second observation.
-Reason: Counts stay current without polling the same scope twice through the shared git lock.
 
 ## [2026-11-01] Build the Scope picker on a focusable Popup instead of SbPopover
 Context: The picker lists every subtask of a goal, which can run to 100 or more rows, and its search field must take focus on open.

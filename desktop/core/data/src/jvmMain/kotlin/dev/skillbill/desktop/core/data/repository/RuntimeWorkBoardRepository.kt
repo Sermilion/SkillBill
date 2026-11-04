@@ -23,6 +23,11 @@ class RuntimeWorkBoardRepository(private val sessions: DatabaseSessionManager) :
     failed = { BoardState.Failed(ReadProblem.Storage(it)) },
   ) { it.board.observe(query.clamped()) }
 
+  override fun observeRefreshes(query: BoardQuery): Flow<Unit> = sessions.sessionFlow(
+    opening = Unit,
+    failed = { Unit },
+  ) { it.board.observeRefreshes(query.clamped()) }
+
   override suspend fun loadMore(query: BoardQuery, cursor: String): LoadMoreOutcome =
     sessions.sessions.value?.board?.loadMore(query.clamped(), cursor) ?: LoadMoreOutcome.End
 

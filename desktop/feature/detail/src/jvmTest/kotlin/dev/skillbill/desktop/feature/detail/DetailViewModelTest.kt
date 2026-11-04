@@ -34,6 +34,9 @@ import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
+import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
+import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.loadedBoard
@@ -82,11 +85,78 @@ class DetailViewModelTest {
     override fun reopen() = Unit
   }
 
+  private val settings = FakeAppSettingsRepository()
+
   private fun viewModel(
     board: FakeWorkBoardRepository = FakeWorkBoardRepository(),
     source: WorkItem = item,
     workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
-  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
+    toastQueue: ToastQueue = ToastQueue(),
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings)
+
+  @Test
+  fun `favorite membership follows confirmed settings and a failed write leaves it unchanged`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val database = DatabaseFileIdentity("/selected.db", "file;key")
+    val source = item.copy(control = item.control.copy(databaseFile = database))
+    val key = FavoriteWorkKey(database, source.id)
+    settings.settings.value = settings.settings.value.copy(favoriteWork = setOf(key))
+    val toastQueue = ToastQueue()
+    val viewModel = viewModel(source = source, toastQueue = toastQueue)
+    advanceUntilIdle()
+    details.flow.emit(DetailState(source, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    settings.favoriteWriteFailure = true
+
+    viewModel.onAction(DetailAction.ToggleFavorite)
+    advanceUntilIdle()
+
+    assertEquals(setOf(key), settings.settings.value.favoriteWork)
+    assertTrue(viewModel.state.value.favorite)
+    assertEquals("Couldn't save this favorite.", toastQueue.host.toasts.single().data.title)
+
+    settings.favoriteWriteFailure = false
+    viewModel.onAction(DetailAction.ToggleFavorite)
+    advanceUntilIdle()
+
+    assertTrue(settings.settings.value.favoriteWork.isEmpty())
+    assertTrue(!viewModel.state.value.favorite)
+  }
+
+  @Test
+  fun `a session change hides the old favorite until its detail resolves again`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val database = DatabaseFileIdentity("/selected.db", "file")
+    val source = item.copy(control = item.control.copy(databaseFile = database))
+    val key = FavoriteWorkKey(database, source.id)
+    settings.settings.value = settings.settings.value.copy(favoriteWork = setOf(key))
+    val viewModel = viewModel(source = source)
+    advanceUntilIdle()
+    details.flow.emit(DetailState(source, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    assertTrue(viewModel.state.value.favorite)
+
+    session.state.value = DatabaseSessionState.Open("replacement.db", 2)
+    advanceUntilIdle()
+
+    assertTrue(!viewModel.state.value.itemResolved)
+    assertTrue(!viewModel.state.value.favorite)
+  }
+
+  @Test
+  fun `favorite toggle refuses a resolved row without its database observation`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val toastQueue = ToastQueue()
+    val viewModel = DetailViewModel(item, session, details, changes, scopes, activity, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, FakeWorkControlRepository(), toastQueue, settings)
+    advanceUntilIdle()
+    details.flow.emit(DetailState(item, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+
+    viewModel.onAction(DetailAction.ToggleFavorite)
+
+    assertTrue(settings.settings.value.favoriteWork.isEmpty())
+    assertEquals("This work item has no database identity, so it cannot be favorited.", toastQueue.host.toasts.single().data.title)
+  }
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {
@@ -130,8 +200,8 @@ class DetailViewModelTest {
     advanceUntilIdle()
     details.flow.emit(loaded("a"))
     advanceUntilIdle()
-    val done = ScopeSubtask(12, "Twelve", ScopeSubtaskState.DONE, "s12", "e12", emptyList())
-    val notStarted = ScopeSubtask(13, "Thirteen", ScopeSubtaskState.NOT_STARTED, null, null, emptyList())
+    val done = ScopeSubtask(12, "Twelve", ScopeSubtaskState.DONE, "e12", listOf("e12"), false, emptyList())
+    val notStarted = ScopeSubtask(13, "Thirteen", ScopeSubtaskState.NOT_STARTED, null, emptyList(), false, emptyList())
     val listed = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = listOf(done, notStarted), stats = emptyMap())
     scopes.flow.value = listed
     advanceUntilIdle()
@@ -317,6 +387,9 @@ class DetailViewModelTest {
 
     override fun observe(item: WorkItem): Flow<DetailState> = flow
 
+    override suspend fun resolve(id: String): dev.skillbill.desktop.core.domain.repository.WorkDetailResolution =
+      dev.skillbill.desktop.core.domain.repository.WorkDetailResolution.Missing
+
     override suspend fun refresh(id: String) { refreshes += id }
 
     override suspend fun loadList(id: String, list: DetailList, anchor: String?): DetailListOutcome {
@@ -349,6 +422,8 @@ class DetailViewModelTest {
       subtaskReads++
       return flow
     }
+
+    override fun observeCommitStats(target: ChangeScopeTarget): Flow<Map<String, dev.skillbill.desktop.core.domain.model.SubtaskStats>> = emptyFlow()
 
     override fun observeScope(target: ChangeScopeTarget, scope: ChangeScope, running: Boolean): Flow<ScopeChangesState> = emptyFlow()
 

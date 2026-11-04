@@ -25,6 +25,13 @@ public data class FeatureTaskRuntimeSubtaskCommitIdentity(val issueKey: String, 
         .mapNotNull { line -> identityFrom(line.removePrefix("$SUBTASK_TRAILER_KEY:").trim()) }
         .lastOrNull()
 
+    public fun parseAll(commitMessage: String): List<FeatureTaskRuntimeSubtaskCommitIdentity> =
+      commitMessage.lineSequence()
+        .map(String::trim)
+        .filter { it.startsWith("$SUBTASK_TRAILER_KEY:") }
+        .mapNotNull { line -> identityFrom(line.removePrefix("$SUBTASK_TRAILER_KEY:").trim()) }
+        .toList()
+
     private fun identityFrom(value: String): FeatureTaskRuntimeSubtaskCommitIdentity? {
       val segments = value.split('/')
       if (segments.size != 2) return null

@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.data.session
 
+import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 
@@ -18,6 +19,8 @@ class SessionSelection(
 interface SessionGraph {
   /** The resolved database path when it resolves, the raw setting otherwise. */
   fun displayPath(): String
+
+  fun databaseFile(): DatabaseFileIdentity? = null
 
   /** Upgrades an existing store, probes it and starts the signal watcher; returns the watcher's job and throws on failure. */
   fun open(): Job

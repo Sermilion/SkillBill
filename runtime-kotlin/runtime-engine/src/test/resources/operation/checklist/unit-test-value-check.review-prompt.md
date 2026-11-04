@@ -93,6 +93,19 @@ Trivial glue on a non-critical path needs no test; say so rather than proposing 
 
 ## Output
 
+Provide a concise human report and then the complete machine projection. The human report may contain its
+table, but it must never omit machine records because of a display limit.
+
+Machine projection records:
+
+- `Test value: <test path>:<line> guards <production path>:<line> reason <realistic regression and why the test can pass>`
+- `Finding: minor <production path>:<line> scenario <specific missing behavior and risk>`
+- `Finding: none` only when there are no actionable findings
+
+End the projection with `Projection complete: <record count>`. Count every actionable `Finding`, `Test value`,
+`Scenario`, and `Regression` line in the full projection. `Finding: none` does not count. Do not emit a completion
+marker if the projection is incomplete.
+
 Provide:
 
 - `Overall verdict`: `Strong | Mixed | Weak`

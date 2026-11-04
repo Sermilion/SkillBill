@@ -3,9 +3,8 @@ package skillbill.ports.workchanges
 import skillbill.ports.idestatus.model.WorkChangeBaseline
 import skillbill.ports.workchanges.model.WorkChangeListResult
 import skillbill.ports.workchanges.model.WorkChangedFile
-import skillbill.ports.workchanges.model.WorkCommitRange
+import skillbill.ports.workchanges.model.WorkCommitTimelineResult
 import skillbill.ports.workchanges.model.WorkFileDiffResult
-import skillbill.ports.workchanges.model.WorkOutsideCommitsResult
 
 /**
  * Read-only git view of the files an execution changed since its baseline.
@@ -52,12 +51,13 @@ interface WorkChangesPort {
   fun uncommittedChanges(worktreeRoot: String): WorkChangeListResult
 
   /**
-   * Lists branch commits since the merge base with [targetBranch] that no [subtaskRanges] entry contains.
+   * Lists the branch commit timeline since the merge base with [targetBranch].
    * Blocks on git, never throws, and returns a typed result.
    */
-  fun outsideCommits(
+  fun commitTimeline(
     worktreeRoot: String,
     targetBranch: String?,
-    subtaskRanges: List<WorkCommitRange>,
-  ): WorkOutsideCommitsResult
+    recordedShas: List<String>,
+    headBranch: String? = null,
+  ): WorkCommitTimelineResult
 }

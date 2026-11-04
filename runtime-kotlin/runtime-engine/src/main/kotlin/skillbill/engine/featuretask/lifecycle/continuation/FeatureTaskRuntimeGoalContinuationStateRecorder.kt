@@ -1,10 +1,12 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
+import skillbill.engine.diagnostics.block.BlockIncidentAcceptedChildCause
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.goalrunner.model.FeatureTaskRuntimeGoalContinuationOutcome
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -99,20 +101,37 @@ internal class FeatureTaskRuntimeGoalContinuationStateRecorder(
     val acceptedAttempt =
       record.steps.find { it.stepId == lastResumableStep }
         ?.attemptCount?.takeIf { it > 0 }
-    val reference =
-      identity.takeIf {
-        it.stepId == lastResumableStep &&
-          it.attempt == acceptedAttempt &&
-          (generation == null || it.generation == generation)
-      }?.acceptedReference(record.workflowId)
+    val identityIsCurrent =
+      identity.stepId == lastResumableStep &&
+        identity.attempt == acceptedAttempt &&
+        (generation == null || identity.generation == generation)
+    val reference = identity.takeIf { identityIsCurrent }?.acceptedReference(record.workflowId)
+    val childCause =
+      BlockIncidentAcceptedChildCause.fromArtifacts(record.artifacts)
+        ?.takeIf { cause ->
+          identityIsCurrent &&
+            cause.parentIncidentToken == identity.incidentToken &&
+            cause.reference.sourceWorkflowId == identity.childWorkflowId &&
+            cause.reference.incidentToken == identity.childIncidentToken
+        }?.reference
     val retained =
-      acceptedBlockReference?.takeIf {
-        it.matchesIdentity(record.workflowId, lastResumableStep, identity.attempt, identity.generation) &&
-          it.incidentToken == identity.incidentToken &&
-          it.aliasValue == identity.alias.value
+      acceptedBlockReference?.takeIf { identityIsCurrent }?.takeIf {
+        it.belongsToIdentity(record.workflowId, lastResumableStep, identity)
       }
-    return copy(acceptedBlockReference = retained ?: reference)
+    return copy(acceptedBlockReference = retained ?: childCause ?: reference)
   }
+
+  private fun GoalRunnerAcceptedBlockReference.belongsToIdentity(
+    workflowId: String,
+    stepId: String,
+    identity: BlockIncidentIdentity,
+  ): Boolean =
+    if (sourceWorkflowId != workflowId) {
+      sourceWorkflowId == identity.childWorkflowId && incidentToken == identity.childIncidentToken
+    } else {
+      matchesIdentity(workflowId, stepId, identity.attempt, identity.generation) &&
+        incidentToken == identity.incidentToken && aliasValue == identity.alias.value
+    }
 
   fun reviewState(workflowId: String): GoalSubtaskReviewState? =
     database.read { unitOfWork ->

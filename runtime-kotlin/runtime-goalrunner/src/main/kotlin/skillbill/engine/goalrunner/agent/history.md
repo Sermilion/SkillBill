@@ -9,6 +9,16 @@ Areas: runtime-goalrunner, runtime-cli, runtime-contracts, runtime-ports, runtim
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented
 
+## [2026-11-04] SKILL-477.1 fix confirmed assessment findings
+Areas: runtime-goalrunner assessment and persistence, runtime-engine unit-test review, runtime-domain assessment, runtime-contracts, runtime-ports, runtime-infra workflow, orchestration/contracts
+- The first assessment round reviews existing unit tests in the committed goal scope. It records a distinct completed review identity even for an empty test scope and fails closed when scope or read-only integrity cannot be established.
+- Assessment requires a complete counted projection and completion marker. Malformed, incomplete or over-capacity output makes assessment unavailable rather than dropping findings.
+- Independent verification covers defect and test-value candidates at every severity. Confirmed findings enter focused repair and require same-reference verification after repair; open confirmed findings block publication. Refuted findings receive no repair authority.
+- reusable: the engine-owned unit-test value review is shared by standalone review and goal assessment.
+- Assessment record 0.3 carries the review identity and guarded production references. Version 0.2 records are quarantined and regenerated; resume retains only an actual completed review identity. Completed historical runs are not reopened.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented; subtask 5/5 implemented
+
 ## [2026-11-03] SKILL-472: reuse completed and cancelled keys for independent goals
 Areas: runtime-goalrunner, runtime-application/workflow/decomposition, runtime-domain, runtime-infra/sqlite
 - A key is reusable for new work only when every matching decomposed parent is completed or abandoned. Occupancy uses parent workflowStatus, not isActiveGoalRuntime. FAILED, RUNNING, PAUSED, BLOCKED, PENDING, and TIMED_OUT still occupy.

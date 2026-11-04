@@ -4,15 +4,38 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
+import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.TrayTab
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 
 /** In-memory settings that apply the same blank-path rule as the DataStore repository. */
 class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : AppSettingsRepository {
   override val settings = MutableStateFlow(initial)
+  private val favoriteReadFailureState = MutableStateFlow(false)
+  private val specFavoriteReadFailureState = MutableStateFlow(false)
+  override val favoriteWork = combine(settings, favoriteReadFailureState) { current, readFailure ->
+    val result: Outcome<Set<FavoriteWorkKey>, SettingsRejection> =
+      if (readFailure) Outcome.Failure(SettingsRejection.ReadFailed) else Outcome.Success(current.favoriteWork)
+    result
+  }
+  override val favoriteSpecs = combine(settings, specFavoriteReadFailureState) { current, readFailure ->
+    val result: Outcome<Set<FavoriteSpecKey>, SettingsRejection> =
+      if (readFailure) Outcome.Failure(SettingsRejection.ReadFailed) else Outcome.Success(current.favoriteSpecs)
+    result
+  }
+  var favoriteWriteFailure = false
+  var specFavoriteWriteFailure = false
+  var favoriteReadFailure: Boolean
+    get() = favoriteReadFailureState.value
+    set(value) { favoriteReadFailureState.value = value }
+  var specFavoriteReadFailure: Boolean
+    get() = specFavoriteReadFailureState.value
+    set(value) { specFavoriteReadFailureState.value = value }
 
   override suspend fun setDatabasePath(path: String?): Outcome<Unit, SettingsRejection> {
     if (!path.isNullOrEmpty() && path.isBlank()) return Outcome.Failure(SettingsRejection.BlankDatabasePath)
@@ -34,6 +57,14 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   }
 
   override suspend fun setTrayLastTab(tab: TrayTab) = change { it.copy(trayLastTab = tab) }
+
+  override suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean) = if (favoriteWriteFailure) {
+    Outcome.Failure(SettingsRejection.WriteFailed)
+  } else change { it.copy(favoriteWork = if (favorite) it.favoriteWork + key else it.favoriteWork - key) }
+
+  override suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean) = if (specFavoriteWriteFailure) {
+    Outcome.Failure(SettingsRejection.WriteFailed)
+  } else change { it.copy(favoriteSpecs = if (favorite) it.favoriteSpecs + key else it.favoriteSpecs - key) }
 
   private fun change(transform: (AppSettings) -> AppSettings): Outcome<Unit, SettingsRejection> {
     settings.update(transform)

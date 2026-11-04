@@ -48,4 +48,13 @@ class ChatThreadTest {
 
     assertEquals(listOf(ChatMessage.Operator("[Image #1] [Image #2]", null)), thread.historyLines().map(::restored))
   }
+
+  @Test
+  fun `a start confirmation notice restores as a confirmation`() {
+    val text = "Started goal run APP-1. $START_AGAIN_SUFFIX"
+    val notice = restored(ChatHistoryLine(ChatHistoryRole.Notice, text)) as ChatMessage.Notice
+    assertEquals(text, notice.text)
+    assertEquals(true, notice.confirmation)
+    assertEquals(false, (restored(ChatHistoryLine(ChatHistoryRole.Notice, "Stopped")) as ChatMessage.Notice).confirmation)
+  }
 }

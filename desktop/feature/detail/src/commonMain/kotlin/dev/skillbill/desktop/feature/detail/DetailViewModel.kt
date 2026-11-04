@@ -2,30 +2,34 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
-import dev.skillbill.desktop.core.domain.model.ControlOutcome
+import dev.skillbill.desktop.core.common.Outcome
+import dev.skillbill.desktop.core.domain.model.ActivityResult
+import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
-import dev.skillbill.desktop.core.domain.model.liveRows
-import dev.skillbill.desktop.core.domain.model.BoardSectionKind
+import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
+import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
+import dev.skillbill.desktop.core.domain.model.selectableSubtaskIds
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
-import dev.skillbill.desktop.core.domain.repository.WorkActivityRepository
-import dev.skillbill.desktop.core.domain.model.ActivityResult
+import dev.skillbill.desktop.core.domain.model.liveRows
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.repository.WorkActivityRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.board.ShellBoard
@@ -34,6 +38,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.input.ScreenKey
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -77,7 +82,8 @@ class DetailViewModel(
   private val subtaskSelections: SubtaskSelections,
   private val clock: Clock,
   workControls: WorkControlRepository,
-  toasts: ToastQueue,
+  private val toasts: ToastQueue,
+  private val settings: AppSettingsRepository,
 ) : ViewModel() {
   private val mutableState = MutableStateFlow(
     DetailUiState(
@@ -100,12 +106,48 @@ class DetailViewModel(
   private var latestBoardItems = listOf(item)
   private var relaunchedPhase: StandaloneRelaunch? = null
   private var launchAccepted = false
+  private var confirmedFavorites = emptySet<FavoriteWorkKey>()
+  private var favoritesAvailable = false
+  private var resolvedSessionId: Long? = null
+  private var favoriteWrite: FavoriteWrite? = null
+  private var favoriteRequest: Job? = null
+  private var favoriteRequestId = 0L
+
+  private data class FavoriteWrite(
+    val requestId: Long,
+    val sessionId: Long,
+    val key: FavoriteWorkKey,
+    val desired: Boolean,
+    var writeSucceeded: Boolean = false,
+  )
 
   private val controls = DetailControls(viewModelScope, workControls, toasts, ::launchStarted, ::launchFinished) { mutableState.value }
 
   init {
     selection.select(null)
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
+    settings.favoriteWork.onEach { result ->
+      when (result) {
+        is Outcome.Success -> {
+          confirmedFavorites = result.value
+          favoritesAvailable = true
+          updateFavoriteState()
+          favoriteWrite?.takeIf { it.writeSucceeded && (it.key in confirmedFavorites) == it.desired }?.let { finishFavoriteWrite(it.requestId) }
+        }
+        is Outcome.Failure -> {
+          favoritesAvailable = false
+          updateFavoriteState()
+          toasts.show(ToastMessage(ToastTone.Problem, "Couldn't read saved favorites. Try again later."))
+          favoriteWrite?.takeIf { it.writeSucceeded }?.let {
+            toasts.show(ToastMessage(ToastTone.Problem, "Couldn't confirm this favorite. Try again."))
+            finishFavoriteWrite(it.requestId)
+          }
+        }
+      }
+    }.launchIn(viewModelScope)
+    session.state.map { (it as? DatabaseSessionState.Open)?.sessionId }.distinctUntilChanged().onEach { sessionId ->
+      if (resolvedSessionId != sessionId) invalidateFavoriteForSessionChange()
+    }.launchIn(viewModelScope)
     observe()
     observeChanges()
     observeActivity()
@@ -170,6 +212,7 @@ class DetailViewModel(
     if (!state.value.itemResolved && action != DetailAction.Retry && action !is DetailAction.Navigate) return
     when (action) {
       is ControlsAction -> controls.onAction(action)
+      DetailAction.ToggleFavorite -> toggleFavorite()
       is DetailAction.ToggleQaCase -> toggleQaCase(action.key)
       is DetailAction.SetAllQaCases -> mutableState.update { current -> current.copy(qaCaseOverrides = current.qaCaseOverrides + action.keys.associateWith { action.open }) }
       is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
@@ -242,21 +285,115 @@ class DetailViewModel(
   }
 
   private fun show(read: DetailState) {
-    val resolved = read.sections is DetailSections.Loaded &&
-      (session.state.value as? DatabaseSessionState.Open)?.sessionId == read.header.control.sessionId
+    val currentSessionId = (session.state.value as? DatabaseSessionState.Open)?.sessionId
+    if (resolvedSessionId != null && resolvedSessionId != currentSessionId) resetFavoriteForSessionChange()
+    val resolved = read.sections is DetailSections.Loaded && currentSessionId != null &&
+      currentSessionId == read.header.control.sessionId
+    if (resolved) resolvedSessionId = currentSessionId
     val header = read.header.withBoardVerdicts(latestBoardRow)
     if (resolved) selection.select(header)
     mutableState.update { current ->
+      val retained = current.itemResolved && resolvedSessionId != null && resolvedSessionId == currentSessionId &&
+        current.header.control.sessionId == currentSessionId
       val sections = when (val sections = read.sections) {
         // A detail that has shown its sections never returns to placeholders.
-        DetailSections.Pending -> current.sections.takeIf { it is SectionsUi.Loaded } ?: SectionsUi.Pending
+        DetailSections.Pending -> current.sections.takeIf { retained && it is SectionsUi.Loaded } ?: SectionsUi.Pending
         is DetailSections.Loaded -> SectionsUi.Loaded(sections.detail, sections.runOptions, sections.listCursors, sections.moreLists)
         DetailSections.Gone -> SectionsUi.Gone
         is DetailSections.Failed -> SectionsUi.Failed(sections.problem)
       }
       val stale = (read.sections as? DetailSections.Loaded)?.stale ?: (current.stale && sections is SectionsUi.Loaded)
-      current.copy(header = header, sections = sections, itemResolved = current.itemResolved || resolved, stale = stale, renderedAt = clock.now())
+      current.copy(
+        header = header,
+        sections = sections,
+        itemResolved = resolved || (retained && read.sections is DetailSections.Pending),
+        stale = stale,
+        renderedAt = clock.now(),
+      )
     }
+    updateFavoriteState()
+  }
+
+  private fun favoriteKey(header: WorkItem): FavoriteWorkKey? =
+    header.control.databaseFile?.let { FavoriteWorkKey(it, header.id) }
+
+  private fun updateFavoriteState() {
+    val current = state.value
+    val sessionId = (session.state.value as? DatabaseSessionState.Open)?.sessionId
+    val isCurrent = current.itemResolved && resolvedSessionId == sessionId && sessionId == current.header.control.sessionId
+    val favorite = isCurrent && favoriteKey(current.header)?.let { it in confirmedFavorites } == true
+    mutableState.update { it.copy(favorite = favorite, favoriteAvailable = isCurrent && favoritesAvailable) }
+  }
+
+  private fun toggleFavorite() {
+    val current = state.value
+    if (!current.itemResolved || !current.favoriteAvailable || current.favoriteInFlight) return
+    val header = current.header
+    val sessionId = (session.state.value as? DatabaseSessionState.Open)?.sessionId ?: return
+    if (resolvedSessionId != sessionId || sessionId != header.control.sessionId) return
+    val key = favoriteKey(header)
+    if (key == null) {
+      toasts.show(ToastMessage(ToastTone.Problem, "This work item has no database identity, so it cannot be favorited."))
+      return
+    }
+    val desired = key !in confirmedFavorites
+    val requestId = ++favoriteRequestId
+    val write = FavoriteWrite(requestId, sessionId, key, desired)
+    favoriteWrite = write
+    mutableState.update { it.copy(favoriteInFlight = true) }
+    favoriteRequest = viewModelScope.launch {
+      try {
+        when (settings.setFavorite(key, desired)) {
+          is Outcome.Success -> if (isCurrentFavoriteWrite(write)) {
+            write.writeSucceeded = true
+            when {
+              !favoritesAvailable -> {
+                toasts.show(ToastMessage(ToastTone.Problem, "Couldn't confirm this favorite. Try again."))
+                finishFavoriteWrite(requestId)
+              }
+              (key in confirmedFavorites) == desired -> finishFavoriteWrite(requestId)
+            }
+          }
+          is Outcome.Failure -> if (isCurrentFavoriteWrite(write)) {
+            toasts.show(ToastMessage(ToastTone.Problem, "Couldn't save this favorite. Try again."))
+            finishFavoriteWrite(requestId)
+          }
+        }
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        if (isCurrentFavoriteWrite(write)) {
+          toasts.show(ToastMessage(ToastTone.Problem, "Couldn't save this favorite. Try again."))
+          finishFavoriteWrite(requestId)
+        }
+      }
+    }
+  }
+
+  private fun invalidateFavoriteForSessionChange() {
+    resetFavoriteForSessionChange()
+    observe()
+  }
+
+  private fun resetFavoriteForSessionChange() {
+    resolvedSessionId = null
+    favoriteRequestId++
+    favoriteRequest?.cancel()
+    favoriteRequest = null
+    favoriteWrite = null
+    mutableState.update { it.copy(itemResolved = false, sections = SectionsUi.Pending, favorite = false, favoriteAvailable = false, favoriteInFlight = false) }
+  }
+
+  private fun isCurrentFavoriteWrite(write: FavoriteWrite): Boolean = favoriteWrite === write &&
+    favoriteRequestId == write.requestId && resolvedSessionId == write.sessionId &&
+    state.value.header.control.sessionId == write.sessionId &&
+    (session.state.value as? DatabaseSessionState.Open)?.sessionId == write.sessionId
+
+  private fun finishFavoriteWrite(requestId: Long) {
+    if (favoriteWrite?.requestId != requestId) return
+    favoriteWrite = null
+    favoriteRequest = null
+    mutableState.update { it.copy(favoriteInFlight = false) }
   }
 
   /**
@@ -314,7 +451,7 @@ class DetailViewModel(
     if (!state.value.header.showsChanges) return
     if (scope is ChangeScope.Subtasks) {
       val listed = state.value.changes.subtasks as? SubtaskScopesState.Listed ?: return
-      if (listed.subtasks.none { it.id == scope.from && it.selectable }) return
+      if (scope.from !in selectableSubtaskIds(listed.subtasks)) return
     }
     effectChannel.trySend(DetailEffect.OpenChangesWindow(state.value.header, scope))
   }

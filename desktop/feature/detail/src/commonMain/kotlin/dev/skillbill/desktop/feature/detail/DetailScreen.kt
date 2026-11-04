@@ -22,6 +22,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -119,6 +121,18 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         Crumb(rowKey(item)),
       ),
       actions = {
+        SbIconButton(
+          LucideIcons.star,
+          when {
+            !state.favoriteAvailable -> "Favorite status unavailable"
+            state.favorite -> "Remove favorite"
+            else -> "Add favorite"
+          },
+          { onAction(DetailAction.ToggleFavorite) },
+          modifier = Modifier.semantics { selected = state.favorite },
+          selected = state.favorite,
+          enabled = state.favoriteAvailable && !state.favoriteInFlight,
+        )
         if (qaRow) {
           loaded?.let { loadedDetail ->
             qaRunPager(item, loadedDetail.detail, state.selectedQaRun)?.let { pager ->

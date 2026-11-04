@@ -2,8 +2,9 @@ package skillbill.goalrunner.assessment
 
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
-import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
+import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
+import skillbill.goalrunner.assessment.model.GoalAssessmentFixValidation
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionState
 import skillbill.goalrunner.assessment.model.GoalAssessmentScenarioVerdict
@@ -17,7 +18,7 @@ object GoalAssessmentLoopRules {
     record.rounds.flatMap { it.findings }.filter { it.state == GoalAssessmentFindingState.OPEN }
 
   fun pendingRefs(record: GoalAssessmentRecord): List<String> =
-    openFindings(record).filter { it.kind == GoalAssessmentFindingKind.DEFECT }.map { it.findingRef } +
+    openFindings(record).map { it.findingRef } +
       record.rounds.flatMap { it.scenarios }.associateBy { it.scenarioRef }.values
         .filter { it.verdict == GoalAssessmentScenarioVerdict.BROKEN }.map { it.scenarioRef } +
       record.rounds.flatMap { it.regressions }.associateBy { it.regressionRef }.values
@@ -29,7 +30,23 @@ object GoalAssessmentLoopRules {
         RepairTargetProgress(
           ref,
           record.rounds.count {
-            it.round >= record.budgetStartRound && it.targetRef == ref && it.fix != null
+            it.round >= record.budgetStartRound &&
+              it.targetRef == ref &&
+              (
+                it.fix?.let { fix ->
+                  (
+                    fix.status == GoalAssessmentFixStatus.NO_CHANGE &&
+                      fix.validation == GoalAssessmentFixValidation.NOT_RUN &&
+                      fix.commitSha == null &&
+                      fix.changedFiles.isEmpty()
+                  ) ||
+                    (
+                      fix.status == GoalAssessmentFixStatus.COMPLETED &&
+                        fix.validation == GoalAssessmentFixValidation.PASSED &&
+                        fix.commitSha != null
+                    )
+                } == true
+              )
           },
         )
       }

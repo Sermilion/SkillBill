@@ -58,7 +58,7 @@ internal fun FileListPane(state: ChangesWindowUiState, onAction: (ChangesWindowA
       ScopeListUi.Loading -> PaneMessage("Loading changes")
       is ScopeListUi.BaseUnavailable -> PaneMessage("Base commit unavailable: ${list.reason}")
       is ScopeListUi.NotARepository -> PaneMessage("${list.worktreeRoot} is not a git repository")
-      is ScopeListUi.TooManyCommits -> PaneMessage("More than ${list.limit} commits outside subtasks.")
+      is ScopeListUi.TooManyCommits -> PaneMessage("More than ${list.limit} commits to read one by one.")
       is ScopeListUi.Unavailable -> PaneMessage(readProblemText(list.problem))
       is ScopeListUi.Listed -> when {
         list.changes.files.isEmpty() -> PaneMessage("No changes in this scope.")

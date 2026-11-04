@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
@@ -167,6 +168,17 @@ class AgentChatTransportsTest {
     val prompt = launcher.commands[1].argv.last()
     assertTrue("Operator:\noperator prompt\n\nYou:\nFirst answer" in prompt)
     assertTrue(prompt.endsWith("The operator's new message:\n\noperator prompt"))
+  }
+
+  @Test
+  fun `junie keeps a stopped turn in the next prompt`() = runTest {
+    val launcher = ScriptedLauncher(listOf(lines("Partial answer"), lines("Second answer")))
+    val transport = JunieChatTransport(host, launcher, store, RecordingDiagnostics())
+
+    transport.run(chatRequest(agent = ChatAgent("junie", null, null))).first()
+    transport.run(chatRequest(agent = ChatAgent("junie", null, null), firstTurn = false)).toList()
+
+    assertTrue("Operator:\noperator prompt\n\nYou:\nPartial answer" in launcher.commands[1].argv.last())
   }
 
   // Codex reads images from files, so each pasted image must reach it as a real absolute path, and leave with the session.

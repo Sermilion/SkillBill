@@ -8,9 +8,16 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.idestatus.model.WorkChangeBaseline
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.workchanges.WorkChangesPort
+import skillbill.ports.workchanges.model.WorkChangeListResult
+import skillbill.ports.workchanges.model.WorkChangedFile
+import skillbill.ports.workchanges.model.WorkCommitTimelineResult
+import skillbill.ports.workchanges.model.WorkFileDiffResult
 import skillbill.ports.workchanges.model.WorkGoalScopesResult
+import skillbill.ports.workchanges.model.WorkGoalTimelineResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
@@ -25,8 +32,10 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalCo
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class WorkChangeScopesServiceTest {
+  private var lastService: WorkChangeScopesService? = null
   private val warnings = mutableListOf<String>()
   private val diagnostics =
     object : RuntimeDiagnostics {
@@ -52,33 +61,49 @@ class WorkChangeScopesServiceTest {
     val listed = assertIs<WorkGoalScopesResult.Listed>(scopes(subtasks))
 
     assertEquals((1..120).toList(), listed.subtasks.map { it.id })
-    assertEquals(sha(120), listed.subtasks.last().endSha)
+    assertEquals(sha(120), listed.subtasks.last().recordedSha)
   }
 
   @Test
-  fun `start falls back to the previous end with one warning and the end prefers manifest then artifact`() {
+  fun `recorded sha prefers manifest then commit push artifact and keeps child paths`() {
     val workflows = IdeStatusWorkflowStates()
-    saveChild(workflows, "w-2", reviewBase = null, commitPushSha = sha(2))
+    saveChild(workflows, "w-2", reviewBase = sha(1), commitPushSha = sha(2))
     saveChild(workflows, "w-3", reviewBase = sha(2), commitPushSha = null, untracked = listOf("notes.txt"))
-    saveChild(workflows, "w-4", reviewBase = sha(2), commitPushSha = sha(44))
     val subtasks =
       listOf(
         subtask(1, "complete", commitSha = sha(1)),
         subtask(2, "complete", workflowId = "w-2"),
         subtask(3, "completed_no_change", workflowId = "w-3"),
-        subtask(4, "complete", workflowId = "w-4", commitSha = sha(4)),
+        subtask(4, "complete", workflowId = "w-2", commitSha = sha(4)),
       )
 
     val listed = assertIs<WorkGoalScopesResult.Listed>(scopes(subtasks, workflows))
 
-    assertEquals(
-      listOf(null to sha(1), sha(1) to sha(2), sha(2) to sha(2), sha(2) to sha(4)),
-      listed.subtasks.map { it.startSha to it.endSha },
-      warnings.toString(),
-    )
+    assertEquals(listOf(sha(1), sha(2), null, sha(4)), listed.subtasks.map { it.recordedSha })
     assertEquals(listOf("notes.txt"), listed.subtasks[2].baselineUntrackedPaths)
-    assertEquals(1, warnings.size, warnings.toString())
-    assertEquals(true, "subtask=2 value_used=${sha(1)}" in warnings.single(), warnings.single())
+    assertTrue(warnings.isEmpty(), warnings.toString())
+  }
+
+  @Test
+  fun `timeline from a different branch is reported without attribution`() {
+    EmptyWorkChangesPort.timelineResult =
+      WorkCommitTimelineResult.Listed(
+        "base",
+        "head",
+        "other",
+        emptyList(),
+        emptySet(),
+      )
+    val listed = assertIs<WorkGoalScopesResult.Listed>(scopes(listOf(subtask(1, "complete", commitSha = sha(1)))))
+
+    val result =
+      assertIs<WorkGoalTimelineResult.OnOtherBranch>(
+        lastService!!.goalSubtaskTimeline(listed),
+      )
+
+    assertEquals("other", result.currentBranch)
+    assertEquals(1, warnings.size)
+    EmptyWorkChangesPort.timelineResult = WorkCommitTimelineResult.Failed("unused")
   }
 
   @Test
@@ -148,7 +173,8 @@ class WorkChangeScopesServiceTest {
       testWorkBoardItemProjection(database),
       testGoalRunnerStatusService(EmptyManifestStore, EmptyOutcomeStore),
       diagnostics,
-    )
+      EmptyWorkChangesPort,
+    ).also { lastService = it }
 
   private fun manifest(
     subtasks: List<DecompositionSubtask>,
@@ -222,4 +248,38 @@ class WorkChangeScopesServiceTest {
   }
 
   private fun sha(n: Int): String = n.toString().padStart(40, '0')
+
+  private object EmptyWorkChangesPort : WorkChangesPort {
+    var timelineResult: WorkCommitTimelineResult = WorkCommitTimelineResult.Failed("unused")
+
+    override fun changes(baseline: WorkChangeBaseline) = WorkChangeListResult.Failed("unused")
+
+    override fun fileDiff(
+      worktreeRoot: String,
+      baseSha: String,
+      file: WorkChangedFile,
+    ) = WorkFileDiffResult.Failed("unused")
+
+    override fun committedChanges(
+      worktreeRoot: String,
+      fromSha: String,
+      toSha: String,
+    ) = WorkChangeListResult.Failed("unused")
+
+    override fun committedFileDiff(
+      worktreeRoot: String,
+      fromSha: String,
+      toSha: String,
+      file: WorkChangedFile,
+    ) = WorkFileDiffResult.Failed("unused")
+
+    override fun uncommittedChanges(worktreeRoot: String) = WorkChangeListResult.Failed("unused")
+
+    override fun commitTimeline(
+      worktreeRoot: String,
+      targetBranch: String?,
+      recordedShas: List<String>,
+      headBranch: String?,
+    ) = timelineResult
+  }
 }

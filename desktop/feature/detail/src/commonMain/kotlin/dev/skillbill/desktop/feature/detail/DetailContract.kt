@@ -25,6 +25,9 @@ data class DetailUiState(
   val stale: Boolean,
   val renderedAt: Instant,
   val itemResolved: Boolean = true,
+  val favorite: Boolean = false,
+  val favoriteAvailable: Boolean = false,
+  val favoriteInFlight: Boolean = false,
   val listLoads: Map<DetailList, ListLoad> = emptyMap(),
   val boardPosition: BoardPosition? = null,
   val controls: ControlsUiState = ControlsUiState(),
@@ -92,6 +95,7 @@ data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?
 data class QaCaseKey(val invocationId: String, val caseId: String)
 
 sealed interface DetailAction {
+  data object ToggleFavorite : DetailAction
   data class ToggleQaCase(val key: QaCaseKey) : DetailAction
   data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction
   data class SelectQaRun(val invocationId: String?) : DetailAction

@@ -97,7 +97,11 @@ class GoalAssessmentRecordContractTest {
             round = 1,
             headSha = "a".repeat(HEAD_SHA_LENGTH),
             scopeFiles = emptyList(),
-            assessorRuns = listOf(GoalAssessmentRun(GoalAssessmentRole.SUBTASK, 1, GoalAssessmentRunStatus.COMPLETED)),
+            assessorRuns =
+              listOf(
+                GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.COMPLETED),
+                GoalAssessmentRun(GoalAssessmentRole.SUBTASK, 1, GoalAssessmentRunStatus.COMPLETED),
+              ),
             findings =
               listOf(
                 GoalAssessmentFinding(
@@ -116,6 +120,22 @@ class GoalAssessmentRecordContractTest {
                   disposition = GoalAssessmentDisposition.PR_ONLY,
                   state = GoalAssessmentFindingState.OPEN,
                 ),
+                GoalAssessmentFinding(
+                  findingRef = "GA-002",
+                  kind = GoalAssessmentFindingKind.TEST_VALUE,
+                  severity = FeatureTaskRuntimeReviewSeverity.MINOR,
+                  path = "src/MainTest.kt",
+                  line = 18,
+                  failureScenario = "the regression test still passes when the handler drops the event",
+                  guardedRef = "src/Main.kt:44",
+                  subtaskId = null,
+                  originRound = 1,
+                  verification = GoalAssessmentVerification.UNVERIFIED,
+                  verificationEvidence = "",
+                  fixRoundsSurvived = 0,
+                  disposition = GoalAssessmentDisposition.PR_ONLY,
+                  state = GoalAssessmentFindingState.OPEN,
+                ),
               ),
             scenarios = emptyList(),
             regressions = emptyList(),
@@ -123,7 +143,7 @@ class GoalAssessmentRecordContractTest {
           ),
         ),
       exitReason = null,
-      openFindingRefs = listOf("GA-001"),
+      openFindingRefs = listOf("GA-001", "GA-002"),
     )
 
   private companion object {

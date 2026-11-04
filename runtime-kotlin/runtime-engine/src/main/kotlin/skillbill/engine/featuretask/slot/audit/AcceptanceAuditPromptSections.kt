@@ -43,7 +43,8 @@ internal object AcceptanceAuditPromptSections {
   private const val RECHECK_DIRECTIVE: String =
     "Re-check every listed accepted criterion against the current tree: read the production code its closure " +
       "evidence cites together with the files the repair touched, answer holds with fresh path:line evidence " +
-      "when its required behavior still holds, or regressed when a change broke it. A regressed answer " +
+      "when its required behavior still holds. Separate path:line citations with commas or semicolons. Answer " +
+      "regressed when a change broke the behavior. A regressed answer " +
       "reopens that criterion for repair. "
 
   private const val TRACE_COMMON: String =
@@ -65,12 +66,12 @@ internal object AcceptanceAuditPromptSections {
     "Report the trace and the re-check in ordinary prose and end with exactly one Interaction line per " +
       "pending ref and exactly one Recheck line per listed criterion, in the grammar given at the end of the " +
       "scope. There is no Open criteria line and no criterion list. Do not repair anything. Malformed output " +
-      "is re-asked once, then pending scenarios are recorded as unknown and every re-check as holding."
+      "is re-asked once. An unresolved re-check cannot be recorded as holding."
 
   private const val RECHECK_ONLY_VALUE_CONTENT: String =
     "Report the re-check in ordinary prose and end with exactly one Recheck line per listed criterion, in the " +
       "grammar given at the end of the scope. There is no Open criteria line and no criterion list. Do not " +
-      "repair anything. Malformed output is re-asked once and then every re-check is recorded as holding."
+      "repair anything. Malformed output is re-asked once. An unresolved re-check cannot be recorded as holding."
 
   private fun traceDirective(trace: AcceptanceAuditInteractionTraceScope): String {
     val scenarios = trace.pendingRefs.isNotEmpty()

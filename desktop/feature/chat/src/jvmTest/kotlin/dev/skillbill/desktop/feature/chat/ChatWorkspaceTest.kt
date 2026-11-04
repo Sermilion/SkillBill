@@ -912,16 +912,21 @@ class ChatWorkspaceTest {
   }
 
   @Test
-  fun `start action on stopped execution calls startNewTask in that worktree`() = runTest {
-    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(running = false, repositoryRoot = "/work/execution-tree")
+  fun `start action on stopped execution runs in the goal worktree and names the main repository`() = runTest {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(
+      running = false,
+      repositoryRoot = "/work/repo",
+      goalWorktree = GoalWorktree("/work/goals/SKILL-1/checkout", GoalWorktreeState.Active, null, null),
+    )
     details.details = mapOf(item.id to flowOf(loaded(item)))
-    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("verify", NewTaskKind.Verify)
     val action = ChatSuggestedAction(
-      "Monitor",
-      "Run monitor.",
+      "Run operation:verify",
+      "Verify the branch.",
       ChatPermissionMode.Act,
-      NewTaskActionKind.Monitor,
-      target = "https://github.com/org/repo/pull/2",
+      NewTaskActionKind.Verify,
+      target = "SKILL-1",
+      branch = "feat/fp-5175",
     )
     chat.events = {
       flowOf(ChatEvent.TextDelta("Ready."), ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed)
@@ -940,9 +945,11 @@ class ChatWorkspaceTest {
     assertIs<ChatMessage.Notice>(session.transcript.value.last())
     assertEquals(1, controls.newTaskRequests.size)
     with(controls.newTaskRequests.single()) {
-      assertEquals("/work/execution-tree", repoRoot)
-      assertEquals(NewTaskKind.Monitor, kind)
-      assertEquals("https://github.com/org/repo/pull/2", target)
+      assertEquals("/work/repo", repoRoot)
+      assertEquals("/work/goals/SKILL-1/checkout", checkoutRoot)
+      assertEquals(NewTaskKind.Verify, kind)
+      assertEquals("SKILL-1", target)
+      assertEquals("feat/fp-5175", branch)
       assertEquals("claude", agentId)
       assertEquals(1L, expectedDatabaseSessionId)
     }

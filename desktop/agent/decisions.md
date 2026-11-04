@@ -3,6 +3,46 @@ Context: Desktop needs to refuse live export before file selection and show arch
 Decision: Delegate preflight and inspection through WorkControlRepository. Recheck export admission and bind import to the inspected fingerprint and selected database observation.
 Reason: The runtime owns liveness and restore rules. The fingerprint prevents confirmation of one archive from authorizing a changed archive.
 
+## [2026-11-04] Keep spec favorite reveals pending through project loading
+Context: Selecting a bundle immediately after switching projects can be dropped while the new tree loads. A favorite can also refer to a project other than the one currently followed.
+Decision: Keep the requested project and bundle path pending until the matching tree loads, and give that request precedence over automatic project following. Open the Specs pane for the selection rather than navigating to a run detail.
+Reason: The loaded tree is needed to reconcile the bundle selection, and a spec favorite identifies a bundle independently of any live run.
+
+## [2026-11-04] Start chat actions in the chat's checkout or on the named branch
+Context: An execution chat's agent works in the goal worktree, but start actions ran in the repository root, and a start for another branch ran against whatever the chat's checkout had checked out.
+Decision: Chat actions carry an optional `branch`. `NewTaskStart` keeps `repoRoot` as the main repository for identity and reservations, and adds `checkoutRoot` and `branch` for where a standalone phase or operation runs; the runtime resolves the branch to a checkout. The execution chat passes its `checkoutRoot`. Standalone reservation keys include the branch so starts for different branches do not block each other. Monitor drops the branch and keeps `target` `branch:<name>`.
+Reason: The reservation and the runtime launch ownership must stay keyed on the repository, while the working directory follows the checkout the operator meant.
+
+## [2026-11-03] Claim destroyTree once so cancel cannot wait twice
+Context: A cancelled runProcess calls destroyTree from the killer finally and again from the outer finally.
+Decision: destroyTree returns unless live.remove(process) succeeds. Both call sites stay. The shutdown hook uses signalTree, SIGTERM only.
+Reason: Without the claim, a process that survives SIGKILL would wait 8s and record chat.process_force_killed twice, which exceeds STOP_WAIT_MS. The killer must still escalate because it unblocks process.waitFor.
+
+## [2026-11-03] Read chat stdout on a daemon thread
+Context: useLines blocked in readLine, and flowOn made the collector wait for that producer. An orphaned child outside the descendant list can hold stdout after cancel.
+Decision: stdoutLines reads on daemon thread chat-stdout into a buffered Channel. The flow emits those lines then waitFor, and cancel closes the channel and still runs destroyTree.
+Reason: The collection must finish without waiting for the pipe to close. The daemon may live until the pipe closes; it holds no coroutine and cannot block JVM exit. Elapsed-time tests are forbidden, so AC-002 has no unit test.
+
+## [2026-11-03] Wait for a stopped Claude job, then open anyway
+Context: ClaudeChatTransport.stop cancelled the session job and registered opened a new process at once, so two claude processes could write the same session.
+Decision: stop records the job in stopping before cancel. run joins that job for STOP_WAIT_MS (5s) before registered. On timeout it records chat.stop_wait_expired and continues. Different session ids do not wait on each other.
+Reason: 5s is longer than SIGTERM plus force-kill. A stuck job must not block chat forever. Registering stopping before remove keeps a concurrent run from seeing the session gone with no entry.
+
+## [2026-11-03] Keep a stopped Junie execution exchange
+Context: JunieChatTransport saved exchanges only on Completed, so a cancelled turn vanished from the next prompt.
+Decision: onCompletion saves history plus the prompt and trimmed reply when the cause is CancellationException, the reply is not blank, and scope is not NewTask.
+Reason: The next execution turn reads store.exchanges. New-task Junie builds history from saved draft lines, which subtask 3 keeps current, so this path must not write them.
+
+## [2026-11-03] Scope and resolve favorites by database file identity
+Context: Run IDs can occur in different databases, files can be replaced at the same path, and saved runs can fall outside the Day board window.
+Decision: Persist the normalized observed path, file key and work ID in versioned, length-prefixed keys. Resolve matching keys through session detail reads fenced by file observations, and retain unavailable or unsupported entries.
+Reason: Board membership cannot establish whether an older run exists, and an ID alone cannot identify its database. File and session checks prevent stale results from opening the wrong run; retaining entries avoids data loss on transient failures or unsupported formats.
+
+## [2026-11-03] Confirm favorite changes against settings and the active session
+Context: A settings write can fail or finish as the user switches databases.
+Decision: Render membership from confirmed settings, serialize toggles, and cancel or invalidate pending results when the session changes.
+Reason: A failed write must not appear successful, and an old session's completion must not change the new session's control.
+
 ## [2026-11-03] Give non-Claude agents pasted images as file paths, Claude as content blocks
 Context: Chat turns can carry pasted images. Claude's stream-json input accepts base64 image content blocks. Codex, Cursor and Junie take only text on stdin or argv.
 Decision: Claude receives image blocks in the user message. The other three save each image to a per-session temp directory and append a footer listing absolute file paths. Each deletes the directory in end(sessionId), and saved history keeps only the typed prompt.

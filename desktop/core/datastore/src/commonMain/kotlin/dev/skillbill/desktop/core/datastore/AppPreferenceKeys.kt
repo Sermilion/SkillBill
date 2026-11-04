@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.datastore
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 
 /** Every preference name the app stores. No other file spells a key. */
@@ -16,6 +17,8 @@ internal object AppPreferenceKeys {
   val START_AT_LOGIN = booleanPreferencesKey("start_at_login")
   val TERMINAL_HEIGHT_DP = intPreferencesKey("terminal_height_dp")
   val TRAY_LAST_TAB = stringPreferencesKey("tray_last_tab")
+  val FAVORITE_WORK = stringSetPreferencesKey("favorite_work")
+  val FAVORITE_SPECS = stringSetPreferencesKey("favorite_specs")
 
   private val NOTIFY_BLOCKED = booleanPreferencesKey("notify_blocked")
   private val NOTIFY_FAILED = booleanPreferencesKey("notify_failed")

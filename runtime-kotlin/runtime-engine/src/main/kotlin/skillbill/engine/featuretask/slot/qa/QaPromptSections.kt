@@ -100,10 +100,13 @@ internal object QaPromptSections {
     |
     |- QA may build and install the app artifact the pack guidance names, and may run device or instrumentation
     |  tests for the flows the acceptance criteria cover.
-    |- QA may edit any file in the QA checkout to reach a state the criteria need but the environment cannot
-    |  produce: inject a fault, force an error response, add a debug hook, or shorten a timeout. Rebuild after such
-    |  an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit, push, or open
-    |  a pull request. QA reports findings; it does not repair them.
+    |- When a criterion or changed behavior needs a state the environment does not produce on its own, QA forces
+    |  it. Edit any file in the QA checkout to inject a fault, force an error response, add a debug hook, or shorten
+    |  a timeout, or change the environment, for example by cutting the network while a response streams. Rebuild
+    |  after such an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit,
+    |  push, or open a pull request. QA reports findings; it does not repair them.
+    |- That the environment could not produce a state is never a reason to leave a flow unexercised. Report a flow
+    |  as not exercised only when a forced attempt failed, and name what you tried and why it failed.
     |- For device QA, build, install, launch, and sign in as needed. An existing signed-in session may be used;
     |  synthetic account provenance is not a prerequisite. Every in-app action needed by the acceptance criteria
     |  is allowed, including creating, editing, deleting records, and logging out.
@@ -256,6 +259,10 @@ internal object QaPromptSections {
     |  [--note <text>] [--finding <finding id> [--finding-title <title>]] [--evidence <path>]...`. Steps count
     |  from 1 within their case. Pass the finding id you use in the report, and evidence paths that start with
     |  `${qa.expected.evidencePrefix}`.
+    |- Report each step when it happens, not in a batch at the end: the runtime rejects progress once the QA run
+    |  has finished, and steps never reported stay pending. Send one command per step with every value written
+    |  out, without shell variables, loops or functions, because the permission policy can deny those. If the
+    |  harness denies a progress command, send each step again as its own literal command.
     |- Progress commands never decide the verdict; the report does. A non-zero exit or a printed `rejected` or
     |  `failed` means nothing changed: continue QA without retrying the same command.
     |- The redaction rules for the report also apply to notes and target details.

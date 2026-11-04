@@ -46,6 +46,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
+import dev.skillbill.desktop.core.ui.changes.CommitStrip
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 import dev.skillbill.desktop.core.ui.changes.hairlineTop
@@ -107,7 +108,19 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
       is WindowContent.Problem -> CenterHint(readProblemText(content.problem))
       is WindowContent.Ready -> {
         ScopeToolbar(state, onAction, pickerSearch, filterFocus) { filterFocused = it }
-        if (state.subtasksAvailable) {
+        if (state.view == ChangesView.Commits && state.commits.isEmpty()) {
+          Box(Modifier.fillMaxWidth().padding(vertical = 18.dp), contentAlignment = Alignment.Center) { Hint("No commits on this branch yet.") }
+        } else if (state.view == ChangesView.Commits) {
+          Box(Modifier.fillMaxWidth().background(colors.bgPanel).hairlineBottom(colors.border).padding(horizontal = 14.dp, vertical = 8.dp)) {
+            CommitStrip(
+              state.commits,
+              state.commitStats,
+              (state.scope as? ChangeScope.Commits)?.shas?.toSet().orEmpty(),
+              onPick = { sha, extend -> onAction(ChangesWindowAction.PickCommit(sha, extend, false)) },
+              onDrag = { from, to -> onAction(ChangesWindowAction.DragCommits(from, to)) },
+            )
+          }
+        } else if (state.subtasksAvailable) {
           val range = (state.scope as? ChangeScope.Subtasks)?.let { it.from..it.to }
           Box(
             Modifier.fillMaxWidth().background(colors.bgPanel).hairlineBottom(colors.border)
@@ -130,7 +143,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
             DiffPane(state, onAction, Modifier.weight(1f).fillMaxHeight())
           }
         }
-        ChangesFooter(state.subtasksAvailable)
+        ChangesFooter(state.subtasksAvailable, state.view)
       }
     }
   }
@@ -140,7 +153,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
 private fun CenterHint(text: String) = Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Hint(text) }
 
 @Composable
-private fun ChangesFooter(subtasksAvailable: Boolean) {
+private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView) {
   val colors = SkillBillTheme.colors
   val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
   Row(
@@ -149,8 +162,8 @@ private fun ChangesFooter(subtasksAvailable: Boolean) {
     verticalAlignment = Alignment.CenterVertically,
   ) {
     if (subtasksAvailable) {
-      FooterHint(listOf("s"), "pick subtask")
-      FooterHint(listOf("[", "]"), "previous / next subtask")
+      FooterHint(listOf("s"), if (view == ChangesView.Commits) "pick commit" else "pick subtask")
+      FooterHint(listOf("[", "]"), if (view == ChangesView.Commits) "previous / next commit" else "previous / next subtask")
     }
     FooterHint(listOf("a"), "all")
     FooterHint(listOf("j", "k"), "file")

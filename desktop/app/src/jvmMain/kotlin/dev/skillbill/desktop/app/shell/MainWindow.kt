@@ -44,6 +44,7 @@ import dev.skillbill.desktop.core.ui.navigation.PaneSlot
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellLayout
+import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.changes.ChangesWindowKeys
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.cancel
@@ -182,6 +183,8 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val panes = window.panes
   val session by window.session.state.collectAsState()
   val board by window.board.view.collectAsState()
+  val favorites by window.favorites.entries.collectAsState()
+  val specFavorites by window.favorites.specEntries.collectAsState()
   val newTaskDraft by window.chat.newTaskDraftOpen.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
@@ -197,6 +200,8 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
       ShellSidebar(
         topRoute = topRoute,
         sectionSizes = board.lastLoaded?.sections?.associate { it.kind to it.items.size },
+        favorites = favorites,
+        specFavorites = specFavorites,
         specsOpen = panes.specsOpen,
         terminalOpen = panes.terminalOpen,
         chatOpen = panes.chatOpen,
@@ -204,10 +209,18 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         contributions = window.entries.flatMap { it.sidebarItems },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,
-        onToggleSpecs = { panes.specsOpen = !panes.specsOpen },
+        onToggleSpecs = {
+          if (!panes.specsOpen) panes.drawerOpen = false
+          panes.specsOpen = !panes.specsOpen
+        },
         onToggleTerminal = window.terminal::toggle,
         onToggleChat = window.chat::toggleChatPane,
         onShowShortcuts = { panes.shortcutsOpen = true },
+        onRemoveFavorite = window.favorites::remove,
+        onRemoveSpecFavorite = window.favorites::removeSpec,
+        onOpenSpecFavorite = { projectId, path ->
+          openSpecFavorite(panes, window.specsPane::open, window.specsPane::revealFavorite, projectId, path)
+        },
       )
     }
   }
@@ -224,4 +237,17 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
       }
     }
   }
+}
+
+internal fun openSpecFavorite(
+  panes: ShellPanes,
+  openSpecs: () -> Unit,
+  revealFavorite: (String, String) -> Unit,
+  projectId: String,
+  path: String,
+) {
+  panes.drawerOpen = false
+  openSpecs()
+  panes.specsOpen = true
+  revealFavorite(projectId, path)
 }

@@ -6,6 +6,36 @@ Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, des
 Feature flag: N/A
 Acceptance criteria: 4/4 implemented
 
+
+## [2026-11-04] SKILL-478 spec bundle favorites
+Areas: desktop/app/shell, desktop/core/domain, desktop/core/datastore, desktop/core/testing, desktop/feature/specs
+- FavoriteSpecKey identifies a bundle by project ID and spec-relative path. DataStore persists spec favorites separately from run favorites with versioned, length-prefixed keys. Database session changes do not define spec identity.
+- The Specs toolbar offers a favorite toggle only for bundles. The Favorites sidebar lists run favorites first, then spec favorites ordered by project and path; unavailable spec entries remain removable.
+- A spec favorite opens the Specs pane and selects the bundle after its project tree loads. The pending reveal takes precedence over automatic project following.
+- Limits: macOS and Windows desktop checks were not run on the Linux host. QA or validation reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
+## [2026-11-03] SKILL-469 subtask 1: agent process ending
+Areas: desktop/core/data chat
+- ChatProcesses.destroyTree snapshots descendants, sends SIGTERM, waits STOP_GRACE_MS (3s), force-kills survivors, records chat.process_force_killed once, then waits FORCE_WAIT_MS (1s). live.remove makes a second destroyTree from killer plus outer finally a no-op. The JVM shutdown hook uses signalTree, SIGTERM with no wait.
+- runProcess reads stdout on daemon thread chat-stdout through a buffered Channel. Cancel closes the channel and still runs destroyTree, even if an orphan holds the pipe.
+- ClaudeChatTransport.stopping joins the prior session job up to STOP_WAIT_MS (5s) before registered. Timeout records chat.stop_wait_expired and opens anyway. Different session ids do not wait on each other.
+- JunieChatTransport.onCompletion saves a cancelled execution turn when the reply is non-blank and scope is not NewTask.
+- Limits: AC-002 has no unit test because the holder case differs only in elapsed time. A descendant still cleaning up after SIGTERM can be force-killed once the parent exits. A blocked stdin write can still delay stop. Real CLI resume after kill stays with QA.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
+## [2026-11-03] SKILL-476 add run favorites
+Areas: desktop/app, desktop/core/domain, desktop/core/data, desktop/core/datastore, desktop/core/designsystem, desktop/core/testing, desktop/feature/detail, desktop/feature/settings
+- FavoriteWorkKey identifies a run by normalized database path, file key and work ID. DataStore persists versioned, length-prefixed keys and preserves unsupported entries on updates. reusable
+- Detail headers expose an accessible favorite toggle backed by confirmed settings. Writes are serialized, failures show a toast, and session changes invalidate pending results.
+- The fixed-height sidebar resolves saved IDs through session detail reads beyond the board window. It opens resolved runs and keeps unavailable entries removable across database identities.
+- Window-scoped sidebar state orders keys, resolves up to four at a time, publishes results as they arrive and discards stale session or identity results. Refreshes during a batch coalesce into a follow-up pass. reusable
+- Limits: macOS and Windows desktop checks were not run on the Linux host. QA or validation reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented
+
 ## [2026-11-03] SKILL-450 subtask 1: deliver pasted images to chat agents
 Areas: desktop/core/domain, desktop/core/data
 - ChatImage (bytes, mediaType) is a plain class with content-based equals and hashCode. ChatTurnRequest gains images as its last, defaulted parameter, so existing callers are unchanged. (reusable)

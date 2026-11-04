@@ -25,6 +25,11 @@ Context: Source identities name another machine, and restoring a worker lease or
 Decision: Rewrite imported identities for the destination, skip worker leases and persist the imported pause reason with no execution lease.
 Reason: Destination lookups need the destination identity. An absent worker lease and a durable pause leave the goal idle until the operator resumes it. Ordinary binding of existing local records retains its separate identity rule.
 
+## [2026-11-04] Verify test-value findings before focused repair
+Context: A test can pass while the production regression it should guard remains. The previous focused-repair decision left test-value notes as report-only.
+Decision: Review the committed goal test scope read-only and independently verify defect and test-value candidates at every severity. Confirmed candidates use the existing focused repair budget and receive same-reference verification after repair; refuted candidates receive no repair authority. Missing or incomplete evidence makes assessment unavailable.
+Reason: A report-only finding can leave a confirmed regression unresolved. Independent verification grants repair authority only to confirmed cases, and post-fix verification prevents a repair from claiming convergence while the regression remains.
+
 ## [2026-11-03] Occupying lookup skips completed and abandoned parents
 Context: skill-bill goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
 Decision: Occupancy is parent workflowStatus not completed or abandoned. Run admission and preflight use a dedicated occupying lookup. Shared discovery, loadDurableByIssueKey, purge listing, and status newest-fallback still return completed parents.
@@ -121,6 +126,7 @@ Context: Goal assessment stopped after three global rounds and allowed finalizat
 Decision: `FocusedRepairStrategy` owns target selection, repair-stage routing and the three unsuccessful outcome allowance. Acceptance audit and goal assessment both consume it. Their aggregates keep their own evidence and identity checks. Assessment discovers once, plans and repairs one material item at a time, verifies every attempt, and blocks before QA or publication when an item exhausts its allowance. Material minor defects receive verification too. Test-value notes remain report-only. Explicit assessment resume resets the active allowance without deleting rounds.
 
 Compatibility: Assessment record version 0.2 adds selected targets, repair plans and the budget boundary, and removes the global round cap. The existing acceptance-repair contract-version quarantine class also covers goal assessment now that both use focused repair. Runtime execution preserves the rejected 0.1 record as diagnostic evidence before fresh discovery. Ordinary status reads do not regenerate records.
+Superseded by: Verify test-value findings before focused repair (2026-11-04)
 
 ## [2026-10-29] Let an operator mark a whole goal complete
 Context: A goal whose work landed outside the runtime had no way out. Ordinary out-of-band accept is disabled, and a hard reset of runtime-completed subtasks cannot be restored because they carry no acceptance.

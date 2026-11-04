@@ -71,6 +71,9 @@ object GoalAssessmentRecordShape {
         if (subtaskRun != (run.subtaskId != null) || (run.subtaskId ?: 1) < 1) {
           add(GoalAssessmentRecordIssue("$runPath.${Keys.SUBTASK_ID}", "must be a positive id for subtask runs only."))
         }
+        if (run.role == GoalAssessmentRole.TEST_VALUE_REVIEW && round.round != 1) {
+          add(GoalAssessmentRecordIssue("$runPath.${Keys.ROLE}", "test-value review identity belongs to round 1 only."))
+        }
       }
       if (round.assessorRuns.map { it.role to it.subtaskId }.let { it.distinct().size != it.size }) {
         add(GoalAssessmentRecordIssue("$path.${Keys.ASSESSOR_RUNS}", "must not repeat a role and subtask id."))
@@ -122,16 +125,22 @@ object GoalAssessmentRecordShape {
       if ((finding.subtaskId ?: 1) < 1) issue(Keys.SUBTASK_ID, "must be a positive subtask id or null.")
       if (finding.originRound !in 1..roundNumber) issue(Keys.ORIGIN_ROUND, "must be a recorded round up to this one.")
       if (finding.fixRoundsSurvived < 0) issue(Keys.FIX_ROUNDS_SURVIVED, "must not be negative.")
-      val needsVerdict = finding.kind == GoalAssessmentFindingKind.DEFECT
-      if (needsVerdict == (finding.verification == GoalAssessmentVerification.NOT_REQUIRED)) {
-        issue(Keys.VERIFICATION, "must be not_required exactly for test-value findings.")
+      if (finding.verification == GoalAssessmentVerification.NOT_REQUIRED) {
+        issue(Keys.VERIFICATION, "must be independently verified for every finding kind.")
       }
       val refuted = finding.verification == GoalAssessmentVerification.REFUTED
-      if (refuted != (finding.state == GoalAssessmentFindingState.REFUTED)) {
-        issue(Keys.STATE, "must be refuted exactly when verification is refuted.")
+      val settledByVerifier =
+        finding.state == GoalAssessmentFindingState.REFUTED || finding.state == GoalAssessmentFindingState.FIXED
+      val invalidRefutedState =
+        refuted && finding.state !in setOf(GoalAssessmentFindingState.REFUTED, GoalAssessmentFindingState.FIXED)
+      if (settledByVerifier && !refuted || invalidRefutedState) {
+        issue(Keys.STATE, "a refuted finding must be refuted or fixed after repair verification.")
       }
-      if (refuted && finding.disposition != GoalAssessmentDisposition.PR_ONLY) {
-        issue(Keys.DISPOSITION, "must be pr_only for a refuted finding.")
+      if (
+        finding.state != GoalAssessmentFindingState.OPEN &&
+        finding.disposition != GoalAssessmentDisposition.PR_ONLY
+      ) {
+        issue(Keys.DISPOSITION, "must be pr_only for a settled finding.")
       }
     }
 

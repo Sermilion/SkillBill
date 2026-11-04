@@ -167,6 +167,10 @@ sealed interface ImportOutcome {
 
 enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr, Monitor, Verify, PrReviewFix }
 
+/**
+ * [repoRoot] names the repository the start belongs to. A standalone phase or operation runs in a checkout of [branch] when
+ * set, else in [checkoutRoot] when set, else in [repoRoot].
+ */
 data class NewTaskStart(
   val repoRoot: String,
   val requirements: String,
@@ -177,6 +181,9 @@ data class NewTaskStart(
   val expectedDatabaseSessionId: Long?,
   val title: String? = null,
   val target: String? = null,
+  val reuseRequested: Boolean = false,
+  val branch: String? = null,
+  val checkoutRoot: String? = null,
 )
 
 fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {

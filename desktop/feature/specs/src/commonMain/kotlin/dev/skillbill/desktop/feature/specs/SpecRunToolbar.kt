@@ -13,6 +13,8 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -55,6 +57,18 @@ internal fun SpecRunToolbar(state: SpecsUiState, onAction: (SpecsAction) -> Unit
           key?.let { IdTag(it) }
           BasicText(toolbar.bundleTitle.orEmpty(), Modifier.weight(1f), style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
           control?.let { RunState(it.runState) }
+          SbIconButton(
+            LucideIcons.star,
+            when {
+              !toolbar.favoriteAvailable -> "Favorite status unavailable"
+              toolbar.favorite -> "Remove favorite"
+              else -> "Add favorite"
+            },
+            { onAction(SpecsAction.ToggleFavorite) },
+            modifier = Modifier.semantics { selected = toolbar.favorite },
+            selected = toolbar.favorite,
+            enabled = toolbar.favoriteAvailable && !toolbar.favoriteInFlight,
+          )
         }
         val canStart = control?.canStart == true && !toolbar.inFlight && !toolbar.reserved
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

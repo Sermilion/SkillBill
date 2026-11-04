@@ -13,6 +13,8 @@ internal object WorkflowGoalRunnerAcceptedBlockOutcomeBinding {
   fun patch(
     record: WorkflowStateSnapshot,
     identity: BlockIncidentIdentity?,
+    acceptedCause: GoalRunnerAcceptedBlockReference?,
+    replaceForeignReference: Boolean = false,
   ): Map<String, Any?> {
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME
     val value = family.value(record.artifacts) as? Map<*, *>
@@ -21,14 +23,15 @@ internal object WorkflowGoalRunnerAcceptedBlockOutcomeBinding {
       GoalRunnerAcceptedBlockReference.fromArtifactMap(
         value[GoalRunnerAcceptedBlockReferenceKeys.OUTCOME_REFERENCE],
       )
-    if (bound != null && bound.isBoundTo(record, identity)) return emptyMap()
+    if (!replaceForeignReference && bound != null && bound.sourceWorkflowId != record.workflowId) return emptyMap()
+    val currentChildCause = acceptedCause?.takeIf { it.matchesChildIdentity(identity) }
+    val reference = currentChildCause ?: identity.acceptedReference(record.workflowId)
+    if (bound == reference) return emptyMap()
     val updated =
       value.entries.associate { it.key.toString() to it.value } +
         (
           GoalRunnerAcceptedBlockReferenceKeys.OUTCOME_REFERENCE to
-            identity.acceptedReference(
-              record.workflowId,
-            ).toArtifactMap()
+            reference.toArtifactMap()
         )
     return mapOf(family.entry(updated))
   }
@@ -46,11 +49,6 @@ internal object WorkflowGoalRunnerAcceptedBlockOutcomeBinding {
       acceptedAttempt == identity.attempt
   }
 
-  private fun GoalRunnerAcceptedBlockReference.isBoundTo(
-    record: WorkflowStateSnapshot,
-    identity: BlockIncidentIdentity,
-  ): Boolean =
-    matchesIdentity(record.workflowId, identity.stepId, identity.attempt, identity.generation) &&
-      incidentToken == identity.incidentToken &&
-      aliasValue == identity.alias.value
+  private fun GoalRunnerAcceptedBlockReference.matchesChildIdentity(identity: BlockIncidentIdentity): Boolean =
+    sourceWorkflowId == identity.childWorkflowId && incidentToken == identity.childIncidentToken
 }

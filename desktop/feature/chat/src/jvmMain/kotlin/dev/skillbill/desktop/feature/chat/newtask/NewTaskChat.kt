@@ -14,20 +14,28 @@ import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.QueuedChatMessage
+import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
 import dev.skillbill.desktop.feature.chat.show
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.UUID
 import kotlin.coroutines.coroutineContext
 import kotlin.time.Clock
+
+private const val COULD_NOT_SAVE_NOTICE = "This draft could not be saved. Keep it open and try again."
 
 /**
  * A chat about work with no execution behind it. Its coroutines are children of the window scope, so navigation keeps it.
@@ -37,19 +45,21 @@ internal class NewTaskChat(
   private val chat: ExecutionChatRepository,
   private val scope: CoroutineScope,
   private val clock: Clock,
-  val sessionId: String,
+  initialSessionId: String,
   var databaseSessionId: Long?,
   val repositoryRoot: String,
   val baseBranch: String?,
   val agent: ChatAgent,
   initiallyStarted: Boolean = false,
-  initiallyFirstTurnEnded: Boolean = initiallyStarted,
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
+  @Volatile
+  var sessionId: String = initialSessionId
+    private set
+
   val thread = ChatThread(clock)
-  val firstTurnEnded = kotlinx.coroutines.flow.MutableStateFlow(initiallyFirstTurnEnded)
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val saveLock = Mutex()
   @Volatile
@@ -64,6 +74,8 @@ internal class NewTaskChat(
   private var unpromptedJob: Job? = null
   @Volatile
   private var pendingAcceptance: (() -> Unit)? = null
+  @Volatile
+  private var stoppedTurn: Job? = null
 
   init {
     thread.agentState.value = agent
@@ -78,6 +90,18 @@ internal class NewTaskChat(
     drainQueue()
   }
 
+  fun stop(): List<QueuedChatMessage> {
+    if (!thread.stoppable.value || closing) return emptyList()
+    val removed = thread.queuedState.getAndUpdate { emptyList() }
+    interrupt()
+    return removed
+  }
+
+  fun sendNow() {
+    if (!thread.stoppable.value || thread.queued.value.isEmpty() || closing) return
+    interrupt()
+  }
+
   private fun drainQueue() {
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.queuedState.value.firstOrNull() ?: return
@@ -90,30 +114,80 @@ internal class NewTaskChat(
     pendingTurnLineIndex = snapshotLines().lastIndex
     pendingAcceptance = null
     thread.busyState.value = true
+    thread.stoppableState.value = true
     turnRunning = true
     val turn = scope.launch(job + dispatcher, start = CoroutineStart.LAZY) {
       turnJob = coroutineContext[Job]
       try {
         runTurn(text)
       } finally {
-        firstTurnEnded.value = true
-        thread.endStreaming()
-        pendingTurnLineIndex = null
-        turnRunning = false
-        thread.busyState.value = false
-        if (!save()) thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
-        turnJob = null
+        finishTurn(coroutineContext.job)
       }
     }
     turnJob = turn
     turn.invokeOnCompletion {
-      if (!closing && job.isActive) scope.launch(job) { drainQueue() }
+      if (!closing && job.isActive) scope.launch(job) {
+        if (turnJob === turn) finishTurn(turn)
+        drainQueue()
+      }
     }
     turn.start()
   }
 
   @Volatile
   private var turnJob: Job? = null
+
+  private suspend fun finishTurn(turn: Job) {
+    thread.stoppableState.value = false
+    thread.endStreaming()
+    pendingTurnLineIndex = null
+    val stopped = turn === stoppedTurn && turn.isCancelled
+    if (stopped) thread.append(ChatMessage.Notice(STOPPED_NOTICE))
+    try {
+      withContext(NonCancellable) {
+        if (stopped && !started) rotateSession()
+        if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      }
+    } finally {
+      turnRunning = false
+      thread.stoppableState.value = false
+      thread.busyState.value = false
+      turnJob = null
+    }
+  }
+
+  private suspend fun rotateSession() {
+    val old = sessionId
+    saveLock.withLock {
+      sessionId = UUID.randomUUID().toString()
+      chat.deleteSavedChat(old)
+    }
+    unpromptedJob?.cancel()
+    if (!closing) observeUnprompted()
+  }
+
+  private fun interrupt() {
+    thread.stoppableState.value = false
+    thread.dropUnprompted = true
+    turnJob?.let {
+      stoppedTurn = it
+      it.cancel()
+    } ?: stopUnprompted()
+  }
+
+  private fun stopUnprompted() {
+    chat.end(sessionId)
+    scope.launch(job + dispatcher) {
+      try {
+        thread.endStreaming()
+        thread.append(ChatMessage.Notice(STOPPED_NOTICE))
+        if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      } finally {
+        thread.busyState.value = false
+      }
+      drainQueue()
+    }
+  }
 
   /** Saves the current transcript before a draft-preserving exit. */
   suspend fun flush(): Boolean {
@@ -126,14 +200,16 @@ internal class NewTaskChat(
       activeTurn.cancel()
       activeTurn.join()
     }
+    turnJob = null
     thread.endStreaming()
     pendingTurnLineIndex = null
     turnRunning = false
+    thread.stoppableState.value = false
     thread.busyState.value = false
     val saved = save()
     if (!saved) {
       closing = false
-      thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+      thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       observeUnprompted()
     } else acceptPendingMessage()
     return saved
@@ -141,6 +217,7 @@ internal class NewTaskChat(
 
   fun end() {
     thread.queuedState.value = emptyList()
+    thread.stoppableState.value = false
     job.cancel()
     chat.end(sessionId)
   }
@@ -160,31 +237,42 @@ internal class NewTaskChat(
 
   private suspend fun runTurn(text: String) {
     if (!save()) {
-      thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+      thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       return
     }
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
+    var seenEvent = false
     chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, text)).collect { event ->
+      coroutineContext.ensureActive()
+      if (!seenEvent) {
+        seenEvent = true
+        thread.dropUnprompted = false
+      }
       val opening = !opened && event !is ChatEvent.Failed
       if (opening) {
         opened = true
         started = true
       }
       thread.show(agent, event)
-      // The file has to exist before any close, because a crash or a kill skips every later save.
-      if (opening && !save()) thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+      if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     }
-    thread.endStreaming()
   }
 
   private suspend fun showUnprompted(event: ChatEvent) {
+    if (thread.dropUnprompted) return
     val ownTurn = !turnRunning
-    if (ownTurn) thread.busyState.value = true
+    if (ownTurn) {
+      thread.busyState.value = true
+      thread.stoppableState.value = true
+    }
     thread.show(thread.agentState.value, event)
     if (event !is ChatEvent.Completed && event !is ChatEvent.Failed) return
-    if (ownTurn) thread.busyState.value = false
-    if (!save()) thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
+    if (ownTurn) {
+      thread.busyState.value = false
+      thread.stoppableState.value = false
+    }
+    if (!save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     drainQueue()
   }
 

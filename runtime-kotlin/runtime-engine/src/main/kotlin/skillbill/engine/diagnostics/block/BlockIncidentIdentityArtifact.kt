@@ -2,6 +2,7 @@ package skillbill.engine.diagnostics.block
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
+import skillbill.contracts.workflow.identity.blockincident.BlockIncidentAcceptedChildCauseKeys
 import skillbill.contracts.workflow.identity.blockincident.BlockIncidentOccurrenceKeys
 import skillbill.contracts.workflow.identity.blockincident.BlockIncidentSpoolKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
@@ -16,6 +17,40 @@ public data class BlockIncidentFailureFacts(
   public val failureCode: String?,
   public val failureDisposition: FeatureTaskRuntimeFailureDisposition?,
 )
+
+public data class BlockIncidentAcceptedChildCause(
+  public val parentIncidentToken: String,
+  public val reference: GoalRunnerAcceptedBlockReference,
+) {
+  public fun artifactEntry(): Pair<String, Any?> =
+    DurableWorkflowArtifactFamily.GOAL_BLOCK_ACCEPTED_CHILD_CAUSE.entry(
+      mapOf(
+        BlockIncidentAcceptedChildCauseKeys.PARENT_INCIDENT_TOKEN to parentIncidentToken,
+        BlockIncidentAcceptedChildCauseKeys.CHILD_REFERENCE to reference.toArtifactMap().toMap(),
+      ),
+    )
+
+  public companion object {
+    private fun invalidChildCause(): Nothing =
+      throw invalidWorkflowStateSchemaError(
+        "Invalid accepted child block cause.",
+      )
+
+    public fun fromArtifacts(artifacts: Map<String, Any?>): BlockIncidentAcceptedChildCause? {
+      val raw = DurableWorkflowArtifactFamily.GOAL_BLOCK_ACCEPTED_CHILD_CAUSE.value(artifacts) ?: return null
+      val value = raw as? Map<*, *> ?: invalidChildCause()
+      val parentToken =
+        (value[BlockIncidentAcceptedChildCauseKeys.PARENT_INCIDENT_TOKEN] as? String)
+          ?.takeIf(String::isNotBlank)
+          ?: invalidChildCause()
+      val reference =
+        GoalRunnerAcceptedBlockReference.fromArtifactMap(
+          value[BlockIncidentAcceptedChildCauseKeys.CHILD_REFERENCE],
+        ) ?: invalidChildCause()
+      return BlockIncidentAcceptedChildCause(parentToken, reference)
+    }
+  }
+}
 
 public data class BlockIncidentIdentity(
   public val stepId: String,
@@ -179,7 +214,7 @@ public data class BlockIncidentIdentity(
 public fun GoalRunnerAcceptedBlockReference.boundTo(
   workflowId: String,
   blockedStepId: String?,
-): GoalRunnerAcceptedBlockReference? = takeIf { it.sourceWorkflowId == workflowId && it.blockedStepId == blockedStepId }
+): GoalRunnerAcceptedBlockReference? = takeIf { it.sourceWorkflowId != workflowId || it.blockedStepId == blockedStepId }
 
 public object OperatorBlockRetryArtifactKeys {
   public const val REASON: String = "reason"
