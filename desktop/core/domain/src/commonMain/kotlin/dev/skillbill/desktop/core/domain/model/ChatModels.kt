@@ -66,7 +66,10 @@ enum class NewTaskActionKind(val wire: String) {
   PrReviewFix("pr-review-fix"),
 }
 
-/** A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. [title] names a started goal or plan. */
+/**
+ * A null [start] sends [instruction] as the next turn; otherwise clicking the action starts that run. [title] names a started
+ * goal or plan. [branch] is the git branch a started run works on; null runs it on the chat's checkout as it is.
+ */
 data class ChatSuggestedAction(
   val label: String,
   val instruction: String,
@@ -74,6 +77,7 @@ data class ChatSuggestedAction(
   val start: NewTaskActionKind? = null,
   val title: String? = null,
   val target: String? = null,
+  val branch: String? = null,
 )
 
 data class ChatToolCall(val id: String, val name: String, val input: String, val summary: String?)

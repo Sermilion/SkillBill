@@ -1,10 +1,12 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -275,6 +277,25 @@ internal object PhaseAttemptContinuations {
       FeatureTaskRuntimeContinuationKind.PROCESS_RETRY,
     )
     return null
+  }
+
+  internal fun continueInteractionTraceReask(context: FixLoopBranchContext): Boolean {
+    val loop = context.loop
+    val scope = (context.run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    if (!AcceptanceCriterionInteractionTraceRound.shouldRelaunch(scope, loop.outputGateFailures)) return false
+    val reason = context.attempt.semanticRetryReason ?: context.attempt.retryableOperatorReason ?: return false
+    val failedIteration = loop.semanticIteration
+    loop.outputGateFailures = 1
+    loop.iteration += 1
+    loop.priorCorrection = PriorAttemptCorrection.retryableTerminal(reason)
+    context.observability.continuation(
+      context.run.phaseId,
+      context.agentId,
+      loop.iteration,
+      failedIteration,
+      FeatureTaskRuntimeContinuationKind.PROCESS_RETRY,
+    )
+    return true
   }
 
   internal fun recordIncompleteAttempt(

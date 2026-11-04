@@ -25,6 +25,10 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
+import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
@@ -48,7 +52,19 @@ public class PhaseRunEntry(
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val standaloneRunners: StandalonePhaseRunners,
   private val plans: PhaseRunPlanResolver,
+  private val branchWorktrees: BranchWorktreeResources,
 ) {
+  public fun runInvocation(request: PhaseRunRequest): PhaseRunResult {
+    val result = run(request)
+    if (result !is PhaseRunResult.Completed) return result
+    val holder = BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, request.definitionId)
+    return when (val released = branchWorktrees.release(request.repoRoot, holder)) {
+      is BranchWorktreeRelease.Kept ->
+        result.copy(targetReport = result.targetReport + "Kept worktree ${released.path}: ${released.detail}.")
+      else -> result
+    }
+  }
+
   public fun run(request: PhaseRunRequest): PhaseRunResult {
     if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
     val invocationId = newInvocationId()

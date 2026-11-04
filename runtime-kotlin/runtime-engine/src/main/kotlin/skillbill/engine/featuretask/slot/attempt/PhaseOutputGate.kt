@@ -82,6 +82,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -589,8 +590,22 @@ internal object PhaseOutputGate {
           repositoryFingerprint = args.repositoryFingerprint,
           checksImmediateConsumerProjection = args.stepHooks.checksImmediateConsumerProjection,
         ),
-      ) ?: stepCompletionRejection(run, args.attested, boundStep, args.stepHooks)
+      )
     return rejection?.let { (rule, reason) -> args.reject(rule, reason) }
+      ?: stepCompletionRejection(run, args.attested, boundStep, args.stepHooks)?.let { (rule, reason) ->
+        val rejected = args.reject(rule, reason)
+        if (reason.startsWith(FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_TRACE_AUDIT_OUTPUT.name)) {
+          AttemptResult.RetryableTerminal(
+            operatorReason = reason,
+            fileManifest = args.capture.fileManifest,
+            failureDisposition = FeatureTaskRuntimeFailureDisposition.RETRYABLE,
+            normalizedOutput = args.attested,
+            continuationOutput = null,
+          )
+        } else {
+          rejected
+        }
+      }
       ?: settleStepOutputCheck(
         boundStep.boundHooks.settleCompletedOutput(
           run,

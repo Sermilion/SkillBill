@@ -129,13 +129,21 @@ private fun ChatMessageRow(
     is ChatMessage.StateLine -> StateCard(message)
     is ChatMessage.Operator -> OperatorMessage(message)
     is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode, allowStartActions, onAction?.let { act -> { action: ChatSuggestedAction -> act(message, action) } })
-    is ChatMessage.Notice -> Row(
-      Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-      verticalAlignment = Alignment.Top,
-    ) {
-      CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(LucideIcons.info, SbIconSize.Sm, modifier = Modifier.padding(top = 2.dp)) }
-      BasicText(message.text, style = type.tSm.copy(color = colors.fgMuted))
+    is ChatMessage.Notice -> if (message.confirmation) {
+      Callout(
+        tone = FeedbackTone.Success,
+        body = message.text,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+      )
+    } else {
+      Row(
+        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+      ) {
+        CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(LucideIcons.info, SbIconSize.Sm, modifier = Modifier.padding(top = 2.dp)) }
+        BasicText(message.text, style = type.tSm.copy(color = colors.fgMuted))
+      }
     }
     is ChatMessage.Error -> Callout(
       tone = FeedbackTone.Error,

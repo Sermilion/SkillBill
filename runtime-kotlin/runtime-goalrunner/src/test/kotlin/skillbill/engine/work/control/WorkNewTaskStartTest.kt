@@ -18,7 +18,9 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -86,6 +88,8 @@ class WorkNewTaskStartTest {
           EnvironmentContext(),
           TestRepositoryEnclosingRoot,
           NoopRuntimeDiagnostics,
+          InPlaceGoalWorktreeResources,
+          RecordingBranchWorktreeResources(),
         ),
         root,
         launches,

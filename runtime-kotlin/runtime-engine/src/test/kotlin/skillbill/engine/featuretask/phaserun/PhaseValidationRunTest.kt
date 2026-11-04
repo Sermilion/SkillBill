@@ -13,6 +13,10 @@ import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -27,6 +31,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class PhaseValidationRunTest {
   private val repoRoot: Path = Files.createTempDirectory("skillbill-phase-validation-repo")
@@ -39,6 +44,7 @@ class PhaseValidationRunTest {
       it.gitOperations.trackedPathsValue = listOf("src/Foo.kt")
     }
   private val headBefore = branchSetup.gitOperations.headCommitShaValue
+  private val branchWorktrees = RecordingBranchWorktreeResources()
 
   @AfterTest
   fun cleanUp() {
@@ -116,6 +122,21 @@ class PhaseValidationRunTest {
     branchSetup.gitOperations.assertNoCommitOrCheckpointRef(headBefore)
   }
 
+  @Test
+  fun `a completed standalone invocation releases its branch worktree and reports one it had to keep`() {
+    branchWorktrees.releaseResult = BranchWorktreeRelease.Kept(repoRoot, "git worktree remove failed: dirty")
+    val entry =
+      entry(launcher { validJsonOutput(PHASE_VALIDATE) }, mutableListOf(), emptyList(), manifests = emptyList())
+
+    val result = assertIs<PhaseRunResult.Completed>(entry.runInvocation(validationRequest()))
+
+    assertEquals(
+      listOf(repoRoot to BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, SkeletonDefinition.VALIDATION.id)),
+      branchWorktrees.released,
+    )
+    assertTrue(result.targetReport.any { repoRoot.toString() in it && "dirty" in it }, result.targetReport.toString())
+  }
+
   private fun validationPack(): PlatformManifest =
     kotlinPackWithValidationGate().let { pack ->
       pack.copy(
@@ -184,12 +205,13 @@ class PhaseValidationRunTest {
         runtimeConfig = config,
         databaseFactory = { database },
       )
-    return phaseRunEntry(
+    return PhaseRunEntryFixture(
       harness.strategies,
       config.harnessGitOperations,
       database,
       clock,
       harness.runLoopEntry.delegateTo(runLoopEntry),
-    )
+      branchWorktrees = branchWorktrees,
+    ).entry()
   }
 }

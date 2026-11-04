@@ -2,6 +2,10 @@ package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import java.nio.file.Path
 import java.util.UUID
 
@@ -24,6 +28,7 @@ public class OperationExecutor(
   private val gate: OperationConfirmationGate,
   private val steps: OperationStepRunner,
   private val projectStore: ProjectStorePort,
+  private val branchWorktrees: BranchWorktreeResources,
 ) {
   public fun execute(request: OperationRequest): OperationResult {
     val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
@@ -59,7 +64,20 @@ public class OperationExecutor(
         } else {
           proceed(operation, context)
         }
-    return OperationResult(invocationId, outcome)
+    return OperationResult(invocationId, settleBranchWorktree(request, outcome))
+  }
+
+  private fun settleBranchWorktree(
+    request: OperationRequest,
+    outcome: OperationOutcome,
+  ): OperationOutcome {
+    if (outcome !is OperationOutcome.Completed) return outcome
+    val holder = BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, request.operationId)
+    return when (val released = branchWorktrees.release(request.repoRoot, holder)) {
+      is BranchWorktreeRelease.Kept ->
+        outcome.copy(text = "${outcome.text.trimEnd()}\n\nKept worktree ${released.path}: ${released.detail}.")
+      else -> outcome
+    }
   }
 
   private fun proceed(
