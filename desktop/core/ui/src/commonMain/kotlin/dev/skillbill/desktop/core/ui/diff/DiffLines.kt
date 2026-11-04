@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -53,27 +56,45 @@ private const val CUT_MARKER_CHARS = 32
  * sideways when it does not fit: diff rows do not wrap.
  */
 @Composable
-fun DiffHorizontalScroll(longestChars: Int, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun DiffHorizontalScroll(longestChars: Int, modifier: Modifier = Modifier, scrollState: ScrollState = rememberScrollState(), content: @Composable () -> Unit) {
   val measurer = rememberTextMeasurer()
   val density = LocalDensity.current
   val mono = changesMono(FONT_SIZE, FontWeight.Normal, SkillBillTheme.colors.fg2, LINE_HEIGHT_SP)
   val charWidth = remember(measurer, mono, density) { with(density) { measurer.measure("0", mono).size.width.toDp() } }
   BoxWithConstraints(modifier.fillMaxSize()) {
     val width = maxOf(maxWidth, GUTTER_WIDTH * 2 + TEXT_START * 2 + charWidth * longestChars)
-    Box(Modifier.horizontalScroll(rememberScrollState()).width(width).fillMaxHeight()) { content() }
+    Box(Modifier.horizontalScroll(scrollState).width(width).fillMaxHeight()) { content() }
   }
 }
 
 /** One row per hunk header and line of [diff], keyed under [key]. */
-fun LazyListScope.diffRows(diff: FileDiff, key: String) {
+data class DiffLineAddress(val hunk: Int, val line: Int)
+
+class DiffLineSlots(
+  val keys: Map<DiffLineAddress, List<String>>,
+  val content: @Composable LazyItemScope.(String) -> Unit,
+) {
+  companion object {
+    val None = DiffLineSlots(emptyMap()) { }
+  }
+}
+
+fun LazyListScope.diffRows(diff: FileDiff, key: String, slots: DiffLineSlots = DiffLineSlots.None) {
   diff.hunks.forEachIndexed { h, hunk ->
-    item(key = "$key:h$h") { HunkHeaderRow(hunk) }
-    items(hunk.lines.size, key = { "$key:l$h:$it" }) { index -> DiffLineRow(hunk.lines[index]) }
+    item(key = "$key:h$h", contentType = "hunk") { HunkHeaderRow(hunk) }
+    hunk.lines.forEachIndexed { i, line ->
+      item(key = "$key:l$h:$i", contentType = "line") { DiffLineRow(line) }
+      val threadIds = slots.keys[DiffLineAddress(h, i)].orEmpty()
+      items(threadIds, key = { "thread:$it" }, contentType = { "thread" }) { threadId -> slots.content(threadId) }
+    }
   }
 }
 
 /** How many rows [diffRows] adds for [diff]. */
-fun diffRowCount(diff: FileDiff): Int = diff.hunks.sumOf { it.lines.size + 1 }
+fun diffRowCount(diff: FileDiff, slots: DiffLineSlots = DiffLineSlots.None): Int = diff.hunks.indices.sumOf { h ->
+  val hunk = diff.hunks[h]
+  hunk.lines.size + 1 + hunk.lines.indices.sumOf { slots.keys[DiffLineAddress(h, it)]?.size ?: 0 }
+}
 
 /** The widest row of [diff], in characters of diff text. */
 fun diffLongestChars(diff: FileDiff): Int = diff.hunks.maxOfOrNull(::hunkChars) ?: 0

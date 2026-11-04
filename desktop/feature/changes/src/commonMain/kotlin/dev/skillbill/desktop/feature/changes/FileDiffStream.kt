@@ -3,12 +3,18 @@ package dev.skillbill.desktop.feature.changes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.animateItem
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -19,16 +25,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
+import dev.skillbill.desktop.core.domain.model.CommentThread
+import dev.skillbill.desktop.core.ui.diff.DiffLineSlots
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
@@ -58,12 +73,15 @@ internal fun FileDiffStream(
   loaded: Map<String, LoadedDiff>,
   selectedPath: String?,
   scrollRequest: Int,
+  threads: List<CommentThread>,
+  threadContent: @Composable (String) -> Unit,
   onAction: (ChangesWindowAction) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val listState = rememberLazyListState()
   val usable = files.map { file -> loaded[file.path]?.takeIf { it.file == file } }
-  val starts = fileStartIndexes(usable)
+  val placement = remember(files, usable, threads) { placeThreads(files, usable, threads) }
+  val starts = fileStartIndexes(usable, placement)
   val currentFiles by rememberUpdatedState(files)
   val currentStarts by rememberUpdatedState(starts)
   val currentAction by rememberUpdatedState(onAction)
@@ -106,29 +124,70 @@ internal fun FileDiffStream(
       currentFiles.subList(first.coerceAtMost(currentFiles.size), (last + 1 + READ_AHEAD_FILES).coerceAtMost(currentFiles.size)).map { it.path }
     }.distinctUntilChanged().collect { currentAction(ChangesWindowAction.EnsureDiffs(it)) }
   }
-  DiffHorizontalScroll(usable.maxOfOrNull { it?.longestChars ?: 0 } ?: 0, modifier) {
-    LazyColumn(state = listState) {
-      files.forEachIndexed { index, file ->
-        item(key = "file:${file.path}") { if (index == 0) Spacer(Modifier.height(0.dp)) else FileSeparator(file) }
-        val diff = usable[index]
-        val state = diff?.state
-        when {
-          diff == null -> item(key = "wait:${file.path}") { Box(Modifier.fillMaxWidth().height(PLACEHOLDER_HEIGHT)) }
-          state is FileDiffState.Shown && state.diff.hunks.isNotEmpty() -> diffRows(state.diff, file.path)
-          state != null -> item(key = "note:${file.path}") { PaneMessage(fileDiffNotice(state)) }
+  BoxWithConstraints(modifier.fillMaxSize()) {
+    val viewportWidth = maxWidth
+    val threadWidth = minOf(viewportWidth, 760.dp)
+    val horizontalScroll = rememberScrollState()
+    DiffHorizontalScroll(usable.maxOfOrNull { it?.longestChars ?: 0 } ?: 0, Modifier.fillMaxSize(), horizontalScroll) {
+      LazyColumn(state = listState) {
+        if (placement.general.isNotEmpty()) {
+          item(key = "general:header", contentType = "general-header") {
+            BasicText(
+              "General · ${placement.general.size}",
+              threadItemModifier(threadWidth, horizontalScroll, Modifier).semantics { heading() },
+              style = changesMono(12f, FontWeight.SemiBold, SkillBillTheme.colors.fg2),
+            )
+          }
+          placement.general.forEach { thread ->
+            item(key = "thread:${thread.id}", contentType = "thread") {
+              val animation = if (LocalReducedMotion.current) Modifier else Modifier.animateItem()
+              Column(threadItemModifier(threadWidth, horizontalScroll, animation)) {
+                thread.path?.let { path -> BasicText(if (thread.line == null) path else "$path:${thread.line}", style = changesMono(11f, FontWeight.Medium, SkillBillTheme.colors.fgFaint)) }
+                threadContent(thread.id)
+              }
+            }
+          }
+        }
+        files.forEachIndexed { index, file ->
+          item(key = "file:${file.path}", contentType = "file") { if (index == 0) Spacer(Modifier.height(0.dp)) else FileSeparator(file) }
+          placement.files[index].fileSlot.forEach { thread ->
+            item(key = "thread:${thread.id}", contentType = "thread") {
+              val animation = if (LocalReducedMotion.current) Modifier else Modifier.animateItem()
+              Box(threadItemModifier(threadWidth, horizontalScroll, animation)) { threadContent(thread.id) }
+            }
+          }
+          val diff = usable[index]
+          val state = diff?.state
+          when {
+            diff == null -> item(key = "wait:${file.path}", contentType = "wait") { Box(Modifier.fillMaxWidth().height(PLACEHOLDER_HEIGHT)) }
+            state is FileDiffState.Shown && state.diff.hunks.isNotEmpty() -> {
+              val lineSlots = DiffLineSlots(
+                placement.files[index].afterLine.mapValues { (_, values) -> values.map { it.id } },
+              ) { threadId ->
+                val animation = if (LocalReducedMotion.current) Modifier else Modifier.animateItem()
+                Box(threadItemModifier(threadWidth, horizontalScroll, animation)) { threadContent(threadId) }
+              }
+              diffRows(state.diff, file.path, lineSlots)
+            }
+            state != null -> item(key = "note:${file.path}", contentType = "note") { PaneMessage(fileDiffNotice(state)) }
+          }
         }
       }
     }
   }
 }
 
+private fun threadItemModifier(width: Dp, scroll: ScrollState, animation: Modifier): Modifier =
+  Modifier.width(width).offset { IntOffset(scroll.value, 0) }.then(animation).padding(start = 48.dp, end = 12.dp, bottom = 8.dp)
+
 /** The list index of each file's separator row; a file with no read yet has one placeholder row after it. */
-internal fun fileStartIndexes(loaded: List<LoadedDiff?>): IntArray {
+internal fun fileStartIndexes(loaded: List<LoadedDiff?>, placement: ThreadPlacement = ThreadPlacement(emptyList(), loaded.map { FileThreads() })): IntArray {
   val starts = IntArray(loaded.size)
-  var next = 0
+  var next = if (placement.general.isEmpty()) 0 else 1 + placement.general.size
   loaded.forEachIndexed { index, diff ->
     starts[index] = next
-    next += 1 + (diff?.rows ?: 1)
+    val fileThreads = placement.files.getOrNull(index) ?: FileThreads()
+    next += 1 + fileThreads.fileSlot.size + (diff?.rows ?: 1) + fileThreads.afterLine.values.sumOf { it.size }
   }
   return starts
 }

@@ -1,6 +1,8 @@
 package dev.skillbill.desktop.feature.changes
 
 import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.CommentState
+import dev.skillbill.desktop.core.domain.model.DiffCommentsState
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
@@ -39,6 +41,8 @@ data class ChangesWindowUiState(
   val scrollRequest: Int = 0,
   /** Why the last open request failed; cleared when the selection changes. */
   val openProblem: String? = null,
+  val comments: DiffCommentsState = DiffCommentsState.Loading,
+  val threadUi: Map<String, ThreadUi> = emptyMap(),
 ) {
   val target: ChangeScopeTarget? get() = (content as? WindowContent.Ready)?.target
   val subtasksAvailable: Boolean get() = target?.let { ScopeKind.Subtasks in availableScopes(it) } == true
@@ -79,6 +83,8 @@ sealed interface DiffPaneUi {
 /** A file's diff read, with the row figures the diff stream lays out from so it never walks every loaded line. */
 data class LoadedDiff(val file: ChangedFile, val state: FileDiffState, val rows: Int, val longestChars: Int)
 
+data class ThreadUi(val expanded: Boolean? = null, val draft: String? = null, val problem: String? = null, val busy: Boolean = false)
+
 data class SubtaskChipUi(val id: Int, val name: String, val inScope: Boolean, val selectable: Boolean)
 
 sealed interface ChangesWindowAction {
@@ -104,4 +110,9 @@ sealed interface ChangesWindowAction {
   data object PickAll : ChangesWindowAction
   data class MoveFile(val delta: Int) : ChangesWindowAction
   data object OpenSelectedFile : ChangesWindowAction
+  data class ToggleThread(val threadId: String) : ChangesWindowAction
+  data class EditReply(val threadId: String, val text: String?) : ChangesWindowAction
+  data class SendReply(val threadId: String) : ChangesWindowAction
+  data class SetThreadState(val threadId: String, val state: CommentState) : ChangesWindowAction
+  data class DeleteComment(val threadId: String, val commentId: String) : ChangesWindowAction
 }

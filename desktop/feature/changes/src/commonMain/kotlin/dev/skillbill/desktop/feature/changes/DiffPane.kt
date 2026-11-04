@@ -37,6 +37,7 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.DiffCommentsState
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.ChangesButton
 import dev.skillbill.desktop.core.ui.changes.DelCount
@@ -45,7 +46,7 @@ import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 
 @Composable
-internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, modifier: Modifier = Modifier) {
+internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, modifier: Modifier = Modifier, onReplyFocusChanged: (String, Boolean) -> Unit) {
   val colors = SkillBillTheme.colors
   Column(modifier.background(colors.bgInset)) {
     val file = when (val diff = state.diff) {
@@ -67,10 +68,24 @@ internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowActio
       state.openProblem?.let { Hint(it, tone = FeedbackTone.Error) }
       (state.diff as? DiffPaneUi.Shown)?.chips?.takeIf { it.isNotEmpty() }?.let { chips -> SubtaskChips(chips, onAction) }
     }
-    if (state.list is ScopeListUi.Listed && state.visibleFiles.isNotEmpty()) {
+    if (state.list is ScopeListUi.Listed) {
       // A new scope or filter is a new stream, which starts on the selected file.
       key(state.scope, state.filter) {
-        FileDiffStream(state.visibleFiles, state.fileDiffs, state.selectedPath, state.scrollRequest, onAction, Modifier.weight(1f))
+        val threads = (state.comments as? DiffCommentsState.Available)?.threads.orEmpty()
+        FileDiffStream(
+          files = state.visibleFiles,
+          loaded = state.fileDiffs,
+          selectedPath = state.selectedPath,
+          scrollRequest = state.scrollRequest,
+          threads = threads,
+          threadContent = { id ->
+            threads.firstOrNull { it.id == id }?.let { thread ->
+              DiffCommentThread(thread, state.threadUi[id] ?: ThreadUi(), onAction, onReplyFocusChanged)
+            }
+          },
+          onAction = onAction,
+          modifier = Modifier.weight(1f),
+        )
       }
     }
   }

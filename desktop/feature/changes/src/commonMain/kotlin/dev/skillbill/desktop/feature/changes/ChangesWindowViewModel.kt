@@ -6,6 +6,9 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.CommentRejection
+import dev.skillbill.desktop.core.domain.model.CommentState
+import dev.skillbill.desktop.core.domain.model.DiffCommentsState
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
@@ -28,6 +31,8 @@ import dev.skillbill.desktop.core.domain.model.subtasksTouching
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.repository.DiffCommentRepository
+import dev.skillbill.desktop.core.common.Outcome
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import dev.skillbill.desktop.core.ui.diff.diffLongestChars
 import dev.skillbill.desktop.core.ui.diff.diffRowCount
@@ -57,6 +62,7 @@ class ChangesWindowViewModel(
   detail: WorkDetailRepository,
   private val scopes: WorkChangeScopesRepository,
   private val changes: WorkChangesRepository,
+  private val comments: DiffCommentRepository,
 ) : ViewModel() {
   private val requestedScope = MutableStateFlow(initialScope)
   private val mutableState = MutableStateFlow(
@@ -115,6 +121,9 @@ class ChangesWindowViewModel(
     observeQuickReads()
     observeAllCount()
     observeScopeReads()
+    state.map { it.target?.allBaseline }.distinctUntilChanged().flatMapLatest { baseline ->
+      baseline?.let(comments::observe) ?: flowOf(DiffCommentsState.Loading)
+    }.onEach { value -> mutableState.update { it.copy(comments = value) } }.launchIn(viewModelScope)
   }
 
   private fun stopGoalObservation() {
@@ -475,6 +484,44 @@ class ChangesWindowViewModel(
       }
       is ChangesWindowAction.MoveFile -> moveFile(action.delta)
       ChangesWindowAction.OpenSelectedFile -> openSelectedFile()
+      is ChangesWindowAction.ToggleThread -> mutableState.update { old ->
+        val current = old.threadUi[action.threadId] ?: ThreadUi()
+        val openByDefault = old.comments.thread(action.threadId)?.state.let { it == CommentState.Open || it == CommentState.Pending }
+        old.copy(threadUi = old.threadUi + (action.threadId to current.copy(expanded = !(current.expanded ?: openByDefault))))
+      }
+      is ChangesWindowAction.EditReply -> mutableState.update { old ->
+        val current = old.threadUi[action.threadId] ?: ThreadUi()
+        old.copy(threadUi = old.threadUi + (action.threadId to current.copy(draft = action.text, problem = null)))
+      }
+      is ChangesWindowAction.SendReply -> sendReply(action.threadId)
+      is ChangesWindowAction.SetThreadState -> updateThread(action.threadId) { comments.setState(action.threadId, action.state) }
+      is ChangesWindowAction.DeleteComment -> updateThread(action.threadId) { comments.deleteComment(action.commentId) }
+    }
+  }
+
+  private fun sendReply(threadId: String) {
+    val rawDraft = state.value.threadUi[threadId]?.draft ?: return
+    val body = rawDraft.trim()
+    if (body.isBlank()) return
+    updateThread(threadId, rawDraft) { comments.reply(threadId, body) }
+  }
+
+  private fun updateThread(threadId: String, submittedDraft: String? = null, operation: suspend () -> Outcome<Unit, CommentRejection>) {
+    if (state.value.threadUi[threadId]?.busy == true) return
+    mutableState.update { old ->
+      val current = old.threadUi[threadId] ?: ThreadUi()
+      old.copy(threadUi = old.threadUi + (threadId to current.copy(busy = true, problem = null)))
+    }
+    viewModelScope.launch {
+      val result = operation()
+      mutableState.update { old ->
+        val current = old.threadUi[threadId] ?: ThreadUi()
+        val updated = when (result) {
+          is Outcome.Success -> current.copy(busy = false, draft = if (submittedDraft != null && current.draft == submittedDraft) null else current.draft, problem = null)
+          is Outcome.Failure -> current.copy(busy = false, problem = result.error.reason)
+        }
+        old.copy(threadUi = old.threadUi + (threadId to updated))
+      }
     }
   }
 
@@ -562,6 +609,8 @@ private fun ChangesWindowUiState.withLoadedDiff(file: ChangedFile, result: FileD
   val loaded = LoadedDiff(file, result, diff?.takeIf { it.hunks.isNotEmpty() }?.let(::diffRowCount) ?: 1, diff?.let(::diffLongestChars) ?: 0)
   return copy(fileDiffs = fileDiffs + (file.path to loaded))
 }
+
+private fun DiffCommentsState.thread(id: String) = (this as? DiffCommentsState.Available)?.threads?.firstOrNull { it.id == id }
 
 private data class GoalObservationKey(val id: String, val running: Boolean, val goalWorktree: dev.skillbill.desktop.core.domain.model.GoalWorktree?)
 
