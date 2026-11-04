@@ -117,7 +117,8 @@ class StandalonePullRequestWatcherTest {
     assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
     assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofMinutes(2))
     assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) < Duration.ofHours(1))
-    assertTrue(checkReads.any { !it.isBefore(Instant.parse("2026-10-16T10:02:00Z")) })
+    assertEquals(Instant.parse("2026-10-16T10:00:00Z"), checkReads.first())
+    assertTrue(checkReads.drop(1).any { !it.isBefore(Instant.parse("2026-10-16T10:02:00Z")) })
   }
 
   @Test
