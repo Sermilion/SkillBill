@@ -54,7 +54,7 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     assertNotNull(draft.chat.value)
-    assertEquals("Add more requirements.", draft.offer.value.problem)
+    assertEquals(listOf("Add more requirements."), errors(chat))
 
     controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
     draft.text = "unsent text"
@@ -64,6 +64,7 @@ class NewTaskDraftStartTest {
     assertEquals(chat, draft.chat.value)
     assertEquals("unsent text", draft.text)
     assertEquals(emptyList(), chats.ended)
+    assertEquals(listOf("Started goal run APP-1. Send another message to start again."), confirmations(chat))
   }
   @Test
   fun `database change keeps the chat and retry uses the new session`() = runTest {
@@ -90,7 +91,7 @@ class NewTaskDraftStartTest {
     runCurrent()
     assertEquals(1L, controls.newTaskRequests.single().expectedDatabaseSessionId)
     assertEquals(chat, draft.chat.value)
-    assertEquals("The database changed. Try again.", draft.offer.value.problem)
+    assertEquals(listOf("The database changed. Try again."), errors(chat))
     assertEquals(emptyList(), chats.ended)
 
     controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
@@ -155,7 +156,7 @@ class NewTaskDraftStartTest {
     runCurrent()
     assertEquals(chat, draft.chat.value)
     assertFalse(draft.offer.value.starting)
-    assertEquals("Try again.", draft.offer.value.problem)
+    assertEquals(listOf("Try again."), errors(chat))
     draft.discard()
     runCurrent()
   }
@@ -219,7 +220,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `starting a goal from the offer card after a titled reply passes the title`() = runTest {
+  fun `starting a goal after a titled reply passes the title`() = runTest {
     val chats = FakeExecutionChatRepository().apply {
       events = {
         kotlinx.coroutines.flow.flowOf(
@@ -277,7 +278,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `a null action title survives plan prefix retry and the next card start uses the transcript`() = runTest {
+  fun `a null action title survives plan prefix retry and the next start uses the transcript`() = runTest {
     val unrelated = ChatSuggestedAction("Other", "Implement another change.", ChatPermissionMode.Act, NewTaskActionKind.Goal, title = "Other change")
     val chats = FakeExecutionChatRepository().apply {
       events = { kotlinx.coroutines.flow.flowOf(ChatEvent.SuggestedActions(listOf(unrelated)), ChatEvent.Completed) }
@@ -342,7 +343,6 @@ class NewTaskDraftStartTest {
     failure.complete("Monitor target refused.")
     runCurrent()
     assertTrue("monitor stopped. Monitor target refused." in notices(chat), notices(chat).toString())
-    assertNull(draft.offer.value.problem)
   }
 
   @Test
@@ -362,7 +362,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `standalone refusal goes to the chat and goal refusal to the offer card`() = runTest {
+  fun `standalone refusal and goal refusal both go to the chat`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
     val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
@@ -380,38 +380,22 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.Review)
     runCurrent()
     assertEquals(listOf("No."), notices(chat))
-    assertNull(draft.offer.value.problem)
+    assertEquals(emptyList(), errors(chat))
 
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     assertEquals(listOf("No."), notices(chat))
-    assertEquals("No.", draft.offer.value.problem)
-  }
-
-  @Test
-  fun `only a latest reply with a standalone start hides the goal offer`() {
-    fun reply(start: NewTaskActionKind?) = ChatMessage.Agent(
-      "ok", false, emptyList(), listOf(ChatSuggestedAction("Go", "Go", ChatPermissionMode.Act, start = start)),
-    )
-    assertTrue(offersStandaloneStart(listOf(reply(NewTaskActionKind.Review))))
-    assertFalse(offersStandaloneStart(listOf(reply(NewTaskActionKind.Goal))))
-    assertFalse(offersStandaloneStart(listOf(reply(null))))
-    assertFalse(offersStandaloneStart(listOf(reply(NewTaskActionKind.Review), ChatMessage.Operator("no", null), reply(null))))
-    assertTrue(offersStandaloneStart(listOf(reply(NewTaskActionKind.Review), ChatMessage.Notice("Started review."))))
-  }
-
-  @Test
-  fun `a release request hides the goal offer and a later feature description does not bring it back`() {
-    val idle = NewTaskOffer()
-    val release = ChatMessage.Operator("publish a minor release", null)
-    assertFalse(showGoalOfferCard(true, listOf(release), idle))
-    assertFalse(showGoalOfferCard(true, listOf(ChatMessage.Operator("Add a release button", null)), idle))
-    assertFalse(showGoalOfferCard(true, listOf(release, ChatMessage.Operator("add dark mode instead", null)), idle))
-    assertTrue(showGoalOfferCard(true, listOf(release, ChatMessage.Operator("start a goal run instead", null)), idle))
+    assertEquals(listOf("No."), errors(chat))
   }
 
   private fun notices(chat: NewTaskChat): List<String> =
     chat.thread.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
+
+  private fun errors(chat: NewTaskChat): List<String> =
+    chat.thread.transcript.value.filterIsInstance<ChatMessage.Error>().map { it.text }
+
+  private fun confirmations(chat: NewTaskChat): List<String> =
+    chat.thread.transcript.value.filterIsInstance<ChatMessage.Notice>().filter { it.confirmation }.map { it.text }
 
   @Test
   fun `starting a goal after chip rebind posts the new repository and agent`() = runTest {
@@ -457,6 +441,7 @@ class NewTaskDraftStartTest {
     assertTrue(chats.saved.contains(sessionId))
     assertEquals(emptyList(), chats.ended)
     assertEquals("Started goal run APP-1", draft.offer.value.started)
+    assertEquals(listOf("Started goal run APP-1. Send another message to start again."), confirmations(assertNotNull(draft.chat.value)))
   }
 
   @Test
@@ -471,6 +456,7 @@ class NewTaskDraftStartTest {
     assertTrue(chats.saved.contains(sessionId))
     assertEquals(emptyList(), chats.ended)
     assertEquals("Started plan APP-1", draft.offer.value.started)
+    assertEquals(listOf("Started plan APP-1. Send another message to start again."), confirmations(assertNotNull(draft.chat.value)))
   }
 
   @Test

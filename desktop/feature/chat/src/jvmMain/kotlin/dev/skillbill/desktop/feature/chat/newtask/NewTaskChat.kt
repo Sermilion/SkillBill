@@ -51,7 +51,6 @@ internal class NewTaskChat(
   val baseBranch: String?,
   val agent: ChatAgent,
   initiallyStarted: Boolean = false,
-  initiallyFirstTurnEnded: Boolean = initiallyStarted,
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -61,7 +60,6 @@ internal class NewTaskChat(
     private set
 
   val thread = ChatThread(clock)
-  val firstTurnEnded = kotlinx.coroutines.flow.MutableStateFlow(initiallyFirstTurnEnded)
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val saveLock = Mutex()
   @Volatile
@@ -140,7 +138,6 @@ internal class NewTaskChat(
   private var turnJob: Job? = null
 
   private suspend fun finishTurn(turn: Job) {
-    firstTurnEnded.value = true
     thread.stoppableState.value = false
     thread.endStreaming()
     pendingTurnLineIndex = null
