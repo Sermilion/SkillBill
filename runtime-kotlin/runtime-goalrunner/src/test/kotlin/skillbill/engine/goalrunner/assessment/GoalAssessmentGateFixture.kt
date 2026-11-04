@@ -46,6 +46,7 @@ internal enum class AssessmentCall {
   FIRST_SUBTASK,
   SECOND_SUBTASK,
   CROSS_SUBTASK,
+  TEST_VALUE_REVIEW,
   VERIFIER,
   PLAN,
   SCENARIO_VERIFY,
@@ -55,11 +56,12 @@ internal enum class AssessmentCall {
 
 internal fun assessmentCallOf(prompt: String): AssessmentCall =
   when {
+    "# Operation: unit-test-value-check (review)" in prompt -> AssessmentCall.TEST_VALUE_REVIEW
     "# Goal assessment repair plan:" in prompt -> AssessmentCall.PLAN
     "Independently verify only scenario" in prompt -> AssessmentCall.SCENARIO_VERIFY
     "Independently verify only regression" in prompt -> AssessmentCall.REGRESSION_VERIFY
     "# Goal assessment fix:" in prompt -> AssessmentCall.FIX
-    "Verify each candidate defect below" in prompt -> AssessmentCall.VERIFIER
+    "Independently verify each candidate below" in prompt -> AssessmentCall.VERIFIER
     "Assess how the subtasks fit together" in prompt -> AssessmentCall.CROSS_SUBTASK
     "Assess subtask 1 (" in prompt -> AssessmentCall.FIRST_SUBTASK
     "Assess subtask 2 (" in prompt -> AssessmentCall.SECOND_SUBTASK
@@ -133,7 +135,7 @@ internal class GoalAssessmentGateFixture(
       calls += call
       prompts[call] = prompt
       if (call == AssessmentCall.FIX) git.worktreeStatusValue = fixedWorktreeStatus
-      script(call)?.let { prose -> facts(settledOutput(call, prose)) }
+      script(call)?.let { prose -> facts(settledOutput(call, completedProjection(call, prose))) }
         ?: agentRunLaunchFacts(SupportedAgent.CLAUDE, termination = AgentRunTermination.Exited(1))
     }
   val git =
@@ -142,6 +144,7 @@ internal class GoalAssessmentGateFixture(
       mergeBaseWithHeadValue = ASSESSMENT_BASE_SHA
       changedPathsBetweenCommitsValue = listOf("src/Feature.kt", "src/FeatureTest.kt")
       worktreeStatusValue = ""
+      repositoryFingerprintValue = "repository-fingerprint"
       onCreateCommit = { worktreeStatusValue = "" }
     }
 
@@ -204,6 +207,21 @@ internal class GoalAssessmentGateFixture(
         "produced_outputs" to mapOf("value" to prose),
       ),
     )
+
+  private fun completedProjection(
+    call: AssessmentCall,
+    prose: String,
+  ): String {
+    if (call == AssessmentCall.VERIFIER) {
+      val count = Regex("(?m)^Verify GA-\\d{3}:").findAll(prose).count()
+      return "$prose\nVerification complete: $count"
+    }
+    if ("Projection complete:" in prose) return prose
+    val count = Regex("(?m)^(Finding: (?!none\\.?$)|Test value:|Scenario |Regression )").findAll(prose).count()
+    val hasFinding = Regex("(?m)^(Finding:|Test value:)").containsMatchIn(prose)
+    val withNone = if (!hasFinding) "$prose\nFinding: none" else prose
+    return "$withNone\nProjection complete: $count"
+  }
 
   companion object {
     const val FEATURE_BRANCH = "feat/SKILL-442-goal"

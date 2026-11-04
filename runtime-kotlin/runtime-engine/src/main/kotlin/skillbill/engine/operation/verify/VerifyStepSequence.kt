@@ -9,6 +9,7 @@ import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.engine.operation.unittestvalue.UnitTestValueCheckReview
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -212,8 +213,8 @@ internal class VerifyStepSequence(
       val reason = "No unit tests changed in ${run.target.comparisonScope}."
       return settled(receiptKey, VerifyWorkflow.SKIPPED, listOf(reason), WorkflowStepStatus.SKIPPED)
     }
-    val directive = UnitTestValueCheckPromptRules.reviewDirective(run.target.comparisonScope, tests)
-    val value = readOnly(run, UnitTestValueCheckPromptRules.REVIEW_STEP, directive, prior) { return it }
+    val directive = UnitTestValueCheckReview.directive(run.target.comparisonScope, tests)
+    val value = readOnly(run, UnitTestValueCheckReview.REVIEW_STEP, directive, prior) { return it }
     return settled(receiptKey, REPORTED, value.lines())
   }
 

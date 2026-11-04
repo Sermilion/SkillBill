@@ -10,11 +10,11 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.operation.unittestvalue.UnitTestValueCheckReview
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
-import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionResult
@@ -27,6 +27,9 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentScenarioResult
 import skillbill.goalrunner.assessment.model.GoalAssessmentScenarioVerdict
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.branchForFinalPullRequest
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -37,6 +40,7 @@ internal class GoalAssessmentRunServices(
   val activityStampWriter: AgentActivityStampWriter,
   val progress: GoalAssessmentProgress,
   val diagnostics: RuntimeDiagnostics,
+  val gitOperations: WorkflowGitOperations,
 ) {
   fun branchOf(state: GoalRunnerManifestState): String =
     state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
@@ -94,7 +98,7 @@ internal class GoalAssessmentRoundRun(
     existing ?: GoalAssessmentRound(
       round = roundNumber,
       headSha = bundle.headSha,
-      scopeFiles = GoalAssessmentScope.of(prior, roundNumber),
+      scopeFiles = if (roundNumber == 1) bundle.scopeFiles else GoalAssessmentScope.of(prior, roundNumber),
       assessorRuns = emptyList(),
       findings = emptyList(),
       scenarios = emptyList(),
@@ -129,7 +133,8 @@ internal class GoalAssessmentRoundRun(
   private fun planned(): List<PlannedRun> {
     val assessable = bundle.subtasks.filter { it.range != GoalAssessmentCommitRange.NoCommit }
     if (roundNumber == 1) {
-      return assessable.map { PlannedRun(GoalAssessmentRole.SUBTASK, it.id) } +
+      return listOf(PlannedRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null)) +
+        assessable.map { PlannedRun(GoalAssessmentRole.SUBTASK, it.id) } +
         PlannedRun(GoalAssessmentRole.CROSS_SUBTASK, null)
     }
     return if (previousTarget?.startsWith("IS-") == true || previousTarget?.startsWith("TR-") == true) {
@@ -140,7 +145,10 @@ internal class GoalAssessmentRoundRun(
   }
 
   private fun isRecorded(planned: PlannedRun): Boolean =
-    round.assessorRuns.any { it.role == planned.role && it.subtaskId == planned.subtaskId }
+    round.assessorRuns.any {
+      it.role == planned.role && it.subtaskId == planned.subtaskId &&
+        (planned.role != GoalAssessmentRole.TEST_VALUE_REVIEW || it.status == COMPLETED)
+    }
 
   private fun missingInput(planned: PlannedRun): String? {
     val subtask = bundle.subtasks.firstOrNull { it.id == planned.subtaskId } ?: return null
@@ -153,18 +161,16 @@ internal class GoalAssessmentRoundRun(
   }
 
   private fun runAssessor(planned: PlannedRun) {
+    if (planned.role == GoalAssessmentRole.TEST_VALUE_REVIEW) {
+      runTestValueReview()
+      return
+    }
     missingInput(planned)?.let { reason ->
       warn("${planned.label()} did not run because its input is unavailable: $reason.")
       record(GoalAssessmentRun(planned.role, planned.subtaskId, GoalAssessmentRunStatus.FAILED))
       return
     }
-    val focus =
-      when {
-        roundNumber == 1 ->
-          planned.subtaskId?.let { GoalAssessmentFocus.Subtask(it) } ?: GoalAssessmentFocus.CrossSubtask
-        previousTarget?.startsWith("IS-") == true -> GoalAssessmentFocus.Scenario(requireNotNull(previousTarget))
-        else -> GoalAssessmentFocus.Regression(requireNotNull(previousTarget))
-      }
+    val focus = assessorFocus(planned)
     val launched = launch(focus, planned.label())
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseAssessor(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
@@ -177,6 +183,15 @@ internal class GoalAssessmentRoundRun(
       if (settled != 1) verificationReady = false
     }
     record(GoalAssessmentRun(planned.role, planned.subtaskId, statusOf(launched, report != null && verificationReady)))
+  }
+
+  private fun assessorFocus(planned: PlannedRun): GoalAssessmentFocus {
+    return when {
+      roundNumber == 1 ->
+        planned.subtaskId?.let { GoalAssessmentFocus.Subtask(it) } ?: GoalAssessmentFocus.CrossSubtask
+      previousTarget?.startsWith("IS-") == true -> GoalAssessmentFocus.Scenario(requireNotNull(previousTarget))
+      else -> GoalAssessmentFocus.Regression(requireNotNull(previousTarget))
+    }
   }
 
   private fun verify() {
@@ -193,15 +208,121 @@ internal class GoalAssessmentRoundRun(
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseVerifier(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
     (parsed as? GoalAssessmentParse.Malformed)?.let { warn("the verifier output was malformed: ${it.reason}") }
-    verificationReady = report != null &&
+    verificationReady = verificationReady && report != null &&
       candidates.all { candidate ->
         val verdicts = report.verdicts.filter { it.findingRef == candidate.findingRef }
         verdicts.size == 1 && verdicts.single().evidence.isNotBlank()
       }
+    val expectedRefs = candidates.map { it.findingRef }.toSet()
+    val actualRefs = report?.verdicts?.map { it.findingRef }
+    if (actualRefs?.toSet() != expectedRefs || actualRefs.size != expectedRefs.size) verificationReady = false
     if (verificationReady) report?.let { applyVerdicts(it, candidates) }
     record(
       GoalAssessmentRun(GoalAssessmentRole.VERIFIER, null, statusOf(launched, report != null && verificationReady)),
     )
+  }
+
+  private fun runTestValueReview() {
+    if (!checkoutMatchesHead()) {
+      verificationReady = false
+      warn("the repository is not an unchanged checkout of the assembled goal head.")
+      record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.FAILED))
+      return
+    }
+    val testPaths = reviewPaths() ?: return
+    runScopedTestValueReview(testPaths)
+  }
+
+  private fun reviewPaths(): List<String>? {
+    val scopedTests = UnitTestValueCheckReview.testPaths(bundle.scopeFiles)
+    val testPaths =
+      when (
+        val result =
+          services.gitOperations.reviewablePathsAtRevision(request.repoRoot, bundle.headSha, scopedTests)
+      ) {
+        is WorkflowGitNameListResult.Listed -> result.names
+        is WorkflowGitNameListResult.Failed -> {
+          verificationReady = false
+          warn("the committed unit-test scope could not be resolved at the assembled head: ${result.error}")
+          record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.FAILED))
+          return null
+        }
+      }
+    if (!checkoutMatchesHead()) {
+      verificationReady = false
+      warn("the repository changed while the committed unit-test scope was being resolved.")
+      record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.FAILED))
+      return null
+    }
+    if (testPaths.isEmpty()) return recordEmptyReview()
+    return testPaths
+  }
+
+  private fun recordEmptyReview(): List<String>? {
+    if (!checkoutMatchesHead()) {
+      verificationReady = false
+      warn("the repository changed before the empty-scope unit-test review could be recorded.")
+      record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.FAILED))
+      return null
+    }
+    record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, COMPLETED))
+    return null
+  }
+
+  private fun runScopedTestValueReview(testPaths: List<String>) {
+    val before = repositoryFingerprint()
+    if (before == null) {
+      verificationReady = false
+      warn("the repository state could not be captured before the unit-test value review.")
+      record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.FAILED))
+      return
+    }
+    val launched = launch(GoalAssessmentFocus.TestValueReview(testPaths), "the unit-test value review")
+    val after = repositoryFingerprint()
+    val headAfter = currentHead()
+    if (
+      after == null || before != after || !reviewHeadMatches(headAfter)
+    ) {
+      verificationReady = false
+      warn("the unit-test value review changed the repository or its read-only state could not be checked.")
+      record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.FAILED))
+      return
+    }
+    val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseAssessor(it.text) }
+    val report = (parsed as? GoalAssessmentParse.Parsed)?.report
+    if (report == null) {
+      verificationReady = false
+      val reason = (parsed as? GoalAssessmentParse.Malformed)?.reason ?: "the review did not produce a report"
+      warn("the unit-test value review was unavailable: $reason")
+      record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, statusOf(launched, false)))
+      return
+    }
+    absorb(PlannedRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null), report)
+    record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, statusOf(launched, verificationReady)))
+  }
+
+  private fun reviewHeadMatches(head: String?): Boolean =
+    bundle.headSha.equals(head, ignoreCase = true) && checkoutMatchesHead()
+
+  private fun repositoryFingerprint(): String? =
+    when (val result = services.gitOperations.repositoryFingerprint(request.repoRoot)) {
+      is WorkflowGitOperationResult.Ok -> result.value.trim().takeIf(String::isNotEmpty)
+      is WorkflowGitOperationResult.Failed -> null
+    }
+
+  private fun currentHead(): String? =
+    (services.gitOperations.headCommitSha(request.repoRoot) as? WorkflowGitOperationResult.Ok)
+      ?.value?.trim()?.takeIf(String::isNotEmpty)
+
+  private fun checkoutMatchesHead(): Boolean {
+    val head = currentHead()
+    if (!bundle.headSha.equals(head, ignoreCase = true)) return false
+    val current = services.gitOperations.repositoryTreeIdentity(request.repoRoot)
+    val revision = services.gitOperations.revisionTreeIdentity(request.repoRoot, bundle.headSha)
+    if (current !is WorkflowGitOperationResult.Ok || revision !is WorkflowGitOperationResult.Ok) return false
+    val currentIdentity = current.value.trim()
+    val revisionIdentity = revision.value.trim()
+    return currentIdentity.isNotEmpty() && currentIdentity == revisionIdentity
   }
 
   private fun statusOf(
@@ -245,10 +366,13 @@ internal class GoalAssessmentRoundRun(
         GoalAssessmentScope.restates(carried, it.path, it.failureScenario)
       }
     val accepted = fresh.take(minOf(MAX_FINDINGS_PER_RUN, MAX_REF_NUMBER - used + 1).coerceAtLeast(0))
-    if (accepted.size < fresh.size) warn("${planned.label()} reported more findings than fit; dropped some.")
+    if (accepted.size < fresh.size) {
+      verificationReady = false
+      warn("${planned.label()} exceeded the finding capacity; assessment is unavailable instead of dropping findings.")
+      return
+    }
     val added =
       accepted.mapIndexed { index, candidate ->
-        val needsVerdict = candidate.kind == GoalAssessmentFindingKind.DEFECT
         GoalAssessmentFinding(
           findingRef = "GA-%03d".format(used + index),
           kind = candidate.kind,
@@ -259,8 +383,7 @@ internal class GoalAssessmentRoundRun(
           guardedRef = candidate.guardedRef,
           subtaskId = planned.subtaskId,
           originRound = round.round,
-          verification =
-            if (needsVerdict) GoalAssessmentVerification.UNVERIFIED else GoalAssessmentVerification.NOT_REQUIRED,
+          verification = GoalAssessmentVerification.UNVERIFIED,
           verificationEvidence = "",
           fixRoundsSurvived = 0,
           disposition = GoalAssessmentDisposition.PR_ONLY,
@@ -378,7 +501,13 @@ internal class GoalAssessmentRoundRun(
   }
 
   private data class PlannedRun(val role: GoalAssessmentRole, val subtaskId: Int?) {
-    fun label(): String = subtaskId?.let { "the subtask $it assessor" } ?: "the cross-subtask assessor"
+    fun label(): String =
+      when (role) {
+        GoalAssessmentRole.TEST_VALUE_REVIEW -> "the unit-test value reviewer"
+        GoalAssessmentRole.VERIFIER -> "the verifier"
+        GoalAssessmentRole.SUBTASK -> "the subtask $subtaskId assessor"
+        GoalAssessmentRole.CROSS_SUBTASK -> "the cross-subtask assessor"
+      }
   }
 
   private companion object {

@@ -6,6 +6,7 @@ enum class GoalAssessmentRole(val wireValue: String) {
   SUBTASK("subtask"),
   CROSS_SUBTASK("cross_subtask"),
   VERIFIER("verifier"),
+  TEST_VALUE_REVIEW("test_value_review"),
 }
 
 enum class GoalAssessmentRunStatus(val wireValue: String) {

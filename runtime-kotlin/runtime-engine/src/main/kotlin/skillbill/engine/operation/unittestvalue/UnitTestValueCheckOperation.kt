@@ -1,6 +1,5 @@
 package skillbill.engine.operation.unittestvalue
 
-import skillbill.engine.featuretask.persist.UnitTestPathClassifier
 import skillbill.engine.operation.core.Operation
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
@@ -20,7 +19,7 @@ public class UnitTestValueCheckOperation(
 
   override fun run(context: OperationContext): OperationRunResult {
     val scope = resolveScope(context) { return OperationRunResult.Finished(it) }
-    val candidates = scope.paths.filter(UnitTestPathClassifier::isUnitTest).distinct().sorted()
+    val candidates = UnitTestValueCheckReview.testPaths(scope.paths)
     val tests =
       if (scope.fromGitChanges) {
         existing(context.repoRoot, candidates, scope.label) { return OperationRunResult.Finished(it) }
@@ -29,12 +28,12 @@ public class UnitTestValueCheckOperation(
       }
     if (tests.isEmpty()) {
       return OperationRunResult.Finished(
-        OperationOutcome.Completed("No unit tests in scope (${scope.label}); nothing to review.\n"),
+        OperationOutcome.Completed(UnitTestValueCheckReview.noTestsReport(scope.label)),
       )
     }
-    val directive = UnitTestValueCheckPromptRules.reviewDirective(scope.label, tests)
+    val directive = UnitTestValueCheckReview.directive(scope.label, tests)
     val outcome =
-      when (val step = context.steps.runReadOnly(context, UnitTestValueCheckPromptRules.REVIEW_STEP, directive)) {
+      when (val step = context.steps.runReadOnly(context, UnitTestValueCheckReview.REVIEW_STEP, directive)) {
         is OperationStepResult.Failed -> OperationOutcome.Failed(step.reason)
         is OperationStepResult.Refused -> step.refusal
         is OperationStepResult.Settled -> OperationOutcome.Completed(step.value.trimEnd() + "\n")

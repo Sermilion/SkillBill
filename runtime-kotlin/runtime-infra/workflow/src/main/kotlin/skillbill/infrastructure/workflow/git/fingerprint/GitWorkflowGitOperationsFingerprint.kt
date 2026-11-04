@@ -4,6 +4,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.contracts.newSha256Digest
 import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.host.jvm.requirePathContainedIn
+import skillbill.infrastructure.workflow.git.scoped.GIT_NUL
 import skillbill.infrastructure.workflow.process.GIT_CHANGED_FILE_SAMPLE_LIMIT
 import skillbill.infrastructure.workflow.process.GIT_NUMSTAT_PART_LIMIT
 import skillbill.infrastructure.workflow.process.GIT_RENAME_NAME_STATUS_MIN_FIELDS
@@ -176,6 +177,85 @@ internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOpe
       WorkflowGitOperationResult.Failed(error = "Could not fingerprint revision tree: ${error.message}")
     }
   }
+
+  override fun reviewablePathsAtRevision(
+    repoRoot: Path,
+    revision: String,
+    candidates: List<String>,
+  ): WorkflowGitNameListResult {
+    if (revision.isBlank() || revision.startsWith("-") || revision.contains('\u0000')) {
+      return WorkflowGitNameListResult.Failed("The requested review revision is invalid.")
+    }
+    val resolvedRevision =
+      runGitCommand(repoRoot, "rev-parse", "--verify", "--end-of-options", "$revision^{commit}")
+    if (resolvedRevision !is WorkflowGitOperationResult.Ok) {
+      return WorkflowGitNameListResult.Failed(resolvedRevision.error)
+    }
+    val commit =
+      resolvedRevision.value.trim().takeIf(String::isNotEmpty)
+        ?: return WorkflowGitNameListResult.Failed("Git returned an empty review revision.")
+    return reviewPathsAtCommit(repoRoot, commit, candidates)
+  }
+
+  private fun reviewPathsAtCommit(
+    repoRoot: Path,
+    commit: String,
+    candidates: List<String>,
+  ): WorkflowGitNameListResult {
+    val paths = candidates.distinct()
+    if (paths.any(::invalidReviewPath)) {
+      return WorkflowGitNameListResult.Failed("The requested review scope contains an invalid path.")
+    }
+    if (paths.isEmpty()) return WorkflowGitNameListResult.Listed(emptyList())
+    val result =
+      runGitCommand(
+        repoRoot,
+        listOf("ls-tree", "-rz", "--full-tree", "--format=%(objectmode)%x09%(path)", commit, "--") +
+          paths.map { ":(literal)$it" },
+      )
+    if (result !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(result.error)
+    return parseReviewPaths(result.value, paths.toSet())
+  }
+
+  private fun parseReviewPaths(
+    output: String,
+    candidateSet: Set<String>,
+  ): WorkflowGitNameListResult {
+    if (output.isNotEmpty() && !output.endsWith(GIT_NUL)) {
+      return WorkflowGitNameListResult.Failed("Git returned malformed revision-scoped review paths.")
+    }
+    val entries = if (output.isEmpty()) emptyList() else output.removeSuffix(GIT_NUL.toString()).split(GIT_NUL)
+    if (entries.any(String::isEmpty)) {
+      return WorkflowGitNameListResult.Failed("Git returned malformed revision-scoped review paths.")
+    }
+    return collectReviewPaths(entries, candidateSet)
+  }
+
+  private fun collectReviewPaths(
+    entries: List<String>,
+    candidateSet: Set<String>,
+  ): WorkflowGitNameListResult {
+    val reviewable = linkedSetOf<String>()
+    entries.forEach { entry ->
+      val separator = entry.indexOf('\t')
+      if (separator != GIT_MODE_LENGTH || entry.length <= separator + 1) {
+        return WorkflowGitNameListResult.Failed("Git returned malformed revision-scoped review paths.")
+      }
+      val mode = entry.substring(0, separator)
+      val path = entry.substring(separator + 1)
+      if (path !in candidateSet) {
+        return WorkflowGitNameListResult.Failed("Git returned an unexpected revision-scoped review path.")
+      }
+      if (mode == "100644" || mode == "100755") reviewable += path
+    }
+    return WorkflowGitNameListResult.Listed(reviewable.toList())
+  }
+
+  private fun invalidReviewPath(path: String): Boolean =
+    path.isBlank() || path.startsWith('/') || path.contains('\u0000') ||
+      path.split('/').any { it == ".." || it == "." }
+
+  private const val GIT_MODE_LENGTH = 6
 
   private fun digestAnchor(
     digest: MessageDigest,

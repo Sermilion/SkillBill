@@ -12,7 +12,9 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentFix
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixValidation
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
+import skillbill.goalrunner.assessment.model.GoalAssessmentRole
 import skillbill.goalrunner.assessment.model.GoalAssessmentRound
+import skillbill.goalrunner.assessment.model.GoalAssessmentRunStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
@@ -63,9 +65,77 @@ class GoalAssessmentLoopTest {
     assertEquals(1, fixture.calls.count { it == AssessmentCall.FIRST_SUBTASK })
     assertEquals(1, fixture.calls.count { it == AssessmentCall.SECOND_SUBTASK })
     assertEquals(1, fixture.calls.count { it == AssessmentCall.CROSS_SUBTASK })
+    assertEquals(1, fixture.calls.count { it == AssessmentCall.TEST_VALUE_REVIEW })
+    assertTrue("kind defect" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
+    assertTrue("Verification complete: <candidate count>" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
     assertEquals(emptyList(), record.openFindingRefs)
     assertTrue(record.rounds.flatMap { it.findings }.all { it.state == GoalAssessmentFindingState.FIXED })
     assertTrue(fixture.prompts.getValue(AssessmentCall.FIX).contains("Repair the selected handler"))
+  }
+
+  @Test
+  fun `empty committed test scope records a completed no tests review before assessors`() {
+    val fixture = GoalAssessmentGateFixture(home) { NO_FINDING }
+    fixture.git.changedPathsBetweenCommitsValue = listOf("src/Feature.kt")
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertTrue(AssessmentCall.TEST_VALUE_REVIEW !in fixture.calls)
+    assertEquals(listOf("src/Feature.kt"), record.rounds.single().scopeFiles)
+    assertEquals(
+      GoalAssessmentRunStatus.COMPLETED,
+      record.rounds.single().assessorRuns.first { it.role == GoalAssessmentRole.TEST_VALUE_REVIEW }.status,
+    )
+  }
+
+  @Test
+  fun `an oversized test value report cannot be resumed as a completed review`() {
+    val fixture =
+      GoalAssessmentGateFixture(home) { call ->
+        if (call == AssessmentCall.TEST_VALUE_REVIEW) {
+          (1..51).joinToString("\n") { line ->
+            "Test value: src/FeatureTest.kt:$line guards src/Feature.kt:3 reason the callback is not asserted"
+          } + "\nProjection complete: 51"
+        } else {
+          NO_FINDING
+        }
+      }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, record.exitReason)
+    assertEquals(
+      GoalAssessmentRunStatus.MALFORMED,
+      record.rounds.single().assessorRuns.first { it.role == GoalAssessmentRole.TEST_VALUE_REVIEW }.status,
+    )
+  }
+
+  @Test
+  fun `a refuted test value candidate never receives repair authority`() {
+    val fixture =
+      GoalAssessmentGateFixture(home) { call ->
+        when (call) {
+          AssessmentCall.TEST_VALUE_REVIEW ->
+            "Test value: src/FeatureTest.kt:8 guards src/Feature.kt:3 reason the test passes when the callback " +
+              "is skipped\n" +
+              "Projection complete: 1"
+          AssessmentCall.VERIFIER ->
+            "Verify GA-001: refuted evidence src/FeatureTest.kt:8 the test fails when the callback is skipped"
+          else -> NO_FINDING
+        }
+      }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val finding = record.rounds.first().findings.single()
+
+    assertEquals(GoalAssessmentFindingKind.TEST_VALUE, finding.kind)
+    assertEquals(GoalAssessmentFindingState.REFUTED, finding.state)
+    assertEquals(GoalAssessmentDisposition.PR_ONLY, finding.disposition)
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertTrue(AssessmentCall.FIX !in fixture.calls)
+    assertTrue("kind test_value" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
+    assertTrue("guards src/Feature.kt:3" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
   }
 
   @Test

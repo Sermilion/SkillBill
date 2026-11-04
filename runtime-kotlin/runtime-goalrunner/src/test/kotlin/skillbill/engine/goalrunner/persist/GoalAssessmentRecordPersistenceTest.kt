@@ -87,7 +87,12 @@ class GoalAssessmentRecordPersistenceTest {
   @Test
   fun `explicit assessment resume retains failed outcomes and grants a new active allowance`() {
     workflows.saveFeatureTaskWorkflow(parentRecord(), FeatureTaskWorkflowMode.RUNTIME)
-    val first = partialRecord().rounds.single()
+    val first =
+      partialRecord().rounds.single().copy(
+        assessorRuns =
+          partialRecord().rounds.single().assessorRuns +
+            GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.COMPLETED),
+      )
     val exhausted =
       partialRecord().copy(
         exitReason = GoalAssessmentExitReason.PERSISTENT_FINDING,
@@ -95,6 +100,8 @@ class GoalAssessmentRecordPersistenceTest {
           (1..4).map { number ->
             first.copy(
               round = number,
+              assessorRuns =
+                first.assessorRuns.filter { number == 1 || it.role != GoalAssessmentRole.TEST_VALUE_REVIEW },
               findings = if (number == 1) first.findings else emptyList(),
               targetRef = "GA-001".takeIf { number < 4 },
               repairPlan = "Repair the loader.".takeIf { number < 4 },
@@ -125,18 +132,36 @@ class GoalAssessmentRecordPersistenceTest {
   }
 
   @Test
+  fun `operator resume drops a failed review identity and never creates a completed one`() {
+    workflows.saveFeatureTaskWorkflow(parentRecord(), FeatureTaskWorkflowMode.RUNTIME)
+    val round =
+      partialRecord().rounds.single().copy(
+        assessorRuns =
+          partialRecord().rounds.single().assessorRuns +
+            GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.FAILED),
+      )
+    store().recordGoalAssessmentRecord(
+      PARENT_ID,
+      GoalAssessmentRecord(
+        issueKey = ISSUE_KEY,
+        rounds = listOf(round),
+        exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE,
+        openFindingRefs = listOf("GA-001"),
+      ),
+    )
+
+    assertTrue(store().reopenGoalAssessmentForOperatorResume(PARENT_ID))
+
+    val resumed = assertIs<GoalAssessmentRecordRead.Recorded>(store().readGoalAssessmentRecord(PARENT_ID)).record
+    assertTrue(resumed.rounds.single().assessorRuns.none { it.role == GoalAssessmentRole.TEST_VALUE_REVIEW })
+  }
+
+  @Test
   fun `execution quarantines the superseded round contract while status leaves it untouched`() {
     val current = partialRecord().asGoalAssessmentRecordWireMap()
     val legacy =
       FeatureTaskRuntimeWorkflowArtifactMap.from(
-        current.filterKeys { it != Keys.BUDGET_START_ROUND } + (Keys.CONTRACT_VERSION to "0.1") +
-          (
-            Keys.ROUNDS to
-              partialRecord().rounds.map { round ->
-                FeatureTaskRuntimeWorkflowArtifactMap.from((current[Keys.ROUNDS] as List<*>)[round.round - 1])
-                  .filterKeys { it != Keys.TARGET_REF && it != Keys.REPAIR_PLAN }
-              }
-          ),
+        current + (Keys.CONTRACT_VERSION to "0.2"),
       )
     val database = sqliteSessionFactoryForTests(home, home.resolve("state.db").toString(), emptyMap(), clock)
     database.transaction { it.workflowStates.save(WorkflowFamily.TASK_RUNTIME, parentRecord(legacy).toSnapshot()) }

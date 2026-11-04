@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.gitops
 
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
@@ -23,6 +24,12 @@ internal object NoopRepositoryFingerprintGitOperations : RepositoryFingerprintGi
     repoRoot: Path,
     revision: String,
   ): WorkflowGitOperationResult = repositoryTreeIdentity(repoRoot)
+
+  override fun reviewablePathsAtRevision(
+    repoRoot: Path,
+    revision: String,
+    candidates: List<String>,
+  ): WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(emptyList())
 
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
