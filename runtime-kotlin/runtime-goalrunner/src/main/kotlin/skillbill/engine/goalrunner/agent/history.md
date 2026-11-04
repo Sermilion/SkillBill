@@ -4,7 +4,7 @@
 Areas: runtime-goalrunner assessment, runtime-engine goal assessment and unit-test review prompts
 - Assessor and verifier output no longer needs a `Projection complete` or `Verification complete` marker or count. ENG-1887 and SKILL-451 stopped at assessment_unavailable because assessors counted `Finding: none` as a record.
 - Only bare record lines (`Finding:`, `Test value:`, `Scenario IS-NNN:`, `Regression TR-NNN:`, `Verify GA-NNN:`, `Verify:`) are records. Markdown bold and backticks are stripped first, so prose such as `**Test value.** ...` is no longer rejected.
-- `Finding: none` is tolerated next to findings or repeated, and a report with only scenario lines counts as having no findings. A record-shaped line that fails its grammar still makes the run malformed, so a broken finding is not silently dropped.
+- `Finding: none` and `Test value: none` are tolerated next to findings or repeated, and a report with only scenario lines counts as having no findings. In assessor output a record-shaped line that fails its grammar still makes the run malformed, so a broken finding is not silently dropped. The verifier reads only `Verify` lines and ignores everything else.
 Feature flag: N/A
 
 ## [2026-11-04] SKILL-477.1 fix confirmed assessment findings

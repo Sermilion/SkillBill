@@ -52,7 +52,8 @@ internal object GoalAssessmentLineParser {
       if (VERIFY.matches(line) || VERIFY_NONE.matches(line)) return@forEach
       val parsed =
         findingOf(line)?.let(findings::add) ?: scenarioOf(line)?.let(scenarios::add)
-          ?: regressionOf(line)?.let(regressions::add) ?: FINDING_NONE.matches(line).takeIf { it }
+          ?: regressionOf(line)?.let(regressions::add)
+          ?: (FINDING_NONE.matches(line) || TEST_VALUE_NONE.matches(line)).takeIf { it }
       if (parsed == null) rejected += line.take(MAX_REJECTED_LINE) else valid++
     }
     return when {
@@ -66,8 +67,7 @@ internal object GoalAssessmentLineParser {
     val verdicts = mutableListOf<GoalVerifierVerdict>()
     val rejected = mutableListOf<String>()
     var valid = 0
-    recordLines(text).forEach { line ->
-      if (ASSESSOR_RECORDS.any { it.matches(line) }) return@forEach
+    recordLines(text).filter { it.startsWith("Verify", ignoreCase = true) }.forEach { line ->
       val parsed = verdictOf(line)?.let(verdicts::add) ?: VERIFY_NONE.matches(line).takeIf { it }
       if (parsed == null) rejected += line.take(MAX_REJECTED_LINE) else valid++
     }
@@ -159,6 +159,7 @@ internal object GoalAssessmentLineParser {
   private val FINDING_NONE = Regex("""^Finding:\s*none\.?$""", RegexOption.IGNORE_CASE)
   private val TEST_VALUE =
     Regex("""^Test value:\s*(\S+?:\d+)\s+guards\s+(\S+?:\d+)\s+reason\s+(.+)$""", RegexOption.IGNORE_CASE)
+  private val TEST_VALUE_NONE = Regex("""^Test value:\s*none\.?$""", RegexOption.IGNORE_CASE)
   private val SCENARIO =
     Regex("""^Scenario\s+(IS-\d{3}):\s*(holds|broken)\s+evidence\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val REGRESSION =
@@ -166,5 +167,4 @@ internal object GoalAssessmentLineParser {
   private val VERIFY =
     Regex("""^Verify\s+(GA-\d{3}):\s*(confirmed|refuted)\s+evidence\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val VERIFY_NONE = Regex("""^Verify:\s*none\.?$""", RegexOption.IGNORE_CASE)
-  private val ASSESSOR_RECORDS = listOf(FINDING, FINDING_NONE, TEST_VALUE, SCENARIO, REGRESSION)
 }

@@ -122,4 +122,34 @@ class GoalAssessmentLineParserTest {
       assertIs<GoalAssessmentParse.Malformed>(GoalAssessmentLineParser.parseVerifier(output))
     }
   }
+
+  @Test
+  fun `verifier projection ignores empty and unparseable assessor lines after the verdict`() {
+    val output =
+      """
+      Verify GA-001: refuted evidence At head `d0cebfc45`, the case at `scripts/claude-code-review/post-findings.test.js:47` sets review outcome `'failure'` together with non-empty structured output.
+
+      Test value: none
+      Finding: none of the candidates still hold
+      """.trimIndent()
+
+    val parsed =
+      assertIs<GoalAssessmentParse.Parsed<GoalVerifierReport>>(GoalAssessmentLineParser.parseVerifier(output))
+
+    assertEquals(listOf("GA-001" to "refuted"), parsed.report.verdicts.map { it.findingRef to it.verdict.wireValue })
+  }
+
+  @Test
+  fun `assessor projection accepts test value none beside findings`() {
+    val output =
+      """
+      Finding: major src/Handler.kt:12 scenario An empty input skips the callback
+      Test value: none
+      """.trimIndent()
+
+    val parsed =
+      assertIs<GoalAssessmentParse.Parsed<GoalAssessorReport>>(GoalAssessmentLineParser.parseAssessor(output))
+
+    assertEquals(listOf("src/Handler.kt"), parsed.report.findings.map { it.path })
+  }
 }
