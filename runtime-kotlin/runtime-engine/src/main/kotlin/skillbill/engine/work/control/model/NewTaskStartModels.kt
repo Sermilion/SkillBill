@@ -14,6 +14,7 @@ public data class NewTaskIntakeRequest(
   public val baseBranch: String?,
   public val keyChoice: String?,
   public val occupiedKeys: Set<String>,
+  public val reuseRequested: Boolean = false,
 )
 
 public sealed interface NewTaskPreparation {
@@ -21,6 +22,7 @@ public sealed interface NewTaskPreparation {
     public val key: String,
     public val intake: String,
     public val allocated: Boolean,
+    public val reuseRequested: Boolean = false,
   ) : NewTaskPreparation
 
   public data class NeedsKey(public val choices: List<String>) : NewTaskPreparation

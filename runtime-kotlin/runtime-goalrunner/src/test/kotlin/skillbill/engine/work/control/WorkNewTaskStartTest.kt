@@ -1,5 +1,6 @@
 package skillbill.engine.work.control
 
+import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testProjectStore
 import skillbill.engine.goal.GoalNewWorkAdmission
@@ -18,7 +19,6 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
-import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,7 +80,7 @@ class WorkNewTaskStartTest {
         WorkNewTaskStart(
           database,
           GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
-          NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
+          NewTaskIssueKeyAllocator(testProjectStore, TestDecompositionManifestStore, NoopRuntimeDiagnostics),
           goalPreflightServiceForTests(database),
           launcher,
           EnvironmentContext(),

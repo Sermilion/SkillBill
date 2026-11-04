@@ -243,6 +243,7 @@ class RuntimeWorkControlRepository(
               request.baseBranch,
               request.keyChoice,
               launches.keys.value + triedKeys,
+              request.reuseRequested,
             ),
           ),
         )

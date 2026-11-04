@@ -135,6 +135,7 @@ data class NewTaskStart(
   val expectedDatabaseSessionId: Long?,
   val title: String? = null,
   val target: String? = null,
+  val reuseRequested: Boolean = false,
 )
 
 fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {

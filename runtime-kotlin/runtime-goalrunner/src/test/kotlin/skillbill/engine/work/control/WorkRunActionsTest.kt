@@ -52,7 +52,6 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
-import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -366,7 +365,7 @@ class WorkRunActionsTest {
         WorkNewTaskStart(
           database,
           GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
-          NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
+          NewTaskIssueKeyAllocator(testProjectStore, TestDecompositionManifestStore, NoopRuntimeDiagnostics),
           goalPreflightServiceForTests(database, leftover),
           recordingLauncher(root, launches),
           EnvironmentContext(),
