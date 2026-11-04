@@ -433,7 +433,7 @@ public class GoalRunnerArchiveImportOperations(
           else -> record.contractVersion
         },
       mode = FeatureTaskWorkflowMode.RUNTIME,
-      implementationSkill = record.implementationSkill?.takeIf(String::isNotBlank) ?: "bill-feature",
+      implementationSkill = if (archived.implementationSkill.isNullOrBlank()) null else record.implementationSkill,
       stateEnteredAt = null,
       stateEnteredAtEstimated = false,
     )

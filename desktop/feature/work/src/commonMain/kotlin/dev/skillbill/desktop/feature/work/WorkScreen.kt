@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.work
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -178,6 +179,25 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
             Text("${repository.name} · ${repository.root}")
           }
         }
+        SbDialogText("Or enter a checkout path")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+          SbInput(
+            value = target.destinationPath,
+            onValueChange = { onAction(WorkAction.ImportDestinationPathChanged(it)) },
+            modifier = Modifier.weight(1f),
+            placeholder = "/path/to/checkout",
+            mono = true,
+            enabled = !target.retryPending && !target.importing && !target.resolvingDestination,
+            onSubmit = { onAction(WorkAction.ResolveImportDestination) },
+          )
+          SbButton(
+            if (target.resolvingDestination) "Checking…" else "Use path",
+            { onAction(WorkAction.ResolveImportDestination) },
+            enabled = !target.retryPending && !target.importing && !target.resolvingDestination && target.destinationPath.isNotBlank(),
+            size = SbControlSize.Small,
+          )
+        }
+        target.destinationError?.let { SbDialogText(it) }
         if (target.retryPending) SbDialogText("Retry stays bound to this repository, archive, and database session.")
       }
     }

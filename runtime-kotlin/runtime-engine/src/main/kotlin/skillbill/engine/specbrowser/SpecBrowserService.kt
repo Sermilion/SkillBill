@@ -34,19 +34,22 @@ public class SpecBrowserService(
   status: IdeStatusService,
   runs: WorkRunActions,
   private val goals: GoalIssueStartedReader,
-  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val repositories: RepositoryEnclosingRootPort,
   private val files: GoalRuntimeStateFileStore,
 ) {
   private val manifestCache = SpecManifestCache(manifests, validator)
   private val treeReader = SpecTreeReader(manifests, manifestCache)
-  private val liveGoals = SpecLiveGoalReader(database, status, runs, repositoryEnclosingRootPort)
+  private val liveGoals = SpecLiveGoalReader(database, status, runs, repositories)
 
   public fun projects(): List<SpecBrowserProject> = catalog.list().filter { it.hasSpecs }.map { project(it, null) }
 
   public fun projectFor(repoRoot: Path): SpecBrowserProject {
-    val location = projectStore.resolve(repoRoot)
-    val name = displayName(repoRoot, location.projectId)
-    return SpecBrowserProject(location.projectId, name, location.specsRoot, repoRoot)
+    require(files.directoryExists(repoRoot)) { "Path '$repoRoot' is not an available directory." }
+    val checkout = repositories.enclosingRepositoryRoot(repoRoot)
+    require(files.realPath(checkout.resolve(".git")) != null) { "Path '$repoRoot' is not inside a Git checkout." }
+    val location = projectStore.resolve(checkout)
+    val name = displayName(checkout, location.projectId)
+    return SpecBrowserProject(location.projectId, name, location.specsRoot, checkout)
   }
 
   public fun snapshot(

@@ -52,6 +52,9 @@ data class WorkImportConfirmation(
   val commitSha: String,
   val repositories: List<WorkImportRepository>,
   val repositoryRoot: String?,
+  val destinationPath: String = repositoryRoot.orEmpty(),
+  val resolvingDestination: Boolean = false,
+  val destinationError: String? = null,
   val retryPending: Boolean = false,
   val importing: Boolean = false,
 )
@@ -82,6 +85,8 @@ sealed interface WorkAction {
   data object RequestImport : WorkAction
   data object DismissImport : WorkAction
   data class ChooseImportRepository(val root: String) : WorkAction
+  data class ImportDestinationPathChanged(val path: String) : WorkAction
+  data object ResolveImportDestination : WorkAction
   data object ConfirmImport : WorkAction
   data class FocusedKey(val key: RowKey) : WorkAction
 }
