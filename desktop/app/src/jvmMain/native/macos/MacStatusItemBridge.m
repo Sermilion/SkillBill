@@ -10,9 +10,43 @@ static id appResignObserver;
 static id rightClickMonitor;
 static NSMenu *contextMenu;
 
-static void onMain(dispatch_block_t block) {
-  if (NSThread.isMainThread) block();
-  else dispatch_sync(dispatch_get_main_queue(), block);
+@interface SkillBillMainRunner : NSObject
++ (void)run:(dispatch_block_t)block;
+@end
+
+@implementation SkillBillMainRunner
++ (void)run:(dispatch_block_t)block {
+  block();
+}
+@end
+
+static void onMainAsync(dispatch_block_t block) {
+  dispatch_async(dispatch_get_main_queue(), block);
+}
+
+static void onMainWaiting(dispatch_block_t block) {
+  if (NSThread.isMainThread) {
+    block();
+    return;
+  }
+  dispatch_block_t copied = [block copy];
+  [SkillBillMainRunner performSelectorOnMainThread:@selector(run:)
+                                        withObject:copied
+                                     waitUntilDone:YES
+                                             modes:@[NSRunLoopCommonModes, @"AWTRunLoopMode"]];
+  [copied release];
+}
+
+static void releaseBridgeClass(void) {
+  if (bridgeClass == NULL || javaVM == NULL) return;
+  JNIEnv *env = NULL;
+  BOOL attached = NO;
+  jint state = (*javaVM)->GetEnv(javaVM, (void **)&env, JNI_VERSION_1_6);
+  if (state == JNI_EDETACHED && (*javaVM)->AttachCurrentThread(javaVM, (void **)&env, NULL) == JNI_OK) attached = YES;
+  else if (state != JNI_OK) return;
+  (*env)->DeleteGlobalRef(env, bridgeClass);
+  bridgeClass = NULL;
+  if (attached) (*javaVM)->DetachCurrentThread(javaVM);
 }
 
 @interface SkillBillStatusTarget : NSObject
@@ -85,7 +119,7 @@ JNIEXPORT jboolean JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusIt
   (*env)->GetJavaVM(env, &javaVM);
   if (bridgeClass == NULL) bridgeClass = (*env)->NewGlobalRef(env, klass);
   __block BOOL failed = NO;
-  onMain(^{
+  onMainWaiting(^{
     if (statusItem != nil) return;
     statusTarget = [SkillBillStatusTarget new];
     statusItem = [[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength] retain];
@@ -128,7 +162,7 @@ JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBr
   (*env)->ReleaseStringUTFChars(env, kindValue, kindChars);
   NSArray *goalLabels = strings(env, goals);
   NSArray *phaseLabels = strings(env, phases);
-  onMain(^{
+  onMainAsync(^{
     if (statusItem == nil) return;
     NSString *symbol = [kind isEqualToString:@"failed"] ? @"exclamationmark.triangle" : ([kind isEqualToString:@"needs_you"] ? @"bell.badge" : ([kind isEqualToString:@"running"] ? @"bolt" : @"checkmark.circle"));
     NSImage *image = [[NSImage imageWithSystemSymbolName:symbol accessibilityDescription:@"Skill Bill"] copy];
@@ -166,7 +200,7 @@ JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBr
 }
 
 JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBridge_nativeDispose(JNIEnv *env, jclass klass) {
-  onMain(^{
+  onMainAsync(^{
     if (statusItem != nil) {
       [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
       [statusItem release];
@@ -186,9 +220,6 @@ JNIEXPORT void JNICALL Java_dev_skillbill_desktop_app_tray_macos_MacStatusItemBr
       [appResignObserver release];
     }
     appResignObserver = nil;
+    releaseBridgeClass();
   });
-  if (bridgeClass != NULL) {
-    (*env)->DeleteGlobalRef(env, bridgeClass);
-    bridgeClass = NULL;
-  }
 }
