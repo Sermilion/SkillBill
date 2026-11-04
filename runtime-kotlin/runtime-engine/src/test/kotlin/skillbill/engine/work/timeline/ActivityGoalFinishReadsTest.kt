@@ -6,6 +6,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.UnitOfWork
 import skillbill.ports.blockincident.BlockIncidentRepository
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowStateRepository
@@ -77,7 +78,8 @@ class ActivityGoalFinishReadsTest {
               ),
               WorkActivityGroup("third", 3, "Third", WorkActivityStatus.PENDING, null, null, emptyList(), emptyList()),
             )
-          val group = ActivityGoalFinishReads().groups(goal, children, emptyList(), reads).single()
+          val group =
+            ActivityGoalFinishReads().groups(goal, children, emptyList(), reads, NoopRuntimeDiagnostics).single()
           assertEquals("goal-interruptions", group.id)
           assertEquals(listOf("old", "current"), group.blocks.map { it.id })
           assertEquals(listOf("plan_subtasks", "plan_subtasks"), group.blocks.map { it.phaseId })
@@ -126,9 +128,24 @@ class ActivityGoalFinishReadsTest {
             emptyList(),
           )
         val previous = child.copy(id = "previous", status = WorkActivityStatus.COMPLETE, startedAt = at(0))
-        assertEquals(emptyList(), ActivityGoalFinishReads().groups(goal, listOf(previous, child), emptyList(), reads))
+        val interrupted =
+          ActivityGoalFinishReads().groups(
+            goal,
+            listOf(previous, child),
+            emptyList(),
+            reads,
+            NoopRuntimeDiagnostics,
+          )
+        assertEquals(emptyList(), interrupted)
         val finished = child.copy(status = WorkActivityStatus.COMPLETE)
-        val group = ActivityGoalFinishReads().groups(goal, listOf(previous, finished), emptyList(), reads).single()
+        val group =
+          ActivityGoalFinishReads().groups(
+            goal,
+            listOf(previous, finished),
+            emptyList(),
+            reads,
+            NoopRuntimeDiagnostics,
+          ).single()
         assertEquals("goal-finish", group.id)
         assertEquals("implement", group.after.single().name)
       }
