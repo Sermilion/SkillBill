@@ -1,3 +1,10 @@
+## [2026-11-04] SKILL-480 audit citations and child incident attributionAreas: runtime-domain, runtime-contracts, runtime-engine, runtime-goalrunner
+- Recheck citations accept commas and semicolons while retaining citation and line-range validation and comma-joined evidence normalization.
+- Parent goal blocks retain child accepted-phase references and report the child phase while keeping the parent standing step for resume.
+- A durable child-cause artifact correlates recovered observations with the parent incident and child identity.
+Feature flag: N/A
+Acceptance criteria: 2/2 subtask criteria implemented
+
 ## [2026-11-02] SKILL-457 standalone QA live checklist
 Areas: runtime-cli, runtime-contracts, runtime-engine, runtime-ports, runtime-infra, runtime-core, orchestration/contracts, skills/skill-bill, docs
 - Migration 97 adds `qa_checklist` to standalone phase status and reinstalls change triggers. Checklist writes leave status revision, timestamps and lease state intact while notifying desktop readers.

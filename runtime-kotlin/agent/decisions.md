@@ -1,3 +1,7 @@
+## [2026-11-04] Preserve child cause separately from the parent standing stepContext: A parent goal stopped at plan_subtasks can be blocked by a child audit. Binding the child's accepted reference to the parent loses the phase and incident that caused the block.
+Decision: Retain the child reference as the cause and keep the parent standing step in its block identity. Persist the cause with the parent incident token and check the child identity during recovery.
+Reason: Resume needs the parent step, while diagnostics need the child's phase and incident. Correlation prevents a stale child cause from being attributed to another parent incident.
+
 ## [2026-11-02] Keep standalone QA progress separate from verdict settlement
 Context: A running standalone QA agent needs durable progress while its prose report remains the source of the verdict.
 Decision: Store a bounded checklist on the active standalone status row, update it transactionally, and treat seed and progress failures as non-blocking. Keep prose report settlement unchanged.
