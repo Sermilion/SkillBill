@@ -44,6 +44,7 @@ import dev.skillbill.desktop.core.ui.navigation.PaneSlot
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellLayout
+import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.changes.ChangesWindowKeys
 import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.cancel
@@ -218,10 +219,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         onRemoveFavorite = window.favorites::remove,
         onRemoveSpecFavorite = window.favorites::removeSpec,
         onOpenSpecFavorite = { projectId, path ->
-          panes.drawerOpen = false
-          window.specsPane.open()
-          panes.specsOpen = true
-          window.specsPane.revealFavorite(projectId, path)
+          openSpecFavorite(panes, window.specsPane::open, window.specsPane::revealFavorite, projectId, path)
         },
       )
     }
@@ -239,4 +237,17 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
       }
     }
   }
+}
+
+internal fun openSpecFavorite(
+  panes: ShellPanes,
+  openSpecs: () -> Unit,
+  revealFavorite: (String, String) -> Unit,
+  projectId: String,
+  path: String,
+) {
+  panes.drawerOpen = false
+  openSpecs()
+  panes.specsOpen = true
+  revealFavorite(projectId, path)
 }

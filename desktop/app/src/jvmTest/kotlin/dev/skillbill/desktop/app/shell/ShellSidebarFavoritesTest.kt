@@ -1,13 +1,20 @@
 package dev.skillbill.desktop.app.shell
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -21,6 +28,7 @@ import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -83,6 +91,57 @@ class ShellSidebarFavoritesTest {
     runOnIdle {
       assertEquals(null, selected)
       assertEquals("p1" to "SKILL-1", opened)
+    }
+  }
+
+  @Test
+  fun `opening a spec favorite closes the drawer and reveals the selected spec`() = runComposeUiTest {
+    val specKey = FavoriteSpecKey("project-1", "SKILL-478")
+    val specEntry = FavoriteSpecSidebarEntry.Resolved(specKey, "Drawer regression", "SKILL-478")
+    val panes = ShellPanes().apply { drawerOpen = true }
+    var opened = false
+    var revealed: Pair<String, String>? = null
+    var clickedBehindDrawer = false
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.width(480.dp).height(420.dp)) {
+          ShellFrame(
+            sidebar = {
+              ShellSidebar(
+                topRoute = WorkRoute(null), sectionSizes = null, favorites = emptyList(), specFavorites = listOf(specEntry), specsOpen = panes.specsOpen,
+                terminalOpen = false, chatOpen = false, newTaskDraft = false, contributions = emptyList(), onNavigate = {},
+                onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {}, onToggleChat = {}, onShowShortcuts = {},
+                onRemoveFavorite = {}, onRemoveSpecFavorite = {},
+                onOpenSpecFavorite = { projectId, path ->
+                  openSpecFavorite(panes, { opened = true }, { selectedProject, selectedPath -> revealed = selectedProject to selectedPath }, projectId, path)
+                },
+              )
+            },
+            drawerMode = true,
+            drawerOpen = panes.drawerOpen,
+            onDismissDrawer = { panes.drawerOpen = false },
+          ) {
+            Box(Modifier.fillMaxSize()) {
+              Box(
+                Modifier.align(Alignment.BottomEnd).size(80.dp).clickable { clickedBehindDrawer = true }.testTag("specs-pane-action"),
+              )
+              BasicText("Specs pane")
+            }
+          }
+        }
+      }
+    }
+
+    onNodeWithContentDescription("Drawer regression, SKILL-478").performClick()
+    onNodeWithContentDescription("Drawer regression, SKILL-478").assertDoesNotExist()
+    onNodeWithText("Specs pane").assertIsDisplayed()
+    onNodeWithTag("specs-pane-action").performClick()
+    runOnIdle {
+      assertEquals(true, opened)
+      assertEquals("project-1" to "SKILL-478", revealed)
+      assertEquals(true, panes.specsOpen)
+      assertEquals(false, panes.drawerOpen)
+      assertEquals(true, clickedBehindDrawer)
     }
   }
 }
