@@ -332,13 +332,16 @@ public class GoalRunnerArchiveExportOperations(
   ): SpecBundleRead {
     val store = projectStore.resolve(repoRoot)
     val specsRoot = store.specsRoot.toAbsolutePath().normalize()
-    val resolvedManifestPath = manifestPath ?: derivedManifestPath(repoRoot, manifest)
+    val resolvedManifestPath = (manifestPath ?: derivedManifestPath(repoRoot, manifest)).toAbsolutePath().normalize()
+    val traceabilityPath = resolvedManifestPath.resolveSibling("traceability.md")
     val paths =
       linkedSetOf(
         resolvedManifestPath,
         resolvedParentSpecPath(repoRoot, Path.of(manifest.parentSpecPath), store),
-      ) +
-        manifest.subtasks.map { subtask -> resolvedParentSpecPath(repoRoot, Path.of(subtask.specPath), store) }
+      ).apply {
+        addAll(manifest.subtasks.map { subtask -> resolvedParentSpecPath(repoRoot, Path.of(subtask.specPath), store) })
+        if (manifestFileStore.isRegularFile(traceabilityPath)) add(traceabilityPath)
+      }
     val entries = mutableListOf<Pair<String, ByteArray>>()
     for (path in paths) {
       if (!manifestFileStore.isRegularFile(path)) {

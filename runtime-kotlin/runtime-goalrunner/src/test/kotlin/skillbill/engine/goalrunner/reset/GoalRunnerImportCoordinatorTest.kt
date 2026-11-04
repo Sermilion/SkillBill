@@ -81,6 +81,10 @@ class GoalRunnerImportCoordinatorTest {
       "body of spec_subtask_2.md",
       Files.readString(destinationPort.root.resolve("specs/specs/spec_subtask_2.md")),
     )
+    assertEquals(
+      "body of traceability.md",
+      Files.readString(destinationPort.root.resolve("specs/specs/traceability.md")),
+    )
   }
 
   @Test

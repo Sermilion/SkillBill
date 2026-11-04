@@ -209,9 +209,37 @@ class GoalRunnerArchiveCoordinatorTest {
         "specs/SKILL-245-goal/spec.md",
         "specs/SKILL-245-goal/spec_subtask_1.md",
         "specs/SKILL-245-goal/spec_subtask_2.md",
+        "specs/SKILL-245-goal/traceability.md",
       ),
       specEntries,
     )
+    assertEquals(
+      "body of traceability.md",
+      readZipEntry(output, "specs/SKILL-245-goal/traceability.md").decodeToString(),
+    )
+  }
+
+  @Test
+  fun `export succeeds when optional traceability file is absent`() {
+    val fixture = storeBundleFixture()
+    Files.delete(fixture.port.root.resolve("specs/SKILL-245-goal/traceability.md"))
+    val output = fixture.root.resolve("archive.zip")
+    val service =
+      exportService(
+        manifestStore = fixture.store,
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGitOperations("feat/SKILL-245-goal", "deadbeef"),
+            projectStore = fixture.port,
+            workerSupervisor = IdleWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
+      )
+
+    val result = service.export(GoalRunnerExportRequest("SKILL-245", fixture.root, output))
+
+    assertIs<GoalRunnerExportResult.Exported>(result)
+    assertFalse(readZipEntryNames(output).contains("specs/SKILL-245-goal/traceability.md"))
   }
 
   @Test
@@ -278,6 +306,20 @@ class GoalRunnerArchiveCoordinatorTest {
       }
       return names
     }
+  }
+
+  private fun readZipEntry(
+    zipPath: Path,
+    entryName: String,
+  ): ByteArray {
+    ZipInputStream(Files.newInputStream(zipPath)).use { zip ->
+      while (true) {
+        val entry = zip.nextEntry ?: break
+        if (entry.name == entryName) return zip.readBytes()
+        zip.closeEntry()
+      }
+    }
+    error("Missing zip entry $entryName")
   }
 
   private fun readZipJsonList(
