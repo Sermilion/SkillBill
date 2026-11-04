@@ -307,6 +307,8 @@ class ChatWorkspace(
           keyChoice = keyChoice,
           expectedDatabaseSessionId = open.sessionId,
           target = action.target,
+          branch = action.branch,
+          checkoutRoot = session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot,
         ),
       )
       when (outcome) {

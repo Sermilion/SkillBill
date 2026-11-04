@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
@@ -78,5 +79,21 @@ class DataStoreAppSettingsRepositoryTest {
 
     assertEquals(Outcome.Failure(SettingsRejection.WriteFailed), repository.setFavorite(key, true))
     assertTrue(repository.settings.first().favoriteWork.isEmpty())
+  }
+
+  @Test
+  fun `spec favorites round trip through FAVORITE_SPECS without touching FAVORITE_WORK`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "spec-favorites.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    store.edit { it[AppPreferenceKeys.FAVORITE_SPECS] = setOf("unsupported-spec") }
+    val key = FavoriteSpecKey("proj;1", "path/with/separators")
+    val work = FavoriteWorkKey(DatabaseFileIdentity("/db", "file"), "SKILL-1")
+
+    assertEquals(Outcome.Success(Unit), repository.setSpecFavorite(key, true))
+    assertEquals(Outcome.Success(Unit), repository.setFavorite(work, true))
+    assertEquals(setOf(key), repository.settings.first().favoriteSpecs)
+    assertEquals(setOf(work), repository.settings.first().favoriteWork)
+    assertTrue("unsupported-spec" in store.data.first()[AppPreferenceKeys.FAVORITE_SPECS].orEmpty())
+    assertEquals(Outcome.Success(setOf(key)), repository.favoriteSpecs.first { it is Outcome.Success })
   }
 }

@@ -49,7 +49,7 @@ class AcceptanceCriterionInteractionTraceOutputGateTest {
     SerialRepairSqliteFixture().use { f ->
       f.owned { worker ->
         val (scope, _) = scenarios.tracePendingSession(f, worker)
-        val malformedValue = "Interaction IS-001: holds"
+        val malformedValue = "No scenario lines at all."
         val prose = requireNotNull(auditProseValue(completedAuditEnvelope(malformedValue).envelopeWireMap()))
         assertEquals(malformedValue, prose)
         val run = auditRun(f, scope)

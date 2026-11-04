@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.condition.DisabledOnOs
+import org.junit.jupiter.api.condition.OS
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,7 +34,9 @@ class ProcessLiveChatLauncherTest {
     assertEquals(listOf(ChatProcessOutput.Line("first"), ChatProcessOutput.Line("second"), ChatProcessOutput.Exited(0, "")), outputs)
   }
 
+  // Windows has no SIGTERM: destroy() terminates at once, and Git Bash $$ is not a Windows pid.
   @Test
+  @DisabledOnOs(OS.WINDOWS)
   fun `a process that ignores SIGTERM is force killed when the collection is cancelled`() = runBlocking {
     val diagnostics = RecordingDiagnostics()
     val input = Channel<String>(Channel.UNLIMITED)

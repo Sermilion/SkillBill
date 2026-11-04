@@ -317,7 +317,7 @@ class NewTaskComposerTest {
       runOnIdle { startDraft.start(NewTaskKind.GoalRun) }
       waitForIdle()
       try {
-        assertChipsDisabled("Wait for Start goal run to finish")
+        assertChipsDisabled("Wait for the start to finish")
       } finally {
         startGate.complete(NewTaskStartOutcome.Refused("done"))
         waitForIdle()

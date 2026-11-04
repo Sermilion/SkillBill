@@ -1,5 +1,6 @@
 package skillbill.engine.work.control
 
+import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
@@ -52,7 +53,8 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
-import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import java.nio.file.Path
 import java.util.UUID
 import kotlin.test.Test
@@ -335,12 +337,14 @@ private class GoalControlsFixture(
       WorkNewTaskStart(
         database,
         newWorkAdmission,
-        NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
+        NewTaskIssueKeyAllocator(testProjectStore, TestDecompositionManifestStore, NoopRuntimeDiagnostics),
         goalPreflightServiceForTests(database),
         launcher,
         EnvironmentContext(),
         TestRepositoryEnclosingRoot,
         newTaskDiagnostics,
+        InPlaceGoalWorktreeResources,
+        RecordingBranchWorktreeResources(),
       ),
     )
 

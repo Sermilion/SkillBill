@@ -9,6 +9,7 @@ import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
@@ -103,14 +104,16 @@ public class WorkControlService(
     phaseId: String,
     agentId: String,
     target: String? = null,
-  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId, target)
+    checkout: StandaloneCheckout = StandaloneCheckout(),
+  ): NewTaskStartResult = newTaskStart.startStandalone(repoRoot, phaseId, agentId, target, checkout)
 
   public fun startOperation(
     repoRoot: Path,
     operationId: String,
     target: String?,
     agentId: String,
-  ): NewTaskStartResult = newTaskStart.startOperation(repoRoot, operationId, target, agentId)
+    checkout: StandaloneCheckout = StandaloneCheckout(),
+  ): NewTaskStartResult = newTaskStart.startOperation(repoRoot, operationId, target, agentId, checkout)
 
   public fun recoveryPreview(
     target: WorkRunTarget,
