@@ -259,6 +259,10 @@ internal object QaPromptSections {
     |  [--note <text>] [--finding <finding id> [--finding-title <title>]] [--evidence <path>]...`. Steps count
     |  from 1 within their case. Pass the finding id you use in the report, and evidence paths that start with
     |  `${qa.expected.evidencePrefix}`.
+    |- Report each step when it happens, not in a batch at the end: the runtime rejects progress once the QA run
+    |  has finished, and steps never reported stay pending. Send one command per step with every value written
+    |  out, without shell variables, loops or functions, because the permission policy can deny those. If the
+    |  harness denies a progress command, send each step again as its own literal command.
     |- Progress commands never decide the verdict; the report does. A non-zero exit or a printed `rejected` or
     |  `failed` means nothing changed: continue QA without retrying the same command.
     |- The redaction rules for the report also apply to notes and target details.
