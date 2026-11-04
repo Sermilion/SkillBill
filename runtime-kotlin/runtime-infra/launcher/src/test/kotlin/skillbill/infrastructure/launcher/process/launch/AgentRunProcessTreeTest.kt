@@ -51,6 +51,7 @@ class AgentRunProcessTreeTest {
         " &
         read _ < detach
       ' &
+      wait
       read _ < hold
       """
   }

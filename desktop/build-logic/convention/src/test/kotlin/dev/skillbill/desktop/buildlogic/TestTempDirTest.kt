@@ -33,7 +33,7 @@ class TestTempDirTest {
           .single { it.startsWith("-Djava.io.tmpdir=") }
           .removePrefix("-Djava.io.tmpdir="),
       )
-    assertEquals(gradleHome.absoluteFile, tempDir.parentFile.absoluteFile)
+    assertEquals(gradleHome.canonicalFile, tempDir.parentFile.canonicalFile)
     assertTrue(tempDir.name.startsWith(TEST_TEMP_PREFIX))
   }
 
