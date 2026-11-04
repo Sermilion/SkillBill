@@ -270,7 +270,7 @@ public sealed interface PullRequestCiOutcome {
 
   public data object Merged : PullRequestCiOutcome
 
-  public data object NoCiConfigured : PullRequestCiOutcome
+  public data object NoChecksReported : PullRequestCiOutcome
 
   public data object NoPullRequest : PullRequestCiOutcome
 

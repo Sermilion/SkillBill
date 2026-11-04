@@ -3490,3 +3490,7 @@ The goal worktree add pins `LC_ALL=C` because git translates the `locked initial
 ## 2026-11-03 — Match JVM thread constructors as identifiers
 
 The application environment guard matched `Thread(` as a substring, rejecting domain names such as `DiffCommentThread` and service methods such as `findThread`. Its constructor check now requires the `Thread` identifier boundary and accepts whitespace before the opening parenthesis. It also rejects the trailing-lambda constructor form. A fixture exercises the source-reference assertion with comment-thread names and all three JVM constructor forms. No production exception or baseline entry is added.
+
+## [2026-11-04] Test temp dirs live under the Gradle user home
+
+Each Test task sets `java.io.tmpdir` to `<gradle-user-home>/sbt-<hash>`. `/tmp` is a RAM-backed tmpfs on developer machines, and leaked fixture dirs filled it and pushed other memory into swap. A module `build/` directory is not an option because tests need paths outside any git repository, and Unix socket tests need a short root for the 104-byte macOS path limit. The task deletes the directory on success and keeps it on failure for debugging. A later test task removes any `sbt-*` directory untouched for 24 hours, which covers failed runs from checkouts that no longer exist. `desktop/build-logic` carries the same rule because the two builds share no convention code.

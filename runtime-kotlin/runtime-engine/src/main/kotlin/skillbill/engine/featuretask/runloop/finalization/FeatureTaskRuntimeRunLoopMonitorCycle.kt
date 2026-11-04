@@ -75,15 +75,15 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
             verdict = null,
           ),
         )
-      PullRequestCiOutcome.NoCiConfigured ->
+      PullRequestCiOutcome.NoChecksReported ->
         complete(
           run,
           iteration,
           monitorOutput(
             run.phaseId,
-            "No CI checks configured for the pull request head.",
-            "No CI checks were reported for branch '$branch' within the registration grace period, so no CI is " +
-              "configured for the pull request head.",
+            "No CI checks reported for the pull request head.",
+            "No CI checks were reported for branch '$branch' after the two-minute grace period. " +
+              "Delayed or conditional checks may still appear.",
             verdict = null,
           ),
         )

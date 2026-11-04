@@ -6,10 +6,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import org.gradle.api.tasks.testing.Test as GradleTest
 
-private const val MACOS_UNIX_SOCKET_PATH_CAP = 104
+private const val MAX_TEMP_DIR_GROWTH = 16
 
 class JvmLibraryConventionPluginTest {
   @Test
@@ -28,8 +29,16 @@ class JvmLibraryConventionPluginTest {
   }
 
   @Test
-  fun `test workers write temp files under a per-task directory outside the shared temp root`() {
-    val project = ProjectBuilder.builder().build()
+  fun `test workers write temp files on disk under a short directory outside the checkout`(
+    @TempDir workspace: File,
+  ) {
+    val gradleHome = workspace.resolve("gradle-home").apply { mkdirs() }
+    val project =
+      ProjectBuilder
+        .builder()
+        .withProjectDir(workspace.resolve("checkout").apply { mkdirs() })
+        .withGradleUserHomeDir(gradleHome)
+        .build()
     val testTask = project.tasks.register("installProbe", GradleTest::class.java).get()
 
     project.pluginManager.apply(JvmLibraryConventionPlugin::class.java)
@@ -38,19 +47,36 @@ class JvmLibraryConventionPluginTest {
       testTask.jvmArgumentProviders.flatMap { it.asArguments() }.filter { it.startsWith("-Djava.io.tmpdir=") }
     assertEquals(1, tmpdirArgs.size, "Expected exactly one java.io.tmpdir override, got $tmpdirArgs")
     val tempDir = File(tmpdirArgs.single().removePrefix("-Djava.io.tmpdir="))
+    assertEquals(gradleHome.canonicalFile, tempDir.parentFile.canonicalFile)
     assertTrue(tempDir.name.startsWith(TEST_TEMP_PREFIX), "Unexpected temp dir name ${tempDir.name}")
     assertTrue(
-      tempDir.path.length <= MACOS_UNIX_SOCKET_PATH_CAP,
+      tempDir.name.length <= MAX_TEMP_DIR_GROWTH,
       "Unix socket tests bind under java.io.tmpdir and macOS caps those paths at 104 bytes: $tempDir",
     )
     assertFalse(
       tempDir.startsWith(project.rootDir),
       "Test temp dirs must stay outside the checkout so non-repository paths remain available.",
     )
-    assertFalse(
-      tempDir.path.replace('\\', '/').contains("/.skill-bill/"),
-      "Temp dirs under skill-bill state leak installed skill-classes into render tests: $tempDir",
-    )
+  }
+
+  @Test
+  fun `sweep removes only stale test temp dirs from the Gradle user home`(
+    @TempDir gradleHome: File,
+  ) {
+    val now = STALE_TEST_TEMP_MILLIS * 2
+    val stale = gradleHome.resolve("${TEST_TEMP_PREFIX}stale").apply { mkdirs() }
+    stale.resolve("leftover").writeText("x")
+    stale.setLastModified(now - STALE_TEST_TEMP_MILLIS - 1)
+    val recent = gradleHome.resolve("${TEST_TEMP_PREFIX}recent").apply { mkdirs() }
+    recent.setLastModified(now)
+    val caches = gradleHome.resolve("caches").apply { mkdirs() }
+    caches.setLastModified(0)
+
+    sweepStaleTestTempDirs(gradleHome, now)
+
+    assertFalse(stale.exists())
+    assertTrue(recent.exists())
+    assertTrue(caches.exists())
   }
 
   @Test

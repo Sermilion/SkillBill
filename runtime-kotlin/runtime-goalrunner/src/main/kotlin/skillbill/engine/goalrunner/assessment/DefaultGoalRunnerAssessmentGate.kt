@@ -40,7 +40,6 @@ public class DefaultGoalRunnerAssessmentGate(
       activityStampWriter,
       GoalAssessmentProgress(outcomeStore, clock, diagnostics),
       diagnostics,
-      gitOperations,
     )
   private val loop =
     GoalAssessmentLoop(services, GoalAssessmentFixStep(services, gitOperations, validation), this::runRound)

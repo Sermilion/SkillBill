@@ -72,7 +72,7 @@ class GoalAssessmentPullRequestTextTest {
     )
     assertTrue(
       body.contains(
-        "- GA-005 (minor) src/RetryTest.kt:8 [open, pr_only; verification: confirmed]: The test asserts nothing. " +
+        "- GA-005 (minor) src/RetryTest.kt:8 [open, pr_only; verification: not_required]: The test asserts nothing. " +
           "Guards: src/Retry.kt:12",
       ),
     )
@@ -141,7 +141,7 @@ class GoalAssessmentPullRequestTextTest {
       )
 
   private val testValue =
-    finding("GA-005", "src/RetryTest.kt", 8, "The test asserts nothing.", GoalAssessmentVerification.CONFIRMED)
+    finding("GA-005", "src/RetryTest.kt", 8, "The test asserts nothing.", GoalAssessmentVerification.NOT_REQUIRED)
       .copy(
         kind = GoalAssessmentFindingKind.TEST_VALUE,
         severity = FeatureTaskRuntimeReviewSeverity.MINOR,

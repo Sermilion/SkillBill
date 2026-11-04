@@ -346,7 +346,7 @@ class PullRequestCiWatcherTest {
     val outcome =
       watcher(
         checks,
-        startTimeout = Duration.ofMinutes(2),
+        noChecksGrace = Duration.ofMinutes(2),
       ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
 
     assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
@@ -354,17 +354,16 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
-  fun `no checks within the start timeout block`() {
+  fun `no checks are reported after the grace period`() {
     val checks = ScriptedChecks(PullRequestChecks.NoChecks)
 
     val outcome =
       watcher(
         checks,
-        startTimeout = Duration.ofMinutes(4),
+        noChecksGrace = Duration.ofMinutes(4),
       ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
 
-    val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
-    assertTrue("did not start within 4 minutes" in blocked.reason, blocked.reason)
+    assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
     assertEquals(9, checks.calls)
   }
 
@@ -386,17 +385,51 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
-  fun `an empty reported check list blocks when ci does not start`() {
+  fun `an empty reported check list completes after the grace period`() {
     val checks = ScriptedChecks(PullRequestChecks.Reported(emptyList()))
 
     val outcome =
       watcher(
         checks,
-        startTimeout = Duration.ofMinutes(2),
+        noChecksGrace = Duration.ofMinutes(2),
       ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
 
-    val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
-    assertTrue("did not start within 2 minutes" in blocked.reason, blocked.reason)
+    assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
+  }
+
+  @Test
+  fun `unavailable recheck does not complete monitoring`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.NoChecks,
+        PullRequestChecks.NoChecks,
+        PullRequestChecks.NoChecks,
+        PullRequestChecks.NoChecks,
+        PullRequestChecks.Unavailable("temporary failure"),
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.FAIL))),
+      )
+    val errors = mutableListOf<String>()
+
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, onInconclusive = errors::add)
+
+    assertIs<PullRequestCiOutcome.Failed>(outcome)
+    assertEquals(listOf("GitHub CI checks lookup failed: temporary failure"), errors)
+  }
+
+  @Test
+  fun `a changed pull request head starts a new grace period`() {
+    var lookups = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        lookups += 1
+        PullRequestIdentity.Found(PR_URL, PR_NUMBER, headSha = if (lookups == 1) HEAD_SHA else "new-head")
+      }
+    val checks = ScriptedChecks(PullRequestChecks.NoChecks)
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
+    assertEquals(6, checks.calls)
   }
 
   @Test
@@ -560,7 +593,7 @@ class PullRequestCiWatcherTest {
     val inconclusive = mutableListOf<String>()
 
     val outcome =
-      watcher(checks, startTimeout = Duration.ZERO).watch(
+      watcher(checks, noChecksGrace = Duration.ZERO).watch(
         REPO_ROOT,
         BRANCH,
         expectedHead = ExpectedCiHead(HEAD_SHA),
@@ -590,7 +623,7 @@ class PullRequestCiWatcherTest {
     val outcome =
       watcher(
         checks,
-        startTimeout = Duration.ZERO,
+        noChecksGrace = Duration.ZERO,
         identityLookup = identities,
       ).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA), onInconclusive = inconclusive::add)
 
@@ -601,7 +634,7 @@ class PullRequestCiWatcherTest {
   private fun watcher(
     checks: ScriptedChecks,
     identity: PullRequestIdentity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER, headSha = HEAD_SHA),
-    startTimeout: Duration = Duration.ofHours(1),
+    noChecksGrace: Duration = Duration.ofMinutes(2),
     progressInterval: Duration = Duration.ofSeconds(30),
     identityLookup: PullRequestIdentityLookup = fixedIdentity(identity),
   ): PullRequestCiWatcher =
@@ -611,7 +644,7 @@ class PullRequestCiWatcherTest {
       now = { clock },
       sleep = { clock = clock.plus(it) },
       pollInterval = Duration.ofSeconds(30),
-      startTimeout = startTimeout,
+      noChecksGrace = noChecksGrace,
       progressInterval = progressInterval,
     )
 
