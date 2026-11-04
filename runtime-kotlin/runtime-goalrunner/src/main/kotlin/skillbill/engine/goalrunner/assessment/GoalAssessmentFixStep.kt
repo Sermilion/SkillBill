@@ -218,10 +218,20 @@ internal class GoalAssessmentFixStep(
       services.warn("validation after the fix stopped at '${outcome.stepId}': ${outcome.reason}")
     }
     val changed = dirtyPaths(run)
-    val pathsMatch = changed != null && changed.toSet() == fix.changedFiles.toSet()
-    if (!pathsMatch) services.warn("validation changed unexpected files or the worktree status is unavailable")
+    val problem = branchProblem(run)
+    val headMatches = matchesAssessedHead(run)
+    if (changed == null) services.warn("the worktree status is unavailable after validation")
+    if (problem != null) services.warn(problem)
+    if (!headMatches) services.warn("the repository head changed during validation")
+    val ready = changed != null && changed.isNotEmpty() && problem == null && headMatches
     return fix.copy(
-      validation = if (passed && pathsMatch) GoalAssessmentFixValidation.PASSED else GoalAssessmentFixValidation.FAILED,
+      changedFiles = changed ?: fix.changedFiles,
+      validation =
+        if (passed && ready) {
+          GoalAssessmentFixValidation.PASSED
+        } else {
+          GoalAssessmentFixValidation.FAILED
+        },
     )
   }
 

@@ -124,9 +124,11 @@ internal class GoalAssessmentGateFixture(
   val prompts = mutableMapOf<AssessmentCall, String>()
   var validationResult: GoalPostChangeValidationResult = GoalPostChangeValidationResult.Passed
   var validations = 0
+  var onValidation: () -> Unit = {}
   private val validation =
     GoalRunnerPostChangeValidation { _, _, _ ->
       validations++
+      onValidation()
       validationResult
     }
   val launcher =
