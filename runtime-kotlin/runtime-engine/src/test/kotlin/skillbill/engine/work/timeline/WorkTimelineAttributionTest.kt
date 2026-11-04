@@ -25,20 +25,21 @@ class WorkTimelineAttributionTest {
   }
 
   @Test
-  fun `a foreign issue trailer makes the commit operator-owned`() {
+  fun `foreign issue trailer does not suppress recorded sha ownership`() {
     val commit = commit("recorded", "Skill-Bill-Subtask: OTHER-1/1")
     val result = attribute("SKILL-1", listOf(task(1, "recorded")), listed(commit, setOf("recorded")))
 
-    assertEquals(emptyList(), result.commits.single().ownerSubtaskIds)
+    assertEquals(listOf(1), result.commits.single().ownerSubtaskIds)
     assertEquals(emptySet(), result.changedAfterFinishIds)
   }
 
   @Test
-  fun `unknown trailer id does not claim a task or fall back to its recorded sha`() {
+  fun `unknown trailer id does not suppress recorded sha ownership`() {
     val commit = commit("recorded", "Skill-Bill-Subtask: SKILL-1/99")
     val result = attribute("SKILL-1", listOf(task(1, "recorded")), listed(commit, setOf("recorded")))
 
-    assertEquals(emptyList(), result.commits.single().ownerSubtaskIds)
+    assertEquals(listOf(1), result.commits.single().ownerSubtaskIds)
+    assertEquals(emptySet(), result.changedAfterFinishIds)
   }
 
   @Test
@@ -81,11 +82,52 @@ class WorkTimelineAttributionTest {
   }
 
   @Test
-  fun `non integer trailer id does not fall back to the recorded sha`() {
+  fun `non integer trailer id does not suppress recorded sha ownership`() {
     val commit = commit("recorded", "Skill-Bill-Subtask: SKILL-1/abc")
     val result = attribute("SKILL-1", listOf(task(1, "recorded")), listed(commit, setOf("recorded")))
 
+    assertEquals(listOf(1), result.commits.single().ownerSubtaskIds)
+    assertEquals(emptySet(), result.changedAfterFinishIds)
+  }
+
+  @Test
+  fun `irrelevant trailer mixture does not suppress recorded sha ownership`() {
+    val commit =
+      commit(
+        "recorded",
+        "Skill-Bill-Subtask: OTHER-1/1\nSkill-Bill-Subtask: SKILL-1/99\nSkill-Bill-Subtask: SKILL-1/abc",
+      )
+    val result = attribute("SKILL-1", listOf(task(1, "recorded")), listed(commit, setOf("recorded")))
+
+    assertEquals(listOf(1), result.commits.single().ownerSubtaskIds)
+    assertEquals(emptySet(), result.changedAfterFinishIds)
+  }
+
+  @Test
+  fun `known current issue owner remains authoritative with irrelevant trailers`() {
+    val commit =
+      commit(
+        "recorded",
+        "Skill-Bill-Subtask: SKILL-1/2\nSkill-Bill-Subtask: OTHER-1/1\nSkill-Bill-Subtask: SKILL-1/99",
+      )
+    val result =
+      attribute(
+        "SKILL-1",
+        listOf(task(1, "recorded"), task(2, "older")),
+        listed(commit, setOf("recorded", "older")),
+      )
+
+    assertEquals(listOf(2), result.commits.single().ownerSubtaskIds)
+    assertEquals(setOf(2), result.changedAfterFinishIds)
+  }
+
+  @Test
+  fun `unmatched recorded sha leaves commit operator-owned`() {
+    val commit = commit("operator-commit", "Skill-Bill-Subtask: OTHER-1/1")
+    val result = attribute("SKILL-1", listOf(task(1, "recorded")), listed(commit, setOf("recorded")))
+
     assertEquals(emptyList(), result.commits.single().ownerSubtaskIds)
+    assertEquals(emptySet(), result.changedAfterFinishIds)
   }
 
   @Test

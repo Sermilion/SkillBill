@@ -26,7 +26,7 @@ internal fun attributeTimeline(
           .sorted()
           .toList()
       val owners =
-        if (trailers.isNotEmpty()) {
+        if (trailerOwners.isNotEmpty()) {
           trailerOwners
         } else {
           subtasks
