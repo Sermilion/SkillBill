@@ -1575,9 +1575,10 @@ result is not a conflict. Success requires every check to pass, be skipped,
 or be cancelled with none pending.
 The run state rebuilds distinct monitor failure SHAs from completed ledger
 entries and retained monitor output. Missing or unassociated monitor output stays unknown and does not exhaust the cap; missing monitor output blocks cap-sensitive resume. Historical loop ordinals do not count as failed repairs. Runtime-owned monitor and commit-push completions retain output through the existing producer output store, while the completion ledger remains the settlement authority.
-Goal monitoring requires reported checks. An empty report keeps polling until
-checks arrive or the watch timeout blocks the goal; it does not settle as
-no CI configured. IDE goal completion uses the durable `goalCompletedAt` record,
+Goal monitoring completes with a no-checks-reported result when two successful
+empty observations for the same PR head are at least two minutes apart. A failed
+read cannot establish absence. Checks may appear later or only under conditions
+that did not occur. IDE goal completion uses the durable `goalCompletedAt` record,
 written after all goal phases finish, rather than completed subtask counts.
 Each poll also reads PR state. A merged PR completes monitoring regardless of
 the CI verdict; a closed unmerged PR does not satisfy goal monitoring.

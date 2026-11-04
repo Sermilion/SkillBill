@@ -21,8 +21,11 @@ internal fun parsePullRequestChecks(result: GhCommandResult): PullRequestChecks 
       }
     )?.takeIf(JsonNode::isArray)
   return when {
+    entries != null && entries.isEmpty && result.exitCode != 0 ->
+      PullRequestChecks.Unavailable(result.describeFailure())
     entries != null -> checksFromEntries(entries)
-    result.stdout.contains(NO_CHECKS_MARKER, ignoreCase = true) -> PullRequestChecks.NoChecks
+    result.exitCode == 1 && result.stdout.trim().startsWith(NO_CHECKS_MARKER, ignoreCase = true) ->
+      PullRequestChecks.NoChecks
     result.stdout.contains(UNKNOWN_FLAG_MARKER, ignoreCase = true) ->
       PullRequestChecks.Unavailable(UNSUPPORTED_JSON_REASON)
     else -> PullRequestChecks.Unavailable(result.describeFailure())
