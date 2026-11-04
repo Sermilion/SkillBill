@@ -11,9 +11,11 @@ import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -63,6 +65,7 @@ class FakeDatabaseSessionFactory(
   private val goalRunnerControls: GoalRunnerControlRepository =
     EmptyGoalRunnerControlRepository,
   private val workList: WorkListRepository = EmptyWorkListRepository,
+  private val archiveSnapshotReader: ((GoalPurgeTarget) -> GoalArchiveOwnedSnapshot)? = null,
 ) : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection(): DatabasePathProtectionResult =
     DatabasePathProtectionResult.Acquired(AutoCloseable { })
@@ -97,6 +100,15 @@ class FakeDatabaseSessionFactory(
       override val workList = this@FakeDatabaseSessionFactory.workList
       override val goalPlanningPreparations = planningPreparations
       override val goalRunnerControls = this@FakeDatabaseSessionFactory.goalRunnerControls
+
+      override fun snapshotGoalArchiveOwned(target: GoalPurgeTarget): GoalArchiveOwnedSnapshot =
+        archiveSnapshotReader?.invoke(target)
+          ?: GoalArchiveOwnedSnapshot(
+            target.workflowIds.mapNotNull(workflowStates::getFeatureTaskWorkflow),
+            emptyList(),
+            emptyList(),
+            emptyList(),
+          )
     }
 }
 

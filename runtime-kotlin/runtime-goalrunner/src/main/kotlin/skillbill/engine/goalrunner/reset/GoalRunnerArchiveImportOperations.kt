@@ -9,7 +9,9 @@ import skillbill.application.workflow.decomposition.listPlanWorkflowsForPurge
 import skillbill.application.workflow.decomposition.matchesIssueKeyForFeatureTaskDiscovery
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_EXECUTION_IDENTITY_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.goal.goalRepositoryIdentity
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
@@ -32,11 +34,13 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.GoalArchiveEnvelopeValidator
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.model.GoalArchiveEnvelope
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.WorkflowArtifactWireEncoder
@@ -162,6 +166,12 @@ public class GoalRunnerArchiveImportOperations(
         )
     validateSpecEntries(normalizedBundle, projectStore.resolve(repoRoot).specsRoot.normalize())
     val archiveParentIds = archiveParentWorkflowIds(issueKey, bundle)
+    if (archiveParentIds.isEmpty()) {
+      return GoalRunnerImportResult.Refused(
+        issueKey,
+        "Goal archive has no discovered parent workflow to mark a pending import; import made no changes.",
+      )
+    }
     return headRefusal(bundle.envelope, repoRoot)?.copy(issueKey = issueKey)
       ?: collisionRefusal(issueKey, repoRoot, archiveParentIds)
       ?: archiveContentRefusal(issueKey, normalizedBundle)
@@ -233,44 +243,179 @@ public class GoalRunnerArchiveImportOperations(
       }.distinctBy(WorkflowStateRecord::workflowId)
     val existingParents = workflows.listDecomposedParentsForPurge(issueKey, destIdentity).parents
     val existingPlans = workflows.listPlanWorkflowsForPurge(issueKey, destIdentity)
+    val archiveTarget = archiveTarget(bundle, parentIds)
+    val existingSnapshot = unitOfWork.snapshotGoalArchiveOwned(archiveTarget)
     val planningParents =
       bundle.snapshot.sharedPreplans.map { it.identity.parentGoalWorkflowId } +
         bundle.snapshot.subtaskPlans.map { it.identity.parentGoalWorkflowId } +
         bundle.snapshot.legacyPreparations.map { it.parentGoalWorkflowId }
     val existingSpecs = existingSpecEntries(bundle, projectStore.resolve(repoRoot).specsRoot.normalize())
     if (isRecovery(context, unitOfWork)) {
-      return recoveryRows(context, unitOfWork, existingById, existingSpecs)
+      return recoveryRows(context, unitOfWork, existingSnapshot, existingSpecs, destIdentity)
     }
     val workflowCollision =
       existingById.isNotEmpty() || existingForIssue.isNotEmpty() ||
-        existingParents.isNotEmpty() || existingPlans.isNotEmpty()
+        existingParents.isNotEmpty() || existingPlans.isNotEmpty() || existingSnapshot.workflows.isNotEmpty()
     val planningCollision =
       planningParents.any { parentId ->
         unitOfWork.goalPlanningPreparations.hasPreparedSharedPreplan(parentId) ||
           unitOfWork.goalPlanningPreparations.preparedPlanStatusCount(parentId) > 0
       }
-    if (workflowCollision || existingSpecs.isNotEmpty() || planningCollision) return null
+    val planningSnapshotCollision =
+      existingSnapshot.sharedPreplans.isNotEmpty() ||
+        existingSnapshot.subtaskPlans.isNotEmpty() || existingSnapshot.legacyPreparations.isNotEmpty()
+    val ownedCollision = existingSnapshot.ownedTables.orderedTables().any { (_, rows) -> rows.isNotEmpty() }
+    val identityCollision =
+      archiveTarget.workflowIds.any { workflows.getFeatureTaskExecutionIdentity(it) != null }
+    if (listOf(
+        workflowCollision,
+        existingSpecs.isNotEmpty(),
+        planningCollision,
+        planningSnapshotCollision,
+        ownedCollision,
+        identityCollision,
+      ).any { it }
+    ) {
+      return null
+    }
     return restoreSnapshot(repoRoot, issueKey, parentIds, bundle, unitOfWork)
   }
 
   private fun recoveryRows(
     context: ImportContext,
     unitOfWork: UnitOfWork,
-    existing: List<WorkflowStateRecord>,
+    existing: GoalArchiveOwnedSnapshot,
     specs: List<Pair<Path, ByteArray>>,
+    destIdentity: String,
   ): Map<String, Int>? {
     val bundle = context.bundle
-    val matchingRows = existing == bundle.snapshot.workflows
+    val matchingRows =
+      existing.workflows.sortedBy(WorkflowStateRecord::workflowId) ==
+        bundle.snapshot.workflows.sortedBy(WorkflowStateRecord::workflowId)
+    val sharedParents = bundle.snapshot.sharedPreplans.map { it.identity.parentGoalWorkflowId }.toSet()
+    val expectedSnapshot =
+      bundle.snapshot.copy(
+        sharedPreplans = bundle.snapshot.sharedPreplans.map { it.rewriteIdentity(destIdentity, context.issueKey) },
+        subtaskPlans = bundle.snapshot.subtaskPlans.map { it.rewriteIdentity(destIdentity, context.issueKey) },
+        legacyPreparations =
+          bundle.snapshot.legacyPreparations
+            .filterNot { it.parentGoalWorkflowId in sharedParents }
+            .map { it.rewriteLegacy(destIdentity, context.issueKey) },
+      )
+    val matchingPlanning =
+      existing.sharedPreplans.sortedBy { it.identity.parentGoalWorkflowId } ==
+        expectedSnapshot.sharedPreplans.sortedBy { it.identity.parentGoalWorkflowId } &&
+        existing.subtaskPlans.sortedWith(compareBy({ it.identity.parentGoalWorkflowId }, { it.subtaskId })) ==
+        expectedSnapshot.subtaskPlans.sortedWith(compareBy({ it.identity.parentGoalWorkflowId }, { it.subtaskId })) &&
+        existing.legacyPreparations.sortedWith(compareBy({ it.parentGoalWorkflowId }, { it.subtaskId })) ==
+        expectedSnapshot.legacyPreparations.sortedWith(compareBy({ it.parentGoalWorkflowId }, { it.subtaskId }))
+    val matchingOwnedTables =
+      ownedTablesForRecovery(existing).mapValues { (_, rows) -> canonicalRows(rows) } ==
+        ownedTablesForRecovery(expectedSnapshot).mapValues { (_, rows) -> canonicalRows(rows) }
+    val expectedIdentities = restoredIdentities(bundle, destIdentity, context.issueKey)
+    val actualIdentities =
+      archiveTarget(bundle, context.parentIds).workflowIds.mapNotNull {
+        unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(it)
+      }
+    val matchingIdentities =
+      expectedIdentities.sortedBy(FeatureTaskExecutionIdentity::workflowId) ==
+        actualIdentities.sortedBy(FeatureTaskExecutionIdentity::workflowId)
     val matchingSpecs =
       specs.all { (path, bytes) ->
         Files.isRegularFile(path) && Files.readAllBytes(path).contentEquals(bytes)
       }
     val pendingParents =
-      existing.all { row ->
-        row.workflowId !in context.parentIds ||
-          unitOfWork.goalRunnerControls.controlState(row.workflowId).archiveImportSpecsPending
+      context.parentIds.all { parentId ->
+        val control = unitOfWork.goalRunnerControls.controlState(parentId)
+        control.archiveImportFingerprint == bundle.fingerprint && control.archiveImportSpecsPending
       }
-    return if (matchingRows && matchingSpecs && pendingParents) rowCounts(bundle) else null
+    return if (listOf(
+        matchingRows,
+        matchingPlanning,
+        matchingOwnedTables,
+        matchingIdentities,
+        matchingSpecs,
+        pendingParents,
+      ).all { it }
+    ) {
+      rowCounts(bundle)
+    } else {
+      null
+    }
+  }
+
+  private fun archiveTarget(
+    bundle: ParsedGoalArchiveBundle,
+    parentIds: Set<String>,
+  ): GoalPurgeTarget {
+    val ownedRows = bundle.snapshot.ownedTables.orderedTables().flatMap { (_, rows) -> rows }
+    val planningParentIds =
+      bundle.snapshot.sharedPreplans.map { it.identity.parentGoalWorkflowId } +
+        bundle.snapshot.subtaskPlans.map { it.identity.parentGoalWorkflowId } +
+        bundle.snapshot.legacyPreparations.map { it.parentGoalWorkflowId }
+    return GoalPurgeTarget(
+      parentWorkflowIds =
+        buildSet {
+          addAll(parentIds)
+          addAll(planningParentIds)
+          ownedRows.mapNotNullTo(this) { row ->
+            val columns = row.orderedEntries().toMap()
+            (
+              columns[GoalPlanningPreparationPayloadKeys.PARENT_GOAL_WORKFLOW_ID]
+                ?: columns[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID]
+            )
+              ?.toString()
+              ?.takeIf(String::isNotBlank)
+          }
+        },
+      workflowIds =
+        buildSet {
+          bundle.snapshot.workflows.forEach { add(it.workflowId) }
+          ownedRows.mapNotNullTo(this) { row ->
+            row.orderedEntries().toMap()[SharedPayloadKeys.WORKFLOW_ID]?.toString()?.takeIf(String::isNotBlank)
+          }
+        },
+    )
+  }
+
+  private fun ownedTablesForRecovery(snapshot: GoalArchiveOwnedSnapshot): Map<String, List<GoalArchiveTableRow>> =
+    snapshot.ownedTables.orderedTables()
+      .filterNot { (table, _) ->
+        table in
+          setOf(
+            "feature_task_execution_identities",
+            "feature_task_runtime_worker_leases",
+            "goal_runner_controls",
+          )
+      }
+      .associate { (table, rows) ->
+        table to if (table == "worktree_edit_journal") rows.map(::withoutJournalId) else rows
+      }
+
+  private fun canonicalRows(rows: List<GoalArchiveTableRow>): List<Map<String, Any?>> =
+    rows.map { it.orderedEntries().toMap() }.sortedBy { it.toSortedMap().toString() }
+
+  private fun withoutJournalId(row: GoalArchiveTableRow): GoalArchiveTableRow =
+    GoalArchiveTableRow(row.orderedEntries().filterNot { it.first == "id" }.toMap())
+
+  private fun restoredIdentities(
+    bundle: ParsedGoalArchiveBundle,
+    destIdentity: String,
+    issueKey: String,
+  ): List<FeatureTaskExecutionIdentity> {
+    val rows = bundle.snapshot.ownedTables.rows(GoalArchiveSpecReferenceKeys.EXECUTION_IDENTITIES_TABLE).orEmpty()
+    if (rows.isNotEmpty()) return rows.map { it.toExecutionIdentity(destIdentity, issueKey) }
+    return bundle.snapshot.workflows.mapNotNull { workflow ->
+      if (workflow.issueKey.isNullOrBlank()) return@mapNotNull null
+      FeatureTaskExecutionIdentity(
+        workflowId = workflow.workflowId,
+        normalizedIssueKey = issueKey,
+        repositoryIdentity = destIdentity,
+        governedSpecPath = "",
+        mode = workflow.mode ?: FeatureTaskWorkflowMode.RUNTIME,
+        routeScope = FeatureTaskRouteScope.STANDALONE,
+      )
+    }
   }
 
   private fun isRecovery(
@@ -343,26 +488,7 @@ public class GoalRunnerArchiveImportOperations(
     issueKey: String,
     workflowStates: WorkflowStateRepository,
   ) {
-    val rows = bundle.snapshot.ownedTables.rows(GoalArchiveSpecReferenceKeys.EXECUTION_IDENTITIES_TABLE).orEmpty()
-    if (rows.isNotEmpty()) {
-      rows.forEach { row ->
-        workflowStates.saveFeatureTaskExecutionIdentity(row.toExecutionIdentity(destIdentity, issueKey))
-      }
-      return
-    }
-    bundle.snapshot.workflows.forEach { workflow ->
-      if (workflow.issueKey.isNullOrBlank()) return@forEach
-      workflowStates.saveFeatureTaskExecutionIdentity(
-        FeatureTaskExecutionIdentity(
-          workflowId = workflow.workflowId,
-          normalizedIssueKey = issueKey,
-          repositoryIdentity = destIdentity,
-          governedSpecPath = "",
-          mode = workflow.mode ?: FeatureTaskWorkflowMode.RUNTIME,
-          routeScope = FeatureTaskRouteScope.STANDALONE,
-        ),
-      )
-    }
+    restoredIdentities(bundle, destIdentity, issueKey).forEach(workflowStates::saveFeatureTaskExecutionIdentity)
   }
 
   private fun writeSpecs(
@@ -402,27 +528,7 @@ public class GoalRunnerArchiveImportOperations(
         retryHint = "Retry with the same import command: skill-bill goal import ${archivePath.fileName}",
       )
     }
-    val completed =
-      when (
-        val result =
-          database.transactionFenced(context.observation) { unitOfWork ->
-            archiveParentWorkflowIds(issueKey, bundle).forEach { parentId ->
-              val control = unitOfWork.goalRunnerControls.controlState(parentId)
-              if (control.archiveImportFingerprint == null) return@forEach
-              if (control.archiveImportFingerprint != bundle.fingerprint || !control.archiveImportSpecsPending) {
-                return@transactionFenced false
-              }
-              unitOfWork.goalRunnerControls.persistControlState(
-                parentId,
-                control.copy(archiveImportSpecsPending = false),
-              )
-            }
-            true
-          }
-      ) {
-        FencedTransactionResult.ChangedTarget -> false
-        is FencedTransactionResult.Committed -> result.value
-      }
+    val completed = completeSpecImport(context)
     if (!completed) {
       return GoalRunnerImportResult.Refused(
         issueKey,
@@ -436,6 +542,36 @@ public class GoalRunnerArchiveImportOperations(
       archivePath = archivePath,
       rowCounts = rowCounts,
     )
+  }
+
+  private fun completeSpecImport(context: ImportContext): Boolean {
+    val issueKey = context.issueKey
+    val bundle = context.bundle
+    return when (
+      val result =
+        database.transactionFenced(context.observation) { unitOfWork ->
+          val pending =
+            archiveParentWorkflowIds(issueKey, bundle).map { parentId ->
+              parentId to unitOfWork.goalRunnerControls.controlState(parentId)
+            }
+          if (pending.any { (_, control) ->
+              control.archiveImportFingerprint != bundle.fingerprint || !control.archiveImportSpecsPending
+            }
+          ) {
+            return@transactionFenced false
+          }
+          pending.forEach { (parentId, control) ->
+            unitOfWork.goalRunnerControls.persistControlState(
+              parentId,
+              control.copy(archiveImportSpecsPending = false),
+            )
+          }
+          true
+        }
+    ) {
+      FencedTransactionResult.ChangedTarget -> false
+      is FencedTransactionResult.Committed -> result.value
+    }
   }
 
   private fun validateSpecEntries(
@@ -596,6 +732,7 @@ private fun GoalPlanningPreparationRecord.rewriteLegacy(
 
 internal object GoalArchiveSpecReferenceKeys {
   const val EXECUTION_IDENTITIES_TABLE = "feature_task_execution_identities"
+  const val ROUTE_SCOPE = "route_scope"
   const val GOVERNED_SPEC_PATH = "governed_spec_path"
   const val GOVERNED_SUB_SPEC_PATH = "governed_sub_spec_path"
   const val SUBTASK_SPEC_PATHS = "subtask_spec_paths"
@@ -621,7 +758,7 @@ private fun GoalArchiveTableRow.toExecutionIdentity(
     repositoryIdentity = destIdentity,
     governedSpecPath = columns[GoalArchiveSpecReferenceKeys.GOVERNED_SPEC_PATH]?.toString().orEmpty(),
     mode = identityMode(columns[WorkflowWirePayloadKeys.MODE]?.toString().orEmpty()),
-    routeScope = identityRouteScope(columns["route_scope"]?.toString().orEmpty()),
+    routeScope = identityRouteScope(columns[GoalArchiveSpecReferenceKeys.ROUTE_SCOPE]?.toString().orEmpty()),
     contractVersion =
       columns[SharedPayloadKeys.CONTRACT_VERSION]?.toString().orEmpty().ifBlank {
         FEATURE_TASK_EXECUTION_IDENTITY_CONTRACT_VERSION
@@ -644,7 +781,7 @@ private fun identityRouteScope(wire: String): FeatureTaskRouteScope {
   return FeatureTaskRouteScope.entries.firstOrNull { it.wireValue == wire }
     ?: throw invalidGoalArchiveSchemaError(
       GoalArchiveSpecReferenceKeys.EXECUTION_IDENTITIES_TABLE,
-      "route_scope",
+      GoalArchiveSpecReferenceKeys.ROUTE_SCOPE,
       "unsupported value '$wire'",
     )
 }

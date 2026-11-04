@@ -20,6 +20,8 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
+import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -341,9 +343,158 @@ class GoalRunnerImportCoordinatorTest {
 
     assertIs<GoalRunnerImportResult.Incomplete>(importService.import(GoalRunnerImportRequest(archive, destinationRoot)))
     val importedWorkflow = requireNotNull(destinationStates.getFeatureTaskWorkflow("wfl-parent"))
+    destinationStates.failSaveWhen = { true }
     assertIs<GoalRunnerImportResult.Imported>(importService.import(GoalRunnerImportRequest(archive, destinationRoot)))
     assertEquals(importedWorkflow, destinationStates.getFeatureTaskWorkflow("wfl-parent"))
     assertEquals("body of spec.md", Files.readString(destinationPort.root.resolve("specs/specs/spec.md")))
+  }
+
+  @Test
+  fun `completion refuses when a parent pending fingerprint disappears during spec write`() {
+    val fixture = importFixture(bundleName = "specs")
+    val archive = exportImportArchive(fixture)
+    val destinationRoot = Files.createTempDirectory("goal-import-missing-marker-dest")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val destinationStates = InMemoryWorkflowStates()
+    val controls = RecordingImportControls()
+    val delegate = storeAwareTestDecompositionManifestStore(destinationPort)
+    val store =
+      object : DecompositionManifestStore by delegate {
+        override fun <T> writeBundleAtomically(
+          writes: List<Pair<Path, String>>,
+          verify: () -> T,
+        ): T {
+          controls.clear()
+          return delegate.writeBundleAtomically(writes, verify)
+        }
+      }
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+          ),
+        database = FakeDatabaseSessionFactory(destinationStates, goalRunnerControls = controls),
+        decompositionManifestStore = store,
+      )
+
+    val result = importService.import(GoalRunnerImportRequest(archive, destinationRoot))
+
+    assertIs<GoalRunnerImportResult.Refused>(result)
+    assertContains(result.reason, "Pending archive import state changed")
+    assertEquals("body of spec.md", Files.readString(destinationPort.root.resolve("specs/specs/spec.md")))
+  }
+
+  @Test
+  fun `retry refuses when archive owned state changes after the restore commit`() {
+    val fixture = importFixture(bundleName = "specs")
+    val archive = exportImportArchive(fixture)
+    val destinationRoot = Files.createTempDirectory("goal-import-owned-change-dest")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val destinationStates = InMemoryWorkflowStates()
+    var snapshots = 0
+    val database =
+      FakeDatabaseSessionFactory(
+        destinationStates,
+        goalRunnerControls = RecordingImportControls(),
+        archiveSnapshotReader = { target ->
+          snapshots++
+          if (snapshots == 1) {
+            GoalArchiveOwnedSnapshot(emptyList(), emptyList(), emptyList(), emptyList())
+          } else {
+            GoalArchiveOwnedSnapshot(
+              workflows = target.workflowIds.mapNotNull(destinationStates::getFeatureTaskWorkflow),
+              sharedPreplans = emptyList(),
+              subtaskPlans = emptyList(),
+              legacyPreparations = emptyList(),
+              ownedTables =
+                GoalArchiveOwnedTables.of(
+                  mapOf("goal_run_sessions" to listOf(GoalArchiveTableRow(mapOf("session_id" to "changed")))),
+                ),
+            )
+          }
+        },
+      )
+    val delegate = storeAwareTestDecompositionManifestStore(destinationPort)
+    var failWrite = true
+    val store =
+      object : DecompositionManifestStore by delegate {
+        override fun <T> writeBundleAtomically(
+          writes: List<Pair<Path, String>>,
+          verify: () -> T,
+        ): T {
+          if (failWrite) {
+            failWrite = false
+            error("spec write failed")
+          }
+          return delegate.writeBundleAtomically(writes, verify)
+        }
+      }
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+          ),
+        database = database,
+        decompositionManifestStore = store,
+      )
+
+    assertIs<GoalRunnerImportResult.Incomplete>(importService.import(GoalRunnerImportRequest(archive, destinationRoot)))
+    val restored = requireNotNull(destinationStates.getFeatureTaskWorkflow("wfl-parent"))
+    val retry = importService.import(GoalRunnerImportRequest(archive, destinationRoot))
+
+    assertIs<GoalRunnerImportResult.Refused>(retry)
+    assertEquals(restored, destinationStates.getFeatureTaskWorkflow("wfl-parent"))
+    assertFalse(Files.exists(destinationPort.root.resolve("specs/specs/spec.md")))
+  }
+
+  @Test
+  fun `archive without a discovered parent refuses before a failed spec write`() {
+    val fixture = importFixture(bundleName = "specs")
+    val archive =
+      exportImportArchive(
+        fixture,
+        RecordingGoalArchiveSnapshotPort {
+          GoalArchiveOwnedSnapshot(emptyList(), emptyList(), emptyList(), emptyList())
+        },
+      )
+    val destinationRoot = Files.createTempDirectory("goal-import-parentless-dest")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val delegate = storeAwareTestDecompositionManifestStore(destinationPort)
+    val store =
+      object : DecompositionManifestStore by delegate {
+        override fun <T> writeBundleAtomically(
+          writes: List<Pair<Path, String>>,
+          verify: () -> T,
+        ): T = error("spec write must not run without a parent marker")
+      }
+    val states = InMemoryWorkflowStates()
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+          ),
+        database = FakeDatabaseSessionFactory(states),
+        decompositionManifestStore = store,
+      )
+
+    val result = importService.import(GoalRunnerImportRequest(archive, destinationRoot))
+
+    assertIs<GoalRunnerImportResult.Refused>(result)
+    assertContains(result.reason, "no discovered parent workflow")
+    assertNull(states.getFeatureTaskWorkflow("wfl-parent"))
+    assertFalse(Files.exists(destinationPort.root.resolve("specs/specs/spec.md")))
   }
 
   @Test
@@ -403,6 +554,10 @@ private class RecordingImportControls : GoalRunnerControlRepository by EmptyGoal
   ): GoalRunnerControlState {
     states[parentWorkflowId] = state
     return state
+  }
+
+  fun clear() {
+    states.clear()
   }
 }
 
@@ -472,6 +627,30 @@ private fun parentSnapshot(): RecordingGoalArchiveSnapshotPort {
   return RecordingGoalArchiveSnapshotPort {
     GoalArchiveOwnedSnapshot(listOf(parent), emptyList(), emptyList(), emptyList())
   }
+}
+
+private fun exportImportArchive(
+  fixture: ImportFixture,
+  snapshotPort: RecordingGoalArchiveSnapshotPort = parentSnapshot(),
+): Path {
+  val archive = fixture.root.resolve("archive.zip")
+  val exportService =
+    testGoalRunnerStatusService(
+      manifestStore = fixture.store,
+      outcomeStore = RecordingOutcomeStore(),
+      ports =
+        GoalRunnerStatusTestPorts(
+          gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+          projectStore = fixture.port,
+          archiveSnapshotPort = snapshotPort,
+          workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+        ),
+      decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
+    )
+  assertIs<GoalRunnerExportResult.Exported>(
+    exportService.export(GoalRunnerExportRequest("SKILL-245", fixture.root, archive)),
+  )
+  return archive
 }
 
 private fun rewriteArchiveEntry(

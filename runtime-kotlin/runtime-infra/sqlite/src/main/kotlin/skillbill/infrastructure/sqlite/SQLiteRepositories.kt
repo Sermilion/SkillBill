@@ -186,7 +186,7 @@ internal class SQLiteUnitOfWork(
     restoreOwnedGoalTables(connection, ownedTables)
   }
 
-  fun snapshotOwnedGoal(target: GoalPurgeTarget): GoalArchiveOwnedSnapshot =
+  override fun snapshotGoalArchiveOwned(target: GoalPurgeTarget): GoalArchiveOwnedSnapshot =
     archiveOwnedSnapshot(connection, workflowStates, purgeScope(target))
 
   private fun purgeScope(target: GoalPurgeTarget): GoalPurgeScope {
