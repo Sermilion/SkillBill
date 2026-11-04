@@ -78,6 +78,86 @@ class PrReviewFixOperationExecutionTest {
   }
 
   @Test
+  fun `a decorated or punctuated outcome line wins over the fixed fallback for a runner that edits a file`() {
+    listOf(
+      LocalReplyCase(
+        "`outcome: failed`\nCould not finish.",
+        "failed",
+        DiffCommentThreadState.OPEN,
+        true,
+        "Could not finish.",
+      ),
+      LocalReplyCase(
+        "outcome: refuted.\nThe comment is mistaken.",
+        "refuted",
+        DiffCommentThreadState.DECLINED,
+        false,
+        "The comment is mistaken.",
+      ),
+      LocalReplyCase(
+        "**Outcome:** Skipped\nLeft alone.",
+        "skipped",
+        DiffCommentThreadState.OPEN,
+        false,
+        "Left alone.",
+      ),
+      LocalReplyCase(
+        "```\noutcome: fixed\nRenamed it.",
+        "fixed",
+        DiffCommentThreadState.RESOLVED,
+        false,
+        "Renamed it.",
+      ),
+      LocalReplyCase(
+        "outcome: failed — partial edit could not compile",
+        "failed",
+        DiffCommentThreadState.OPEN,
+        true,
+        "partial edit could not compile",
+      ),
+    ).forEach { case ->
+      PrReviewFixHarness().use { harness ->
+        val threadId = harness.addLocalThread()
+        harness.runner.localReply = case.reply
+        val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.invokeLocal()).token
+
+        val outcome = harness.invokeLocal(OperationArguments(confirm = token, select = "T1=1"))
+
+        if (case.failsOperation) {
+          assertContains(assertIs<OperationOutcome.Failed>(outcome).reason, "replied (${case.wire} -> open)")
+        } else {
+          assertContains(assertIs<OperationOutcome.Completed>(outcome).text, "replied (${case.wire} -> ")
+        }
+        assertEquals(case.state, harness.localThreadState(threadId), case.reply)
+        assertEquals(case.body, harness.localThreadReplyBody(threadId), case.reply)
+        assertEquals(emptyList(), harness.warnings, case.reply)
+      }
+    }
+  }
+
+  @Test
+  fun `a copied outcome template is an unknown outcome and applies the fallback`() {
+    PrReviewFixHarness().use { harness ->
+      val threadId = harness.addLocalThread()
+      harness.runner.localReply = "outcome: fixed|refuted|skipped|failed\nAddressed the local comment."
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.invokeLocal()).token
+
+      assertIs<OperationOutcome.Completed>(
+        harness.invokeLocal(OperationArguments(confirm = token, select = "T1=1")),
+      )
+
+      assertEquals(DiffCommentThreadState.RESOLVED, harness.localThreadState(threadId))
+      assertEquals(
+        listOf(
+          "seam=local_review_reply_outcome value_expected=declared_outcome value_used=fixed cause=unknown_outcome",
+        ),
+        harness.warnings,
+      )
+      assertEquals("Addressed the local comment.", harness.localThreadReplyBody(threadId))
+    }
+  }
+
+  @Test
   fun `a thread closed after admission is not edited or replied to`() {
     PrReviewFixHarness().use { harness ->
       val threadId = harness.addLocalThread()
@@ -211,4 +291,12 @@ class PrReviewFixOperationExecutionTest {
   }
 
   private fun PrReviewFixHarness.analyze(): String = assertIs<OperationOutcome.AwaitingConfirmation>(invoke()).token
+
+  private data class LocalReplyCase(
+    val reply: String,
+    val wire: String,
+    val state: DiffCommentThreadState,
+    val failsOperation: Boolean,
+    val body: String,
+  )
 }

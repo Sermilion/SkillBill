@@ -57,8 +57,17 @@ internal fun parseLocalReplyOutcome(
   diagnostics: RuntimeDiagnostics,
 ): Pair<DiffCommentOutcome, String> {
   val lines = reply.lines()
-  val match = OUTCOME_LINE.matchEntire(lines.firstOrNull().orEmpty())
-  val declared = match?.groupValues?.get(1)?.lowercase()?.let(DiffCommentOutcome::fromWire)
+  val firstContentLineIndex = lines.indexOfFirst { it.isNotBlank() && !it.trimStart().startsWith(CODE_FENCE) }
+  val outcomeLine = lines.getOrNull(firstContentLineIndex)?.trim { it.isWhitespace() || it in MARKDOWN_DECORATION }
+  val match = outcomeLine?.let(OUTCOME_LINE::find)
+  val trailing = match?.groupValues?.get(2).orEmpty().trimStart()
+  val copiedOutcomeAlternativesTemplate = trailing.startsWith('|')
+  val declared =
+    if (copiedOutcomeAlternativesTemplate) {
+      null
+    } else {
+      match?.groupValues?.get(1)?.lowercase()?.let(DiffCommentOutcome::fromWire)
+    }
   val outcome =
     declared ?: if (changedPaths.isNotEmpty()) DiffCommentOutcome.FIXED else DiffCommentOutcome.SKIPPED
   if (declared == null) {
@@ -67,7 +76,18 @@ internal fun parseLocalReplyOutcome(
       "seam=local_review_reply_outcome value_expected=declared_outcome value_used=${outcome.wireValue} cause=$cause",
     )
   }
-  val body = if (match == null) reply.trim() else lines.drop(1).joinToString("\n").trim()
+  val body =
+    if (match == null) {
+      reply.trim()
+    } else {
+      val prose =
+        if (copiedOutcomeAlternativesTemplate) {
+          ""
+        } else {
+          trailing.trimStart { it.isWhitespace() || it in LEADING_SEPARATORS }
+        }
+      (listOf(prose) + lines.drop(firstContentLineIndex + 1)).joinToString("\n").trim()
+    }
   return outcome to body
 }
 
@@ -80,4 +100,7 @@ private fun localLocation(thread: DiffCommentThread): String =
 
 private const val LOCAL_ANALYSIS_DIRECTIVE = "/skillbill/engine/operation/prreviewfix/local-analysis-directive.md"
 private const val LOCAL_THREAD_DIRECTIVE = "/skillbill/engine/operation/prreviewfix/local-thread-directive.md"
-private val OUTCOME_LINE = Regex("""(?i)outcome:\s*(\w+)""")
+private const val CODE_FENCE = "```"
+private const val MARKDOWN_DECORATION = "`*_>#-"
+private const val LEADING_SEPARATORS = ".,;:—–-*_`)"
+private val OUTCOME_LINE = Regex("""(?i)^outcome[*_`\s]*:[*_`\s]*([a-z]+)\b(.*)$""")

@@ -29,4 +29,4 @@ If the selection defers a recommended fix as out of scope, draft a follow-up spe
 
 ## Value
 
-Start with exactly one line `outcome: fixed|refuted|skipped|failed`, followed by 1–3 plain sentences explaining what changed or why nothing changed.
+Make the first line of your value `outcome: ` followed by exactly one of fixed, refuted, skipped or failed, written without backticks, quotes, bold or a trailing period (for example: outcome: refuted). Then write 1–3 plain sentences explaining what changed or why nothing changed.

@@ -183,6 +183,13 @@ internal class PrReviewFixHarness : AutoCloseable {
       is DiffCommentListResult.Unavailable -> error("Unable to list fixture local comments: ${result.reason}")
     }
 
+  fun localThreadReplyBody(threadId: String): String? =
+    when (val result = diffComments.list(repo)) {
+      is DiffCommentListResult.Listed ->
+        result.threads.firstOrNull { it.id == threadId }?.comments?.lastOrNull()?.body
+      is DiffCommentListResult.Unavailable -> error("Unable to list fixture local comments: ${result.reason}")
+    }
+
   fun closeLocalThread(threadId: String) {
     check(diffComments.setState(threadId, DiffCommentThreadState.DECLINED) is DiffCommentThreadResult.Saved)
   }
@@ -336,7 +343,7 @@ internal class ScriptedPrReviewFixRunner(
         PhaseStepFileManifest(emptyList(), listOf(path))
       }
     val reply =
-      if ("outcome: fixed|refuted|skipped|failed" in input.directive) {
+      if ("# PR review fix: local thread" in input.directive) {
         localReply
       } else {
         "Renamed as asked in $ordinal.\n"
