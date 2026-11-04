@@ -76,6 +76,7 @@ class NewTaskDraft(
 
   var text: String by mutableStateOf("")
   var repository: NewTaskRepository? by mutableStateOf(null)
+  var addedRepositories: List<NewTaskRepository> by mutableStateOf(emptyList())
   var baseBranch: String by mutableStateOf("")
   var agentId: String? by mutableStateOf(null)
   var selectedAgent: ChatAgent? by mutableStateOf(null)

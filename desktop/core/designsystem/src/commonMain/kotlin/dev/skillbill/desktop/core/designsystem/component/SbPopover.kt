@@ -60,15 +60,17 @@ private val POPOVER_WIDTH_MARGIN = 12.dp
 // placePopover keeps the panel 8px inside the window.
 private val POPOVER_WINDOW_MARGIN = 8.dp
 
+enum class SbPopoverPlacement { Auto, Above }
+
 @Composable
-fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, content: @Composable ColumnScope.() -> Unit) {
+fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
   val density = LocalDensity.current
   val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
   val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
-  val maxWidth = (windowWidth - POPOVER_WIDTH_MARGIN * 2).coerceAtLeast(0.dp)
+  val windowMaxWidth = (windowWidth - POPOVER_WIDTH_MARGIN * 2).coerceAtLeast(0.dp)
   val maxHeight = (windowHeight - POPOVER_WINDOW_MARGIN * 2).coerceAtLeast(0.dp)
-  // An inline width still answers to min-width: 220px and max-width: min(340px, 100vw - 24px).
-  val capWidth = POPOVER_MAX_WIDTH.coerceAtMost(maxWidth)
+  // An inline width still answers to min-width: 220px and max-width: min(maxWidth, 100vw - 24px).
+  val capWidth = maxWidth.coerceAtMost(windowMaxWidth)
   val floorWidth = POPOVER_MIN_WIDTH.coerceAtMost(capWidth)
   val panelMaxWidth = width?.coerceIn(floorWidth, capWidth) ?: capWidth
   val panelMinWidth = if (width != null) panelMaxWidth else floorWidth
@@ -84,7 +86,7 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
   if (expanded) {
     val shape = RoundedCornerShape(SkillBillRadius.md)
     Popup(
-      popupPositionProvider = PopoverPositionProvider(offsetPx, gapPx, marginPx),
+      popupPositionProvider = PopoverPositionProvider(offsetPx, gapPx, marginPx, placement),
       onDismissRequest = onDismissRequest,
       properties = PopupProperties(focusable = true, dismissOnClickOutside = true, dismissOnBackPress = true),
     ) {
@@ -115,6 +117,7 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
               when (it.key) {
                 Key.Escape -> { onDismissRequest(); true }
                 Key.DirectionDown -> {
+                  if (!arrowKeysMoveFocus) return@onPreviewKeyEvent false
                   if (!focusManager.moveFocus(FocusDirection.Next)) {
                     focusManager.clearFocus(force = true)
                     focusManager.moveFocus(FocusDirection.Next)
@@ -122,6 +125,7 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
                   true
                 }
                 Key.DirectionUp -> {
+                  if (!arrowKeysMoveFocus) return@onPreviewKeyEvent false
                   if (!focusManager.moveFocus(FocusDirection.Previous)) {
                     focusManager.clearFocus(force = true)
                     focusManager.moveFocus(FocusDirection.Previous)
@@ -137,12 +141,15 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
   }
 }
 
-private class PopoverPositionProvider(private val offset: IntOffset, private val gap: Int, private val margin: Int) : PopupPositionProvider {
+internal class PopoverPositionProvider(private val offset: IntOffset, private val gap: Int, private val margin: Int, private val placement: SbPopoverPlacement) : PopupPositionProvider {
   override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
     val left = if (layoutDirection == LayoutDirection.Ltr) anchorBounds.left else anchorBounds.right - popupContentSize.width
     val below = anchorBounds.bottom + gap + offset.y
-    // placePopover flips to `top - height - 8`: the anchor's top edge, 8px clear, without the downward gap or offset.
-    val top = if (below + popupContentSize.height <= windowSize.height - margin) below else anchorBounds.top - popupContentSize.height - margin
+    val top = when (placement) {
+      // placePopover flips to `top - height - 8`: the anchor's top edge, 8px clear, without the downward gap or offset.
+      SbPopoverPlacement.Auto -> if (below + popupContentSize.height <= windowSize.height - margin) below else anchorBounds.top - popupContentSize.height - margin
+      SbPopoverPlacement.Above -> (anchorBounds.top - popupContentSize.height - gap + offset.y).takeIf { it >= margin } ?: below
+    }
     return IntOffset((left + offset.x).coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)), top.coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))
   }
 }

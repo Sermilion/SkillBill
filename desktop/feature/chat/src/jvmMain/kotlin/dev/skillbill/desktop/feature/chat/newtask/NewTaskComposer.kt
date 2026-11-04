@@ -5,16 +5,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -29,12 +26,10 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.component.SbField
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbMenu
-import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
+import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
@@ -50,6 +45,7 @@ internal val COMPOSER_MAX_WIDTH = 728.dp
 private const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
 internal const val PICKERS_DISABLED_STARTING = "Wait for the start to finish"
 internal const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
+private val REPOSITORY_PICKER_WIDTH = 620.dp
 
 /** The task input with repository, agent, Send, Stop and Send now. Enter and Send share one condition; a busy turn queues the next message. */
 @Composable
@@ -149,39 +145,15 @@ private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: N
       repository?.name,
       repositoryPillBranch(draft.baseBranch, repository?.root, state.branchRead),
     ) { onAction(NewTaskAction.OpenRepositoryPicker) }
-    if ((mode == RepositoryPillMode.Interactive || mode == RepositoryPillMode.Choose) && state.repositoryPickerOpen) {
-      ShellLayer(close)
-      SbPopover(expanded = true, onDismissRequest = close) { RepositoryPickerContent(state, draft, onAction) }
-    }
-  }
-}
-
-@Composable
-private fun RepositoryPickerContent(state: NewTaskUiState, draft: NewTaskDraft, onAction: (NewTaskAction) -> Unit) {
-  var path by remember { mutableStateOf("") }
-  if (state.repositories.isNotEmpty()) {
-    SbMenu(
-      state.repositories.map { repository ->
-        SbMenuEntry.Item(repository.name, { onAction(NewTaskAction.ChooseRepository(repository)) }, checked = repository.root == draft.repository?.root)
-      },
-    )
-  }
-  Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    SbField("Repository path", error = state.repositoryError) {
-      SbInput(
-        path, { path = it },
-        modifier = fieldModifier.fillMaxWidth().gatesShortcutsWhileFocused(),
-        mono = true,
-        isError = isError,
-        onSubmit = { onAction(NewTaskAction.SubmitRepositoryPath(path)) },
-      )
-    }
-    SbField("Base branch") {
-      SbInput(
-        draft.baseBranch, { onAction(NewTaskAction.BaseBranchChanged(it)) },
-        modifier = fieldModifier.fillMaxWidth().gatesShortcutsWhileFocused(),
-        mono = true,
-      )
-    }
+    val open = (mode == RepositoryPillMode.Interactive || mode == RepositoryPillMode.Choose) && state.repositoryPickerOpen
+    if (open) ShellLayer(close)
+    SbPopover(
+      expanded = open,
+      onDismissRequest = close,
+      width = REPOSITORY_PICKER_WIDTH,
+      maxWidth = REPOSITORY_PICKER_WIDTH,
+      placement = SbPopoverPlacement.Above,
+      arrowKeysMoveFocus = false,
+    ) { NewTaskRepositoryPickerContent(state, draft, onAction) }
   }
 }

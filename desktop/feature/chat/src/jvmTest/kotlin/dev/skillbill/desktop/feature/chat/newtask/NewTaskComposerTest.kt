@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -23,6 +24,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -429,7 +432,67 @@ class NewTaskComposerTest {
     onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
     waitForIdle()
 
-    onNodeWithText("Repository path", useUnmergedTree = true).assertExists()
+    onNodeWithText("Add repository", useUnmergedTree = true).assertExists()
+    onNodeWithText("Repository path", useUnmergedTree = true).assertDoesNotExist()
+  }
+
+  @Test
+  fun `the repository filter appears only above seven rows`() = runComposeUiTest {
+    var state by mutableStateOf(openPicker(7))
+    setPicker { state }
+
+    onNodeWithText("Filter repositories", useUnmergedTree = true).assertDoesNotExist()
+
+    runOnIdle { state = openPicker(8) }
+    waitForIdle()
+    onNodeWithText("Filter repositories", useUnmergedTree = true).assertExists()
+  }
+
+  @Test
+  fun `the repository filter ignores case and outer spaces and reports no match`() = runComposeUiTest {
+    val state = openPicker(8)
+    setPicker { state }
+
+    onNodeWithContentDescription("Filter repositories").performTextInput(" REPO1 ")
+    waitForIdle()
+    onNodeWithText("repo1", useUnmergedTree = true).assertExists()
+    onNodeWithText("repo0", useUnmergedTree = true).assertDoesNotExist()
+
+    onNodeWithContentDescription("Filter repositories").performTextReplacement("zzz")
+    waitForIdle()
+    onNodeWithText("No repository matches \"zzz\"", useUnmergedTree = true).assertExists()
+  }
+
+  @Test
+  fun `two repositories with one name show their parent folders`() = runComposeUiTest {
+    val state = NewTaskUiState(
+      repositories = listOf(NewTaskRepository("/work/a/app", "app"), NewTaskRepository("/other/b/app", "app"), NewTaskRepository("/work/c/tool", "tool")),
+      repositoryPickerOpen = true,
+    )
+    setPicker { state }
+
+    onNodeWithText("a", useUnmergedTree = true).assertExists()
+    onNodeWithText("b", useUnmergedTree = true).assertExists()
+    onNodeWithText("c", useUnmergedTree = true).assertDoesNotExist()
+    onNodeWithContentDescription("app, a").assertExists()
+    onNodeWithContentDescription("app, b").assertExists()
+  }
+
+  private fun openPicker(rows: Int) = NewTaskUiState(
+    repositories = List(rows) { NewTaskRepository("/work/repo$it", "repo$it") },
+    repositoryPickerOpen = true,
+  )
+
+  private fun ComposeUiTest.setPicker(state: () -> NewTaskUiState) {
+    val draft = testNewTaskDraft()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(state(), draft) {}
+        }
+      }
+    }
+    waitForIdle()
   }
 
   private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {
