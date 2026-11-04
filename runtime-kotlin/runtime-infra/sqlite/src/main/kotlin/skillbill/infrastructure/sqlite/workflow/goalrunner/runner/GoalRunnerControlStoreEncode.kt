@@ -83,6 +83,9 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
       executionWorktreeRetentionReason?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON to it },
       executionWorktreeRetentionDetail?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL to it },
       launchWarning?.let { GoalRunnerControlPayloadKeys.LAUNCH_WARNING to it },
+      archiveImportFingerprint?.let { GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_FINGERPRINT to it },
+      GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_SPECS_PENDING.takeIf { archiveImportFingerprint != null }
+        ?.let { it to archiveImportSpecsPending },
     )
 
 private fun leaseTimestamp(

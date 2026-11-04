@@ -44,10 +44,12 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 
@@ -169,20 +171,9 @@ public class GoalRunnerArchiveImportOperations(
       }
     observationRefusal(issueKey, observation)?.let { return it }
     requireNotNull(observation)
+    val context = ImportContext(repoRoot, archivePath, bundle, issueKey, archiveParentIds, observation)
     val restore =
-      when (
-        val result =
-          database.transactionFenced(observation) { unitOfWork ->
-            val destIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
-            val ownedParents = unitOfWork.workflowStates.listDecomposedParentsForPurge(issueKey, destIdentity).parents
-            val ownedPlans = unitOfWork.workflowStates.listPlanWorkflowsForPurge(issueKey, destIdentity)
-            if (ownedParents.isNotEmpty() || ownedPlans.isNotEmpty()) {
-              null
-            } else {
-              restoreSnapshot(repoRoot, issueKey, archiveParentIds, bundle, unitOfWork)
-            }
-          }
-      ) {
+      when (val result = database.transactionFenced(observation) { restoreTransaction(context, it) }) {
         FencedTransactionResult.ChangedTarget -> return GoalRunnerImportResult.Refused(issueKey, changedSummary)
         is FencedTransactionResult.Committed -> result.value
       }
@@ -192,8 +183,89 @@ public class GoalRunnerArchiveImportOperations(
         "Goal '$issueKey' already has destination workflow or planning state; import refused.",
       )
     }
-    return writeSpecs(repoRoot, archivePath, issueKey, bundle, restore)
+    return writeSpecs(context, restore)
   }
+
+  private data class ImportContext(
+    val repoRoot: Path,
+    val archivePath: Path,
+    val bundle: ParsedGoalArchiveBundle,
+    val issueKey: String,
+    val parentIds: Set<String>,
+    val observation: DatabaseFileObservation,
+  )
+
+  private fun restoreTransaction(
+    context: ImportContext,
+    unitOfWork: UnitOfWork,
+  ): Map<String, Int>? {
+    val repoRoot = context.repoRoot
+    val bundle = context.bundle
+    val issueKey = context.issueKey
+    val parentIds = context.parentIds
+    val destIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val workflows = unitOfWork.workflowStates
+    val archiveIds = bundle.snapshot.workflows.mapTo(linkedSetOf()) { it.workflowId }
+    val existingById = archiveIds.mapNotNull(workflows::getFeatureTaskWorkflow)
+    val existingForIssue =
+      FeatureTaskWorkflowMode.entries.flatMap { mode ->
+        workflows.findFeatureTaskWorkflowsForIssue(mode, issueKey, destIdentity)
+      }.distinctBy(WorkflowStateRecord::workflowId)
+    val existingParents = workflows.listDecomposedParentsForPurge(issueKey, destIdentity).parents
+    val existingPlans = workflows.listPlanWorkflowsForPurge(issueKey, destIdentity)
+    val planningParents =
+      bundle.snapshot.sharedPreplans.map { it.identity.parentGoalWorkflowId } +
+        bundle.snapshot.subtaskPlans.map { it.identity.parentGoalWorkflowId } +
+        bundle.snapshot.legacyPreparations.map { it.parentGoalWorkflowId }
+    val existingSpecs = existingSpecEntries(bundle, projectStore.resolve(repoRoot).specsRoot.normalize())
+    if (isRecovery(context, unitOfWork)) {
+      return recoveryRows(context, unitOfWork, existingById, existingSpecs)
+    }
+    val workflowCollision =
+      existingById.isNotEmpty() || existingForIssue.isNotEmpty() ||
+        existingParents.isNotEmpty() || existingPlans.isNotEmpty()
+    val planningCollision =
+      planningParents.any { parentId ->
+        unitOfWork.goalPlanningPreparations.hasPreparedSharedPreplan(parentId) ||
+          unitOfWork.goalPlanningPreparations.preparedPlanStatusCount(parentId) > 0
+      }
+    if (workflowCollision || existingSpecs.isNotEmpty() || planningCollision) return null
+    return restoreSnapshot(repoRoot, issueKey, parentIds, bundle, unitOfWork)
+  }
+
+  private fun recoveryRows(
+    context: ImportContext,
+    unitOfWork: UnitOfWork,
+    existing: List<WorkflowStateRecord>,
+    specs: List<Pair<Path, ByteArray>>,
+  ): Map<String, Int>? {
+    val bundle = context.bundle
+    val matchingRows = existing == bundle.snapshot.workflows
+    val matchingSpecs =
+      specs.all { (path, bytes) ->
+        Files.isRegularFile(path) && Files.readAllBytes(path).contentEquals(bytes)
+      }
+    val pendingParents =
+      existing.all { row ->
+        row.workflowId !in context.parentIds ||
+          unitOfWork.goalRunnerControls.controlState(row.workflowId).archiveImportSpecsPending
+      }
+    return if (matchingRows && matchingSpecs && pendingParents) rowCounts(bundle) else null
+  }
+
+  private fun isRecovery(
+    context: ImportContext,
+    unitOfWork: UnitOfWork,
+  ): Boolean =
+    context.parentIds.isNotEmpty() &&
+      context.parentIds.all { parentId ->
+        val control = unitOfWork.goalRunnerControls.controlState(parentId)
+        val matchingImport =
+          control.archiveImportFingerprint == context.bundle.fingerprint &&
+            control.archiveImportSpecsPending
+        val pausedImport = control.paused && control.pauseReason == GOAL_PAUSE_REASON_IMPORTED
+        matchingImport && pausedImport && control.executionLease == null
+      }
 
   private fun restoreSnapshot(
     repoRoot: Path,
@@ -209,7 +281,13 @@ public class GoalRunnerArchiveImportOperations(
     restoreIdentities(bundle, destIdentity, issueKey, unitOfWork.workflowStates)
     restorePlanning(bundle, destIdentity, issueKey, unitOfWork.goalPlanningPreparations)
     for (parentId in parentIds) {
-      unitOfWork.goalRunnerControls.persistControlState(parentId, importedControlState(destIdentity))
+      unitOfWork.goalRunnerControls.persistControlState(
+        parentId,
+        importedControlState(destIdentity).copy(
+          archiveImportFingerprint = bundle.fingerprint,
+          archiveImportSpecsPending = true,
+        ),
+      )
     }
     unitOfWork.restoreGoalArchiveOwnedTables(bundle.snapshot.ownedTables)
     return rowCounts(bundle)
@@ -268,24 +346,33 @@ public class GoalRunnerArchiveImportOperations(
   }
 
   private fun writeSpecs(
-    repoRoot: Path,
-    archivePath: Path,
-    issueKey: String,
-    bundle: ParsedGoalArchiveBundle,
+    context: ImportContext,
     rowCounts: Map<String, Int>,
   ): GoalRunnerImportResult {
-    val store = projectStore.resolve(repoRoot)
+    val archivePath = context.archivePath
+    val bundle = context.bundle
+    val issueKey = context.issueKey
+    val store = projectStore.resolve(context.repoRoot)
     val specsRoot = store.specsRoot.normalize()
     val writes =
       bundle.specEntries.map { (relative, bytes) ->
         specsRoot.resolve(relative).normalize() to bytes.decodeToString()
-      }
+      }.filterNot { (path, content) -> Files.isRegularFile(path) && Files.readString(path) == content }
+    val conflicts =
+      existingSpecEntries(bundle, specsRoot)
+        .filter { (path, bytes) -> !Files.isRegularFile(path) || Files.readString(path) != bytes.decodeToString() }
+    if (conflicts.isNotEmpty()) {
+      return GoalRunnerImportResult.Refused(
+        issueKey,
+        "Destination spec paths differ from the pending archive import: ${conflicts.map { it.first }}",
+      )
+    }
     val missing =
       catchingNonCancellation {
-        manifestFileStore.writeBundleAtomically(writes) {}
+        if (writes.isNotEmpty()) manifestFileStore.writeBundleAtomically(writes) {}
       }.exceptionOrNull()
     if (missing != null) {
-      val paths = writes.map { (path, _) -> repoRelativePath(repoRoot, store, path) }
+      val paths = writes.map { (path, _) -> repoRelativePath(context.repoRoot, store, path) }
       return GoalRunnerImportResult.Incomplete(
         issueKey = issueKey,
         missingSpecPaths = paths,
@@ -293,6 +380,33 @@ public class GoalRunnerArchiveImportOperations(
         commitSha = bundle.envelope.commitSha,
         archivePath = archivePath,
         retryHint = "Retry with the same import command: skill-bill goal import ${archivePath.fileName}",
+      )
+    }
+    val completed =
+      when (
+        val result =
+          database.transactionFenced(context.observation) { unitOfWork ->
+            archiveParentWorkflowIds(issueKey, bundle).forEach { parentId ->
+              val control = unitOfWork.goalRunnerControls.controlState(parentId)
+              if (control.archiveImportFingerprint == null) return@forEach
+              if (control.archiveImportFingerprint != bundle.fingerprint || !control.archiveImportSpecsPending) {
+                return@transactionFenced false
+              }
+              unitOfWork.goalRunnerControls.persistControlState(
+                parentId,
+                control.copy(archiveImportSpecsPending = false),
+              )
+            }
+            true
+          }
+      ) {
+        FencedTransactionResult.ChangedTarget -> false
+        is FencedTransactionResult.Committed -> result.value
+      }
+    if (!completed) {
+      return GoalRunnerImportResult.Refused(
+        issueKey,
+        "Pending archive import state changed before spec restoration completed.",
       )
     }
     return GoalRunnerImportResult.Imported(
@@ -318,6 +432,14 @@ public class GoalRunnerArchiveImportOperations(
       }
     }
   }
+
+  private fun existingSpecEntries(
+    bundle: ParsedGoalArchiveBundle,
+    specsRoot: Path,
+  ): List<Pair<Path, ByteArray>> =
+    bundle.specEntries.mapNotNull { (relative, bytes) ->
+      specsRoot.resolve(relative).normalize().takeIf { Files.exists(it) }?.let { it to bytes }
+    }
 
   private fun headRefusal(
     envelope: GoalArchiveEnvelope,

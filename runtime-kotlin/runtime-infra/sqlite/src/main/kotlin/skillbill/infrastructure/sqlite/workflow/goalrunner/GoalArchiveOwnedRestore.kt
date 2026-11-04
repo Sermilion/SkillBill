@@ -54,12 +54,12 @@ internal fun restoreOwnedGoalTables(
         rows
       }
     rowsToRestore.forEach { row ->
-      insertOrReplaceArchiveRow(connection, table, row, blobColumns, omitJournalId = table == "worktree_edit_journal")
+      insertArchiveRow(connection, table, row, blobColumns, omitJournalId = table == "worktree_edit_journal")
     }
   }
 }
 
-private fun insertOrReplaceArchiveRow(
+private fun insertArchiveRow(
   connection: Connection,
   table: String,
   row: GoalArchiveTableRow,
@@ -70,9 +70,8 @@ private fun insertOrReplaceArchiveRow(
   if (entries.isEmpty()) return
   val columns = entries.joinToString(", ") { (name, _) -> quotedIdentifier(name) }
   val values = entries.joinToString(", ") { "?" }
-  val insertMode = if (omitJournalId) "INSERT" else "INSERT OR REPLACE"
   connection.prepareStatement(
-    "$insertMode INTO ${quotedIdentifier(table)} ($columns) VALUES ($values)",
+    "INSERT INTO ${quotedIdentifier(table)} ($columns) VALUES ($values)",
   ).use { statement ->
     entries.forEachIndexed { index, (name, value) ->
       bindArchiveRestoreValue(statement, index + 1, value, name in blobColumns)

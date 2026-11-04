@@ -108,6 +108,8 @@ data class GoalRunnerControlState(
   val executionWorktreeRetentionReason: String? = null,
   val executionWorktreeRetentionDetail: String? = null,
   val launchWarning: String? = null,
+  val archiveImportFingerprint: String? = null,
+  val archiveImportSpecsPending: Boolean = false,
 ) {
   init {
     executionWorktreePath?.let {
@@ -123,6 +125,12 @@ data class GoalRunnerControlState(
       require(it.isNotBlank()) { "executionWorktreeRetentionDetail must not be blank when provided." }
     }
     launchWarning?.let { require(it.isNotBlank()) { "launchWarning must not be blank when provided." } }
+    archiveImportFingerprint?.let {
+      require(it.isNotBlank()) { "archiveImportFingerprint must not be blank when provided." }
+    }
+    require(!archiveImportSpecsPending || archiveImportFingerprint != null) {
+      "archiveImportSpecsPending requires an archive import fingerprint."
+    }
     goalCompletedAt?.let { require(it.isNotBlank()) { "goalCompletedAt must not be blank when provided." } }
     goalPullRequestUrl?.let { require(it.isNotBlank()) { "goalPullRequestUrl must not be blank when provided." } }
     require(goalPullRequestUrl == null || goalCompletedAt != null) {
