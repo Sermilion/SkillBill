@@ -1,11 +1,9 @@
 package skillbill.engine.work.timeline
 
-import skillbill.contracts.workflow.featuretask.GoalAssessmentRecordPayloadKeys
 import skillbill.engine.work.timeline.model.WorkActivityGroup
 import skillbill.engine.work.timeline.model.WorkActivityGroupKind
 import skillbill.engine.work.timeline.model.WorkActivityResult
 import skillbill.engine.work.timeline.model.WorkActivityStatus
-import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.UnitOfWork
@@ -22,7 +20,6 @@ import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asGoalAssessmentRecordWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
@@ -47,48 +44,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class WorkActivityServiceTest {
-  @Test
-  fun `legacy and malformed assessment records do not hide goal activity`() {
-    establishTemporarySchemaReadiness("activity-assessment-versions").use { fixture ->
-      val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
-      database.read { unit ->
-        val goal = WorkItem("SKILL-474", WorkItemKind.FEATURE_GOAL, "goal", at(0), "running", at(0), false)
-        val current = GoalAssessmentRecord("SKILL-474").asGoalAssessmentRecordWireMap()
-        val legacy = current + (GoalAssessmentRecordPayloadKeys.CONTRACT_VERSION to "0.2")
-        val malformed = legacy - GoalAssessmentRecordPayloadKeys.ISSUE_KEY
-        val stops = listOf(WorkActivityStop("stop", at(0), at(1), "BLOCKED", "Blocked"))
-
-        fun groups(record: Map<String, Any?>): List<WorkActivityGroup> {
-          val artifacts =
-            DurableWorkflowArtifacts.fromMap(
-              mapOf(DurableWorkflowArtifactFamily.GOAL_ASSESSMENT_RECORD.label() to record),
-            )
-          val workflows =
-            object : WorkflowStateRepository by unit.workflowStates {
-              override fun readFeatureTaskArtifacts(
-                workflowId: String,
-                families: Set<DurableWorkflowArtifactFamily>,
-              ) = artifacts
-            }
-          val reads =
-            object : UnitOfWork by unit {
-              override val workflowStates = workflows
-            }
-          return ActivityGoalFinishReads().groups(goal, emptyList(), stops, reads, NoopRuntimeDiagnostics)
-        }
-        val legacyGroups = groups(legacy)
-        val legacyDetail = legacyGroups.single { it.id == "goal-finish" }.before.single().detail.orEmpty()
-        assertTrue(legacyDetail.contains("test-value review unavailable"))
-        assertEquals("0.2", legacy[GoalAssessmentRecordPayloadKeys.CONTRACT_VERSION])
-        assertEquals("Blocked", legacyGroups.single { it.id == "goal-interruptions" }.blocks.single().reason)
-        val malformedDetail = groups(malformed).single { it.id == "goal-finish" }.before.single().detail
-        assertEquals("Assessment unavailable", malformedDetail)
-        assertEquals("Blocked", groups(malformed).single { it.id == "goal-interruptions" }.blocks.single().reason)
-        assertEquals("0 rounds", groups(current).single { it.id == "goal-finish" }.before.single().detail)
-      }
-    }
-  }
-
   @Test
   fun `goal finish uses detailed block recorded after stop completion`() {
     establishTemporarySchemaReadiness("activity-finish-late-block").use { fixture ->
@@ -138,7 +93,7 @@ class WorkActivityServiceTest {
             WorkActivityStop("goal", at(0), at(10), "BLOCKED", "The goal is blocked."),
             WorkActivityStop("goal:resumed", at(20), null, null),
           )
-        val group = ActivityGoalFinishReads().groups(goal, emptyList(), stops, unit, NoopRuntimeDiagnostics).single()
+        val group = ActivityGoalFinishReads().groups(goal, emptyList(), stops, unit).single()
 
         assertEquals(1, group.blocks.size)
         assertEquals("plan_subtasks", group.blocks.single().phaseId)
@@ -178,7 +133,6 @@ class WorkActivityServiceTest {
             listOf(priorAttempt, child.copy(startedAt = at(4))),
             stops,
             unit,
-            NoopRuntimeDiagnostics,
           )
         val interruptions = groups.single { it.id == "goal-interruptions" }
         assertEquals(listOf("pr", "decision"), interruptions.blocks.map { it.id })

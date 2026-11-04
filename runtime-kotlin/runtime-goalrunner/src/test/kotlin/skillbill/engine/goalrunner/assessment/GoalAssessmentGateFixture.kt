@@ -46,7 +46,6 @@ internal enum class AssessmentCall {
   FIRST_SUBTASK,
   SECOND_SUBTASK,
   CROSS_SUBTASK,
-  TEST_VALUE_REVIEW,
   VERIFIER,
   PLAN,
   SCENARIO_VERIFY,
@@ -56,12 +55,11 @@ internal enum class AssessmentCall {
 
 internal fun assessmentCallOf(prompt: String): AssessmentCall =
   when {
-    "# Operation: unit-test-value-check (review)" in prompt -> AssessmentCall.TEST_VALUE_REVIEW
     "# Goal assessment repair plan:" in prompt -> AssessmentCall.PLAN
     "Independently verify only scenario" in prompt -> AssessmentCall.SCENARIO_VERIFY
     "Independently verify only regression" in prompt -> AssessmentCall.REGRESSION_VERIFY
     "# Goal assessment fix:" in prompt -> AssessmentCall.FIX
-    "Independently verify each candidate below" in prompt -> AssessmentCall.VERIFIER
+    "Verify each candidate defect below" in prompt -> AssessmentCall.VERIFIER
     "Assess how the subtasks fit together" in prompt -> AssessmentCall.CROSS_SUBTASK
     "Assess subtask 1 (" in prompt -> AssessmentCall.FIRST_SUBTASK
     "Assess subtask 2 (" in prompt -> AssessmentCall.SECOND_SUBTASK
@@ -115,7 +113,6 @@ internal class GoalAssessmentGateFixture(
   val store: AssessmentOutcomeStore = AssessmentOutcomeStore(),
   private val subtaskOf: (Int) -> DecompositionSubtask = { id -> committedSubtask(id) },
   private val fixedWorktreeStatus: String = "",
-  private val parentSpecText: String? = null,
   private val script: (AssessmentCall) -> String?,
 ) {
   private val clock = Clock.systemUTC()
@@ -124,11 +121,9 @@ internal class GoalAssessmentGateFixture(
   val prompts = mutableMapOf<AssessmentCall, String>()
   var validationResult: GoalPostChangeValidationResult = GoalPostChangeValidationResult.Passed
   var validations = 0
-  var onValidation: () -> Unit = {}
   private val validation =
     GoalRunnerPostChangeValidation { _, _, _ ->
       validations++
-      onValidation()
       validationResult
     }
   val launcher =
@@ -138,7 +133,7 @@ internal class GoalAssessmentGateFixture(
       calls += call
       prompts[call] = prompt
       if (call == AssessmentCall.FIX) git.worktreeStatusValue = fixedWorktreeStatus
-      script(call)?.let { prose -> facts(settledOutput(call, completedProjection(call, prose))) }
+      script(call)?.let { prose -> facts(settledOutput(call, prose)) }
         ?: agentRunLaunchFacts(SupportedAgent.CLAUDE, termination = AgentRunTermination.Exited(1))
     }
   val git =
@@ -147,12 +142,11 @@ internal class GoalAssessmentGateFixture(
       mergeBaseWithHeadValue = ASSESSMENT_BASE_SHA
       changedPathsBetweenCommitsValue = listOf("src/Feature.kt", "src/FeatureTest.kt")
       worktreeStatusValue = ""
-      repositoryFingerprintValue = "repository-fingerprint"
       onCreateCommit = { worktreeStatusValue = "" }
     }
 
   init {
-    Files.writeString(home.resolve(PARENT_SPEC), parentSpecText ?: PARENT_SPEC_TEXT)
+    Files.writeString(home.resolve(PARENT_SPEC), PARENT_SPEC_TEXT)
     Files.writeString(home.resolve(FIRST_SPEC), "# Subtask 1\n\n$FIRST_SUBTASK_SPEC_MARKER\n")
     Files.writeString(home.resolve(SECOND_SPEC), "# Subtask 2\n\n$SECOND_SUBTASK_SPEC_MARKER\n")
   }
@@ -210,28 +204,6 @@ internal class GoalAssessmentGateFixture(
         "produced_outputs" to mapOf("value" to prose),
       ),
     )
-
-  private fun completedProjection(
-    call: AssessmentCall,
-    prose: String,
-  ): String {
-    if (call == AssessmentCall.VERIFIER) {
-      val count = Regex("(?m)^Verify GA-\\d{3}:").findAll(prose).count()
-      return "$prose\nVerification complete: $count"
-    }
-    if ("Projection complete:" in prose) return prose
-    val covered =
-      if (call == AssessmentCall.CROSS_SUBTASK && prose == "Finding: none" && parentSpecText == null) {
-        "$prose\nScenario IS-001: holds evidence both runs agree\n" +
-          "Regression TR-001: restored evidence the legacy path is off"
-      } else {
-        prose
-      }
-    val count = Regex("(?m)^(Finding: (?!none\\.?$)|Test value:|Scenario |Regression )").findAll(covered).count()
-    val hasFinding = Regex("(?m)^(Finding:|Test value:)").containsMatchIn(covered)
-    val withNone = if (!hasFinding) "$covered\nFinding: none" else covered
-    return "$withNone\nProjection complete: $count"
-  }
 
   companion object {
     const val FEATURE_BRANCH = "feat/SKILL-442-goal"

@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.assessment
 
-import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.review.spec.model.InteractionScenarioCatalog
 
 internal sealed interface GoalAssessmentCommitRange {
@@ -45,15 +44,11 @@ internal sealed interface GoalAssessmentFocus {
   data class Regression(val ref: String) : GoalAssessmentFocus
 
   data class Verifier(val candidates: List<GoalAssessmentVerifierCandidate>) : GoalAssessmentFocus
-
-  data class TestValueReview(val testPaths: List<String>) : GoalAssessmentFocus
 }
 
 internal data class GoalAssessmentVerifierCandidate(
   val findingRef: String,
-  val kind: GoalAssessmentFindingKind,
   val path: String,
   val line: Int,
-  val guardedRef: String?,
   val failureScenario: String,
 )

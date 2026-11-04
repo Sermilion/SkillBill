@@ -101,12 +101,6 @@ object UnavailableRepositoryFingerprintGitOperations : RepositoryFingerprintGitO
     revision: String,
   ): WorkflowGitOperationResult = error("WorkflowGitOperations must provide a revision tree identity implementation.")
 
-  override fun reviewablePathsAtRevision(
-    repoRoot: Path,
-    revision: String,
-    candidates: List<String>,
-  ): WorkflowGitNameListResult = error("WorkflowGitOperations must provide revision-scoped review paths.")
-
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,

@@ -1,7 +1,6 @@
 package skillbill.engine.goalrunner.assessment
 
 import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
-import skillbill.engine.operation.unittestvalue.UnitTestValueCheckReview
 import skillbill.review.spec.model.InteractionScenario
 import skillbill.review.spec.model.TransitionalRegression
 
@@ -71,8 +70,6 @@ internal object GoalAssessmentPromptRenderer {
         is GoalAssessmentFocus.Subtask -> subtaskRole(bundle, focus.subtaskId) + reassessmentText(bundle)
         GoalAssessmentFocus.CrossSubtask -> CROSS_SUBTASK_ROLE + reassessmentText(bundle)
         is GoalAssessmentFocus.Verifier -> verifierRole(focus.candidates)
-        is GoalAssessmentFocus.TestValueReview ->
-          UnitTestValueCheckReview.directive("goal scope at ${bundle.headSha}", focus.testPaths)
         is GoalAssessmentFocus.Scenario ->
           "Independently verify only scenario ${focus.ref} after its repair. Read source at HEAD and report " +
             "one Scenario ${focus.ref}: <holds|broken> evidence <path:line citations> line. " +
@@ -96,29 +93,25 @@ internal object GoalAssessmentPromptRenderer {
     val name = bundle.subtasks.firstOrNull { it.id == subtaskId }?.name.orEmpty()
     return "Assess subtask $subtaskId ($name): judge each of its criteria against its spec and the parent spec " +
       "in the code at the head commit, not at its own commit. Use its commit range to find what it changed. " +
-      "Report concrete defects at every severity and tests that would still pass after their named regression. " +
-      "Leave speculation unconfirmed. $MATERIALITY_RULE Include the complete machine projection."
+      "Report defects in the code it touched as it stands at the head commit, and tests it added that would " +
+      "still pass if the behavior they name broke. Report only material defects. $MATERIALITY_RULE " +
+      "Answer with `Finding:` and `Test value:` lines only; write `Finding: none` when you find no defect."
   }
 
   private fun verifierRole(candidates: List<GoalAssessmentVerifierCandidate>): String =
-    "Independently verify each candidate below against the code at the head commit. Try to refute it by " +
-      "re-deriving the failure scenario and settle it as confirmed or refuted with nonblank file and line evidence. " +
-      "For test_value candidates, determine whether the named regression still passes. " +
+    "Verify each candidate defect below against the code at the head commit. Try to refute it: re-derive the " +
+      "failure scenario from the code and settle it as confirmed or refuted with file and line evidence. " +
+      "Refute a candidate that is not material, citing what makes it unreachable or behavior-neutral. " +
       "$MATERIALITY_RULE " +
-      "Answer with one `Verify <GA-NNN>: <confirmed|refuted> evidence <reason and file:line citations>` line " +
-      "per candidate.\n\n" +
-      candidates.joinToString("\n") {
-        "- ${it.findingRef} kind ${it.kind.wireValue}, test ${it.path}:${it.line}, guards " +
-          "${it.guardedRef ?: "none"}; scenario: ${it.failureScenario}"
-      }
+      "Answer with one `Verify <GA-NNN>:` line per candidate.\n\n" +
+      candidates.joinToString("\n") { "- ${it.findingRef} ${it.path}:${it.line} - ${it.failureScenario}" }
 
   private const val MAX_SCOPE_FILES = 200
 
   private const val CROSS_SUBTASK_ROLE: String =
     "Assess how the subtasks fit together in the code at the head commit. Settle every declared interaction " +
       "scenario with a `Scenario <IS-NNN>:` line and every declared transitional regression with a " +
-      "`Regression <TR-NNN>:` line. Report each broken scenario, each concrete defect at every severity that " +
-      "appears when subtasks interact, and tests that would still pass after their named behavior breaks. " +
-      "Leave speculation unconfirmed. $MATERIALITY_RULE " +
-      "Include the complete machine projection."
+      "`Regression <TR-NNN>:` line. Report each broken scenario and each defect that only appears when " +
+      "subtasks interact as a `Finding:` line. Report only material defects. $MATERIALITY_RULE " +
+      "Write `Finding: none` when you find no such defect."
 }

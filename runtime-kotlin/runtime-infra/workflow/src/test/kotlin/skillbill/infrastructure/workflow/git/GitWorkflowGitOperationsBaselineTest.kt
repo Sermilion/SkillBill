@@ -44,34 +44,6 @@ class GitWorkflowGitOperationsBaselineTest {
   }
 
   @Test
-  fun `runtime phase commit range preserves non ascii and quoted paths`() {
-    val repoRoot = Files.createTempDirectory("skillbill-git-runtime-phase-nul")
-    git(repoRoot, "init")
-    git(repoRoot, "config", "user.email", "skill-bill@example.test")
-    git(repoRoot, "config", "user.name", "Skill Bill")
-    Files.writeString(repoRoot.resolve("tracked.txt"), "one\n")
-    git(repoRoot, "add", ".")
-    git(repoRoot, "commit", "-m", "initial")
-    val before = requireNotNull(GitWorkflowGitOperations().runtimePhaseHeadCommit(repoRoot).value)
-    val expected = listOf("src/тест файл.kt", "src/a\tquoted\"test.kt")
-    expected.forEach { path ->
-      val file = repoRoot.resolve(path)
-      Files.createDirectories(file.parent)
-      Files.writeString(file, "test\n")
-    }
-    git(repoRoot, "add", ".")
-    git(repoRoot, "commit", "-m", "add test paths")
-    val after = requireNotNull(GitWorkflowGitOperations().runtimePhaseHeadCommit(repoRoot).value)
-
-    val result =
-      assertIs<WorkflowGitNameListResult.Listed>(
-        GitWorkflowGitOperations().runtimePhaseChangedPathsBetweenCommits(repoRoot, before, after),
-      )
-
-    assertEquals(expected.sorted(), result.names.sorted())
-  }
-
-  @Test
   fun `runtime phase commit range reports no paths when both commits are the same`() {
     val repoRoot = Files.createTempDirectory("skillbill-git-runtime-phase-same")
     git(repoRoot, "init")

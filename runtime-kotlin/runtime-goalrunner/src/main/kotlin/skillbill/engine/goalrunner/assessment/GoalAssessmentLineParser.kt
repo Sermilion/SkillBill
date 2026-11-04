@@ -49,17 +49,15 @@ internal object GoalAssessmentLineParser {
     val rejected = mutableListOf<String>()
     var valid = 0
     recordLines(text).forEach { line ->
-      if (VERIFY.matches(line) || VERIFY_NONE.matches(line)) return@forEach
       val parsed =
         findingOf(line)?.let(findings::add) ?: scenarioOf(line)?.let(scenarios::add)
-          ?: regressionOf(line)?.let(regressions::add)
-          ?: (FINDING_NONE.matches(line) || TEST_VALUE_NONE.matches(line)).takeIf { it }
+          ?: regressionOf(line)?.let(regressions::add) ?: FINDING_NONE.matches(line).takeIf { it }
       if (parsed == null) rejected += line.take(MAX_REJECTED_LINE) else valid++
     }
-    return when {
-      rejected.isNotEmpty() -> GoalAssessmentParse.Malformed("the projection contains malformed records.")
-      valid == 0 -> GoalAssessmentParse.Malformed("the output held no line in the assessor grammar.")
-      else -> GoalAssessmentParse.Parsed(GoalAssessorReport(findings, scenarios, regressions, rejected))
+    return if (valid == 0) {
+      GoalAssessmentParse.Malformed("the output held no line in the assessor grammar.")
+    } else {
+      GoalAssessmentParse.Parsed(GoalAssessorReport(findings, scenarios, regressions, rejected))
     }
   }
 
@@ -67,23 +65,21 @@ internal object GoalAssessmentLineParser {
     val verdicts = mutableListOf<GoalVerifierVerdict>()
     val rejected = mutableListOf<String>()
     var valid = 0
-    recordLines(text).filter { it.startsWith("Verify", ignoreCase = true) }.forEach { line ->
+    recordLines(text).forEach { line ->
       val parsed = verdictOf(line)?.let(verdicts::add) ?: VERIFY_NONE.matches(line).takeIf { it }
       if (parsed == null) rejected += line.take(MAX_REJECTED_LINE) else valid++
     }
-    return when {
-      rejected.isNotEmpty() -> GoalAssessmentParse.Malformed("the verification contains malformed records.")
-      valid == 0 -> GoalAssessmentParse.Malformed("the output held no line in the verifier grammar.")
-      verdicts.map { it.findingRef }.distinct().size != verdicts.size ->
-        GoalAssessmentParse.Malformed("the verification repeats a candidate verdict.")
-      else -> GoalAssessmentParse.Parsed(GoalVerifierReport(verdicts, rejected))
+    return if (valid == 0) {
+      GoalAssessmentParse.Malformed("the output held no line in the verifier grammar.")
+    } else {
+      GoalAssessmentParse.Parsed(GoalVerifierReport(verdicts, rejected))
     }
   }
 
   private fun recordLines(text: String): List<String> =
     text.lineSequence()
-      .map { it.replace("**", "").replace("`", "").trim().trimStart('-', '*', '>', ' ').trim() }
-      .filter { RECORD_PREFIX.containsMatchIn(it) }
+      .map { it.trim().trimStart('-', '*', '>', ' ', '`').trimEnd('`', ' ') }
+      .filter { RECORD_KEYWORD.containsMatchIn(it) }
       .toList()
 
   private fun findingOf(line: String): GoalAssessmentCandidate? {
@@ -117,8 +113,7 @@ internal object GoalAssessmentLineParser {
 
   private fun sourceLineOf(location: String): Pair<String, Int>? {
     val lineNumber = location.substringAfterLast(':').toIntOrNull()?.takeIf { it >= 1 } ?: return null
-    val path = location.substringBeforeLast(':').removePrefix("./").takeIf(String::isNotBlank) ?: return null
-    return path to lineNumber
+    return location.substringBeforeLast(':').removePrefix("./") to lineNumber
   }
 
   private fun scenarioOf(line: String): GoalAssessmentScenarioResult? =
@@ -149,17 +144,12 @@ internal object GoalAssessmentLineParser {
     }
 
   private const val MAX_REJECTED_LINE = 160
-  private val RECORD_PREFIX =
-    Regex(
-      """^(Finding:|Test value:|Verify:|Scenario\s+IS-\d{3}:|Regression\s+TR-\d{3}:|Verify\s+GA-\d{3}:)""",
-      RegexOption.IGNORE_CASE,
-    )
+  private val RECORD_KEYWORD = Regex("""^(Finding|Test value|Scenario|Regression|Verify)\b""", RegexOption.IGNORE_CASE)
   private val FINDING =
     Regex("""^Finding:\s*(blocker|major|minor)\s+(\S+?:\d+)\s+scenario\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val FINDING_NONE = Regex("""^Finding:\s*none\.?$""", RegexOption.IGNORE_CASE)
   private val TEST_VALUE =
     Regex("""^Test value:\s*(\S+?:\d+)\s+guards\s+(\S+?:\d+)\s+reason\s+(.+)$""", RegexOption.IGNORE_CASE)
-  private val TEST_VALUE_NONE = Regex("""^Test value:\s*none\.?$""", RegexOption.IGNORE_CASE)
   private val SCENARIO =
     Regex("""^Scenario\s+(IS-\d{3}):\s*(holds|broken)\s+evidence\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val REGRESSION =

@@ -1,22 +1,16 @@
 package skillbill.engine.work.timeline
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.contracts.workflow.featuretask.GOAL_ASSESSMENT_RECORD_CONTRACT_VERSION
-import skillbill.contracts.workflow.featuretask.GOAL_ASSESSMENT_RECORD_PREVIOUS_CONTRACT_VERSION
-import skillbill.contracts.workflow.featuretask.GoalAssessmentRecordPayloadKeys
-import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.work.timeline.model.WorkActivityBlock
 import skillbill.engine.work.timeline.model.WorkActivityBlockKind
 import skillbill.engine.work.timeline.model.WorkActivityFact
 import skillbill.engine.work.timeline.model.WorkActivityGroup
 import skillbill.engine.work.timeline.model.WorkActivityGroupKind
 import skillbill.engine.work.timeline.model.WorkActivityStatus
-import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.UnitOfWork
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.work.model.WorkActivityStop
 import skillbill.ports.work.model.WorkItem
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -32,7 +26,6 @@ public class ActivityGoalFinishReads {
     children: List<WorkActivityGroup>,
     stops: List<WorkActivityStop>,
     unit: UnitOfWork,
-    diagnostics: RuntimeDiagnostics,
   ): List<WorkActivityGroup> {
     val artifacts =
       unit.workflowStates.readFeatureTaskArtifacts(
@@ -43,11 +36,14 @@ public class ActivityGoalFinishReads {
         ),
       )
     val family = DurableWorkflowArtifactFamily.GOAL_ASSESSMENT_RECORD
-    val assessment = artifacts?.get(family.label())?.let { assessmentActivity(it, goal.workflowId, diagnostics) }
+    val assessment =
+      artifacts?.get(family.label())?.let {
+        FeatureTaskRuntimeWorkflowArtifactMap.from(it).toGoalAssessmentRecord(family.label())
+      }
     val progress = artifacts?.let(::declaredProgressEventFrom)
     val blocks = parentBlocks(goal.workflowId, children, stops, unit)
     val childrenFinished = childrenFinished(children)
-    val before = assessment?.let(::listOf).orEmpty()
+    val before = assessment?.let { listOf(assessmentFact(it)) }.orEmpty()
     val after =
       progress?.takeIf {
         activityStatus(goal.currentState) == WorkActivityStatus.RUNNING &&
@@ -150,36 +146,6 @@ private fun stopBlock(stop: WorkActivityStop): WorkActivityBlock? {
     stop.blockedReason,
     kind == WorkActivityBlockKind.AWAITING_DECISION,
   )
-}
-
-private fun assessmentActivity(
-  raw: Any,
-  workflowId: String,
-  diagnostics: RuntimeDiagnostics,
-): WorkActivityFact {
-  val wire = FeatureTaskRuntimeWorkflowArtifactMap.from(raw)
-  val legacy =
-    wire[GoalAssessmentRecordPayloadKeys.CONTRACT_VERSION] == GOAL_ASSESSMENT_RECORD_PREVIOUS_CONTRACT_VERSION
-  val projected =
-    if (legacy) {
-      FeatureTaskRuntimeWorkflowArtifactMap.from(
-        wire + (GoalAssessmentRecordPayloadKeys.CONTRACT_VERSION to GOAL_ASSESSMENT_RECORD_CONTRACT_VERSION),
-      )
-    } else {
-      wire
-    }
-  return try {
-    val record = projected.toGoalAssessmentRecord(DurableWorkflowArtifactFamily.GOAL_ASSESSMENT_RECORD.label())
-    val fact = assessmentFact(record)
-    if (legacy) fact.copy(detail = "${fact.detail}, legacy assessment; test-value review unavailable") else fact
-  } catch (failure: SkillBillRuntimeException) {
-    RuntimeDiagnosticsBestEffortWarning.record(
-      diagnostics,
-      "work_activity goal=$workflowId assessment=unavailable cause=${failure.message}",
-      failure,
-    )
-    WorkActivityFact("goal_assessment", "Assessment unavailable", null, null, null, null, failure.message, false)
-  }
 }
 
 private fun assessmentFact(record: GoalAssessmentRecord): WorkActivityFact {

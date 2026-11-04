@@ -13,7 +13,6 @@ import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
-import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFix
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
@@ -41,87 +40,26 @@ internal class GoalAssessmentFixStep(
     fixSet: GoalAssessmentFixSet,
   ): GoalAssessmentRecord {
     val run = FixRun(services, state, request, roundNumber, record)
-    return try {
-      execute(run, fixSet)
-    } catch (failure: SkillBillRuntimeException) {
-      if (failure.code != GoalAssessmentFailureCode.PERSISTENCE) throw failure
-      services.warn("the goal assessment repair could not be persisted: ${failure.message}")
-      run.record
-    }
-  }
-
-  private fun execute(
-    run: FixRun,
-    fixSet: GoalAssessmentFixSet,
-  ): GoalAssessmentRecord {
-    if (!preparePlan(run, fixSet)) return run.record
-    val fix = run.round().fix ?: run.save(agentFix(run, fixSet))
-    if (fix.status == GoalAssessmentFixStatus.COMPLETED) return finishFix(run, fix)
-    return run.record
-  }
-
-  private fun preparePlan(
-    run: FixRun,
-    fixSet: GoalAssessmentFixSet,
-  ): Boolean {
     if (run.round().fix == null && run.round().repairPlan == null) {
-      if (branchProblem(run) != null || !matchesAssessedHead(run) || dirtyPaths(run)?.isNotEmpty() != false) {
-        services.warn("repair planning stopped because the feature branch, assessed head, or worktree is not ready")
-        return false
-      }
       val plan =
         launch(
           run,
           inputText(run, fixSet).replace("# Goal assessment fix:", "# Goal assessment repair plan:") +
-            "\n\nPrepare a read-only repair plan for this selected item. Use its reference, kind, test and guarded " +
-            "locations, failure scenario, and verifier evidence. Name the files, changes, and independent source " +
-            "verification. Leave speculation unconfirmed. A test-value repair may rewrite or delete a useless test " +
-            "when evidence supports it, but must preserve real regression coverage and product behavior. " +
-            "Do not edit files, build, test, validate, commit or push. Return ordinary prose.",
+            "\n\nPrepare a read-only repair plan for this selected item. Cover its remaining material defect class " +
+            "and sibling production paths. Name the files, changes, and independent source verification. " +
+            "Exclude immaterial cases. Do not edit files, build, test, validate, commit or push. " +
+            "Return ordinary prose.",
           SkeletonDefinition.GOAL_ASSESSMENT,
-        )?.takeIf(String::isNotBlank) ?: return false
-      run.savePlan(plan)
+        )?.takeIf(String::isNotBlank) ?: return run.record
+      if (!run.savePlan(plan)) return run.record
     }
-    return true
-  }
-
-  private fun finishFix(
-    run: FixRun,
-    fix: GoalAssessmentFix,
-  ): GoalAssessmentRecord {
-    if (fix.validation == GoalAssessmentFixValidation.FAILED) return run.record
-    if (fix.validation == GoalAssessmentFixValidation.PASSED && fix.commitSha != null) {
-      val problem = branchProblem(run)
-      val head = gitOperations.headCommitSha(run.request.repoRoot) as? WorkflowGitOperationResult.Ok
-      if (problem != null || head?.value?.trim()?.equals(fix.commitSha, ignoreCase = true) != true) {
-        services.warn(problem ?: "the recorded repair commit is no longer the repository head")
-        return run.record.copy(exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
-      }
-      return run.record
-    }
-    return validateAndCommit(run, fix)
-  }
-
-  private fun validateAndCommit(
-    run: FixRun,
-    initial: GoalAssessmentFix,
-  ): GoalAssessmentRecord {
-    var fix = initial
-    if (fix.validation == GoalAssessmentFixValidation.NOT_RUN) {
-      if (fix.commitSha != null) {
-        services.warn("a recorded repair commit has no saved post-change validation result")
-        return run.record
-      }
-      val problem = branchProblem(run)
-      val paths = dirtyPaths(run)
-      if (problem != null || !matchesAssessedHead(run) || paths?.toSet() != fix.changedFiles.toSet()) {
-        services.warn(problem ?: "the saved repair paths or assessed head no longer match the worktree")
-        return run.record.copy(exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
-      }
+    var fix = run.round().fix ?: run.save(agentFix(run, fixSet))
+    if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.validation == GoalAssessmentFixValidation.NOT_RUN) {
       fix = run.save(validated(run, fix))
-      if (fix.validation != GoalAssessmentFixValidation.PASSED) return run.record
     }
-    if (fix.commitSha == null) run.save(committed(run, fix))
+    if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.commitSha == null) {
+      run.save(committed(run, fix))
+    }
     return run.record
   }
 
@@ -129,15 +67,11 @@ internal class GoalAssessmentFixStep(
     run: FixRun,
     fixSet: GoalAssessmentFixSet,
   ): GoalAssessmentFix {
-    repairReadinessProblem(run)?.let { return failed(run, it) }
-    val before = dirtyPaths(run) ?: return failed(run, "the worktree status could not be read before repair")
-    if (before.isNotEmpty()) {
-      return failed(run, "pre-existing non-spec worktree changes prevent a focused repair", before)
-    }
+    val before = dirtyPaths(run).orEmpty().toSet()
     val launched = launch(run, inputText(run, fixSet))
-    val changed = dirtyPaths(run)
+    val changed = dirtyPaths(run)?.filterNot(before::contains)
     return when {
-      launched.isNullOrBlank() || changed == null ->
+      launched == null || changed == null ->
         GoalAssessmentFix(
           GoalAssessmentFixStatus.FAILED,
           changed.orEmpty(),
@@ -152,9 +86,6 @@ internal class GoalAssessmentFixStep(
       }
     }
   }
-
-  private fun repairReadinessProblem(run: FixRun): String? =
-    branchProblem(run) ?: if (!matchesAssessedHead(run)) "the repository head differs from the assessed round" else null
 
   private fun launch(
     run: FixRun,
@@ -217,21 +148,9 @@ internal class GoalAssessmentFixStep(
     if (outcome is GoalPostChangeValidationResult.Stopped) {
       services.warn("validation after the fix stopped at '${outcome.stepId}': ${outcome.reason}")
     }
-    val changed = dirtyPaths(run)
-    val problem = branchProblem(run)
-    val headMatches = matchesAssessedHead(run)
-    if (changed == null) services.warn("the worktree status is unavailable after validation")
-    if (problem != null) services.warn(problem)
-    if (!headMatches) services.warn("the repository head changed during validation")
-    val ready = changed != null && changed.isNotEmpty() && problem == null && headMatches
     return fix.copy(
-      changedFiles = changed ?: fix.changedFiles,
-      validation =
-        if (passed && ready) {
-          GoalAssessmentFixValidation.PASSED
-        } else {
-          GoalAssessmentFixValidation.FAILED
-        },
+      changedFiles = dirtyPaths(run) ?: fix.changedFiles,
+      validation = if (passed) GoalAssessmentFixValidation.PASSED else GoalAssessmentFixValidation.FAILED,
     )
   }
 
@@ -241,13 +160,10 @@ internal class GoalAssessmentFixStep(
   ): GoalAssessmentFix {
     val round = run.round()
     val head = (gitOperations.headCommitSha(run.request.repoRoot) as? WorkflowGitOperationResult.Ok)?.value?.trim()
-    val branchProblem = branchProblem(run)
     return when {
-      fix.validation != GoalAssessmentFixValidation.PASSED -> unrecorded(fix, "post-change validation did not pass")
-      branchProblem != null -> unrecorded(fix, branchProblem)
       head.isNullOrEmpty() -> unrecorded(fix, "the head commit could not be read")
       !head.equals(round.headSha, ignoreCase = true) -> adopted(run, fix, round, head)
-      else -> commitRound(run, fix)
+      else -> branchProblem(run)?.let { unrecorded(fix, it) } ?: commitRound(run, fix)
     }
   }
 
@@ -256,20 +172,15 @@ internal class GoalAssessmentFixStep(
     fix: GoalAssessmentFix,
   ): GoalAssessmentFix {
     val paths = dirtyPaths(run) ?: return unrecorded(fix, "the worktree status could not be read")
-    val pathProblem =
-      when {
-        paths.toSet() != fix.changedFiles.toSet() -> "worktree paths no longer match the recorded repair paths"
-        paths.isEmpty() -> "the recorded repair paths are no longer present"
-        else -> null
-      }
-    if (pathProblem != null) return unrecorded(fix, pathProblem)
-    val staged = gitOperations.stagePaths(run.request.repoRoot, fix.changedFiles)
-    if (staged !is WorkflowGitOperationResult.Ok) return unrecorded(fix, "staging failed: ${staged.error}")
+    if (paths.isEmpty()) return fix.copy(status = GoalAssessmentFixStatus.NO_CHANGE, changedFiles = emptyList())
+    val intended = if (paths.toSet() == fix.changedFiles.toSet()) fix else run.save(fix.copy(changedFiles = paths))
+    val staged = gitOperations.stagePaths(run.request.repoRoot, paths)
+    if (staged !is WorkflowGitOperationResult.Ok) return unrecorded(intended, "staging failed: ${staged.error}")
     val subject = "${run.state.manifest.issueKey}: goal assessment round ${run.roundNumber}"
     return when (val commit = gitOperations.createCommit(run.request.repoRoot, subject)) {
-      is WorkflowGitCommitResult.Committed -> fix.copy(commitSha = commit.commitSha.ifBlank { null })
-      WorkflowGitCommitResult.NothingToCommit -> unrecorded(fix, "git found nothing to commit")
-      is WorkflowGitCommitResult.Failed -> unrecorded(fix, "the commit failed: ${commit.error}")
+      is WorkflowGitCommitResult.Committed -> intended.copy(commitSha = commit.commitSha.ifBlank { null })
+      WorkflowGitCommitResult.NothingToCommit -> unrecorded(intended, "git found nothing to commit")
+      is WorkflowGitCommitResult.Failed -> unrecorded(intended, "the commit failed: ${commit.error}")
     }
   }
 
@@ -279,10 +190,6 @@ internal class GoalAssessmentFixStep(
     round: GoalAssessmentRound,
     head: String,
   ): GoalAssessmentFix {
-    if (fix.validation != GoalAssessmentFixValidation.PASSED) {
-      return unrecorded(fix, "a commit cannot be adopted without passed post-change validation")
-    }
-    branchProblem(run)?.let { return unrecorded(fix, it) }
     val identity = gitOperations.commitIdentity(run.request.repoRoot, head)
     val ownedParent =
       identity is WorkflowGitCommitIdentityResult.Found &&
@@ -323,27 +230,6 @@ internal class GoalAssessmentFixStep(
     return parseGitPorcelainPaths(status.value).filterNot(::isFeatureSpecPath).distinct()
   }
 
-  private fun matchesAssessedHead(run: FixRun): Boolean {
-    val head = gitOperations.headCommitSha(run.request.repoRoot) as? WorkflowGitOperationResult.Ok ?: return false
-    return head.value.trim().equals(run.round().headSha, ignoreCase = true)
-  }
-
-  private fun failed(
-    run: FixRun,
-    reason: String,
-    changedFiles: List<String> = emptyList(),
-  ): GoalAssessmentFix {
-    services.warn("the goal assessment repair is unavailable: $reason")
-    return run.save(
-      GoalAssessmentFix(
-        GoalAssessmentFixStatus.FAILED,
-        changedFiles,
-        null,
-        GoalAssessmentFixValidation.NOT_RUN,
-      ),
-    )
-  }
-
   private fun inputText(
     run: FixRun,
     fixSet: GoalAssessmentFixSet,
@@ -368,8 +254,7 @@ internal class GoalAssessmentFixStep(
 
   private fun findingText(finding: GoalAssessmentFinding): String {
     val evidence = finding.verificationEvidence.takeIf(String::isNotBlank)?.let { " Evidence: $it" }.orEmpty()
-    return "- ${finding.findingRef} kind ${finding.kind.wireValue} (${finding.severity.wireValue}), " +
-      "test ${finding.path}:${finding.line}, guards ${finding.guardedRef ?: "none"}. Scenario: " +
+    return "- ${finding.findingRef} (${finding.severity.wireValue}) ${finding.path}:${finding.line} - " +
       finding.failureScenario + evidence
   }
 
@@ -382,29 +267,22 @@ internal class GoalAssessmentFixStep(
   ) {
     fun round(): GoalAssessmentRound = record.rounds.first { it.round == roundNumber }
 
-    fun savePlan(plan: String) {
-      val updated =
+    fun savePlan(plan: String): Boolean {
+      record =
         record.copy(
           rounds = record.rounds.map { if (it.round == roundNumber) it.copy(repairPlan = plan) else it },
         )
-      if (!services.persist(state, updated)) {
-        throw SkillBillRuntimeException(
-          GoalAssessmentFailureCode.PERSISTENCE,
-          "The assessment repair plan could not be persisted.",
-        )
-      }
-      record = updated
+      return services.persist(state, record)
     }
 
     fun save(fix: GoalAssessmentFix): GoalAssessmentFix {
-      val updated = record.copy(rounds = record.rounds.map { if (it.round == roundNumber) it.copy(fix = fix) else it })
-      if (!services.persist(state, updated)) {
+      record = record.copy(rounds = record.rounds.map { if (it.round == roundNumber) it.copy(fix = fix) else it })
+      if (!services.persist(state, record)) {
         throw SkillBillRuntimeException(
           GoalAssessmentFailureCode.PERSISTENCE,
           "The assessment repair outcome could not be persisted.",
         )
       }
-      record = updated
       return fix
     }
   }
