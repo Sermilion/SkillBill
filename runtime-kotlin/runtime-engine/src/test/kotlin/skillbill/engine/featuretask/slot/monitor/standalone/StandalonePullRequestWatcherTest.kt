@@ -39,6 +39,7 @@ class StandalonePullRequestWatcherTest {
   private val running = mutableListOf<List<String>>()
   private val adopted = mutableListOf<String>()
   private var adoptionRefusal: String? = null
+  private var adoptionRefusalHead: String? = null
   private val checks =
     object : MonitorCheckSource {
       override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks {
@@ -91,7 +92,11 @@ class StandalonePullRequestWatcherTest {
     ).watch(
       identity(PR_NUMBER),
       StandaloneWatchHeads(expected, superseded, refreshAfter),
-      { sha -> adoptionRefusal.also { if (it == null) adopted += sha } },
+      { sha ->
+        val refusal =
+          adoptionRefusal ?: if (sha == adoptionRefusalHead) "The returned head cannot be followed." else null
+        refusal.also { if (it == null) adopted += sha }
+      },
     ) { _, pending ->
       running += pending.map(PullRequestCheck::name)
     }
@@ -187,6 +192,28 @@ class StandalonePullRequestWatcherTest {
 
     assertEquals(PullRequestCiOutcome.Failed(listOf(failing), FOREIGN), watch())
     assertEquals(listOf(FOREIGN), adopted)
+  }
+
+  @Test
+  fun `a returned earlier head is adopted and its checks determine the verdict`() {
+    heads += listOf(PUBLISHED, REPAIRED, PUBLISHED)
+    reportedSequence += reports(check("build", CheckBucket.PENDING))
+    reportedSequence += reports(check("build", CheckBucket.PASS))
+
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), watch())
+    assertEquals(listOf(REPAIRED, PUBLISHED), adopted)
+  }
+
+  @Test
+  fun `a returned earlier head blocks when adoption is refused`() {
+    heads += listOf(PUBLISHED, REPAIRED, PUBLISHED)
+    reportedSequence += reports(check("build", CheckBucket.PENDING))
+    adoptionRefusalHead = PUBLISHED
+
+    val outcome = assertIs<PullRequestCiOutcome.Blocked>(watch())
+
+    assertTrue("returned head cannot be followed" in outcome.reason, outcome.reason)
+    assertEquals(listOf(REPAIRED), adopted)
   }
 
   @Test
