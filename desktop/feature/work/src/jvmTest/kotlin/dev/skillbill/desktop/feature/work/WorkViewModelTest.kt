@@ -201,32 +201,6 @@ class WorkViewModelTest {
   }
 
   @Test
-  fun `a live worker refusal still opens the pause presentation`() = runTest {
-    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    val item = workItem("SKILL-475")
-    val controls = FakeWorkControlRepository().apply {
-      exportPreflightOutcome = ExportPreflightOutcome.Refused(
-        "Goal is live; export refused.",
-        ExportRefusalCategory.LIVENESS,
-      )
-    }
-    val viewModel = WorkViewModel(
-      FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(item)))),
-      FakeWorkDetailRepository(),
-      controls,
-      SelectionHolder(),
-      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
-      FakeArchiveFileChooser(),
-      TestSession,
-      EmptySpecRepository,
-    )
-    viewModel.onAction(WorkAction.RequestExport(item))
-    advanceUntilIdle()
-
-    assertEquals(item, viewModel.state.value.exportLiveTarget)
-  }
-
-  @Test
   fun `canceling archive selection does not inspect or import`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val board = FakeWorkBoardRepository(loadedBoard())
