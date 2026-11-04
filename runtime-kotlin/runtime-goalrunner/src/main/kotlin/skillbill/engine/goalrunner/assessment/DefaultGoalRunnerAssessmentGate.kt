@@ -137,11 +137,9 @@ public class DefaultGoalRunnerAssessmentGate(
     headSha: String,
   ): GoalAssessmentRound? {
     if (existing == null || round != 1) return existing
-    if (existing.assessorRuns.isNotEmpty()) return existing
-    val hasResults =
-      existing.findings.isNotEmpty() || existing.scenarios.isNotEmpty() || existing.regressions.isNotEmpty()
+    if (existing.headSha.equals(headSha, ignoreCase = true)) return existing
     val repairStarted = existing.fix != null || existing.repairPlan != null || existing.targetRef != null
-    return if (hasResults || repairStarted) existing else existing.copy(headSha = headSha)
+    return if (repairStarted) existing else null
   }
 
   private fun resumeProblem(

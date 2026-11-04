@@ -101,20 +101,58 @@ class DefaultGoalRunnerAssessmentGateTest {
     )
   }
 
+  @Test
+  fun `an unrepaired first round assessed at an older head is reassessed at the current head`() {
+    val stale = recordedFirstSubtaskRound(headSha = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1")
+    val store = AssessmentOutcomeStore(GoalAssessmentRecordRead.Recorded(stale))
+    val fixture = GoalAssessmentGateFixture(home, store) { NO_FINDING }
+
+    val result = fixture.assess()
+
+    assertEquals(
+      listOf(
+        AssessmentCall.TEST_VALUE_REVIEW,
+        AssessmentCall.FIRST_SUBTASK,
+        AssessmentCall.SECOND_SUBTASK,
+        AssessmentCall.CROSS_SUBTASK,
+      ),
+      fixture.calls,
+    )
+    val round = result.record.rounds.single()
+    assertEquals(ASSESSMENT_HEAD_SHA, round.headSha)
+    assertEquals(emptyList(), round.findings)
+    assertEquals(emptyList(), result.record.openFindingRefs)
+  }
+
+  @Test
+  fun `a first round with a started repair still refuses a moved head`() {
+    val repairing =
+      recordedFirstSubtaskRound(headSha = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1").let { record ->
+        record.copy(rounds = record.rounds.map { it.copy(targetRef = "GA-001") })
+      }
+    val store = AssessmentOutcomeStore(GoalAssessmentRecordRead.Recorded(repairing))
+    val fixture = GoalAssessmentGateFixture(home, store) { NO_FINDING }
+
+    assertIs<GoalAssessmentRoundResult.Unavailable>(fixture.gate().runRound(fixture.state(), fixture.request(), 1))
+
+    assertEquals(emptyList(), fixture.calls)
+    assertTrue(fixture.diagnostics.warnings.any { "goal head is now" in it }, fixture.diagnostics.warnings.toString())
+  }
+
   private fun GoalAssessmentGateFixture.assess(): GoalAssessmentRoundResult.Assessed =
     assertIs<GoalAssessmentRoundResult.Assessed>(
       gate().runRound(state(), request(), 1),
       diagnostics.warnings.toString(),
     )
 
-  private fun recordedFirstSubtaskRound(): GoalAssessmentRecord =
+  private fun recordedFirstSubtaskRound(headSha: String = ASSESSMENT_HEAD_SHA): GoalAssessmentRecord =
     GoalAssessmentRecord(
       issueKey = "SKILL-442",
       rounds =
         listOf(
           GoalAssessmentRound(
             round = 1,
-            headSha = ASSESSMENT_HEAD_SHA,
+            headSha = headSha,
             scopeFiles = emptyList(),
             assessorRuns = listOf(GoalAssessmentRun(GoalAssessmentRole.SUBTASK, 1, GoalAssessmentRunStatus.COMPLETED)),
             findings = listOf(recordedMinorFinding()),
