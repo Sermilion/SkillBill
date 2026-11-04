@@ -56,7 +56,7 @@ import kotlin.time.Instant
 internal val COMPOSER_MAX_WIDTH = 728.dp
 
 private const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
-private const val PICKERS_DISABLED_STARTING = "Wait for Start goal run to finish"
+private const val PICKERS_DISABLED_STARTING = "Wait for the start to finish"
 private const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
 
 /** The task input with repository, agent, Send, Stop and Send now. Enter and Send share one condition; a busy turn queues the next message. */

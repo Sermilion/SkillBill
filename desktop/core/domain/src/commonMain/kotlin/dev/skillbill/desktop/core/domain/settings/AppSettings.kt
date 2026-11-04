@@ -15,6 +15,7 @@ data class AppSettings(
   val terminalHeightDp: Int,
   val trayLastTab: TrayTab,
   val favoriteWork: Set<FavoriteWorkKey> = emptySet(),
+  val favoriteSpecs: Set<FavoriteSpecKey> = emptySet(),
 ) {
   companion object {
     const val TERMINAL_HEIGHT_DEFAULT_DP = 200
@@ -30,11 +31,17 @@ data class AppSettings(
       terminalHeightDp = TERMINAL_HEIGHT_DEFAULT_DP,
       trayLastTab = TrayTab.DEFAULT,
       favoriteWork = emptySet(),
+      favoriteSpecs = emptySet(),
     )
   }
 }
 
 data class FavoriteWorkKey(val databaseFile: DatabaseFileIdentity, val workItemId: String)
+
+data class FavoriteSpecKey(val projectId: String, val path: String)
+
+fun Iterable<FavoriteSpecKey>.orderedSpecFavorites(): List<FavoriteSpecKey> =
+  sortedWith(compareBy({ it.projectId }, { it.path }))
 
 fun Iterable<FavoriteWorkKey>.orderedFavorites(normalizePath: (String) -> String): List<FavoriteWorkKey> =
   sortedWith(compareBy({ normalizePath(it.databaseFile.path) }, { it.databaseFile.fileKey }, { it.workItemId }))

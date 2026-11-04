@@ -1,5 +1,6 @@
 package skillbill.engine.work.control.model
 
+import java.nio.file.Path
 import java.util.concurrent.CompletionStage
 
 public sealed interface NewTaskKeyAllocation {
@@ -37,6 +38,11 @@ public sealed interface NewTaskPreparation {
 }
 
 public enum class NewTaskRunKind { GOAL, PLAN }
+
+public data class StandaloneCheckout(
+  public val checkoutRoot: Path? = null,
+  public val branch: String? = null,
+)
 
 public sealed interface NewTaskStartResult {
   public data object Started : NewTaskStartResult

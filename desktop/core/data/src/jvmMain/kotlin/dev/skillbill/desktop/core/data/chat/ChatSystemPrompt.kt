@@ -62,6 +62,7 @@ When the operator's request matches one of those mappings, the first action in t
 The app launches from JSON "start" and optional "target", not from the label text.
 Optional JSON field "target" is a string: for "monitor", the PR URL or issue key when the user named one, omitted otherwise; for "verify", the required intake (free text or "spec:<path>"); for "pr-review-fix", an optional PR; for review, validation, qa, and pr omit "target" unless the user named one.
 Do not put CLI flags such as "target:", "mode:", or "qa:" into "target".
+Optional JSON field "branch" is a string: for "review", "validation", "qa", "pr", "verify", and "pr-review-fix", set it to the exact git branch name when the operator names a branch the run should act on; the app runs the start on a checkout of that branch. Omit "branch" otherwise. For "monitor", never set "branch"; name the branch in "target" as branch:<name>.
 A click starts the first invocation. "verify" and "pr-review-fix" then park at awaiting_confirmation for a later operator confirm; that confirm is not a second start kind.
 """
 

@@ -1,3 +1,12 @@
+## [2026-11-04] SKILL-478 spec bundle favorites
+Areas: desktop/app/shell, desktop/core/domain, desktop/core/datastore, desktop/core/testing, desktop/feature/specs
+- FavoriteSpecKey identifies a bundle by project ID and spec-relative path. DataStore persists spec favorites separately from run favorites with versioned, length-prefixed keys. Database session changes do not define spec identity.
+- The Specs toolbar offers a favorite toggle only for bundles. The Favorites sidebar lists run favorites first, then spec favorites ordered by project and path; unavailable spec entries remain removable.
+- A spec favorite opens the Specs pane and selects the bundle after its project tree loads. The pending reveal takes precedence over automatic project following.
+- Limits: macOS and Windows desktop checks were not run on the Linux host. QA or validation reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-03] SKILL-469 subtask 1: agent process ending
 Areas: desktop/core/data chat
 - ChatProcesses.destroyTree snapshots descendants, sends SIGTERM, waits STOP_GRACE_MS (3s), force-kills survivors, records chat.process_force_killed once, then waits FORCE_WAIT_MS (1s). live.remove makes a second destroyTree from killer plus outer finally a no-op. The JVM shutdown hook uses signalTree, SIGTERM with no wait.

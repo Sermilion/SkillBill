@@ -17,6 +17,7 @@ import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.work.WorkRunLauncher
@@ -26,6 +27,13 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -48,16 +56,28 @@ class WorkNewTaskStartTest {
       override fun preflight(request: GoalPreflightRequest) =
         GoalPreflightResult(GoalPreflightVerdict.NEW_WORK, "LOCAL-0")
     }
+  private val siblingRoot: Path = Files.createTempDirectory("work-new-task-start-sibling")
+  private var branchHolder: Path? = null
+  private val goalWorktrees =
+    object : GoalWorktreeResources by InPlaceGoalWorktreeResources {
+      override fun checkoutHolding(
+        repoRoot: Path,
+        branch: String,
+      ): Path? = branchHolder
+    }
+  private val branchWorktrees = RecordingBranchWorktreeResources()
   private val subject =
     WorkNewTaskStart(
       database,
       GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey },
-      NewTaskIssueKeyAllocator(testProjectStore, TestDecompositionManifestStore, NoopRuntimeDiagnostics),
+      NewTaskIssueKeyAllocator(testProjectStore, UnavailableDecompositionManifestStore, NoopRuntimeDiagnostics),
       preflight,
       launcher,
       EnvironmentContext(),
       TestRepositoryEnclosingRoot,
       NoopRuntimeDiagnostics,
+      goalWorktrees,
+      branchWorktrees,
     )
 
   @Test
@@ -175,6 +195,8 @@ class WorkNewTaskStartTest {
     EnvironmentContext(),
     TestRepositoryEnclosingRoot,
     NoopRuntimeDiagnostics,
+    goalWorktrees,
+    branchWorktrees,
   )
 
   private fun keyAdmission() =
@@ -205,6 +227,75 @@ class WorkNewTaskStartTest {
         )
       return GoalPreflightResult(verdict, request.issueKey, candidates = listOf(candidate))
     }
+  }
+
+  @Test
+  fun `a branch another checkout holds runs there without being claimed as created`() {
+    branchHolder = siblingRoot
+
+    val result = subject.startStandalone(repoRoot, "review", "claude", null, StandaloneCheckout(branch = "feat/x"))
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(siblingRoot, launcher.lastDirectory())
+    assertEquals(emptyList(), branchWorktrees.created)
+    assertEquals(
+      listOf(siblingRoot to BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, "review")),
+      branchWorktrees.held,
+    )
+    assertTrue(launcher.lastOwnership().startsWith(TestRepositoryEnclosingRoot.primaryRepositoryIdentity(repoRoot)))
+    assertTrue(launcher.lastOwnership().endsWith(":branch:feat/x"), launcher.lastOwnership())
+  }
+
+  @Test
+  fun `a branch no checkout holds runs in the worktree created for it`() {
+    branchWorktrees.creation = BranchWorktreeCreation.Created(siblingRoot)
+
+    val result = subject.startOperation(repoRoot, "verify", "SKILL-1", "claude", StandaloneCheckout(branch = "feat/x"))
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(listOf(repoRoot to "feat/x"), branchWorktrees.created)
+    assertEquals(siblingRoot, launcher.lastDirectory())
+    assertEquals(emptyList(), branchWorktrees.released)
+  }
+
+  @Test
+  fun `a branch that exists nowhere refuses the start without launching`() {
+    branchWorktrees.creation = BranchWorktreeCreation.Missing
+
+    val result = subject.startStandalone(repoRoot, "qa", "claude", null, StandaloneCheckout(branch = "feat/gone"))
+
+    val refused = assertIs<NewTaskStartResult.Refused>(result)
+    assertTrue("feat/gone" in refused.reason, refused.reason)
+    assertEquals(0, launcher.calls)
+  }
+
+  @Test
+  fun `a refused launch releases the worktree it claimed`() {
+    branchWorktrees.creation = BranchWorktreeCreation.Created(siblingRoot)
+    launcher.refusal = "A run is already starting or running for this work."
+
+    val result = subject.startStandalone(repoRoot, "pr", "claude", null, StandaloneCheckout(branch = "feat/x"))
+
+    assertIs<NewTaskStartResult.Refused>(result)
+    assertEquals(
+      listOf(siblingRoot to BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, "pr")),
+      branchWorktrees.released,
+    )
+  }
+
+  @Test
+  fun `monitor ignores the branch and a start without one runs in the given checkout`() {
+    branchHolder = siblingRoot
+    val checkout = Files.createTempDirectory("work-new-task-start-checkout")
+
+    subject.startStandalone(repoRoot, "monitor", "claude", "branch:feat/x", StandaloneCheckout(checkout, "feat/x"))
+    assertEquals(checkout, launcher.lastDirectory())
+    subject.startStandalone(repoRoot, "review", "claude", null, StandaloneCheckout(checkout))
+    assertEquals(checkout, launcher.lastDirectory())
+
+    assertEquals(emptyList(), branchWorktrees.created)
+    assertEquals(emptyList(), branchWorktrees.held)
+    assertTrue(launcher.lastOwnership().startsWith(TestRepositoryEnclosingRoot.primaryRepositoryIdentity(repoRoot)))
   }
 
   @Test
@@ -317,17 +408,23 @@ class WorkNewTaskStartTest {
   private class RecordingLauncher : WorkRunLauncher {
     var calls = 0
     var exit: Pair<Path, CompletableFuture<WorkRunExit>>? = null
-    private var last: List<String> = emptyList()
+    var refusal: String? = null
+    private var last: WorkRunLaunchRequest? = null
 
     override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
       calls++
-      last = (request.kind as WorkRunLaunchKind.RuntimeCommand).arguments
+      last = request
+      refusal?.let { return WorkRunLaunchResult.Refused(it) }
       return exit?.let { (log, finished) -> WorkRunLaunchResult.Started(log, finished) }
         ?: WorkRunLaunchResult.Started(Path.of("work-new-task-start.log"))
     }
 
     override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
 
-    fun lastArgs(): List<String> = last
+    fun lastArgs(): List<String> = (last?.kind as WorkRunLaunchKind.RuntimeCommand).arguments
+
+    fun lastDirectory(): Path? = last?.repositoryRoot
+
+    fun lastOwnership(): String = last?.ownershipKey.orEmpty()
   }
 }

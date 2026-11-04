@@ -12,6 +12,13 @@ Reason: Subtask 1 occupancy treats a used URL as not reusable. Forcing reuse aro
 Context: New Task Goal and Plan starts must not mint from a prefix menu, but execution chats still retry a missing key through ChatComposer.
 Decision: Remove prefix-menu starts from the Goal run card. Keep IssuePrefixPicker as a sibling composable that ChatComposer still imports.
 Reason: Deleting the picker would break execution-chat retry. The Goal run card now takes a complete key only.
+Supersedes: Show the Goal run card only when the operator is asking to run a goal.
+
+## [2026-11-04] Drop the Goal run card and keep start feedback in the transcript
+Context: The Goal run card duplicated agent start:goal / start:plan buttons and held the success banner, prefix picker, and start errors outside the conversation.
+Decision: Remove the card. Goal and plan start from the agent's in-chat actions. A successful start keeps the chat and appends a confirmation notice that restores as a success callout. Goal refusals append as Error. A pending prefix choice is a transcript footer, not a card. Home chips for review, validation, QA, and PR stay.
+Reason: The operator starts a run from the action the agent offered. The confirmation has to stay visible in the chat so another message can start again.
+Supersedes: Show the Goal run card only when the operator is asking to run a goal.
 
 ## [2026-11-03] Always release a cancelled turn after a NonCancellable save
 Context: The window scope uses Dispatchers.Main, not Main.immediate, so a job cancelled before first dispatch never enters its body. A cancelled IO save can skip clearing the turn job, and /clear can replace turnJob during that suspension.
@@ -71,7 +78,7 @@ Reason: The operator asked to slide the existing pane, not add a third create pa
 
 ## [2026-11-03] Keep suggested input with the pending prefix choice
 Context: A suggested goal or plan can need a prefix before it starts. Transcript-derived retry input can select an unrelated instruction or title.
-Decision: Carry the selected action through the screen host and retain it with the pending prefix choice. Use its instruction and exact nullable title for the initial request and retry. Clear or replace pending input on a new turn or launch; card starts use the transcript.
+Decision: Carry the selected action through the screen host and retain it with the pending prefix choice. Use its instruction and exact nullable title for the initial request and retry. Clear or replace pending input on a new turn or launch; a start without a selected action uses the transcript.
 Reason: The retry must start the action the operator selected, while a later card start must not inherit that action.
 
 ## [2026-11-03] Show the Goal run card only when the operator is asking to run a goal

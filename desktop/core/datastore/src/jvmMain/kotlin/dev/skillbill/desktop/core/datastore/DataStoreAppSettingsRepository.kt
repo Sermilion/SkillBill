@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
@@ -83,6 +84,24 @@ class DataStoreAppSettingsRepository(
     }
   }.distinctUntilChanged()
 
+  override val favoriteSpecs: Flow<Outcome<Set<FavoriteSpecKey>, SettingsRejection>> = flow {
+    while (true) {
+      val seenWrites = writes.value
+      store.data
+        .map { preferences ->
+          val decoded = preferences.toAppSettings {}
+          Outcome.Success(decoded.favoriteSpecs)
+        }
+        .catch { failure ->
+          if (failure !is IOException) throw failure
+          diagnostics.record("desktop_settings_unreadable")
+          emit(Outcome.Failure(SettingsRejection.ReadFailed))
+        }
+        .collect { emit(it) }
+      withTimeoutOrNull(FAVORITE_READ_RETRY_MILLIS) { writes.first { it != seenWrites } }
+    }
+  }.distinctUntilChanged()
+
   override suspend fun setDatabasePath(path: String?): Outcome<Unit, SettingsRejection> {
     if (!path.isNullOrEmpty() && path.isBlank()) return Outcome.Failure(SettingsRejection.BlankDatabasePath)
     return edit { if (path.isNullOrEmpty()) it.remove(AppPreferenceKeys.DATABASE_PATH) else it[AppPreferenceKeys.DATABASE_PATH] = path.trim() }
@@ -111,6 +130,14 @@ class DataStoreAppSettingsRepository(
     if (favorite) stored.add(encoded) else stored.remove(encoded)
     if (stored.isEmpty()) preferences.remove(AppPreferenceKeys.FAVORITE_WORK)
     else preferences[AppPreferenceKeys.FAVORITE_WORK] = stored
+  }
+
+  override suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean) = edit { preferences ->
+    val encoded = FavoriteSpecKeyEncoding.encode(key)
+    val stored = preferences[AppPreferenceKeys.FAVORITE_SPECS].orEmpty().toMutableSet()
+    if (favorite) stored.add(encoded) else stored.remove(encoded)
+    if (stored.isEmpty()) preferences.remove(AppPreferenceKeys.FAVORITE_SPECS)
+    else preferences[AppPreferenceKeys.FAVORITE_SPECS] = stored
   }
 
   private suspend fun edit(change: (MutablePreferences) -> Unit): Outcome<Unit, SettingsRejection> = try {

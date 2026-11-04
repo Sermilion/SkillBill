@@ -46,8 +46,6 @@ import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterio
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParser
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionVerdict
-import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckEntry
-import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict
 import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
 import skillbill.workflow.taskruntime.model.audit.qaReauditRefs
@@ -331,13 +329,14 @@ public class AcceptanceCriterionRepairPhaseRecorder(
     malformed: AcceptanceCriterionInteractionTraceParse.Malformed,
   ): AcceptanceCriterionInteractionTraceParse.Parsed? {
     if (session.accounting.traceReaskScope != AcceptanceCriterionInteractionTraceRound.scopeKey(state)) return null
+    if (state.interactionTrace.pendingRechecks.isNotEmpty()) return null
     AcceptanceCriterionTraceDiagnostics.warn(
       diagnostics,
       phase.workflowId,
       AcceptanceCriterionTraceDiagnostics.Warning(
         "degraded",
         malformed.code.name,
-        "unknown_and_holds",
+        "unknown",
         "reason=${malformed.reason.take(AcceptanceCriterionTraceDiagnostics.MAX_REASON)}",
       ),
     )
@@ -350,12 +349,7 @@ public class AcceptanceCriterionRepairPhaseRecorder(
           DEGRADED_UNKNOWN_REASON,
         )
       }
-    val rechecks =
-      state.interactionTrace.pendingRechecks.map { ref ->
-        val prior = state.criteria.firstOrNull { it.canonicalRef == ref }?.closureEvidenceRef.orEmpty()
-        AcceptanceCriterionRecheckEntry(ref, AcceptanceCriterionRecheckVerdict.HOLDS, prior)
-      }
-    return AcceptanceCriterionInteractionTraceParse.Parsed(entries, emptyList(), rechecks)
+    return AcceptanceCriterionInteractionTraceParse.Parsed(entries, emptyList(), emptyList())
   }
 
   private data class CompletionEvidence(

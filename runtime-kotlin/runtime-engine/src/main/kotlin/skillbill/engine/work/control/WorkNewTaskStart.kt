@@ -16,6 +16,7 @@ import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
@@ -26,6 +27,12 @@ import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
+import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
 import java.nio.file.Path
@@ -41,6 +48,8 @@ public class WorkNewTaskStart(
   private val environment: EnvironmentContext,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val diagnostics: RuntimeDiagnostics,
+  private val goalWorktrees: GoalWorktreeResources,
+  private val branchWorktrees: BranchWorktreeResources,
 ) {
   public fun prepareNewTask(
     repoRoot: Path,
@@ -223,10 +232,13 @@ public class WorkNewTaskStart(
     phaseId: String,
     agentId: String,
     target: String? = null,
+    checkout: StandaloneCheckout = StandaloneCheckout(),
   ): NewTaskStartResult {
     if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
     standaloneIntakeRefusal(target, phaseId)?.let { return it }
-    return launchStandaloneCommand(repoRoot, "phase", phaseId, target, agentId)
+    val place = if (phaseId == MONITOR_PHASE) checkout.copy(branch = null) else checkout
+    val run = StandaloneRun("phase", BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, phaseId))
+    return launchStandaloneCommand(repoRoot, run, target, agentId, place)
   }
 
   public fun startOperation(
@@ -234,6 +246,7 @@ public class WorkNewTaskStart(
     operationId: String,
     target: String?,
     agentId: String,
+    checkout: StandaloneCheckout = StandaloneCheckout(),
   ): NewTaskStartResult {
     if (operationId !in STANDALONE_OPERATIONS) {
       return NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
@@ -241,53 +254,77 @@ public class WorkNewTaskStart(
     if (operationId == "verify" && target.isNullOrBlank()) {
       return NewTaskStartResult.Refused("Verify needs an intake before it can start.")
     }
-    return launchStandaloneCommand(repoRoot, "operation", operationId, target, agentId)
+    val run = StandaloneRun("operation", BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, operationId))
+    return launchStandaloneCommand(repoRoot, run, target, agentId, checkout)
   }
 
   private fun launchStandaloneCommand(
     repoRoot: Path,
-    verb: String,
-    id: String,
+    run: StandaloneRun,
     target: String?,
     agentId: String,
+    checkout: StandaloneCheckout,
   ): NewTaskStartResult {
     val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
-    if (launchTarget?.startsWith("-") == true) {
-      return NewTaskStartResult.Refused(
-        "The target '$launchTarget' starts with a dash, so the CLI would parse it as an option.",
-      )
-    }
-    if (agentId !in SupportedAgent.supportedIds) {
-      return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
-    }
-    val checked =
-      preflight.preflight(
-        GoalPreflightRequest(
-          "LOCAL-0",
-          repoRoot,
-          invokedAgentId = agentId,
-          userHome = environment.userHome,
-          environment = environment.environment,
-        ),
-      )
-    goalStartRefusal(checked)?.let { return NewTaskStartResult.Refused(it) }
+    val branch = checkout.branch?.trim()?.takeIf(String::isNotBlank)
+    standaloneLaunchRefusal(repoRoot, launchTarget, branch, agentId)?.let { return it }
+    val workspace =
+      when (val resolved = branch?.let { branchCheckout(repoRoot, it, run.holder) }) {
+        null -> StandaloneWorkspace(checkout.checkoutRoot ?: repoRoot, held = false)
+        is BranchCheckout.Ready -> resolved.workspace
+        is BranchCheckout.Refused -> return NewTaskStartResult.Refused(resolved.reason)
+      }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
     val ownership =
-      if (launchTarget == null) "$identity:$id:standalone" else "$identity:$id:standalone:$launchTarget"
-    val args =
-      buildList {
-        add(verb)
-        add(id)
-        launchTarget?.let(::add)
-        add("--agent")
-        add(agentId)
+      listOfNotNull("$identity:${run.holder.id}:standalone", launchTarget, branch?.let { "branch:$it" })
+        .joinToString(":")
+    val args = listOfNotNull(run.verb, run.holder.id, launchTarget, "--agent", agentId)
+    val result = launchRuntimeCommand(workspace.root, ownership, args)
+    if (result is NewTaskStartResult.Refused && workspace.held) releaseAfterRefusal(workspace.root, run.holder)
+    return result
+  }
+
+  private fun standaloneLaunchRefusal(
+    repoRoot: Path,
+    launchTarget: String?,
+    branch: String?,
+    agentId: String,
+  ): NewTaskStartResult.Refused? {
+    val refusal =
+      when {
+        launchTarget?.startsWith("-") == true ->
+          "The target '$launchTarget' starts with a dash, so the CLI would parse it as an option."
+        branch?.startsWith(
+          "-",
+        ) == true -> "The branch '$branch' starts with a dash, so git would parse it as an option."
+        agentId !in SupportedAgent.supportedIds -> "Choose a supported agent before starting this run."
+        else ->
+          goalStartRefusal(
+            preflight.preflight(
+              GoalPreflightRequest(
+                "LOCAL-0",
+                repoRoot,
+                invokedAgentId = agentId,
+                userHome = environment.userHome,
+                environment = environment.environment,
+              ),
+            ),
+          )
       }
-    return database.transaction { unit ->
+    return refusal?.let(NewTaskStartResult::Refused)
+  }
+
+  private fun launchRuntimeCommand(
+    workingDirectory: Path,
+    ownership: String,
+    args: List<String>,
+  ): NewTaskStartResult =
+    database.transaction { unit ->
       when (
         val launched =
           launcher.start(
             WorkRunLaunchRequest(
-              repoRoot,
+              workingDirectory,
               unit.dbPath,
               ownership,
               WorkRunLaunchKind.RuntimeCommand(args),
@@ -301,6 +338,33 @@ public class WorkNewTaskStart(
             ?: NewTaskStartResult.Started
       }
     }
+
+  private fun releaseAfterRefusal(
+    checkoutRoot: Path,
+    holder: BranchWorktreeHolder,
+  ) {
+    val released = branchWorktrees.release(checkoutRoot, holder)
+    if (released is BranchWorktreeRelease.Kept) {
+      diagnostics.warning(
+        "seam=new-task.branch-worktree outcome=kept_after_refused_launch path=${released.path} " +
+          "reason=${released.detail}",
+      )
+    }
+  }
+
+  private fun branchCheckout(
+    repoRoot: Path,
+    branch: String,
+    run: BranchWorktreeHolder,
+  ): BranchCheckout {
+    goalWorktrees.checkoutHolding(repoRoot, branch)?.let { holding ->
+      return BranchCheckout.Ready(StandaloneWorkspace(holding, held = branchWorktrees.hold(holding, run)))
+    }
+    return when (val created = branchWorktrees.create(repoRoot, branch, run)) {
+      is BranchWorktreeCreation.Created -> BranchCheckout.Ready(StandaloneWorkspace(created.path, held = true))
+      BranchWorktreeCreation.Missing -> BranchCheckout.Refused("Branch $branch was not found locally or on origin.")
+      is BranchWorktreeCreation.Failed -> BranchCheckout.Refused(created.reason)
+    }
   }
 
   private fun standaloneIntakeRefusal(
@@ -311,7 +375,7 @@ public class WorkNewTaskStart(
     val trimmed = intake.trim()
     if (trimmed.isEmpty()) return null
     return when {
-      phaseId != "monitor" ->
+      phaseId != MONITOR_PHASE ->
         NewTaskStartResult.Refused("Intake is supported only for standalone monitor runs.")
       trimmed.contains(' ') || trimmed.any { it.isISOControl() } ->
         NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
@@ -405,6 +469,37 @@ public class WorkNewTaskStart(
 
   private enum class IdentityOrigin { TYPED, URL }
 
+  private data class StandaloneRun(
+    val verb: String,
+    val holder: BranchWorktreeHolder,
+  )
+
+  private data class StandaloneWorkspace(
+    val root: Path,
+    val held: Boolean,
+  )
+
+  private sealed interface BranchCheckout {
+    data class Ready(
+      val workspace: StandaloneWorkspace,
+    ) : BranchCheckout
+
+    data class Refused(
+      val reason: String,
+    ) : BranchCheckout
+  }
+
+  private sealed interface KeyChoice {
+    data class Chosen(
+      val key: String,
+      val allocated: Boolean,
+    ) : KeyChoice
+
+    data class Ask(
+      val choices: List<String>,
+    ) : KeyChoice
+  }
+
   private companion object {
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
     val WHITESPACE = Regex("\\s+")
@@ -412,7 +507,8 @@ public class WorkNewTaskStart(
     val STOP_LINE = Regex("^(?:Phase '[^']+' blocked at |Operation '[^']+' (?:blocked|failed): )")
     const val MAX_INTAKE_BYTES = 30_000
     const val MAX_REASON_CHARS = 500
-    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", "monitor")
+    const val MONITOR_PHASE = "monitor"
+    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", MONITOR_PHASE)
     val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
     const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
     const val MONITOR_INTAKE_TARGET_PREFIX = "target:"

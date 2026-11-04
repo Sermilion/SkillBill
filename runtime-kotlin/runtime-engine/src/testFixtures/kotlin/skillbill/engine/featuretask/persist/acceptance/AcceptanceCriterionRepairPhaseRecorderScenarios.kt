@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -268,6 +269,11 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
 
           val trace = phase(f, "audit", 4)
           assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(trace))
+          if (verdict == "holds") {
+            scope.recordTraceReask(AcceptanceCriterionInteractionTraceRound.scopeKey(pending))
+            assertIs<RequiredPhaseWrite.Rejected>(recorder.complete(output(trace, "advance", "No decision given.")))
+            assertEquals(listOf("AC-001"), assertNotNull(scope.snapshot).interactionTrace.pendingRechecks)
+          }
           val settled =
             recorder.complete(
               output(
@@ -290,6 +296,39 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
             assertTrue(state.unsuccessfulTotals.isEmpty())
           }
         }
+      }
+    }
+  }
+
+  fun `a malformed Recheck without evidence is a relaunchable re-ask rather than a hard schema block`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val scope = openScope(f, worker)
+        val recorder = recorderFor(f, worker, scope)
+        audit(f, recorder, 1, true, "AC-001 is implemented at src/Flow.kt:10.")
+        audit(f, recorder, 2, false, "AC-002 still needs a caller.")
+        val repair = phase(f, "audit_implement_fix", 2)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
+        val repaired =
+          output(repair, "satisfied", "Connected the caller.").copy(fileManifestIntroduced = listOf("src/Flow.kt"))
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(repaired))
+        audit(f, recorder, 3, true, "AC-002 is implemented at src/Other.kt:3.")
+        val pending = assertNotNull(scope.snapshot)
+        assertEquals(AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED, pending.stage)
+        assertEquals(listOf("AC-001"), pending.interactionTrace.pendingRechecks)
+        assertEquals(emptyList(), pending.interactionTrace.pendingScenarioRefs)
+
+        val reason =
+          AcceptanceCriterionInteractionTraceRound.reaskRejection(
+            scope,
+            "The completeness audit is settled as satisfied.",
+          )
+        assertNotNull(reason)
+        assertTrue(FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_TRACE_AUDIT_OUTPUT.name in reason)
+        assertTrue("Recheck AC-001" in reason)
+        assertTrue(AcceptanceCriterionInteractionTraceRound.shouldRelaunch(scope, outputGateFailures = 0))
+        assertFalse(AcceptanceCriterionInteractionTraceRound.shouldRelaunch(scope, outputGateFailures = 1))
+        assertFalse(AcceptanceCriterionInteractionTraceRound.shouldRelaunch(null, outputGateFailures = 0))
       }
     }
   }
