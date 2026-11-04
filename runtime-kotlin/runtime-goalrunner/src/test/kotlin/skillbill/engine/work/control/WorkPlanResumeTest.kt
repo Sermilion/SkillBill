@@ -44,6 +44,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WorkPlanResumeTest {
@@ -96,6 +97,7 @@ class WorkPlanResumeTest {
       val item = assertNotNull(status.detail(WorkDetailRequest(workflowId)).item)
       val options = database.read { actions.optionsForTest(item, it) }
       assertEquals(!owned, options.canLaunch)
+      assertNull(options.unavailableReason)
       assertEquals("Resume", options.launchLabel)
       if (!owned) {
         assertEquals(IdeStatusLifecycleState.PAUSED, item.snapshot.lifecycleState)
