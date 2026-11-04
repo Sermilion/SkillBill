@@ -205,6 +205,31 @@ class ChangesWindowViewModelTest {
   }
 
   @Test
+  fun `view switches preserve spanned operator commits and remove subtask quick buttons`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val goal = workItem("G")
+    detailOf(goal)
+    val subtask = ScopeSubtask(2, "Two", ScopeSubtaskState.DONE, "c", listOf("a", "c"), false, emptyList())
+    scopes.subtasks.value = SubtaskScopesState.Listed(
+      "/repo", "main", true, listOf(subtask), emptyMap(),
+      timeline = ChangeScopeTimeline("base", "c", listOf(
+        ScopeCommit("a", "base", "first", listOf(2)),
+        ScopeCommit("op", "a", "operator", emptyList()),
+        ScopeCommit("c", "op", "last", listOf(2)),
+      )),
+    )
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
+    advanceUntilIdle()
+    viewModel.requestScope(ChangeScope.Subtasks(2, 2))
+
+    viewModel.onAction(ChangesWindowAction.SetView(ChangesView.Commits))
+    assertEquals(ChangeScope.Commits(listOf("a", "op", "c")), viewModel.state.value.scope)
+    assertEquals(false, viewModel.state.value.quick.any { it.kind == QuickScope.Operator || it.kind == QuickScope.Running })
+    viewModel.onAction(ChangesWindowAction.SetView(ChangesView.Subtasks))
+    assertEquals(ChangeScope.Subtasks(2, 2), viewModel.state.value.scope)
+  }
+
+  @Test
   fun `operator quick selection shows the limit while all keeps its changes`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val viewModel = goalWindow(listOf(subtask(1)))
@@ -391,6 +416,8 @@ class ChangesWindowViewModelTest {
     fun list(scope: ChangeScope): MutableStateFlow<ScopeChangesState> = lists.getOrPut(scope) { MutableStateFlow(ScopeChangesState.Loading) }
 
     override fun observeSubtasks(goalWorkflowId: String, running: Boolean): Flow<SubtaskScopesState> = subtasks
+
+    override fun observeCommitStats(target: ChangeScopeTarget): Flow<Map<String, SubtaskStats>> = emptyFlow()
 
     override fun observeScope(target: ChangeScopeTarget, scope: ChangeScope, running: Boolean): Flow<ScopeChangesState> {
       observed += scope

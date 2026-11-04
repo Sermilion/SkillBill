@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.ScopeCommit
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
+import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.TimelineProblem
 import dev.skillbill.desktop.core.domain.model.resolveScope
 import kotlinx.coroutines.flow.first
@@ -149,6 +150,28 @@ class ChangeScopeObservationsTest {
   }
 
   @Test
+  fun `commit stats keep successful reads and report a failed sha once across collections`() = runTest {
+    val port = CountingPort().apply {
+      committedFilesByRange["base" to "one"] = listOf(WorkChangedFile("one.kt", null, WorkChangeStatus.MODIFIED, 2, 1))
+      failedRanges += "one" to "two"
+    }
+    val diagnostics = RecordingDiagnostics()
+    val target = ChangeScopeTarget(
+      "goal", root.toString(), ChangeBaseline.TargetMergeBase(root.toString(), "main"),
+      listOf(ScopeSubtask(1, "one", ScopeSubtaskState.DONE, "two", listOf("one", "two"), false, emptyList())), true,
+      timeline = ChangeScopeTimeline("base", "two", listOf(ScopeCommit("one", "base", "one", listOf(1)), ScopeCommit("two", "one", "two", listOf(1)))),
+    )
+    val observations = observations(port, listed(), diagnostics) { WorkGoalTimelineResult.Failed("unused") }
+    val cache = CommittedChangeCache()
+    val first = observations.observeCommitStats(target, Mutex(), cache).toList().last()
+    val second = observations.observeCommitStats(target, Mutex(), cache).toList().last()
+
+    assertEquals(setOf("one"), first.keys)
+    assertEquals(mapOf("one" to SubtaskStats(listOf(ChangedFile("one.kt", null, ChangeStatus.Modified, 2, 1)), 2, 1)), second)
+    assertEquals(listOf(SCOPES_READ_FAILED), diagnostics.records)
+  }
+
+  @Test
   fun `interleaved running scope includes working changes without reading another owners commit`() = runTest {
     val port = CountingPort().apply {
       workingFiles = listOf(WorkChangedFile("working.kt", null, WorkChangeStatus.MODIFIED, 2, 0))
@@ -259,6 +282,7 @@ class ChangeScopeObservationsTest {
     var workingFiles = emptyList<WorkChangedFile>()
     val committedFilesByRange = mutableMapOf<Pair<String, String>, List<WorkChangedFile>>()
     val patches = mutableMapOf<Pair<String, String>, WorkFileDiffResult>()
+    val failedRanges = mutableSetOf<Pair<String, String>>()
     override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
       workingBases += (baseline as WorkChangeBaseline.SubtaskStart).baseSha
       return WorkChangeListResult.Listed(
@@ -272,6 +296,7 @@ class ChangeScopeObservationsTest {
     override fun committedChanges(worktreeRoot: String, fromSha: String, toSha: String): WorkChangeListResult {
       committedCalls++
       committedRanges += fromSha to toSha
+      if ((fromSha to toSha) in failedRanges) return WorkChangeListResult.Failed("git failed")
       val files = committedFilesByRange[fromSha to toSha].orEmpty()
       return WorkChangeListResult.Listed(toSha, files, files.sumOf { it.insertions ?: 0 }, files.sumOf { it.deletions ?: 0 })
     }

@@ -42,3 +42,12 @@ Context: The detail screen must open a separate Changes window owned by :feature
 Decision: ChangesWindows lives in core/ui, and :feature:changes binds it with ChangesWindowRegistry in AppScope. Detail emits an effect that DetailFeatureEntry turns into ChangesWindows.open, and Application.kt renders one window per registry entry beside MainWindow.
 Reason: Detail cannot depend on :feature:changes. A registry outside MainWindow keeps windows open when the main window hides to the tray, and a known work id reuses its window instead of adding a second one.
 Revisit when: Open windows need to survive an app restart, or a database session switch should close them.
+## [2026-11-04] Retain commit statistics across timeline refreshes
+Context: Commit statistics are immutable for an unchanged commit SHA, while the goal timeline can refresh during the view.
+Decision: Keep observed statistics for SHAs that remain on the refreshed timeline and merge each new per-commit emission into that map.
+Reason: The strip keeps its bars while the repository reads the next commit.
+
+## [2026-11-04] Validate subtask view switches after range normalization
+Context: Normalizing a selected subtask range can expand it to include squash partners.
+Decision: After mapping selected commits to covered subtasks, normalize the range and require every selectable id in the expanded range to be covered by the selected commits.
+Reason: The subtask view must not display commits the commit view did not select.

@@ -23,6 +23,7 @@ import dev.skillbill.desktop.core.domain.model.attributeHunks
 import dev.skillbill.desktop.core.domain.model.hunkOwnerLabel
 import dev.skillbill.desktop.core.domain.model.resolveScope
 import dev.skillbill.desktop.core.domain.model.scopeHunkGroups
+import dev.skillbill.desktop.core.domain.model.scopeCommits
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -76,7 +77,7 @@ internal class ChangeScopeDiffs(
       }
       is ScopeRead.Unavailable -> FileDiffState.Unavailable(ReadProblem.Runtime(resolved.reason))
     }
-    if (scope is Subtasks && result is FileDiffState.Shown &&
+    if ((scope is Subtasks || scope is ChangeScope.Commits) && result is FileDiffState.Shown &&
       (resolved is ScopeRead.Committed || resolved is ScopeRead.Baseline)
     ) {
       return attributeRangeDiff(target, scope, file, result.diff, lock, cache)
@@ -272,13 +273,17 @@ internal class ChangeScopeDiffs(
 
   private suspend fun attributeRangeDiff(
     target: ChangeScopeTarget,
-    scope: ChangeScope.Subtasks,
+    scope: ChangeScope,
     file: ChangedFile,
     diff: FileDiff,
     lock: Mutex,
     cache: CommittedChangeCache,
   ): FileDiffState {
-    val groups = scopeHunkGroups(target, scope)
+    val groups = if (scope is Subtasks) scopeHunkGroups(target, scope) else {
+      scopeCommits(target, scope).groupBy { commit ->
+        if (commit.operator) ScopeHunkOwner.OperatorCommit(commit.sha) else ScopeHunkOwner.Subtasks(commit.ownerIds.sorted())
+      }.map { (owner, commits) -> dev.skillbill.desktop.core.domain.model.ScopeHunkGroup(owner, commits, false) }
+    }
     if (groups.size < 2) return FileDiffState.Shown(diff)
     fun failedRead(): FileDiffState {
       diagnostics.record(SCOPES_READ_FAILED)

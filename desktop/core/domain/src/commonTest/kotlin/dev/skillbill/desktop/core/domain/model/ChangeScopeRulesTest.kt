@@ -35,6 +35,14 @@ class ChangeScopeRulesTest {
   }
 
   @Test
+  fun `commit selections normalize in timeline order and resolve without the working tree`() {
+    assertEquals(ChangeScope.Commits(listOf("s1", "op-middle")), normalizeCommits(target, listOf("op-middle", "s1")))
+    assertNull(normalizeCommits(target, listOf("gone")))
+    assertEquals(ScopeRead.Committed("op-before", "op-middle"), resolveScope(target, ChangeScope.Commits(listOf("op-middle", "s1"))))
+    assertEquals(ScopeRead.PerCommit(listOf(timeline.commits[1], timeline.commits[3])), resolveScope(target, ChangeScope.Commits(listOf("s1", "s2"))))
+  }
+
+  @Test
   fun `removed worktree never reads the repository working tree`() {
     val removed = target.copy(committedOnly = true)
     assertEquals(false, ScopeKind.Uncommitted in availableScopes(removed))

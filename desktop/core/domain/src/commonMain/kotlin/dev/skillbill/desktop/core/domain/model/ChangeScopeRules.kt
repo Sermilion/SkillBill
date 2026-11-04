@@ -91,6 +91,14 @@ fun normalizeRange(target: ChangeScopeTarget, a: Int, b: Int): ChangeScope.Subta
   return ChangeScope.Subtasks(minOf(newLow, newHigh), maxOf(newLow, newHigh))
 }
 
+fun normalizeCommits(target: ChangeScopeTarget, shas: List<String>): ChangeScope.Commits? {
+  if (ScopeKind.Commits !in availableScopes(target) || shas.isEmpty()) return null
+  val selected = shas.toSet()
+  val commits = target.timeline?.commits?.filter { it.sha in selected }.orEmpty()
+  if (commits.size != selected.size) return null
+  return ChangeScope.Commits(commits.map { it.sha })
+}
+
 fun resolveScope(target: ChangeScopeTarget, scope: ChangeScope): ScopeRead {
   if (scope.kind !in availableScopes(target)) return ScopeRead.Unavailable("scope not available")
   return when (scope) {
@@ -98,6 +106,14 @@ fun resolveScope(target: ChangeScopeTarget, scope: ChangeScope): ScopeRead {
     ChangeScope.Uncommitted -> ScopeRead.Uncommitted
     ChangeScope.Operator -> ScopeRead.PerCommit(target.timeline!!.commits.filter(ScopeCommit::operator))
     is ChangeScope.Subtasks -> resolveSubtasks(target, scope)
+    is ChangeScope.Commits -> {
+      val commits = normalizeCommits(target, scope.shas) ?: return ScopeRead.Unavailable("scope not available")
+      val timeline = target.timeline!!
+      val indices = commits.shas.map { sha -> timeline.commits.indexOfFirst { it.sha == sha } }
+      if (indices.zipWithNext().all { (a, b) -> b == a + 1 }) {
+        ScopeRead.Committed(timeline.commits[indices.first()].parentSha, timeline.commits[indices.last()].sha)
+      } else ScopeRead.PerCommit(commits.shas.mapNotNull { sha -> timeline.commits.firstOrNull { it.sha == sha } })
+    }
   }
 }
 
@@ -159,7 +175,7 @@ fun touchCount(path: String, scope: ChangeScope, stats: Map<Int, SubtaskStats>, 
   return when (scope) {
     ChangeScope.All -> ids.size
     is ChangeScope.Subtasks -> ids.count { it in selectedSubtaskIds(subtasks, scope) }
-    ChangeScope.Operator, ChangeScope.Uncommitted -> null
+    is ChangeScope.Commits, ChangeScope.Operator, ChangeScope.Uncommitted -> null
   }
 }
 
@@ -205,7 +221,7 @@ fun spannedCommits(target: ChangeScopeTarget, scope: ChangeScope.Subtasks): List
   }
   if (ownedIndices.isEmpty()) return emptyList()
   val firstIndex = ownedIndices.first()
-  return when (resolveScope(target, scope)) {
+  return when (val read = resolveScope(target, scope)) {
     is ScopeRead.Baseline -> timeline.commits.subList(firstIndex, timeline.commits.size)
     is ScopeRead.Committed -> {
       val lastIndex = ownedIndices.last()
@@ -213,8 +229,16 @@ fun spannedCommits(target: ChangeScopeTarget, scope: ChangeScope.Subtasks): List
         commit.operator || commit.ownerIds.any { it in selected }
       }
     }
+    is ScopeRead.PerCommit -> read.commits
     else -> emptyList()
   }
+}
+
+fun scopeCommits(target: ChangeScopeTarget, scope: ChangeScope): List<ScopeCommit> = when (scope) {
+  is ChangeScope.Commits -> normalizeCommits(target, scope.shas)?.shas.orEmpty().mapNotNull { sha -> target.timeline?.commits?.firstOrNull { it.sha == sha } }
+  ChangeScope.Operator -> target.timeline?.commits?.filter(ScopeCommit::operator).orEmpty()
+  is ChangeScope.Subtasks -> spannedCommits(target, scope)
+  else -> emptyList()
 }
 
 data class ScopeHunkGroup(val owner: ScopeHunkOwner, val commits: List<ScopeCommit>, val workingTree: Boolean)

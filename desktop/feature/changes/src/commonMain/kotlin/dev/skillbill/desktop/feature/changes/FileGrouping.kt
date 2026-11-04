@@ -34,6 +34,7 @@ internal fun scopeLabel(scope: ChangeScope, subtasks: List<ScopeSubtask>): Strin
   ChangeScope.All -> "All changes"
   ChangeScope.Operator -> "Operator commits"
   ChangeScope.Uncommitted -> "Uncommitted"
+  is ChangeScope.Commits -> scope.shas.singleOrNull()?.let { sha -> "Commit ${sha.take(7)}" } ?: "${scope.shas.size} commits"
   is ChangeScope.Subtasks -> {
     val selected = selectedSubtaskIds(subtasks, scope).filter { id -> subtasks.any { it.id == id } }
     when {

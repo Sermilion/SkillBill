@@ -350,6 +350,8 @@ class DetailViewModelTest {
       return flow
     }
 
+    override fun observeCommitStats(target: ChangeScopeTarget): Flow<Map<String, dev.skillbill.desktop.core.domain.model.SubtaskStats>> = emptyFlow()
+
     override fun observeScope(target: ChangeScopeTarget, scope: ChangeScope, running: Boolean): Flow<ScopeChangesState> = emptyFlow()
 
     override suspend fun fileDiff(target: ChangeScopeTarget, scope: ChangeScope, file: ChangedFile): FileDiffState = error("unused")

@@ -3,22 +3,25 @@ package dev.skillbill.desktop.core.domain.model
 sealed interface ChangeScope {
   data object All : ChangeScope
   data class Subtasks(val from: Int, val to: Int) : ChangeScope
+  data class Commits(val shas: List<String>) : ChangeScope
   data object Operator : ChangeScope
   data object Uncommitted : ChangeScope
 }
 
-enum class ScopeKind { All, Subtasks, Operator, Uncommitted }
+enum class ScopeKind { All, Subtasks, Commits, Operator, Uncommitted }
 
 val ChangeScope.kind: ScopeKind
   get() = when (this) {
     ChangeScope.All -> ScopeKind.All
     is ChangeScope.Subtasks -> ScopeKind.Subtasks
+    is ChangeScope.Commits -> ScopeKind.Commits
     ChangeScope.Operator -> ScopeKind.Operator
     ChangeScope.Uncommitted -> ScopeKind.Uncommitted
   }
 
 data class ScopeCommit(val sha: String, val parentSha: String, val subject: String, val ownerIds: List<Int>) {
   val operator: Boolean get() = ownerIds.isEmpty()
+  val orderedOwnerIds: List<Int> get() = ownerIds.sorted()
 }
 
 data class ChangeScopeTimeline(val mergeBaseSha: String, val headSha: String, val commits: List<ScopeCommit>)

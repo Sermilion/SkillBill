@@ -71,6 +71,7 @@ class ChangeScopeObservations internal constructor(
   }
 
   private val baseShas = ConcurrentHashMap<ListedBaseKey, String>()
+  private val reportedCommitFailures = ConcurrentHashMap.newKeySet<String>()
   private val latestSubtaskStates = ConcurrentHashMap<String, SubtaskScopesState.Listed>()
   private val interruptedStats = ConcurrentHashMap<InterruptedStatsKey, SubtaskStats>()
   private val diffs = ChangeScopeDiffs(runtime, diagnostics, port, io, baseShas, ::readPerCommit)
@@ -93,6 +94,39 @@ class ChangeScopeObservations internal constructor(
       delay(CHANGE_REFRESH_INTERVAL)
     }
   }.distinctUntilChanged()
+
+  fun observeCommitStats(
+    target: ChangeScopeTarget,
+    lock: Mutex,
+    cache: CommittedChangeCache,
+  ): Flow<Map<String, SubtaskStats>> = flow {
+    val stats = linkedMapOf<String, SubtaskStats>()
+    emit(emptyMap())
+    for (commit in target.timeline?.commits.orEmpty()) {
+      val result = readCommitStats(target, commit, lock, cache)
+      if (result == null) {
+        if (reportedCommitFailures.add("${target.worktreeRoot}:${commit.sha}")) diagnostics.record(SCOPES_READ_FAILED)
+      } else stats[commit.sha] = result
+      emit(stats.toMap())
+    }
+  }.distinctUntilChanged()
+
+  private suspend fun readCommitStats(
+    target: ChangeScopeTarget,
+    commit: ScopeCommit,
+    lock: Mutex,
+    cache: CommittedChangeCache,
+  ): SubtaskStats? {
+    val key = CommittedListKey(target.worktreeRoot, commit.parentSha, commit.sha)
+    cache.list(key)?.let { return it.toStats() }
+    return when (val outcome = git(lock) { port.committedChanges(target.worktreeRoot, commit.parentSha, commit.sha) }) {
+      is Outcome.Failure -> null
+      is Outcome.Success -> when (val result = outcome.value) {
+        is WorkChangeListResult.Listed -> result.toChangeSet().also { cache.putList(key, it) }.toStats()
+        is WorkChangeListResult.Failed, is WorkChangeListResult.BaseUnavailable, is WorkChangeListResult.NotARepository -> null
+      }
+    }
+  }
 
   fun observeSubtasks(
     goalWorkflowId: String,

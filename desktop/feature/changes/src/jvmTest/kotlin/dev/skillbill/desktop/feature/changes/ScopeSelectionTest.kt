@@ -1,6 +1,10 @@
 package dev.skillbill.desktop.feature.changes
 
 import dev.skillbill.desktop.core.domain.model.ChangeScope
+import dev.skillbill.desktop.core.domain.model.ChangeBaseline
+import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
+import dev.skillbill.desktop.core.domain.model.ChangeScopeTimeline
+import dev.skillbill.desktop.core.domain.model.ScopeCommit
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import kotlin.test.Test
@@ -36,5 +40,23 @@ class ScopeSelectionTest {
       ScopeSubtask(3, "c", ScopeSubtaskState.DONE, "s", listOf("s"), false, emptyList()),
     )
     assertEquals(2, stepTarget(subtasks, ChangeScope.Subtasks(1, 1), forward = true))
+  }
+
+  @Test
+  fun `commit selection steps, filters by subject, and switch back rejects partial ownership`() {
+    val commits = listOf(
+      ScopeCommit("a", "base", "First change", listOf(1)),
+      ScopeCommit("op", "a", "Operator edit", emptyList()),
+      ScopeCommit("b", "op", "Second change", listOf(2)),
+    )
+    val subtasks = listOf(
+      ScopeSubtask(1, "Alpha", ScopeSubtaskState.DONE, "a", listOf("a"), false, emptyList()),
+      ScopeSubtask(2, "Beta", ScopeSubtaskState.DONE, "b", listOf("b"), false, emptyList()),
+    )
+    val target = ChangeScopeTarget("goal", "/repo", ChangeBaseline.TargetMergeBase("/repo", "main"), subtasks, true, timeline = ChangeScopeTimeline("base", "b", commits))
+    assertEquals("op", commitStepTarget(commits, ChangeScope.Commits(listOf("a")), true))
+    assertEquals(listOf("op"), filterCommits(commits, subtasks, "OPERATOR").map { it.sha })
+    assertEquals(ChangeScope.Subtasks(1, 1), subtaskSelectionOf(target, ChangeScope.Commits(listOf("a"))))
+    assertEquals(ChangeScope.All, subtaskSelectionOf(target, ChangeScope.Commits(listOf("op"))))
   }
 }

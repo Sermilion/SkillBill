@@ -43,7 +43,13 @@ internal fun ScopeBar(state: ChangesWindowUiState, onAction: (ChangesWindowActio
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
-      if (state.scope is ChangeScope.Subtasks) {
+      if (state.view == ChangesView.Commits) {
+        val previous = commitStepTarget(state.commits, state.scope, forward = false)
+        val next = commitStepTarget(state.commits, state.scope, forward = true)
+        ChangesLink("← ${previous?.take(7).orEmpty()}", { onAction(ChangesWindowAction.Step(forward = false)) })
+        ChangesLink("${next?.take(7).orEmpty()} →", { onAction(ChangesWindowAction.Step(forward = true)) })
+        if (state.scope is ChangeScope.Commits) ChangesLink("All commits", { onAction(ChangesWindowAction.PickAll) })
+      } else if (state.scope is ChangeScope.Subtasks) {
         val previous = stepTarget(state.subtasks, state.scope, forward = false)
         val next = stepTarget(state.subtasks, state.scope, forward = true)
         ChangesLink("← ${previous ?: ""}", { onAction(ChangesWindowAction.Step(forward = false)) })

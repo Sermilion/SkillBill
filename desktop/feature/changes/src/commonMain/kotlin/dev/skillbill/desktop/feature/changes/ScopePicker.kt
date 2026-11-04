@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -68,6 +69,7 @@ import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.model.selectedSubtaskIds
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
+import dev.skillbill.desktop.core.ui.changes.commitTag
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.filesLabel
@@ -84,6 +86,10 @@ private val PICKER_BELOW_BUTTON = 36.dp
  */
 @Composable
 internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, search: FocusRequester) {
+  if (state.view == ChangesView.Commits) {
+    CommitPicker(state, onAction, search)
+    return
+  }
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(10.dp)
   val below = with(LocalDensity.current) { PICKER_BELOW_BUTTON.roundToPx() }
@@ -122,7 +128,7 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
             }
             Key.Enter, Key.NumPadEnter -> {
               val picked = selectable.firstOrNull { it.id == keyboardId } ?: selectable.firstOrNull()
-              if (picked != null) onAction(ChangesWindowAction.PickSubtask(picked.id, extend = false, fromPicker = true)) else close()
+              if (picked != null) onAction(ChangesWindowAction.PickSubtask(picked.id, extend = event.isShiftPressed, fromPicker = true)) else close()
             }
             else -> return@onPreviewKeyEvent false
           }
@@ -145,7 +151,97 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
           }
         }
       }
-      PickerFooter { onAction(ChangesWindowAction.PickAll) }
+      PickerFooter("All subtasks") { onAction(ChangesWindowAction.PickAll) }
+    }
+  }
+}
+
+@Composable
+private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, search: FocusRequester) {
+  val colors = SkillBillTheme.colors
+  val shape = RoundedCornerShape(10.dp)
+  val rows = filterCommits(state.commits, state.subtasks, state.pickerQuery)
+  var keyboardSha by remember(state.pickerQuery) { mutableStateOf<String?>(null) }
+  val listState = rememberLazyListState()
+  val close = { onAction(ChangesWindowAction.ClosePicker) }
+  Popup(
+    alignment = Alignment.TopStart,
+    offset = IntOffset(0, with(LocalDensity.current) { PICKER_BELOW_BUTTON.roundToPx() }),
+    onDismissRequest = close,
+    properties = PopupProperties(focusable = true, dismissOnClickOutside = true, dismissOnBackPress = true),
+  ) {
+    LaunchedEffect(Unit) { search.requestFocus() }
+    LaunchedEffect(keyboardSha, rows.map { it.sha }) {
+      val index = rows.indexOfFirst { it.sha == keyboardSha }
+      if (index < 0) return@LaunchedEffect
+      val info = listState.layoutInfo
+      if (info.visibleItemsInfo.none { it.index == index && it.offset >= 0 && it.offset + it.size <= info.viewportEndOffset }) {
+        listState.scrollToItem(index)
+      }
+    }
+    Column(
+      Modifier.width(PICKER_WIDTH).layeredShadow(SkillBillTheme.shadows.popover, shape).clip(shape)
+        .background(colors.bgOverlay, shape).border(1.dp, colors.borderStrong, shape)
+        .onPreviewKeyEvent { event ->
+          if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+          val selectable = rows
+          when (event.key) {
+            Key.Escape -> close()
+            Key.DirectionDown, Key.DirectionUp -> {
+              val current = selectable.indexOfFirst { it.sha == keyboardSha }
+              val next = (current + if (event.key == Key.DirectionDown) 1 else -1).coerceIn(0, (selectable.lastIndex).coerceAtLeast(0))
+              keyboardSha = selectable.getOrNull(next)?.sha
+            }
+            Key.Enter, Key.NumPadEnter -> {
+              val picked = selectable.firstOrNull { it.sha == keyboardSha } ?: selectable.firstOrNull()
+              if (picked != null) onAction(ChangesWindowAction.PickCommit(picked.sha, event.isShiftPressed, true)) else close()
+            }
+            else -> return@onPreviewKeyEvent false
+          }
+          true
+        },
+    ) {
+      val style = changesSans(12.5f, FontWeight.Normal, colors.fg)
+      BasicTextField(
+        state.pickerQuery,
+        { onAction(ChangesWindowAction.PickerQuery(it)) },
+        Modifier.fillMaxWidth().height(38.dp).focusRequester(search),
+        singleLine = true, textStyle = style, cursorBrush = SolidColor(colors.fg),
+        decorationBox = { field -> Box(Modifier.fillMaxWidth().hairlineBottom(colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+          if (state.pickerQuery.isEmpty()) BasicText("Filter commits by subject, SHA or subtask", style = style.copy(color = colors.fgFaint), maxLines = 1, softWrap = false)
+          field()
+        } },
+      )
+      if (rows.isEmpty()) PaneMessage("No commit matches.") else LazyColumn(Modifier.heightIn(max = PICKER_LIST_MAX), state = listState, contentPadding = PaddingValues(4.dp)) {
+        items(rows, key = { it.sha }) { commit ->
+          val stat = state.commitStats[commit.sha]
+          val inScope = (state.scope as? ChangeScope.Commits)?.shas?.contains(commit.sha) == true
+          val interaction = remember { MutableInteractionSource() }
+          Row(
+            Modifier.fillMaxWidth().background(if (inScope || keyboardSha == commit.sha) colors.bgRaised else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(6.dp))
+              .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+              .semantics(mergeDescendants = true) {
+                role = Role.Button
+                selected = inScope
+                onClick { onAction(ChangesWindowAction.PickCommit(commit.sha, false, true)); true }
+              }
+              .pointerInput(commit.sha) {
+                awaitEachGesture {
+                  awaitFirstDown()
+                  val extend = currentEvent.keyboardModifiers.isShiftPressed
+                  if (waitForUpOrCancellation() != null) onAction(ChangesWindowAction.PickCommit(commit.sha, extend, true))
+                }
+              }.padding(horizontal = 9.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+          ) {
+            BasicText(commit.sha.take(7), Modifier.width(56.dp), style = changesMono(10.5f, FontWeight.SemiBold, colors.accentText), maxLines = 1)
+            BasicText(commit.subject, Modifier.weight(1f), style = changesSans(12f, FontWeight.Normal, colors.fg2), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(commitTag(commit), Modifier.width(70.dp), style = changesSans(10f, FontWeight.Medium, colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(if (stat == null) "" else "+${stat.insertions}/−${stat.deletions}", style = changesMono(10f, FontWeight.Normal, colors.fgFaint), maxLines = 1)
+          }
+        }
+      }
+      PickerFooter("All commits") { onAction(ChangesWindowAction.PickAll) }
     }
   }
 }
@@ -227,7 +323,7 @@ private fun PickerRow(subtask: ScopeSubtask, stats: SubtaskStats?, inScope: Bool
 }
 
 @Composable
-private fun PickerFooter(onShowAll: () -> Unit) {
+private fun PickerFooter(label: String, onShowAll: () -> Unit) {
   val colors = SkillBillTheme.colors
   val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
   Row(
@@ -246,6 +342,6 @@ private fun PickerFooter(onShowAll: () -> Unit) {
       KeyCap("Enter")
     }
     Spacer(Modifier.weight(1f))
-    ChangesLink("All subtasks", onShowAll)
+    ChangesLink(label, onShowAll)
   }
 }
