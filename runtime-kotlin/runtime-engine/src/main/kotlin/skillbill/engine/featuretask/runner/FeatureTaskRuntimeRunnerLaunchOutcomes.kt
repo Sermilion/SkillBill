@@ -33,6 +33,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitDetector
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 public fun terminalBlockedReasonFrom(
   phaseId: String,
@@ -207,13 +208,15 @@ internal fun providerLimitSignal(facts: AgentRunLaunchFacts): FeatureTaskRuntime
 
 internal fun providerLimitPauseReason(
   phaseId: String,
+  agentId: String,
   signal: FeatureTaskRuntimeProviderLimitSignal,
-): String {
-  val reset = signal.resetHint?.let { " Access resets $it." }.orEmpty()
-  return "Feature-task-runtime phase '$phaseId' stopped because the agent provider refused the request at a " +
-    "usage limit.$reset The phase produced no output and consumed no repair attempt; the run is paused and " +
-    "resumes at '$phaseId'. Provider said: ${signal.evidence}"
-}
+): String =
+  FeatureTaskRuntimeProviderLimitPause.reason(
+    phaseLabel = "Feature-task-runtime phase '$phaseId'",
+    agentId = agentId,
+    resumePhaseId = phaseId,
+    signal = signal,
+  )
 
 internal fun isProcessFailureBlockReason(
   phaseId: String,

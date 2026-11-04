@@ -87,7 +87,7 @@ public class DefaultPhaseRunner(
             PhaseLaunchFailure(PhaseLaunchFailureKind.AFTER_CAPTURE_FAILED, captureReason(step, captured.detail)),
           )
       }
-    return launched(outcome, manifest, settled, classify(step, outcome))
+    return launched(outcome, manifest, settled, classify(input, outcome))
   }
 
   private fun launchUntracked(
@@ -97,7 +97,7 @@ public class DefaultPhaseRunner(
   ): PhaseStepOutput {
     val input = state.prepareLaunch(unprepared) ?: return preparationRejected(unprepared.stepName)
     val outcome = session.execute(launchRequest(input, state))
-    return launched(outcome, null, PhaseSettledEnvelopeRead.None, classify(input.stepName, outcome))
+    return launched(outcome, null, PhaseSettledEnvelopeRead.None, classify(input, outcome))
   }
 
   private fun launchRequest(
@@ -243,10 +243,11 @@ public class DefaultPhaseRunner(
   }
 
   private fun classify(
-    step: String,
+    input: PhaseStepInput,
     outcome: AgentRunLaunchOutcome,
-  ): PhaseLaunchFailure? =
-    when (outcome) {
+  ): PhaseLaunchFailure? {
+    val step = input.stepName
+    return when (outcome) {
       is UnsupportedAgentRunLaunch ->
         PhaseLaunchFailure(
           PhaseLaunchFailureKind.UNSUPPORTED_AGENT,
@@ -254,11 +255,20 @@ public class DefaultPhaseRunner(
           outcome.reason,
         )
       is AgentRunLaunchDenied -> null
-      is AgentRunLaunchFacts ->
+      is AgentRunLaunchFacts -> {
+        val agentId =
+          input.facts.invokedAgentId.takeIf(String::isNotBlank) ?: outcome.agent.wireValue
         providerLimitSignal(outcome)
-          ?.let { PhaseLaunchFailure(PhaseLaunchFailureKind.PROVIDER_LIMIT, providerLimitPauseReason(step, it)) }
+          ?.let {
+            PhaseLaunchFailure(
+              PhaseLaunchFailureKind.PROVIDER_LIMIT,
+              providerLimitPauseReason(step, agentId, it),
+            )
+          }
           ?: infraFailureReason(step, outcome)?.let { PhaseLaunchFailure(PhaseLaunchFailureKind.INFRASTRUCTURE, it) }
+      }
     }
+  }
 
   private fun launched(
     outcome: AgentRunLaunchOutcome,
