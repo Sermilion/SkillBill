@@ -90,6 +90,23 @@ class GoalAssessmentLoopTest {
   }
 
   @Test
+  fun `non ascii committed test path reaches the review prompt at the assembled head`() {
+    val testPath = "src/тесты/FeatureTest.kt"
+    val fixture = GoalAssessmentGateFixture(home) { NO_FINDING }
+    fixture.git.changedPathsBetweenCommitsValue = listOf("src/Feature.kt", testPath)
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertTrue(AssessmentCall.TEST_VALUE_REVIEW in fixture.calls)
+    assertTrue(testPath in fixture.prompts.getValue(AssessmentCall.TEST_VALUE_REVIEW))
+    assertEquals(
+      GoalAssessmentRunStatus.COMPLETED,
+      record.rounds.single().assessorRuns.first { it.role == GoalAssessmentRole.TEST_VALUE_REVIEW }.status,
+    )
+  }
+
+  @Test
   fun `an oversized test value report cannot be resumed as a completed review`() {
     val fixture =
       GoalAssessmentGateFixture(home) { call ->

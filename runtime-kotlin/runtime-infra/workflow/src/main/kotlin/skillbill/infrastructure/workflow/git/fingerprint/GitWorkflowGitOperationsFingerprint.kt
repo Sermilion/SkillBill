@@ -520,11 +520,20 @@ internal object GitRuntimePhaseFileManifestOperations : RuntimePhaseFileManifest
     afterCommit: String,
   ): WorkflowGitNameListResult {
     if (beforeCommit == afterCommit) return WorkflowGitNameListResult.Listed(emptyList())
-    val changed = runGitCommand(repoRoot, "diff", "--name-only", beforeCommit, afterCommit)
+    val changed = runGitCommand(repoRoot, "diff", "--name-only", "-z", beforeCommit, afterCommit)
     if (changed !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(changed.error)
-    return WorkflowGitNameListResult.Listed(
-      changed.value.orEmpty().lineSequence().map(String::trim).filter(String::isNotEmpty).toList(),
-    )
+    return parseChangedPaths(changed.value.orEmpty())
+  }
+
+  private fun parseChangedPaths(output: String): WorkflowGitNameListResult {
+    if (output.isEmpty()) return WorkflowGitNameListResult.Listed(emptyList())
+    if (!output.endsWith('\u0000')) return WorkflowGitNameListResult.Failed("Git returned malformed changed paths.")
+    val names = output.dropLast(1).split('\u0000')
+    return if (names.any(String::isEmpty)) {
+      WorkflowGitNameListResult.Failed("Git returned malformed changed paths.")
+    } else {
+      WorkflowGitNameListResult.Listed(names)
+    }
   }
 }
 
