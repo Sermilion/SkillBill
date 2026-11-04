@@ -11,6 +11,7 @@ import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
@@ -42,6 +43,16 @@ public class WorkNewTaskStart(
   private val diagnostics: RuntimeDiagnostics,
 ) {
   public fun prepareNewTask(
+    repoRoot: Path,
+    request: NewTaskIntakeRequest,
+  ): NewTaskPreparation =
+    if (request.identityPolicy == NewTaskIdentityPolicy.RESOLVED_DESKTOP_IDENTITY) {
+      prepareResolvedDesktopIdentity(repoRoot, request)
+    } else {
+      prepareLegacyIdentity(repoRoot, request)
+    }
+
+  private fun prepareLegacyIdentity(
     repoRoot: Path,
     request: NewTaskIntakeRequest,
   ): NewTaskPreparation {
@@ -83,11 +94,39 @@ public class WorkNewTaskStart(
     return readyOrRefused(repoRoot, request, selected.first, intake, selected.second)
   }
 
+  private fun prepareResolvedDesktopIdentity(
+    repoRoot: Path,
+    request: NewTaskIntakeRequest,
+  ): NewTaskPreparation {
+    val choice = request.keyChoice?.trim().orEmpty()
+    val selected =
+      when {
+        choice.contains(GOAL_INTAKE_URL_MARKER) -> extractDesktopUrlKey(choice)?.let { it to IdentityOrigin.URL }
+        ISSUE_KEY.matches(choice) -> choice.uppercase() to IdentityOrigin.TYPED
+        else -> null
+      } ?: return NewTaskPreparation.NeedsKey(allocator.prefixes(repoRoot))
+    val requirements = request.requirements
+    val agentTitle = usableTitle(request.title)
+    val titleLine = requirements.trim().lineSequence().firstOrNull(String::isNotBlank).orEmpty()
+    val title = agentTitle ?: titleLine.takeIf(ASCII_WORD::containsMatchIn) ?: "New task from desktop"
+    val intake = appendBase("${selected.first}\n$title\n\n$requirements", request.baseBranch)
+    return readyOrRefused(repoRoot, request, selected.first, intake, selected.second)
+  }
+
   private fun extractUrlKey(value: String): String? =
     value.substringAfter(GOAL_INTAKE_URL_MARKER)
       .substringBefore('?')
       .substringBefore('#')
       .split('/')
+      .firstOrNull { ISSUE_KEY.matches(it) }
+      ?.uppercase()
+
+  private fun extractDesktopUrlKey(value: String): String? =
+    value.substringAfter(GOAL_INTAKE_URL_MARKER)
+      .substringBefore('?')
+      .substringBefore('#')
+      .split('/')
+      .drop(1)
       .firstOrNull { ISSUE_KEY.matches(it) }
       ?.uppercase()
 

@@ -36,6 +36,60 @@ import kotlin.time.Clock
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewTaskDraftStartTest {
   @Test
+  fun `empty goal identity asks for a key without minting`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository().apply { newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP")) }
+    val draft = draftWithFinishedTurn(chats, controls)
+
+    draft.start(NewTaskKind.GoalRun)
+    runCurrent()
+
+    with(controls.newTaskRequests.single()) {
+      assertNull(keyChoice)
+      assertFalse(reuseRequested)
+    }
+    assertEquals(listOf("APP"), draft.offer.value.choices)
+  }
+
+  @Test
+  fun `typed offer key is passed and reuse wording enables terminal reuse`() = runTest {
+    val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val controls = FakeWorkControlRepository()
+    val draft = draftWithFinishedTurn(chats, controls, "Please reuse SKILL-470")
+
+    draft.start(NewTaskKind.GoalRun, "SKILL-470")
+    runCurrent()
+
+    with(controls.newTaskRequests.single()) {
+      assertEquals("SKILL-470", keyChoice)
+      assertTrue(reuseRequested)
+    }
+  }
+
+  @Test
+  fun `operator URL identity is raw and sentence mentions do not become identity`() = runTest {
+    val url = "https://linear.app/team/issue/SKILL-502/title"
+    val urlChats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val urlControls = FakeWorkControlRepository()
+    val urlDraft = draftWithFinishedTurn(urlChats, urlControls, url)
+    urlDraft.start(NewTaskKind.GoalRun)
+    runCurrent()
+
+    with(urlControls.newTaskRequests.single()) {
+      assertEquals(url, keyChoice)
+      assertFalse(reuseRequested)
+    }
+
+    val sentenceChats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
+    val sentenceControls = FakeWorkControlRepository()
+    val sentenceDraft = draftWithFinishedTurn(sentenceChats, sentenceControls, "Please fix SKILL-476 while adding export")
+    sentenceDraft.start(NewTaskKind.GoalRun)
+    runCurrent()
+
+    assertNull(sentenceControls.newTaskRequests.single().keyChoice)
+  }
+
+  @Test
   fun `refusal and success both keep the conversation`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
@@ -266,7 +320,7 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.GoalRun, action = section)
     runCurrent()
     controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
-    draft.retryPrefix("APP-2")
+    draft.start(NewTaskKind.GoalRun, "APP-2")
     runCurrent()
 
     controls.newTaskRequests.forEach { request ->
@@ -277,7 +331,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `a null action title survives plan prefix retry and the next card start uses the transcript`() = runTest {
+  fun `a null action title survives plan key retry and the next card start uses the transcript`() = runTest {
     val unrelated = ChatSuggestedAction("Other", "Implement another change.", ChatPermissionMode.Act, NewTaskActionKind.Goal, title = "Other change")
     val chats = FakeExecutionChatRepository().apply {
       events = { kotlinx.coroutines.flow.flowOf(ChatEvent.SuggestedActions(listOf(unrelated)), ChatEvent.Completed) }
@@ -291,7 +345,7 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.PlanOnly, action = action)
     runCurrent()
     controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.PlanOnly)
-    draft.retryPrefix("APP")
+    draft.start(NewTaskKind.PlanOnly, "APP-2")
     runCurrent()
 
     assertEquals("Plan the requested export.", controls.newTaskRequests[0].requirements)
@@ -306,7 +360,7 @@ class NewTaskDraftStartTest {
     draft.start(NewTaskKind.GoalRun)
     runCurrent()
     controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
-    draft.retryPrefix("APP")
+    draft.start(NewTaskKind.GoalRun, "APP-3")
     runCurrent()
 
     val transcript = assertNotNull(draft.chat.value).thread.transcript.value
@@ -474,7 +528,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `prefix start clears prefix panel on success`() = runTest {
+  fun `needs key keeps its choices until a complete key starts successfully`() = runTest {
     val chats = FakeExecutionChatRepository().apply { events = { kotlinx.coroutines.flow.flowOf(ChatEvent.Completed) } }
     val controls = FakeWorkControlRepository()
     val draft = draftWithFinishedTurn(chats, controls)
@@ -483,8 +537,8 @@ class NewTaskDraftStartTest {
     runCurrent()
     assertEquals(NewTaskKind.GoalRun, draft.offer.value.prefixKind)
     assertEquals(listOf("APP"), draft.offer.value.choices)
-    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-1", NewTaskKind.GoalRun)
-    draft.retryPrefix("APP")
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("APP-2", NewTaskKind.GoalRun)
+    draft.start(NewTaskKind.GoalRun, "APP-2")
     runCurrent()
     assertNull(draft.offer.value.prefixKind)
     assertEquals(emptyList(), draft.offer.value.choices)
@@ -573,13 +627,14 @@ class NewTaskDraftStartTest {
   private fun TestScope.draftWithFinishedTurn(
     chats: FakeExecutionChatRepository,
     controls: WorkControlRepository,
+    operatorText: String = "Add export",
   ): NewTaskDraft {
     return NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), Clock.System).apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/work/repo", "repo")
       agentId = "claude"
       selectedAgent = chats.agent
-      text = "Add export"
+      text = operatorText
       send()
     }.also { runCurrent() }
   }

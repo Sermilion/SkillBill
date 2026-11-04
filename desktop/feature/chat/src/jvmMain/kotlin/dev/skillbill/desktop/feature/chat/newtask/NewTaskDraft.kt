@@ -71,6 +71,8 @@ class NewTaskDraft(
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var savedRead: Job? = null
   private var closing = false
+  private var offerKeyEdit: NewTaskOfferKeyEdit? = null
+  private var lastOfferFieldValue: String? = null
   internal var chatDispatcher = Dispatchers.IO
 
   var text: String by mutableStateOf("")
@@ -121,25 +123,48 @@ class NewTaskDraft(
     current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
   }
 
-  internal fun start(kind: NewTaskKind, keyChoice: String? = null, target: String? = null, action: ChatSuggestedAction? = null) {
+  internal fun offerKeyChanged(value: String) {
+    val previous = lastOfferFieldValue
+    lastOfferFieldValue = value
+    if (previous == value) return
+    val current = chatState.value
+    val identity = newTaskCompleteKeyOrUrl(value)?.takeIf(NEW_TASK_COMPLETE_KEY::matches)
+    val previousIdentity = previous?.let(::newTaskCompleteKeyOrUrl)?.takeIf(NEW_TASK_COMPLETE_KEY::matches)
+    if (identity == null || identity.equals(previousIdentity, ignoreCase = true) || current == null) {
+      offerKeyEdit = null
+      return
+    }
+    val transcript = current.thread.transcript.value
+    offerKeyEdit = NewTaskOfferKeyEdit(
+      current,
+      current.repositoryRoot,
+      value,
+      transcript.size,
+      transcript.filterIsInstance<ChatMessage.Operator>(),
+    )
+  }
+
+  internal fun offerKeyFieldDisposed() {
+    offerKeyEdit = null
+    lastOfferFieldValue = null
+  }
+
+  internal fun start(
+    kind: NewTaskKind,
+    keyChoice: String? = null,
+    target: String? = null,
+    action: ChatSuggestedAction? = null,
+    offerFieldValue: String? = null,
+  ) {
     val current = chatState.value
     if (closing || offerState.value.starting || current?.thread?.busy?.value == true) return
     if (current == null && kind in RUN_KINDS) return
     if (kind in RUN_KINDS && offerState.value.started != null) return
     if (selectedAgent == null || repository == null) return
-    offerState.value = NewTaskOffer(starting = true, started = offerState.value.started)
-    startRequest(kind, keyChoice, target, action, current)
-  }
-
-  internal fun retryPrefix(keyChoice: String) {
     val pending = offerState.value
-    val kind = pending.prefixKind ?: return
-    val current = chatState.value
-    if (kind !in GOAL_KINDS || closing || pending.starting || current?.thread?.busy?.value == true) return
-    if (current == null || pending.started != null) return
-    if (selectedAgent == null || repository == null) return
-    offerState.value = pending.copy(starting = true, problem = null)
-    startRequest(kind, keyChoice, null, pending.action, current)
+    val selectedAction = action ?: pending.action?.takeIf { pending.prefixKind == kind }
+    offerState.value = NewTaskOffer(starting = true, started = pending.started)
+    startRequest(kind, keyChoice, target, selectedAction, offerFieldValue, current)
   }
 
   private fun startRequest(
@@ -147,6 +172,7 @@ class NewTaskDraft(
     keyChoice: String?,
     target: String?,
     action: ChatSuggestedAction?,
+    offerFieldValue: String?,
     current: NewTaskChat?,
   ) {
     val agent = checkNotNull(selectedAgent)
@@ -158,6 +184,10 @@ class NewTaskDraft(
         .joinToString("\n\n")
     }
     val title = if (kind in GOAL_KINDS && action != null) action.title else action?.title ?: current?.let { newTaskTitle(transcript) }
+    val argumentIdentity = newTaskStartArgumentIdentity(keyChoice)
+    val resolvedKey = if (kind in GOAL_KINDS) argumentIdentity ?: newTaskOperatorIdentity(transcript) else keyChoice
+    val reuseRequested = kind in GOAL_KINDS && resolvedKey != null &&
+      newTaskReuseRequested(transcript, resolvedKey, offerFieldValue, offerKeyEdit, current, root)
     val expectedSessionId = current?.databaseSessionId ?: if (current == null) {
       (databaseSession.state.value as? DatabaseSessionState.Open)?.sessionId
     } else null
@@ -167,10 +197,11 @@ class NewTaskDraft(
       baseBranch.ifBlank { null },
       agent.agentId,
       kind,
-      keyChoice,
+      resolvedKey,
       expectedSessionId,
       title = title,
       target = target?.trim()?.takeIf(String::isNotBlank) ?: action?.target?.trim()?.takeIf(String::isNotBlank),
+      reuseRequested = reuseRequested,
     )
     scope.launch {
       try {
@@ -178,6 +209,7 @@ class NewTaskDraft(
         when (outcome) {
           is NewTaskStartOutcome.Started -> {
             if (kind in GOAL_KINDS) {
+              if (ownsChat(current)) offerKeyEdit = null
               val message = when (outcome.kind) {
                 NewTaskKind.GoalRun -> "Started goal run ${outcome.issueKey}"
                 NewTaskKind.PlanOnly -> "Started plan ${outcome.issueKey}"
@@ -366,6 +398,8 @@ class NewTaskDraft(
   }
 
   private fun clearChatFeedback() {
+    offerKeyEdit = null
+    lastOfferFieldValue = null
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, problem = null, started = null)
   }
 }

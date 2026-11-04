@@ -10,11 +10,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -24,8 +27,8 @@ import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
-import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbInput
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
@@ -36,13 +39,22 @@ internal fun NewTaskOfferCard(
   agent: String,
   busy: Boolean,
   offer: NewTaskOffer,
-  onStart: (dev.skillbill.desktop.core.domain.model.NewTaskKind) -> Unit,
-  onRetryPrefix: (String) -> Unit,
+  onStart: (dev.skillbill.desktop.core.domain.model.NewTaskKind, String?, String) -> Unit,
+  onKeyChoiceChanged: (String) -> Unit,
+  onKeyChoiceFieldDisposed: () -> Unit,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val prefixKind = offer.prefixKind
   val canStart = !busy && !offer.starting && offer.started == null
+  var keyChoice by remember { mutableStateOf("") }
+  val trimmedKeyChoice = keyChoice.trim()
+  val selectedIdentity = newTaskCompleteKeyOrUrl(trimmedKeyChoice)
+  val validKey = selectedIdentity != null
+  val canStartWithKey = canStart && (trimmedKeyChoice.isEmpty() || validKey)
+  DisposableEffect(Unit) {
+    onDispose { onKeyChoiceFieldDisposed() }
+  }
   Column(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)
       .border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.md))
@@ -52,11 +64,24 @@ internal fun NewTaskOfferCard(
     BasicText("Goal run", Modifier.semantics { heading() }, style = type.tBaseMedium.copy(color = colors.fg))
     BasicText("base ${branch.ifBlank { "default branch" }} · $agent", style = type.monoSm.copy(color = colors.fgMuted))
     BasicText("plan › implement › audit › review › validate › qa › pr", style = type.monoSm.copy(color = colors.fgMuted))
+    BasicText("Issue key", style = type.tXs.copy(color = colors.fgMuted))
+    SbInput(
+      keyChoice,
+      { keyChoice = it; onKeyChoiceChanged(it) },
+      modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused().semantics {
+        contentDescription = "Issue key"
+        if (keyChoice.isNotBlank() && !validKey) error("Enter a complete issue key or issue URL.")
+      },
+      placeholder = "SKILL-12",
+      isError = keyChoice.isNotBlank() && !validKey,
+      enabled = canStart,
+      onSubmit = { if (prefixKind != null && canStart && validKey) onStart(prefixKind, selectedIdentity, keyChoice) },
+    )
+    if (prefixKind != null) Callout(tone = FeedbackTone.Error, body = "Enter a complete issue key or issue URL to start.")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      SbButton("Start goal run", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun) }, variant = SbButtonVariant.Primary, enabled = canStart)
-      SbButton("Plan only", { onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly) }, enabled = canStart)
+      SbButton("Start goal run", { if (canStartWithKey) onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.GoalRun, selectedIdentity, keyChoice) }, variant = SbButtonVariant.Primary, enabled = canStartWithKey)
+      SbButton("Plan only", { if (canStartWithKey) onStart(dev.skillbill.desktop.core.domain.model.NewTaskKind.PlanOnly, selectedIdentity, keyChoice) }, enabled = canStartWithKey)
     }
-    if (prefixKind != null) IssuePrefixPicker(offer.choices, canStart, onRetryPrefix)
     offer.started?.let { Callout(tone = FeedbackTone.Success, body = "$it. Send another message to start again.") }
     offer.problem?.let { Callout(tone = FeedbackTone.Error, body = it) }
   }

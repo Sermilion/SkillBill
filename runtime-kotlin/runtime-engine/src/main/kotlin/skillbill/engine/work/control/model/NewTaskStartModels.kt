@@ -15,7 +15,13 @@ public data class NewTaskIntakeRequest(
   public val keyChoice: String?,
   public val occupiedKeys: Set<String>,
   public val reuseRequested: Boolean = false,
+  public val identityPolicy: NewTaskIdentityPolicy = NewTaskIdentityPolicy.REQUIREMENTS_FIRST,
 )
+
+public enum class NewTaskIdentityPolicy {
+  REQUIREMENTS_FIRST,
+  RESOLVED_DESKTOP_IDENTITY,
+}
 
 public sealed interface NewTaskPreparation {
   public data class Ready(

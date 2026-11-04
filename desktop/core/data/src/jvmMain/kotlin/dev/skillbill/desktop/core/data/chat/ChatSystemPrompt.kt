@@ -35,6 +35,8 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("Repository: ${scope.repositoryRoot}")
   scope.baseBranch?.let { appendLine("Base branch: $it") }
   appendLine("The operator is describing work to start in this repository. When the request does not say what done means or what is out of scope, ask.")
+  appendLine("Before proposing an issue key, inspect the local spec inventory, including completed and archived bundles, and existing runs.")
+  appendLine("You may suggest the next free local key implied by the inventory in prose only. Wait for the operator to send that complete key in chat or say they will type it on the start card. Never silently mint or use a suggested key before acceptance.")
   appendLine(
     "You have the same access as any chat: any shell command, git, gh and file edits. Do not launch skill-bill yourself. " +
       "A start action becomes a button; the app starts the selected run when the operator clicks it.",
@@ -55,7 +57,7 @@ For an action that should start a skill-bill run when clicked, set "start" to ex
 Never set "start" to "release".
 Treat "update-check", "unit-test-value-check", "feature-guard", and "feature-guard-cleanup" as ordinary chat turns: use an instruction only, with no "start" field.
 Do not launch skill-bill yourself. The app starts the run only after the operator clicks the button.
-Map operator phrasing to "start" as follows: "code review", "review this branch", and "review my branch" -> "review"; watching a named PR or "monitor this PR" -> "monitor"; acceptance or spec verify (not Verify findings) -> "verify"; "qa" or "QA this branch" -> "qa"; "run the checks" or validation -> "validation"; opening or creating a PR -> "pr"; planning -> "plan"; new work the operator asked you to implement -> "goal"; fixing PR review comments -> "pr-review-fix".
+Map operator phrasing to "start" as follows: "code review", "review this branch", and "review my branch" -> "review"; watching a named PR or "monitor this PR" -> "monitor"; acceptance or spec verify (not Verify findings) -> "verify"; "qa" or "QA this branch" -> "qa"; "run the checks" or validation -> "validation"; opening or creating a PR -> "pr"; planning -> "plan"; new work the operator asked you to implement -> "goal"; fixing PR review comments -> "pr-review-fix". In a New Task chat, use "goal" or "plan" only after the operator accepts a key or says they will type one on the card.
 When the operator's request matches one of those mappings, the first action in the block must use label "Run phase:<id>" for phase starts (goal, plan, review, validation, qa, pr, monitor) or "Run operation:<id>" for verify and pr-review-fix.
 The app launches from JSON "start" and optional "target", not from the label text.
 Optional JSON field "target" is a string: for "monitor", the PR URL or issue key when the user named one, omitted otherwise; for "verify", the required intake (free text or "spec:<path>"); for "pr-review-fix", an optional PR; for review, validation, qa, and pr omit "target" unless the user named one.
@@ -95,11 +97,12 @@ private const val NEW_TASK_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
-[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal","title":"Add dark mode setting"}]
+[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository. The operator will type the issue key on the start card.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
 Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
 Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
-Offer a start action once the request is clear.
+Do not put an issue key in the title. A sentence that mentions a key does not identify the run. Treat a suggested key as unaccepted until the operator sends that complete key in chat or says they will type it on the card.
+Offer a "goal" or "plan" start action only after the operator sends the accepted complete key in chat or says they will type one on the card. Keep start chips keyless; never add a key field to the action JSON.
 When "start" is "monitor", set optional JSON "target" to exactly one token: branch:<name>, a pull request URL, or an issue key.
 The app turns that action into a button and starts the selected run only after the operator clicks it. Do not launch skill-bill yourself.
 For an action without "start", the app sends its instruction as the next chat turn when clicked.
