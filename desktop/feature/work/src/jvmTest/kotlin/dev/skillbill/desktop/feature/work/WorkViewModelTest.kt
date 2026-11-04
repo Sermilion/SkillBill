@@ -1,12 +1,21 @@
 package dev.skillbill.desktop.feature.work
 
+import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
-import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
-import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
+import dev.skillbill.desktop.core.domain.model.ImportOutcome
+import dev.skillbill.desktop.core.domain.model.OpenOutcome
+import dev.skillbill.desktop.core.domain.model.ReadProblem
+import dev.skillbill.desktop.core.domain.model.SpecBundleRef
+import dev.skillbill.desktop.core.domain.model.SpecControlState
+import dev.skillbill.desktop.core.domain.model.SpecDeleteOutcome
+import dev.skillbill.desktop.core.domain.model.SpecProject
+import dev.skillbill.desktop.core.domain.model.SpecTreeState
+import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.ControlCall
@@ -22,6 +31,7 @@ import dev.skillbill.desktop.core.ui.feedback.controlFeedback
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -38,6 +48,19 @@ import kotlin.time.Instant
 private object TestSession : DatabaseSessionController {
   override val state = MutableStateFlow<DatabaseSessionState>(DatabaseSessionState.Open("test", 1L))
   override fun reopen() = Unit
+}
+
+private object EmptySpecRepository : SpecRepository {
+  override suspend fun projects(): Outcome<List<SpecProject>, ReadProblem> = Outcome.Success(emptyList())
+  override suspend fun projectFor(repoRoot: String): Outcome<SpecProject, ReadProblem> = error("unused")
+  override fun observeTree(projectId: String): Flow<SpecTreeState> = error("unused")
+  override fun refreshTree(projectId: String) = error("unused")
+  override fun control(bundle: SpecBundleRef): Flow<SpecControlState> = error("unused")
+  override suspend fun openFile(path: String): OpenOutcome = error("unused")
+  override suspend fun openFileInDefaultApp(path: String): OpenOutcome = error("unused")
+  override suspend fun openFileUnder(path: String, directory: String): OpenOutcome = error("unused")
+  override suspend fun revealFolder(path: String): OpenOutcome = error("unused")
+  override suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome = error("unused")
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -61,6 +84,7 @@ class WorkViewModelTest {
       clock,
       FakeArchiveFileChooser(),
       TestSession,
+      EmptySpecRepository,
     )
     advanceUntilIdle()
 
@@ -85,6 +109,7 @@ class WorkViewModelTest {
       object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
       FakeArchiveFileChooser(),
       TestSession,
+      EmptySpecRepository,
     )
     advanceUntilIdle()
     viewModel.onAction(WorkAction.Focus(original))
@@ -120,6 +145,7 @@ class WorkViewModelTest {
       object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
       chooser,
       TestSession,
+      EmptySpecRepository,
     )
     viewModel.onAction(WorkAction.RequestExport(item))
     advanceUntilIdle()
@@ -153,6 +179,7 @@ class WorkViewModelTest {
       object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
       chooser,
       TestSession,
+      EmptySpecRepository,
     )
 
     viewModel.onAction(WorkAction.RequestExport(item))
@@ -191,6 +218,7 @@ class WorkViewModelTest {
       object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
       FakeArchiveFileChooser(),
       TestSession,
+      EmptySpecRepository,
     )
     viewModel.onAction(WorkAction.RequestExport(item))
     advanceUntilIdle()
@@ -212,7 +240,9 @@ class WorkViewModelTest {
       object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
       chooser,
       TestSession,
+      EmptySpecRepository,
     )
+    advanceUntilIdle()
     viewModel.onAction(WorkAction.RequestImport)
     advanceUntilIdle()
 
@@ -238,6 +268,7 @@ class WorkViewModelTest {
       object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
       chooser,
       TestSession,
+      EmptySpecRepository,
     )
     viewModel.onAction(WorkAction.RequestExport(item))
     advanceUntilIdle()
@@ -252,7 +283,8 @@ class WorkViewModelTest {
   @Test
   fun `a confirmed import refreshes the board observation`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    val board = FakeWorkBoardRepository(loadedBoard())
+    val item = workItem("SKILL-4")
+    val board = FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(item))))
     val controls = FakeWorkControlRepository().apply {
       archiveInspectOutcome = ArchiveInspectOutcome.Ready("SKILL-4", "feature/SKILL-4", "abc123", "fingerprint")
       importOutcome = ImportOutcome.Imported("SKILL-4", "feature/SKILL-4", "abc123")
@@ -266,7 +298,9 @@ class WorkViewModelTest {
       object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
       chooser,
       TestSession,
+      EmptySpecRepository,
     )
+    advanceUntilIdle()
     viewModel.onAction(WorkAction.RequestImport)
     advanceUntilIdle()
     viewModel.onAction(WorkAction.ConfirmImport)
@@ -274,6 +308,48 @@ class WorkViewModelTest {
 
     assertEquals(listOf("/tmp/SKILL-4.zip"), controls.inspectRequests)
     assertEquals(listOf("/tmp/SKILL-4.zip"), controls.importRequests)
+    assertEquals(listOf<Triple<String, String?, String>>(Triple("/tmp/SKILL-4.zip", item.repositoryRoot, "fingerprint")), controls.importDetails)
     assertEquals(1, board.refreshes)
+  }
+
+  @Test
+  fun `an incomplete import retry keeps its repository archive fingerprint and session`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val item = workItem("SKILL-6").copy(repositoryRoot = "/work/other-checkout", repositoryName = "other-checkout")
+    val board = FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(item))))
+    val controls = FakeWorkControlRepository().apply {
+      archiveInspectOutcome = ArchiveInspectOutcome.Ready("SKILL-6", "feature/SKILL-6", "abc123", "fingerprint")
+      importOutcome = ImportOutcome.Incomplete(listOf("SKILL-6.md"))
+    }
+    val chooser = FakeArchiveFileChooser().apply { nextOpen = "/tmp/SKILL-6.zip" }
+    val viewModel = WorkViewModel(
+      board,
+      FakeWorkDetailRepository(),
+      controls,
+      SelectionHolder(),
+      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
+      chooser,
+      TestSession,
+      EmptySpecRepository,
+    )
+    advanceUntilIdle()
+    viewModel.onAction(WorkAction.RequestImport)
+    advanceUntilIdle()
+    viewModel.onAction(WorkAction.ConfirmImport)
+    advanceUntilIdle()
+
+    assertEquals(true, viewModel.state.value.importDialog?.retryPending)
+    controls.importOutcome = ImportOutcome.Imported("SKILL-6", "feature/SKILL-6", "abc123")
+    viewModel.onAction(WorkAction.ConfirmImport)
+    advanceUntilIdle()
+
+    assertEquals(
+      listOf<Triple<String, String?, String>>(
+        Triple("/tmp/SKILL-6.zip", "/work/other-checkout", "fingerprint"),
+        Triple("/tmp/SKILL-6.zip", "/work/other-checkout", "fingerprint"),
+      ),
+      controls.importDetails,
+    )
+    assertEquals(null, viewModel.state.value.importDialog)
   }
 }

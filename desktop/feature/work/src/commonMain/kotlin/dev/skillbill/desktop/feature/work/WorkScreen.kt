@@ -2,7 +2,9 @@ package dev.skillbill.desktop.feature.work
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -10,7 +12,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -18,9 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
@@ -140,13 +147,38 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
         title = "Import ${target.issueKey}?",
         onDismissRequest = { onAction(WorkAction.DismissImport) },
         actions = {
-          SbButton("Cancel", { onAction(WorkAction.DismissImport) }, variant = SbButtonVariant.Ghost)
-          SbButton("Import work", { onAction(WorkAction.ConfirmImport) })
+          SbButton("Cancel", { onAction(WorkAction.DismissImport) }, variant = SbButtonVariant.Ghost, enabled = !target.importing)
+          SbButton(
+            if (target.importing) "Importing…" else if (target.retryPending) "Retry import" else "Import work",
+            { onAction(WorkAction.ConfirmImport) },
+            enabled = target.repositoryRoot != null && !target.importing,
+          )
         },
       ) {
         SbDialogText("Issue key: ${target.issueKey}")
         SbDialogText("Branch: ${target.featureBranch}")
         SbDialogText("Commit: ${target.commitSha}")
+        SbDialogText("Import into repository")
+        target.repositories.forEach { repository ->
+          Row(
+            Modifier.fillMaxWidth().selectable(
+              selected = target.repositoryRoot == repository.root,
+              enabled = !target.retryPending && !target.importing,
+              onClick = { onAction(WorkAction.ChooseImportRepository(repository.root)) },
+              role = Role.RadioButton,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            RadioButton(
+              selected = target.repositoryRoot == repository.root,
+              onClick = if (target.retryPending || target.importing) null else {
+                { onAction(WorkAction.ChooseImportRepository(repository.root)) }
+              },
+            )
+            Text("${repository.name} · ${repository.root}")
+          }
+        }
+        if (target.retryPending) SbDialogText("Retry stays bound to this repository, archive, and database session.")
       }
     }
   }

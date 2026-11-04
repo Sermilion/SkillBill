@@ -103,6 +103,7 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
   val exportRequests = mutableListOf<Triple<String, String?, String>>()
   val inspectRequests = mutableListOf<String>()
   val importRequests = mutableListOf<String>()
+  val importDetails = mutableListOf<Triple<String, String?, String>>()
 
   override suspend fun pauseAfterSubtask(item: WorkItem) = record(ControlCall("pauseAfterSubtask", item))
 
@@ -146,6 +147,7 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
 
   override suspend fun import(archivePath: String, repoRoot: String?, fingerprint: String): ImportOutcome {
     importRequests += archivePath
+    importDetails += Triple(archivePath, repoRoot, fingerprint)
     return importOutcome
   }
 

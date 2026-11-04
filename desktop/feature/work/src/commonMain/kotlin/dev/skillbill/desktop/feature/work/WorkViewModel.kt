@@ -2,18 +2,20 @@ package dev.skillbill.desktop.feature.work
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.skillbill.desktop.core.common.Outcome
+import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
-import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
-import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
-import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
 import dev.skillbill.desktop.core.domain.model.LoadMoreOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
+import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
@@ -57,6 +59,7 @@ class WorkViewModel(
   private val clock: Clock,
   private val archiveChooser: ArchiveFileChooser,
   private val session: DatabaseSessionController,
+  private val specs: SpecRepository,
 ) : ViewModel() {
   private var importSession: DatabaseSessionState.Open? = null
   private val mutableState = MutableStateFlow(WorkUiState())
@@ -107,8 +110,12 @@ class WorkViewModel(
       WorkAction.DismissExportLive -> mutableState.update { it.copy(exportLiveTarget = null) }
       WorkAction.RequestImport -> requestImport()
       WorkAction.DismissImport -> {
-        importSession = null
-        mutableState.update { it.copy(importDialog = null) }
+        if (state.value.importDialog?.importing != true) dismissImport()
+      }
+      is WorkAction.ChooseImportRepository -> mutableState.update { current ->
+        val target = current.importDialog ?: return@update current
+        if (target.retryPending || target.importing || target.repositories.none { it.root == action.root }) current
+        else current.copy(importDialog = target.copy(repositoryRoot = action.root))
       }
       WorkAction.ConfirmImport -> confirmImport()
       is WorkAction.FocusedKey -> focusedRow()?.let { item ->
@@ -195,23 +202,53 @@ class WorkViewModel(
   }
 
   private fun requestImport() {
+    if (state.value.importDialog != null) return
     val selectedSession = session.state.value as? DatabaseSessionState.Open ?: return
     archiveChooser.openArchive { path ->
       if (path != null && session.state.value == selectedSession) viewModelScope.launch {
         if (session.state.value != selectedSession) return@launch
         when (val inspected = controls.inspectArchive(path, null)) {
           is ArchiveInspectOutcome.Ready -> if (session.state.value == selectedSession) {
-            importSession = selectedSession
-            mutableState.update {
-              it.copy(
-                importDialog = WorkImportConfirmation(
-                  path,
-                  inspected.fingerprint,
-                  inspected.issueKey,
-                  inspected.featureBranch,
-                  inspected.commitSha,
-                ),
-              )
+            when (val projects = specs.projects()) {
+              is Outcome.Failure -> showToast(ToastTone.Problem, readProblemText(projects.error))
+              is Outcome.Success -> if (session.state.value == selectedSession) {
+                val repositories = buildList {
+                  projects.value.mapNotNullTo(this) { project ->
+                    project.repoRoot?.takeIf(String::isNotBlank)?.let { WorkImportRepository(it, project.displayName) }
+                  }
+                  state.value.visibleRows.forEach { item ->
+                    if (item.repositoryRoot.isNotBlank() && none { it.root == item.repositoryRoot }) {
+                      add(WorkImportRepository(item.repositoryRoot, item.repositoryName))
+                    }
+                  }
+                  selection.item.value?.let { item ->
+                    if (item.repositoryRoot.isNotBlank() && none { it.root == item.repositoryRoot }) {
+                      add(WorkImportRepository(item.repositoryRoot, item.repositoryName))
+                    }
+                  }
+                }.distinctBy(WorkImportRepository::root)
+                if (repositories.isEmpty()) {
+                  showToast(ToastTone.Problem, "No repository is available for this import.")
+                } else {
+                  importSession = selectedSession
+                  val selectedRoot = selection.item.value?.repositoryRoot
+                    ?.takeIf { root -> repositories.any { it.root == root } }
+                    ?: repositories.first().root
+                  mutableState.update {
+                    it.copy(
+                      importDialog = WorkImportConfirmation(
+                        path,
+                        inspected.fingerprint,
+                        inspected.issueKey,
+                        inspected.featureBranch,
+                        inspected.commitSha,
+                        repositories,
+                        selectedRoot,
+                      ),
+                    )
+                  }
+                }
+              }
             }
           }
           is ArchiveInspectOutcome.Refused -> showToast(ToastTone.Problem, inspected.reason)
@@ -223,25 +260,63 @@ class WorkViewModel(
 
   private fun confirmImport() {
     val target = state.value.importDialog ?: return
+    if (target.importing) return
     val selectedSession = importSession ?: return
-    importSession = null
-    mutableState.update { it.copy(importDialog = null) }
-    if (session.state.value != selectedSession) return
+    val repoRoot = target.repositoryRoot ?: return
+    if (session.state.value != selectedSession) {
+      importSession = null
+      mutableState.update { it.copy(importDialog = null) }
+      return
+    }
+    mutableState.update { current ->
+      current.importDialog?.takeIf { it.archivePath == target.archivePath && it.fingerprint == target.fingerprint }
+        ?.let { pending -> current.copy(importDialog = pending.copy(importing = true)) }
+        ?: current
+    }
     viewModelScope.launch {
-      if (session.state.value != selectedSession) return@launch
-      when (val result = controls.import(target.archivePath, null, target.fingerprint)) {
-        is ImportOutcome.Imported -> board.refresh()
-        is ImportOutcome.Incomplete -> showToast(
-          ToastTone.Problem,
-          "Import is incomplete. Missing specs: ${result.leftovers.joinToString()}. Run Import work… again to retry.",
-        )
-        is ImportOutcome.Refused -> showToast(
-          ToastTone.Problem,
-          "${result.reason} Recorded branch ${target.featureBranch}, commit ${target.commitSha}.",
-        )
-        is ImportOutcome.Failed -> showToast(ToastTone.Problem, readProblemText(result.problem))
+      if (session.state.value != selectedSession) {
+        dismissImport()
+        return@launch
+      }
+      when (val result = controls.import(target.archivePath, repoRoot, target.fingerprint)) {
+        is ImportOutcome.Imported -> {
+          importSession = null
+          mutableState.update { it.copy(importDialog = null) }
+          board.refresh()
+        }
+        is ImportOutcome.Incomplete -> {
+          mutableState.update { current ->
+            current.importDialog?.takeIf { it.archivePath == target.archivePath && it.fingerprint == target.fingerprint }
+              ?.let { pending -> current.copy(importDialog = pending.copy(retryPending = true, importing = false)) }
+              ?: current
+          }
+          showToast(
+            ToastTone.Problem,
+            "Import is incomplete. Missing specs: ${result.leftovers.joinToString()}. Retry here to continue in $repoRoot.",
+          )
+        }
+        is ImportOutcome.Refused -> {
+          showToast(
+            ToastTone.Problem,
+            "${result.reason} Recorded branch ${target.featureBranch}, commit ${target.commitSha}.",
+          )
+          dismissImport()
+        }
+        is ImportOutcome.Failed -> {
+          showToast(ToastTone.Problem, readProblemText(result.problem))
+          mutableState.update { current ->
+            current.importDialog?.takeIf { it.archivePath == target.archivePath && it.fingerprint == target.fingerprint }
+              ?.let { pending -> current.copy(importDialog = pending.copy(retryPending = true, importing = false)) }
+              ?: current
+          }
+        }
       }
     }
+  }
+
+  private fun dismissImport() {
+    importSession = null
+    mutableState.update { it.copy(importDialog = null) }
   }
 
   private fun showToast(tone: ToastTone, message: String) {

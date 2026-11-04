@@ -50,7 +50,13 @@ data class WorkImportConfirmation(
   val issueKey: String,
   val featureBranch: String,
   val commitSha: String,
+  val repositories: List<WorkImportRepository>,
+  val repositoryRoot: String?,
+  val retryPending: Boolean = false,
+  val importing: Boolean = false,
 )
+
+data class WorkImportRepository(val root: String, val name: String)
 
 /** The single-key row controls, acting on the focused row as its context menu entry would. */
 enum class RowKey { Pause, PauseNow, Launch }
@@ -75,6 +81,7 @@ sealed interface WorkAction {
   data object DismissExportLive : WorkAction
   data object RequestImport : WorkAction
   data object DismissImport : WorkAction
+  data class ChooseImportRepository(val root: String) : WorkAction
   data object ConfirmImport : WorkAction
   data class FocusedKey(val key: RowKey) : WorkAction
 }

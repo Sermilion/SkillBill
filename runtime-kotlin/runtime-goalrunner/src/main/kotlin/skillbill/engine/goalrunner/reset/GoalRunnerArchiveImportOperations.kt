@@ -8,6 +8,8 @@ import skillbill.application.workflow.decomposition.listDecomposedParentsForPurg
 import skillbill.application.workflow.decomposition.listPlanWorkflowsForPurge
 import skillbill.application.workflow.decomposition.matchesIssueKeyForFeatureTaskDiscovery
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
 import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_EXECUTION_IDENTITY_CONTRACT_VERSION
@@ -237,12 +239,6 @@ public class GoalRunnerArchiveImportOperations(
     val workflows = unitOfWork.workflowStates
     val archiveIds = bundle.snapshot.workflows.mapTo(linkedSetOf()) { it.workflowId }
     val existingById = archiveIds.mapNotNull(workflows::getFeatureTaskWorkflow)
-    val existingForIssue =
-      FeatureTaskWorkflowMode.entries.flatMap { mode ->
-        workflows.findFeatureTaskWorkflowsForIssue(mode, issueKey, destIdentity)
-      }.distinctBy(WorkflowStateRecord::workflowId)
-    val existingParents = workflows.listDecomposedParentsForPurge(issueKey, destIdentity).parents
-    val existingPlans = workflows.listPlanWorkflowsForPurge(issueKey, destIdentity)
     val archiveTarget = archiveTarget(bundle, parentIds)
     val existingSnapshot = unitOfWork.snapshotGoalArchiveOwned(archiveTarget)
     val planningParents =
@@ -253,6 +249,12 @@ public class GoalRunnerArchiveImportOperations(
     if (isRecovery(context, unitOfWork)) {
       return recoveryRows(context, unitOfWork, existingSnapshot, existingSpecs, destIdentity)
     }
+    val existingForIssue =
+      FeatureTaskWorkflowMode.entries.flatMap { mode ->
+        workflows.findFeatureTaskWorkflowsForIssue(mode, issueKey, destIdentity)
+      }.distinctBy(WorkflowStateRecord::workflowId)
+    val existingParents = workflows.listDecomposedParentsForPurge(issueKey, destIdentity).parents
+    val existingPlans = workflows.listPlanWorkflowsForPurge(issueKey, destIdentity)
     val workflowCollision =
       existingById.isNotEmpty() || existingForIssue.isNotEmpty() ||
         existingParents.isNotEmpty() || existingPlans.isNotEmpty() || existingSnapshot.workflows.isNotEmpty()
@@ -289,19 +291,21 @@ public class GoalRunnerArchiveImportOperations(
     destIdentity: String,
   ): Map<String, Int>? {
     val bundle = context.bundle
-    val matchingRows =
-      existing.workflows.sortedBy(WorkflowStateRecord::workflowId) ==
-        bundle.snapshot.workflows.sortedBy(WorkflowStateRecord::workflowId)
-    val sharedParents = bundle.snapshot.sharedPreplans.map { it.identity.parentGoalWorkflowId }.toSet()
-    val expectedSnapshot =
-      bundle.snapshot.copy(
-        sharedPreplans = bundle.snapshot.sharedPreplans.map { it.rewriteIdentity(destIdentity, context.issueKey) },
-        subtaskPlans = bundle.snapshot.subtaskPlans.map { it.rewriteIdentity(destIdentity, context.issueKey) },
-        legacyPreparations =
-          bundle.snapshot.legacyPreparations
-            .filterNot { it.parentGoalWorkflowId in sharedParents }
-            .map { it.rewriteLegacy(destIdentity, context.issueKey) },
-      )
+    val workflows = unitOfWork.workflowStates
+    val existingForIssue =
+      FeatureTaskWorkflowMode.entries.flatMap { mode ->
+        workflows.findFeatureTaskWorkflowsForIssue(mode, context.issueKey, destIdentity)
+      }.distinctBy(WorkflowStateRecord::workflowId)
+    val existingParents = workflows.listDecomposedParentsForPurge(context.issueKey, destIdentity).parents
+    val existingPlans = workflows.listPlanWorkflowsForPurge(context.issueKey, destIdentity)
+    val matchingRows = recoveryWorkflowsMatch(existing.workflows, bundle.snapshot.workflows)
+    val archivedForIssue =
+      bundle.snapshot.workflows.filter { it.matchesIssueKeyForFeatureTaskDiscovery(context.issueKey) }
+    val matchingIssueRows = recoveryWorkflowsMatch(existingForIssue, archivedForIssue)
+    val expectedPlanIds = bundle.snapshot.workflows.filter { it.isPlanWorkflow() }.map { it.workflowId }.toSet()
+    val matchingParents = existingParents.map { it.record.workflowId }.toSet() == context.parentIds
+    val matchingPlans = existingPlans.map(WorkflowStateRecord::workflowId).toSet() == expectedPlanIds
+    val expectedSnapshot = recoverySnapshot(context, destIdentity)
     val matchingPlanning =
       existing.sharedPreplans.sortedBy { it.identity.parentGoalWorkflowId } ==
         expectedSnapshot.sharedPreplans.sortedBy { it.identity.parentGoalWorkflowId } &&
@@ -331,6 +335,9 @@ public class GoalRunnerArchiveImportOperations(
       }
     return if (listOf(
         matchingRows,
+        matchingIssueRows,
+        matchingParents,
+        matchingPlans,
         matchingPlanning,
         matchingOwnedTables,
         matchingIdentities,
@@ -342,6 +349,22 @@ public class GoalRunnerArchiveImportOperations(
     } else {
       null
     }
+  }
+
+  private fun recoverySnapshot(
+    context: ImportContext,
+    destIdentity: String,
+  ): GoalArchiveOwnedSnapshot {
+    val snapshot = context.bundle.snapshot
+    val sharedParents = snapshot.sharedPreplans.map { it.identity.parentGoalWorkflowId }.toSet()
+    return snapshot.copy(
+      sharedPreplans = snapshot.sharedPreplans.map { it.rewriteIdentity(destIdentity, context.issueKey) },
+      subtaskPlans = snapshot.subtaskPlans.map { it.rewriteIdentity(destIdentity, context.issueKey) },
+      legacyPreparations =
+        snapshot.legacyPreparations
+          .filterNot { it.parentGoalWorkflowId in sharedParents }
+          .map { it.rewriteLegacy(destIdentity, context.issueKey) },
+    )
   }
 
   private fun archiveTarget(
@@ -394,6 +417,40 @@ public class GoalRunnerArchiveImportOperations(
 
   private fun canonicalRows(rows: List<GoalArchiveTableRow>): List<Map<String, Any?>> =
     rows.map { it.orderedEntries().toMap() }.sortedBy { it.toSortedMap().toString() }
+
+  private fun recoveryWorkflowRecord(
+    record: WorkflowStateRecord,
+    archived: WorkflowStateRecord,
+  ): WorkflowStateRecord =
+    record.copy(
+      startedAt = if (archived.startedAt.isNullOrBlank()) null else record.startedAt,
+      updatedAt = null,
+      finishedAt = if (archived.finishedAt.isNullOrBlank()) null else record.finishedAt,
+      contractVersion =
+        when {
+          record.contractVersion.isBlank() || record.contractVersion in WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS ->
+            WORKFLOW_STATE_CONTRACT_VERSION
+          else -> record.contractVersion
+        },
+      mode = FeatureTaskWorkflowMode.RUNTIME,
+      implementationSkill = record.implementationSkill?.takeIf(String::isNotBlank) ?: "bill-feature",
+      stateEnteredAt = null,
+      stateEnteredAtEstimated = false,
+    )
+
+  private fun recoveryWorkflowsMatch(
+    restored: List<WorkflowStateRecord>,
+    archived: List<WorkflowStateRecord>,
+  ): Boolean {
+    val restoredById = restored.associateBy(WorkflowStateRecord::workflowId)
+    val archivedById = archived.associateBy(WorkflowStateRecord::workflowId)
+    return restoredById.size == restored.size && archivedById.size == archived.size &&
+      restoredById.keys == archivedById.keys &&
+      archivedById.all { (workflowId, archivedRecord) ->
+        recoveryWorkflowRecord(restoredById.getValue(workflowId), archivedRecord) ==
+          recoveryWorkflowRecord(archivedRecord, archivedRecord)
+      }
+  }
 
   private fun withoutJournalId(row: GoalArchiveTableRow): GoalArchiveTableRow =
     GoalArchiveTableRow(row.orderedEntries().filterNot { it.first == "id" }.toMap())
