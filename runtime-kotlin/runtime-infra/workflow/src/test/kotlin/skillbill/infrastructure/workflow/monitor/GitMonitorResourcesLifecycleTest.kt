@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.monitor
 import org.junit.jupiter.api.io.TempDir
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.workflow.git.runGit
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.monitor.model.MonitorAcquisition
 import skillbill.ports.monitor.model.MonitorAdmissionBlock
@@ -55,7 +56,7 @@ class GitMonitorResourcesLifecycleTest {
   private val resources = resourcesWith(inspector)
 
   private fun resourcesWith(inspector: MonitorProcessInspector) =
-    GitMonitorResources(inspector, Clock.systemUTC(), environment)
+    GitMonitorResources(inspector, Clock.systemUTC(), environment, NoopRuntimeDiagnostics)
 
   @AfterTest
   fun deleteStateDir() {
@@ -108,6 +109,26 @@ class GitMonitorResourcesLifecycleTest {
     assertEquals(before, fixture.snapshot())
     val listed = runGit(fixture.caller, "worktree", "list", "--porcelain").lines()
     assertEquals(1, listed.count { it.startsWith("worktree ") })
+  }
+
+  @Test
+  fun `a prepared worktree gets the caller's ignored local configuration but no ignored directories`() {
+    val fixture = fixture()
+    fixture.commitFile(".gitignore", "local.properties\nbuild/\n")
+    runGit(fixture.caller, "push", "origin", FEATURE_BRANCH)
+    Files.writeString(fixture.caller.resolve("local.properties"), "sdk.dir=/sdk\n")
+    Files.createDirectories(fixture.caller.resolve("build")).resolve("output.bin").let { Files.writeString(it, "x") }
+    val target = fixture.target(expectedHeadSha = runGit(fixture.caller, "rev-parse", "HEAD"))
+
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val fetched = assertIs<MonitorFetchResult.Fetched>(resources.fetchPinned(fence, target))
+    val worktree = resources.createWorktree(fence, target, fetched.refs)
+    resources.markPrepared(fence, target, worktree)
+
+    assertEquals("sdk.dir=/sdk\n", Files.readString(worktree.path.resolve("local.properties")))
+    assertFalse(Files.exists(worktree.path.resolve("build")))
+    assertEquals(MonitorSettlement.Released, resources.settle(fence))
+    assertFalse(Files.exists(worktree.path))
   }
 
   @Test
