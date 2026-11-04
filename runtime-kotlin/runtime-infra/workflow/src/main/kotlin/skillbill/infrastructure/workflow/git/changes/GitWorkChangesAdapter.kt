@@ -6,9 +6,8 @@ import skillbill.ports.workchanges.WorkChangesPort
 import skillbill.ports.workchanges.model.WorkChangeListResult
 import skillbill.ports.workchanges.model.WorkChangeStatus
 import skillbill.ports.workchanges.model.WorkChangedFile
-import skillbill.ports.workchanges.model.WorkCommitRange
+import skillbill.ports.workchanges.model.WorkCommitTimelineResult
 import skillbill.ports.workchanges.model.WorkFileDiffResult
-import skillbill.ports.workchanges.model.WorkOutsideCommitsResult
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -116,11 +115,12 @@ class GitWorkChangesAdapter : WorkChangesPort {
     }
   }
 
-  override fun outsideCommits(
+  override fun commitTimeline(
     worktreeRoot: String,
     targetBranch: String?,
-    subtaskRanges: List<WorkCommitRange>,
-  ): WorkOutsideCommitsResult = readOutsideCommits(Path.of(worktreeRoot), targetBranch, subtaskRanges)
+    recordedShas: List<String>,
+    headBranch: String?,
+  ): WorkCommitTimelineResult = readCommitTimeline(Path.of(worktreeRoot), targetBranch, recordedShas, headBranch)
 
   private fun resolveBase(
     root: Path,

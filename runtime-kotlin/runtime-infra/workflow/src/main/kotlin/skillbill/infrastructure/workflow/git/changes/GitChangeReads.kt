@@ -88,6 +88,7 @@ internal fun listRepositoryProblem(root: Path): WorkChangeListResult? =
 internal fun mergeBase(
   root: Path,
   targetBranch: String?,
+  head: String = "HEAD",
 ): BaseRead {
   val target =
     targetBranch
@@ -95,7 +96,7 @@ internal fun mergeBase(
         is WorkflowGitOperationResult.Ok -> branch.value
         is WorkflowGitOperationResult.Failed -> return BaseRead.Unavailable("no default branch: ${branch.error}")
       }
-  return scalar(root, listOf("merge-base", "HEAD", target), "no merge-base between HEAD and $target")
+  return scalar(root, listOf("merge-base", head, target), "no merge-base between $head and $target")
 }
 
 internal fun commitExists(

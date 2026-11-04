@@ -5,7 +5,6 @@ import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
-import dev.skillbill.desktop.core.domain.model.OutsideCommit
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.ScopeKind
@@ -18,9 +17,12 @@ data class ChangesWindowUiState(
   val item: WorkItem,
   val content: WindowContent = WindowContent.Loading,
   val scope: ChangeScope,
+  val view: ChangesView = ChangesView.Subtasks,
   val filter: String = "",
   val subtasks: List<ScopeSubtask> = emptyList(),
   val stats: Map<Int, SubtaskStats> = emptyMap(),
+  val commitStats: Map<String, SubtaskStats> = emptyMap(),
+  val commitAnchor: String? = null,
   val list: ScopeListUi = ScopeListUi.Loading,
   val groups: List<FileGroupUi> = emptyList(),
   val selectedPath: String? = null,
@@ -31,7 +33,7 @@ data class ChangesWindowUiState(
   val pickerQuery: String = "",
   /** The latest settled All list, for the All button's count; null until All has been read. */
   val allRead: ScopeListUi? = null,
-  val outsideRead: ScopeChangesState? = null,
+  val operatorRead: ScopeChangesState? = null,
   val uncommittedRead: ScopeChangesState? = null,
   /** The diffs loaded for this scope by path; each is good for the [ChangedFile] it was read for. */
   val fileDiffs: Map<String, LoadedDiff> = emptyMap(),
@@ -41,14 +43,16 @@ data class ChangesWindowUiState(
   val openProblem: String? = null,
 ) {
   val target: ChangeScopeTarget? get() = (content as? WindowContent.Ready)?.target
+  val commits get() = target?.timeline?.commits.orEmpty()
   val subtasksAvailable: Boolean get() = target?.let { ScopeKind.Subtasks in availableScopes(it) } == true
-  val outsideCommits: List<OutsideCommit> get() = (outsideRead as? ScopeChangesState.Listed)?.outsideCommits.orEmpty()
   val visibleFiles: List<ChangedFile> get() = groups.flatMap { group -> group.rows.map { it.file } }
   val selectedFile: ChangedFile? get() = visibleFiles.firstOrNull { it.path == selectedPath }
   val quick: List<QuickButtonUi> get() = quickButtons(this)
 }
 
-enum class QuickScope { All, Running, Outside, Uncommitted }
+enum class ChangesView { Subtasks, Commits }
+
+enum class QuickScope { All, Running, Operator, Uncommitted }
 
 /** A quick scope button; [count] is null before its read lands. */
 data class QuickButtonUi(val kind: QuickScope, val label: String, val count: Int?, val enabled: Boolean, val pressed: Boolean, val running: Boolean = false)
@@ -83,6 +87,7 @@ data class SubtaskChipUi(val id: Int, val name: String, val inScope: Boolean, va
 
 sealed interface ChangesWindowAction {
   data class SetFilter(val text: String) : ChangesWindowAction
+  data class SetView(val view: ChangesView) : ChangesWindowAction
   data class SelectFile(val path: String) : ChangesWindowAction
 
   /** The diff stream scrolled [path] to its top: select it without scrolling back. */
@@ -95,6 +100,8 @@ sealed interface ChangesWindowAction {
   /** A strip column or picker row; [extend] (Shift) grows the range from the anchor, and only a plain picker pick closes it. */
   data class PickSubtask(val id: Int, val extend: Boolean, val fromPicker: Boolean) : ChangesWindowAction
   data class DragSubtasks(val fromId: Int, val toId: Int) : ChangesWindowAction
+  data class PickCommit(val sha: String, val extend: Boolean, val fromPicker: Boolean) : ChangesWindowAction
+  data class DragCommits(val fromSha: String, val toSha: String) : ChangesWindowAction
   data class SelectQuickScope(val kind: QuickScope) : ChangesWindowAction
   data class Step(val forward: Boolean) : ChangesWindowAction
   data object TogglePicker : ChangesWindowAction

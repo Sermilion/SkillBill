@@ -200,8 +200,8 @@ class DetailViewModelTest {
     advanceUntilIdle()
     details.flow.emit(loaded("a"))
     advanceUntilIdle()
-    val done = ScopeSubtask(12, "Twelve", ScopeSubtaskState.DONE, "s12", "e12", emptyList())
-    val notStarted = ScopeSubtask(13, "Thirteen", ScopeSubtaskState.NOT_STARTED, null, null, emptyList())
+    val done = ScopeSubtask(12, "Twelve", ScopeSubtaskState.DONE, "e12", listOf("e12"), false, emptyList())
+    val notStarted = ScopeSubtask(13, "Thirteen", ScopeSubtaskState.NOT_STARTED, null, emptyList(), false, emptyList())
     val listed = SubtaskScopesState.Listed("/repo", "main", rangesSupported = true, subtasks = listOf(done, notStarted), stats = emptyMap())
     scopes.flow.value = listed
     advanceUntilIdle()
@@ -422,6 +422,8 @@ class DetailViewModelTest {
       subtaskReads++
       return flow
     }
+
+    override fun observeCommitStats(target: ChangeScopeTarget): Flow<Map<String, dev.skillbill.desktop.core.domain.model.SubtaskStats>> = emptyFlow()
 
     override fun observeScope(target: ChangeScopeTarget, scope: ChangeScope, running: Boolean): Flow<ScopeChangesState> = emptyFlow()
 

@@ -38,6 +38,7 @@ import dev.skillbill.desktop.core.ui.changes.ChangesButton
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
 import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
+import dev.skillbill.desktop.core.ui.changes.timelineProblemText
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.filesLabel
@@ -80,6 +81,7 @@ private fun LazyListScope.goalChanges(state: SubtaskScopesState, onAction: (Deta
     SubtaskScopesState.NotAGoal -> notice("changes-none") { Hint("No subtasks recorded") }
     is SubtaskScopesState.Unavailable -> notice("changes-problem") { Hint(readProblemText(state.problem)) }
     is SubtaskScopesState.Listed -> {
+      state.timelineProblem?.let { problem -> notice("changes-timeline-problem") { Hint(timelineProblemText(problem)) } }
       val open = { id: Int -> onAction(DetailAction.OpenChangesWindow(ChangeScope.Subtasks(id, id))) }
       // Shift-clicks and drags do nothing in the detail strip; only a plain click opens the pressed subtask.
       item(key = "changes-strip") {

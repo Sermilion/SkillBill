@@ -22,8 +22,7 @@ class ChangeScopeMappingTest {
     name = "first",
     status = status,
     running = running,
-    startSha = "start",
-    endSha = null,
+    recordedSha = "commit",
     baselineUntrackedPaths = emptyList(),
   )
 }

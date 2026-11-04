@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
+import dev.skillbill.desktop.core.domain.model.selectableSubtaskIds
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.liveRows
@@ -450,7 +451,7 @@ class DetailViewModel(
     if (!state.value.header.showsChanges) return
     if (scope is ChangeScope.Subtasks) {
       val listed = state.value.changes.subtasks as? SubtaskScopesState.Listed ?: return
-      if (listed.subtasks.none { it.id == scope.from && it.selectable }) return
+      if (scope.from !in selectableSubtaskIds(listed.subtasks)) return
     }
     effectChannel.trySend(DetailEffect.OpenChangesWindow(state.value.header, scope))
   }

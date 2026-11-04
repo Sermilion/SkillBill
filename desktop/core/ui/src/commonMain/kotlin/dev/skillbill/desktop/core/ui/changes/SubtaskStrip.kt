@@ -22,8 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -59,36 +58,17 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
-import kotlin.math.roundToInt
-import kotlin.math.sqrt
-
-private val COLUMN_GAP = 2.dp
-private val MIN_COLUMN = 4.dp
-private val LABEL_EVERY_COLUMN = 22.dp
-private val STRIP_HEIGHT = 46.dp
-private val MIN_BAR_HEIGHT = 2.dp
-private const val MIN_FRACTION = 0.06f
-private const val SELECTED_ALPHA = 0.10f
-private const val TIP_OFFSET_X = 12
-private const val TIP_OFFSET_Y = 14
-
-/** Below this per-subtask width bars read better; at or above it each subtask gets a labelled card. */
-private val CARD_MIN_PITCH = 140.dp
-private val CARD_MAX_WIDTH = 320.dp
+import dev.skillbill.desktop.core.domain.model.TimelineProblem
+import dev.skillbill.desktop.core.domain.model.subtaskColumns
+import dev.skillbill.desktop.core.ui.feedback.readProblemText
 
 private data class StripHover(val index: Int, val position: Offset)
 
@@ -109,19 +89,20 @@ fun SubtaskStrip(
   barsFooter: (@Composable () -> Unit)? = null,
 ) {
   if (subtasks.isEmpty()) return
+  val entries = remember(subtasks, stats) { stripEntries(subtasks, stats) }
   val colors = SkillBillTheme.colors
   val maxLines = stats.values.maxOfOrNull { it.insertions + it.deletions }?.coerceAtLeast(1) ?: 1
   val pick by rememberUpdatedState(onPick)
   val drag by rememberUpdatedState(onDrag)
   var hover by remember { mutableStateOf<StripHover?>(null) }
   BoxWithConstraints(modifier.fillMaxWidth()) {
-    val natural = (maxWidth + COLUMN_GAP) / subtasks.size
-    val cards = natural >= CARD_MIN_PITCH
-    val pitch = if (cards) minOf(natural, CARD_MAX_WIDTH + COLUMN_GAP) else maxOf(MIN_COLUMN + COLUMN_GAP, natural)
-    val column = pitch - COLUMN_GAP
-    val scrolls = pitch * subtasks.size - COLUMN_GAP > maxWidth
-    val labelAll = maxWidth / subtasks.size >= LABEL_EVERY_COLUMN
-    Column(if (scrolls) Modifier.horizontalScroll(rememberScrollState()) else Modifier) {
+    val metrics = stripMetrics(maxWidth, entries.size)
+    val pitch = metrics.pitch
+    val column = metrics.column
+    val cards = metrics.cards
+    val labelAll = metrics.labelAll
+    val gap = 2.dp
+    Column(if (metrics.scrolls) Modifier.horizontalScroll(rememberScrollState()) else Modifier) {
       Box {
         Row(
           Modifier.height(STRIP_HEIGHT)
@@ -132,18 +113,18 @@ fun SubtaskStrip(
                   val event = awaitPointerEvent(PointerEventPass.Initial)
                   val change = event.changes.firstOrNull() ?: continue
                   hover = if (event.type == PointerEventType.Exit) null else {
-                    StripHover((change.position.x / pitchPx).toInt().coerceIn(0, subtasks.lastIndex), change.position)
+                    StripHover((change.position.x / pitchPx).toInt().coerceIn(0, entries.lastIndex), change.position)
                   }
                 }
               }
             }
             .pointerInput(subtasks, pitch) {
               val pitchPx = pitch.toPx()
-              fun indexAt(x: Float) = (x / pitchPx).toInt().coerceIn(0, subtasks.lastIndex)
+              fun indexAt(x: Float) = (x / pitchPx).toInt().coerceIn(0, entries.lastIndex)
               awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val pressIndex = indexAt(down.position.x)
-                val press = subtasks[pressIndex]
+                val press = entries[pressIndex].subtask
                 if (!press.selectable) return@awaitEachGesture
                 val extend = currentEvent.keyboardModifiers.isShiftPressed
                 val follow = drag
@@ -173,37 +154,55 @@ fun SubtaskStrip(
                   val index = indexAt(change.position.x)
                   if (index != last) {
                     last = index
-                    follow(press.id, subtasks[index].id)
+                    follow(press.id, entries[index].subtask.id)
                   }
                 }
               }
             },
-          horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
+          horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
-          subtasks.forEachIndexed { index, subtask ->
-            key(subtask.id) {
-              val inRange = selected != null && subtask.id in selected
-              val description = subtaskTooltip(subtask, stats[subtask.id])
+          entries.forEachIndexed { index, entry ->
+            key(entry.ids) {
+              val inRange = selected != null && entry.ids.any { it in selected }
+              val description = subtaskTooltip(entry.subtask, entry.stats)
               val hovered = hover?.index == index
               val columnModifier = Modifier.width(column).fillMaxHeight()
               if (cards) {
-                StripCard(subtask, stats[subtask.id], inRange, hovered, description, { pick(subtask.id, false) }, columnModifier)
+                StripCard(
+                  entry.subtask,
+                  entry.stats,
+                  inRange,
+                  hovered,
+                  description,
+                  { pick(entry.subtask.id, false) },
+                  columnModifier,
+                  entry.number,
+                )
               } else {
-                StripColumn(subtask, inRange, hovered, subtaskBarFraction(subtask, stats[subtask.id], maxLines), description, { pick(subtask.id, false) }, columnModifier)
+                StripColumn(
+                  entry.subtask,
+                  inRange,
+                  hovered,
+                  subtaskBarFraction(entry.subtask, entry.stats, maxLines),
+                  description,
+                  { pick(entry.subtask.id, false) },
+                  columnModifier,
+                )
               }
             }
           }
         }
-        hover?.let { StripTip(subtasks[it.index], stats[subtasks[it.index].id], it.position) }
+        hover?.let { tip ->
+          entries.getOrNull(tip.index)?.let { entry -> StripTip(entry.subtask, entry.stats, tip.position) }
+        }
       }
-      if (!cards) Row(Modifier.padding(top = 4.dp).height(9.5.dp), horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP)) {
-        subtasks.forEachIndexed { index, subtask ->
-          val labelled = index == 0 || subtask.id % (if (labelAll) 1 else 5) == 0
-          val color = if (selected != null && subtask.id in selected) colors.accentText else colors.fgFaint
+      if (!cards) Row(Modifier.padding(top = 4.dp).height(9.5.dp), horizontalArrangement = Arrangement.spacedBy(gap)) {
+        entries.forEachIndexed { index, entry ->
+          val labelled = index == 0 || entry.ids.any { id -> id % (if (labelAll) 1 else 5) == 0 }
+          val color = if (selected != null && entry.ids.any { it in selected }) colors.accentText else colors.fgFaint
           Box(Modifier.width(column).fillMaxHeight(), contentAlignment = Alignment.Center) {
-            // A label wider than a narrow column overflows it on both sides.
             BasicText(
-              if (labelled) "${subtask.id}" else "",
+              if (labelled) entry.number else "",
               Modifier.wrapContentSize(unbounded = true),
               style = changesMono(9.5f, FontWeight.Medium, color),
               maxLines = 1,
@@ -227,16 +226,11 @@ private fun StripCard(
   description: String,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
+  number: String = "${subtask.id}",
 ) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(7.dp)
   val started = subtask.state != ScopeSubtaskState.NOT_STARTED
-  val background = when {
-    inRange -> colors.accent.copy(alpha = SELECTED_ALPHA)
-    !started -> Color.Transparent
-    hovered -> colors.bgOverlay
-    else -> colors.bgRaised
-  }
   val dash = colors.borderStrong
   val running = subtask.state == ScopeSubtaskState.RUNNING
   Column(
@@ -248,10 +242,10 @@ private fun StripCard(
         this.selected = inRange
         if (subtask.selectable) onClick { onClick(); true } else disabled()
       }
-      .background(background, shape)
+      .then(stripCardSurface(inRange, hovered && started, if (started) colors.bgRaised else Color.Transparent))
       .then(
         when {
-          inRange -> Modifier.border(1.dp, colors.accent.copy(alpha = 0.4f), shape)
+          inRange -> Modifier
           started -> Modifier
           else -> Modifier.drawBehind {
             val stroke = 1.dp.toPx()
@@ -268,20 +262,33 @@ private fun StripCard(
       .padding(horizontal = 10.dp),
     verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
   ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-      ScopeStateDot(subtask.state)
-      BasicText(
-        "${subtask.id}",
-        style = changesMono(11f, FontWeight.SemiBold, if (running || inRange) colors.accentText else colors.fgFaint),
-        maxLines = 1,
-        softWrap = false,
-      )
-      BasicText(
-        subtask.name,
-        style = changesSans(12f, FontWeight.Medium, if (started) (if (inRange) colors.fg else colors.fg2) else colors.fgFaint, lineHeight = 15f),
-        maxLines = 1,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-      )
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+      val showChangedLabel = maxWidth >= CARD_CHANGED_BADGE_MIN_CONTENT_WIDTH
+      Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+        ScopeStateDot(subtask.state)
+        BasicText(
+          number,
+          Modifier.widthIn(max = 56.dp),
+          style = changesMono(11f, FontWeight.SemiBold, if (running || inRange) colors.accentText else colors.fgFaint),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          softWrap = false,
+        )
+        BasicText(
+          subtask.name,
+          Modifier.weight(1f),
+          style = changesSans(12f, FontWeight.Medium, if (started) (if (inRange) colors.fg else colors.fg2) else colors.fgFaint, lineHeight = 15f),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+        if (subtask.changedAfterFinish) {
+          if (showChangedLabel) {
+            BasicText("changed after finish", style = changesSans(10f, FontWeight.Medium, colors.stFailed), maxLines = 1, softWrap = false)
+          } else {
+            BasicText("!", style = changesMono(11f, FontWeight.Bold, colors.stFailed), maxLines = 1, softWrap = false)
+          }
+        }
+      }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       if (started) {
@@ -348,6 +355,9 @@ private fun StripColumn(
         Modifier.fillMaxWidth().fillMaxHeight(fraction).heightIn(min = MIN_BAR_HEIGHT)
           .background(bar, RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)),
       )
+      if (subtask.changedAfterFinish) {
+        Box(Modifier.align(Alignment.TopCenter).size(5.dp).background(colors.stFailed, CircleShape))
+      }
     }
   }
 }
@@ -356,43 +366,22 @@ private fun StripColumn(
 @Composable
 private fun StripTip(subtask: ScopeSubtask, stats: SubtaskStats?, position: Offset) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(7.dp)
-  val provider = remember(position) {
-    object : PopupPositionProvider {
-      override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
-        val x = anchorBounds.left + position.x.roundToInt() + TIP_OFFSET_X
-        val y = anchorBounds.top + position.y.roundToInt() + TIP_OFFSET_Y
-        return IntOffset(
-          x.coerceAtMost((windowSize.width - popupContentSize.width).coerceAtLeast(0)),
-          y.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0)),
-        )
+  StripTipSurface(position) {
+    BasicText("${subtask.id} · ${subtask.name}", style = changesSans(11.5f, FontWeight.SemiBold, colors.fg, lineHeight = 16.1f))
+    val detail = buildAnnotatedString {
+      if (subtask.state == ScopeSubtaskState.NOT_STARTED) {
+        append("not started")
+      } else {
+        if (subtask.state == ScopeSubtaskState.RUNNING) append("running · ")
+        append("${filesLabel(stats?.files?.size ?: 0)} · ")
+        withStyle(changesMono(11f, FontWeight.Medium, colors.stDone).toSpanStyle()) { append("+${stats?.insertions ?: 0}") }
+        append(" ")
+        withStyle(changesMono(11f, FontWeight.Medium, colors.stFailed).toSpanStyle()) { append("−${stats?.deletions ?: 0}") }
+        append(" · ${subtask.commitShas.lastOrNull()?.take(7) ?: "no commit"}")
+        if (subtask.changedAfterFinish) append(" · changed after finish")
       }
     }
-  }
-  Popup(popupPositionProvider = provider) {
-    Column(
-      Modifier.widthIn(max = 320.dp)
-        .layeredShadow(SkillBillTheme.shadows.popover, shape)
-        .clip(shape)
-        .background(colors.bgOverlay, shape)
-        .border(1.dp, colors.borderStrong, shape)
-        .padding(horizontal = 9.dp, vertical = 7.dp),
-    ) {
-      BasicText("${subtask.id} · ${subtask.name}", style = changesSans(11.5f, FontWeight.SemiBold, colors.fg, lineHeight = 16.1f))
-      val detail = buildAnnotatedString {
-        if (subtask.state == ScopeSubtaskState.NOT_STARTED) {
-          append("not started")
-        } else {
-          if (subtask.state == ScopeSubtaskState.RUNNING) append("running · ")
-          append("${filesLabel(stats?.files?.size ?: 0)} · ")
-          withStyle(changesMono(11f, FontWeight.Medium, colors.stDone).toSpanStyle()) { append("+${stats?.insertions ?: 0}") }
-          append(" ")
-          withStyle(changesMono(11f, FontWeight.Medium, colors.stFailed).toSpanStyle()) { append("−${stats?.deletions ?: 0}") }
-          append(" · ${subtask.endSha?.take(7) ?: "no commit"}")
-        }
-      }
-      BasicText(detail, style = changesMono(11f, FontWeight.Normal, colors.fgMuted, lineHeight = 15.4f))
-    }
+    BasicText(detail, style = changesMono(11f, FontWeight.Normal, colors.fgMuted, lineHeight = 15.4f))
   }
 }
 
@@ -429,15 +418,57 @@ fun subtaskBarFraction(subtask: ScopeSubtask, stats: SubtaskStats?, maxLines: In
   if (subtask.state == ScopeSubtaskState.NOT_STARTED) return 0f
   if (stats == null) return MIN_FRACTION
   val lines = stats.insertions + stats.deletions
-  val percent = (sqrt(lines.toDouble() / maxLines.coerceAtLeast(1)) * 100).roundToInt()
-  return maxOf(MIN_FRACTION, percent / 100f)
+  return subtaskLineFraction(lines, maxLines)
 }
 
 /** `<n> · <name>` over `not started`, or `[running · ]<F> files · +<A> −<D> · <sha>`. */
 fun subtaskTooltip(subtask: ScopeSubtask, stats: SubtaskStats?): String {
   val head = "${subtask.id} · ${subtask.name}"
-  if (subtask.state == ScopeSubtaskState.NOT_STARTED) return "$head\nnot started"
+  if (subtask.state == ScopeSubtaskState.NOT_STARTED) {
+    val changed = if (subtask.changedAfterFinish) " · changed after finish" else ""
+    return "$head\nnot started$changed"
+  }
   val running = if (subtask.state == ScopeSubtaskState.RUNNING) "running · " else ""
-  val sha = subtask.endSha?.take(7) ?: "no commit"
-  return "$head\n$running${filesLabel(stats?.files?.size ?: 0)} · +${stats?.insertions ?: 0} −${stats?.deletions ?: 0} · $sha"
+  val sha = subtask.commitShas.lastOrNull()?.take(7) ?: "no commit"
+  val changed = if (subtask.changedAfterFinish) " · changed after finish" else ""
+  return "$head\n$running${filesLabel(stats?.files?.size ?: 0)} · +${stats?.insertions ?: 0} −${stats?.deletions ?: 0} · $sha$changed"
+}
+
+fun timelineProblemText(problem: TimelineProblem): String = when (problem) {
+  is TimelineProblem.OnOtherBranch ->
+    "Checkout is on ${problem.currentBranch ?: "detached HEAD"}, not the goal branch ${problem.featureBranch}. Subtask scopes need the goal branch."
+  is TimelineProblem.BaseUnavailable -> "Base commit unavailable: ${problem.reason}"
+  is TimelineProblem.NotARepository -> "${problem.worktreeRoot} is not a git repository."
+  is TimelineProblem.Unavailable -> readProblemText(problem.problem)
+}
+
+internal data class StripEntry(val ids: List<Int>, val subtask: ScopeSubtask, val stats: SubtaskStats?) {
+  val number: String get() = ids.joinToString(" + ")
+}
+
+private val STRIP_STATE_ORDER = listOf(
+  ScopeSubtaskState.RUNNING,
+  ScopeSubtaskState.INTERRUPTED,
+  ScopeSubtaskState.DONE,
+  ScopeSubtaskState.NOT_STARTED,
+)
+
+internal fun stripEntries(subtasks: List<ScopeSubtask>, stats: Map<Int, SubtaskStats>): List<StripEntry> {
+  val byId = subtasks.associateBy { it.id }
+  return subtaskColumns(subtasks).map { column ->
+    val members = column.ids.map { byId.getValue(it) }
+    val representative = members.maxByOrNull { member -> stats[member.id]?.let { it.insertions + it.deletions } ?: -1 } ?: members.first()
+    val subtask = if (members.size == 1) members.single() else ScopeSubtask(
+      id = column.ids.first(),
+      name = members.joinToString(" + ") { it.name },
+      state = STRIP_STATE_ORDER.first { state -> members.any { it.state == state } },
+      recordedSha = representative.recordedSha,
+      commitShas = members.flatMap { it.commitShas }.distinct(),
+      changedAfterFinish = members.any { it.changedAfterFinish },
+      baselineUntrackedPaths = representative.baselineUntrackedPaths,
+      reviewBaseSha = representative.reviewBaseSha,
+      completedNoChange = representative.completedNoChange,
+    )
+    StripEntry(column.ids, subtask, stats[representative.id])
+  }
 }
