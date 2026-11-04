@@ -43,6 +43,7 @@ private val COLUMN_GAP = 2.dp
 private val MIN_COLUMN = 4.dp
 private val LABEL_EVERY_COLUMN = 22.dp
 internal val CARD_MIN_PITCH = 140.dp
+internal val CARD_CHANGED_BADGE_MIN_CONTENT_WIDTH = 180.dp
 private val CARD_MAX_WIDTH = 320.dp
 
 internal fun stripMetrics(maxWidth: Dp, count: Int): StripMetrics {

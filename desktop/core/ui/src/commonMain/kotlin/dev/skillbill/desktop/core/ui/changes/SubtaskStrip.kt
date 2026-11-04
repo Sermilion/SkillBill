@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -57,6 +58,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
@@ -260,22 +262,32 @@ private fun StripCard(
       .padding(horizontal = 10.dp),
     verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
   ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-      ScopeStateDot(subtask.state)
-      BasicText(
-        number,
-        style = changesMono(11f, FontWeight.SemiBold, if (running || inRange) colors.accentText else colors.fgFaint),
-        maxLines = 1,
-        softWrap = false,
-      )
-      BasicText(
-        subtask.name,
-        style = changesSans(12f, FontWeight.Medium, if (started) (if (inRange) colors.fg else colors.fg2) else colors.fgFaint, lineHeight = 15f),
-        maxLines = 1,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-      )
-      if (subtask.changedAfterFinish) {
-        BasicText("changed after finish", style = changesSans(10f, FontWeight.Medium, colors.stFailed), maxLines = 1, softWrap = false)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+      val showChangedLabel = maxWidth >= CARD_CHANGED_BADGE_MIN_CONTENT_WIDTH
+      Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+        ScopeStateDot(subtask.state)
+        BasicText(
+          number,
+          Modifier.widthIn(max = 56.dp),
+          style = changesMono(11f, FontWeight.SemiBold, if (running || inRange) colors.accentText else colors.fgFaint),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          softWrap = false,
+        )
+        BasicText(
+          subtask.name,
+          Modifier.weight(1f),
+          style = changesSans(12f, FontWeight.Medium, if (started) (if (inRange) colors.fg else colors.fg2) else colors.fgFaint, lineHeight = 15f),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+        if (subtask.changedAfterFinish) {
+          if (showChangedLabel) {
+            BasicText("changed after finish", style = changesSans(10f, FontWeight.Medium, colors.stFailed), maxLines = 1, softWrap = false)
+          } else {
+            BasicText("!", style = changesMono(11f, FontWeight.Bold, colors.stFailed), maxLines = 1, softWrap = false)
+          }
+        }
       }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -412,7 +424,10 @@ fun subtaskBarFraction(subtask: ScopeSubtask, stats: SubtaskStats?, maxLines: In
 /** `<n> · <name>` over `not started`, or `[running · ]<F> files · +<A> −<D> · <sha>`. */
 fun subtaskTooltip(subtask: ScopeSubtask, stats: SubtaskStats?): String {
   val head = "${subtask.id} · ${subtask.name}"
-  if (subtask.state == ScopeSubtaskState.NOT_STARTED) return "$head\nnot started"
+  if (subtask.state == ScopeSubtaskState.NOT_STARTED) {
+    val changed = if (subtask.changedAfterFinish) " · changed after finish" else ""
+    return "$head\nnot started$changed"
+  }
   val running = if (subtask.state == ScopeSubtaskState.RUNNING) "running · " else ""
   val sha = subtask.commitShas.lastOrNull()?.take(7) ?: "no commit"
   val changed = if (subtask.changedAfterFinish) " · changed after finish" else ""
