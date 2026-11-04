@@ -56,11 +56,38 @@ object GoalAssessmentLoopRules {
   fun publicationBlockReason(record: GoalAssessmentRecord): String? =
     when {
       record.exitReason != GoalAssessmentExitReason.CONVERGED ->
-        "Goal assessment did not accept the goal: ${record.exitReason?.wireValue ?: "unfinished"}."
+        "Goal assessment did not accept the goal: ${record.exitReason?.wireValue ?: "unfinished"}." +
+          pendingRepairNote(record).orEmpty()
       pendingRefs(record).isNotEmpty() -> "Goal assessment has unresolved items: ${pendingRefs(record).joinToString()}."
       record.rounds.lastOrNull()?.fix != null -> "The last assessment repair still needs independent verification."
       else -> null
     }
+
+  private fun pendingRepairNote(record: GoalAssessmentRecord): String? {
+    if (record.exitReason != GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE) return null
+    val round = record.rounds.lastOrNull() ?: return null
+    val fix = round.fix?.takeIf { it.status == GoalAssessmentFixStatus.COMPLETED } ?: return null
+    val repair = "The round ${round.round} repair${round.targetRef?.let { " of $it" }.orEmpty()}"
+    val commit = fix.commitSha
+    return when {
+      commit == null && fix.validation == GoalAssessmentFixValidation.NOT_RUN ->
+        " $repair changed ${filesText(fix.changedFiles)} and is not validated or committed yet. It resumes only " +
+          "on the feature branch at assessed head ${round.headSha.take(SHORT_SHA)} with only those files changed."
+      commit != null && fix.validation == GoalAssessmentFixValidation.PASSED ->
+        " $repair was committed as ${commit.take(SHORT_SHA)}. It resumes only on the feature branch with that " +
+          "commit as head."
+      else -> null
+    }
+  }
+
+  private fun filesText(files: List<String>): String {
+    val listed = files.take(LISTED_REPAIR_FILES).joinToString()
+    val more = files.size - LISTED_REPAIR_FILES
+    return if (more > 0) "$listed and $more more" else listed
+  }
+
+  private const val SHORT_SHA = 12
+  private const val LISTED_REPAIR_FILES = 5
 
   fun resetBudgetForOperatorResume(record: GoalAssessmentRecord): GoalAssessmentRecord =
     if (record.exitReason == GoalAssessmentExitReason.PERSISTENT_FINDING) {
