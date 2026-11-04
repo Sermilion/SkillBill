@@ -109,7 +109,7 @@ class PhaseCommand(
           } else {
             null
           }
-        entry.run(
+        entry.runInvocation(
           PhaseRunRequest(
             definitionId = invocation.definitionId,
             repoRoot = repoRoot,

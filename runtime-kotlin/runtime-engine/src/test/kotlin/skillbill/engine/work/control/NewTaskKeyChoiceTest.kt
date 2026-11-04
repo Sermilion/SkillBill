@@ -19,6 +19,8 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -53,6 +55,8 @@ class NewTaskKeyChoiceTest {
       EnvironmentContext(),
       TestRepositoryEnclosingRoot,
       NoopRuntimeDiagnostics,
+      InPlaceGoalWorktreeResources,
+      RecordingBranchWorktreeResources(),
     )
 
   init {
