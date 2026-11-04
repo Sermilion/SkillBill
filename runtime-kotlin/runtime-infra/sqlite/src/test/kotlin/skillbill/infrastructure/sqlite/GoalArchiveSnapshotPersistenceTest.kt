@@ -13,9 +13,46 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalArchiveSnapshotPersistenceTest {
+  @Test
+  fun `restore does not transfer an archived active worker lease to destination`() {
+    val tempDir = Files.createTempDirectory("goal-archive-worker-lease-restore")
+    val dbPath = tempDir.resolve("metrics.db")
+    val workflowId = "wftr-destination-lease"
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      store.saveFeatureTaskWorkflow(
+        workflowRow(workflowId, "ftr-destination", "bill-feature-task", "plan", FeatureTaskWorkflowMode.RUNTIME),
+        FeatureTaskWorkflowMode.RUNTIME,
+      )
+      assertNull(store.getFeatureTaskRuntimeWorkerOwnership(workflowId))
+    }
+    val factory =
+      sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap())
+    val archive =
+      GoalArchiveOwnedTables.of(
+        mapOf("feature_task_runtime_worker_leases" to listOf(activeLeaseArchiveRow(workflowId))),
+      )
+
+    SqliteGoalArchiveSnapshotPort(factory).restoreOwnedTables(archive)
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      assertNull(store.getFeatureTaskRuntimeWorkerOwnership(workflowId))
+      val leaseCount =
+        connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT COUNT(*) FROM feature_task_runtime_worker_leases").use { rows ->
+            rows.next()
+            rows.getInt(1)
+          }
+        }
+      assertEquals(0, leaseCount)
+    }
+  }
+
   @Test
   fun `restore assigns local journal ids and preserves archived id order`() {
     val tempDir = Files.createTempDirectory("goal-archive-journal-restore")
@@ -227,6 +264,25 @@ class GoalArchiveSnapshotPersistenceTest {
         "lines_added" to linesChanged.first,
         "lines_removed" to linesChanged.second,
         "source" to source,
+      ),
+    )
+
+  private fun activeLeaseArchiveRow(workflowId: String): GoalArchiveTableRow =
+    GoalArchiveTableRow(
+      linkedMapOf(
+        "workflow_id" to workflowId,
+        "contract_version" to "0.1",
+        "generation" to 1,
+        "owner_token" to "archived-owner",
+        "host_identity" to "archived-host",
+        "boot_identity" to "archived-boot",
+        "pid" to 1234,
+        "process_birth_token" to "archived-process",
+        "lease_state" to "active",
+        "heartbeat_at" to "2026-01-01T00:00:00Z",
+        "expires_at" to "2026-01-01T00:01:00Z",
+        "phase_id" to "plan",
+        "phase_attempt" to 1,
       ),
     )
 

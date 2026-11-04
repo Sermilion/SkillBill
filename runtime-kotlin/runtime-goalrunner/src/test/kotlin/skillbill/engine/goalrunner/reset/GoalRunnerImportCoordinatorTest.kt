@@ -4,12 +4,15 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.storeAwareTestDecompositionManifestStore
 import skillbill.application.testDecompositionManifestValidator
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.archive.RecordingGoalArchiveSnapshotPort
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
+import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
@@ -20,16 +23,22 @@ import skillbill.engine.goalrunner.model.GoalRunnerImportResult
 import skillbill.engine.goalrunner.persist.seedCurrentParent
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
+import skillbill.ports.goalrunner.GoalPlanningPreparationRepositoryDefaults
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.goalrunner.model.GoalArchiveTableRow
+import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
+import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.nio.file.Files
 import java.nio.file.Path
@@ -173,6 +182,7 @@ class GoalRunnerImportCoordinatorTest {
   @Test
   fun `exported archive restores manifest parent and subtasks at recorded paths`() {
     val fixture = importFixture(bundleName = "specs", absolutePaths = true)
+    val sourcePreplan = archivedPreplan()
     val archive = fixture.root.resolve("archive.zip")
     val exportService =
       testGoalRunnerStatusService(
@@ -182,7 +192,7 @@ class GoalRunnerImportCoordinatorTest {
           GoalRunnerStatusTestPorts(
             gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
             projectStore = fixture.port,
-            archiveSnapshotPort = parentSnapshot(),
+            archiveSnapshotPort = parentSnapshot(listOf(sourcePreplan)),
             workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
           ),
         decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
@@ -194,6 +204,7 @@ class GoalRunnerImportCoordinatorTest {
     val destinationRoot = Files.createTempDirectory("goal-import-roundtrip-dest")
     val destinationPort = FixedProjectStorePort(destinationRoot)
     val destStates = InMemoryWorkflowStates()
+    val planningPreparations = RecordingImportPlanningPreparations()
     val importService =
       testGoalRunnerStatusService(
         manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
@@ -204,34 +215,31 @@ class GoalRunnerImportCoordinatorTest {
             projectStore = destinationPort,
             workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
           ),
-        database = FakeDatabaseSessionFactory(destStates, goalRunnerControls = RecordingImportControls()),
+        database =
+          FakeDatabaseSessionFactory(
+            destStates,
+            planningPreparations = planningPreparations,
+            goalRunnerControls = RecordingImportControls(),
+          ),
         decompositionManifestStore = storeAwareTestDecompositionManifestStore(destinationPort),
       )
 
     val result = importService.import(GoalRunnerImportRequest(archive, destinationRoot))
 
     assertIs<GoalRunnerImportResult.Imported>(result)
-    assertContains(
-      Files.readString(destinationPort.root.resolve("specs/specs/decomposition-manifest.yaml")),
-      "specs/specs/spec.md",
-    )
-    assertFalse(
-      Files.readString(destinationPort.root.resolve("specs/specs/decomposition-manifest.yaml"))
-        .contains(fixture.port.root.toString()),
-    )
-    assertEquals("body of spec.md", Files.readString(destinationPort.root.resolve("specs/specs/spec.md")))
-    assertEquals(
-      "body of spec_subtask_1.md",
-      Files.readString(destinationPort.root.resolve("specs/specs/spec_subtask_1.md")),
-    )
-    assertEquals(
-      "body of spec_subtask_2.md",
-      Files.readString(destinationPort.root.resolve("specs/specs/spec_subtask_2.md")),
-    )
-    assertEquals(
-      "body of traceability.md",
-      Files.readString(destinationPort.root.resolve("specs/specs/traceability.md")),
-    )
+    val destinationIdentity = GoalPlanningIdentity("wfl-parent", "SKILL-245", goalRepositoryIdentity(destinationRoot))
+    assertFalse(sourcePreplan.identity.repositoryIdentity == destinationIdentity.repositoryIdentity)
+    val restoredPreplan =
+      assertIs<SharedGoalPreplanLookupResult.Found>(planningPreparations.findSharedPreplan(destinationIdentity))
+        .checkpoint
+    assertEquals(destinationIdentity, restoredPreplan?.identity)
+    assertEquals(sourcePreplan.preplanPayload, restoredPreplan?.preplanPayload)
+    assertEquals(sourcePreplan.payloadSha256, restoredPreplan?.payloadSha256)
+    assertEquals(sourcePreplan.preparationStatus, restoredPreplan?.preparationStatus)
+    assertEquals(sourcePreplan.provenance, restoredPreplan?.provenance)
+    assertEquals(sourcePreplan.createdAt, restoredPreplan?.createdAt)
+    assertEquals(sourcePreplan.contractVersion, restoredPreplan?.contractVersion)
+    assertRestoredSpecFiles(destinationPort.root, fixture.port.root)
     val importedWorkflow = requireNotNull(destStates.getFeatureTaskWorkflow("wfl-parent"))
     destStates.saveFeatureTaskWorkflow(importedWorkflow.copy(updatedAt = "later"), FeatureTaskWorkflowMode.RUNTIME)
     val progressedWorkflow = requireNotNull(destStates.getFeatureTaskWorkflow("wfl-parent"))
@@ -239,6 +247,33 @@ class GoalRunnerImportCoordinatorTest {
     assertIs<GoalRunnerImportResult.Refused>(reimport)
     assertEquals(progressedWorkflow, destStates.getFeatureTaskWorkflow("wfl-parent"))
     assertEquals("body of spec.md", Files.readString(destinationPort.root.resolve("specs/specs/spec.md")))
+  }
+
+  private fun assertRestoredSpecFiles(
+    destinationRoot: Path,
+    sourceRoot: Path,
+  ) {
+    assertContains(
+      Files.readString(destinationRoot.resolve("specs/specs/decomposition-manifest.yaml")),
+      "specs/specs/spec.md",
+    )
+    assertFalse(
+      Files.readString(destinationRoot.resolve("specs/specs/decomposition-manifest.yaml"))
+        .contains(sourceRoot.toString()),
+    )
+    assertEquals("body of spec.md", Files.readString(destinationRoot.resolve("specs/specs/spec.md")))
+    assertEquals(
+      "body of spec_subtask_1.md",
+      Files.readString(destinationRoot.resolve("specs/specs/spec_subtask_1.md")),
+    )
+    assertEquals(
+      "body of spec_subtask_2.md",
+      Files.readString(destinationRoot.resolve("specs/specs/spec_subtask_2.md")),
+    )
+    assertEquals(
+      "body of traceability.md",
+      Files.readString(destinationRoot.resolve("specs/specs/traceability.md")),
+    )
   }
 
   @Test
@@ -676,13 +711,47 @@ private class BranchHeadGit(
     WorkflowGitOperationResult.Ok(value = headSha)
 }
 
-private fun parentSnapshot(): RecordingGoalArchiveSnapshotPort {
+private fun parentSnapshot(
+  sharedPreplans: List<SharedGoalPreplanCheckpoint> = emptyList(),
+): RecordingGoalArchiveSnapshotPort {
   val states = InMemoryWorkflowStates()
   seedCurrentParent(states, "wfl-child", "SKILL-245")
   val parent = requireNotNull(states.getFeatureTaskWorkflow("wfl-parent")).copy(issueKey = "SKILL-245")
   return RecordingGoalArchiveSnapshotPort {
-    GoalArchiveOwnedSnapshot(listOf(parent), emptyList(), emptyList(), emptyList())
+    GoalArchiveOwnedSnapshot(listOf(parent), sharedPreplans, emptyList(), emptyList())
   }
+}
+
+private fun archivedPreplan(): SharedGoalPreplanCheckpoint {
+  val payload =
+    """
+    {"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"preplan","status":"completed",
+    "summary":"archive preplan","produced_outputs":{"value":"resume from restored planning state"}}
+    """.trimIndent()
+  return SharedGoalPreplanCheckpoint(
+    identity = GoalPlanningIdentity("wfl-parent", "SKILL-245", "repo-root-realpath-v1:/archived/source"),
+    provenance =
+      GoalPlanningContractProvenance(
+        parentSpecHash = "a".repeat(64),
+        decompositionManifestHash = "b".repeat(64),
+        planningContractId = "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml",
+        planningContractVersion = GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
+      ),
+    payloadSha256 = sha256HexUtf8(payload),
+    preplanPayload = payload,
+    createdAt = "2026-01-01T00:00:00Z",
+  )
+}
+
+private class RecordingImportPlanningPreparations : GoalPlanningPreparationRepositoryDefaults() {
+  private var sharedPreplan: SharedGoalPreplanCheckpoint? = null
+
+  override fun saveSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
+    sharedPreplan = checkpoint
+  }
+
+  override fun findSharedPreplan(expectedIdentity: GoalPlanningIdentity): SharedGoalPreplanLookupResult =
+    SharedGoalPreplanLookupResult.Found(sharedPreplan?.takeIf { it.identity == expectedIdentity })
 }
 
 private fun exportImportArchive(

@@ -12,6 +12,7 @@ import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalArchiveEnvelopeKeys
 import skillbill.contracts.workflow.goal.GoalArchiveRecordKeys
+import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.contracts.workflow.goal.goalArchiveEnvelopeWireMap
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.goalplanning.toEnvelopeMap
@@ -268,8 +269,14 @@ public class GoalRunnerArchiveExportOperations(
       workflowsJson = snapshot.workflows.map { it.toGoalArchiveFieldMap(workflowArtifactWireEncoder) },
       planningJson =
         linkedMapOf(
-          GoalArchiveRecordKeys.SHARED_PREPLANS to snapshot.sharedPreplans.map { it.toEnvelopeMap() },
-          GoalArchiveRecordKeys.SUBTASK_PLANS to snapshot.subtaskPlans.map { it.toEnvelopeMap() },
+          GoalArchiveRecordKeys.SHARED_PREPLANS to
+            snapshot.sharedPreplans.map {
+              it.toEnvelopeMap() + (GoalPlanningPreparationPayloadKeys.CREATED_AT to it.createdAt)
+            },
+          GoalArchiveRecordKeys.SUBTASK_PLANS to
+            snapshot.subtaskPlans.map {
+              it.toEnvelopeMap() + (GoalPlanningPreparationPayloadKeys.CREATED_AT to it.createdAt)
+            },
           GoalArchiveRecordKeys.LEGACY_PREPARATIONS to snapshot.legacyPreparations.map { it.toEnvelopeMap() },
         ),
       ownedTablesJson = ownedTablesJson(snapshot.ownedTables),
