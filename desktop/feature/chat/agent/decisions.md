@@ -1,3 +1,18 @@
+## [2026-11-04] Bind only desktop-resolved identity on desktop Goal/Plan start
+Context: Desktop already resolved identity from the offer field or dedicated operator tokens. Re-running admission on composed chat requirements would bind an in-sentence key or an agent-suggested key that leaked into the transcript.
+Decision: Desktop prepare uses identity policy RESOLVED_DESKTOP_IDENTITY and binds only keyChoice. REQUIREMENTS_FIRST remains the default for other callers.
+Reason: Sentence mentions must not become identity, and GoalIntake.parseOrNull stays unchanged. Scanning requirements again would undo the desktop helpers.
+
+## [2026-11-04] Reuse only typed complete keys, never pasted URLs
+Context: An inventory-held complete or cancelled spec key may bind again, but a pasted used tracker URL must stay refused even if the operator also said reuse.
+Decision: NewTaskDraft sets reuseRequested only when identity is a typed complete key and an operator message contains reuse wording with that key as a whitespace token, including when that key is then typed in the offer field. URL identity always leaves the flag false.
+Reason: Subtask 1 occupancy treats a used URL as not reusable. Forcing reuse around occupied in-flight keys would steal a running run.
+
+## [2026-11-04] Keep IssuePrefixPicker for execution-chat retry
+Context: New Task Goal and Plan starts must not mint from a prefix menu, but execution chats still retry a missing key through ChatComposer.
+Decision: Remove prefix-menu starts from the Goal run card. Keep IssuePrefixPicker as a sibling composable that ChatComposer still imports.
+Reason: Deleting the picker would break execution-chat retry. The Goal run card now takes a complete key only.
+
 ## [2026-11-03] Always release a cancelled turn after a NonCancellable save
 Context: The window scope uses Dispatchers.Main, not Main.immediate, so a job cancelled before first dispatch never enters its body. A cancelled IO save can skip clearing the turn job, and /clear can replace turnJob during that suspension.
 Decision: Both chats save the stopped turn under NonCancellable and clear busy, stoppable, and the turn job in a nested finally. invokeOnCompletion still finishes the turn when the body never ran. Execution chat also clears only when turnJob still matches.

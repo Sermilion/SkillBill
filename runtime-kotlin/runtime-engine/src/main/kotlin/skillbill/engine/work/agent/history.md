@@ -1,3 +1,12 @@
+## [2026-11-04] SKILL-479 subtask 1: bind task identity without minting
+Areas: runtime-engine work control; desktop core data and domain
+- Goal and plan preparation bind an admitted first-token key, a complete typed key, or a tracker key in a URL. Missing identity returns inventory prefixes as NeedsKey without allocating.
+- Occupied keys and used URLs are refused. Explicit typed reuse can pass terminal-only preflight for completed or abandoned runs; running, resumable, and continuation runs remain refused.
+- Desktop carries reuseRequested to runtime preparation. Goal and plan Ready results report allocated=false, so reservation conflicts do not trigger a new key allocation.
+- Limitation: desktop operator-message detection and the key-choice UI belong to the desktop chat boundary.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-30] SKILL-447 board executing agent
 Areas: runtime-engine work, runtime-ports, runtime-contracts, runtime-infra/sqlite, desktop work and history
 - Board projection carries the executing agent for goals, standalone runs and feature-task phases. Desktop uses it for display; launches retain the agent from run options.
