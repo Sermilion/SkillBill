@@ -34,9 +34,11 @@ public object AcceptanceCriterionInteractionTraceRound {
       "`Interaction <ref>: unknown`. Add explanations in ordinary prose."
 
   internal const val RECHECK_GRAMMAR =
-    "For each listed re-check, answer with exactly one line of the form " +
-      "`Recheck AC-NNN: holds` or " +
-      "`Recheck AC-NNN: regressed`. Add explanations in ordinary prose."
+    "For each listed re-check, answer with one line of the form " +
+      "`Recheck AC-NNN: holds` or `Recheck AC-NNN: regressed`. " +
+      "You may add evidence citations as `<path:line list>` after `evidence`; " +
+      "separate citations with commas or semicolons. " +
+      "You may also explain the decision in ordinary prose."
 
   public fun scopeKey(state: AcceptanceCriterionRepairState): String =
     sha256Hex(

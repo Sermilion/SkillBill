@@ -7,6 +7,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.goal.GoalBlockArtifactKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.engine.diagnostics.block.BlockIncidentAcceptedChildCause
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentAliases.withBlockCause
 import skillbill.engine.diagnostics.block.BlockIncidentFailureFacts
@@ -128,7 +129,13 @@ public class WorkflowGoalRunnerBlockWrites(
           )
         }
       }
-    persistBlock(write, blockIdentity, blockIdentity.attempt ?: candidate.stepAttemptCount ?: 0, workflowStates)
+    persistBlock(
+      write,
+      blockIdentity,
+      blockIdentity.attempt ?: candidate.stepAttemptCount ?: 0,
+      candidate.acceptedCause,
+      workflowStates,
+    )
     return GoalRunnerBlockWriteResult(
       blockIdentity.stepId,
       acceptedObservation(write, blockIdentity, candidate.acceptedCause),
@@ -209,7 +216,12 @@ public class WorkflowGoalRunnerBlockWrites(
     acceptedCause: GoalRunnerAcceptedBlockReference?,
   ): BlockIncidentObservation {
     val parentWorkflowId = write.goalParentWorkflowId()
-    val phaseId = blockIdentity.stepId.takeIf { write.family == WorkflowFamily.TASK_RUNTIME }
+    val phaseId =
+      when {
+        write.family != WorkflowFamily.TASK_RUNTIME -> null
+        acceptedCause != null -> acceptedCause.blockedStepId
+        else -> blockIdentity.stepId
+      }
     return BlockIncidentObservation(
       workflowId = write.record.workflowId,
       parentWorkflowId = parentWorkflowId,
@@ -299,13 +311,14 @@ public class WorkflowGoalRunnerBlockWrites(
           it.attempt == reference.attempt &&
           it.generation == reference.executionGeneration
       }
+    val acceptedCause = historicalChildCause(write, referencedIdentity)
     val blockIdentity =
       BlockIncidentIdentity(
         stepId = reference.blockedStepId,
         attempt = reference.attempt,
         generation = reference.executionGeneration,
         childWorkflowId = referencedIdentity?.childWorkflowId,
-        childIncidentToken = reference.childIncidentToken,
+        childIncidentToken = referencedIdentity?.childIncidentToken,
         incidentToken = reference.incidentToken,
         alias = canonical,
         sourceAlias = referenceSourceAlias ?: referenceAlias?.takeIf { it != canonical },
@@ -317,6 +330,7 @@ public class WorkflowGoalRunnerBlockWrites(
       write,
       blockIdentity,
       maxOf(currentAttemptCount ?: 0, reference.attempt ?: 0),
+      acceptedCause,
       workflowStates,
     )
     val sourceFacts = historicalSourceFacts(workflowStates, reference)
@@ -328,7 +342,28 @@ public class WorkflowGoalRunnerBlockWrites(
       ),
       reference,
       blockIdentity.sourceAlias,
+      acceptedCause,
     )
+  }
+
+  private fun historicalChildCause(
+    write: GoalRunnerBlockWrite,
+    identity: BlockIncidentIdentity?,
+  ): GoalRunnerAcceptedBlockReference? {
+    if (identity == null ||
+      !DurableWorkflowArtifactFamily.GOAL_BLOCK_ACCEPTED_CHILD_CAUSE.contains(
+        write.record.artifacts,
+      )
+    ) {
+      return null
+    }
+    return BlockIncidentAcceptedChildCause.fromArtifacts(write.record.artifacts)
+      ?.takeIf { cause ->
+        cause.parentIncidentToken == identity.incidentToken &&
+          cause.reference.sourceWorkflowId == identity.childWorkflowId &&
+          cause.reference.incidentToken == identity.childIncidentToken &&
+          cause.reference.sourceWorkflowId != write.record.workflowId
+      }?.reference
   }
 
   private fun historicalSourceFacts(
@@ -349,6 +384,7 @@ public class WorkflowGoalRunnerBlockWrites(
     write: GoalRunnerBlockWrite,
     blockIdentity: BlockIncidentIdentity,
     attemptCount: Int,
+    acceptedCause: GoalRunnerAcceptedBlockReference?,
     workflowStates: WorkflowStateRepository,
   ) {
     val updated =
@@ -380,7 +416,19 @@ public class WorkflowGoalRunnerBlockWrites(
                 }
                 write.supervisionEvent?.let { event -> put("supervision_event", event.toPersistenceWire()) }
                 putAll(mapOf(blockIdentity.artifactEntry()))
-                putAll(WorkflowGoalRunnerAcceptedBlockOutcomeBinding.patch(write.record, blockIdentity))
+                val childCause =
+                  acceptedCause?.let {
+                    BlockIncidentAcceptedChildCause(blockIdentity.incidentToken, it).artifactEntry()
+                  } ?: DurableWorkflowArtifactFamily.GOAL_BLOCK_ACCEPTED_CHILD_CAUSE.entry(null)
+                put(childCause.first, childCause.second)
+                putAll(
+                  WorkflowGoalRunnerAcceptedBlockOutcomeBinding.patch(
+                    write.record,
+                    blockIdentity,
+                    acceptedCause,
+                    replaceForeignReference = true,
+                  ),
+                )
               },
             ),
           sessionId = write.record.sessionId.orEmpty(),
@@ -588,7 +636,11 @@ public class WorkflowGoalRunnerBlockWrites(
               },
             ),
           ) + repairBudgetPatch +
-            WorkflowGoalRunnerAcceptedBlockOutcomeBinding.patch(record, BlockIncidentIdentity.fromArtifacts(artifacts)),
+            WorkflowGoalRunnerAcceptedBlockOutcomeBinding.patch(
+              record,
+              BlockIncidentIdentity.fromArtifacts(artifacts),
+              acceptedCause = null,
+            ),
         ),
       sessionId = "",
     )

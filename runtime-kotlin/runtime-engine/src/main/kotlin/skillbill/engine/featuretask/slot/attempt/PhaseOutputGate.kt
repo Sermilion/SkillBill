@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinaliseRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoff
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoffInvalid
@@ -17,7 +18,9 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalisationBlocked
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalisationResult
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalised
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.stepOutputContext
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
@@ -82,7 +85,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
-import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -579,7 +581,7 @@ internal object PhaseOutputGate {
   ): AttemptResult {
     val run = args.capture.run
     val boundStep = args.boundStep
-    val rejection =
+    val projectionRejection =
       FeatureTaskRuntimeRunLoopOutputVerification.completionProjectionRejection(
         this,
         CompletionProjectionRejectionArgs(
@@ -591,31 +593,21 @@ internal object PhaseOutputGate {
           checksImmediateConsumerProjection = args.stepHooks.checksImmediateConsumerProjection,
         ),
       )
-    return rejection?.let { (rule, reason) -> args.reject(rule, reason) }
-      ?: stepCompletionRejection(run, args.attested, boundStep, args.stepHooks)?.let { (rule, reason) ->
-        val rejected = args.reject(rule, reason)
-        if (reason.startsWith(FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_TRACE_AUDIT_OUTPUT.name)) {
-          AttemptResult.RetryableTerminal(
-            operatorReason = reason,
-            fileManifest = args.capture.fileManifest,
-            failureDisposition = FeatureTaskRuntimeFailureDisposition.RETRYABLE,
-            normalizedOutput = args.attested,
-            continuationOutput = null,
-          )
-        } else {
-          rejected
-        }
-      }
-      ?: settleStepOutputCheck(
-        boundStep.boundHooks.settleCompletedOutput(
+    if (projectionRejection != null) {
+      val (rule, reason) = projectionRejection
+      return args.reject(rule, reason)
+    }
+    return settleStepOutputCheck(
+      stepCompletionRejection(run, args.attested, boundStep, args.stepHooks)
+        ?: boundStep.boundHooks.settleCompletedOutput(
           run,
           stepOutputContext(run, args.stepHooks),
           args.attested.envelopeWireMap(),
         ),
-        args.capture,
-        args.attested,
-        args.reject,
-      )
+      args.capture,
+      args.attested,
+      args.reject,
+    )
       ?: args.stepHooks.settleCompletedRound(
         stepOutputContext(run, args.stepHooks),
         args.capture,
@@ -650,15 +642,26 @@ internal object PhaseOutputGate {
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     boundStep: PhaseAcceptedStepExecution,
     stepHooks: PhaseStepHooks<*>,
-  ): Pair<String, String>? =
-    boundStep.boundHooks
-      .completionRejection(
+  ): PhaseStepOutputCheck? {
+    val reason =
+      boundStep.boundHooks.completionRejection(
         run,
         stepOutputContext(run, stepHooks),
         attested.envelopeWireMap(),
-      )?.let {
-        stepHooks.completionRejectionRule to it
-      }
+      ) ?: return null
+    return interactionTraceCompletionOutputCheck(run, reason, stepHooks.completionRejectionRule)
+  }
+
+  internal fun interactionTraceCompletionOutputCheck(
+    run: PhaseRun,
+    reason: String,
+    rule: String,
+  ): PhaseStepOutputCheck {
+    if (interactionTraceRepair(run.request) != null) {
+      return PhaseStepOutputCheck.Retry(reason, rule)
+    }
+    return PhaseStepOutputCheck.Reject(reason, rule)
+  }
 
   internal fun PhaseOutputSettlementContext.finalizeValidatedOutputAcceptance(
     args: FinalizeValidatedOutputAcceptanceArgs,
@@ -758,7 +761,7 @@ internal object PhaseOutputGate {
         iteration = capture.iteration,
         rule = diagnosticRule,
         reason = detail,
-        captured = capture.captured,
+        captured = interactionTraceRejectionDiagnosticCapture(capture, outputMap),
         targeting =
           PhaseOutputGate.rejectedOutputTargeting(
             defaultRejectedOutputTargetingArgs(capture.run, RejectedOutputTargetingOverrides(path = path)),
@@ -771,6 +774,24 @@ internal object PhaseOutputGate {
       retryReason = retryReason,
     )
   }
+
+  internal fun interactionTraceRejectionDiagnosticCapture(
+    capture: ValidatedOutputCapture,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): CapturedPhaseOutput {
+    if (interactionTraceRepair(capture.run.request) != null) {
+      val value = auditProseValue(outputMap)
+      if (value != null) {
+        return CapturedPhaseOutput.fromBytes(value.encodeToByteArray(), value)
+      }
+    }
+    return capture.captured
+  }
+
+  private fun interactionTraceRepair(request: FeatureTaskRuntimeRunFacts) =
+    (request as? FeatureTaskRuntimeRunRequest)
+      ?.acceptanceCriterionRepair
+      ?.takeIf(AcceptanceCriterionInteractionTraceRound::active)
 
   internal fun retainSettledProducerOutput(
     request: FeatureTaskRuntimeRunFacts,

@@ -1,13 +1,17 @@
 package skillbill.engine.featuretask.incident
 
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.engine.diagnostics.block.BlockIncidentAcceptedChildCause
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentAliases.withBlockCause
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.slot.state.carriesPullRequestIncidentFields
+import skillbill.goalrunner.goalContinuationOutcomeArtifact
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.ports.blockincident.model.BlockedWorkflowWithoutIncident
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
@@ -39,10 +43,14 @@ internal object BlockIncidentRecoveredObservations {
         }
       }
     val currentAttempt = record.step(record.currentStepId)?.attemptCount
+    val recoveredChildReference = identity?.let { acceptedChildReference(record, it) }
     val applicable =
       identity?.takeIf {
         it.stepId == record.currentStepId &&
-          it.incidentToken == BlockIncidentAliases.token(it.alias) &&
+          (
+            it.incidentToken == BlockIncidentAliases.token(it.alias) ||
+              (it.isGoalWriterIdentity(record.workflowId) && recoveredChildReference != null)
+          ) &&
           BlockIncidentIdentity.matchesBlockedAttempt(
             record.artifacts,
             it.stepId,
@@ -55,7 +63,7 @@ internal object BlockIncidentRecoveredObservations {
         applicable == null -> recoveredBlock(candidate, record, reason)
         candidate.family == WorkflowFamily.TASK_RUNTIME && !applicable.isGoalWriterIdentity(record.workflowId) ->
           featureTaskBlock(record, applicable, reason)
-        else -> goalBlock(candidate.family, record, applicable, reason)
+        else -> goalBlock(candidate.family, record, applicable, recoveredChildReference, reason)
       }
     return observation.copy(
       parentWorkflowId = parentWorkflowId,
@@ -72,9 +80,15 @@ internal object BlockIncidentRecoveredObservations {
     family: WorkflowFamily,
     record: WorkflowStateSnapshot,
     identity: BlockIncidentIdentity,
+    childReference: GoalRunnerAcceptedBlockReference?,
     reason: String,
   ): BlockIncidentObservation {
-    val phaseId = identity.stepId.takeIf { family == WorkflowFamily.TASK_RUNTIME }
+    val phaseId =
+      when {
+        family != WorkflowFamily.TASK_RUNTIME -> null
+        identity.childIncidentToken != null -> childReference?.blockedStepId
+        else -> identity.stepId
+      }
     return BlockIncidentObservation(
       workflowId = record.workflowId,
       phaseId = phaseId,
@@ -88,6 +102,7 @@ internal object BlockIncidentRecoveredObservations {
           identity.childIncidentToken?.let(BlockIncidentAliases::childCause),
         ),
       generation = identity.generation,
+      linkedAcceptedBlockReference = childReference,
       origin = BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK,
       failureCode = identity.failureCode,
       failureDisposition = identity.failureDisposition?.wireValue,
@@ -104,7 +119,11 @@ internal object BlockIncidentRecoveredObservations {
               },
             BlockIncidentCorrelatedField.PHASE_ID to
               if (phaseId == null) {
-                BlockIncidentFieldAvailability.NOT_APPLICABLE
+                if (identity.childIncidentToken != null) {
+                  BlockIncidentFieldAvailability.NOT_CAPTURED
+                } else {
+                  BlockIncidentFieldAvailability.NOT_APPLICABLE
+                }
               } else {
                 BlockIncidentFieldAvailability.AVAILABLE
               },
@@ -117,6 +136,28 @@ internal object BlockIncidentRecoveredObservations {
           ),
     )
   }
+
+  private fun acceptedChildReference(
+    record: WorkflowStateSnapshot,
+    identity: BlockIncidentIdentity,
+  ): GoalRunnerAcceptedBlockReference? {
+    if (!identity.isGoalWriterIdentity(record.workflowId)) return null
+    val hasDurableCause = DurableWorkflowArtifactFamily.GOAL_BLOCK_ACCEPTED_CHILD_CAUSE.contains(record.artifacts)
+    val reference =
+      if (hasDurableCause) {
+        BlockIncidentAcceptedChildCause.fromArtifacts(record.artifacts)
+          ?.takeIf { it.parentIncidentToken == identity.incidentToken }
+          ?.reference
+      } else {
+        record.artifacts.goalContinuationOutcomeArtifact()?.acceptedBlockReference
+      }
+    return reference?.takeIf {
+      it.sourceWorkflowId != record.workflowId && it.matchesChildIdentity(identity)
+    }
+  }
+
+  private fun GoalRunnerAcceptedBlockReference.matchesChildIdentity(identity: BlockIncidentIdentity): Boolean =
+    sourceWorkflowId == identity.childWorkflowId && incidentToken == identity.childIncidentToken
 
   private fun featureTaskBlock(
     record: WorkflowStateSnapshot,

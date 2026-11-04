@@ -131,6 +131,45 @@ class AcceptanceCriterionInteractionTraceTest {
       "src/Flow.kt:71-93, src/Flow.kt:123-133, src/State.kt:10, src/State.kt:20",
       parsed.rechecks.single().evidenceRef,
     )
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "Recheck AC-001: holds evidence 71-93, src/Flow.kt:123",
+        emptyList(),
+        listOf("AC-001"),
+      ),
+    )
+    val semicolonParsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(
+          "Recheck AC-001: holds evidence src/Flow.kt:71-93;123-133; src/State.kt:10;20",
+          emptyList(),
+          listOf("AC-001"),
+        ),
+      )
+    assertEquals(parsed.rechecks.single().evidenceRef, semicolonParsed.rechecks.single().evidenceRef)
+    val semicolonFiles =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(
+          "Recheck AC-001: holds evidence src/A.kt:10; src/B.kt:20",
+          emptyList(),
+          listOf("AC-001"),
+        ),
+      )
+    assertEquals("src/A.kt:10, src/B.kt:20", semicolonFiles.rechecks.single().evidenceRef)
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "Recheck AC-001: holds evidence src/A.kt:10; not-a-file",
+        emptyList(),
+        listOf("AC-001"),
+      ),
+    )
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "Recheck AC-001: holds evidence 71-93; src/Flow.kt:123",
+        emptyList(),
+        listOf("AC-001"),
+      ),
+    )
   }
 
   @Test
@@ -145,7 +184,7 @@ class AcceptanceCriterionInteractionTraceTest {
         ),
       )
     assertEquals("The route reaches the selected profile.", parsed.entries.single().traceRef)
-    assertEquals("src/Flow.kt:10; src/State.kt:20", parsed.rechecks.single().evidenceRef)
+    assertEquals("src/Flow.kt:10, src/State.kt:20", parsed.rechecks.single().evidenceRef)
   }
 
   @Test

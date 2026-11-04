@@ -6,6 +6,7 @@ import skillbill.contracts.workflow.goal.GoalBlockArtifactKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.boundTo
 import skillbill.engine.diagnostics.block.featureTaskPhaseAliasForTest
 import skillbill.engine.diagnostics.block.observeBlockIncidentForTest
 import skillbill.engine.diagnostics.block.persistAcceptedBlockIdentityForTest
@@ -115,6 +116,48 @@ class WorkflowGoalRunnerBlockWritesTest {
     assertIs<BlockIncidentCaptureOutcome.Captured>(capture(newChildCause.observation))
     assertNotEquals(childReference.incidentToken, secondChildReference.incidentToken)
     assertEquals(secondChildReference.incidentToken, newChildCause.observation.additionalAliases.single().value)
+  }
+
+  @Test
+  fun `parent incident keeps a child audit reference and phase`() {
+    saveRunning("wftr-parent", 1, "plan_subtasks")
+    val childReference =
+      GoalRunnerAcceptedBlockReference(
+        sourceWorkflowId = "wftr-child",
+        blockedStepId = "audit",
+        attempt = 1,
+        executionGeneration = 2,
+        aliasKind = BlockIncidentAliasKind.PHASE_TRANSITION.wireValue,
+        aliasValue = "child-audit",
+        incidentToken = "child-audit-token",
+        childIncidentToken = null,
+      )
+    val retainedReference = assertNotNull(childReference.boundTo("wftr-parent", "plan_subtasks"))
+
+    val result =
+      assertNotNull(
+        writes.markBlocked(
+          GoalRunnerBlockRequest(
+            workflowId = "wftr-parent",
+            blockedReason = "child audit blocked",
+            lastResumableStep = "plan_subtasks",
+            causingChildWorkflowId = "wftr-child",
+            causingAcceptedBlockReference = retainedReference,
+          ),
+          workflows,
+          incidents,
+        ),
+      )
+    val identity =
+      assertNotNull(
+        BlockIncidentIdentity.fromArtifacts(
+          requireNotNull(workflows.get(WorkflowFamily.TASK_RUNTIME, "wftr-parent")).artifacts,
+        ),
+      )
+
+    assertEquals("wftr-child", identity.childWorkflowId)
+    assertEquals("child-audit-token", identity.childIncidentToken)
+    assertEquals("audit", result.observation.phaseId)
   }
 
   @Test
@@ -356,8 +399,9 @@ class WorkflowGoalRunnerBlockWritesTest {
   private fun saveRunning(
     id: String,
     attempt: Int,
+    stepId: String = "implement",
   ) {
-    val opened = engine.openRecord(WorkflowFamily.TASK_RUNTIME.definition, id, "session", "implement")
+    val opened = engine.openRecord(WorkflowFamily.TASK_RUNTIME.definition, id, "session", stepId)
     val record: WorkflowStateSnapshot =
       engine.updateRecord(
         WorkflowFamily.TASK_RUNTIME.definition,
@@ -366,10 +410,10 @@ class WorkflowGoalRunnerBlockWritesTest {
           artifactsPatch = null,
           sessionId = "session",
           workflowStatus = WorkflowStatus.RUNNING,
-          currentStepId = "implement",
+          currentStepId = stepId,
           stepUpdates =
             WorkflowStepUpdates.from(
-              listOf(mapOf("step_id" to "implement", "status" to "running", "attempt_count" to attempt)),
+              listOf(mapOf("step_id" to stepId, "status" to "running", "attempt_count" to attempt)),
             ),
         ),
       )

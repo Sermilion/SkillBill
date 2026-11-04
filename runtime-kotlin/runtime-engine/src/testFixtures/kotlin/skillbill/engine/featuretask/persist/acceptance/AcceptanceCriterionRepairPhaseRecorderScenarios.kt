@@ -351,7 +351,7 @@ class AcceptanceCriterionRepairPhaseRecorderScenarios(
         .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
     )
 
-  private fun tracePendingSession(
+  internal fun tracePendingSession(
     f: SerialRepairSqliteFixture,
     worker: AcquiredFeatureTaskRuntimeWorker,
   ): Pair<AcceptanceCriterionRepairRunState, AcceptanceCriterionRepairSession> {

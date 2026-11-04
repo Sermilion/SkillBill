@@ -39,16 +39,20 @@ internal object AcceptanceCriterionRecheckParser {
   ): AcceptanceCriterionRecheckParse {
     val entries =
       lines.map { line ->
-        val citations =
-          citationsOf(line.rest) ?: line.rest.removePrefix("evidence").trim().takeIf { it.isNotBlank() } ?: prose
-        AcceptanceCriterionRecheckEntry(line.ref, line.verdict, citations)
+        val citations = citationsOf(line.rest)
+        if (line.rest.startsWith("evidence ", ignoreCase = true) && citations == null) {
+          return rejected("Recheck ${line.ref} has malformed evidence citations.")
+        }
+        val evidenceRef =
+          citations ?: line.rest.removePrefix("evidence").trim().takeIf { it.isNotBlank() } ?: prose
+        AcceptanceCriterionRecheckEntry(line.ref, line.verdict, evidenceRef)
       }
     return AcceptanceCriterionRecheckParse.Parsed(entries, ignoredRefs)
   }
 
   private fun citationsOf(rest: String): String? {
     val listed = EVIDENCE.matchEntire(rest)?.groupValues?.get(1) ?: return null
-    val parts = listed.split(',').map { it.trim().trimEnd('*', '`', '_', '.') }
+    val parts = listed.split(',', ';').map { it.trim().trimEnd('*', '`', '_', '.') }
     var path: String? = null
     val expanded =
       parts.map { part ->
