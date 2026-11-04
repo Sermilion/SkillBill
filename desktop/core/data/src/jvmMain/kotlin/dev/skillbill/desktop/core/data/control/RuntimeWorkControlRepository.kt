@@ -24,6 +24,7 @@ import dev.skillbill.desktop.core.domain.model.PrerequisiteInstruction
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
 import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
@@ -54,6 +55,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
+import skillbill.engine.goalrunner.model.GoalRunnerExportRefusalCategory
 import skillbill.engine.goalrunner.model.GoalRunnerImportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportPreflightResult
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
@@ -540,7 +542,7 @@ class RuntimeWorkControlRepository(
         )
       ) {
         is GoalRunnerExportPreflightResult.Ready -> ExportPreflightOutcome.Ready(result.featureBranch, result.commitSha)
-        is GoalRunnerExportPreflightResult.Refused -> ExportPreflightOutcome.Refused(result.reason)
+        is GoalRunnerExportPreflightResult.Refused -> ExportPreflightOutcome.Refused(result.reason, result.category.toDesktopCategory())
         is GoalRunnerExportPreflightResult.Failed -> ExportPreflightOutcome.Failed(ReadProblem.Runtime(result.message))
       }
     }
@@ -570,11 +572,18 @@ class RuntimeWorkControlRepository(
             result.commitSha,
             result.archivePath.toString(),
           )
-        is GoalRunnerExportResult.Refused -> ExportOutcome.Refused(result.reason)
+        is GoalRunnerExportResult.Refused -> ExportOutcome.Refused(result.reason, result.category.toDesktopCategory())
         is GoalRunnerExportResult.Failed -> ExportOutcome.Failed(ReadProblem.Runtime(result.message))
       }
     }
   }
+
+  private fun GoalRunnerExportRefusalCategory.toDesktopCategory(): ExportRefusalCategory =
+    when (this) {
+      GoalRunnerExportRefusalCategory.LIVENESS -> ExportRefusalCategory.LIVENESS
+      GoalRunnerExportRefusalCategory.BRANCH -> ExportRefusalCategory.BRANCH
+      GoalRunnerExportRefusalCategory.OTHER -> ExportRefusalCategory.OTHER
+    }
 
   override suspend fun inspectArchive(archivePath: String, repoRoot: String?): ArchiveInspectOutcome {
     if (archivePath.isBlank()) return ArchiveInspectOutcome.Refused("archive path required")

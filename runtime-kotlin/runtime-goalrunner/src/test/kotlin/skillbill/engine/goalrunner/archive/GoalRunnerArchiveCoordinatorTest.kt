@@ -16,6 +16,7 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
+import skillbill.engine.goalrunner.model.GoalRunnerExportRefusalCategory
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -87,6 +88,7 @@ class GoalRunnerArchiveCoordinatorTest {
     val result = service.export(GoalRunnerExportRequest("SKILL-245", root, output))
 
     assertIs<GoalRunnerExportResult.Refused>(result)
+    assertEquals(GoalRunnerExportRefusalCategory.LIVENESS, result.category)
     assertContains(result.reason, "GoalPauseCommand")
     assertContains(result.reason, "GoalStopCommand")
     assertFalse(Files.exists(output))
@@ -111,6 +113,7 @@ class GoalRunnerArchiveCoordinatorTest {
     val result = service.export(GoalRunnerExportRequest("SKILL-245", fixture.root, output))
 
     assertIs<GoalRunnerExportResult.Refused>(result)
+    assertEquals(GoalRunnerExportRefusalCategory.BRANCH, result.category)
     assertContains(result.reason, "feat/SKILL-245-goal")
     assertFalse(Files.exists(output))
   }

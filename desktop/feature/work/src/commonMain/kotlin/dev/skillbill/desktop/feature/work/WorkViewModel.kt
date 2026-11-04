@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
 import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
@@ -178,14 +179,14 @@ class WorkViewModel(
             when (val result = controls.export(item.issueKey ?: item.id, item.repositoryRoot, path)) {
               is ExportOutcome.Exported ->
                 showToast(ToastTone.Confirmation, "Exported ${result.issueKey} to ${result.archivePath}")
-              is ExportOutcome.Refused -> if (requiresPause(result.reason)) {
+              is ExportOutcome.Refused -> if (requiresPause(result.category)) {
                 mutableState.update { it.copy(exportLiveTarget = item) }
               } else showToast(ToastTone.Problem, result.reason)
               is ExportOutcome.Failed -> showToast(ToastTone.Problem, readProblemText(result.problem))
             }
           }
         }
-        is ExportPreflightOutcome.Refused -> if (requiresPause(preflight.reason)) {
+        is ExportPreflightOutcome.Refused -> if (requiresPause(preflight.category)) {
           mutableState.update { it.copy(exportLiveTarget = item) }
         } else showToast(ToastTone.Problem, preflight.reason)
         is ExportPreflightOutcome.Failed -> showToast(ToastTone.Problem, readProblemText(preflight.problem))
@@ -247,8 +248,7 @@ class WorkViewModel(
     effectChannel.trySend(WorkEffect.ShowToast(ToastMessage(tone, message)))
   }
 
-  private fun requiresPause(reason: String): Boolean =
-    listOf("live", "running", "liveness", "ownership").any { reason.contains(it, ignoreCase = true) }
+  private fun requiresPause(category: ExportRefusalCategory): Boolean = category == ExportRefusalCategory.LIVENESS
 
   private fun control(item: WorkItem, action: ControlAction, request: suspend () -> ControlOutcome) {
     val options = state.value.runOptions[item.id]

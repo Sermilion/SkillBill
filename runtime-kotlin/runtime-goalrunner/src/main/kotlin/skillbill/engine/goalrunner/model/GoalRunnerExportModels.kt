@@ -8,6 +8,12 @@ public data class GoalRunnerExportRequest(
   public val outputPath: Path,
 )
 
+public enum class GoalRunnerExportRefusalCategory {
+  LIVENESS,
+  BRANCH,
+  OTHER,
+}
+
 public sealed interface GoalRunnerExportResult {
   public val issueKey: String
 
@@ -23,6 +29,7 @@ public sealed interface GoalRunnerExportResult {
   public data class Refused(
     override val issueKey: String,
     public val reason: String,
+    public val category: GoalRunnerExportRefusalCategory = GoalRunnerExportRefusalCategory.OTHER,
   ) : GoalRunnerExportResult
 
   public data class Failed(
@@ -40,7 +47,11 @@ public sealed interface GoalRunnerExportPreflightResult {
     public val commitSha: String,
   ) : GoalRunnerExportPreflightResult
 
-  public data class Refused(override val issueKey: String, public val reason: String) : GoalRunnerExportPreflightResult
+  public data class Refused(
+    override val issueKey: String,
+    public val reason: String,
+    public val category: GoalRunnerExportRefusalCategory = GoalRunnerExportRefusalCategory.OTHER,
+  ) : GoalRunnerExportPreflightResult
 
   public data class Failed(override val issueKey: String, public val message: String) : GoalRunnerExportPreflightResult
 }

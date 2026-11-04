@@ -14,6 +14,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
 import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -84,7 +85,7 @@ class CommandCatalog(
                     is ExportOutcome.Refused -> toasts.show(
                       ToastData(
                         "Export refused",
-                        if (requiresPause(outcome.reason)) "Pause the goal before exporting it." else outcome.reason,
+                        if (requiresPause(outcome.category)) "Pause the goal before exporting it." else outcome.reason,
                       ),
                     )
                     is ExportOutcome.Failed -> toasts.show(ToastData("Export failed", readProblemText(outcome.problem)))
@@ -94,7 +95,7 @@ class CommandCatalog(
               is ExportPreflightOutcome.Refused -> toasts.show(
                 ToastData(
                   "Export refused",
-                  if (requiresPause(preflight.reason)) "Pause the goal before exporting it." else preflight.reason,
+                  if (requiresPause(preflight.category)) "Pause the goal before exporting it." else preflight.reason,
                 ),
               )
               is ExportPreflightOutcome.Failed -> toasts.show(
@@ -138,8 +139,7 @@ class CommandCatalog(
     scope.scope.launch { toasts.show(controlFeedback(action, request(), subject)) }
   }
 
-  private fun requiresPause(reason: String): Boolean =
-    listOf("live", "running", "liveness", "ownership").any { reason.contains(it, ignoreCase = true) }
+  private fun requiresPause(category: ExportRefusalCategory): Boolean = category == ExportRefusalCategory.LIVENESS
 }
 
 /** Keeps the entries whose label and group head hold every typed term, as the prototype's filter does. */

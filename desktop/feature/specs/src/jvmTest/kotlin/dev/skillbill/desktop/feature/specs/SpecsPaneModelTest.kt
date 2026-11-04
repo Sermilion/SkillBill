@@ -16,6 +16,9 @@ import dev.skillbill.desktop.core.domain.model.SpecRunState
 import dev.skillbill.desktop.core.domain.model.SpecStatus
 import dev.skillbill.desktop.core.domain.model.SpecTree
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeArchiveFileChooser
@@ -211,6 +214,53 @@ class SpecsPaneModelTest {
   }
 
   @Test
+  fun `branch refusals with live in the branch name show the reason at preflight and export`() = runTest {
+    val reason = "Current branch 'main' is not the recorded feature branch 'feature/delivery'; export refused."
+    controls.exportPreflightOutcome = ExportPreflightOutcome.Refused(reason, ExportRefusalCategory.BRANCH)
+    val chooser = FakeArchiveFileChooser().apply { nextSave = "/tmp/SKILL-1.zip" }
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    val model = model(dispatcher, chooser)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.RequestExport)
+    advanceUntilIdle()
+    assertFalse(model.state.value.toolbar.exportLiveDialogOpen)
+    assertTrue(toasts.host.toasts.any { "feature/delivery" in (it.data.body ?: it.data.title) })
+
+    toasts.host.toasts.toList().forEach { toasts.host.dismiss(it.id) }
+    controls.exportPreflightOutcome = ExportPreflightOutcome.Ready("feature/delivery", "abc123")
+    controls.exportOutcome = ExportOutcome.Refused(reason, ExportRefusalCategory.BRANCH)
+    model.onAction(SpecsAction.RequestExport)
+    advanceUntilIdle()
+
+    assertFalse(model.state.value.toolbar.exportLiveDialogOpen)
+    assertTrue(toasts.host.toasts.any { "feature/delivery" in (it.data.body ?: it.data.title) })
+  }
+
+  @Test
+  fun `a live worker refusal still opens the export pause presentation`() = runTest {
+    controls.exportPreflightOutcome = ExportPreflightOutcome.Refused(
+      "Goal is live; export refused.",
+      ExportRefusalCategory.LIVENESS,
+    )
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+    model.onAction(SpecsAction.RequestExport)
+    advanceUntilIdle()
+
+    assertTrue(model.state.value.toolbar.exportLiveDialogOpen)
+  }
+
+  @Test
   fun `a deleted bundle refreshes the tree and drops its selection`() = runTest {
     val model = openedModel()
     model.onAction(SpecsAction.Select("SKILL-1"))
@@ -236,13 +286,13 @@ class SpecsPaneModelTest {
     return model
   }
 
-  private fun model(dispatcher: TestDispatcher) = SpecsPaneModel(
+  private fun model(dispatcher: TestDispatcher, archiveChooser: FakeArchiveFileChooser = FakeArchiveFileChooser()) = SpecsPaneModel(
     specs,
     controls,
     SelectionHolder(),
     toasts,
     AppDispatchers(dispatcher, dispatcher, dispatcher),
-    archiveChooser = FakeArchiveFileChooser(),
+    archiveChooser = archiveChooser,
     board = FakeWorkBoardRepository(),
   ).also(models::add)
 

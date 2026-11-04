@@ -125,7 +125,10 @@ sealed interface PurgeOutcome {
 
 sealed interface ExportPreflightOutcome {
   data class Ready(val featureBranch: String, val commitSha: String) : ExportPreflightOutcome
-  data class Refused(val reason: String) : ExportPreflightOutcome
+  data class Refused(
+    val reason: String,
+    val category: ExportRefusalCategory = ExportRefusalCategory.OTHER,
+  ) : ExportPreflightOutcome
   data class Failed(val problem: ReadProblem) : ExportPreflightOutcome
 }
 
@@ -142,8 +145,17 @@ sealed interface ExportOutcome {
     val commitSha: String,
     val archivePath: String,
   ) : ExportOutcome
-  data class Refused(val reason: String) : ExportOutcome
+  data class Refused(
+    val reason: String,
+    val category: ExportRefusalCategory = ExportRefusalCategory.OTHER,
+  ) : ExportOutcome
   data class Failed(val problem: ReadProblem) : ExportOutcome
+}
+
+enum class ExportRefusalCategory {
+  LIVENESS,
+  BRANCH,
+  OTHER,
 }
 
 sealed interface ImportOutcome {

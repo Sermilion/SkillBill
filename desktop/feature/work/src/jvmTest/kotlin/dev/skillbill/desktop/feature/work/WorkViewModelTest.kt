@@ -3,6 +3,8 @@ package dev.skillbill.desktop.feature.work
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -104,7 +106,10 @@ class WorkViewModelTest {
     val item = workItem("SKILL-3")
     val board = FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(item))))
     val controls = FakeWorkControlRepository().apply {
-      exportPreflightOutcome = ExportPreflightOutcome.Refused("Goal is live; export refused.")
+      exportPreflightOutcome = ExportPreflightOutcome.Refused(
+        "Goal is live; export refused.",
+        ExportRefusalCategory.LIVENESS,
+      )
     }
     val chooser = FakeArchiveFileChooser().apply { nextSave = "/tmp/SKILL-3.zip" }
     val viewModel = WorkViewModel(
@@ -126,6 +131,70 @@ class WorkViewModelTest {
     assertEquals(listOf(ControlCall("pauseAfterSubtask", item)), controls.calls)
     assertEquals(emptyList(), chooser.saveNames)
     assertEquals(emptyList(), controls.exportRequests)
+    assertEquals(item, viewModel.state.value.exportLiveTarget)
+  }
+
+  @Test
+  fun `branch refusals with live in the branch name show the reason at preflight and export`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val item = workItem("SKILL-474")
+    val controls = FakeWorkControlRepository().apply {
+      exportPreflightOutcome = ExportPreflightOutcome.Refused(
+        "Current branch 'main' is not the recorded feature branch 'feature/delivery'; export refused.",
+        ExportRefusalCategory.BRANCH,
+      )
+    }
+    val chooser = FakeArchiveFileChooser().apply { nextSave = "/tmp/SKILL-474.zip" }
+    val viewModel = WorkViewModel(
+      FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(item)))),
+      FakeWorkDetailRepository(),
+      controls,
+      SelectionHolder(),
+      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
+      chooser,
+      TestSession,
+    )
+
+    viewModel.onAction(WorkAction.RequestExport(item))
+    advanceUntilIdle()
+    val preflightEffect = viewModel.effects.first()
+    assertEquals("Current branch 'main' is not the recorded feature branch 'feature/delivery'; export refused.", (preflightEffect as WorkEffect.ShowToast).message.text)
+    assertEquals(null, viewModel.state.value.exportLiveTarget)
+
+    controls.exportPreflightOutcome = ExportPreflightOutcome.Ready("feature/delivery", "abc123")
+    controls.exportOutcome = ExportOutcome.Refused(
+      "Current branch 'main' is not the recorded feature branch 'feature/delivery'; export refused.",
+      ExportRefusalCategory.BRANCH,
+    )
+    viewModel.onAction(WorkAction.RequestExport(item))
+    advanceUntilIdle()
+    val exportEffect = viewModel.effects.first()
+    assertEquals("Current branch 'main' is not the recorded feature branch 'feature/delivery'; export refused.", (exportEffect as WorkEffect.ShowToast).message.text)
+    assertEquals(null, viewModel.state.value.exportLiveTarget)
+  }
+
+  @Test
+  fun `a live worker refusal still opens the pause presentation`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val item = workItem("SKILL-475")
+    val controls = FakeWorkControlRepository().apply {
+      exportPreflightOutcome = ExportPreflightOutcome.Refused(
+        "Goal is live; export refused.",
+        ExportRefusalCategory.LIVENESS,
+      )
+    }
+    val viewModel = WorkViewModel(
+      FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(item)))),
+      FakeWorkDetailRepository(),
+      controls,
+      SelectionHolder(),
+      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
+      FakeArchiveFileChooser(),
+      TestSession,
+    )
+    viewModel.onAction(WorkAction.RequestExport(item))
+    advanceUntilIdle()
+
     assertEquals(item, viewModel.state.value.exportLiveTarget)
   }
 

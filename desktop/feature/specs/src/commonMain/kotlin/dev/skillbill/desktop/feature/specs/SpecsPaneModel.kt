@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
 import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
@@ -793,14 +794,14 @@ class SpecsPaneModel(
               is ExportOutcome.Exported -> toasts.show(
                 ToastMessage(ToastTone.Confirmation, "Exported ${result.issueKey} to ${result.archivePath}"),
               )
-              is ExportOutcome.Refused -> if (requiresPause(result.reason)) {
+              is ExportOutcome.Refused -> if (requiresPause(result.category)) {
                 setToolbar { copy(exportLiveDialogOpen = true) }
               } else problem(result.reason)
               is ExportOutcome.Failed -> problem(readProblemText(result.problem))
             }
           }
         }
-        is ExportPreflightOutcome.Refused -> if (requiresPause(preflight.reason)) {
+        is ExportPreflightOutcome.Refused -> if (requiresPause(preflight.category)) {
           setToolbar { copy(exportLiveDialogOpen = true) }
         } else problem(preflight.reason)
         is ExportPreflightOutcome.Failed -> problem(readProblemText(preflight.problem))
@@ -864,8 +865,7 @@ class SpecsPaneModel(
     }
   }
 
-  private fun requiresPause(reason: String): Boolean =
-    listOf("live", "running", "liveness", "ownership").any { reason.contains(it, ignoreCase = true) }
+  private fun requiresPause(category: ExportRefusalCategory): Boolean = category == ExportRefusalCategory.LIVENESS
 
   private fun dropVanishedBundleTargets(roots: List<SpecNode>) {
     val current = local.value

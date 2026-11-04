@@ -15,6 +15,7 @@ import skillbill.engine.goalplanning.toEnvelopeMap
 import skillbill.engine.goalrunner.archive.toGoalArchiveFieldMap
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerExportPreflightResult
+import skillbill.engine.goalrunner.model.GoalRunnerExportRefusalCategory
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
@@ -98,9 +99,9 @@ public class GoalRunnerArchiveExportOperations(
           return GoalRunnerExportPreflightResult.Refused(canonicalKey, changedSummary)
         is FencedTransactionResult.Committed -> admission.value
       }
-    plan.refusalReason?.let { return GoalRunnerExportPreflightResult.Refused(canonicalKey, it) }
+    plan.refusal?.let { return GoalRunnerExportPreflightResult.Refused(canonicalKey, it.reason, it.category) }
     return when (val git = branchHeadAdmission(repoRoot, plan)) {
-      is BranchHeadAdmission.Refused -> GoalRunnerExportPreflightResult.Refused(canonicalKey, git.reason)
+      is BranchHeadAdmission.Refused -> GoalRunnerExportPreflightResult.Refused(canonicalKey, git.reason, git.category)
       is BranchHeadAdmission.Ready ->
         GoalRunnerExportPreflightResult.Ready(canonicalKey, git.featureBranch, git.commitSha)
     }
@@ -171,10 +172,11 @@ public class GoalRunnerArchiveExportOperations(
         FencedTransactionResult.ChangedTarget -> return GoalRunnerExportResult.Refused(issueKey, changedSummary)
         is FencedTransactionResult.Committed -> admission.value
       }
-    plan.refusalReason?.let { return GoalRunnerExportResult.Refused(issueKey, it) }
+    plan.refusal?.let { return GoalRunnerExportResult.Refused(issueKey, it.reason, it.category) }
     val git =
       when (val admission = branchHeadAdmission(repoRoot, plan)) {
-        is BranchHeadAdmission.Refused -> return GoalRunnerExportResult.Refused(issueKey, admission.reason)
+        is BranchHeadAdmission.Refused ->
+          return GoalRunnerExportResult.Refused(issueKey, admission.reason, admission.category)
         is BranchHeadAdmission.Ready -> admission
       }
     return snapshotAndWrite(ReadyExport(repoRoot, issueKey, outputPath, observation, plan, git))
@@ -376,6 +378,7 @@ public class GoalRunnerArchiveExportOperations(
       plan.sourceManifest?.featureBranch?.takeIf(String::isNotBlank)
         ?: return BranchHeadAdmission.Refused(
           "Goal '${plan.issueKey}' has no recorded feature branch; export refused.",
+          GoalRunnerExportRefusalCategory.BRANCH,
         )
     return admittedGit(repoRoot, featureBranch)
   }
@@ -390,6 +393,7 @@ public class GoalRunnerArchiveExportOperations(
     if (current != featureBranch) {
       return BranchHeadAdmission.Refused(
         "Current branch '$current' is not the recorded feature branch '$featureBranch'; export refused.",
+        GoalRunnerExportRefusalCategory.BRANCH,
       )
     }
     val commitSha =
@@ -430,7 +434,7 @@ public class GoalRunnerArchiveExportOperations(
       )
     val sourceManifest = manifests.firstOrNull()
     val orphanIds = verifiedIds - childrenByParent.values.flatten().toSet()
-    val refusalReason =
+    val refusal =
       childrenByParent.firstNotNullOfOrNull { (parentId, childIds) ->
         livenessRefusal(issueKey, parentId, childIds + orphanIds)
       }
@@ -441,7 +445,7 @@ public class GoalRunnerArchiveExportOperations(
       target = target,
       sourceManifest = sourceManifest,
       manifestPath = diskCandidate?.path ?: sourceManifest?.let { derivedManifestPath(repoRoot, it) },
-      refusalReason = refusalReason,
+      refusal = refusal,
     )
   }
 
@@ -449,13 +453,13 @@ public class GoalRunnerArchiveExportOperations(
     issueKey: String,
     unclassified: List<String>,
     siblings: List<String>,
-  ): String? {
+  ): ExportRefusal? {
     siblings.firstOrNull()?.let { sibling ->
       val exportHint = sibling.replace("skill-bill goal purge", "skill-bill goal export")
-      return "Goal '$issueKey' has sibling worktree workflows; export refused. $exportHint"
+      return ExportRefusal("Goal '$issueKey' has sibling worktree workflows; export refused. $exportHint")
     }
     unclassified.firstOrNull()?.let { leftover ->
-      return "Goal '$issueKey' has undecodable owned workflows; export refused. $leftover"
+      return ExportRefusal("Goal '$issueKey' has undecodable owned workflows; export refused. $leftover")
     }
     return null
   }
@@ -475,40 +479,48 @@ public class GoalRunnerArchiveExportOperations(
     issueKey: String,
     parentWorkflowId: String,
     childWorkflowIds: List<String>,
-  ): String? =
-    when (projectionAssembler.resolvePurgeBlockingLiveness(parentWorkflowId, childWorkflowIds)) {
-      ExecutionLiveness.IDLE, null -> null
-      ExecutionLiveness.LIVE ->
-        "Goal '$issueKey' is live; refuse export while a parent or child worker is active. " +
-          "Use GoalPauseCommand or GoalStopCommand first."
-      ExecutionLiveness.LIVE_EXPIRED ->
-        "Goal '$issueKey' has a live-but-expired lease; refuse export until ownership is reconciled."
-      ExecutionLiveness.UNKNOWN ->
-        "Goal '$issueKey' has unknown execution liveness; refuse export until liveness is known."
-      ExecutionLiveness.FOREIGN_HOST ->
-        "Goal '$issueKey' has foreign-host ownership; refuse export until ownership is reconciled."
-      ExecutionLiveness.PID_REUSED ->
-        "Goal '$issueKey' has pid-reused ownership; refuse export until ownership is reconciled."
-    }
+  ): ExportRefusal? {
+    val liveness = projectionAssembler.resolvePurgeBlockingLiveness(parentWorkflowId, childWorkflowIds)
+    val reason =
+      when (liveness) {
+        ExecutionLiveness.IDLE, null -> null
+        ExecutionLiveness.LIVE ->
+          "Goal '$issueKey' is live; refuse export while a parent or child worker is active. " +
+            "Use GoalPauseCommand or GoalStopCommand first."
+        ExecutionLiveness.LIVE_EXPIRED ->
+          "Goal '$issueKey' has a live-but-expired lease; refuse export until ownership is reconciled."
+        ExecutionLiveness.UNKNOWN ->
+          "Goal '$issueKey' has unknown execution liveness; refuse export until liveness is known."
+        ExecutionLiveness.FOREIGN_HOST ->
+          "Goal '$issueKey' has foreign-host ownership; refuse export until ownership is reconciled."
+        ExecutionLiveness.PID_REUSED ->
+          "Goal '$issueKey' has pid-reused ownership; refuse export until ownership is reconciled."
+      }
+    return reason?.let { ExportRefusal(it, GoalRunnerExportRefusalCategory.LIVENESS) }
+  }
 
   private fun planLivenessRefusal(
     issueKey: String,
     planWorkflowIds: Collection<String>,
-  ): String? =
-    when (projectionAssembler.resolveWorkerBlockingLiveness(planWorkflowIds)) {
-      ExecutionLiveness.IDLE, null -> null
-      ExecutionLiveness.LIVE ->
-        "Goal '$issueKey' has a live plan worker; refuse export while a plan workflow is active. " +
-          "Use GoalPauseCommand or GoalStopCommand first."
-      ExecutionLiveness.LIVE_EXPIRED ->
-        "Goal '$issueKey' has a live-but-expired plan worker; refuse export until ownership is reconciled."
-      ExecutionLiveness.UNKNOWN ->
-        "Goal '$issueKey' has unknown plan worker liveness; refuse export until liveness is known."
-      ExecutionLiveness.FOREIGN_HOST ->
-        "Goal '$issueKey' has foreign-host plan ownership; refuse export until ownership is reconciled."
-      ExecutionLiveness.PID_REUSED ->
-        "Goal '$issueKey' has pid-reused plan ownership; refuse export until ownership is reconciled."
-    }
+  ): ExportRefusal? {
+    val liveness = projectionAssembler.resolveWorkerBlockingLiveness(planWorkflowIds)
+    val reason =
+      when (liveness) {
+        ExecutionLiveness.IDLE, null -> null
+        ExecutionLiveness.LIVE ->
+          "Goal '$issueKey' has a live plan worker; refuse export while a plan workflow is active. " +
+            "Use GoalPauseCommand or GoalStopCommand first."
+        ExecutionLiveness.LIVE_EXPIRED ->
+          "Goal '$issueKey' has a live-but-expired plan worker; refuse export until ownership is reconciled."
+        ExecutionLiveness.UNKNOWN ->
+          "Goal '$issueKey' has unknown plan worker liveness; refuse export until liveness is known."
+        ExecutionLiveness.FOREIGN_HOST ->
+          "Goal '$issueKey' has foreign-host plan ownership; refuse export until ownership is reconciled."
+        ExecutionLiveness.PID_REUSED ->
+          "Goal '$issueKey' has pid-reused plan ownership; refuse export until ownership is reconciled."
+      }
+    return reason?.let { ExportRefusal(it, GoalRunnerExportRefusalCategory.LIVENESS) }
+  }
 
   private fun isCurrent(expected: DatabaseFileObservation): Boolean =
     when (database.transactionFenced(expected) { true }) {
@@ -542,6 +554,7 @@ private sealed interface BranchHeadAdmission {
 
   data class Refused(
     val reason: String,
+    val category: GoalRunnerExportRefusalCategory = GoalRunnerExportRefusalCategory.OTHER,
   ) : BranchHeadAdmission
 }
 
@@ -571,5 +584,10 @@ private data class ArchivePlan(
   val target: GoalPurgeTarget,
   val sourceManifest: DecompositionManifest?,
   val manifestPath: Path?,
-  val refusalReason: String?,
+  val refusal: ExportRefusal?,
+)
+
+private data class ExportRefusal(
+  val reason: String,
+  val category: GoalRunnerExportRefusalCategory = GoalRunnerExportRefusalCategory.OTHER,
 )
