@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeComp
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeOmittedFindingsRetryReason
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeProseMentions
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRemediationRoundNumberOrNull
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairEntriesFromProse
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptFromProse
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptOmittedFindings
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepeatedUnresolvedBlockReason
@@ -16,20 +17,26 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.codereview.verify.VerifyFindingsEvidence
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
+import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.diffcomment.model.DiffCommentOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.model.goalreview.withoutRefutedFindings
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object ImplementFixReceipt {
   private const val MAX_REPLY_MENTIONS_LENGTH = 300
+  private const val NON_GOAL_REVIEW_PASS = 1
+  private const val NON_GOAL_FIXED_BODY = "Fixed in implement_fix."
 
   private const val WRITE_FAILURE_REASON =
     "the review persistence.state could not be updated with the repair receipt."
@@ -41,7 +48,11 @@ internal object ImplementFixReceipt {
     comments: DiffCommentService? = null,
   ): PhaseStepOutputCheck {
     val prose = auditProseValue(outputMap) ?: return PhaseStepOutputCheck.Accept
-    val reviewState = state.goalReviewState() ?: return PhaseStepOutputCheck.Accept
+    val reviewState =
+      state.goalReviewState() ?: run {
+        if (comments != null) replyOutsideGoal(context, state, comments, prose)
+        return PhaseStepOutputCheck.Accept
+      }
     val anchor = anchor(context, reviewState) ?: return PhaseStepOutputCheck.Accept
     val refuted = refutedCarriedFindingIds(context.diagnostics, context.request, state, reviewState)
     val receipt =
@@ -64,7 +75,8 @@ internal object ImplementFixReceipt {
       } else {
         val passNumber = reviewState.passResults.lastOrNull()?.passNumber
         if (comments != null && passNumber != null) {
-          postReceiptReplies(context, receipt, comments, prose, passNumber)
+          val replies = receiptReplies(receipt.entries, prose, "Fixed in repair round ${receipt.roundNumber}.")
+          postReceiptReplies(context, comments, passNumber, replies)
         }
         repeatedUnresolvedBlock(receipt, reviewState) ?: PhaseStepOutputCheck.Accept
       }
@@ -96,36 +108,77 @@ internal object ImplementFixReceipt {
     }
   }
 
-  private fun postReceiptReplies(
+  private fun replyOutsideGoal(
     context: PhaseStepOutputContext,
-    receipt: FeatureTaskRuntimeRepairReceipt,
+    state: PhaseImplementFixStepBinding,
     comments: DiffCommentService,
     prose: String,
-    passNumber: Int,
   ) {
-    receipt.entries.forEach { entry ->
-      val (outcome, body) =
-        when (entry.outcome) {
-          FeatureTaskRuntimeRepairOutcome.ADDRESSED -> {
-            val mentions =
-              featureTaskRuntimeProseMentions(prose, entry.findingId).joinToString(" ").take(MAX_REPLY_MENTIONS_LENGTH)
-            DiffCommentOutcome.FIXED to
-              if (mentions.isEmpty()) "Fixed in repair round ${receipt.roundNumber}." else "Fixed: $mentions"
-          }
-          FeatureTaskRuntimeRepairOutcome.NO_EDIT_REQUIRED -> {
-            val reason = entry.noEditReason?.takeIf(String::isNotBlank) ?: "no edit required."
-            DiffCommentOutcome.SKIPPED to "Skipped: $reason"
-          }
-          FeatureTaskRuntimeRepairOutcome.ATTEMPTED_UNRESOLVED -> {
-            val reason = entry.unresolvedReason?.takeIf(String::isNotBlank) ?: "no reason given."
-            DiffCommentOutcome.FAILED to "Failed to fix: $reason"
-          }
+    val replies =
+      catchingNonCancellation {
+        val review =
+          state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW)
+            ?: return@catchingNonCancellation emptyList()
+        val refuted =
+          state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS)
+            ?.let { VerifyFindingsEvidence.rejectedReviewFindings(context.request, state, it) }
+            ?.findings
+            .orEmpty()
+            .mapNotNullTo(linkedSetOf()) { it.findingId?.takeIf(String::isNotBlank) }
+        val carried =
+          withoutRefutedFindings(
+            GoalSubtaskReviewSummaryReducer.fromOutput(review, state.recordedFindingVerdicts(review)),
+            refuted,
+          )
+        receiptReplies(featureTaskRuntimeRepairEntriesFromProse(prose, carried), prose, NON_GOAL_FIXED_BODY)
+      }.getOrElse { error ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          context.diagnostics,
+          "Feature-task-runtime could not read the implement_fix outcomes for issue ${context.request.issueKey}, " +
+            "workflow ${context.request.workflowId}; operation reply review outcomes.",
+          error,
+        )
+        return
+      }
+    postReceiptReplies(context, comments, NON_GOAL_REVIEW_PASS, replies)
+  }
+
+  private fun receiptReplies(
+    entries: List<FeatureTaskRuntimeRepairReceiptEntry>,
+    prose: String,
+    fixedFallback: String,
+  ): List<ReceiptReply> =
+    entries.map { entry ->
+      when (entry.outcome) {
+        FeatureTaskRuntimeRepairOutcome.ADDRESSED -> {
+          val mentions =
+            featureTaskRuntimeProseMentions(prose, entry.findingId).joinToString(" ").take(MAX_REPLY_MENTIONS_LENGTH)
+          val body = if (mentions.isEmpty()) fixedFallback else "Fixed: $mentions"
+          ReceiptReply(entry.findingId, DiffCommentOutcome.FIXED, body)
         }
+        FeatureTaskRuntimeRepairOutcome.NO_EDIT_REQUIRED -> {
+          val reason = entry.noEditReason?.takeIf(String::isNotBlank) ?: "no edit required."
+          ReceiptReply(entry.findingId, DiffCommentOutcome.SKIPPED, "Skipped: $reason")
+        }
+        FeatureTaskRuntimeRepairOutcome.ATTEMPTED_UNRESOLVED -> {
+          val reason = entry.unresolvedReason?.takeIf(String::isNotBlank) ?: "no reason given."
+          ReceiptReply(entry.findingId, DiffCommentOutcome.FAILED, "Failed to fix: $reason")
+        }
+      }
+    }
+
+  private fun postReceiptReplies(
+    context: PhaseStepOutputContext,
+    comments: DiffCommentService,
+    passNumber: Int,
+    replies: List<ReceiptReply>,
+  ) {
+    replies.forEach { (findingId, outcome, body) ->
       val result =
         catchingNonCancellation {
           comments.replyReviewOutcome(
             context.request.repoRoot,
-            "review:${context.request.workflowId}:pass-$passNumber:${entry.findingId}",
+            "review:${context.request.workflowId}:pass-$passNumber:$findingId",
             body,
             outcome,
           )
@@ -134,7 +187,7 @@ internal object ImplementFixReceipt {
       if (error != null || result.getOrNull() !is DiffCommentThreadResult.Saved) {
         RuntimeDiagnosticsBestEffortWarning.record(
           context.diagnostics,
-          "Feature-task-runtime could not reply ${outcome.name.lowercase()} to finding ${entry.findingId} " +
+          "Feature-task-runtime could not reply ${outcome.name.lowercase()} to finding $findingId " +
             "for issue ${context.request.issueKey}, workflow ${context.request.workflowId}; " +
             "operation reply ${outcome.name.lowercase()}.",
           error,
@@ -142,6 +195,12 @@ internal object ImplementFixReceipt {
       }
     }
   }
+
+  private data class ReceiptReply(
+    val findingId: String,
+    val outcome: DiffCommentOutcome,
+    val body: String,
+  )
 
   private fun repeatedUnresolvedBlock(
     receipt: FeatureTaskRuntimeRepairReceipt,

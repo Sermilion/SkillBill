@@ -39,20 +39,23 @@ public fun featureTaskRuntimeRepairReceiptFromProse(
   carriedFindings: List<GoalSubtaskReviewCompactFinding>,
   remediationBaseSha: String,
   roundNumber: Int,
-): FeatureTaskRuntimeRepairReceipt {
-  val entries =
-    carriedFindings.mapNotNull { finding ->
-      val findingId = finding.findingId?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-      val mentions = featureTaskRuntimeProseMentions(prose, findingId)
-      if (mentions.isEmpty()) return@mapNotNull null
-      repairEntry(findingId, mentions)
-    }
-  return FeatureTaskRuntimeRepairReceipt(
+): FeatureTaskRuntimeRepairReceipt =
+  FeatureTaskRuntimeRepairReceipt(
     roundNumber = roundNumber,
     preFixCheckpointSha = remediationBaseSha,
-    entries = entries.take(MAX_REPORT_ENTRIES),
+    entries = featureTaskRuntimeRepairEntriesFromProse(prose, carriedFindings),
   )
-}
+
+public fun featureTaskRuntimeRepairEntriesFromProse(
+  prose: String,
+  carriedFindings: List<GoalSubtaskReviewCompactFinding>,
+): List<FeatureTaskRuntimeRepairReceiptEntry> =
+  carriedFindings.mapNotNull { finding ->
+    val findingId = finding.findingId?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+    val mentions = featureTaskRuntimeProseMentions(prose, findingId)
+    if (mentions.isEmpty()) return@mapNotNull null
+    repairEntry(findingId, mentions)
+  }.take(MAX_REPORT_ENTRIES)
 
 public fun repairEntry(
   findingId: String,

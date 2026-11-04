@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeProseMentions
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemoryRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemorySection
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
@@ -26,11 +27,15 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
+import skillbill.engine.featuretask.slot.state.PhaseReviewFindingObservations
+import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.error.core.catchingNonCancellation
+import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
+import skillbill.goalrunner.subtaskreview.model.RejectedVerificationFindingsResult
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.goalrunner.subtaskreview.verificationBoundaryFindingPaths
 import skillbill.ports.repository.toFileLocation
@@ -171,52 +176,90 @@ internal object VerifyFindingsEvidence {
     verifyOutput: FeatureTaskRuntimeWorkflowArtifactMap,
     comments: DiffCommentService?,
   ) {
-    if (!isGoalContinuationRun(run.request)) return
-    val continuation = run.request.goalContinuation ?: return
-    val reviewOutput = state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) ?: return
-    val recordedVerdicts = state.recordedFindingVerdicts(reviewOutput)
-    val rejectedResult =
-      GoalSubtaskReviewSummaryReducer.rejectedVerificationFindings(
-        verifyOutput = verifyOutput,
-        reviewOutput = reviewOutput,
-        scope =
-          UnaddressedFindingLedgerScope(
-            issueKey = continuation.parentIssueKey,
-            subtaskId = continuation.subtaskId,
-            workflowId = run.request.workflowId,
-            reviewPassNumber = FIRST_REVIEW_PASS,
-          ),
-        recordedVerdicts = recordedVerdicts,
-      )
+    if (!isGoalContinuationRun(run.request)) {
+      if (comments != null) replyOutsideGoal(run, context, state, verifyOutput, comments)
+      return
+    }
+    if (run.request.goalContinuation == null) return
+    val rejectedResult = rejectedReviewFindings(run.request, state, verifyOutput) ?: return
     rejectedResult.truncationRecords.forEach { record ->
       RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, record)
     }
     if (rejectedResult.findings.isEmpty()) return
     state.appendRejectedVerificationFindings(FIRST_REVIEW_PASS, rejectedResult.findings)
-    if (comments != null) {
-      rejectedResult.findings.forEach { finding ->
-        val findingId = finding.findingId?.takeIf(String::isNotBlank) ?: return@forEach
-        val reason = finding.verificationReason?.takeIf(String::isNotBlank)
-        val body = reason?.let { "Refuted: $it" } ?: "Refuted during verify_findings."
-        val result =
-          catchingNonCancellation {
-            comments.replyReviewOutcome(
-              run.request.repoRoot,
-              "review:${run.request.workflowId}:pass-$FIRST_REVIEW_PASS:$findingId",
-              body,
-              DiffCommentOutcome.REFUTED,
-              run.resolvedAgent.resolvedAgentId,
-            )
-          }
-        val failure = result.exceptionOrNull()
-        if (failure != null || result.getOrNull() !is DiffCommentThreadResult.Saved) {
-          RuntimeDiagnosticsBestEffortWarning.record(
-            context.diagnostics,
-            "Feature-task-runtime could not reply refuted to finding $findingId for issue ${run.request.issueKey}, " +
-              "workflow ${run.request.workflowId}; operation reply refuted.",
-            failure,
+    if (comments != null) replyRefuted(run, context, comments, rejectedResult.findings)
+  }
+
+  internal fun <T> rejectedReviewFindings(
+    request: FeatureTaskRuntimeRunFacts,
+    state: T,
+    verifyOutput: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): RejectedVerificationFindingsResult? where T : PhaseStepBinding, T : PhaseReviewFindingObservations {
+    val reviewOutput =
+      state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) ?: return null
+    val continuation = request.goalContinuation?.takeIf { isGoalContinuationRun(request) }
+    return GoalSubtaskReviewSummaryReducer.rejectedVerificationFindings(
+      verifyOutput = verifyOutput,
+      reviewOutput = reviewOutput,
+      scope =
+        UnaddressedFindingLedgerScope(
+          issueKey = continuation?.parentIssueKey ?: request.issueKey,
+          subtaskId = continuation?.subtaskId ?: 0,
+          workflowId = request.workflowId,
+          reviewPassNumber = FIRST_REVIEW_PASS,
+        ),
+      recordedVerdicts = state.recordedFindingVerdicts(reviewOutput),
+    )
+  }
+
+  private fun replyOutsideGoal(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    state: PhaseVerifyFindingsStepBinding,
+    verifyOutput: FeatureTaskRuntimeWorkflowArtifactMap,
+    comments: DiffCommentService,
+  ) {
+    val rejected =
+      catchingNonCancellation { rejectedReviewFindings(run.request, state, verifyOutput) }.getOrElse { error ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          context.diagnostics,
+          "Feature-task-runtime could not read refuted review findings for issue ${run.request.issueKey}, " +
+            "workflow ${run.request.workflowId}; operation reply refuted.",
+          error,
+        )
+        return
+      }
+    rejected?.findings?.takeIf(List<*>::isNotEmpty)?.let { replyRefuted(run, context, comments, it) }
+  }
+
+  private fun replyRefuted(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    comments: DiffCommentService,
+    findings: List<UnaddressedFinding>,
+  ) {
+    findings.forEach { finding ->
+      val findingId = finding.findingId?.takeIf(String::isNotBlank) ?: return@forEach
+      val reason = finding.verificationReason?.takeIf(String::isNotBlank)
+      val body = reason?.let { "Refuted: $it" } ?: "Refuted during verify_findings."
+      val result =
+        catchingNonCancellation {
+          comments.replyReviewOutcome(
+            run.request.repoRoot,
+            "review:${run.request.workflowId}:pass-$FIRST_REVIEW_PASS:$findingId",
+            body,
+            DiffCommentOutcome.REFUTED,
+            run.resolvedAgent.resolvedAgentId,
           )
         }
+      val failure = result.exceptionOrNull()
+      if (failure != null || result.getOrNull() !is DiffCommentThreadResult.Saved) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          context.diagnostics,
+          "Feature-task-runtime could not reply refuted to finding $findingId for issue ${run.request.issueKey}, " +
+            "workflow ${run.request.workflowId}; operation reply refuted.",
+          failure,
+        )
       }
     }
   }
