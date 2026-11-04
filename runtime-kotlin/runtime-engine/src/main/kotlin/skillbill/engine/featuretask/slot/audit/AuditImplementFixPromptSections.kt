@@ -49,6 +49,7 @@ internal object AuditImplementFixPromptSections {
       "full audit. Do not compile, build, run tests, or run a full repository check, because build and validate " +
       "own those; safe scoped authoring commands under the authoring discipline are allowed. Report evidence " +
       "for each finding and state any unresolved gap explicitly. " +
+      ImplementationPromptSections.IGNORED_FILES_DIRECTIVE + " " +
       "When the remaining gaps are wrong because the code already satisfies them, pass the claim object as the " +
       "`no_change` argument of feature_task_phase_complete, with per-criterion evidence, instead of a repair report. " +
       "Either change files or return a no-change claim, never both. " +
