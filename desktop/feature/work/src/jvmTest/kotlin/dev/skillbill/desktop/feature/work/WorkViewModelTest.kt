@@ -287,6 +287,37 @@ class WorkViewModelTest {
   }
 
   @Test
+  fun `dismissing an inspected archive confirmation does not import`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val controls = FakeWorkControlRepository().apply {
+      archiveInspectOutcome = ArchiveInspectOutcome.Ready("SKILL-4", "feature/SKILL-4", "abc123", "fingerprint")
+    }
+    val chooser = FakeArchiveFileChooser().apply { nextOpen = "/tmp/SKILL-4.zip" }
+    val viewModel = WorkViewModel(
+      FakeWorkBoardRepository(loadedBoard()),
+      FakeWorkDetailRepository(),
+      controls,
+      SelectionHolder(),
+      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
+      chooser,
+      TestSession,
+      EmptySpecRepository,
+    )
+    advanceUntilIdle()
+
+    viewModel.onAction(WorkAction.RequestImport)
+    advanceUntilIdle()
+    assertEquals(listOf("/tmp/SKILL-4.zip"), controls.inspectRequests)
+    assertEquals("SKILL-4", viewModel.state.value.importDialog?.issueKey)
+
+    viewModel.onAction(WorkAction.DismissImport)
+    advanceUntilIdle()
+
+    assertEquals(null, viewModel.state.value.importDialog)
+    assertEquals(emptyList(), controls.importRequests)
+  }
+
+  @Test
   fun `an incomplete import retry keeps its repository archive fingerprint and session`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val item = workItem("SKILL-6").copy(repositoryRoot = "/work/other-checkout", repositoryName = "other-checkout")
