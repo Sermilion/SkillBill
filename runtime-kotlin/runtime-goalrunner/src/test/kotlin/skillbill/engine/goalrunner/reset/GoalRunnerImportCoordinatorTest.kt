@@ -11,6 +11,8 @@ import skillbill.engine.goalrunner.archive.RecordingGoalArchiveSnapshotPort
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.model.GoalRunnerImportRequest
@@ -289,6 +291,58 @@ class GoalRunnerImportCoordinatorTest {
   }
 
   @Test
+  fun `different destination parent refuses import without writes`() {
+    val fixture = importFixture(bundleName = "specs")
+    val archive = exportImportArchive(fixture)
+    val destinationRoot = Files.createTempDirectory("goal-import-different-parent-dest")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val destinationManifestStore =
+      InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-245"))
+    val destinationParent =
+      checkNotNull(destinationManifestStore.loadDurableByIssueKey("SKILL-245"))
+        .copy(parentWorkflowId = "destination-parent")
+    val destinationOwnership = GoalPurgeOwnership(listOf(destinationParent), setOf("destination-parent"))
+    val guardedManifestStore =
+      object : GoalRunnerManifestStore by destinationManifestStore {
+        override fun discoverPurgeOwnership(
+          issueKey: String,
+          repoRoot: Path,
+        ): GoalPurgeOwnership = destinationOwnership
+      }
+    val destinationStates = InMemoryWorkflowStates()
+    val controls = RecordingImportControls()
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = guardedManifestStore,
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+          ),
+        database = FakeDatabaseSessionFactory(destinationStates, goalRunnerControls = controls),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(destinationPort),
+      )
+
+    val result = importService.import(GoalRunnerImportRequest(archive, destinationRoot))
+
+    assertIs<GoalRunnerImportResult.Refused>(result)
+    assertContains(result.reason, "already has parent workflow ids")
+    assertContains(result.reason, "destination-parent")
+    assertContains(result.reason, "wfl-parent")
+    assertEquals(destinationOwnership, guardedManifestStore.discoverPurgeOwnership("SKILL-245", destinationRoot))
+    assertNull(destinationStates.getFeatureTaskWorkflow("wfl-parent"))
+    assertEquals(emptyList(), controls.persistedWrites)
+    listOf(
+      "spec.md",
+      "spec_subtask_1.md",
+      "spec_subtask_2.md",
+      "traceability.md",
+      "decomposition-manifest.yaml",
+    ).forEach { name -> assertFalse(Files.exists(destinationPort.root.resolve("specs/specs/$name"))) }
+  }
+
+  @Test
   fun `failed spec write retries without restoring workflow rows again`() {
     val fixture = importFixture(bundleName = "specs")
     val archive = fixture.root.resolve("archive.zip")
@@ -544,6 +598,7 @@ class GoalRunnerImportCoordinatorTest {
 
 private class RecordingImportControls : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
   private val states = mutableMapOf<String, GoalRunnerControlState>()
+  val persistedWrites = mutableListOf<Pair<String, GoalRunnerControlState>>()
 
   override fun controlState(parentWorkflowId: String): GoalRunnerControlState =
     states[parentWorkflowId] ?: GoalRunnerControlState()
@@ -553,6 +608,7 @@ private class RecordingImportControls : GoalRunnerControlRepository by EmptyGoal
     state: GoalRunnerControlState,
   ): GoalRunnerControlState {
     states[parentWorkflowId] = state
+    persistedWrites += parentWorkflowId to state
     return state
   }
 
