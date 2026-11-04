@@ -67,6 +67,11 @@ public object AcceptanceCriterionInteractionTraceRound {
   public fun active(scope: AcceptanceCriterionRepairRunState): Boolean =
     scope.snapshot?.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED
 
+  internal fun shouldRelaunch(
+    scope: AcceptanceCriterionRepairRunState?,
+    outputGateFailures: Int,
+  ): Boolean = outputGateFailures == 0 && scope != null && active(scope) && scope.traceReaskScope != null
+
   internal fun promptScope(scope: AcceptanceCriterionRepairRunState): AcceptanceAuditInteractionTraceScope? {
     if (!active(scope)) return null
     val state = checkNotNull(scope.snapshot)

@@ -53,6 +53,11 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   }
 
   @Test
+  fun `a malformed Recheck without evidence is a relaunchable re-ask rather than a hard schema block`() {
+    scenarios.`a malformed Recheck without evidence is a relaunchable re-ask rather than a hard schema block`()
+  }
+
+  @Test
   fun `three rejected completed repair claims block even when verification reports progress`() {
     scenarios.`three rejected completed repair claims block even when verification reports progress`()
   }

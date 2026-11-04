@@ -216,6 +216,7 @@ internal object PhaseAttemptSteps {
         phaseAttempts.settlePlanBundleRejected(recorder, context, requireNotNull(attempt.planBundleRejected))
       attempt.retryableTerminal != null ->
         phaseAttempts.settleRetryableTerminal(recorder, context, requireNotNull(attempt.retryableTerminal))
+      phaseAttempts.continueInteractionTraceReask(context) -> null
       else ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.settleSemanticFailure(recorder, context)
     }
