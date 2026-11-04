@@ -13,8 +13,11 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentFix
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixValidation
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
+import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionResult
+import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionState
 import skillbill.goalrunner.assessment.model.GoalAssessmentRole
 import skillbill.goalrunner.assessment.model.GoalAssessmentRound
+import skillbill.goalrunner.assessment.model.GoalAssessmentRun
 import skillbill.goalrunner.assessment.model.GoalAssessmentRunStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentity
@@ -228,7 +231,8 @@ class GoalAssessmentLoopTest {
       GoalAssessmentGateFixture(home, fixedWorktreeStatus = " M src/Feature.kt") { call ->
         when (call) {
           AssessmentCall.CROSS_SUBTASK ->
-            "$NO_FINDING\nRegression TR-001: not_restored evidence src/Feature.kt:3 the legacy path still runs"
+            "$NO_FINDING\nScenario IS-001: holds evidence both runs agree\n" +
+              "Regression TR-001: not_restored evidence src/Feature.kt:3 the legacy path still runs"
           AssessmentCall.REGRESSION_VERIFY ->
             "Regression TR-001: ${if (++checks == 1) "not_restored" else "restored"} evidence src/Feature.kt:3"
           AssessmentCall.FIX -> "TR-001: fixed: src/Feature.kt removes the legacy path"
@@ -242,6 +246,112 @@ class GoalAssessmentLoopTest {
     assertEquals(2, fixture.calls.count { it == AssessmentCall.FIX })
     assertEquals(2, checks)
     assertEquals(null, record.rounds.last().fix)
+  }
+
+  @Test
+  fun `cross subtask assessment cannot converge when it omits a declared scenario`() {
+    val fixture =
+      GoalAssessmentGateFixture(home) { call ->
+        if (call == AssessmentCall.CROSS_SUBTASK) {
+          "$NO_FINDING\nRegression TR-001: restored evidence the legacy path is off"
+        } else {
+          NO_FINDING
+        }
+      }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, record.exitReason)
+    assertTrue(fixture.diagnostics.warnings.any { "IS-001" in it })
+  }
+
+  @Test
+  fun `cross subtask assessment cannot converge when it omits a declared regression`() {
+    val fixture =
+      GoalAssessmentGateFixture(home) { call ->
+        if (call == AssessmentCall.CROSS_SUBTASK) {
+          "$NO_FINDING\nScenario IS-001: holds evidence both runs agree"
+        } else {
+          NO_FINDING
+        }
+      }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, record.exitReason)
+    assertTrue(fixture.diagnostics.warnings.any { "TR-001" in it })
+  }
+
+  @Test
+  fun `cross subtask assessment converges when every declared record is reported`() {
+    val fixture = GoalAssessmentGateFixture(home) { NO_FINDING }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertEquals(listOf("IS-001"), record.rounds.single().scenarios.map { it.scenarioRef })
+    assertEquals(listOf("TR-001"), record.rounds.single().regressions.map { it.regressionRef })
+  }
+
+  @Test
+  fun `a saved incomplete cross subtask report retries without duplicating its retained finding`() {
+    val finding =
+      confirmedFinding(fixRoundsSurvived = 0).copy(
+        subtaskId = null,
+        verification = GoalAssessmentVerification.UNVERIFIED,
+        verificationEvidence = "",
+        disposition = GoalAssessmentDisposition.PR_ONLY,
+      )
+    val savedRound =
+      GoalAssessmentRound(
+        round = 1,
+        headSha = ASSESSMENT_HEAD_SHA,
+        scopeFiles = emptyList(),
+        assessorRuns =
+          listOf(
+            GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.COMPLETED),
+            GoalAssessmentRun(GoalAssessmentRole.SUBTASK, 1, GoalAssessmentRunStatus.COMPLETED),
+            GoalAssessmentRun(GoalAssessmentRole.SUBTASK, 2, GoalAssessmentRunStatus.COMPLETED),
+            GoalAssessmentRun(GoalAssessmentRole.CROSS_SUBTASK, null, GoalAssessmentRunStatus.MALFORMED),
+          ),
+        findings = listOf(finding),
+        scenarios = emptyList(),
+        regressions =
+          listOf(GoalAssessmentRegressionResult("TR-001", GoalAssessmentRegressionState.RESTORED, "legacy path off")),
+        fix = null,
+      )
+    val stored = GoalAssessmentRecordRead.Recorded(GoalAssessmentRecord("SKILL-442", listOf(savedRound)))
+    val fixture =
+      GoalAssessmentGateFixture(home, AssessmentOutcomeStore(stored)) { call ->
+        when (call) {
+          AssessmentCall.CROSS_SUBTASK ->
+            "$MAJOR_FINDING\nScenario IS-001: holds evidence both runs agree\n" +
+              "Regression TR-001: restored evidence the legacy path is off"
+          AssessmentCall.VERIFIER -> REFUTE_FIRST
+          else -> NO_FINDING
+        }
+      }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertEquals(1, fixture.calls.count { it == AssessmentCall.CROSS_SUBTASK })
+    assertEquals(1, record.rounds.single().findings.count { it.path == finding.path && it.line == finding.line })
+  }
+
+  @Test
+  fun `an empty declaration catalog needs no scenario or regression records`() {
+    val fixture =
+      GoalAssessmentGateFixture(
+        home,
+        parentSpecText = "# SKILL-442 goal\n\nThe gate assesses the goal.",
+      ) { NO_FINDING }
+
+    val record = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
+    assertTrue(record.rounds.single().scenarios.isEmpty())
+    assertTrue(record.rounds.single().regressions.isEmpty())
   }
 
   @Test

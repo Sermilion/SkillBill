@@ -115,6 +115,7 @@ internal class GoalAssessmentGateFixture(
   val store: AssessmentOutcomeStore = AssessmentOutcomeStore(),
   private val subtaskOf: (Int) -> DecompositionSubtask = { id -> committedSubtask(id) },
   private val fixedWorktreeStatus: String = "",
+  private val parentSpecText: String? = null,
   private val script: (AssessmentCall) -> String?,
 ) {
   private val clock = Clock.systemUTC()
@@ -149,7 +150,7 @@ internal class GoalAssessmentGateFixture(
     }
 
   init {
-    Files.writeString(home.resolve(PARENT_SPEC), PARENT_SPEC_TEXT)
+    Files.writeString(home.resolve(PARENT_SPEC), parentSpecText ?: PARENT_SPEC_TEXT)
     Files.writeString(home.resolve(FIRST_SPEC), "# Subtask 1\n\n$FIRST_SUBTASK_SPEC_MARKER\n")
     Files.writeString(home.resolve(SECOND_SPEC), "# Subtask 2\n\n$SECOND_SUBTASK_SPEC_MARKER\n")
   }
@@ -217,9 +218,16 @@ internal class GoalAssessmentGateFixture(
       return "$prose\nVerification complete: $count"
     }
     if ("Projection complete:" in prose) return prose
-    val count = Regex("(?m)^(Finding: (?!none\\.?$)|Test value:|Scenario |Regression )").findAll(prose).count()
-    val hasFinding = Regex("(?m)^(Finding:|Test value:)").containsMatchIn(prose)
-    val withNone = if (!hasFinding) "$prose\nFinding: none" else prose
+    val covered =
+      if (call == AssessmentCall.CROSS_SUBTASK && prose == "Finding: none" && parentSpecText == null) {
+        "$prose\nScenario IS-001: holds evidence both runs agree\n" +
+          "Regression TR-001: restored evidence the legacy path is off"
+      } else {
+        prose
+      }
+    val count = Regex("(?m)^(Finding: (?!none\\.?$)|Test value:|Scenario |Regression )").findAll(covered).count()
+    val hasFinding = Regex("(?m)^(Finding:|Test value:)").containsMatchIn(covered)
+    val withNone = if (!hasFinding) "$covered\nFinding: none" else covered
     return "$withNone\nProjection complete: $count"
   }
 

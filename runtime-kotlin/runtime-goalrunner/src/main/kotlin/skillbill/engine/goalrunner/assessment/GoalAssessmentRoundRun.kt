@@ -111,19 +111,28 @@ internal class GoalAssessmentRoundRun(
   private var earlier: List<GoalAssessmentRound> = prior.rounds.take(roundNumber - 1)
   private var persisted = true
   private var verificationReady = true
+  private var missingCoverage: List<String> = emptyList()
   private val previousTarget: String? = earlier.lastOrNull()?.targetRef
 
   fun execute(): GoalAssessmentRoundResult {
     val plan = planned()
+    missingCoverage = missingDeclaredCoverage()
     plan.filterNot(::isRecorded).forEach(::runAssessor)
     val usable =
       plan.all { planned ->
         round.assessorRuns.any {
           it.role == planned.role && it.subtaskId == planned.subtaskId &&
+            (planned.role != GoalAssessmentRole.CROSS_SUBTASK || missingCoverage.isEmpty()) &&
             (it.status == COMPLETED || (it.status == GoalAssessmentRunStatus.MALFORMED && hasRetainedFinding(planned)))
         }
       }
-    if (!usable) return unavailable("an assessor failed or produced no usable output")
+    if (!usable) {
+      val reason =
+        missingCoverage.takeIf { it.isNotEmpty() }?.let {
+          "the cross-subtask assessor omitted declared records: ${it.joinToString(", ")}"
+        } ?: "an assessor failed or produced no usable output"
+      return unavailable(reason)
+    }
     verify()
     if (!verificationReady) return unavailable("independent verification did not settle every selected item")
     save()
@@ -149,8 +158,20 @@ internal class GoalAssessmentRoundRun(
   private fun isRecorded(planned: PlannedRun): Boolean =
     round.assessorRuns.any {
       it.role == planned.role && it.subtaskId == planned.subtaskId &&
+        (planned.role != GoalAssessmentRole.CROSS_SUBTASK || missingDeclaredCoverage().isEmpty()) &&
         (it.status == COMPLETED || (it.status == GoalAssessmentRunStatus.MALFORMED && hasRetainedFinding(planned)))
     }
+
+  private fun missingDeclaredCoverage(
+    scenarios: List<GoalAssessmentScenarioResult> = round.scenarios,
+    regressions: List<GoalAssessmentRegressionResult> = round.regressions,
+  ): List<String> {
+    if (roundNumber != 1) return emptyList()
+    val declaredScenarios = bundle.declared?.scenarios?.map { it.scenarioRef }.orEmpty().toSet()
+    val declaredRegressions = bundle.declared?.transitionalRegressions?.map { it.regressionRef }.orEmpty().toSet()
+    return (declaredScenarios - scenarios.map { it.scenarioRef }.toSet()).sorted() +
+      (declaredRegressions - regressions.map { it.regressionRef }.toSet()).sorted()
+  }
 
   private fun hasRetainedFinding(planned: PlannedRun): Boolean =
     round.findings.any { finding ->
@@ -375,7 +396,21 @@ internal class GoalAssessmentRoundRun(
         return false
       }
     }
+    val coverageMissing =
+      if (roundNumber == 1 && planned.role == GoalAssessmentRole.CROSS_SUBTASK) {
+        missingDeclaredCoverage(report.scenarios, report.regressions)
+      } else {
+        emptyList()
+      }
+    if (roundNumber == 1 && planned.role == GoalAssessmentRole.CROSS_SUBTASK) {
+      missingCoverage = coverageMissing
+    }
     val accepted = absorb(planned, report)
+    if (coverageMissing.isNotEmpty()) {
+      verificationReady = false
+      warn("the cross-subtask assessor omitted declared records: ${coverageMissing.joinToString(", ")}.")
+      return false
+    }
     if (!accepted) verificationReady = false
     return accepted
   }
@@ -390,8 +425,13 @@ internal class GoalAssessmentRoundRun(
     val used = nextRefNumber()
     val carried = GoalAssessmentScope.carriedOf(prior, roundNumber)
     val fresh =
-      report.findings.filter { roundNumber == 1 }.filterNot {
-        GoalAssessmentScope.restates(carried, it.path, it.failureScenario)
+      report.findings.filter { roundNumber == 1 }.filterNot { candidate ->
+        GoalAssessmentScope.restates(carried, candidate.path, candidate.failureScenario) ||
+          round.findings.any { finding ->
+            finding.kind == candidate.kind && finding.path == candidate.path && finding.line == candidate.line &&
+              finding.failureScenario == candidate.failureScenario && finding.guardedRef == candidate.guardedRef &&
+              finding.subtaskId == planned.subtaskId
+          }
       }
     val accepted = fresh.take(minOf(MAX_FINDINGS_PER_RUN, MAX_REF_NUMBER - used + 1).coerceAtLeast(0))
     if (accepted.size < fresh.size) {
