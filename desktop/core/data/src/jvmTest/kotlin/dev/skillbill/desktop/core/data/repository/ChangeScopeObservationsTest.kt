@@ -212,6 +212,160 @@ class ChangeScopeObservationsTest {
   }
 
   @Test
+  fun `non adjacent rename history keeps identity totals and patches when old path is reused`() = runTest {
+    val port = CountingPort().apply {
+      committedFilesByRange["base" to "one"] = listOf(
+        WorkChangedFile("old.kt", null, WorkChangeStatus.MODIFIED, 2, 1),
+        WorkChangedFile("unrelated.kt", null, WorkChangeStatus.MODIFIED, 7, 2),
+      )
+      committedFilesByRange["two" to "three"] = listOf(WorkChangedFile("middle.kt", "old.kt", WorkChangeStatus.RENAMED, 1, 2))
+      committedFilesByRange["four" to "five"] = listOf(WorkChangedFile("new.kt", "middle.kt", WorkChangeStatus.RENAMED, 2, 3))
+      committedFilesByRange["six" to "seven"] = listOf(WorkChangedFile("old.kt", null, WorkChangeStatus.ADDED, 4, 0))
+      patches["base" to "one"] = WorkFileDiffResult.Patch("@@ -1,0 +1 @@\n+first")
+      patches["two" to "three"] = WorkFileDiffResult.Patch("@@ -2,0 +2 @@\n+renamed once")
+      patches["four" to "five"] = WorkFileDiffResult.Patch("@@ -3,0 +3 @@\n+renamed twice")
+      patches["six" to "seven"] = WorkFileDiffResult.Patch("@@ -4,0 +4 @@\n+replacement")
+    }
+    val target = ChangeScopeTarget(
+      "goal",
+      root.toString(),
+      ChangeBaseline.TargetMergeBase(root.toString(), "main"),
+      listOf(ScopeSubtask(1, "one", ScopeSubtaskState.DONE, "seven", listOf("one", "three", "five", "seven"), false, emptyList())),
+      rangesSupported = true,
+      timeline = ChangeScopeTimeline(
+        "base",
+        "seven",
+        listOf(
+          ScopeCommit("one", "base", "edit", listOf(1)),
+          ScopeCommit("two", "one", "other", listOf(2)),
+          ScopeCommit("three", "two", "rename", listOf(1)),
+          ScopeCommit("four", "three", "other", listOf(2)),
+          ScopeCommit("five", "four", "rename again", listOf(1)),
+          ScopeCommit("six", "five", "other", listOf(2)),
+          ScopeCommit("seven", "six", "reuse old path", listOf(1)),
+        ),
+      ),
+    )
+    val observations = observations(port, listed(), RecordingDiagnostics()) { WorkGoalTimelineResult.Failed("unused") }
+    val cache = CommittedChangeCache()
+    val scope = ChangeScope.Subtasks(1, 1)
+    val state = observations.observeScope(target, scope, false, Mutex(), cache).toList().last() as ScopeChangesState.Listed
+
+    assertEquals(
+      listOf(
+        ChangedFile("new.kt", "old.kt", ChangeStatus.Renamed, 5, 6),
+        ChangedFile("old.kt", null, ChangeStatus.Added, 4, 0),
+        ChangedFile("unrelated.kt", null, ChangeStatus.Modified, 7, 2),
+      ),
+      state.changes.files,
+    )
+    val renamed = observations.fileDiff(target, scope, state.changes.files.first(), Mutex(), cache) as FileDiffState.Shown
+    val reused = observations.fileDiff(target, scope, state.changes.files.single { it.path == "old.kt" }, Mutex(), cache) as FileDiffState.Shown
+    assertEquals(listOf("first", "renamed once", "renamed twice"), renamed.diff.hunks.flatMap { it.lines }.filter { it.kind == dev.skillbill.desktop.core.domain.model.DiffLineKind.Added }.map { it.text })
+    assertEquals(listOf("replacement"), reused.diff.hunks.flatMap { it.lines }.filter { it.kind == dev.skillbill.desktop.core.domain.model.DiffLineKind.Added }.map { it.text })
+    assertEquals(listOf("old.kt", "middle.kt", "new.kt", "old.kt"), port.patchFiles.map { it.third.path })
+    val commitScope = ChangeScope.Commits(listOf("one", "three", "five"))
+    val commitState = observations.observeScope(target, commitScope, false, Mutex(), cache).toList().last() as ScopeChangesState.Listed
+    assertEquals(
+      listOf(
+        ChangedFile("new.kt", "old.kt", ChangeStatus.Renamed, 5, 6),
+        ChangedFile("unrelated.kt", null, ChangeStatus.Modified, 7, 2),
+      ),
+      commitState.changes.files,
+    )
+    val commitDiff = observations.fileDiff(target, commitScope, commitState.changes.files.first(), Mutex(), cache) as FileDiffState.Shown
+    assertEquals(listOf("first", "renamed once", "renamed twice"), commitDiff.diff.hunks.flatMap { it.lines }.filter { it.kind == dev.skillbill.desktop.core.domain.model.DiffLineKind.Added }.map { it.text })
+    port.committedFilesByRange["base" to "operator-one"] = listOf(WorkChangedFile("operator-old.kt", null, WorkChangeStatus.MODIFIED, 1, 0))
+    port.committedFilesByRange["operator-two" to "operator-three"] = listOf(WorkChangedFile("operator-new.kt", "operator-old.kt", WorkChangeStatus.RENAMED, 2, 0))
+    port.patches["base" to "operator-one"] = WorkFileDiffResult.Patch("@@ -1,0 +1 @@\n+operator first")
+    port.patches["operator-two" to "operator-three"] = WorkFileDiffResult.Patch("@@ -2,0 +2 @@\n+operator rename")
+    val operatorTarget = target.copy(
+      timeline = ChangeScopeTimeline(
+        "base",
+        "operator-three",
+        listOf(
+          ScopeCommit("operator-one", "base", "operator edit", emptyList()),
+          ScopeCommit("operator-two", "operator-one", "subtask", listOf(1)),
+          ScopeCommit("operator-three", "operator-two", "operator rename", emptyList()),
+        ),
+      ),
+    )
+    val operatorState = observations.observeScope(operatorTarget, ChangeScope.Operator, false, Mutex(), cache).toList().last() as ScopeChangesState.Listed
+    assertEquals(listOf(ChangedFile("operator-new.kt", "operator-old.kt", ChangeStatus.Renamed, 3, 0)), operatorState.changes.files)
+    val operatorDiff = observations.fileDiff(operatorTarget, ChangeScope.Operator, operatorState.changes.files.single(), Mutex(), cache) as FileDiffState.Shown
+    assertEquals(listOf("operator first", "operator rename"), operatorDiff.diff.hunks.flatMap { it.lines }.filter { it.kind == dev.skillbill.desktop.core.domain.model.DiffLineKind.Added }.map { it.text })
+
+    val scopes = listed().copy(
+      subtasks = listOf(WorkScopeSubtask(1, "one", DecompositionStatus.COMPLETE, false, "seven", emptyList())),
+    )
+    val statsObservations = observations(port, scopes, RecordingDiagnostics()) {
+      WorkGoalTimelineResult.Attributed(
+        "base",
+        "seven",
+        listOf(
+          WorkTimelineCommit("one", "base", "edit", listOf(1)),
+          WorkTimelineCommit("two", "one", "other", listOf(2)),
+          WorkTimelineCommit("three", "two", "rename", listOf(1)),
+          WorkTimelineCommit("four", "three", "other", listOf(2)),
+          WorkTimelineCommit("five", "four", "rename again", listOf(1)),
+          WorkTimelineCommit("six", "five", "other", listOf(2)),
+          WorkTimelineCommit("seven", "six", "reuse old path", listOf(1)),
+        ),
+        emptySet(),
+      )
+    }
+    val statsCache = CommittedChangeCache()
+    val fresh = statsObservations.observeSubtasks("goal", false, Mutex(), statsCache).toList()
+      .filterIsInstance<SubtaskScopesState.Listed>().single().stats.getValue(1)
+    val callsAfterFresh = port.committedCalls
+    val cached = statsObservations.observeSubtasks("goal", false, Mutex(), statsCache).toList()
+      .filterIsInstance<SubtaskScopesState.Listed>().single().stats.getValue(1)
+    assertEquals(state.changes.files, fresh.files)
+    assertEquals(fresh, cached)
+    assertEquals(callsAfterFresh, port.committedCalls)
+  }
+
+  @Test
+  fun `working tree rename extends committed identity and patch history`() = runTest {
+    val port = CountingPort().apply {
+      committedFilesByRange["base" to "one"] = listOf(WorkChangedFile("old.kt", null, WorkChangeStatus.MODIFIED, 2, 0))
+      committedFilesByRange["two" to "three"] = listOf(WorkChangedFile("new.kt", "old.kt", WorkChangeStatus.RENAMED, 1, 0))
+      workingFiles = listOf(WorkChangedFile("current.kt", "new.kt", WorkChangeStatus.RENAMED, 3, 0))
+      patches["base" to "one"] = WorkFileDiffResult.Patch("@@ -1,0 +1 @@\n+committed edit")
+      patches["two" to "three"] = WorkFileDiffResult.Patch("@@ -2,0 +2 @@\n+committed rename")
+      workingPatches["current.kt"] = WorkFileDiffResult.Patch("@@ -3,0 +3 @@\n+working rename")
+    }
+    val target = ChangeScopeTarget(
+      "goal",
+      root.toString(),
+      ChangeBaseline.TargetMergeBase(root.toString(), "main"),
+      listOf(ScopeSubtask(1, "running", ScopeSubtaskState.RUNNING, null, listOf("one", "three"), false, emptyList())),
+      rangesSupported = true,
+      timeline = ChangeScopeTimeline(
+        "base",
+        "three",
+        listOf(
+          ScopeCommit("one", "base", "edit", listOf(1)),
+          ScopeCommit("two", "one", "other", listOf(2)),
+          ScopeCommit("three", "two", "rename", listOf(1)),
+        ),
+      ),
+    )
+    val observations = observations(port, listed(), RecordingDiagnostics()) { WorkGoalTimelineResult.Failed("unused") }
+    val scope = ChangeScope.Subtasks(1, 1)
+    val cache = CommittedChangeCache()
+    val state = observations.observeScope(target, scope, true, Mutex(), cache)
+      .first { it is ScopeChangesState.Listed } as ScopeChangesState.Listed
+
+    assertEquals(listOf(ChangedFile("current.kt", "old.kt", ChangeStatus.Renamed, 6, 0)), state.changes.files)
+    val diff = observations.fileDiff(target, scope, state.changes.files.single(), Mutex(), cache) as FileDiffState.Shown
+    assertEquals(
+      listOf("committed edit", "committed rename", "working rename"),
+      diff.diff.hunks.flatMap { it.lines }.filter { it.kind == dev.skillbill.desktop.core.domain.model.DiffLineKind.Added }.map { it.text },
+    )
+  }
+
+  @Test
   fun `range diff labels a subtask that spans an operator commit`() = runTest {
     val diagnostics = RecordingDiagnostics()
     val port = operatorSpanPort(WorkFileDiffResult.Patch("@@ -2,0 +2 @@\n+from operator"))
@@ -282,6 +436,8 @@ class ChangeScopeObservationsTest {
     var workingFiles = emptyList<WorkChangedFile>()
     val committedFilesByRange = mutableMapOf<Pair<String, String>, List<WorkChangedFile>>()
     val patches = mutableMapOf<Pair<String, String>, WorkFileDiffResult>()
+    val workingPatches = mutableMapOf<String, WorkFileDiffResult>()
+    val patchFiles = mutableListOf<Triple<String, String, WorkChangedFile>>()
     val failedRanges = mutableSetOf<Pair<String, String>>()
     override fun changes(baseline: WorkChangeBaseline): WorkChangeListResult {
       workingBases += (baseline as WorkChangeBaseline.SubtaskStart).baseSha
@@ -292,7 +448,8 @@ class ChangeScopeObservationsTest {
         workingFiles.sumOf { it.deletions ?: 0 },
       )
     }
-    override fun fileDiff(worktreeRoot: String, baseSha: String, file: WorkChangedFile) = WorkFileDiffResult.Failed("unused")
+    override fun fileDiff(worktreeRoot: String, baseSha: String, file: WorkChangedFile) =
+      workingPatches[file.path] ?: WorkFileDiffResult.Failed("unused")
     override fun committedChanges(worktreeRoot: String, fromSha: String, toSha: String): WorkChangeListResult {
       committedCalls++
       committedRanges += fromSha to toSha
@@ -300,8 +457,10 @@ class ChangeScopeObservationsTest {
       val files = committedFilesByRange[fromSha to toSha].orEmpty()
       return WorkChangeListResult.Listed(toSha, files, files.sumOf { it.insertions ?: 0 }, files.sumOf { it.deletions ?: 0 })
     }
-    override fun committedFileDiff(worktreeRoot: String, fromSha: String, toSha: String, file: WorkChangedFile): WorkFileDiffResult =
-      patches[fromSha to toSha] ?: WorkFileDiffResult.Failed("missing")
+    override fun committedFileDiff(worktreeRoot: String, fromSha: String, toSha: String, file: WorkChangedFile): WorkFileDiffResult {
+      patchFiles += Triple(fromSha, toSha, file)
+      return patches[fromSha to toSha] ?: WorkFileDiffResult.Failed("missing")
+    }
     override fun uncommittedChanges(worktreeRoot: String) = WorkChangeListResult.Failed("unused")
     override fun commitTimeline(worktreeRoot: String, targetBranch: String?, recordedShas: List<String>, headBranch: String?) =
       WorkCommitTimelineResult.Failed("unused")

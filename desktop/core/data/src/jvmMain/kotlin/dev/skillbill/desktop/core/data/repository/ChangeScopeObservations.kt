@@ -383,16 +383,8 @@ class ChangeScopeObservations internal constructor(
   private fun WorkChangeListResult.Listed.toChangeSet() = ChangeSet(baseSha, files.map { it.toDomain() }, insertions, deletions)
 
   private fun ScopeChangesState.Listed.withWorkingChanges(working: ChangeSet): ScopeChangesState.Listed {
-    val files = changes.files.associateByTo(linkedMapOf<String, ChangedFile>()) { it.path }
-    for (file in working.files) {
-      val committed = files[file.path]
-      files[file.path] = if (committed == null) file else file.copy(
-        oldPath = file.oldPath ?: committed.oldPath,
-        insertions = if (file.binary || committed.binary) null else (file.insertions ?: 0) + (committed.insertions ?: 0),
-        deletions = if (file.binary || committed.binary) null else (file.deletions ?: 0) + (committed.deletions ?: 0),
-      )
-    }
-    val merged = files.values.sortedBy(ChangedFile::path)
+    val mergedChanges = perCommit + perCommit.lastOrNull()?.let { last -> listOf(CommitChanges(last.commit, working.files)) }.orEmpty()
+    val merged = mergedChanges.aggregate(changes.baseSha).files
     return copy(changes = ChangeSet(
       changes.baseSha,
       merged,

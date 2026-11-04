@@ -73,39 +73,66 @@ internal fun SubtaskScopesState.Listed.withTimeline(result: WorkGoalTimelineResu
   )
 }
 
-internal fun List<CommitChanges>.aggregate(mergeBaseSha: String): ChangeSet {
+internal data class IdentifiedCommitFile(
+  val commit: ScopeCommit,
+  val file: ChangedFile,
+  val identityPath: String,
+)
+
+internal data class FileIdentityHistory(val files: List<ChangedFile>, val changes: List<IdentifiedCommitFile>)
+
+internal fun List<CommitChanges>.fileIdentityHistory(terminalFiles: List<ChangedFile> = emptyList()): FileIdentityHistory {
   data class FileTotals(
-    val first: ChangedFile,
+    val id: Int,
+    var oldPath: String?,
     var last: ChangedFile,
     var insertions: Int,
     var deletions: Int,
     var fileCount: Int,
     var binaryCount: Int,
   )
-  val totals = linkedMapOf<String, FileTotals>()
-  for (commit in this) {
-    for (file in commit.files) {
-      val existing = totals[file.path]
+  val active = linkedMapOf<String, FileTotals>()
+  val totals = mutableListOf<FileTotals>()
+  val changes = mutableListOf<Pair<Int, IdentifiedCommitFile>>()
+  fun track(commit: ScopeCommit, files: List<ChangedFile>, includePatch: Boolean) {
+    for (file in files) {
+      val existing = file.oldPath?.let(active::remove) ?: active[file.path]
       if (existing == null) {
-        totals[file.path] = FileTotals(file, file, file.insertions ?: 0, file.deletions ?: 0, 1, if (file.binary) 1 else 0)
+        val created = FileTotals(totals.size, file.oldPath, file, file.insertions ?: 0, file.deletions ?: 0, 1, if (file.binary) 1 else 0)
+        totals += created
+        active[file.path] = created
+        if (includePatch) changes += created.id to IdentifiedCommitFile(commit, file, file.path)
       } else {
+        existing.oldPath = existing.oldPath ?: file.oldPath
         existing.last = file
         existing.insertions += file.insertions ?: 0
         existing.deletions += file.deletions ?: 0
         existing.fileCount++
         if (file.binary) existing.binaryCount++
+        active[file.path] = existing
+        if (includePatch) changes += existing.id to IdentifiedCommitFile(commit, file, file.path)
       }
     }
   }
-  val files = totals.map { (path, value) ->
+  for (commit in this) track(commit.commit, commit.files, true)
+  if (terminalFiles.isNotEmpty()) this.lastOrNull()?.let { track(it.commit, terminalFiles, false) }
+  val finalPathById = active.values.associate { it.id to it.last.path }
+  val files = totals.map { value ->
     val binary = value.binaryCount == value.fileCount
     ChangedFile(
-      path = path,
-      oldPath = value.first.oldPath,
+      path = finalPathById[value.id] ?: value.last.path,
+      oldPath = value.oldPath,
       status = value.last.status,
       insertions = if (binary) null else value.insertions,
       deletions = if (binary) null else value.deletions,
     )
   }.sortedBy { it.path }
-  return ChangeSet(mergeBaseSha, files, files.sumOf { it.insertions ?: 0 }, files.sumOf { it.deletions ?: 0 })
+  val identities = changes.map { (id, change) ->
+    change.copy(identityPath = finalPathById[id] ?: change.identityPath)
+  }
+  return FileIdentityHistory(files, identities)
+}
+
+internal fun List<CommitChanges>.aggregate(mergeBaseSha: String): ChangeSet = fileIdentityHistory().files.let { files ->
+  ChangeSet(mergeBaseSha, files, files.sumOf { it.insertions ?: 0 }, files.sumOf { it.deletions ?: 0 })
 }

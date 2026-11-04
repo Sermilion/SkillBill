@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.data.repository
 
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
+import dev.skillbill.desktop.core.data.runtime.fileIdentityHistory
 import dev.skillbill.desktop.core.data.runtime.parseUnifiedDiff
 import dev.skillbill.desktop.core.data.runtime.readOrProblem
 import dev.skillbill.desktop.core.data.runtime.toDomain
@@ -12,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope.Subtasks
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.CommitChanges
 import dev.skillbill.desktop.core.domain.model.ScopeCommit
 import dev.skillbill.desktop.core.domain.model.FileDiff
 import dev.skillbill.desktop.core.domain.model.FileDiffState
@@ -189,15 +191,16 @@ internal class ChangeScopeDiffs(
     file: ChangedFile,
     lock: Mutex,
     cache: CommittedChangeCache,
+    latestFiles: List<ChangedFile> = emptyList(),
   ): FileDiffState {
     val perCommit = readPerCommit(target, commits, lock, cache)
     if (perCommit is ScopeChangesState.TooManyCommits) {
       return FileDiffState.Unavailable(ReadProblem.Runtime("More than ${perCommit.limit} commits to read one by one."))
     }
     if (perCommit !is ScopeChangesState.Listed) return perCommit.toFileDiffState()
-    val matching = perCommit.perCommit.mapNotNull { change ->
-      change.files.firstOrNull { entry -> matchesCommittedFile(entry, file) }?.let { change.commit to it }
-    }
+    val matching = perCommit.perCommit.fileIdentityHistory(latestFiles).changes
+      .filter { it.identityPath == file.path }
+      .map { it.commit to it.file }
     if (matching.isEmpty()) return FileDiffState.Shown(FileDiff(emptyList(), 0, 0))
     val patches = matching.map { (commit, entry) ->
       commit to readCommittedPatch(target.worktreeRoot, commit.parentSha, commit.sha, entry, lock, cache)
@@ -230,7 +233,19 @@ internal class ChangeScopeDiffs(
     lock: Mutex,
     cache: CommittedChangeCache,
   ): FileDiffState {
-    val committed = perCommitFileDiff(target, commits, file, lock, cache)
+    val workingFiles = when (val result = git(lock) { port.changes(baseline.toPort()) }) {
+      is Outcome.Failure -> return FileDiffState.Unavailable(result.error)
+      is Outcome.Success -> when (val listed = result.value) {
+        is WorkChangeListResult.Listed -> listed.files.map { it.toDomain() }
+        is WorkChangeListResult.BaseUnavailable -> return FileDiffState.BaseUnavailable(listed.reason)
+        is WorkChangeListResult.NotARepository -> return FileDiffState.Unavailable(ReadProblem.Runtime("${listed.worktreeRoot} is not a repository."))
+        is WorkChangeListResult.Failed -> {
+          diagnostics.record(SCOPES_READ_FAILED)
+          return FileDiffState.Unavailable(ReadProblem.Runtime(listed.message))
+        }
+      }
+    }
+    val committed = perCommitFileDiff(target, commits, file, lock, cache, workingFiles)
     if (committed !is FileDiffState.Shown) return committed
     return when (val working = readWorkingPatch(target.worktreeRoot, baseline.baseSha, file, lock)) {
       is FileDiffState.Shown -> FileDiffState.Shown(
@@ -243,9 +258,6 @@ internal class ChangeScopeDiffs(
       else -> working
     }
   }
-
-  private fun matchesCommittedFile(entry: ChangedFile, file: ChangedFile): Boolean =
-    entry.path == file.path || entry.path == file.oldPath || entry.oldPath == file.path
 
   private suspend fun readCommittedFileList(
     worktreeRoot: String,
@@ -291,19 +303,26 @@ internal class ChangeScopeDiffs(
     }
     if (groups.sumOf { it.commits.size } > PER_COMMIT_READ_LIMIT) return failedRead()
     val perOwner = linkedMapOf<ScopeHunkOwner, FileDiff>()
+    val groupedShas = groups.flatMap { it.commits }.map(ScopeCommit::sha).toSet()
+    val orderedCommits = target.timeline?.commits?.filter { it.sha in groupedShas }
+      ?: groups.flatMap { it.commits }
+    val committed = mutableListOf<CommitChanges>()
+    for (commit in orderedCommits) {
+      when (val listed = readCommittedFileList(target.worktreeRoot, commit.parentSha, commit.sha, lock, cache)) {
+        is Outcome.Failure -> return failedRead()
+        is Outcome.Success -> committed += CommitChanges(commit, listed.value.files)
+      }
+    }
+    val identityHistory = committed.fileIdentityHistory().changes
     for (group in groups) {
       val patches = mutableListOf<FileDiff>()
-      for (commit in group.commits) {
-        when (val listed = readCommittedFileList(target.worktreeRoot, commit.parentSha, commit.sha, lock, cache)) {
-          is Outcome.Failure -> return failedRead()
-          is Outcome.Success -> {
-            val entry = listed.value.files.firstOrNull { matchesCommittedFile(it, file) } ?: continue
-            when (val patch = readCommittedPatch(target.worktreeRoot, commit.parentSha, commit.sha, entry, lock, cache)) {
-              is FileDiffState.Shown -> patches += patch.diff
-              is FileDiffState.Unavailable -> return FileDiffState.Shown(diff)
-              else -> return failedRead()
-            }
-          }
+      val groupShas = group.commits.map(ScopeCommit::sha).toSet()
+      val entries = identityHistory.filter { it.commit.sha in groupShas && it.identityPath == file.path }
+      for ((commit, entry) in entries.map { it.commit to it.file }) {
+        when (val patch = readCommittedPatch(target.worktreeRoot, commit.parentSha, commit.sha, entry, lock, cache)) {
+          is FileDiffState.Shown -> patches += patch.diff
+          is FileDiffState.Unavailable -> return FileDiffState.Shown(diff)
+          else -> return failedRead()
         }
       }
       if (group.workingTree) {
