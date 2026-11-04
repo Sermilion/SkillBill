@@ -167,6 +167,44 @@ class ChangesWindowViewModelTest {
   }
 
   @Test
+  fun `a failed comment read keeps the typed edit when the same branch recovers`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availableEditable()
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+    viewModel.onAction(ChangesWindowAction.StartEdit("pending-1", "comment-1", "Original"))
+    viewModel.onAction(ChangesWindowAction.EditText("Typed but unsaved"))
+
+    comments.state.value = DiffCommentsState.Unavailable("The database is unavailable.")
+    runCurrent()
+    comments.state.value = availableEditable()
+    runCurrent()
+
+    assertEquals("Typed but unsaved", viewModel.state.value.editing?.text)
+  }
+
+  @Test
+  fun `a recovered comment read on another branch drops the edit`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availableEditable()
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+    viewModel.onAction(ChangesWindowAction.StartEdit("pending-1", "comment-1", "Original"))
+    viewModel.onAction(ChangesWindowAction.EditText("Typed but unsaved"))
+
+    comments.state.value = DiffCommentsState.Unavailable("The database is unavailable.")
+    runCurrent()
+    comments.state.value = availableEditable().copy(branch = "other")
+    runCurrent()
+
+    assertEquals(null, viewModel.state.value.editing)
+  }
+
+  @Test
   fun `a refresh keeps a still-listed selection and otherwise selects the first file`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
@@ -578,6 +616,11 @@ class ChangesWindowViewModelTest {
     fun availablePending() = DiffCommentsState.Available("main", listOf(
       CommentThread("pending-1", "src/A.kt", CommentSide.New, 10, null, CommentState.Pending, false, null, null, null, emptyList()),
       CommentThread("pending-2", "src/A.kt", CommentSide.New, 11, null, CommentState.Pending, false, null, null, null, emptyList()),
+    ), canAuthor = true)
+
+    fun availableEditable() = DiffCommentsState.Available("main", listOf(
+      CommentThread("pending-1", "src/A.kt", CommentSide.New, 10, null, CommentState.Pending, false, null, null, null,
+        listOf(Comment("comment-1", CommentAuthor.User, null, "Original", null, epoch, null))),
     ), canAuthor = true)
 
     fun detail(baseline: ChangeBaseline) = Detail(

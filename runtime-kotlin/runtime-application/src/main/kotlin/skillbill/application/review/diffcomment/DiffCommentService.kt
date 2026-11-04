@@ -26,6 +26,7 @@ import skillbill.review.diffcomment.model.DiffCommentSide
 import skillbill.review.diffcomment.model.DiffCommentThread
 import skillbill.review.diffcomment.model.DiffCommentThreadState
 import skillbill.review.model.ParallelReviewMergedFinding
+import skillbill.review.model.ReviewFindingSettlement
 import java.io.IOException
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
@@ -52,10 +53,16 @@ class DiffCommentService(
     var reused = 0
     var failed = 0
     var firstFailureReason: String? = null
+    val anchor =
+      when (val resolved = anchor(repoRoot, null)) {
+        is AnchorResolution.Available -> resolved.anchor
+        is AnchorResolution.Unavailable ->
+          return ReviewFindingThreadCounts(0, 0, findings.size, resolved.reason.takeIf { findings.isNotEmpty() })
+      }
     findings.forEach { finding ->
       catchingNonCancellation {
-        val result = addAgentThread(repoRoot, reviewThreadRequest(sourceRefPrefix, agentId, finding))
-        when (result) {
+        val request = reviewThreadRequest(sourceRefPrefix, agentId, finding)
+        when (val result = recordReviewFinding(repoRoot, anchor, request, finding)) {
           is DiffCommentThreadResult.Saved -> if (result.changed) written++ else reused++
           is DiffCommentThreadResult.Rejected -> {
             failed++
@@ -76,6 +83,33 @@ class DiffCommentService(
       }
     }
     return ReviewFindingThreadCounts(written, reused, failed, firstFailureReason)
+  }
+
+  private fun recordReviewFinding(
+    repoRoot: Path,
+    anchor: Anchor,
+    request: DiffCommentAgentThreadRequest,
+    finding: ParallelReviewMergedFinding,
+  ): DiffCommentThreadResult {
+    agentThreadRejection(request)?.let { return DiffCommentThreadResult.Rejected(it) }
+    val outcome =
+      when (finding.settlement) {
+        ReviewFindingSettlement.FIXED -> DiffCommentOutcome.FIXED
+        ReviewFindingSettlement.REFUTED -> DiffCommentOutcome.REFUTED
+        null -> null
+      }
+    return database.transaction { unit ->
+      val store = unit.diffComments
+      val saved = insertAgentThread(store, repoRoot, anchor, request)
+      if (outcome == null || saved !is DiffCommentThreadResult.Saved) return@transaction saved
+      val thread = saved.thread
+      val latest = thread.comments.maxByOrNull { it.position }
+      if (latest?.author == DiffCommentAuthor.AGENT && latest.outcome == outcome) return@transaction saved
+      val body = if (outcome == DiffCommentOutcome.FIXED) SETTLED_FIXED_BODY else SETTLED_REFUTED_BODY
+      val reply = replyComment(thread, DiffCommentAuthor.AGENT, request.agentId, body, outcome)
+      val replied = appendReply(store, thread, reply)
+      if (replied is DiffCommentThreadResult.Saved) replied.copy(changed = saved.changed) else replied
+    }
   }
 
   private fun reviewThreadRequest(
@@ -211,19 +245,18 @@ class DiffCommentService(
     repoRoot: Path,
     request: DiffCommentAgentThreadRequest,
   ): DiffCommentThreadResult {
-    validateThreadInput(request.path, request.line, request.body)?.let {
-      return DiffCommentThreadResult.Rejected(it)
-    }
+    agentThreadRejection(request)?.let { return DiffCommentThreadResult.Rejected(it) }
     val anchor =
       when (val result = anchor(repoRoot, null)) {
         is AnchorResolution.Available -> result.anchor
         is AnchorResolution.Unavailable -> return DiffCommentThreadResult.Unavailable(result.reason)
       }
-    if (!DiffCommentThread.acceptsSeverity(request.severity)) {
-      return DiffCommentThreadResult.Rejected(DiffCommentRejection.INVALID_SEVERITY)
-    }
     return database.transaction { unit -> insertAgentThread(unit.diffComments, repoRoot, anchor, request) }
   }
+
+  private fun agentThreadRejection(request: DiffCommentAgentThreadRequest): DiffCommentRejection? =
+    validateThreadInput(request.path, request.line, request.body)
+      ?: DiffCommentRejection.INVALID_SEVERITY.takeUnless { DiffCommentThread.acceptsSeverity(request.severity) }
 
   private fun insertAgentThread(
     store: DiffCommentStore,
@@ -486,7 +519,7 @@ class DiffCommentService(
       is AnchorResolution.Unavailable -> result
       is AnchorResolution.Available ->
         if (expectedBranch != null && result.anchor.branch != expectedBranch) {
-          anchorUnavailable("authoring_branch", "Check out $expectedBranch to comment")
+          anchorUnavailable("Check out $expectedBranch to comment")
         } else {
           result
         }
@@ -501,22 +534,22 @@ class DiffCommentService(
         when (val result = git.currentBranch(root)) {
           is WorkflowGitOperationResult.Ok -> result.value.trim()
           is WorkflowGitOperationResult.Failed ->
-            return anchorUnavailable("current_branch", "current branch unavailable", result.error)
+            return anchorUnavailable("current branch unavailable", result.error)
         }
-      if (current.isBlank()) return anchorUnavailable("current_branch", "detached HEAD")
+      if (current.isBlank()) return anchorUnavailable("detached HEAD")
       val head =
         when (val result = git.headCommitSha(root)) {
           is WorkflowGitOperationResult.Ok -> result.value.trim()
           is WorkflowGitOperationResult.Failed ->
-            return anchorUnavailable("head_commit", "HEAD unavailable", result.error)
+            return anchorUnavailable("HEAD unavailable", result.error)
         }
       anchorAtBranch(root, explicitBranch, current, head)
     } catch (failure: CancellationException) {
       throw failure
     } catch (failure: IOException) {
-      anchorUnavailable("repository_access", "repository access unavailable", failure.message)
+      anchorUnavailable("repository access unavailable", failure.message)
     } catch (failure: SecurityException) {
-      anchorUnavailable("repository_access", "repository access unavailable", failure.message)
+      anchorUnavailable("repository access unavailable", failure.message)
     }
   }
 
@@ -534,22 +567,18 @@ class DiffCommentService(
         when (val result = git.resolveCommit(root, "refs/heads/$branch")) {
           is WorkflowGitOperationResult.Ok -> result.value.trim()
           is WorkflowGitOperationResult.Failed ->
-            return anchorUnavailable("branch_tip", "branch $branch unavailable", result.error)
+            return anchorUnavailable("branch $branch unavailable", result.error)
         }
       }
     return AnchorResolution.Available(Anchor(repositories.primaryRepositoryIdentity(root), branch, tip, current))
   }
 
   private fun anchorUnavailable(
-    seam: String,
     reason: String,
     detail: String? = null,
   ): AnchorResolution.Unavailable {
     val boundedCause =
       detail?.replace('\n', ' ')?.replace('\r', ' ')?.take(MAX_DIAGNOSTIC_CAUSE_LENGTH)?.takeIf { it.isNotBlank() }
-    diagnostics.warning(
-      "seam=diff_comment_anchor expected=available value_used=unavailable stage=$seam cause=${boundedCause ?: reason}",
-    )
     val unavailableReason =
       if (boundedCause == null || reason == "detached HEAD") reason else "$reason: $boundedCause"
     return AnchorResolution.Unavailable(unavailableReason)
@@ -601,5 +630,7 @@ class DiffCommentService(
 
   private companion object {
     const val MAX_DIAGNOSTIC_CAUSE_LENGTH = 160
+    const val SETTLED_FIXED_BODY = "Fixed during review."
+    const val SETTLED_REFUTED_BODY = "Refuted during review."
   }
 }

@@ -2,6 +2,7 @@
 Context: Review findings and repair receipts are authoritative workflow evidence; diff comments are an auxiliary projection.
 Decision: Write finding threads and outcome replies beside the owning review or receipt mutation, treating failures as best-effort and diagnostic.
 Reason: Comment failures must leave review envelopes, verdicts, receipts, and step outcomes unchanged.
+Follow-up: Standalone review keeps its census-based verification register and verdict. Merged-finding groups only decide which comment thread is posted and when it is declined, since a group is declined only when every member was rejected. `DiffCommentService` returns `Unavailable` without recording a diagnostic, so each swallowed write gets exactly one record from its engine caller. Inline findings already settled as `fixed` or `refuted` get their outcome reply in the same transaction as the thread. Replies stay limited to goal runs: non-goal feature-task runs have no carried-finding receipt to reply from.
 
 ## [2026-11-04] Preserve child cause separately from the parent standing step
 Context: A parent goal stopped at plan_subtasks can be blocked by a child audit. Binding the child's accepted reference to the parent loses the phase and incident that caused the block.

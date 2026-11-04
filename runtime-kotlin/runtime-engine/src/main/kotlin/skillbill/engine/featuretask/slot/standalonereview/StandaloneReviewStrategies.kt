@@ -344,7 +344,7 @@ public abstract class StandaloneReviewStrategy(
     report.findingGroups
       .filter { group ->
         group.finding != null &&
-          group.members.all { member -> accepted.sourceFindingDispositions[member.identity] == "rejected" }
+          group.members.all { member -> accepted.findingDispositions[member.identity] == "rejected" }
       }
       .forEach { group ->
         val result =
@@ -522,31 +522,21 @@ public abstract class StandaloneReviewStrategy(
             verification.warningClassifications.getValue(warning.identity)
           }
       }
-    val findingDispositions =
-      report.findingGroups.associate { group ->
-        group.identity to disposition(group.members.map { verification.findingDispositions.getValue(it.identity) })
-      }
-    val verdict = verifiedFindingVerdict(report, findingDispositions, warningClassifications)
+    val verdict = verifiedFindingVerdict(report, verification.findingDispositions, warningClassifications)
     val register =
       buildString {
         appendLine(presentedFindings(report))
         appendLine()
         appendLine(StandaloneReviewReportReader.VERIFICATION_HEADING)
-        report.findingGroups.forEach { group ->
-          appendLine("- ${presentedLabel(group)}: ${findingDispositions.getValue(group.identity)}")
-          appendLine(
-            "Source classifications for ${group.identity}: " +
-              group.members.joinToString(", ") { member ->
-                "${member.identity}=${verification.findingDispositions.getValue(member.identity)}"
-              },
-          )
+        report.census.forEach { finding ->
+          appendLine("- ${presentedLabel(finding)}: ${verification.findingDispositions.getValue(finding.identity)}")
         }
         report.reviewWarnings.forEach { warning ->
           appendLine("- ${warning.identity} (${warning.source}): ${warningClassifications.getValue(warning.identity)}")
         }
         append("verdict: $verdict")
       }
-    return VerificationResult.Accepted(register, verdict, findingDispositions, verification.findingDispositions)
+    return VerificationResult.Accepted(register, verdict, verification.findingDispositions)
   }
 
   private fun presentedFindings(report: StandaloneReviewReport): String =
@@ -555,14 +545,10 @@ public abstract class StandaloneReviewStrategy(
       .joinToString("\n")
       .trimEnd()
 
-  private fun presentedLabel(group: StandaloneReviewFindingGroup): String = group.identity
-
-  private fun disposition(sourceDispositions: List<String>): String =
-    when {
-      sourceDispositions.any { it == "unresolved" } -> "unresolved"
-      sourceDispositions.any { it == "confirmed" } -> "confirmed"
-      else -> "rejected"
-    }
+  private fun presentedLabel(finding: StandaloneReviewFinding): String =
+    StandaloneReviewReportReader.read(finding.text)?.findings?.singleOrNull()?.ref
+      ?.takeIf { finding.text.contains("[$it]") }
+      ?: "${finding.identity} (unstructured report text)"
 
   private fun verificationInput(
     run: PhaseRun,
@@ -902,11 +888,11 @@ internal fun verifiedFindingVerdict(
 ): String {
   val changes =
     warningClassifications.values.any { it == "incomplete" } ||
-      report.findingGroups.any { group ->
-        when (findingDispositions.getValue(group.identity)) {
+      report.census.any { finding ->
+        when (findingDispositions.getValue(finding.identity)) {
           "unresolved" -> true
           "rejected" -> false
-          "confirmed" -> group.members.any(StandaloneReviewFinding::requiresChangesWhenConfirmed)
+          "confirmed" -> finding.requiresChangesWhenConfirmed
           else -> true
         }
       }
@@ -962,7 +948,6 @@ private sealed interface VerificationResult {
     val register: String,
     val verdict: String,
     val findingDispositions: Map<String, String> = emptyMap(),
-    val sourceFindingDispositions: Map<String, String> = emptyMap(),
   ) : VerificationResult
 
   data class Blocked(val reason: String, val evidence: String = "") : VerificationResult

@@ -2,6 +2,8 @@ package skillbill.di.review
 
 import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.diffcomment.model.DiffCommentAgentThreadRequest
+import skillbill.application.review.diffcomment.model.DiffCommentCountResult
+import skillbill.application.review.diffcomment.model.DiffCommentDeleteResult
 import skillbill.application.review.diffcomment.model.DiffCommentListResult
 import skillbill.application.review.diffcomment.model.DiffCommentPendingThreadRequest
 import skillbill.application.review.diffcomment.model.DiffCommentRejection
@@ -18,11 +20,14 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.diffcomment.model.DiffComment
+import skillbill.review.diffcomment.model.DiffCommentAuthor
 import skillbill.review.diffcomment.model.DiffCommentOutcome
 import skillbill.review.diffcomment.model.DiffCommentSide
+import skillbill.review.diffcomment.model.DiffCommentThread
 import skillbill.review.diffcomment.model.DiffCommentThreadState
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
+import skillbill.review.model.ReviewFindingSettlement
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -178,9 +183,110 @@ class DiffCommentServiceTest {
     assertEquals(DiffCommentThreadState.RESOLVED, stored.state)
   }
 
+  @Test
+  fun `settled inline findings carry their outcome reply and state without duplicating it on retry`() {
+    val fixture = Fixture()
+    val findings =
+      listOf(
+        reviewFinding("F-001", "src/A.kt", 4).copy(settlement = ReviewFindingSettlement.FIXED),
+        reviewFinding("F-002", "src/B.kt", 7).copy(settlement = ReviewFindingSettlement.REFUTED),
+        reviewFinding("F-003", "src/C.kt", 2),
+      )
+
+    val first = fixture.service.recordReviewFindings(fixture.root, "review:wf:pass-1", "agent", findings)
+    val replay = fixture.service.recordReviewFindings(fixture.root, "review:wf:pass-1", "agent", findings)
+    val threads = fixture.list().threads.sortedBy { it.findingRef }
+
+    assertEquals(3, first.written)
+    assertEquals(3, replay.reused)
+    assertEquals(
+      listOf(DiffCommentThreadState.RESOLVED, DiffCommentThreadState.DECLINED, DiffCommentThreadState.OPEN),
+      threads.map { it.state },
+    )
+    assertEquals(
+      listOf(DiffCommentOutcome.FIXED, DiffCommentOutcome.REFUTED, null),
+      threads.map { it.comments.last().outcome },
+    )
+    assertEquals(listOf(2, 2, 1), threads.map { it.comments.size })
+    assertTrue(threads.take(2).all { it.comments.last().author == DiffCommentAuthor.AGENT })
+  }
+
+  @Test
+  fun `an unavailable anchor fails every review finding without its own diagnostic`() {
+    val fixture = Fixture()
+    fixture.git.branch = ""
+
+    val counts =
+      fixture.service.recordReviewFindings(
+        fixture.root,
+        "review:wf:pass-1",
+        "agent",
+        listOf(reviewFinding("F-001", "src/A.kt", 4), reviewFinding("F-002", null, null)),
+      )
+    val reply = fixture.service.replyReviewOutcome(fixture.root, "finding", "Fixed.", DiffCommentOutcome.FIXED)
+
+    assertEquals(2, counts.failed)
+    assertEquals("detached HEAD", counts.firstFailureReason)
+    assertIs<DiffCommentThreadResult.Unavailable>(reply)
+    assertEquals(emptyList(), fixture.diagnostics.warnings)
+  }
+
+  @Test
+  fun `submitting a review opens only the pending drafts of that branch`() {
+    val fixture = Fixture()
+    val draft = DiffCommentPendingThreadRequest("file.kt", DiffCommentSide.NEW, 1, "main draft")
+    fixture.service.addPending(fixture.root, draft)
+    fixture.git.branch = "other"
+    fixture.service.addPending(fixture.root, draft.copy(body = "other draft"))
+    fixture.git.branch = "main"
+
+    val counted = assertIs<DiffCommentCountResult.Counted>(fixture.service.submitReview(fixture.root))
+
+    assertEquals(1, counted.count)
+    assertEquals(listOf(DiffCommentThreadState.OPEN), fixture.storedThreads("main").map { it.state })
+    assertEquals(listOf(DiffCommentThreadState.PENDING), fixture.storedThreads("other").map { it.state })
+  }
+
+  @Test
+  fun `deleting the first comment removes the thread while a later comment goes alone`() {
+    val fixture = Fixture()
+    val thread = fixture.openUserThread()
+    val reply =
+      assertIs<DiffCommentThreadResult.Saved>(
+        fixture.service.reply(thread.id, DiffCommentAuthor.USER, body = "follow-up"),
+      ).thread.comments.last()
+
+    val later = assertIs<DiffCommentDeleteResult.Deleted>(fixture.service.deleteComment(reply.id))
+
+    assertFalse(later.threadRemoved)
+    assertEquals(listOf("draft"), fixture.storedThreads("main").single().comments.map { it.body })
+
+    val first = assertIs<DiffCommentDeleteResult.Deleted>(fixture.service.deleteComment(thread.comments.first().id))
+
+    assertTrue(first.threadRemoved)
+    assertTrue(fixture.storedThreads("main").isEmpty())
+  }
+
+  @Test
+  fun `a user reply reopens a resolved thread and a failed outcome leaves the state alone`() {
+    val fixture = Fixture()
+    val thread = fixture.openUserThread()
+    fixture.service.reply(thread.id, DiffCommentAuthor.AGENT, "agent", "Could not fix.", DiffCommentOutcome.FAILED)
+
+    assertEquals(DiffCommentThreadState.OPEN, fixture.storedThreads("main").single().state)
+
+    fixture.service.reply(thread.id, DiffCommentAuthor.AGENT, "agent", "Fixed.", DiffCommentOutcome.FIXED)
+    assertEquals(DiffCommentThreadState.RESOLVED, fixture.storedThreads("main").single().state)
+
+    fixture.service.reply(thread.id, DiffCommentAuthor.USER, body = "Still broken.")
+
+    assertEquals(DiffCommentThreadState.OPEN, fixture.storedThreads("main").single().state)
+  }
+
   private class Fixture {
     val root: Path = Files.createTempDirectory("diff-comment-service")
     val git = Git()
+    val diagnostics = Diagnostics()
     var observation: DiffCommentLineObservation = DiffCommentLineObservation.Text("line")
     var beforeNextTransaction: (() -> Unit)? = null
     private var nextId = 0
@@ -213,8 +319,14 @@ class DiffCommentServiceTest {
           },
         clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
         ids = IdentifierGeneratorPort { "comment-${nextId++}" },
-        diagnostics = Diagnostics,
+        diagnostics = diagnostics,
       )
+
+    fun openUserThread(): DiffCommentThread {
+      service.addPending(root, DiffCommentPendingThreadRequest("file.kt", DiffCommentSide.NEW, 1, "draft"))
+      service.submitReview(root)
+      return storedThreads("main").single()
+    }
 
     fun request(line: Int? = 1) =
       DiffCommentAgentThreadRequest(
@@ -273,11 +385,15 @@ class DiffCommentServiceTest {
     override fun primaryRepositoryRoot(repoRoot: Path) = repoRoot
   }
 
-  private object Diagnostics : RuntimeDiagnostics {
+  private class Diagnostics : RuntimeDiagnostics {
+    val warnings = mutableListOf<String>()
+
     override fun warning(
       message: String,
       error: Throwable?,
-    ) = Unit
+    ) {
+      warnings += message
+    }
 
     override fun error(
       message: String,

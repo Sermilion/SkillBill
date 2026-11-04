@@ -187,6 +187,3 @@ ledger expects must be regenerated in the subtask that the ledger names.
   `prompts/preplan.txt` and `prompts/plan.txt` are removed and their phase records, ledger, handoff projections,
   finished event and workflow snapshots no longer carry launched planning phases. Every captured prompt's loop
   header names `plan_subtasks`. Every other file is unchanged.
-- SKILL-451 (merged review identities): the inline and delegated review outputs in `code-review/`
-  and `phase/` retain source classifications beneath each merged finding disposition. Regeneration
-  changes only those four output files.
