@@ -218,15 +218,23 @@ public class GoalRunnerArchiveExportOperations(
       when (val specs = readSpecBundleEntries(ready.repoRoot, sourceManifest, ready.plan.manifestPath)) {
         is SpecBundleRead.Missing ->
           return GoalRunnerExportResult.Failed(ready.issueKey, "Spec bundle file is missing at ${specs.path}.")
+        is SpecBundleRead.UnsupportedPath ->
+          return GoalRunnerExportResult.Refused(
+            ready.issueKey,
+            "Spec path '${specs.path}' is outside the project store specs directory and cannot be restored " +
+              "from an archive. Move the bundle under specs/<bundle>/ before exporting.",
+          )
         is SpecBundleRead.Ready -> specs.entries
       }
     val documents = archiveDocuments(ready.issueKey, ready.git, snapshot)
-    try {
-      envelopeValidator.validate(documents.envelope)
-    } catch (error: SkillBillRuntimeException) {
-      return GoalRunnerExportResult.Failed(ready.issueKey, error.message ?: error.code.toString())
-    }
-    return persistArchiveZip(ready, specEntries, documents, snapshot)
+    val validationFailure =
+      try {
+        envelopeValidator.validate(documents.envelope)
+        null
+      } catch (error: SkillBillRuntimeException) {
+        GoalRunnerExportResult.Failed(ready.issueKey, error.message ?: error.code.toString())
+      }
+    return validationFailure ?: persistArchiveZip(ready, specEntries, documents, snapshot)
   }
 
   private fun archiveDocuments(
@@ -323,6 +331,7 @@ public class GoalRunnerArchiveExportOperations(
     manifestPath: Path?,
   ): SpecBundleRead {
     val store = projectStore.resolve(repoRoot)
+    val specsRoot = store.specsRoot.toAbsolutePath().normalize()
     val resolvedManifestPath = manifestPath ?: derivedManifestPath(repoRoot, manifest)
     val paths =
       linkedSetOf(
@@ -335,7 +344,11 @@ public class GoalRunnerArchiveExportOperations(
       if (!manifestFileStore.isRegularFile(path)) {
         return SpecBundleRead.Missing(repoRelativePath(repoRoot, store, path))
       }
-      val relative = repoRelativePath(repoRoot, store, path)
+      val absolutePath = path.toAbsolutePath().normalize()
+      if (!absolutePath.startsWith(specsRoot)) {
+        return SpecBundleRead.UnsupportedPath(repoRelativePath(repoRoot, store, path))
+      }
+      val relative = specsRoot.relativize(absolutePath).toString().replace('\\', '/')
       entries += archiveSpecEntryName(relative) to manifestFileStore.readText(path).encodeToByteArray()
     }
     return SpecBundleRead.Ready(entries)
@@ -535,6 +548,10 @@ private sealed interface SpecBundleRead {
   ) : SpecBundleRead
 
   data class Missing(
+    val path: String,
+  ) : SpecBundleRead
+
+  data class UnsupportedPath(
     val path: String,
   ) : SpecBundleRead
 }

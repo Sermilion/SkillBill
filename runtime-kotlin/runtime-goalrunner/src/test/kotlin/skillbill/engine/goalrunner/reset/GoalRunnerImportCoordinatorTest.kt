@@ -23,11 +23,66 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class GoalRunnerImportCoordinatorTest {
+  @Test
+  fun `exported archive restores manifest parent and subtasks at recorded paths`() {
+    val fixture = importFixture(bundleName = "specs")
+    val archive = fixture.root.resolve("archive.zip")
+    val exportService =
+      testGoalRunnerStatusService(
+        manifestStore = fixture.store,
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = fixture.port,
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
+      )
+    assertIs<GoalRunnerExportResult.Exported>(
+      exportService.export(GoalRunnerExportRequest("SKILL-245", fixture.root, archive)),
+    )
+
+    val destinationRoot = Files.createTempDirectory("goal-import-roundtrip-dest")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(destinationPort),
+      )
+
+    val result = importService.import(GoalRunnerImportRequest(archive, destinationRoot))
+
+    assertIs<GoalRunnerImportResult.Imported>(result)
+    assertContains(
+      Files.readString(destinationPort.root.resolve("specs/specs/decomposition-manifest.yaml")),
+      "specs/specs/spec.md",
+    )
+    assertEquals("body of spec.md", Files.readString(destinationPort.root.resolve("specs/specs/spec.md")))
+    assertEquals(
+      "body of spec_subtask_1.md",
+      Files.readString(destinationPort.root.resolve("specs/specs/spec_subtask_1.md")),
+    )
+    assertEquals(
+      "body of spec_subtask_2.md",
+      Files.readString(destinationPort.root.resolve("specs/specs/spec_subtask_2.md")),
+    )
+  }
+
   @Test
   fun `wrong branch refuses import without workflow or spec writes`() {
     val fixture = importFixture()
@@ -83,10 +138,10 @@ private data class ImportFixture(
   val store: InMemoryGoalManifestStore,
 )
 
-private fun importFixture(): ImportFixture {
+private fun importFixture(bundleName: String = "SKILL-245-goal"): ImportFixture {
   val root = Files.createTempDirectory("goal-import-root")
   val storeRoot = Files.createTempDirectory("goal-import-store")
-  val bundle = storeRoot.resolve("specs/SKILL-245-goal")
+  val bundle = storeRoot.resolve("specs/$bundleName")
   Files.createDirectories(bundle)
   listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md", "traceability.md").forEach { name ->
     Files.writeString(bundle.resolve(name), "body of $name")
@@ -95,11 +150,11 @@ private fun importFixture(): ImportFixture {
     manifest(subtaskCount = 2).copy(
       issueKey = "SKILL-245",
       featureBranch = "feat/SKILL-245-goal",
-      parentSpecPath = "specs/SKILL-245-goal/spec.md",
+      parentSpecPath = "specs/$bundleName/spec.md",
       subtasks =
         manifest(2).subtasks.mapIndexed { index, subtask ->
           subtask.copy(
-            specPath = "specs/SKILL-245-goal/spec_subtask_${index + 1}.md",
+            specPath = "specs/$bundleName/spec_subtask_${index + 1}.md",
             branch = "feat/SKILL-245-goal",
           )
         },

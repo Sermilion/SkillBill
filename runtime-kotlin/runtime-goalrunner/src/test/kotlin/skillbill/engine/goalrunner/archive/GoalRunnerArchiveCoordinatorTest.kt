@@ -202,6 +202,82 @@ class GoalRunnerArchiveCoordinatorTest {
     assertEquals("plan_subtasks", row[WorkflowWirePayloadKeys.CURRENT_STEP_ID])
     val typed = JsonCodec.anyToStringAnyMap(row[GoalArchiveRecordKeys.TYPED_ARTIFACTS])!!
     assertTrue(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.label() in typed)
+    val specEntries = readZipEntryNames(output).filter { it.startsWith(GoalArchiveEnvelopeKeys.SPECS_PREFIX) }.toSet()
+    assertEquals(
+      setOf(
+        "specs/SKILL-245-goal/decomposition-manifest.yaml",
+        "specs/SKILL-245-goal/spec.md",
+        "specs/SKILL-245-goal/spec_subtask_1.md",
+        "specs/SKILL-245-goal/spec_subtask_2.md",
+      ),
+      specEntries,
+    )
+  }
+
+  @Test
+  fun `legacy checkout specs refuse export with migration guidance`() {
+    val root = Files.createTempDirectory("goal-export-legacy-root")
+    val storeRoot = Files.createTempDirectory("goal-export-legacy-store")
+    val bundle = root.resolve(".feature-specs/SKILL-245-goal")
+    Files.createDirectories(bundle)
+    listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md").forEach { name ->
+      Files.writeString(bundle.resolve(name), "body of $name")
+    }
+    val sourceManifest =
+      manifest(subtaskCount = 2).copy(
+        issueKey = "SKILL-245",
+        featureBranch = "feat/SKILL-245-goal",
+        parentSpecPath = ".feature-specs/SKILL-245-goal/spec.md",
+        subtasks =
+          manifest(2).subtasks.mapIndexed { index, subtask ->
+            subtask.copy(
+              specPath = ".feature-specs/SKILL-245-goal/spec_subtask_${index + 1}.md",
+              branch = "feat/SKILL-245-goal",
+            )
+          },
+      )
+    val port = FixedProjectStorePort(storeRoot)
+    val manifestPath = bundle.resolve("decomposition-manifest.yaml")
+    Files.writeString(
+      manifestPath,
+      encodeDecompositionManifestYaml(
+        sourceManifest,
+        testDecompositionManifestValidator,
+        storeAwareTestDecompositionManifestStore(port),
+        manifestPath.toString(),
+      ),
+    )
+    val output = root.resolve("archive.zip")
+    val service =
+      exportService(
+        manifestStore = InMemoryGoalManifestStore(sourceManifest),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGitOperations("feat/SKILL-245-goal", "abc123"),
+            projectStore = port,
+            workerSupervisor = IdleWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(port),
+      )
+
+    val result = service.export(GoalRunnerExportRequest("SKILL-245", root, output))
+
+    assertIs<GoalRunnerExportResult.Refused>(result)
+    assertContains(result.reason, ".feature-specs/SKILL-245-goal")
+    assertContains(result.reason, "Move the bundle under specs/<bundle>/")
+    assertFalse(Files.exists(output))
+  }
+
+  private fun readZipEntryNames(zipPath: Path): List<String> {
+    ZipInputStream(Files.newInputStream(zipPath)).use { zip ->
+      val names = mutableListOf<String>()
+      while (true) {
+        val entry = zip.nextEntry ?: break
+        names += entry.name
+        zip.closeEntry()
+      }
+      return names
+    }
   }
 
   private fun readZipJsonList(
