@@ -19,6 +19,7 @@ internal data class StandaloneReviewReport(
   val verdict: String?,
   val findings: List<ParallelReviewMergedFinding>,
   val census: List<StandaloneReviewFinding>,
+  val findingGroups: List<StandaloneReviewFindingGroup>,
   val warnings: List<String>,
   val reviewWarnings: List<StandaloneReviewWarning>,
   val hasIncompleteReviewWarning: Boolean,
@@ -28,6 +29,12 @@ internal data class StandaloneReviewReport(
 ) {
   val admitted: Boolean get() = rejectionReasons.isEmpty()
 }
+
+internal data class StandaloneReviewFindingGroup(
+  val identity: String,
+  val finding: ParallelReviewMergedFinding?,
+  val members: List<StandaloneReviewFinding>,
+)
 
 internal data class StandaloneReviewWarning(
   val identity: String,
@@ -59,7 +66,7 @@ internal object StandaloneReviewReportAdmission {
         producerId = result.lane1.agentId,
       )
     val integration = integrationCandidates(result.integration)
-    val (candidates, reasons) = collectCandidates(rawOutput, result, parent, integration)
+    val (candidates, reasons, mergedMemberships) = collectCandidates(rawOutput, result, parent, integration)
 
     val census =
       candidates.mapIndexed { index, candidate ->
@@ -75,6 +82,7 @@ internal object StandaloneReviewReportAdmission {
     if (census.size > MAX_CENSUS_FINDINGS) {
       reasons += "report contains more findings than the verifier identity format supports"
     }
+    val findingGroups = findingGroups(census, result.mergeResult.findings, mergedMemberships)
 
     val (coverageLines, warnings, reviewWarnings) = collectWarnings(parent, integration, result, reasons)
     reasons += reportRejections(rawOutput, result, truncated, requireDelegatedCoverage, integration)
@@ -90,6 +98,7 @@ internal object StandaloneReviewReportAdmission {
       verdict = finalVerdict,
       findings = result.mergeResult.findings,
       census = census,
+      findingGroups = findingGroups,
       warnings = warnings,
       reviewWarnings = reviewWarnings,
       hasIncompleteReviewWarning = knownIncompleteReview,
@@ -212,7 +221,7 @@ internal object StandaloneReviewReportAdmission {
     result: ParallelCodeReviewResult,
     parent: StandaloneReviewSourceCensus,
     integration: StandaloneReviewSourceCensus,
-  ): Pair<MutableList<StandaloneReviewSourceCandidate>, MutableList<String>> {
+  ): Triple<MutableList<StandaloneReviewSourceCandidate>, MutableList<String>, Map<String, List<Int>>> {
     val candidates = (parent.candidates + integration.candidates).toMutableList()
     val reasons = (parent.rejections + integration.rejections).toMutableList()
     if (
@@ -244,7 +253,7 @@ internal object StandaloneReviewReportAdmission {
     if (mergedTexts.keys.any { ref -> result.mergeResult.findings.none { it.fNumber == ref } }) {
       reasons += "merged review output contains findings missing from its typed merge result"
     }
-    reconcileMergedFindings(result.mergeResult.findings, mergedTexts, candidates, reasons)
+    val memberships = reconcileMergedFindings(result.mergeResult.findings, mergedTexts, candidates, reasons)
     val explicitClean = StandaloneReviewReportSourceCensusBuilder.hasExplicitCleanDeclaration(rawOutput)
     if (parent.candidates.isEmpty() && !explicitClean) {
       reasons += "parent report does not explicitly declare an empty findings census"
@@ -253,7 +262,42 @@ internal object StandaloneReviewReportAdmission {
       reasons += "parent report declares no findings alongside admitted candidates"
     }
 
-    return candidates to reasons
+    return Triple(candidates, reasons, memberships)
+  }
+
+  private fun findingGroups(
+    census: List<StandaloneReviewFinding>,
+    findings: List<ParallelReviewMergedFinding>,
+    mergedMemberships: Map<String, List<Int>>,
+  ): List<StandaloneReviewFindingGroup> {
+    val claimed = mutableSetOf<Int>()
+    val groups =
+      mergedMemberships.mapNotNull { (identity, indices) ->
+        val members = indices.distinct().mapNotNull(census::getOrNull)
+        if (members.isEmpty()) {
+          null
+        } else {
+          claimed += indices
+          StandaloneReviewFindingGroup(
+            identity,
+            findings.firstOrNull { it.fNumber == identity },
+            members,
+          )
+        }
+      }
+    val remaining = census.withIndex().filterNot { it.index in claimed }
+    val identities = groups.mapTo(mutableSetOf(), StandaloneReviewFindingGroup::identity)
+    return groups +
+      remaining.map { (_, finding) ->
+        var identity = finding.identity
+        var next = 1
+        while (identity in identities) {
+          identity = "F-${next.toString().padStart(IDENTITY_DIGITS, '0')}"
+          next += 1
+        }
+        identities += identity
+        StandaloneReviewFindingGroup(identity, finding.finding, listOf(finding))
+      }
   }
 
   private fun integrationCandidates(outcome: ReviewIntegrationPassOutcome?): StandaloneReviewSourceCensus {
@@ -333,8 +377,9 @@ internal object StandaloneReviewReportAdmission {
     mergedTexts: Map<String, String>,
     candidates: MutableList<StandaloneReviewSourceCandidate>,
     reasons: MutableList<String>,
-  ) {
+  ): Map<String, List<Int>> {
     val claimedCandidates = mutableSetOf<Int>()
+    val memberships = linkedMapOf<String, List<Int>>()
     merged.forEach { finding ->
       val referenced = referencedCandidates(finding, candidates)
       val unresolvedRefs =
@@ -357,16 +402,19 @@ internal object StandaloneReviewReportAdmission {
                 MERGED_REPORT,
                 finding.asRawFinding(),
               )
+            memberships[finding.fNumber] = listOf(candidates.lastIndex)
           } ?: run {
             reasons += "merged finding has no retained source presentation text"
           }
         referenced.size == 1 -> {
           val index = referenced.single().index
           candidates[index] = candidates[index].copy(finding = finding.asRawFinding())
+          memberships[finding.fNumber] = listOf(index)
         }
-        else -> Unit
+        else -> memberships[finding.fNumber] = referencedIndices
       }
     }
+    return memberships
   }
 
   private fun referencedCandidates(
