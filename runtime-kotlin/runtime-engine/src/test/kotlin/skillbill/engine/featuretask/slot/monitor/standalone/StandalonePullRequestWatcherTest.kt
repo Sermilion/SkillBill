@@ -31,6 +31,7 @@ class StandalonePullRequestWatcherTest {
   private val sleeps = mutableListOf<Duration>()
   private var reported: PullRequestChecks = PullRequestChecks.NoChecks
   private val reportedSequence = ArrayDeque<PullRequestChecks>()
+  private val checkReads = mutableListOf<Instant>()
   private var state = MonitorPullRequestState.OPEN
   private var conflicting = false
   private var lookupFailure: String? = null
@@ -40,12 +41,14 @@ class StandalonePullRequestWatcherTest {
   private var adoptionRefusal: String? = null
   private val checks =
     object : MonitorCheckSource {
-      override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks =
-        when {
+      override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks {
+        checkReads += clock
+        return when {
           reportedSequence.size > 1 -> reportedSequence.removeFirst()
           reportedSequence.isNotEmpty() -> reportedSequence.first()
           else -> reported
         }
+      }
 
       override fun commitChecks(
         repository: MonitorRepositoryIdentity,
@@ -109,6 +112,18 @@ class StandalonePullRequestWatcherTest {
     assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
     assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofMinutes(2))
     assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) < Duration.ofHours(1))
+    assertTrue(checkReads.any { !it.isBefore(Instant.parse("2026-10-16T10:02:00Z")) })
+  }
+
+  @Test
+  fun `a failure reported after an empty observation determines the outcome`() {
+    heads += PUBLISHED
+    val failing = check("build", CheckBucket.FAIL)
+    reportedSequence += reports()
+    reportedSequence += reports(failing)
+
+    assertEquals(PullRequestCiOutcome.Failed(listOf(failing), PUBLISHED), watch())
+    assertTrue(checkReads.size >= 2)
   }
 
   @Test
