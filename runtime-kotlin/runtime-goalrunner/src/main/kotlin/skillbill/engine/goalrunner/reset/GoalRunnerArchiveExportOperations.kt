@@ -7,6 +7,8 @@ import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GoalArchiveEnvelopeKeys
 import skillbill.contracts.workflow.goal.GoalArchiveRecordKeys
@@ -38,6 +40,7 @@ import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.projectstore.model.SpecPathLocation
 import skillbill.ports.projectstore.model.classifySpecPath
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -195,7 +198,9 @@ public class GoalRunnerArchiveExportOperations(
         is FencedTransactionResult.Committed -> result.value
       }
     if (!isCurrent(ready.observation)) return GoalRunnerExportResult.Refused(ready.issueKey, changedSummary)
-    return writeArchive(ready, snapshot)
+    val sourceManifest =
+      ready.plan.sourceManifest ?: return GoalRunnerExportResult.Failed(ready.issueKey, "No decomposition manifest.")
+    return writeArchive(ready, snapshot, sourceManifest)
   }
 
   private fun observationRefusal(
@@ -217,9 +222,8 @@ public class GoalRunnerArchiveExportOperations(
   private fun writeArchive(
     ready: ReadyExport,
     snapshot: GoalArchiveOwnedSnapshot,
+    sourceManifest: DecompositionManifest,
   ): GoalRunnerExportResult {
-    val sourceManifest =
-      ready.plan.sourceManifest ?: return GoalRunnerExportResult.Failed(ready.issueKey, "No decomposition manifest.")
     val specEntries =
       when (val specs = readSpecBundleEntries(ready.repoRoot, sourceManifest, ready.plan.manifestPath)) {
         is SpecBundleRead.Missing ->
@@ -227,8 +231,12 @@ public class GoalRunnerArchiveExportOperations(
         is SpecBundleRead.UnsupportedPath ->
           return GoalRunnerExportResult.Refused(
             ready.issueKey,
-            "Spec path '${specs.path}' is outside the project store specs directory and cannot be restored " +
-              "from an archive. Move the bundle under specs/<bundle>/ before exporting.",
+            "Spec path '${specs.path}' is outside the supported project spec roots and cannot be archived.",
+          )
+        is SpecBundleRead.Collision ->
+          return GoalRunnerExportResult.Refused(
+            ready.issueKey,
+            "Distinct spec files map to the same archive entry '${specs.entry}'; export refused.",
           )
         is SpecBundleRead.Ready -> specs.entries
       }
@@ -337,7 +345,7 @@ public class GoalRunnerArchiveExportOperations(
     manifestPath: Path?,
   ): SpecBundleRead {
     val store = projectStore.resolve(repoRoot)
-    val specsRoot = store.specsRoot.toAbsolutePath().normalize()
+    val checkoutRoot = repoRoot.toAbsolutePath().normalize()
     val resolvedManifestPath = (manifestPath ?: derivedManifestPath(repoRoot, manifest)).toAbsolutePath().normalize()
     val traceabilityPath = resolvedManifestPath.resolveSibling("traceability.md")
     val portableManifest = manifest.withPortableSpecPaths(repoRoot, store)
@@ -350,15 +358,19 @@ public class GoalRunnerArchiveExportOperations(
         if (manifestFileStore.isRegularFile(traceabilityPath)) add(traceabilityPath)
       }
     val entries = mutableListOf<Pair<String, ByteArray>>()
+    val entryNames = mutableSetOf<String>()
     for (path in paths) {
       if (!manifestFileStore.isRegularFile(path)) {
         return SpecBundleRead.Missing(repoRelativePath(repoRoot, store, path))
       }
       val absolutePath = path.toAbsolutePath().normalize()
-      if (!absolutePath.startsWith(specsRoot)) {
+      val location = store.classifySpecPath(absolutePath, checkoutRoot)
+      if (location == null) {
         return SpecBundleRead.UnsupportedPath(repoRelativePath(repoRoot, store, path))
       }
-      val relative = specsRoot.relativize(absolutePath).toString().replace('\\', '/')
+      val relative = location.archiveRelativePath()
+      val entryName = archiveSpecEntryName(relative)
+      if (!entryNames.add(entryName)) return SpecBundleRead.Collision(entryName)
       val content =
         if (path == resolvedManifestPath && portableManifest != manifest) {
           encodeDecompositionManifestYaml(
@@ -369,7 +381,7 @@ public class GoalRunnerArchiveExportOperations(
         } else {
           manifestFileStore.readText(path)
         }
-      entries += archiveSpecEntryName(relative) to content.encodeToByteArray()
+      entries += entryName to content.encodeToByteArray()
     }
     return SpecBundleRead.Ready(entries)
   }
@@ -391,11 +403,17 @@ public class GoalRunnerArchiveExportOperations(
     repoRoot: Path,
     store: ProjectStoreLocation,
   ): String {
-    val path = Path.of(specPath)
-    if (!path.isAbsolute) return specPath
-    val location = store.classifySpecPath(path.toAbsolutePath().normalize(), repoRoot.toAbsolutePath().normalize())
-    return (location as? SpecPathLocation.Store)?.relative ?: specPath
+    val path = store.resolveSpecPath(specPath, repoRoot).toAbsolutePath().normalize()
+    val location = store.classifySpecPath(path, repoRoot.toAbsolutePath().normalize()) ?: return specPath
+    return ProjectStoreLayout.SPECS_PREFIX + location.archiveRelativePath()
   }
+
+  private fun SpecPathLocation.archiveRelativePath(): String =
+    when (this) {
+      is SpecPathLocation.Store -> relative.removePrefix(ProjectStoreLayout.SPECS_PREFIX)
+      is SpecPathLocation.Legacy ->
+        relative.removePrefix(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)
+    }
 
   private fun archiveSpecEntryName(storeRelativePath: String): String {
     val normalized = storeRelativePath.replace('\\', '/').trimStart('/')
@@ -607,6 +625,10 @@ private sealed interface SpecBundleRead {
 
   data class UnsupportedPath(
     val path: String,
+  ) : SpecBundleRead
+
+  data class Collision(
+    val entry: String,
   ) : SpecBundleRead
 }
 

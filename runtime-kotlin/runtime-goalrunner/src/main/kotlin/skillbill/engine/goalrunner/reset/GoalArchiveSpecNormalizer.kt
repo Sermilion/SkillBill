@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.reset
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.engine.goalrunner.archive.ParsedGoalArchiveBundle
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPacket
@@ -43,8 +44,10 @@ internal class GoalArchiveSpecNormalizer(
           return null
         }
       if (relative.isBlank() || path.isAbsolute || path.startsWith("..")) continue
-      result[Path.of(ProjectStoreLayout.SPECS_PREFIX).resolve(path).normalize()] =
-        ProjectStoreLayout.SPECS_PREFIX + path.toString().replace('\\', '/')
+      val storePath = Path.of(ProjectStoreLayout.SPECS_PREFIX).resolve(path).normalize()
+      val portable = ProjectStoreLayout.SPECS_PREFIX + path.toString().replace('\\', '/')
+      result[storePath] = portable
+      result[Path.of(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX).resolve(path).normalize()] = portable
     }
     return result
   }
@@ -150,7 +153,10 @@ private class ReferenceMapper(
       } catch (_: InvalidPathException) {
         return null
       }
-    if (!path.isAbsolute) return reference
+    if (!path.isAbsolute) {
+      return paths[path.normalize()]
+        ?: if (reference.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)) null else reference
+    }
     return paths.filterKeys { path.toAbsolutePath().normalize().endsWith(it) }.values.distinct().singleOrNull()
   }
 

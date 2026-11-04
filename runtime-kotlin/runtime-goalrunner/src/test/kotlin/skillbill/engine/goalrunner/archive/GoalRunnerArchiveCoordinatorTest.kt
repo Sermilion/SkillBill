@@ -271,12 +271,12 @@ class GoalRunnerArchiveCoordinatorTest {
   }
 
   @Test
-  fun `legacy checkout specs refuse export with migration guidance`() {
+  fun `legacy checkout specs export into the archive specs layout`() {
     val root = Files.createTempDirectory("goal-export-legacy-root")
     val storeRoot = Files.createTempDirectory("goal-export-legacy-store")
     val bundle = root.resolve(".feature-specs/SKILL-245-goal")
     Files.createDirectories(bundle)
-    listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md").forEach { name ->
+    listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md", "traceability.md").forEach { name ->
       Files.writeString(bundle.resolve(name), "body of $name")
     }
     val sourceManifest =
@@ -318,9 +318,138 @@ class GoalRunnerArchiveCoordinatorTest {
 
     val result = service.export(GoalRunnerExportRequest("SKILL-245", root, output))
 
+    assertIs<GoalRunnerExportResult.Exported>(result)
+    assertEquals(
+      setOf(
+        "specs/SKILL-245-goal/decomposition-manifest.yaml",
+        "specs/SKILL-245-goal/spec.md",
+        "specs/SKILL-245-goal/spec_subtask_1.md",
+        "specs/SKILL-245-goal/spec_subtask_2.md",
+        "specs/SKILL-245-goal/traceability.md",
+      ),
+      readZipEntryNames(output).filter { it.startsWith("specs/") }.toSet(),
+    )
+    val archivedManifest = readZipEntry(output, "specs/SKILL-245-goal/decomposition-manifest.yaml").decodeToString()
+    assertContains(archivedManifest, "specs/SKILL-245-goal/spec.md")
+    assertFalse(archivedManifest.contains(".feature-specs"))
+    assertEquals(
+      "body of traceability.md",
+      readZipEntry(output, "specs/SKILL-245-goal/traceability.md").decodeToString(),
+    )
+  }
+
+  @Test
+  fun `absolute legacy manifest references become portable archive paths`() {
+    val root = Files.createTempDirectory("goal-export-absolute-legacy-root")
+    val storeRoot = Files.createTempDirectory("goal-export-absolute-legacy-store")
+    val bundle = root.resolve(".feature-specs/SKILL-245-goal")
+    Files.createDirectories(bundle)
+    listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md").forEach { name ->
+      Files.writeString(bundle.resolve(name), "body of $name")
+    }
+    val sourceManifest =
+      manifest(subtaskCount = 2).copy(
+        issueKey = "SKILL-245",
+        featureBranch = "feat/SKILL-245-goal",
+        parentSpecPath = bundle.resolve("spec.md").toString(),
+        subtasks =
+          manifest(2).subtasks.mapIndexed { index, subtask ->
+            subtask.copy(
+              specPath = bundle.resolve("spec_subtask_${index + 1}.md").toString(),
+              branch = "feat/SKILL-245-goal",
+            )
+          },
+      )
+    val port = FixedProjectStorePort(storeRoot)
+    val manifestPath = bundle.resolve("decomposition-manifest.yaml")
+    Files.writeString(
+      manifestPath,
+      encodeDecompositionManifestYaml(
+        sourceManifest,
+        testDecompositionManifestValidator,
+        storeAwareTestDecompositionManifestStore(port),
+        manifestPath.toString(),
+      ),
+    )
+    val output = root.resolve("archive.zip")
+    val service =
+      exportService(
+        manifestStore = InMemoryGoalManifestStore(sourceManifest),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGitOperations("feat/SKILL-245-goal", "abc123"),
+            projectStore = port,
+            workerSupervisor = IdleWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(port),
+      )
+
+    assertIs<GoalRunnerExportResult.Exported>(service.export(GoalRunnerExportRequest("SKILL-245", root, output)))
+
+    val archivedManifest = readZipEntry(output, "specs/SKILL-245-goal/decomposition-manifest.yaml").decodeToString()
+    assertContains(archivedManifest, "specs/SKILL-245-goal/spec.md")
+    assertFalse(archivedManifest.contains(root.toString()))
+  }
+
+  @Test
+  fun `distinct files that map to one archive entry refuse export`() {
+    val root = Files.createTempDirectory("goal-export-spec-collision-root")
+    val storeRoot = Files.createTempDirectory("goal-export-spec-collision-store")
+    val legacyBundle = root.resolve(".feature-specs/SKILL-245-goal")
+    val storeBundle = storeRoot.resolve("specs/SKILL-245-goal")
+    Files.createDirectories(legacyBundle)
+    Files.createDirectories(storeBundle)
+    listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md").forEach { name ->
+      Files.writeString(legacyBundle.resolve(name), "legacy $name")
+    }
+    Files.writeString(storeBundle.resolve("spec_subtask_1.md"), "store spec_subtask_1.md")
+    val base = manifest(subtaskCount = 2)
+    val port = FixedProjectStorePort(storeRoot)
+    val sourceManifest =
+      base.copy(
+        issueKey = "SKILL-245",
+        featureBranch = "feat/SKILL-245-goal",
+        parentSpecPath = ".feature-specs/SKILL-245-goal/spec.md",
+        subtasks =
+          base.subtasks.mapIndexed { index, subtask ->
+            subtask.copy(
+              specPath =
+                if (index == 0) {
+                  storeBundle.resolve("spec_subtask_1.md").toString()
+                } else {
+                  ".feature-specs/SKILL-245-goal/spec_subtask_1.md"
+                },
+              branch = "feat/SKILL-245-goal",
+            )
+          },
+      )
+    val manifestPath = legacyBundle.resolve("decomposition-manifest.yaml")
+    Files.writeString(
+      manifestPath,
+      encodeDecompositionManifestYaml(
+        sourceManifest,
+        testDecompositionManifestValidator,
+        storeAwareTestDecompositionManifestStore(port),
+        manifestPath.toString(),
+      ),
+    )
+    val output = root.resolve("archive.zip")
+    val service =
+      exportService(
+        manifestStore = InMemoryGoalManifestStore(sourceManifest),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGitOperations("feat/SKILL-245-goal", "abc123"),
+            projectStore = port,
+            workerSupervisor = IdleWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(port),
+      )
+
+    val result = service.export(GoalRunnerExportRequest("SKILL-245", root, output))
+
     assertIs<GoalRunnerExportResult.Refused>(result)
-    assertContains(result.reason, ".feature-specs/SKILL-245-goal")
-    assertContains(result.reason, "Move the bundle under specs/<bundle>/")
+    assertContains(result.reason, "same archive entry")
     assertFalse(Files.exists(output))
   }
 

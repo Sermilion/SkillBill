@@ -41,6 +41,87 @@ import kotlin.test.assertNull
 
 class GoalRunnerImportCoordinatorTest {
   @Test
+  fun `legacy checkout bundle exports and imports into destination project specs`() {
+    val archive = exportLegacyBundle()
+    val destinationRoot = Files.createTempDirectory("goal-import-legacy-destination")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val states = InMemoryWorkflowStates()
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        database = FakeDatabaseSessionFactory(states, goalRunnerControls = RecordingImportControls()),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(destinationPort),
+      )
+
+    assertIs<GoalRunnerImportResult.Imported>(importService.import(GoalRunnerImportRequest(archive, destinationRoot)))
+
+    val destinationBundle = destinationPort.root.resolve("specs/SKILL-245-goal")
+    val restoredManifest = Files.readString(destinationBundle.resolve("decomposition-manifest.yaml"))
+    assertContains(restoredManifest, "specs/SKILL-245-goal/spec.md")
+    assertFalse(restoredManifest.contains(".feature-specs"))
+    assertEquals("body of spec.md", Files.readString(destinationBundle.resolve("spec.md")))
+    assertEquals("body of traceability.md", Files.readString(destinationBundle.resolve("traceability.md")))
+  }
+
+  private fun exportLegacyBundle(): Path {
+    val sourceRoot = Files.createTempDirectory("goal-import-legacy-source")
+    val sourceStore = FixedProjectStorePort(Files.createTempDirectory("goal-import-legacy-source-store"))
+    val sourceBundle = sourceRoot.resolve(".feature-specs/SKILL-245-goal")
+    Files.createDirectories(sourceBundle)
+    listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md", "traceability.md").forEach { name ->
+      Files.writeString(sourceBundle.resolve(name), "body of $name")
+    }
+    val sourceManifest =
+      manifest(subtaskCount = 2).copy(
+        issueKey = "SKILL-245",
+        featureBranch = "feat/SKILL-245-goal",
+        parentSpecPath = ".feature-specs/SKILL-245-goal/spec.md",
+        subtasks =
+          manifest(2).subtasks.mapIndexed { index, subtask ->
+            subtask.copy(
+              specPath = ".feature-specs/SKILL-245-goal/spec_subtask_${index + 1}.md",
+              branch = "feat/SKILL-245-goal",
+            )
+          },
+      )
+    val manifestPath = sourceBundle.resolve("decomposition-manifest.yaml")
+    Files.writeString(
+      manifestPath,
+      encodeDecompositionManifestYaml(
+        sourceManifest,
+        testDecompositionManifestValidator,
+        storeAwareTestDecompositionManifestStore(sourceStore),
+        manifestPath.toString(),
+      ),
+    )
+    val archive = sourceRoot.resolve("archive.zip")
+    val exportService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(sourceManifest),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = sourceStore,
+            archiveSnapshotPort = parentSnapshot(),
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(sourceStore),
+      )
+    assertIs<GoalRunnerExportResult.Exported>(
+      exportService.export(GoalRunnerExportRequest("SKILL-245", sourceRoot, archive)),
+    )
+    return archive
+  }
+
+  @Test
   fun `unmappable absolute archive reference refuses before restoring rows or specs`() {
     val fixture = importFixture(bundleName = "specs")
     val archive = fixture.root.resolve("archive.zip")
