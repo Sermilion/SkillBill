@@ -46,6 +46,14 @@ enum class DiffCommentRejection(val wireValue: String) {
   OUTCOME_NOT_ALLOWED("outcome_not_allowed"),
 }
 
+data class DiffCommentPendingThreadRequest(
+  val path: String,
+  val side: DiffCommentSide,
+  val line: Int?,
+  val body: String,
+  val expectedBranch: String? = null,
+)
+
 data class DiffCommentAgentThreadRequest(
   val path: String?,
   val side: DiffCommentSide?,

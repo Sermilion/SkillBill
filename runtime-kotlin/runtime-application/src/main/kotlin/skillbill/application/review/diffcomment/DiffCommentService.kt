@@ -5,6 +5,7 @@ import skillbill.application.review.diffcomment.model.DiffCommentAgentThreadRequ
 import skillbill.application.review.diffcomment.model.DiffCommentCountResult
 import skillbill.application.review.diffcomment.model.DiffCommentDeleteResult
 import skillbill.application.review.diffcomment.model.DiffCommentListResult
+import skillbill.application.review.diffcomment.model.DiffCommentPendingThreadRequest
 import skillbill.application.review.diffcomment.model.DiffCommentRejection
 import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.ports.db.DatabaseSessionFactory
@@ -55,14 +56,15 @@ class DiffCommentService(
 
   fun addPending(
     repoRoot: Path,
-    path: String,
-    side: DiffCommentSide,
-    line: Int?,
-    body: String,
+    request: DiffCommentPendingThreadRequest,
   ): DiffCommentThreadResult {
+    val path = request.path
+    val side = request.side
+    val line = request.line
+    val body = request.body
     validateThreadInput(path, line, body)?.let { return DiffCommentThreadResult.Rejected(it) }
     val anchor =
-      when (val result = anchor(repoRoot, null)) {
+      when (val result = pendingAnchor(repoRoot, request.expectedBranch)) {
         is AnchorResolution.Available -> result.anchor
         is AnchorResolution.Unavailable -> return DiffCommentThreadResult.Unavailable(result.reason)
       }
@@ -234,9 +236,12 @@ class DiffCommentService(
       }
     }
 
-  fun submitReview(repoRoot: Path): DiffCommentCountResult {
+  fun submitReview(
+    repoRoot: Path,
+    branch: String? = null,
+  ): DiffCommentCountResult {
     val anchor =
-      when (val result = anchor(repoRoot, null)) {
+      when (val result = anchor(repoRoot, branch)) {
         is AnchorResolution.Available -> result.anchor
         is AnchorResolution.Unavailable -> return DiffCommentCountResult.Unavailable(result.reason)
       }
@@ -247,9 +252,12 @@ class DiffCommentService(
     return DiffCommentCountResult.Counted(count)
   }
 
-  fun discardPending(repoRoot: Path): DiffCommentCountResult {
+  fun discardPending(
+    repoRoot: Path,
+    branch: String? = null,
+  ): DiffCommentCountResult {
     val anchor =
-      when (val result = anchor(repoRoot, null)) {
+      when (val result = anchor(repoRoot, branch)) {
         is AnchorResolution.Available -> result.anchor
         is AnchorResolution.Unavailable -> return DiffCommentCountResult.Unavailable(result.reason)
       }
@@ -372,6 +380,20 @@ class DiffCommentService(
 
     data class Unavailable(val reason: String) : AnchorResolution
   }
+
+  private fun pendingAnchor(
+    root: Path,
+    expectedBranch: String?,
+  ): AnchorResolution =
+    when (val result = anchor(root, null)) {
+      is AnchorResolution.Unavailable -> result
+      is AnchorResolution.Available ->
+        if (expectedBranch != null && result.anchor.branch != expectedBranch) {
+          anchorUnavailable("authoring_branch", "Check out $expectedBranch to comment")
+        } else {
+          result
+        }
+    }
 
   private fun anchor(
     root: Path,

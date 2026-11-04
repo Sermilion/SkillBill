@@ -3,6 +3,7 @@ package skillbill.di.review
 import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.diffcomment.model.DiffCommentAgentThreadRequest
 import skillbill.application.review.diffcomment.model.DiffCommentListResult
+import skillbill.application.review.diffcomment.model.DiffCommentPendingThreadRequest
 import skillbill.application.review.diffcomment.model.DiffCommentRejection
 import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
@@ -38,7 +39,10 @@ class DiffCommentServiceTest {
 
     val added =
       assertIs<DiffCommentThreadResult.Unavailable>(
-        fixture.service.addPending(fixture.root, "file.kt", DiffCommentSide.NEW, 1, "review"),
+        fixture.service.addPending(
+          fixture.root,
+          DiffCommentPendingThreadRequest("file.kt", DiffCommentSide.NEW, 1, "review"),
+        ),
       )
     val listed = assertIs<DiffCommentListResult.Unavailable>(fixture.service.list(fixture.root))
 
@@ -62,7 +66,10 @@ class DiffCommentServiceTest {
   fun `a missing line anchor cannot match an empty line that later appears`() {
     val fixture = Fixture()
     fixture.observation = DiffCommentLineObservation.Missing
-    fixture.service.addPending(fixture.root, "file.kt", DiffCommentSide.NEW, 1, "review")
+    fixture.service.addPending(
+      fixture.root,
+      DiffCommentPendingThreadRequest("file.kt", DiffCommentSide.NEW, 1, "review"),
+    )
     fixture.observation = DiffCommentLineObservation.Text("")
 
     assertTrue(fixture.list().threads.single().outdated)

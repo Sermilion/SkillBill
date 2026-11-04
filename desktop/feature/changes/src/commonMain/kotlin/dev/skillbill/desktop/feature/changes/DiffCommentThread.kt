@@ -90,6 +90,8 @@ internal fun DiffCommentThread(
   ui: ThreadUi,
   onAction: (ChangesWindowAction) -> Unit,
   onReplyFocusChanged: (String, Boolean) -> Unit,
+  editing: CommentEditUi? = null,
+  onEditFocusChanged: (Boolean) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val colors = SkillBillTheme.colors
@@ -165,12 +167,22 @@ internal fun DiffCommentThread(
             BasicText("${thread.line?.let { "L$it" }.orEmpty()}${if (thread.line != null && thread.anchorLineText != null) " · " else ""}${thread.anchorLineText.orEmpty()}", style = changesMono(10f, FontWeight.Normal, colors.fgMuted))
           }
           thread.comments.forEachIndexed { index, comment ->
-            CommentRow(comment, thread.sourceLabel, now, ui.busy, onDelete = { confirmDelete = comment.id })
+            if (editing?.commentId == comment.id) {
+              CommentComposer(editing.text, editing.problem, editing.saving, "", "", "Save", { onAction(ChangesWindowAction.EditText(it)) }, { onAction(ChangesWindowAction.SaveEdit) }, { onAction(ChangesWindowAction.CancelEdit) }, onEditFocusChanged)
+            } else CommentRow(comment, thread.sourceLabel, now, ui.busy, onDelete = {
+              if (thread.state == CommentState.Pending && comment.author == CommentAuthor.User) onAction(ChangesWindowAction.DeleteComment(thread.id, comment.id)) else confirmDelete = comment.id
+            })
             if (confirmDelete == comment.id) {
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 BasicText(if (index == 0) "Deletes the whole thread" else "Delete this reply?", style = changesSans(10.5f, FontWeight.Normal, colors.stFailed))
                 ActionText("Delete", colors.stFailed, ui.busy) { onAction(ChangesWindowAction.DeleteComment(thread.id, comment.id)); confirmDelete = null }
                 ActionText("Cancel", colors.fgMuted) { confirmDelete = null }
+              }
+            }
+            if (thread.state == CommentState.Pending && comment.author == CommentAuthor.User && editing?.commentId != comment.id) {
+              Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActionText("Edit", colors.accentText, ui.busy) { onAction(ChangesWindowAction.StartEdit(thread.id, comment.id, comment.body)) }
+                ActionText("Delete", colors.stFailed, ui.busy) { onAction(ChangesWindowAction.DeleteComment(thread.id, comment.id)) }
               }
             }
           }
@@ -202,6 +214,8 @@ internal fun DiffCommentThread(
               ActionText("Send", colors.accentText, ui.busy) { onAction(ChangesWindowAction.SendReply(thread.id)) }
               ActionText("Cancel", colors.fgMuted) { onAction(ChangesWindowAction.EditReply(thread.id, null)) }
             }
+          } else if (thread.state == CommentState.Pending) {
+            BasicText("Only you can see this until you add the review.", style = changesSans(10.5f, FontWeight.Normal, colors.fgFaint))
           } else {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
               ActionText("Reply…", colors.fgMuted, ui.busy) { onAction(ChangesWindowAction.EditReply(thread.id, "")) }

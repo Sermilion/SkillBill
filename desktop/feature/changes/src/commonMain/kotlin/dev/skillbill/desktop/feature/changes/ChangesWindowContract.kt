@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.changes
 
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.CommentState
+import dev.skillbill.desktop.core.domain.model.CommentSide
 import dev.skillbill.desktop.core.domain.model.DiffCommentsState
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
@@ -43,6 +44,10 @@ data class ChangesWindowUiState(
   val openProblem: String? = null,
   val comments: DiffCommentsState = DiffCommentsState.Loading,
   val threadUi: Map<String, ThreadUi> = emptyMap(),
+  val composer: CommentComposerUi? = null,
+  val editing: CommentEditUi? = null,
+  val review: ReviewBarUi = ReviewBarUi(),
+  val reviewToast: String? = null,
 ) {
   val target: ChangeScopeTarget? get() = (content as? WindowContent.Ready)?.target
   val subtasksAvailable: Boolean get() = target?.let { ScopeKind.Subtasks in availableScopes(it) } == true
@@ -50,7 +55,18 @@ data class ChangesWindowUiState(
   val visibleFiles: List<ChangedFile> get() = groups.flatMap { group -> group.rows.map { it.file } }
   val selectedFile: ChangedFile? get() = visibleFiles.firstOrNull { it.path == selectedPath }
   val quick: List<QuickButtonUi> get() = quickButtons(this)
+  val pendingCount: Int get() = (comments as? DiffCommentsState.Available)?.threads?.count { it.state == CommentState.Pending } ?: 0
+  val canAuthor: Boolean get() = (comments as? DiffCommentsState.Available)?.canAuthor == true
+  val authorHint: String? get() = when (val value = comments) {
+    is DiffCommentsState.Available -> if (value.canAuthor) null else "Check out ${value.branch} to comment"
+    is DiffCommentsState.Unavailable -> value.reason
+    DiffCommentsState.Loading -> null
+  }
 }
+
+data class CommentComposerUi(val path: String, val side: CommentSide?, val line: Int?, val text: String = "", val saving: Boolean = false, val problem: String? = null)
+data class CommentEditUi(val threadId: String, val commentId: String, val text: String, val saving: Boolean = false, val problem: String? = null)
+data class ReviewBarUi(val submitting: Boolean = false, val confirmingDiscard: Boolean = false, val problem: String? = null)
 
 enum class QuickScope { All, Running, Outside, Uncommitted }
 
@@ -115,4 +131,16 @@ sealed interface ChangesWindowAction {
   data class SendReply(val threadId: String) : ChangesWindowAction
   data class SetThreadState(val threadId: String, val state: CommentState) : ChangesWindowAction
   data class DeleteComment(val threadId: String, val commentId: String) : ChangesWindowAction
+  data class OpenComposer(val path: String, val side: CommentSide?, val line: Int?) : ChangesWindowAction
+  data class ComposerText(val text: String) : ChangesWindowAction
+  data object CancelComposer : ChangesWindowAction
+  data object SavePending : ChangesWindowAction
+  data class StartEdit(val threadId: String, val commentId: String, val body: String) : ChangesWindowAction
+  data class EditText(val text: String) : ChangesWindowAction
+  data object SaveEdit : ChangesWindowAction
+  data object CancelEdit : ChangesWindowAction
+  data object SubmitReview : ChangesWindowAction
+  data object RequestDiscard : ChangesWindowAction
+  data object ConfirmDiscard : ChangesWindowAction
+  data object KeepPending : ChangesWindowAction
 }

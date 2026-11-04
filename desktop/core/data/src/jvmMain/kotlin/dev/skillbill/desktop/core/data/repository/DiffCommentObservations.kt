@@ -24,7 +24,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
 import skillbill.application.review.diffcomment.model.DiffCommentDeleteResult
+import skillbill.application.review.diffcomment.model.DiffCommentCountResult
 import skillbill.application.review.diffcomment.model.DiffCommentListResult
+import skillbill.application.review.diffcomment.model.DiffCommentPendingThreadRequest
 import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.di.core.RuntimeComponent
@@ -95,11 +97,53 @@ class DiffCommentObservations internal constructor(
     ::deleteWriteOutcome,
   )
 
-  private suspend fun <T> write(
+  suspend fun addPending(baseline: ChangeBaseline, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = write(
+    "add_pending",
+    {
+      it.diffCommentService.addPending(
+        Path.of(baseline.worktreeRoot),
+        DiffCommentPendingThreadRequest(
+          path, side?.toRuntime() ?: RuntimeSide.NEW, line, body,
+          expectedBranch = (baseline as? ChangeBaseline.CommittedBranchRange)?.headBranch,
+        ),
+      )
+    },
+    ::threadWriteOutcome,
+  )
+
+  suspend fun editComment(commentId: String, body: String): Outcome<Unit, CommentRejection> = write(
+    "edit",
+    { it.diffCommentService.editComment(commentId, body) },
+    ::threadWriteOutcome,
+  )
+
+  suspend fun submitReview(baseline: ChangeBaseline): Outcome<Int, CommentRejection> = write(
+    "submit_review",
+    {
+      it.diffCommentService.submitReview(
+        Path.of(baseline.worktreeRoot),
+        branch = (baseline as? ChangeBaseline.CommittedBranchRange)?.headBranch,
+      )
+    },
+    ::countWriteOutcome,
+  )
+
+  suspend fun discardPending(baseline: ChangeBaseline): Outcome<Int, CommentRejection> = write(
+    "discard_pending",
+    {
+      it.diffCommentService.discardPending(
+        Path.of(baseline.worktreeRoot),
+        branch = (baseline as? ChangeBaseline.CommittedBranchRange)?.headBranch,
+      )
+    },
+    ::countWriteOutcome,
+  )
+
+  private suspend fun <T, R> write(
     operation: String,
     block: (RuntimeComponent) -> T,
-    map: (T) -> Outcome<Unit, CommentRejection>,
-  ): Outcome<Unit, CommentRejection> {
+    map: (T) -> Outcome<R, CommentRejection>,
+  ): Outcome<R, CommentRejection> {
     val outcome = readOrProblem(runtime, diagnostics) { reads.write("diff_comment_$operation") { block(it) } }
     return when (outcome) {
       is Outcome.Failure -> rejected(readFailure(outcome.error))
@@ -119,6 +163,11 @@ class DiffCommentObservations internal constructor(
     DiffCommentDeleteResult.NotFound -> rejected("The comment no longer exists.")
   }
 
+  private fun countWriteOutcome(result: DiffCommentCountResult): Outcome<Int, CommentRejection> = when (result) {
+    is DiffCommentCountResult.Counted -> Outcome.Success(result.count)
+    is DiffCommentCountResult.Unavailable -> rejected(result.reason)
+  }
+
   private fun readFailure(problem: ReadProblem): String = when (problem) {
     is ReadProblem.Runtime ->
       if (problem.message == "The database session closed.") "The database session closed. Try again." else problem.message
@@ -130,7 +179,7 @@ class DiffCommentObservations internal constructor(
     return DiffCommentsState.Unavailable(reason)
   }
 
-  private fun rejected(reason: String): Outcome<Unit, CommentRejection> {
+  private fun <T> rejected(reason: String): Outcome<T, CommentRejection> {
     diagnostics.record("desktop_diff_comment_write_rejected")
     return Outcome.Failure(CommentRejection(reason))
   }
@@ -176,6 +225,11 @@ private fun RuntimeAuthor.toDomain() = when (this) {
 private fun RuntimeSide.toDomain() = when (this) {
   RuntimeSide.OLD -> CommentSide.Old
   RuntimeSide.NEW -> CommentSide.New
+}
+
+private fun CommentSide.toRuntime() = when (this) {
+  CommentSide.Old -> RuntimeSide.OLD
+  CommentSide.New -> RuntimeSide.NEW
 }
 
 private fun RuntimeOutcome.toDomain() = when (this) {

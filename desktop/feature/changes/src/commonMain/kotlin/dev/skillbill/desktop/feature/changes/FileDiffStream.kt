@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,6 +52,8 @@ import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.CommentThread
 import dev.skillbill.desktop.core.ui.diff.DiffLineSlots
+import dev.skillbill.desktop.core.ui.diff.DiffLineAddress
+import dev.skillbill.desktop.core.ui.diff.DiffLineAffordance
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
@@ -83,12 +86,17 @@ internal fun FileDiffStream(
   threads: List<CommentThread>,
   threadContent: @Composable (String) -> Unit,
   onAction: (ChangesWindowAction) -> Unit,
+  composer: CommentComposerUi? = null,
+  authoring: DiffAuthoringInput = DiffAuthoringInput(),
+  canAuthor: Boolean = false,
+  onCommentFocusChanged: (Boolean) -> Unit = {},
+  bottomPadding: Dp = 0.dp,
   modifier: Modifier = Modifier,
 ) {
   val listState = rememberLazyListState()
   val usable = files.map { file -> loaded[file.path]?.takeIf { it.file == file } }
   val placement = remember(files, usable, threads) { placeThreads(files, usable, threads) }
-  val starts = fileStartIndexes(usable, placement)
+  val starts = fileStartIndexes(usable, placement, composer, files)
   val currentFiles by rememberUpdatedState(files)
   val currentStarts by rememberUpdatedState(starts)
   val currentAction by rememberUpdatedState(onAction)
@@ -104,6 +112,19 @@ internal fun FileDiffStream(
     jumping = true
     try {
       listState.scrollToItem(currentStarts[index])
+    } finally {
+      jumping = false
+    }
+  }
+  LaunchedEffect(composer?.path, composer?.side, composer?.line) {
+    val draft = composer ?: return@LaunchedEffect
+    if (draft.side != null) return@LaunchedEffect
+    val index = files.indexOfFirst { it.path == draft.path }
+    if (index < 0) return@LaunchedEffect
+    followedPath = draft.path
+    jumping = true
+    try {
+      listState.scrollToItem(starts[index] + 1 + placement.files[index].fileSlot.size)
     } finally {
       jumping = false
     }
@@ -136,7 +157,7 @@ internal fun FileDiffStream(
     val threadWidth = minOf(viewportWidth, 760.dp)
     val horizontalScroll = rememberScrollState()
     DiffHorizontalScroll(usable.maxOfOrNull { it?.longestChars ?: 0 } ?: 0, Modifier.fillMaxSize(), horizontalScroll) {
-      LazyColumn(state = listState) {
+      LazyColumn(state = listState, contentPadding = PaddingValues(bottom = bottomPadding)) {
         if (placement.general.isNotEmpty()) {
           item(key = "general:header", contentType = "general-header") {
             BasicText(
@@ -157,23 +178,51 @@ internal fun FileDiffStream(
           }
         }
         files.forEachIndexed { index, file ->
-          item(key = "file:${file.path}", contentType = "file") { if (index == 0) Spacer(Modifier.height(0.dp)) else FileSeparator(file) }
+          val loadedState = usable[index]?.state
+          val shownDiff = (loadedState as? FileDiffState.Shown)?.diff
+          val intendedAddress = composer?.takeIf { it.path == file.path && it.side != null && it.line != null }?.let { draft ->
+            shownDiff?.hunks?.asSequence()?.flatMapIndexed { h, hunk -> hunk.lines.asSequence().mapIndexed { i, line -> DiffLineAddress(h, i) to line } }
+              ?.firstOrNull { (_, line) -> commentAnchorFor(line) == CommentAnchor(draft.side!!, draft.line!!) }?.first
+          }
+          val fileComposer = composer?.takeIf { it.path == file.path && (it.side == null || intendedAddress == null) }
+          item(key = "file:${file.path}", contentType = "file") {
+            if (index == 0) {
+              Spacer(Modifier.height(0.dp))
+            } else FileSeparator(file, if (canAuthor) ({ onAction(ChangesWindowAction.OpenComposer(file.path, null, null)) }) else null)
+          }
           placement.files[index].fileSlot.forEach { thread ->
             item(key = "thread:${thread.id}", contentType = "thread") {
               ThreadAppearing(threadWidth, horizontalScroll) { threadContent(thread.id) }
             }
+          }
+          if (fileComposer != null) item(key = "composer:${file.path}", contentType = "composer") {
+            ThreadAppearing(threadWidth, horizontalScroll) { CommentComposer(fileComposer.text, fileComposer.problem, fileComposer.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
           }
           val diff = usable[index]
           val state = diff?.state
           when {
             diff == null -> item(key = "wait:${file.path}", contentType = "wait") { Box(Modifier.fillMaxWidth().height(PLACEHOLDER_HEIGHT)) }
             state is FileDiffState.Shown && state.diff.hunks.isNotEmpty() -> {
+              val lineComposerAddress = intendedAddress
               val lineSlots = DiffLineSlots(
-                placement.files[index].afterLine.mapValues { (_, values) -> values.map { it.id } },
-              ) { threadId ->
-                ThreadAppearing(threadWidth, horizontalScroll) { threadContent(threadId) }
+                (placement.files[index].afterLine.keys + listOfNotNull(lineComposerAddress)).associateWith { address ->
+                  placement.files[index].afterLine[address].orEmpty().map { it.id } +
+                    if (address == lineComposerAddress) listOf("composer:${file.path}:${composer?.side}:${composer?.line}") else emptyList()
+                },
+              ) { slotId ->
+                if (slotId.startsWith("composer:")) {
+                  val draft = composer ?: return@DiffLineSlots
+                  ThreadAppearing(threadWidth, horizontalScroll) { CommentComposer(draft.text, draft.problem, draft.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
+                } else ThreadAppearing(threadWidth, horizontalScroll) { threadContent(slotId) }
               }
-              diffRows(state.diff, file.path, lineSlots)
+              val affordance = if (canAuthor) DiffLineAffordance(
+                onAdd = { line -> commentAnchorFor(line)?.let { onAction(ChangesWindowAction.OpenComposer(file.path, it.side, it.line)) } },
+                onHover = { line, entered ->
+                  val hovered = commentAnchorFor(line)?.let { HoveredLine(file.path, it) }
+                  if (entered) authoring.hovered = hovered else if (authoring.hovered == hovered) authoring.hovered = null
+                },
+              ) else null
+              diffRows(state.diff, file.path, lineSlots, affordance)
             }
             state != null -> item(key = "note:${file.path}", contentType = "note") { PaneMessage(fileDiffNotice(state)) }
           }
@@ -200,13 +249,14 @@ private fun threadItemModifier(width: Dp, scroll: ScrollState): Modifier =
   Modifier.width(width).offset { IntOffset(scroll.value, 0) }.padding(start = 48.dp, end = 12.dp, bottom = 8.dp)
 
 /** The list index of each file's separator row; a file with no read yet has one placeholder row after it. */
-internal fun fileStartIndexes(loaded: List<LoadedDiff?>, placement: ThreadPlacement = ThreadPlacement(emptyList(), loaded.map { FileThreads() })): IntArray {
+internal fun fileStartIndexes(loaded: List<LoadedDiff?>, placement: ThreadPlacement = ThreadPlacement(emptyList(), loaded.map { FileThreads() }), composer: CommentComposerUi? = null, files: List<ChangedFile>? = null): IntArray {
   val starts = IntArray(loaded.size)
   var next = if (placement.general.isEmpty()) 0 else 1 + placement.general.size
   loaded.forEachIndexed { index, diff ->
     starts[index] = next
     val fileThreads = placement.files.getOrNull(index) ?: FileThreads()
-    next += 1 + fileThreads.fileSlot.size + (diff?.rows ?: 1) + fileThreads.afterLine.values.sumOf { it.size }
+    val draft = composer?.takeIf { it.path == files?.getOrNull(index)?.path || it.path == diff?.file?.path }
+    next += 1 + fileThreads.fileSlot.size + (if (draft != null) 1 else 0) + (diff?.rows ?: 1) + fileThreads.afterLine.values.sumOf { it.size }
   }
   return starts
 }
@@ -218,7 +268,7 @@ internal fun fileAt(starts: IntArray, item: Int): Int {
 }
 
 @Composable
-private fun FileSeparator(file: ChangedFile) {
+private fun FileSeparator(file: ChangedFile, onComment: (() -> Unit)?) {
   val colors = SkillBillTheme.colors
   Row(
     Modifier.fillMaxWidth().height(38.dp).background(colors.bgPanel).hairlineBottom(colors.border).padding(horizontal = 14.dp),
@@ -237,5 +287,6 @@ private fun FileSeparator(file: ChangedFile) {
       AddCount(file.insertions ?: 0)
       DelCount(file.deletions ?: 0)
     }
+    if (onComment != null) dev.skillbill.desktop.core.designsystem.component.SbIconButton(dev.skillbill.desktop.core.designsystem.icon.LucideIcons.compose, "Comment on file", onComment, size = dev.skillbill.desktop.core.designsystem.component.SbControlSize.Small)
   }
 }

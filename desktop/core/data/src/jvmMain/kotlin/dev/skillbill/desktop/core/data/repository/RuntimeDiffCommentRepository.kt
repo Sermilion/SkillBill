@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.CommentRejection
 import dev.skillbill.desktop.core.domain.model.CommentState
 import dev.skillbill.desktop.core.domain.model.DiffCommentsState
+import dev.skillbill.desktop.core.domain.model.CommentSide
 import dev.skillbill.desktop.core.domain.repository.DiffCommentRepository
 import kotlinx.coroutines.flow.Flow
 import me.tatarka.inject.annotations.Inject
@@ -38,7 +39,19 @@ class RuntimeDiffCommentRepository(
   override suspend fun deleteComment(commentId: String): Outcome<Unit, CommentRejection> =
     sessions.sessions.value?.diffComments?.deleteComment(commentId) ?: noSession()
 
-  private fun noSession(): Outcome<Unit, CommentRejection> {
+  override suspend fun addPending(baseline: ChangeBaseline, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> =
+    sessions.sessions.value?.diffComments?.addPending(baseline, path, side, line, body) ?: noSession()
+
+  override suspend fun editComment(commentId: String, body: String): Outcome<Unit, CommentRejection> =
+    sessions.sessions.value?.diffComments?.editComment(commentId, body) ?: noSession()
+
+  override suspend fun submitReview(baseline: ChangeBaseline): Outcome<Int, CommentRejection> =
+    sessions.sessions.value?.diffComments?.submitReview(baseline) ?: noSession()
+
+  override suspend fun discardPending(baseline: ChangeBaseline): Outcome<Int, CommentRejection> =
+    sessions.sessions.value?.diffComments?.discardPending(baseline) ?: noSession()
+
+  private fun <T> noSession(): Outcome<T, CommentRejection> {
     diagnostics.record("desktop_diff_comment_write_rejected")
     return Outcome.Failure(CommentRejection("No database session is open."))
   }

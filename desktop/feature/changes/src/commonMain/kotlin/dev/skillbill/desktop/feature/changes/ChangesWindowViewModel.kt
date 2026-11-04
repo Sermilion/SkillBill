@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.CommentAuthor
 import dev.skillbill.desktop.core.domain.model.CommentRejection
 import dev.skillbill.desktop.core.domain.model.CommentState
 import dev.skillbill.desktop.core.domain.model.DiffCommentsState
@@ -69,6 +70,7 @@ class ChangesWindowViewModel(
     ChangesWindowUiState(item, scope = initialScope, anchor = (initialScope as? ChangeScope.Subtasks)?.from),
   )
   val state: StateFlow<ChangesWindowUiState> = mutableState.asStateFlow()
+  private val authoringActions = DiffCommentAuthoringActions(viewModelScope, comments, { state.value }, { change -> mutableState.update(change) })
   private var currentLoadedDetail: DetailState? = null
   private var observedGoal: GoalObservationKey? = null
   private var notGoalKey: GoalObservationKey? = null
@@ -80,7 +82,6 @@ class ChangesWindowViewModel(
   private var wantedDiffs: List<String> = emptyList()
   private var streamRead: Job? = null
   private var streamKey: ScopeReadKey? = null
-
   init {
     detail.observe(item).onEach { observed ->
       val runningChanged = mutableState.value.item.running != observed.header.running
@@ -123,7 +124,21 @@ class ChangesWindowViewModel(
     observeScopeReads()
     state.map { it.target?.allBaseline }.distinctUntilChanged().flatMapLatest { baseline ->
       baseline?.let(comments::observe) ?: flowOf(DiffCommentsState.Loading)
-    }.onEach { value -> mutableState.update { it.copy(comments = value) } }.launchIn(viewModelScope)
+    }.onEach { value ->
+      val priorBranch = (mutableState.value.comments as? DiffCommentsState.Available)?.branch
+      val nextBranch = (value as? DiffCommentsState.Available)?.branch
+      if (priorBranch != nextBranch) authoringActions.cancelToast()
+      mutableState.update { old ->
+      val changedBranch = (old.comments as? DiffCommentsState.Available)?.branch != (value as? DiffCommentsState.Available)?.branch
+      val edit = old.editing
+      val editingPending = edit != null && (value as? DiffCommentsState.Available)?.threads?.any { thread ->
+        thread.id == edit.threadId && thread.state == CommentState.Pending && thread.comments.any { it.id == edit.commentId && it.author == CommentAuthor.User }
+      } == true
+      old.copy(comments = value, composer = if (changedBranch || (value as? DiffCommentsState.Available)?.canAuthor != true) null else old.composer,
+        editing = old.editing?.takeIf { editingPending && !changedBranch }, review = if (changedBranch) ReviewBarUi() else old.review,
+        reviewToast = if (changedBranch) null else old.reviewToast)
+      }
+    }.launchIn(viewModelScope)
   }
 
   private fun stopGoalObservation() {
@@ -190,14 +205,20 @@ class ChangesWindowViewModel(
       }
       return
     }
+    if (current.target != target) authoringActions.cancelToast()
     invalidateDiffRead()
     mutableState.update { old ->
+      val targetChanged = old.target != target
       project(
         old.copy(
           content = WindowContent.Ready(target),
           scope = effective,
           subtasks = subtasks ?: old.subtasks,
           stats = stats ?: old.stats,
+          composer = if (targetChanged) null else old.composer,
+          editing = if (targetChanged) null else old.editing,
+          review = if (targetChanged) ReviewBarUi() else old.review,
+          reviewToast = if (targetChanged) null else old.reviewToast,
         ),
         list = if (old.scope == effective) old.list else ScopeListUi.Loading,
       )
@@ -496,6 +517,7 @@ class ChangesWindowViewModel(
       is ChangesWindowAction.SendReply -> sendReply(action.threadId)
       is ChangesWindowAction.SetThreadState -> updateThread(action.threadId) { comments.setState(action.threadId, action.state) }
       is ChangesWindowAction.DeleteComment -> updateThread(action.threadId) { comments.deleteComment(action.commentId) }
+      else -> authoringActions.handle(action)
     }
   }
 

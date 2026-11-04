@@ -35,6 +35,7 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,8 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -72,6 +75,93 @@ class ChangesWindowViewModelTest {
 
     assertEquals(ChangeScope.All, viewModel.state.value.scope)
     assertEquals(listOf<ChangeScope>(ChangeScope.All), scopes.shown)
+  }
+
+  @Test
+  fun `a failed submit keeps the drafts and shows the reason`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    comments.submitResult = Outcome.Failure(CommentRejection("closed"))
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.SubmitReview)
+    runCurrent()
+
+    assertEquals(2, viewModel.state.value.pendingCount)
+    assertEquals("closed", viewModel.state.value.review.problem)
+    assertEquals(false, viewModel.state.value.review.submitting)
+    assertEquals(null, viewModel.state.value.reviewToast)
+  }
+
+  @Test
+  fun `a successful submit clears the bar and the toast expires`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    comments.submitResult = Outcome.Success(2)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.SubmitReview)
+    runCurrent()
+    assertEquals(0, viewModel.state.value.pendingCount)
+    assertEquals("Review added · 2 comments", viewModel.state.value.reviewToast)
+
+    advanceTimeBy(2_600)
+    runCurrent()
+    assertEquals(null, viewModel.state.value.reviewToast)
+  }
+
+  @Test
+  fun `a completed save does not erase a replacement draft at the same anchor`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    val write = CompletableDeferred<Outcome<Unit, CommentRejection>>()
+    comments.pendingWrite = write
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+    viewModel.onAction(ChangesWindowAction.OpenComposer("src/A.kt", CommentSide.New, 10))
+    viewModel.onAction(ChangesWindowAction.ComposerText("original"))
+    viewModel.onAction(ChangesWindowAction.SavePending)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.CancelComposer)
+    viewModel.onAction(ChangesWindowAction.OpenComposer("src/A.kt", CommentSide.New, 10))
+    viewModel.onAction(ChangesWindowAction.ComposerText("replacement"))
+    write.complete(Outcome.Success(Unit))
+    runCurrent()
+
+    assertEquals("replacement", viewModel.state.value.composer?.text)
+    assertEquals(false, viewModel.state.value.composer?.saving)
+  }
+
+  @Test
+  fun `a submit completed after a branch change cannot show feedback on the new branch`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    val write = CompletableDeferred<Outcome<Int, CommentRejection>>()
+    comments.reviewWrite = write
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+    viewModel.onAction(ChangesWindowAction.SubmitReview)
+    runCurrent()
+
+    comments.state.value = availablePending().copy(branch = "other")
+    runCurrent()
+    write.complete(Outcome.Success(2))
+    runCurrent()
+
+    assertEquals(2, viewModel.state.value.pendingCount)
+    assertEquals(null, viewModel.state.value.reviewToast)
+    assertEquals(ReviewBarUi(), viewModel.state.value.review)
   }
 
   @Test
@@ -363,11 +453,22 @@ class ChangesWindowViewModelTest {
   private class FakeDiffComments : DiffCommentRepository {
     val state = MutableStateFlow<DiffCommentsState>(DiffCommentsState.Loading)
     var stateChange: Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
+    var submitResult: Outcome<Int, CommentRejection> = Outcome.Success(0)
+    var pendingWrite: CompletableDeferred<Outcome<Unit, CommentRejection>>? = null
+    var reviewWrite: CompletableDeferred<Outcome<Int, CommentRejection>>? = null
 
     override fun observe(baseline: ChangeBaseline): Flow<DiffCommentsState> = state
     override suspend fun reply(threadId: String, body: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
     override suspend fun setState(threadId: String, state: CommentState): Outcome<Unit, CommentRejection> = stateChange
     override suspend fun deleteComment(commentId: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
+    override suspend fun addPending(baseline: ChangeBaseline, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = pendingWrite?.await() ?: Outcome.Success(Unit)
+    override suspend fun editComment(commentId: String, body: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
+    override suspend fun submitReview(baseline: ChangeBaseline): Outcome<Int, CommentRejection> {
+      reviewWrite?.let { return it.await() }
+      if (submitResult is Outcome.Success) state.value = availablePending().copy(threads = availablePending().threads.map { it.copy(state = CommentState.Open) })
+      return submitResult
+    }
+    override suspend fun discardPending(baseline: ChangeBaseline): Outcome<Int, CommentRejection> = Outcome.Success(0)
   }
 
   private fun detailOf(item: WorkItem): MutableStateFlow<DetailState> {
@@ -408,6 +509,11 @@ class ChangesWindowViewModelTest {
 
   private companion object {
     val epoch: Instant = Instant.fromEpochMilliseconds(0)
+
+    fun availablePending() = DiffCommentsState.Available("main", listOf(
+      CommentThread("pending-1", "src/A.kt", CommentSide.New, 10, null, CommentState.Pending, false, null, null, null, emptyList()),
+      CommentThread("pending-2", "src/A.kt", CommentSide.New, 11, null, CommentState.Pending, false, null, null, null, emptyList()),
+    ), canAuthor = true)
 
     fun detail(baseline: ChangeBaseline) = Detail(
       featureTitle = null, workflowId = null, invocationId = null, activeAgent = null, executionLiveness = null,
