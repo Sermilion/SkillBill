@@ -4,8 +4,12 @@ import org.gradle.api.tasks.bundling.Jar
 import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.io.File
 import org.gradle.api.tasks.testing.Test as GradleTest
+
+private const val MAX_TEMP_DIR_GROWTH = 16
 
 class JvmLibraryConventionPluginTest {
   @Test
@@ -21,6 +25,30 @@ class JvmLibraryConventionPluginTest {
     assertFalse(testTask.environment.containsKey("CODEX_HOME"))
     assertFalse(testTask.environment.containsKey("CLAUDE_CONFIG_DIR"))
     assertEquals("/test/bin", testTask.environment["PATH"])
+  }
+
+  @Test
+  fun `test workers write temp files under a per-task directory outside the shared temp root`() {
+    val project = ProjectBuilder.builder().build()
+    val testTask = project.tasks.register("installProbe", GradleTest::class.java).get()
+
+    project.pluginManager.apply(JvmLibraryConventionPlugin::class.java)
+
+    val tmpdirArgs =
+      testTask.jvmArgumentProviders.flatMap { it.asArguments() }.filter { it.startsWith("-Djava.io.tmpdir=") }
+    assertEquals(1, tmpdirArgs.size, "Expected exactly one java.io.tmpdir override, got $tmpdirArgs")
+    val tempDir = File(tmpdirArgs.single().removePrefix("-Djava.io.tmpdir="))
+    val systemTemp = File(System.getProperty("java.io.tmpdir")).absoluteFile
+    assertEquals(systemTemp, tempDir.parentFile)
+    assertTrue(tempDir.name.startsWith(TEST_TEMP_PREFIX), "Unexpected temp dir name ${tempDir.name}")
+    assertTrue(
+      tempDir.path.length - systemTemp.path.length <= MAX_TEMP_DIR_GROWTH,
+      "Unix socket tests bind under java.io.tmpdir and macOS caps those paths at 104 bytes: $tempDir",
+    )
+    assertFalse(
+      tempDir.startsWith(project.rootDir),
+      "Test temp dirs must stay outside the checkout so non-repository paths remain available.",
+    )
   }
 
   @Test
