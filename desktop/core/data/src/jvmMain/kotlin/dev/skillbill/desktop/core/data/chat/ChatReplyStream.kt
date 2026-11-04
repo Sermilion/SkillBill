@@ -82,14 +82,9 @@ private fun decodeActions(source: String, diagnostics: Diagnostics): List<ChatSu
         return@mapNotNull null
       }
     }
-    val target = when (action["target"]) {
-      null -> null
-      else -> {
-        val value = action.actionString("target") ?: return@mapNotNull null
-        value.trim().takeIf { it.isNotBlank() }
-      }
-    }
-    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target)
+    val target = optionalActionString(action, "target") ?: return@mapNotNull null
+    val branch = optionalActionString(action, "branch") ?: return@mapNotNull null
+    ChatSuggestedAction(label, instruction, mode, start, actionTitle(action, diagnostics), target.value, branch.value)
   }
   return actions.takeIf { it.map(ChatSuggestedAction::label).distinct().size == it.size }
 }
@@ -106,6 +101,12 @@ private fun actionTitle(action: JsonObject, diagnostics: Diagnostics): String? {
   if (title == null) diagnostics.record("chat.action_title_invalid")
   return title
 }
+
+private class OptionalActionText(val value: String?)
+
+private fun optionalActionString(action: JsonObject, key: String): OptionalActionText? =
+  if (key !in action) OptionalActionText(null)
+  else action.actionString(key)?.let { OptionalActionText(it.trim().takeIf(String::isNotBlank)) }
 
 private fun JsonObject.actionString(key: String): String? =
   (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content

@@ -170,6 +170,7 @@ class NewTaskDraft(
       expectedSessionId,
       title = title,
       target = target?.trim()?.takeIf(String::isNotBlank) ?: action?.target?.trim()?.takeIf(String::isNotBlank),
+      branch = action?.branch?.trim()?.takeIf(String::isNotBlank),
     )
     scope.launch {
       try {

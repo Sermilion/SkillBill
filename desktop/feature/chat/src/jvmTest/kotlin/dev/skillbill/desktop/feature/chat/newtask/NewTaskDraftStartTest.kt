@@ -193,7 +193,7 @@ class NewTaskDraftStartTest {
   }
 
   @Test
-  fun `start without open chat records monitor and verify kind and target`() = runTest {
+  fun `start without open chat records monitor and verify kind, target and action branch`() = runTest {
     val chats = FakeExecutionChatRepository()
     val controls = FakeWorkControlRepository()
     controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor)
@@ -211,12 +211,21 @@ class NewTaskDraftStartTest {
     }
 
     controls.newTaskOutcome = NewTaskStartOutcome.Started("verify", NewTaskKind.Verify)
-    draft.start(NewTaskKind.Verify, target = "check the review on this branch")
+    val verify = ChatSuggestedAction(
+      "Run operation:verify",
+      "Verify the branch.",
+      ChatPermissionMode.Act,
+      NewTaskActionKind.Verify,
+      branch = " feat/fp-5175 ",
+    )
+    draft.start(NewTaskKind.Verify, target = "check the review on this branch", action = verify)
     runCurrent()
     with(controls.newTaskRequests.last()) {
       assertEquals(NewTaskKind.Verify, kind)
       assertEquals("check the review on this branch", target)
+      assertEquals("feat/fp-5175", branch)
     }
+    assertEquals(null, controls.newTaskRequests.first().branch)
   }
 
   @Test

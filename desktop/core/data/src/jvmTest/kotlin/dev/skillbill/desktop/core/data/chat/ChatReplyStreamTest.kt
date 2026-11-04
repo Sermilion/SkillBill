@@ -73,6 +73,30 @@ class ChatReplyStreamTest {
   }
 
   @Test
+  fun `start branch is trimmed, a blank one is dropped, and a non-string one drops that action`() {
+    val diagnostics = RecordingDiagnostics()
+    val stream = ChatReplyStream(diagnostics)
+    stream.accept(
+      ChatEvent.TextDelta(
+        "```skillbill-actions\n" +
+          """[{"label":"Run phase:review","instruction":"Review it.","mode":"read","start":"review","branch":"  feat/fp-5175 "},""" +
+          """{"label":"Run phase:qa","instruction":"QA it.","mode":"read","start":"qa","branch":"  "},""" +
+          """{"label":"Run phase:pr","instruction":"Open it.","mode":"act","start":"pr","branch":7}]""" +
+          "\n```",
+      ),
+    )
+    val actions = stream.accept(ChatEvent.Completed).filterIsInstance<ChatEvent.SuggestedActions>().single().actions
+    assertEquals(
+      listOf(
+        ChatSuggestedAction("Run phase:review", "Review it.", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review, branch = "feat/fp-5175"),
+        ChatSuggestedAction("Run phase:qa", "QA it.", ChatPermissionMode.ReadOnly, NewTaskActionKind.Qa),
+      ),
+      actions,
+    )
+    assertTrue(diagnostics.categories.isEmpty())
+  }
+
+  @Test
   fun `non-string target drops that action`() {
     val diagnostics = RecordingDiagnostics()
     val stream = ChatReplyStream(diagnostics)
