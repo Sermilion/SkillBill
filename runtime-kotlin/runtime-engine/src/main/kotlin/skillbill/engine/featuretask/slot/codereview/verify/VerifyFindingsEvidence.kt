@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.slot.codereview.verify
 
+import skillbill.application.review.diffcomment.DiffCommentService
+import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.application.review.packet.toProjectionPayload
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
@@ -25,6 +27,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
@@ -34,6 +37,7 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.SpecIntentProjectionResolveRequest
 import skillbill.review.context.model.execution.SpecIntentResolution
+import skillbill.review.diffcomment.model.DiffCommentOutcome
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -165,6 +169,7 @@ internal object VerifyFindingsEvidence {
     context: PhaseStepOutputContext,
     state: PhaseVerifyFindingsStepBinding,
     verifyOutput: FeatureTaskRuntimeWorkflowArtifactMap,
+    comments: DiffCommentService?,
   ) {
     if (!isGoalContinuationRun(run.request)) return
     val continuation = run.request.goalContinuation ?: return
@@ -188,6 +193,32 @@ internal object VerifyFindingsEvidence {
     }
     if (rejectedResult.findings.isEmpty()) return
     state.appendRejectedVerificationFindings(FIRST_REVIEW_PASS, rejectedResult.findings)
+    if (comments != null) {
+      rejectedResult.findings.forEach { finding ->
+        val findingId = finding.findingId?.takeIf(String::isNotBlank) ?: return@forEach
+        val reason = finding.verificationReason?.takeIf(String::isNotBlank)
+        val body = reason?.let { "Refuted: $it" } ?: "Refuted during verify_findings."
+        val result =
+          catchingNonCancellation {
+            comments.replyReviewOutcome(
+              run.request.repoRoot,
+              "review:${run.request.workflowId}:pass-$FIRST_REVIEW_PASS:$findingId",
+              body,
+              DiffCommentOutcome.REFUTED,
+              run.resolvedAgent.resolvedAgentId,
+            )
+          }
+        val failure = result.exceptionOrNull()
+        if (failure != null || result.getOrNull() !is DiffCommentThreadResult.Saved) {
+          RuntimeDiagnosticsBestEffortWarning.record(
+            context.diagnostics,
+            "Feature-task-runtime could not reply refuted to finding $findingId for issue ${run.request.issueKey}, " +
+              "workflow ${run.request.workflowId}; operation reply refuted.",
+            failure,
+          )
+        }
+      }
+    }
   }
 
   private fun boundaryDispositionGate(

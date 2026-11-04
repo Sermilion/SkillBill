@@ -73,3 +73,10 @@ data class DiffCommentAgentThreadInput(
   val body: String,
   val agentId: String?,
 )
+
+data class ReviewFindingThreadCounts(
+  val written: Int,
+  val reused: Int,
+  val failed: Int,
+  val firstFailureReason: String? = null,
+)

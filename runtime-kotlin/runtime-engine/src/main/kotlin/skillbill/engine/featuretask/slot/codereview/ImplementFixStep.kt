@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseFindingVerdictHooks
@@ -15,7 +16,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal class ImplementFixStep :
+internal class ImplementFixStep(private val comments: DiffCommentService? = null) :
   PhaseStepHooks<PhaseImplementFixStepBinding>,
   PhaseRepositoryFingerprintHooks,
   PhaseFindingVerdictHooks<PhaseImplementFixStepBinding>,
@@ -56,5 +57,5 @@ internal class ImplementFixStep :
     context: PhaseStepOutputContext,
     state: PhaseImplementFixStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): PhaseStepOutputCheck = ImplementFixReceipt.settle(context, state, outputMap)
+  ): PhaseStepOutputCheck = ImplementFixReceipt.settle(context, state, outputMap, comments)
 }

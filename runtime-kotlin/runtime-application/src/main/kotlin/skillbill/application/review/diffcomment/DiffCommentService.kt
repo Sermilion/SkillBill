@@ -8,6 +8,8 @@ import skillbill.application.review.diffcomment.model.DiffCommentListResult
 import skillbill.application.review.diffcomment.model.DiffCommentPendingThreadRequest
 import skillbill.application.review.diffcomment.model.DiffCommentRejection
 import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
+import skillbill.application.review.diffcomment.model.ReviewFindingThreadCounts
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.IdentifierGeneratorPort
@@ -23,7 +25,9 @@ import skillbill.review.diffcomment.model.DiffCommentOutcome
 import skillbill.review.diffcomment.model.DiffCommentSide
 import skillbill.review.diffcomment.model.DiffCommentThread
 import skillbill.review.diffcomment.model.DiffCommentThreadState
+import skillbill.review.model.ParallelReviewMergedFinding
 import java.io.IOException
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
@@ -38,6 +42,99 @@ class DiffCommentService(
   private val ids: IdentifierGeneratorPort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
+  fun recordReviewFindings(
+    repoRoot: Path,
+    sourceRefPrefix: String,
+    agentId: String?,
+    findings: List<ParallelReviewMergedFinding>,
+  ): ReviewFindingThreadCounts {
+    var written = 0
+    var reused = 0
+    var failed = 0
+    var firstFailureReason: String? = null
+    findings.forEach { finding ->
+      catchingNonCancellation {
+        val result = addAgentThread(repoRoot, reviewThreadRequest(sourceRefPrefix, agentId, finding))
+        when (result) {
+          is DiffCommentThreadResult.Saved -> if (result.changed) written++ else reused++
+          is DiffCommentThreadResult.Rejected -> {
+            failed++
+            if (firstFailureReason == null) firstFailureReason = result.rejection.name
+          }
+          is DiffCommentThreadResult.Unavailable -> {
+            failed++
+            if (firstFailureReason == null) firstFailureReason = result.reason
+          }
+          DiffCommentThreadResult.NotFound -> {
+            failed++
+            if (firstFailureReason == null) firstFailureReason = "thread not found"
+          }
+        }
+      }.onFailure { error ->
+        failed++
+        if (firstFailureReason == null) firstFailureReason = error.message ?: error.javaClass.simpleName
+      }
+    }
+    return ReviewFindingThreadCounts(written, reused, failed, firstFailureReason)
+  }
+
+  private fun reviewThreadRequest(
+    sourceRefPrefix: String,
+    agentId: String?,
+    finding: ParallelReviewMergedFinding,
+  ): DiffCommentAgentThreadRequest {
+    val path = finding.repositoryPath?.let(::relativeReviewPath)
+    val locationPrefix = if (path == null && finding.location.isNotBlank()) "${finding.location}: " else ""
+    return DiffCommentAgentThreadRequest(
+      path = path,
+      side = if (path != null && finding.line != null) DiffCommentSide.NEW else null,
+      line = if (path != null) finding.line else null,
+      body = reviewCommentBody(locationPrefix + finding.description),
+      agentId = agentId,
+      sourceRef = "$sourceRefPrefix:${finding.fNumber}",
+      sourceLabel = "phase:review",
+      severity = finding.severity.displayName.lowercase(),
+      findingRef = finding.fNumber,
+    )
+  }
+
+  fun replyReviewOutcome(
+    repoRoot: Path,
+    sourceRef: String,
+    body: String,
+    outcome: DiffCommentOutcome,
+    agentId: String? = null,
+  ): DiffCommentThreadResult = replyToSource(repoRoot, sourceRef, reviewCommentBody(body), outcome, agentId)
+
+  private fun reviewCommentBody(value: String): String {
+    val limit = DiffComment.MAX_BODY_BYTES
+    if (value.toByteArray(Charsets.UTF_8).size <= limit) return value
+    val suffix = "…"
+    val budget = limit - suffix.toByteArray(Charsets.UTF_8).size
+    val result = StringBuilder()
+    var bytes = 0
+    var truncated = false
+    value.codePoints().forEach { point ->
+      val chunk = String(Character.toChars(point))
+      val size = chunk.toByteArray(Charsets.UTF_8).size
+      if (!truncated && bytes + size <= budget) {
+        result.append(chunk)
+        bytes += size
+      } else {
+        truncated = true
+      }
+    }
+    return result.append(suffix).toString()
+  }
+
+  private fun relativeReviewPath(candidate: String): String? =
+    try {
+      val path = Path.of(candidate)
+      candidate.takeIf { it.isNotBlank() && !path.isAbsolute && path.none { part -> part.toString() == ".." } }
+    } catch (_: InvalidPathException) {
+      null
+    }
+
   fun list(
     repoRoot: Path,
     branch: String? = null,

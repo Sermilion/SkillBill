@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
@@ -44,7 +45,8 @@ public class InlineReviewStrategy private constructor(
   public constructor(
     runner: PhaseRunner,
     rubricResolver: InlineReviewRubricResolver? = null,
-  ) : this(runner, CodeReviewSlot(runner, InlineReviewPass(rubricResolver)))
+    comments: DiffCommentService? = null,
+  ) : this(runner, CodeReviewSlot(runner, InlineReviewPass(rubricResolver), comments))
 
   override val slot: PhaseSlot = PhaseSlot.CODE_REVIEW
   override val strategyId: String = ID

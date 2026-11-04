@@ -17,9 +17,12 @@ import skillbill.ports.review.diffcomment.model.DiffCommentLineObservation
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.review.diffcomment.model.DiffComment
 import skillbill.review.diffcomment.model.DiffCommentOutcome
 import skillbill.review.diffcomment.model.DiffCommentSide
 import skillbill.review.diffcomment.model.DiffCommentThreadState
+import skillbill.review.model.ParallelReviewMergedFinding
+import skillbill.review.model.ParallelReviewSeverity
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -32,6 +35,56 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class DiffCommentServiceTest {
+  @Test
+  fun `review findings become anchored threads and reuse their source refs on retry`() {
+    val fixture = Fixture()
+    val findings =
+      listOf(
+        reviewFinding("F-001", "src/A.kt", 4),
+        reviewFinding("F-002", "src/B.kt", null),
+        reviewFinding("F-003", null, null),
+      )
+
+    val first = fixture.service.recordReviewFindings(fixture.root, "review:wf:pass-1", "agent", findings)
+    val replay = fixture.service.recordReviewFindings(fixture.root, "review:wf:pass-1", "agent", findings)
+    val threads = fixture.list().threads.sortedBy { it.findingRef }
+
+    assertEquals(3, first.written)
+    assertEquals(0, first.reused)
+    assertEquals(0, first.failed)
+    assertEquals(0, replay.written)
+    assertEquals(3, replay.reused)
+    assertEquals(listOf(4, null, null), threads.map { it.line })
+    assertEquals(listOf("src/A.kt", "src/B.kt", null), threads.map { it.path })
+    assertTrue(threads.last().comments.single().body.startsWith("module.kt:9: "))
+  }
+
+  @Test
+  fun `oversized review refutations remain valid Unicode and decline the thread on retry`() {
+    val fixture = Fixture()
+    fixture.service.addAgentThread(fixture.root, fixture.request())
+    val body = "Refuted: " + "🙂".repeat(5000)
+
+    val first =
+      assertIs<DiffCommentThreadResult.Saved>(
+        fixture.service.replyReviewOutcome(fixture.root, "finding", body, DiffCommentOutcome.REFUTED),
+      )
+    val replay =
+      assertIs<DiffCommentThreadResult.Saved>(
+        fixture.service.replyReviewOutcome(fixture.root, "finding", body, DiffCommentOutcome.REFUTED),
+      )
+    val stored = fixture.list().threads.single()
+    val savedBody = stored.comments.last().body
+
+    assertTrue(first.changed)
+    assertFalse(replay.changed)
+    assertEquals(DiffCommentThreadState.DECLINED, stored.state)
+    assertEquals(2, stored.comments.size)
+    assertTrue(savedBody.toByteArray(Charsets.UTF_8).size <= DiffComment.MAX_BODY_BYTES)
+    assertTrue(savedBody.startsWith("Refuted: "))
+    assertTrue(savedBody.endsWith("🙂…"))
+  }
+
   @Test
   fun `detached HEAD refuses pending comments and listing without writing a row`() {
     val fixture = Fixture()
@@ -176,6 +229,21 @@ class DiffCommentServiceTest {
 
     fun storedThreads(branch: String) = delegate.read { it.diffComments.listThreads("repository", branch) }
   }
+
+  private fun reviewFinding(
+    id: String,
+    path: String?,
+    line: Int?,
+  ) = ParallelReviewMergedFinding(
+    fNumber = id,
+    agentIds = listOf("reviewer"),
+    severity = ParallelReviewSeverity.MAJOR,
+    confidence = "high",
+    location = if (path == null) "module.kt:9" else "$path${line?.let { ":$it" }.orEmpty()}",
+    description = "Description for $id",
+    repositoryPath = path,
+    line = line,
+  )
 
   private class Git : WorkflowGitOperations by NoopWorkflowGitOperations {
     var branch = "main"

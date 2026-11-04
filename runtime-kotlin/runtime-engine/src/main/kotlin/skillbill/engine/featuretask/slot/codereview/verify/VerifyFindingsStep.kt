@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview.verify
 
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseAcceptedOutputRecordingHooks
 import skillbill.engine.featuretask.slot.PhaseCompletionRejectionHooks
@@ -17,7 +18,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
-internal class VerifyFindingsStep :
+internal class VerifyFindingsStep(private val comments: DiffCommentService? = null) :
   PhaseStepHooks<PhaseVerifyFindingsStepBinding>,
   PhaseUpstreamFailureContinuationHooks,
   PhaseLaunchPromptHooks<PhaseVerifyFindingsStepBinding>,
@@ -73,5 +74,5 @@ internal class VerifyFindingsStep :
     context: PhaseStepOutputContext,
     state: PhaseVerifyFindingsStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ) = VerifyFindingsEvidence.recordRejectedFindings(run, context, state, outputMap)
+  ) = VerifyFindingsEvidence.recordRejectedFindings(run, context, state, outputMap, comments)
 }

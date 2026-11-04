@@ -338,8 +338,8 @@ internal object StandaloneReviewReportAdmission {
     merged.forEach { finding ->
       val referenced = referencedCandidates(finding, candidates)
       val unresolvedRefs =
-        finding.sourceFindingRefs.filter { ref -> referenced.none { it.finding?.sourceFindingRef == ref } }
-      val referencedIndices = referenced.map(candidates::indexOf).filter { it >= 0 }
+        finding.sourceFindingRefs.filter { ref -> referenced.none { it.value.finding?.sourceFindingRef == ref } }
+      val referencedIndices = referenced.map { it.index }
       val reusedCandidate = referencedIndices.any { it in claimedCandidates }
       if (reusedCandidate) {
         reasons += "a source finding candidate is reused by multiple merged findings"
@@ -351,14 +351,18 @@ internal object StandaloneReviewReportAdmission {
           reasons += "merged finding has source references that cannot be reconciled to admitted report text"
         referenced.isEmpty() ->
           mergedTexts[finding.fNumber]?.takeIf { finding.sourceFindingRefs.isEmpty() }?.let { text ->
-            candidates += StandaloneReviewSourceCandidate(text, MERGED_REPORT, finding.asRawFinding())
+            candidates +=
+              StandaloneReviewSourceCandidate(
+                text,
+                MERGED_REPORT,
+                finding.asRawFinding(),
+              )
           } ?: run {
             reasons += "merged finding has no retained source presentation text"
           }
         referenced.size == 1 -> {
-          val source = referenced.single()
-          val index = candidates.indexOf(source)
-          if (index >= 0) candidates[index] = source.copy(finding = finding.asRawFinding())
+          val index = referenced.single().index
+          candidates[index] = candidates[index].copy(finding = finding.asRawFinding())
         }
         else -> Unit
       }
@@ -368,15 +372,15 @@ internal object StandaloneReviewReportAdmission {
   private fun referencedCandidates(
     finding: ParallelReviewMergedFinding,
     candidates: List<StandaloneReviewSourceCandidate>,
-  ): List<StandaloneReviewSourceCandidate> {
+  ): List<IndexedValue<StandaloneReviewSourceCandidate>> {
     return if (finding.sourceFindingRefs.isEmpty()) {
-      candidates.filter { candidate ->
+      candidates.withIndex().filter { (_, candidate) ->
         candidate.source != MERGED_REPORT &&
           candidate.finding?.let { sameSourceFinding(it, finding.asRawFinding()) } == true &&
           (candidate.producerId == null || candidate.producerId in finding.agentIds)
       }
     } else {
-      candidates.filter { candidate ->
+      candidates.withIndex().filter { (_, candidate) ->
         candidate.source != MERGED_REPORT &&
           candidate.finding?.sourceFindingRef?.let { it in finding.sourceFindingRefs } == true &&
           (candidate.producerId == null || candidate.producerId in finding.agentIds)
