@@ -16,6 +16,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixValidation
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
@@ -163,7 +164,11 @@ internal class WorkflowGoalRunnerAssessmentRecording(
         round.copy(
           assessorRuns =
             round.assessorRuns.filter {
-              it.status == GoalAssessmentRunStatus.COMPLETED && it.role != GoalAssessmentRole.VERIFIER
+              it.role != GoalAssessmentRole.VERIFIER &&
+                (
+                  it.status == GoalAssessmentRunStatus.COMPLETED ||
+                    (it.status == GoalAssessmentRunStatus.MALFORMED && hasRetainedFinding(round, it.role, it.subtaskId))
+                )
             },
           fix =
             round.fix?.let { fix ->
@@ -181,6 +186,21 @@ internal class WorkflowGoalRunnerAssessmentRecording(
       }
     }
   }
+
+  private fun hasRetainedFinding(
+    round: GoalAssessmentRound,
+    role: GoalAssessmentRole,
+    subtaskId: Int?,
+  ): Boolean =
+    round.findings.any { finding ->
+      when (role) {
+        GoalAssessmentRole.TEST_VALUE_REVIEW -> finding.kind == GoalAssessmentFindingKind.TEST_VALUE
+        GoalAssessmentRole.SUBTASK -> finding.subtaskId == subtaskId
+        GoalAssessmentRole.CROSS_SUBTASK ->
+          finding.subtaskId == null && finding.kind == GoalAssessmentFindingKind.DEFECT
+        else -> false
+      }
+    }
 
   private fun decode(stored: Any?): GoalAssessmentRecordRead =
     try {

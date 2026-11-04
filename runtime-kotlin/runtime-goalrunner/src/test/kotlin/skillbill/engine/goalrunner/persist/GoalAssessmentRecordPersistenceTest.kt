@@ -157,6 +157,38 @@ class GoalAssessmentRecordPersistenceTest {
   }
 
   @Test
+  fun `operator resume retains malformed assessor output when its finding provenance is ambiguous`() {
+    workflows.saveFeatureTaskWorkflow(parentRecord(), FeatureTaskWorkflowMode.RUNTIME)
+    val round =
+      partialRecord().rounds.single().copy(
+        assessorRuns =
+          partialRecord().rounds.single().assessorRuns.map {
+            it.copy(status = GoalAssessmentRunStatus.MALFORMED)
+          },
+        findings =
+          partialRecord().rounds.single().findings +
+            partialRecord().rounds.single().findings.single().copy(
+              findingRef = "GA-002",
+              failureScenario = "a distinct malformed-input path crashes the parser",
+            ),
+      )
+    val record =
+      GoalAssessmentRecord(
+        issueKey = ISSUE_KEY,
+        rounds = listOf(round),
+        exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE,
+        openFindingRefs = listOf("GA-001", "GA-002"),
+      )
+    store().recordGoalAssessmentRecord(PARENT_ID, record)
+
+    assertTrue(store().reopenGoalAssessmentForOperatorResume(PARENT_ID))
+
+    val resumed = assertIs<GoalAssessmentRecordRead.Recorded>(store().readGoalAssessmentRecord(PARENT_ID)).record
+    assertEquals(round.findings, resumed.rounds.single().findings)
+    assertEquals(round.assessorRuns, resumed.rounds.single().assessorRuns)
+  }
+
+  @Test
   fun `execution quarantines the superseded round contract while status leaves it untouched`() {
     val current = partialRecord().asGoalAssessmentRecordWireMap()
     val legacy =

@@ -15,6 +15,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionResult
@@ -118,7 +119,8 @@ internal class GoalAssessmentRoundRun(
     val usable =
       plan.all { planned ->
         round.assessorRuns.any {
-          it.role == planned.role && it.subtaskId == planned.subtaskId && it.status == COMPLETED
+          it.role == planned.role && it.subtaskId == planned.subtaskId &&
+            (it.status == COMPLETED || (it.status == GoalAssessmentRunStatus.MALFORMED && hasRetainedFinding(planned)))
         }
       }
     if (!usable) return unavailable("an assessor failed or produced no usable output")
@@ -147,7 +149,19 @@ internal class GoalAssessmentRoundRun(
   private fun isRecorded(planned: PlannedRun): Boolean =
     round.assessorRuns.any {
       it.role == planned.role && it.subtaskId == planned.subtaskId &&
-        (planned.role != GoalAssessmentRole.TEST_VALUE_REVIEW || it.status == COMPLETED)
+        (it.status == COMPLETED || (it.status == GoalAssessmentRunStatus.MALFORMED && hasRetainedFinding(planned)))
+    }
+
+  private fun hasRetainedFinding(planned: PlannedRun): Boolean =
+    round.findings.any { finding ->
+      when (planned.role) {
+        GoalAssessmentRole.TEST_VALUE_REVIEW -> finding.kind == GoalAssessmentFindingKind.TEST_VALUE
+        GoalAssessmentRole.SUBTASK -> finding.subtaskId == planned.subtaskId
+        GoalAssessmentRole.CROSS_SUBTASK ->
+          finding.subtaskId == null &&
+            finding.kind == GoalAssessmentFindingKind.DEFECT
+        else -> false
+      }
     }
 
   private fun missingInput(planned: PlannedRun): String? {
@@ -175,14 +189,8 @@ internal class GoalAssessmentRoundRun(
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseAssessor(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
     (parsed as? GoalAssessmentParse.Malformed)?.let { warn("${planned.label()} output was malformed: ${it.reason}") }
-    report?.let { absorb(planned, it) }
-    if (roundNumber > 1 && report != null) {
-      val settled =
-        report.scenarios.count { it.scenarioRef == previousTarget } +
-          report.regressions.count { it.regressionRef == previousTarget }
-      if (settled != 1) verificationReady = false
-    }
-    record(GoalAssessmentRun(planned.role, planned.subtaskId, statusOf(launched, report != null && verificationReady)))
+    val accepted = report?.let { acceptReport(planned, it) } == true
+    record(GoalAssessmentRun(planned.role, planned.subtaskId, statusOf(launched, accepted)))
   }
 
   private fun assessorFocus(planned: PlannedRun): GoalAssessmentFocus {
@@ -208,17 +216,19 @@ internal class GoalAssessmentRoundRun(
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseVerifier(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
     (parsed as? GoalAssessmentParse.Malformed)?.let { warn("the verifier output was malformed: ${it.reason}") }
-    verificationReady = verificationReady && report != null &&
-      candidates.all { candidate ->
-        val verdicts = report.verdicts.filter { it.findingRef == candidate.findingRef }
-        verdicts.size == 1 && verdicts.single().evidence.isNotBlank()
-      }
+    val verifierValid =
+      report != null &&
+        candidates.all { candidate ->
+          val verdicts = report.verdicts.filter { it.findingRef == candidate.findingRef }
+          verdicts.size == 1 && verdicts.single().evidence.isNotBlank()
+        }
     val expectedRefs = candidates.map { it.findingRef }.toSet()
     val actualRefs = report?.verdicts?.map { it.findingRef }
-    if (actualRefs?.toSet() != expectedRefs || actualRefs.size != expectedRefs.size) verificationReady = false
+    val exactRefs = actualRefs != null && actualRefs.toSet() == expectedRefs && actualRefs.size == expectedRefs.size
+    verificationReady = verificationReady && verifierValid && exactRefs
     if (verificationReady) report?.let { applyVerdicts(it, candidates) }
     record(
-      GoalAssessmentRun(GoalAssessmentRole.VERIFIER, null, statusOf(launched, report != null && verificationReady)),
+      GoalAssessmentRun(GoalAssessmentRole.VERIFIER, null, statusOf(launched, verifierValid && exactRefs)),
     )
   }
 
@@ -297,8 +307,8 @@ internal class GoalAssessmentRoundRun(
       record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, statusOf(launched, false)))
       return
     }
-    absorb(PlannedRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null), report)
-    record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, statusOf(launched, verificationReady)))
+    val accepted = absorb(PlannedRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null), report)
+    record(GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, statusOf(launched, accepted)))
   }
 
   private fun reviewHeadMatches(head: String?): Boolean =
@@ -352,10 +362,28 @@ internal class GoalAssessmentRoundRun(
     earlier = earlier.map { it.copy(findings = GoalAssessmentVerdicts.applyCarried(it.findings, selectedReport)) }
   }
 
+  private fun acceptReport(
+    planned: PlannedRun,
+    report: GoalAssessorReport,
+  ): Boolean {
+    if (roundNumber > 1) {
+      val settled =
+        report.scenarios.count { it.scenarioRef == previousTarget } +
+          report.regressions.count { it.regressionRef == previousTarget }
+      if (settled != 1) {
+        verificationReady = false
+        return false
+      }
+    }
+    val accepted = absorb(planned, report)
+    if (!accepted) verificationReady = false
+    return accepted
+  }
+
   private fun absorb(
     planned: PlannedRun,
     report: GoalAssessorReport,
-  ) {
+  ): Boolean {
     if (report.rejectedLines.isNotEmpty()) {
       warn("${planned.label()} left ${report.rejectedLines.size} lines outside the grammar.")
     }
@@ -369,7 +397,7 @@ internal class GoalAssessmentRoundRun(
     if (accepted.size < fresh.size) {
       verificationReady = false
       warn("${planned.label()} exceeded the finding capacity; assessment is unavailable instead of dropping findings.")
-      return
+      return false
     }
     val added =
       accepted.mapIndexed { index, candidate ->
@@ -396,6 +424,7 @@ internal class GoalAssessmentRoundRun(
         scenarios = mergeScenarios(round.scenarios, report.scenarios),
         regressions = mergeRegressions(round.regressions, report.regressions),
       )
+    return true
   }
 
   private fun mergeScenarios(

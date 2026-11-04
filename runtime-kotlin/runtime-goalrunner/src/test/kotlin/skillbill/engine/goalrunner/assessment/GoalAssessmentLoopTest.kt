@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.assessment
 import org.junit.jupiter.api.io.TempDir
 import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
+import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
@@ -126,6 +127,46 @@ class GoalAssessmentLoopTest {
       GoalAssessmentRunStatus.MALFORMED,
       record.rounds.single().assessorRuns.first { it.role == GoalAssessmentRole.TEST_VALUE_REVIEW }.status,
     )
+    assertTrue(record.rounds.single().findings.isEmpty())
+  }
+
+  @Test
+  fun `a valid finding survives an earlier test review failure and is not repeated after resume`() {
+    var resumed = false
+    val fixture =
+      GoalAssessmentGateFixture(home) { call ->
+        when (call) {
+          AssessmentCall.TEST_VALUE_REVIEW -> if (resumed) NO_FINDING else null
+          AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
+          AssessmentCall.VERIFIER -> CONFIRM_FIRST
+          else -> NO_FINDING
+        }
+      }
+
+    val interrupted = fixture.gate().run(fixture.state(), fixture.request())
+    assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, interrupted.exitReason)
+    assertEquals(
+      GoalAssessmentRunStatus.COMPLETED,
+      interrupted.rounds.single().assessorRuns.first { it.role == GoalAssessmentRole.SUBTASK }.status,
+    )
+    assertEquals(listOf("GA-001"), interrupted.rounds.single().findings.map { it.findingRef })
+
+    val round =
+      interrupted.rounds.single().copy(
+        assessorRuns =
+          interrupted.rounds.single().assessorRuns.filter {
+            it.status == GoalAssessmentRunStatus.COMPLETED && it.role != GoalAssessmentRole.VERIFIER
+          },
+      )
+    fixture.store.stored =
+      GoalAssessmentRecordRead.Recorded(interrupted.copy(exitReason = null, rounds = listOf(round)))
+    resumed = true
+    val result = fixture.gate().run(fixture.state(), fixture.request())
+
+    assertEquals(1, fixture.calls.count { it == AssessmentCall.FIRST_SUBTASK })
+    assertEquals(listOf("GA-001"), result.rounds.flatMap { it.findings }.map { it.findingRef })
+    assertEquals(listOf("GA-001"), GoalAssessmentLoopRules.pendingRefs(result))
+    assertTrue("- GA-001 kind defect" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
   }
 
   @Test
