@@ -67,8 +67,7 @@ public class GoalAssessmentStrategy : PhaseStrategy() {
         "would still pass if the guarded behavior broke>`. " +
         "Declared scenarios: `Scenario <IS-NNN>: <holds|broken> evidence <path:line citations>`. " +
         "Declared regressions: `Regression <TR-NNN>: <restored|not_restored> evidence <path:line citations>`. " +
-        "Verification: `Verify <GA-NNN>: <confirmed|refuted> evidence <path:line citations>`, or " +
-        "`Verify: none` when no candidate was listed, followed by `Verification complete: <candidate count>`. " +
+        "Only a verifier role writes `Verify` lines; its role section names that grammar. " +
         "Cite file and line for every claim."
   }
 }

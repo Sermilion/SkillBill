@@ -58,7 +58,12 @@ internal object GoalAssessmentLineParser {
         ?: return GoalAssessmentParse.Malformed("the projection count is invalid.")
     var valid = 0
     var noneCount = 0
+    var verifierLines = 0
     recordLines(text).forEach { line ->
+      if (VERIFY.matches(line) || VERIFY_NONE.matches(line)) {
+        verifierLines++
+        return@forEach
+      }
       val parsed =
         findingOf(line)?.let(findings::add) ?: scenarioOf(line)?.let(scenarios::add)
           ?: regressionOf(line)?.let(regressions::add) ?: FINDING_NONE.matches(line).takeIf { it }?.also {
@@ -72,6 +77,7 @@ internal object GoalAssessmentLineParser {
       declaredCount,
       valid,
       noneCount,
+      verifierLines,
     )
   }
 
@@ -80,6 +86,7 @@ internal object GoalAssessmentLineParser {
     declaredCount: Int,
     valid: Int,
     noneCount: Int,
+    verifierLines: Int,
   ): GoalAssessmentParse<GoalAssessorReport> {
     val saysNone = noneCount > 0
     return when {
@@ -94,7 +101,7 @@ internal object GoalAssessmentLineParser {
           "Finding: none was combined with findings.",
         )
       valid == 0 -> GoalAssessmentParse.Malformed("the output held no line in the assessor grammar.")
-      report.projectionCount != declaredCount ->
+      declaredCount !in report.projectionCount..report.projectionCount + verifierLines ->
         GoalAssessmentParse.Malformed("the projection count does not match its records.")
       !saysNone && report.findings.isEmpty() ->
         GoalAssessmentParse.Malformed("an empty finding projection must declare Finding: none.")
