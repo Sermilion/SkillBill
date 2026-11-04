@@ -35,6 +35,7 @@ class GoalAssessmentInputIsolationTest {
 
     assertEquals(
       setOf(
+        AssessmentCall.TEST_VALUE_REVIEW,
         AssessmentCall.FIRST_SUBTASK,
         AssessmentCall.SECOND_SUBTASK,
         AssessmentCall.CROSS_SUBTASK,
@@ -42,10 +43,13 @@ class GoalAssessmentInputIsolationTest {
       ),
       fixture.prompts.keys,
     )
-    fixture.prompts.forEach { (call, prompt) ->
+    fixture.prompts.filterKeys { it != AssessmentCall.TEST_VALUE_REVIEW }.forEach { (call, prompt) ->
       REQUIRED.forEach { required -> assertTrue(required in prompt, "$call prompt lacks '$required'") }
+    }
+    fixture.prompts.forEach { (call, prompt) ->
       SENTINELS.forEach { sentinel -> assertFalse(sentinel in prompt, "$call prompt carries '$sentinel'") }
     }
+    assertTrue("src/FeatureTest.kt" in fixture.prompts.getValue(AssessmentCall.TEST_VALUE_REVIEW))
   }
 
   private companion object {

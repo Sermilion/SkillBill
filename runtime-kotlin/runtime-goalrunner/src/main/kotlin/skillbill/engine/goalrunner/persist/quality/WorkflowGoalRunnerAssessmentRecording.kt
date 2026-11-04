@@ -16,8 +16,12 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
+import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
+import skillbill.goalrunner.assessment.model.GoalAssessmentFixValidation
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentRole
+import skillbill.goalrunner.assessment.model.GoalAssessmentRound
 import skillbill.goalrunner.assessment.model.GoalAssessmentRunStatus
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -62,8 +66,8 @@ internal class WorkflowGoalRunnerAssessmentRecording(
     val bytes = JsonCodec.mapToJsonString(wire).encodeToByteArray()
     val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT
     val reason =
-      "Goal assessment now uses focused repair accounting. " +
-        "The previous round record requires fresh discovery."
+      "Goal assessment contract 0.2 has no separate unit-test review identity or verified test-value lifecycle. " +
+        "The record requires fresh discovery."
     val diagnostic =
       recorder.recordRejectedOutput(
         RejectedOutputDiagnosticRequest(
@@ -143,24 +147,59 @@ internal class WorkflowGoalRunnerAssessmentRecording(
         return@transaction false
       }
       val reset = GoalAssessmentLoopRules.resetBudgetForOperatorResume(old)
-      val rounds =
-        reset.rounds.mapIndexed { index, round ->
-          if (index == reset.rounds.lastIndex && old.exitReason == GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE) {
-            round.copy(
-              assessorRuns =
-                round.assessorRuns.filter {
-                  it.status == GoalAssessmentRunStatus.COMPLETED && it.role != GoalAssessmentRole.VERIFIER
-                },
-            )
-          } else {
-            round
-          }
-        }
+      val rounds = resumeRounds(reset, old.exitReason)
       val resumed = reset.copy(exitReason = null, rounds = rounds)
       val wire = resumed.asGoalAssessmentRecordWireMap()
       wireArtifactValidator.validate(KIND, wire, ARTIFACT.label())
       engine.saveRunnerArtifactPatch(unit.workflowStates, family, parent, mapOf(ARTIFACT.entry(wire)))
       true
+    }
+
+  private fun resumeRounds(
+    reset: GoalAssessmentRecord,
+    oldExitReason: GoalAssessmentExitReason?,
+  ): List<GoalAssessmentRound> {
+    return reset.rounds.mapIndexed { index, round ->
+      if (index == reset.rounds.lastIndex && oldExitReason == GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE) {
+        round.copy(
+          assessorRuns =
+            round.assessorRuns.filter {
+              it.role != GoalAssessmentRole.VERIFIER &&
+                (
+                  it.status == GoalAssessmentRunStatus.COMPLETED ||
+                    (it.status == GoalAssessmentRunStatus.MALFORMED && hasRetainedFinding(round, it.role, it.subtaskId))
+                )
+            },
+          fix =
+            round.fix?.let { fix ->
+              when {
+                fix.status == GoalAssessmentFixStatus.FAILED -> null
+                fix.status == GoalAssessmentFixStatus.COMPLETED &&
+                  fix.validation == GoalAssessmentFixValidation.FAILED && fix.commitSha == null ->
+                  fix.copy(validation = GoalAssessmentFixValidation.NOT_RUN)
+                else -> fix
+              }
+            },
+        )
+      } else {
+        round
+      }
+    }
+  }
+
+  private fun hasRetainedFinding(
+    round: GoalAssessmentRound,
+    role: GoalAssessmentRole,
+    subtaskId: Int?,
+  ): Boolean =
+    round.findings.any { finding ->
+      when (role) {
+        GoalAssessmentRole.TEST_VALUE_REVIEW -> finding.kind == GoalAssessmentFindingKind.TEST_VALUE
+        GoalAssessmentRole.SUBTASK -> finding.subtaskId == subtaskId
+        GoalAssessmentRole.CROSS_SUBTASK ->
+          finding.subtaskId == null && finding.kind == GoalAssessmentFindingKind.DEFECT
+        else -> false
+      }
     }
 
   private fun decode(stored: Any?): GoalAssessmentRecordRead =

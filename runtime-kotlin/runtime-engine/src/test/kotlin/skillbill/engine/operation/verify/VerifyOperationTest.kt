@@ -2,7 +2,7 @@ package skillbill.engine.operation.verify
 
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
-import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.engine.operation.unittestvalue.UnitTestValueCheckReview
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import kotlin.test.Test
@@ -39,7 +39,7 @@ class VerifyOperationTest {
           VerifyPromptSections.EXTRACT_CRITERIA_STEP,
           VerifyPromptSections.FEATURE_FLAG_AUDIT_STEP,
           VerifyPromptSections.CODE_REVIEW_STEP,
-          UnitTestValueCheckPromptRules.REVIEW_STEP,
+          UnitTestValueCheckReview.REVIEW_STEP,
           VerifyPromptSections.COMPLETENESS_AUDIT_STEP,
           VerifyPromptSections.VERDICT_STEP,
         ),
@@ -112,7 +112,7 @@ class VerifyOperationTest {
       assertEquals(
         listOf(
           VerifyPromptSections.CODE_REVIEW_STEP,
-          UnitTestValueCheckPromptRules.REVIEW_STEP,
+          UnitTestValueCheckReview.REVIEW_STEP,
           VerifyPromptSections.COMPLETENESS_AUDIT_STEP,
           VerifyPromptSections.VERDICT_STEP,
         ),
@@ -153,7 +153,7 @@ class VerifyOperationTest {
         VerifyPromptSections.EXTRACT_CRITERIA_STEP to emptySet(),
         VerifyPromptSections.FEATURE_FLAG_AUDIT_STEP to evaluator("feature_flag_policy"),
         VerifyPromptSections.CODE_REVIEW_STEP to evaluator("review_rubric"),
-        UnitTestValueCheckPromptRules.REVIEW_STEP to evaluator("unit_test_value_rubric"),
+        UnitTestValueCheckReview.REVIEW_STEP to evaluator("unit_test_value_rubric"),
         VerifyPromptSections.COMPLETENESS_AUDIT_STEP to evaluator("completeness_rubric"),
         VerifyPromptSections.VERDICT_STEP to
           setOf(

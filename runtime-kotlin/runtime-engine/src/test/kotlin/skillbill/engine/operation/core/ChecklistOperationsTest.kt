@@ -2,7 +2,7 @@ package skillbill.engine.operation.core
 
 import skillbill.engine.operation.featureguard.FeatureGuardPromptRules
 import skillbill.engine.operation.featureguardcleanup.FeatureGuardCleanupPromptRules
-import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.engine.operation.unittestvalue.UnitTestValueCheckReview
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -85,7 +85,7 @@ class ChecklistOperationsTest {
 
     assertContains(
       outcome.reason,
-      "'${UnitTestValueCheckPromptRules.REVIEW_STEP}' is read-only but changed the worktree",
+      "'${UnitTestValueCheckReview.REVIEW_STEP}' is read-only but changed the worktree",
     )
   }
 
@@ -103,7 +103,7 @@ class ChecklistOperationsTest {
     assertIs<OperationOutcome.Completed>(harness.invoke(UNIT_TEST_VALUE_CHECK))
 
     val review = harness.runner.inputs.single()
-    assertEquals(UnitTestValueCheckPromptRules.REVIEW_STEP, review.stepName)
+    assertEquals(UnitTestValueCheckReview.REVIEW_STEP, review.stepName)
     assertContains(review.directive, "Unit tests in scope:\n- src/test/kotlin/CheckoutTest.kt\n\n")
     assertContains(review.directive, "## Criticality Weighting")
     assertFalse("UnchangedTest" in review.directive, review.directive)
