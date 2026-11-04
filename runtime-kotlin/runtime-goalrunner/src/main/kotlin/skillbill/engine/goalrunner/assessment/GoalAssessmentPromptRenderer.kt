@@ -76,12 +76,10 @@ internal object GoalAssessmentPromptRenderer {
         is GoalAssessmentFocus.Scenario ->
           "Independently verify only scenario ${focus.ref} after its repair. Read source at HEAD and report " +
             "one Scenario ${focus.ref}: <holds|broken> evidence <path:line citations> line. " +
-            "Also report `Finding: none` and end with `Projection complete: 1`. " +
             "Do not re-audit accepted items or discover unrelated defects."
         is GoalAssessmentFocus.Regression ->
           "Independently verify only regression ${focus.ref} after its repair. Read source at HEAD and report " +
             "one Regression ${focus.ref}: <restored|not_restored> evidence <path:line citations> line. " +
-            "Also report `Finding: none` and end with `Projection complete: 1`. " +
             "Do not re-audit accepted items or discover unrelated defects."
       }
 
@@ -99,8 +97,7 @@ internal object GoalAssessmentPromptRenderer {
     return "Assess subtask $subtaskId ($name): judge each of its criteria against its spec and the parent spec " +
       "in the code at the head commit, not at its own commit. Use its commit range to find what it changed. " +
       "Report concrete defects at every severity and tests that would still pass after their named regression. " +
-      "Leave speculation unconfirmed. $MATERIALITY_RULE Include the complete machine projection and finish it " +
-      "with `Projection complete: <record count>`. Write `Finding: none` only when there are no actionable findings."
+      "Leave speculation unconfirmed. $MATERIALITY_RULE Include the complete machine projection."
   }
 
   private fun verifierRole(candidates: List<GoalAssessmentVerifierCandidate>): String =
@@ -109,7 +106,7 @@ internal object GoalAssessmentPromptRenderer {
       "For test_value candidates, determine whether the named regression still passes. " +
       "$MATERIALITY_RULE " +
       "Answer with one `Verify <GA-NNN>: <confirmed|refuted> evidence <reason and file:line citations>` line " +
-      "per candidate, followed by `Verification complete: <candidate count>`.\n\n" +
+      "per candidate.\n\n" +
       candidates.joinToString("\n") {
         "- ${it.findingRef} kind ${it.kind.wireValue}, test ${it.path}:${it.line}, guards " +
           "${it.guardedRef ?: "none"}; scenario: ${it.failureScenario}"
@@ -123,6 +120,5 @@ internal object GoalAssessmentPromptRenderer {
       "`Regression <TR-NNN>:` line. Report each broken scenario, each concrete defect at every severity that " +
       "appears when subtasks interact, and tests that would still pass after their named behavior breaks. " +
       "Leave speculation unconfirmed. $MATERIALITY_RULE " +
-      "Include the complete machine projection and finish it with `Projection complete: <record count>`. " +
-      "Write `Finding: none` only when no actionable findings exist."
+      "Include the complete machine projection."
 }

@@ -1,5 +1,12 @@
 # goalrunner boundary history
 
+## [2026-11-04] Goal assessment reads assessor prose leniently
+Areas: runtime-goalrunner assessment, runtime-engine goal assessment and unit-test review prompts
+- Assessor and verifier output no longer needs a `Projection complete` or `Verification complete` marker or count. ENG-1887 and SKILL-451 stopped at assessment_unavailable because assessors counted `Finding: none` as a record.
+- Only bare record lines (`Finding:`, `Test value:`, `Scenario IS-NNN:`, `Regression TR-NNN:`, `Verify GA-NNN:`, `Verify:`) are records. Markdown bold and backticks are stripped first, so prose such as `**Test value.** ...` is no longer rejected.
+- `Finding: none` is tolerated next to findings or repeated, and a report with only scenario lines counts as having no findings. A record-shaped line that fails its grammar still makes the run malformed, so a broken finding is not silently dropped.
+Feature flag: N/A
+
 ## [2026-11-04] SKILL-477.1 fix confirmed assessment findings
 Areas: runtime-goalrunner assessment and persistence, runtime-engine unit-test review, runtime-domain assessment, runtime-contracts, runtime-ports, runtime-infra workflow, orchestration/contracts
 - The first assessment round reviews existing unit tests in the committed goal scope. It records a distinct completed review identity even for an empty test scope and fails closed when scope or read-only integrity cannot be established.

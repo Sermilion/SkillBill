@@ -71,7 +71,6 @@ class GoalAssessmentLoopTest {
     assertEquals(1, fixture.calls.count { it == AssessmentCall.CROSS_SUBTASK })
     assertEquals(1, fixture.calls.count { it == AssessmentCall.TEST_VALUE_REVIEW })
     assertTrue("kind defect" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
-    assertTrue("Verification complete: <candidate count>" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
     assertEquals(emptyList(), record.openFindingRefs)
     assertTrue(record.rounds.flatMap { it.findings }.all { it.state == GoalAssessmentFindingState.FIXED })
     assertTrue(fixture.prompts.getValue(AssessmentCall.FIX).contains("Repair the selected handler"))

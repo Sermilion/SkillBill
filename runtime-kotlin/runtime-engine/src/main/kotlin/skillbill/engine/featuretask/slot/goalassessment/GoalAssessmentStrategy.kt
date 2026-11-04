@@ -59,8 +59,7 @@ public class GoalAssessmentStrategy : PhaseStrategy() {
         "commit range only to locate what it changed, because a later subtask can break or repair an earlier " +
         "one. Nothing else tells you what was reviewed, audited, validated, or accepted before you. " +
         "Report concrete evidence-backed defects at every severity. Leave speculation unconfirmed. Skip style " +
-        "and preference. Include the complete machine projection and finish assessor output with " +
-        "`Projection complete: <record count>`. Answer with plain lines in the grammar the role focus names. " +
+        "and preference. Include the complete machine projection: plain lines in the grammar the role focus names. " +
         "Findings: `Finding: <Blocker|Major|Minor> <path>:<line> scenario <failure scenario>`, or " +
         "`Finding: none` when you found no defect. " +
         "Tests that guard nothing: `Test value: <test path>:<line> guards <path>:<line> reason <why the test " +

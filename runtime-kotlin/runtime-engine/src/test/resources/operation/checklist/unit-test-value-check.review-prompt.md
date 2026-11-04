@@ -102,10 +102,6 @@ Machine projection records:
 - `Finding: minor <production path>:<line> scenario <specific missing behavior and risk>`
 - `Finding: none` only when there are no actionable findings
 
-End the projection with `Projection complete: <record count>`. Count every actionable `Finding`, `Test value`,
-`Scenario`, and `Regression` line in the full projection. `Finding: none` does not count. Do not emit a completion
-marker if the projection is incomplete.
-
 Provide:
 
 - `Overall verdict`: `Strong | Mixed | Weak`
