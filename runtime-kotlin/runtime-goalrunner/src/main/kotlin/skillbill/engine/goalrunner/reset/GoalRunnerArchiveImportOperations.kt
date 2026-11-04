@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.workflow.decomposition.decomposedParentsForPurgeFromRecords
 import skillbill.application.workflow.decomposition.isPlanWorkflow
+import skillbill.application.workflow.decomposition.listDecomposedParentsForPurge
+import skillbill.application.workflow.decomposition.listPlanWorkflowsForPurge
 import skillbill.application.workflow.decomposition.matchesIssueKeyForFeatureTaskDiscovery
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
@@ -171,12 +173,25 @@ public class GoalRunnerArchiveImportOperations(
       when (
         val result =
           database.transactionFenced(observation) { unitOfWork ->
-            restoreSnapshot(repoRoot, issueKey, archiveParentIds, bundle, unitOfWork)
+            val destIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+            val ownedParents = unitOfWork.workflowStates.listDecomposedParentsForPurge(issueKey, destIdentity).parents
+            val ownedPlans = unitOfWork.workflowStates.listPlanWorkflowsForPurge(issueKey, destIdentity)
+            if (ownedParents.isNotEmpty() || ownedPlans.isNotEmpty()) {
+              null
+            } else {
+              restoreSnapshot(repoRoot, issueKey, archiveParentIds, bundle, unitOfWork)
+            }
           }
       ) {
         FencedTransactionResult.ChangedTarget -> return GoalRunnerImportResult.Refused(issueKey, changedSummary)
         is FencedTransactionResult.Committed -> result.value
       }
+    if (restore == null) {
+      return GoalRunnerImportResult.Refused(
+        issueKey,
+        "Goal '$issueKey' already has destination workflow or planning state; import refused.",
+      )
+    }
     return writeSpecs(repoRoot, archivePath, issueKey, bundle, restore)
   }
 
