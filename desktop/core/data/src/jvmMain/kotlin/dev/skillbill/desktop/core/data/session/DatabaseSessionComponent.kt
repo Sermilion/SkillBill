@@ -13,12 +13,15 @@ import dev.skillbill.desktop.core.data.repository.DetailObservations
 import dev.skillbill.desktop.core.data.repository.DiffCommentObservations
 import dev.skillbill.desktop.core.data.repository.SpecObservations
 import dev.skillbill.desktop.core.data.repository.WorkingTreeReads
+import dev.skillbill.desktop.core.data.runtime.DetailRead
 import dev.skillbill.desktop.core.data.runtime.RuntimeBoardReads
 import dev.skillbill.desktop.core.data.runtime.RuntimeDetailReads
 import dev.skillbill.desktop.core.data.runtime.RuntimeReads
 import dev.skillbill.desktop.core.data.signal.CommitSignalWatcher
 import dev.skillbill.desktop.core.data.signal.NativeSignalWatch
 import dev.skillbill.desktop.core.data.signal.SpecDirectoryChanges
+import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.Provides
@@ -51,6 +54,7 @@ interface DatabaseSessionComponent {
   val signals: CommitSignalWatcher
   val board: BoardObservations
   val details: DetailObservations
+  val favoriteResolver: FavoriteWorkSessionResolver
   val specs: SpecObservations
   val changes: ChangeObservations
   val changeScopes: ChangeScopeObservations
@@ -181,6 +185,10 @@ interface RuntimeSessionProviders {
 
 /** A session graph over a [DatabaseSessionComponent]. */
 class RuntimeSessionGraph internal constructor(val component: DatabaseSessionComponent) : SessionGraph {
+  override fun databaseFile(): DatabaseFileIdentity? = component.purgeIdentity.observation?.let {
+    DatabaseFileIdentity(it.path.toAbsolutePath().normalize().toString(), it.fileKey)
+  }
+
   override fun displayPath(): String = try {
     component.runtime.databaseSession.resolveDbPath().toString()
   } catch (_: InvalidPathException) {
@@ -226,6 +234,36 @@ class RuntimeSessionGraph internal constructor(val component: DatabaseSessionCom
     component.purgeIdentity.clear()
     component.runtime.databaseReadConnections.release()
   }
+}
+
+@Inject
+@SingleIn(DatabaseSessionScope::class)
+class FavoriteWorkSessionResolver(
+  reads: RuntimeReads,
+  runtime: RuntimeComponent,
+  diagnostics: Diagnostics,
+  holder: SessionSelectionHolder,
+  private val identity: SessionPurgeIdentity,
+) {
+  private val detailReads = RuntimeDetailReads(reads, runtime, diagnostics, holder.selection.id)
+  private val database = runtime.databaseSession
+
+  internal suspend fun resolve(id: String): DetailRead {
+    val observed = identity.observation ?: return DetailRead.Failed(dev.skillbill.desktop.core.domain.model.ReadProblem.Runtime("Database identity is unavailable."))
+    return try {
+      if (database.readIfPresent { it.databaseFileObservation } != observed) return changedIdentity()
+      val result = detailReads.first(id)
+      if (database.readIfPresent { it.databaseFileObservation } != observed) changedIdentity() else result
+    } catch (failure: CancellationException) {
+      throw failure
+    } catch (failure: Exception) {
+      DetailRead.Failed(dev.skillbill.desktop.core.domain.model.ReadProblem.Runtime(failure.message ?: "Favorite lookup failed."))
+    }
+  }
+
+  private fun changedIdentity() = DetailRead.Failed(
+    dev.skillbill.desktop.core.domain.model.ReadProblem.Runtime("Database identity changed during favorite lookup."),
+  )
 }
 
 @Inject

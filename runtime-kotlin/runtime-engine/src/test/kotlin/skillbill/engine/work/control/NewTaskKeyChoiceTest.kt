@@ -19,13 +19,14 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class NewTaskKeyChoiceTest {
   private val repoRoot: Path = Files.createTempDirectory("new-task-key-choice")
@@ -53,77 +54,23 @@ class NewTaskKeyChoiceTest {
       EnvironmentContext(),
       TestRepositoryEnclosingRoot,
       NoopRuntimeDiagnostics,
+      InPlaceGoalWorktreeResources,
+      RecordingBranchWorktreeResources(),
     )
 
-  init {
-    bundle(repoRoot.resolve("project-specs"), "WE-5188-dashboard", "", "")
-  }
-
   @Test
-  fun `a tracker link anywhere in the intake supplies the key`() {
+  fun `an admitted first-token key is ready without allocation`() {
     val ready =
-      ready(
-        "lets start goal to work on this https://linear.app/acme/issue/WE-5249/follow-up-fixes " +
-          "use feat/WE-5188-dashboard as base branch. Analytics moved to WE-5187.",
+      assertIs<NewTaskPreparation.Ready>(
+        subject.prepareNewTask(
+          repoRoot,
+          NewTaskIntakeRequest("SKILL-5249 Add follow-up fixes", null, null, null, emptySet()),
+        ),
       )
 
-    assertEquals("WE-5249", ready.key)
+    assertEquals("SKILL-5249", ready.key)
     assertFalse(ready.allocated)
   }
-
-  @Test
-  fun `a single named key with a known prefix supplies the key`() {
-    assertEquals("WE-5249", ready("Implement **WE-5249** on top of the dashboard.").key)
-  }
-
-  @Test
-  fun `a named key with an unknown prefix is not taken as the key`() {
-    val choices = needsKey("Hash it with SHA-256 before upload.")
-
-    assertEquals(listOf("WE-5189"), choices)
-  }
-
-  @Test
-  fun `an intake without a key asks and suggests the next free key`() {
-    assertEquals(listOf("WE-5189"), needsKey("Add a dark mode setting."))
-  }
-
-  @Test
-  fun `several named keys ask with each of them and the next free key`() {
-    val choices = needsKey("Follow up WE-5249 after WE-5187 lands.")
-
-    assertEquals(listOf("WE-5249", "WE-5187", "WE-5189"), choices)
-  }
-
-  @Test
-  fun `a chosen prefix allocates the next free key`() {
-    val ready = ready("Add a dark mode setting.", keyChoice = "we")
-
-    assertEquals("WE-5189", ready.key)
-    assertTrue(ready.allocated)
-  }
-
-  @Test
-  fun `a chosen key is used even when the intake names another`() {
-    val ready = ready("https://linear.app/acme/issue/WE-5249/slug follow-ups", keyChoice = "WE-6000")
-
-    assertEquals("WE-6000", ready.key)
-    assertFalse(ready.allocated)
-  }
-
-  private fun prepare(
-    requirements: String,
-    keyChoice: String?,
-  ): NewTaskPreparation =
-    subject.prepareNewTask(repoRoot, NewTaskIntakeRequest(requirements, "Follow-up fixes", null, keyChoice, emptySet()))
-
-  private fun ready(
-    requirements: String,
-    keyChoice: String? = null,
-  ): NewTaskPreparation.Ready = assertIs<NewTaskPreparation.Ready>(prepare(requirements, keyChoice))
-
-  private fun needsKey(requirements: String): List<String> =
-    assertIs<NewTaskPreparation.NeedsKey>(prepare(requirements, null)).choices
 
   private companion object {
     val LEADING_KEY = Regex("^([A-Z][A-Z0-9]*-\\d+)(?:\\s|$)")

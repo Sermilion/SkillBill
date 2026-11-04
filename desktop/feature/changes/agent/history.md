@@ -1,3 +1,13 @@
+## [2026-11-04] SKILL-461 Changes window commit timeline
+Areas: desktop/core/domain, desktop/core/data, desktop/core/ui, desktop/feature/changes, desktop/feature/detail, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-infra/workflow, runtime-kotlin/runtime-ports
+- The runtime reads merge-base..HEAD and attributes commits by valid subtask trailers, then recorded SHA. Other commits are Operator commits. Finished subtasks show a changed-after-finish badge when ownership differs from the recorded SHA.
+- Subtask scopes use the timeline, merge squash owners into columns, and label hunks by owner group. A range can include operator commits, labelled by short SHA. Timeline failures leave All and Uncommitted available.
+- The commit view adds a strip, subject search, stepping and range selection. Switching views preserves fully covered selections and falls back to All for partial or operator-only selections.
+- reusable: WorkCommitTimelineResult, timeline attribution, ChangeScopeTimeline, per-commit reads, owner-group hunk attribution and shared strip layout.
+- Limits: stacked goals have no timeline; single runs and stacked goals have no commit view. Five trailer-less runtime commit paths classify as operator. Per-commit reads have a 200-commit limit; failed or oversized attribution falls back to an unlabelled range with a diagnostic. A file renamed twice can miss its middle commit.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-02] SKILL-457 removed flaky FileDiffStreamTest
 Areas: desktop/feature/changes
 - Deleted the wheel-scroll test FileDiffStreamTest because it failed intermittently on Ubuntu and Windows CI and its failures were not tied to changes in the code it covers. No production code changed, and no test in this module covers wheel scrolling now.

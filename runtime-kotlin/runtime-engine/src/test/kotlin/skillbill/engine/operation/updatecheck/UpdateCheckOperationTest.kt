@@ -26,6 +26,7 @@ import skillbill.ports.process.model.ReleaseCatalogResult
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.telemetry.model.TelemetrySettings
 import java.nio.file.Files
@@ -125,6 +126,7 @@ class UpdateCheckOperationTest {
         ),
         OperationStepRunner(UnlaunchablePhaseRunner, NoopWorkflowGitOperations),
         FixedProjectStorePort(home.resolve("project-store")),
+        RecordingBranchWorktreeResources(),
       )
     val result =
       executor.execute(

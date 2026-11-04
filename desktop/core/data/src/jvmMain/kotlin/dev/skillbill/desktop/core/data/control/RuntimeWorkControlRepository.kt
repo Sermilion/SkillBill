@@ -49,12 +49,14 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
-import skillbill.engine.work.control.model.WorkControlAction
+import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
+import skillbill.engine.work.control.model.WorkControlAction
 import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
@@ -243,6 +245,8 @@ class RuntimeWorkControlRepository(
               request.baseBranch,
               request.keyChoice,
               launches.keys.value + triedKeys,
+              request.reuseRequested,
+              NewTaskIdentityPolicy.RESOLVED_DESKTOP_IDENTITY,
             ),
           ),
         )
@@ -322,7 +326,13 @@ class RuntimeWorkControlRepository(
       else -> return NewTaskStartOutcome.Refused("Choose a standalone phase.")
     }
     return startReservedStandalone(request, session, phaseId, settleOnStarted = true) { runtime ->
-      runtime.workControlService.startStandalone(Path.of(request.repoRoot), phaseId, request.agentId, request.target)
+      runtime.workControlService.startStandalone(
+        Path.of(request.repoRoot),
+        phaseId,
+        request.agentId,
+        request.target,
+        request.standaloneCheckout(),
+      )
     }
   }
 
@@ -333,7 +343,13 @@ class RuntimeWorkControlRepository(
       else -> return NewTaskStartOutcome.Refused("Choose a standalone operation.")
     }
     return startReservedStandalone(request, session, operationId, settleOnStarted = false) { runtime ->
-      runtime.workControlService.startOperation(Path.of(request.repoRoot), operationId, request.target, request.agentId)
+      runtime.workControlService.startOperation(
+        Path.of(request.repoRoot),
+        operationId,
+        request.target,
+        request.agentId,
+        request.standaloneCheckout(),
+      )
     }
   }
 
@@ -356,7 +372,7 @@ class RuntimeWorkControlRepository(
       is Outcome.Failure -> return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.") else NewTaskStartOutcome.Failed(result.error)
       is Outcome.Success -> result.value
     }
-    val key = "$repositoryIdentity:$id:standalone"
+    val key = request.standaloneBranch()?.let { "$repositoryIdentity:$id:standalone:branch:$it" } ?: "$repositoryIdentity:$id:standalone"
     val admission = sessions.admitReservation(session, key, LaunchBoardTarget.StandalonePhase(id, repositoryIdentity), null, snapshot)
     val handle = when (admission) {
       ReservationAdmission.AlreadyReserved -> return NewTaskStartOutcome.Refused("$id is already starting in this repository.")
@@ -595,6 +611,12 @@ internal fun decisionPrecheck(item: WorkItem, decision: OperatorDecision, instru
 }
 
 private fun DatabaseFileIdentity.toObservation() = DatabaseFileObservation(Path.of(path), fileKey)
+
+private fun NewTaskStart.standaloneBranch(): String? =
+  branch?.trim()?.takeIf { it.isNotBlank() && kind != NewTaskKind.Monitor }
+
+private fun NewTaskStart.standaloneCheckout(): StandaloneCheckout =
+  StandaloneCheckout(checkoutRoot?.trim()?.takeIf(String::isNotBlank)?.let(Path::of), standaloneBranch())
 
 /** Null when the item is not a goal or was read without its database file; the runtime cannot address it. */
 internal fun WorkItem.controlTarget(): WorkControlTarget? {

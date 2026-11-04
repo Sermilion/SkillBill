@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, issue_key, rounds, exit_reason, open_finding_refs, budget_start_round]
 properties:
-  contract_version: { const: '0.2' }
+  contract_version: { const: '0.3' }
   issue_key: { type: string, pattern: '\S' }
   budget_start_round: { type: integer, minimum: 1 }
   rounds:
@@ -29,7 +29,7 @@ properties:
             additionalProperties: false
             required: [role, subtask_id, status]
             properties:
-              role: { enum: [subtask, cross_subtask, verifier] }
+              role: { enum: [subtask, cross_subtask, verifier, test_value_review] }
               subtask_id: { type: [integer, 'null'], minimum: 1 }
               status: { enum: [completed, failed, malformed] }
         findings:
@@ -114,7 +114,7 @@ x-coherence-checks:
   - id: ordered-rounds
     description: Round numbers start at 1 and increase by exactly 1; the codec owns this check.
   - id: unique-run-identity
-    description: A role plus subtask id pair appears at most once within a round, and only subtask runs carry a subtask id; the codec owns this check.
+    description: A role plus subtask id pair appears at most once within a round; only subtask runs carry a subtask id and test-value review carries null; the codec owns this check.
   - id: resolvable-open-refs
     description: Every open finding ref names a recorded finding whose state is open; the codec owns this check.
   - id: guarded-ref-by-kind

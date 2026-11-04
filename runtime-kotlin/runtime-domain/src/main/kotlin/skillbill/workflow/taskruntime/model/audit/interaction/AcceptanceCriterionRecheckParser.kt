@@ -28,26 +28,31 @@ internal object AcceptanceCriterionRecheckParser {
     return when {
       duplicated != null -> rejected("Recheck ${duplicated.key} appears more than once.")
       missing != null -> rejected("Recheck $missing has no line.")
-      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } }, ignored)
+      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } }, ignored, prose)
     }
   }
 
   private fun entriesOf(
     lines: List<RecheckLine>,
     ignoredRefs: List<String>,
+    prose: String,
   ): AcceptanceCriterionRecheckParse {
     val entries =
       lines.map { line ->
-        val citations =
-          citationsOf(line.rest) ?: return rejected("Recheck ${line.ref} needs `evidence <path:line list>`.")
-        AcceptanceCriterionRecheckEntry(line.ref, line.verdict, citations)
+        val citations = citationsOf(line.rest)
+        if (line.rest.startsWith("evidence ", ignoreCase = true) && citations == null) {
+          return rejected("Recheck ${line.ref} has malformed evidence citations.")
+        }
+        val evidenceRef =
+          citations ?: line.rest.removePrefix("evidence").trim().takeIf { it.isNotBlank() } ?: prose
+        AcceptanceCriterionRecheckEntry(line.ref, line.verdict, evidenceRef)
       }
     return AcceptanceCriterionRecheckParse.Parsed(entries, ignoredRefs)
   }
 
   private fun citationsOf(rest: String): String? {
     val listed = EVIDENCE.matchEntire(rest)?.groupValues?.get(1) ?: return null
-    val parts = listed.split(',').map { it.trim().trimEnd('*', '`', '_', '.') }
+    val parts = listed.split(',', ';').map { it.trim().trimEnd('*', '`', '_', '.') }
     var path: String? = null
     val expanded =
       parts.map { part ->
@@ -77,8 +82,7 @@ internal object AcceptanceCriterionRecheckParser {
       AcceptanceCriterionRecheckVerdict.entries.first {
         it.wireValue.equals(match.groupValues[VERDICT_GROUP], ignoreCase = true)
       }
-    val citations = CITATION.findAll(match.groupValues[REST_GROUP]).map { it.value }.toList()
-    return RecheckLine(match.groupValues[REF_GROUP].uppercase(), verdict, "evidence ${citations.joinToString(", ")}")
+    return RecheckLine(match.groupValues[REF_GROUP].uppercase(), verdict, match.groupValues[REST_GROUP])
   }
 
   private data class RecheckLine(

@@ -55,6 +55,7 @@ kotlin {
   }
   sourceSets.jvmTest.dependencies {
     implementation(projects.core.testing)
+    implementation(libs.compose.ui.test)
     implementation("dev.skillbill:runtime-core")
     implementation("dev.skillbill:runtime-contracts")
     implementation("dev.skillbill:runtime-infra-host")

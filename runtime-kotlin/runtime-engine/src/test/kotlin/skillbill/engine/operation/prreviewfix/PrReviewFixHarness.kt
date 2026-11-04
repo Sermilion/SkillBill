@@ -37,6 +37,7 @@ import skillbill.ports.review.pullrequest.model.ReviewThread
 import skillbill.ports.review.pullrequest.model.ReviewThreadComment
 import skillbill.ports.review.pullrequest.model.ReviewThreadListing
 import skillbill.ports.review.pullrequest.model.ReviewThreadReplyResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.diffcomment.model.DiffCommentThreadState
@@ -128,6 +129,7 @@ internal class PrReviewFixHarness : AutoCloseable {
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
       FixedProjectStorePort(root.resolve("project-store")),
+      RecordingBranchWorktreeResources(),
     )
 
   init {

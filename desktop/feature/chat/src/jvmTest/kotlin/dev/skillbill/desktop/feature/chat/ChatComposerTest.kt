@@ -126,6 +126,44 @@ class ChatComposerTest {
   }
 
   @Test
+  fun `stop shows only while stoppable and send now label when draft is empty with a queue`() = runTest {
+    val workspace = ChatWorkspace(
+      FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
+      WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
+      testNewTaskDraft(),
+    )
+    val item = workItem("SKILL-469")
+    workspace.open(item)
+    val session = workspace.session(item.id)!!
+    session.agentState.value = ChatAgent("claude", null, null)
+    session.agentSupportedState.value = true
+    session.stoppableState.value = false
+    runComposeUiTest {
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+            ChatComposer(session, workspace)
+          }
+        }
+      }
+      onNodeWithText("Stop", substring = false).assertDoesNotExist()
+      runOnIdle {
+        session.busyState.value = true
+        session.stoppableState.value = true
+      }
+      onNodeWithText("Stop", substring = false).assertExists()
+      onNodeWithText("Queue", substring = false).assertExists()
+      runOnIdle {
+        session.queuedState.value = listOf(QueuedChatMessage("queued", null, pauseAndAct = false))
+        workspace.drafts[item.id] = ""
+      }
+      onNodeWithText("Send now", substring = false).assertExists()
+      runOnIdle { session.stoppableState.value = false }
+      onNodeWithText("Stop", substring = false).assertDoesNotExist()
+    }
+  }
+
+  @Test
   fun `pasting an image adds a numbered chip, removing it empties the row, and sending clears pending images`() = runTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(supported = setOf("claude")), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),

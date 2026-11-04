@@ -2,15 +2,22 @@ package skillbill.engine.work.control
 
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
+import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testProjectStore
+import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
+import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
+import skillbill.engine.work.control.model.NewTaskIntakeRequest
+import skillbill.engine.work.control.model.NewTaskPreparation
+import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.work.WorkRunLauncher
@@ -20,7 +27,16 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -40,6 +56,16 @@ class WorkNewTaskStartTest {
       override fun preflight(request: GoalPreflightRequest) =
         GoalPreflightResult(GoalPreflightVerdict.NEW_WORK, "LOCAL-0")
     }
+  private val siblingRoot: Path = Files.createTempDirectory("work-new-task-start-sibling")
+  private var branchHolder: Path? = null
+  private val goalWorktrees =
+    object : GoalWorktreeResources by InPlaceGoalWorktreeResources {
+      override fun checkoutHolding(
+        repoRoot: Path,
+        branch: String,
+      ): Path? = branchHolder
+    }
+  private val branchWorktrees = RecordingBranchWorktreeResources()
   private val subject =
     WorkNewTaskStart(
       database,
@@ -50,7 +76,227 @@ class WorkNewTaskStartTest {
       EnvironmentContext(),
       TestRepositoryEnclosingRoot,
       NoopRuntimeDiagnostics,
+      goalWorktrees,
+      branchWorktrees,
     )
+
+  @Test
+  fun `missing identity asks for the single inventory prefix without minting`() {
+    val root = Files.createTempDirectory("work-new-task-prefix")
+    bundle(root.resolve("project-specs"), "NEWS-8-existing", "", "")
+    val result =
+      newSubject(root, preflight, GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey })
+        .prepareNewTask(root, intake(keyChoice = null))
+
+    assertEquals(NewTaskPreparation.NeedsKey(listOf("NEWS")), result)
+  }
+
+  @Test
+  fun `URL identity binds only when unused`() {
+    val root = Files.createTempDirectory("work-new-task-url")
+    val url = "https://linear.app/acme/issue/SKILL-501/title?view=all#top"
+    val start = newSubject(root, preflight, keyAdmission())
+    val ready = assertIs<NewTaskPreparation.Ready>(start.prepareNewTask(root, intake(keyChoice = url)))
+    assertEquals("SKILL-501", ready.key)
+    assertEquals(false, ready.allocated)
+
+    bundle(root.resolve("project-specs"), "SKILL-501-existing", "", "")
+    val reused = start.prepareNewTask(root, intake(keyChoice = url, reuseRequested = true))
+    assertEquals(NewTaskPreparation.Refused("SKILL-501 is already used."), reused)
+  }
+
+  @Test
+  fun `a sentence mention does not become identity`() {
+    val root = Files.createTempDirectory("work-new-task-mention")
+    bundle(root.resolve("project-specs"), "SKILL-476-existing", "", "")
+    val result =
+      newSubject(root, preflight, GoalNewWorkAdmissionPort { _, _ -> GoalNewWorkAdmission.NoIssueKey })
+        .prepareNewTask(root, intake(requirements = "Please fix SKILL-476 while adding export", keyChoice = null))
+
+    assertIs<NewTaskPreparation.NeedsKey>(result)
+  }
+
+  @Test
+  fun `typed complete key binds without allocating and prefix alone asks`() {
+    val root = Files.createTempDirectory("work-new-task-typed")
+    val start = newSubject(root, preflight, keyAdmission())
+    assertIs<NewTaskPreparation.NeedsKey>(start.prepareNewTask(root, intake(keyChoice = "NEWS")))
+    val ready = assertIs<NewTaskPreparation.Ready>(start.prepareNewTask(root, intake(keyChoice = "skill-501")))
+    assertEquals("SKILL-501", ready.key)
+    assertEquals(false, ready.allocated)
+    assertEquals(
+      NewTaskPreparation.Refused("SKILL-501 is already in use. Choose another key."),
+      start.prepareNewTask(root, intake(keyChoice = "SKILL-501", occupiedKeys = setOf("skill-501"))),
+    )
+  }
+
+  @Test
+  fun `typed spec reuse skips terminal refusal but never in-flight refusal`() {
+    val root = Files.createTempDirectory("work-new-task-reuse")
+    bundle(root.resolve("project-specs"), "SKILL-500-existing", "", "")
+    val terminalWithoutReuse = newSubject(root, preflightWith(GoalPreflightVerdict.TERMINAL_ONLY), keyAdmission())
+    val terminalReady =
+      assertIs<NewTaskPreparation.Ready>(
+        terminalWithoutReuse.prepareNewTask(root, intake(keyChoice = "SKILL-501")),
+      )
+    assertEquals(
+      NewTaskStartResult.Refused("SKILL-501 already finished. Purge its run history to start it again."),
+      terminalWithoutReuse.startNewTask(root, terminalReady, NewTaskRunKind.GOAL, "claude"),
+    )
+    val reusable = newSubject(root, preflightWith(GoalPreflightVerdict.TERMINAL_ONLY), keyAdmission())
+    assertEquals(
+      NewTaskPreparation.Refused("SKILL-500 already has a spec."),
+      reusable.prepareNewTask(root, intake(keyChoice = "SKILL-500")),
+    )
+    val ready =
+      assertIs<NewTaskPreparation.Ready>(
+        reusable.prepareNewTask(root, intake(keyChoice = "SKILL-500", reuseRequested = true)),
+      )
+    assertEquals(NewTaskStartResult.Started, reusable.startNewTask(root, ready, NewTaskRunKind.GOAL, "claude"))
+
+    val failed =
+      newSubject(root, preflightWith(GoalPreflightVerdict.TERMINAL_ONLY, WorkflowStatus.FAILED), keyAdmission())
+    assertEquals(
+      NewTaskStartResult.Refused("SKILL-500 already finished. Purge its run history to start it again."),
+      failed.startNewTask(root, ready, NewTaskRunKind.GOAL, "claude"),
+    )
+
+    listOf(
+      GoalPreflightVerdict.ALREADY_RUNNING to "SKILL-500 is already running.",
+      GoalPreflightVerdict.RESUMABLE to "SKILL-500 already has a run. Use Resume or Run again.",
+      GoalPreflightVerdict.GOAL_CONTINUATION to "SKILL-500 already has a run. Use Resume or Run again.",
+    ).forEach { (verdict, message) ->
+      val running = newSubject(root, preflightWith(verdict), keyAdmission())
+      val runningReady =
+        assertIs<NewTaskPreparation.Ready>(
+          running.prepareNewTask(root, intake(keyChoice = "SKILL-500", reuseRequested = true)),
+        )
+      assertEquals(
+        NewTaskStartResult.Refused(message),
+        running.startNewTask(root, runningReady, NewTaskRunKind.GOAL, "claude"),
+      )
+    }
+  }
+
+  private fun newSubject(
+    root: Path,
+    preflight: GoalPreflightPort,
+    admission: GoalNewWorkAdmissionPort,
+  ) = WorkNewTaskStart(
+    database,
+    admission,
+    NewTaskIssueKeyAllocator(
+      projectStore(root, root.resolve("project-specs")),
+      TestDecompositionManifestStore,
+      NoopRuntimeDiagnostics,
+    ),
+    preflight,
+    launcher,
+    EnvironmentContext(),
+    TestRepositoryEnclosingRoot,
+    NoopRuntimeDiagnostics,
+    goalWorktrees,
+    branchWorktrees,
+  )
+
+  private fun keyAdmission() =
+    GoalNewWorkAdmissionPort { requirements, _ ->
+      val first = requirements.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+      Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN").matchEntire(first)?.let {
+        GoalNewWorkAdmission.Admitted(first.uppercase())
+      } ?: GoalNewWorkAdmission.NoIssueKey
+    }
+
+  private fun intake(
+    requirements: String = "Add a small feature",
+    keyChoice: String?,
+    reuseRequested: Boolean = false,
+    occupiedKeys: Set<String> = emptySet(),
+  ) = NewTaskIntakeRequest(requirements, null, null, keyChoice, occupiedKeys, reuseRequested)
+
+  private fun preflightWith(
+    verdict: String,
+    status: WorkflowStatus = WorkflowStatus.COMPLETED,
+  ) = object : GoalPreflightPort {
+    override fun preflight(request: GoalPreflightRequest): GoalPreflightResult {
+      val identity =
+        FeatureTaskExecutionIdentity("workflow", request.issueKey, "repo", "spec.md", FeatureTaskWorkflowMode.RUNTIME)
+      val candidate =
+        FeatureTaskContinuationCandidate(
+          identity, "workflow", FeatureTaskWorkflowMode.RUNTIME, status.wireValue, "plan", "spec.md", null, null, "",
+        )
+      return GoalPreflightResult(verdict, request.issueKey, candidates = listOf(candidate))
+    }
+  }
+
+  @Test
+  fun `a branch another checkout holds runs there without being claimed as created`() {
+    branchHolder = siblingRoot
+
+    val result = subject.startStandalone(repoRoot, "review", "claude", null, StandaloneCheckout(branch = "feat/x"))
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(siblingRoot, launcher.lastDirectory())
+    assertEquals(emptyList(), branchWorktrees.created)
+    assertEquals(
+      listOf(siblingRoot to BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, "review")),
+      branchWorktrees.held,
+    )
+    assertTrue(launcher.lastOwnership().startsWith(TestRepositoryEnclosingRoot.primaryRepositoryIdentity(repoRoot)))
+    assertTrue(launcher.lastOwnership().endsWith(":branch:feat/x"), launcher.lastOwnership())
+  }
+
+  @Test
+  fun `a branch no checkout holds runs in the worktree created for it`() {
+    branchWorktrees.creation = BranchWorktreeCreation.Created(siblingRoot)
+
+    val result = subject.startOperation(repoRoot, "verify", "SKILL-1", "claude", StandaloneCheckout(branch = "feat/x"))
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(listOf(repoRoot to "feat/x"), branchWorktrees.created)
+    assertEquals(siblingRoot, launcher.lastDirectory())
+    assertEquals(emptyList(), branchWorktrees.released)
+  }
+
+  @Test
+  fun `a branch that exists nowhere refuses the start without launching`() {
+    branchWorktrees.creation = BranchWorktreeCreation.Missing
+
+    val result = subject.startStandalone(repoRoot, "qa", "claude", null, StandaloneCheckout(branch = "feat/gone"))
+
+    val refused = assertIs<NewTaskStartResult.Refused>(result)
+    assertTrue("feat/gone" in refused.reason, refused.reason)
+    assertEquals(0, launcher.calls)
+  }
+
+  @Test
+  fun `a refused launch releases the worktree it claimed`() {
+    branchWorktrees.creation = BranchWorktreeCreation.Created(siblingRoot)
+    launcher.refusal = "A run is already starting or running for this work."
+
+    val result = subject.startStandalone(repoRoot, "pr", "claude", null, StandaloneCheckout(branch = "feat/x"))
+
+    assertIs<NewTaskStartResult.Refused>(result)
+    assertEquals(
+      listOf(siblingRoot to BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, "pr")),
+      branchWorktrees.released,
+    )
+  }
+
+  @Test
+  fun `monitor ignores the branch and a start without one runs in the given checkout`() {
+    branchHolder = siblingRoot
+    val checkout = Files.createTempDirectory("work-new-task-start-checkout")
+
+    subject.startStandalone(repoRoot, "monitor", "claude", "branch:feat/x", StandaloneCheckout(checkout, "feat/x"))
+    assertEquals(checkout, launcher.lastDirectory())
+    subject.startStandalone(repoRoot, "review", "claude", null, StandaloneCheckout(checkout))
+    assertEquals(checkout, launcher.lastDirectory())
+
+    assertEquals(emptyList(), branchWorktrees.created)
+    assertEquals(emptyList(), branchWorktrees.held)
+    assertTrue(launcher.lastOwnership().startsWith(TestRepositoryEnclosingRoot.primaryRepositoryIdentity(repoRoot)))
+  }
 
   @Test
   fun `startStandalone monitor passes target as positional`() {
@@ -173,17 +419,23 @@ class WorkNewTaskStartTest {
   private class RecordingLauncher : WorkRunLauncher {
     var calls = 0
     var exit: Pair<Path, CompletableFuture<WorkRunExit>>? = null
-    private var last: List<String> = emptyList()
+    var refusal: String? = null
+    private var last: WorkRunLaunchRequest? = null
 
     override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
       calls++
-      last = (request.kind as WorkRunLaunchKind.RuntimeCommand).arguments
+      last = request
+      refusal?.let { return WorkRunLaunchResult.Refused(it) }
       return exit?.let { (log, finished) -> WorkRunLaunchResult.Started(log, finished) }
         ?: WorkRunLaunchResult.Started(Path.of("work-new-task-start.log"))
     }
 
     override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
 
-    fun lastArgs(): List<String> = last
+    fun lastArgs(): List<String> = (last?.kind as WorkRunLaunchKind.RuntimeCommand).arguments
+
+    fun lastDirectory(): Path? = last?.repositoryRoot
+
+    fun lastOwnership(): String = last?.ownershipKey.orEmpty()
   }
 }

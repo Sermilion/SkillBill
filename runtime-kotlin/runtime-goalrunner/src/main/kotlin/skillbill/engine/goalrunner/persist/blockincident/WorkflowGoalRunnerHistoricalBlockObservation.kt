@@ -20,6 +20,7 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
     write: GoalRunnerBlockWrite,
     reference: GoalRunnerAcceptedBlockReference,
     sourceAlias: BlockIncidentAlias?,
+    acceptedCause: GoalRunnerAcceptedBlockReference?,
   ): GoalRunnerBlockWriteResult {
     val goalAlias =
       BlockIncidentAliases.goal(
@@ -34,12 +35,14 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
       BlockIncidentObservation(
         workflowId = reference.sourceWorkflowId,
         parentWorkflowId = write.goalParentWorkflowId(),
-        phaseId = reference.blockedStepId.takeIf { write.family == WorkflowFamily.TASK_RUNTIME },
+        phaseId =
+          (acceptedCause?.blockedStepId ?: reference.blockedStepId)
+            .takeIf { write.family == WorkflowFamily.TASK_RUNTIME },
         attempt = reference.attempt,
         reason = write.blockedReason,
         alias = goalAlias,
         linkOccurrenceToken = reference.incidentToken,
-        linkedAcceptedBlockReference = reference,
+        linkedAcceptedBlockReference = acceptedCause ?: reference,
         additionalAliases = listOfNotNull(sourceAlias, childToken?.let(BlockIncidentAliases::childCause)),
         generation = reference.executionGeneration,
         origin = write.blockOrigin(),

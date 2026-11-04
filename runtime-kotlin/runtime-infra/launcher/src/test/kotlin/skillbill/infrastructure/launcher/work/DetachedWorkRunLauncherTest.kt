@@ -74,7 +74,8 @@ class DetachedWorkRunLauncherTest {
     val home = Files.createTempDirectory("host-agent-home")
     executable(home, RECORD_AGENT_HOME, "skill-bill")
     val hostHomes = HostAgentHomesPort { mapOf(AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/host/claude-work") }
-    assertIs<WorkRunLaunchResult.Started>(launcher(home, hostHomes).start(runtimeRequest(home)))
+    val started = assertIs<WorkRunLaunchResult.Started>(launcher(home, hostHomes).start(runtimeRequest(home)))
+    assertNotNull(started.exit).toCompletableFuture().get()
     assertEquals("/host/claude-work", recordedAgentHome(home))
   }
 
@@ -85,7 +86,8 @@ class DetachedWorkRunLauncherTest {
     val hostHomes = HostAgentHomesPort { mapOf(AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/host/claude-work") }
     val recorded = mapOf(AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/recorded/claude")
     val request = runtimeRequest(home).copy(agentEnvironment = recorded)
-    assertIs<WorkRunLaunchResult.Started>(launcher(home, hostHomes).start(request))
+    val started = assertIs<WorkRunLaunchResult.Started>(launcher(home, hostHomes).start(request))
+    assertNotNull(started.exit).toCompletableFuture().get()
     assertEquals("/host/claude-work", recordedAgentHome(home))
   }
 
@@ -95,7 +97,8 @@ class DetachedWorkRunLauncherTest {
     executable(home, RECORD_AGENT_HOME, "skill-bill")
     val recorded = mapOf(AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/recorded/claude")
     val request = runtimeRequest(home).copy(agentEnvironment = recorded)
-    assertIs<WorkRunLaunchResult.Started>(launcher(home).start(request))
+    val started = assertIs<WorkRunLaunchResult.Started>(launcher(home).start(request))
+    assertNotNull(started.exit).toCompletableFuture().get()
     assertEquals("/recorded/claude", recordedAgentHome(home))
   }
 
@@ -107,17 +110,13 @@ class DetachedWorkRunLauncherTest {
     val environment = TRAY_ENVIRONMENT + (AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/tray/claude")
     val recorded = mapOf(AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR to "/recorded/claude")
     val request = runtimeRequest(home).copy(agentEnvironment = recorded)
-    assertIs<WorkRunLaunchResult.Started>(launcher(home, hostHomes, environment).start(request))
+    val started = assertIs<WorkRunLaunchResult.Started>(launcher(home, hostHomes, environment).start(request))
+    assertNotNull(started.exit).toCompletableFuture().get()
     assertEquals("", recordedAgentHome(home))
   }
 
   private fun recordedAgentHome(home: Path): String {
-    val written = home.resolve("agent-home")
-    val deadline = System.nanoTime() + RECORD_TIMEOUT.toNanos()
-    while (!Files.exists(written) && System.nanoTime() < deadline) {
-      Thread.sleep(POLL_MILLIS)
-    }
-    return Files.readString(written)
+    return Files.readString(home.resolve("agent-home"))
   }
 
   private fun runtimeRequest(home: Path) =
@@ -167,8 +166,6 @@ class DetachedWorkRunLauncherTest {
 
   private companion object {
     val TRAY_ENVIRONMENT = mapOf("PATH" to "/usr/bin:/bin")
-    val RECORD_TIMEOUT: Duration = Duration.ofSeconds(10)
-    const val POLL_MILLIS = 20L
     const val FAIL_WHEN_RELEASED =
       "#!/bin/sh\nprintf '\\377\\n'\necho \"Phase 'monitor' blocked at 'monitor': no origin.\"\n" +
         "until [ -e release ]; do :; done\nexit 3"

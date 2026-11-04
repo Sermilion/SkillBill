@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.ScopeChangesState
 import dev.skillbill.desktop.core.domain.model.SubtaskScopesState
+import dev.skillbill.desktop.core.domain.model.SubtaskStats
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import kotlinx.coroutines.flow.Flow
 import me.tatarka.inject.annotations.Inject
@@ -29,6 +30,11 @@ class RuntimeWorkChangeScopesRepository(
     opening = SubtaskScopesState.Loading,
     failed = { SubtaskScopesState.Unavailable(ReadProblem.Storage(it)) },
   ) { it.changeScopes.observeSubtasks(goalWorkflowId, running, lock.mutex, cache) }
+
+  override fun observeCommitStats(target: ChangeScopeTarget): Flow<Map<String, SubtaskStats>> = sessions.sessionFlow(
+    opening = emptyMap(),
+    failed = { emptyMap() },
+  ) { it.changeScopes.observeCommitStats(target, lock.mutex, cache) }
 
   override fun observeScope(target: ChangeScopeTarget, scope: ChangeScope, running: Boolean): Flow<ScopeChangesState> = sessions.sessionFlow(
     opening = ScopeChangesState.Loading,

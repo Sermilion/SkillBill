@@ -31,7 +31,7 @@ object AcceptanceCriterionInteractionTraceParser {
     val lines = explicit + natural
     val ignored = lines.map { it.ref }.filter { it !in wanted }.distinct()
     val entries =
-      when (val result = entriesFor(targets, lines.filter { it.ref in wanted })) {
+      when (val result = entriesFor(targets, lines.filter { it.ref in wanted }, prose)) {
         is Checked.Ok -> result.value
         is Checked.Bad -> return malformed(result.reason)
       }
@@ -50,6 +50,7 @@ object AcceptanceCriterionInteractionTraceParser {
   private fun entriesFor(
     targets: List<AcceptanceCriterionInteractionTarget>,
     relevant: List<TraceLine>,
+    prose: String,
   ): Checked<List<AcceptanceCriterionInteractionEntry>> {
     val duplicated = relevant.groupingBy { it.ref }.eachCount().entries.firstOrNull { it.value > 1 }
     if (duplicated != null) return Checked.Bad("${duplicated.key} is traced more than once.")
@@ -57,7 +58,7 @@ object AcceptanceCriterionInteractionTraceParser {
     val entries = mutableListOf<AcceptanceCriterionInteractionEntry>()
     for (target in targets) {
       val line = byRef[target.scenarioRef] ?: return Checked.Bad("${target.scenarioRef} has no trace line.")
-      when (val result = entryFor(target, line)) {
+      when (val result = entryFor(target, line, prose)) {
         is Checked.Ok -> entries += result.value
         is Checked.Bad -> return result
       }
@@ -94,38 +95,32 @@ object AcceptanceCriterionInteractionTraceParser {
   private fun entryFor(
     target: AcceptanceCriterionInteractionTarget,
     line: TraceLine,
+    prose: String,
   ): Checked<AcceptanceCriterionInteractionEntry> {
-    val ref = target.scenarioRef
-    val trace = TRACE.matchEntire(line.rest)?.groupValues?.get(1)?.trim()
+    val trace = (TRACE.matchEntire(line.rest)?.groupValues?.get(1) ?: line.rest).trim().takeIf { it.isNotEmpty() }
     return when (line.verdict) {
       AcceptanceCriterionInteractionVerdict.HOLDS ->
-        if (trace == null || !CITATION.containsMatchIn(trace)) {
-          Checked.Bad("$ref holds without a path:line citation.")
-        } else {
-          Checked.Ok(AcceptanceCriterionInteractionEntry(ref, line.verdict, null, trace))
-        }
-      AcceptanceCriterionInteractionVerdict.BROKEN -> brokenEntry(target, line)
+        Checked.Ok(AcceptanceCriterionInteractionEntry(target.scenarioRef, line.verdict, null, trace ?: prose))
+      AcceptanceCriterionInteractionVerdict.BROKEN -> brokenEntry(target, line, prose)
       AcceptanceCriterionInteractionVerdict.UNKNOWN ->
-        (trace ?: line.rest).takeIf { it.isNotBlank() }?.let {
-          Checked.Ok(AcceptanceCriterionInteractionEntry(ref, line.verdict, null, it))
-        } ?: Checked.Bad("$ref is unknown without a reason.")
+        Checked.Ok(AcceptanceCriterionInteractionEntry(target.scenarioRef, line.verdict, null, trace ?: prose))
     }
   }
 
   private fun brokenEntry(
     target: AcceptanceCriterionInteractionTarget,
     line: TraceLine,
+    prose: String,
   ): Checked<AcceptanceCriterionInteractionEntry> {
     val ref = target.scenarioRef
     val match =
       BROKEN_REST.matchEntire(line.rest)
-        ?: return Checked.Bad("$ref broken must read `owner AC-NNN trace <citations>`.")
+        ?: return Checked.Bad("$ref broken must identify an owner criterion.")
     val owner = match.groupValues[1].uppercase()
-    val trace = match.groupValues[2].trim()
+    val trace = match.groupValues[2].trim().ifEmpty { prose }
     return when {
       owner !in target.allowedOwners ->
         Checked.Bad("$ref broken owner $owner is not a reopenable criterion of that scenario.")
-      !CITATION.containsMatchIn(trace) -> Checked.Bad("$ref broken without a path:line citation.")
       else -> Checked.Ok(AcceptanceCriterionInteractionEntry(ref, line.verdict, owner, trace))
     }
   }
@@ -153,6 +148,5 @@ object AcceptanceCriterionInteractionTraceParser {
   private val TRACE = Regex("""^trace\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val NATURAL_LINE =
     Regex("""^\W*(IS-\d{3})\s*(?:\([^)]*\)\s*)?(holds|unknown)\b[.:]?\s*(.*)$""", RegexOption.IGNORE_CASE)
-  private val BROKEN_REST = Regex("""^owner\s+(AC-\d{3})\s+trace\s+(.+)$""", RegexOption.IGNORE_CASE)
-  private val CITATION = Regex("""[\w./\\-]+:\d+(?:-\d+)?""")
+  private val BROKEN_REST = Regex("""^owner\s+(AC-\d{3})(?:\s+(?:trace\s+)?(.*))?$""", RegexOption.IGNORE_CASE)
 }

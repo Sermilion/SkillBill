@@ -2,7 +2,7 @@
 
 ## Project Context
 
-skill-bill governs agent skill authoring, routing, validation, installation, and measurement. It ships orchestration, tooling, telemetry, workflow state, and shells for review, quality checks, feature work, verification, and PRs.
+skill-bill governs skill authoring, routing, validation, installation, and measurement. It provides orchestration, telemetry, workflow state, and shells for review, checks, feature work, verification, and PRs.
 
 Non-negotiable contracts:
 
@@ -22,7 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Each goal runs in a runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after completion unless it holds unpublished work. Standalone phases use the caller's checkout.
+Each goal runs in its own runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after recording completion unless it holds unpublished work. Standalone phases keep working in the caller's checkout. A desktop start naming a branch runs in that branch's checkout or a runtime-created sibling worktree, removed once its last run completes.
 
 ## Product Intent
 

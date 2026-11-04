@@ -122,8 +122,10 @@ internal object VerifyPromptSections {
   ): String =
     "# Operation: verify (QA)\n\n" +
       "Run QA for the verify target `$headRevision`. The runtime checked it out into the temporary QA " +
-      "checkout `$checkout`; build, install, and test only from there. You may edit any file in that checkout to " +
-      "reach a state the criteria need; the runtime deletes it afterwards. Never touch the operator's checkout, " +
+      "checkout `$checkout`; build, install, and test only from there. When a criterion needs a state the " +
+      "environment does not produce on its own, force it by editing any file in that checkout or by changing the " +
+      "environment; leave a flow unexercised only when a forced attempt failed, and say what you tried. The " +
+      "runtime deletes the checkout afterwards. Never touch the operator's checkout, " +
       "and never commit, push, or open a pull request. Settle by writing the QA report at the path the runtime " +
       "names."
 

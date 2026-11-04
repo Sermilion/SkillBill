@@ -85,6 +85,7 @@ class RuntimeDetailReadsTest {
         assertEquals(Path.of(checklist.invocationDirectory).normalize(), Path.of(mappedChecklist.invocationDirectory).normalize())
         assertEquals(Path.of(checklist.reportPath).normalize(), Path.of(mappedChecklist.reportPath).normalize())
         assertEquals(listOf("QA-1"), execution.qaFindings.map { it.id })
+        assertIs<DetailRead.Gone>(detailReads.first("missing-favorite-id"))
       } finally {
         sessionJob.cancel()
         runtime.databaseReadConnections.release()

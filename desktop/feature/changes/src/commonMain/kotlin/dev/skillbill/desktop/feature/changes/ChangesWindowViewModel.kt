@@ -28,6 +28,9 @@ import dev.skillbill.desktop.core.domain.model.executionScopeTarget
 import dev.skillbill.desktop.core.domain.model.goalScopeTarget
 import dev.skillbill.desktop.core.domain.model.kind
 import dev.skillbill.desktop.core.domain.model.normalizeRange
+import dev.skillbill.desktop.core.domain.model.normalizeCommits
+import dev.skillbill.desktop.core.domain.model.selectableSubtaskIds
+import dev.skillbill.desktop.core.domain.model.selectedSubtaskIds
 import dev.skillbill.desktop.core.domain.model.subtasksTouching
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
@@ -44,7 +47,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
@@ -86,7 +88,9 @@ class ChangesWindowViewModel(
     detail.observe(item).onEach { observed ->
       val runningChanged = mutableState.value.item.running != observed.header.running
       if (runningChanged) invalidateDiffRead()
-      mutableState.update { it.copy(item = observed.header) }
+      mutableState.update {
+        it.copy(item = observed.header, allRead = if (runningChanged) null else it.allRead)
+      }
       when (val sections = observed.sections) {
         DetailSections.Pending -> {
           currentLoadedDetail = null
@@ -139,6 +143,7 @@ class ChangesWindowViewModel(
         reviewToast = if (changedBranch) null else old.reviewToast)
       }
     }.launchIn(viewModelScope)
+    observeCommitStats()
   }
 
   private fun stopGoalObservation() {
@@ -196,9 +201,27 @@ class ChangesWindowViewModel(
     subtasks: List<ScopeSubtask>? = null,
     stats: Map<Int, SubtaskStats>? = null,
   ) {
-    val effective = effectiveScope(target, requestedScope.value)
+    val resetView = ScopeKind.Commits !in availableScopes(target)
+    if (resetView && mutableState.value.view == ChangesView.Commits) mutableState.update { it.copy(view = ChangesView.Subtasks, pickerOpen = false) }
+    val requested = requestedScope.value
+    val view = if (resetView) ChangesView.Subtasks else mutableState.value.view
+    val mapped = if (view == ChangesView.Commits && (requested is ChangeScope.Subtasks || requested == ChangeScope.Operator)) {
+      commitSelectionOf(target, requested)
+    } else requested
+    val effective = effectiveScope(target, mapped)
     requestedScope.value = effective
     val current = mutableState.value
+    val targetChanged = current.target != target
+    val commitAnchor = if (!targetChanged) current.commitAnchor else {
+      val previousTarget = current.target
+      val sameWork = previousTarget != null && previousTarget.workId == target.workId && previousTarget.worktreeRoot == target.worktreeRoot
+      val selected = effective as? ChangeScope.Commits
+      if (sameWork && !resetView && selected != null) {
+        val timelineShas = target.timeline?.commits?.mapTo(mutableSetOf()) { it.sha }.orEmpty()
+        current.commitAnchor?.takeIf { it in selected.shas && it in timelineShas }
+          ?: selected.shas.firstOrNull()?.takeIf { it in timelineShas }
+      } else null
+    }
     if (current.content == WindowContent.Ready(target) && current.scope == effective) {
       if (subtasks != null && stats != null) {
         mutableState.update { old -> project(old.copy(subtasks = subtasks, stats = stats)) }
@@ -213,8 +236,11 @@ class ChangesWindowViewModel(
         old.copy(
           content = WindowContent.Ready(target),
           scope = effective,
+          view = if (resetView) ChangesView.Subtasks else old.view,
           subtasks = subtasks ?: old.subtasks,
           stats = stats ?: old.stats,
+          commitAnchor = commitAnchor,
+          allRead = if (targetChanged) null else old.allRead,
           composer = if (targetChanged) null else old.composer,
           editing = if (targetChanged) null else old.editing,
           review = if (targetChanged) ReviewBarUi() else old.review,
@@ -233,7 +259,7 @@ class ChangesWindowViewModel(
     stats: Map<Int, SubtaskStats> = state.stats,
   ): ChangesWindowUiState {
     val groups = (list as? ScopeListUi.Listed)?.changes?.files?.let { files ->
-      groupFiles(files, filter) { path -> scopeTouchCount(path, scope, stats) }
+      groupFiles(files, filter) { path -> scopeTouchCount(path, scope, stats, state.subtasks) }
     }.orEmpty()
     val visible = groups.flatMap { it.rows }.map { it.file.path }
     val selected = if (list !is ScopeListUi.Listed) state.selectedPath
@@ -266,8 +292,9 @@ class ChangesWindowViewModel(
     return subtasksTouching(file.path, stats).mapNotNull { id ->
       val subtask = target.subtasks.firstOrNull { it.id == id } ?: return@mapNotNull null
       val inScope = when (scope) {
-        is ChangeScope.Subtasks -> id in scope.from..scope.to
-        ChangeScope.All, ChangeScope.Outside, ChangeScope.Uncommitted -> false
+        is ChangeScope.Subtasks -> id in selectedSubtaskIds(target.subtasks, scope)
+        is ChangeScope.Commits -> target.timeline?.commits?.any { it.sha in scope.shas && id in it.ownerIds } == true
+        ChangeScope.All, ChangeScope.Operator, ChangeScope.Uncommitted -> false
       }
       SubtaskChipUi(id, subtask.name, inScope, normalizeRange(target, id, id) != null)
     }
@@ -276,6 +303,7 @@ class ChangesWindowViewModel(
   private fun effectiveScope(target: ChangeScopeTarget, requested: ChangeScope): ChangeScope {
     if (requested.kind !in availableScopes(target)) return ChangeScope.All
     if (requested is ChangeScope.Subtasks) return normalizeRange(target, requested.from, requested.to) ?: ChangeScope.All
+    if (requested is ChangeScope.Commits) return normalizeCommits(target, requested.shas) ?: ChangeScope.All
     return requested
   }
 
@@ -299,7 +327,7 @@ class ChangesWindowViewModel(
   }
 
   /**
-   * Uncommitted, and Outside when the target offers it, stay observed for the quick buttons' counts. The shown list reuses these
+   * Uncommitted, and Operator when the target offers it, stay observed for the quick buttons' counts. The shown list reuses these
    * reads when the scope is one of them, so the same scope is never polled twice.
    */
   private fun observeQuickReads() {
@@ -310,30 +338,37 @@ class ChangesWindowViewModel(
       } else {
         flowOf(null)
       }
-      val outside = if (ScopeKind.Outside in availableScopes(key.target)) {
-        scopes.observeScope(key.target, ChangeScope.Outside, key.running)
+      val operator = if (ScopeKind.Operator in availableScopes(key.target)) {
+        scopes.observeScope(key.target, ChangeScope.Operator, key.running)
       } else {
         flowOf(null)
       }
-      combine(uncommitted, outside) { u, o -> QuickReads(key, u, o) }
+      combine(uncommitted, operator) { u, o -> QuickReads(key, u, o) }
     }.onEach { reads ->
       val previous = quickReads.value?.takeIf { it.key == reads?.key }
       // A re-read of the same target keeps the last settled list until the new one lands, like the shown list.
       val settled = reads?.copy(
         uncommitted = reads.uncommitted?.settledOver(previous?.uncommitted),
-        outside = reads.outside?.settledOver(previous?.outside),
+        operator = reads.operator?.settledOver(previous?.operator),
       )
       quickReads.value = settled
-      mutableState.update { it.copy(uncommittedRead = settled?.uncommitted, outsideRead = settled?.outside) }
+      mutableState.update { it.copy(uncommittedRead = settled?.uncommitted, operatorRead = settled?.operator) }
     }.launchIn(viewModelScope)
   }
 
   /** A panel opened on another scope still shows All's count: one read, not polled, until All is viewed. */
   private fun observeAllCount() {
-    state.map { ui -> ui.target?.takeIf { ui.allRead == null && ui.scope != ChangeScope.All } }.filterNotNull().distinctUntilChanged().flatMapLatest { target ->
-      scopes.observeScope(target, ChangeScope.All, running = false)
-    }.onEach { read ->
-      if (read != ScopeChangesState.Loading) mutableState.update { if (it.allRead == null) it.copy(allRead = read.toUi()) else it }
+    state.map { ui ->
+      if (ui.scope != ChangeScope.All && ui.allRead == null) ui.target?.let { AllCountKey(it, ui.item.running) } else null
+    }.distinctUntilChanged().flatMapLatest { key ->
+      if (key == null) emptyFlow() else scopes.observeScope(key.target, ChangeScope.All, running = false).map { key to it }
+    }.onEach { (key, read) ->
+      if (read == ScopeChangesState.Loading) return@onEach
+      mutableState.update { current ->
+        if (current.target == key.target && current.item.running == key.running && current.scope != ChangeScope.All && current.allRead == null) {
+          current.copy(allRead = read.toUi())
+        } else current
+      }
     }.launchIn(viewModelScope)
   }
 
@@ -344,7 +379,7 @@ class ChangesWindowViewModel(
     }.distinctUntilChanged().flatMapLatest { key ->
       when {
         key == null -> emptyFlow()
-        key.scope == ChangeScope.Uncommitted || key.scope == ChangeScope.Outside -> quickReads
+        key.scope == ChangeScope.Uncommitted || key.scope == ChangeScope.Operator -> quickReads
           .map { reads -> reads?.takeIf { it.key == QuickKey(key.target, key.running) }?.get(key.scope) ?: ScopeChangesState.Loading }
           .distinctUntilChanged()
           .map { key to it }
@@ -366,6 +401,23 @@ class ChangesWindowViewModel(
         (list as? ScopeListUi.Listed)?.let { dropStaleDiffs(it) }
       }
     }.launchIn(viewModelScope)
+  }
+
+  private fun observeCommitStats() {
+    state.map { ui -> ui.target?.takeIf { ui.view == ChangesView.Commits } }
+      .distinctUntilChanged()
+      .flatMapLatest { target ->
+        if (target == null) flowOf(null) else scopes.observeCommitStats(target).map { target to it }
+      }
+      .onEach { result ->
+        if (result == null) mutableState.update { it.copy(commitStats = emptyMap()) }
+        else {
+          val (target, stats) = result
+          mutableState.update { old ->
+            if (old.target != target) old else old.copy(commitStats = old.commitStats.filterKeys { sha -> target.timeline?.commits?.any { it.sha == sha } == true } + stats)
+          }
+        }
+      }.launchIn(viewModelScope)
   }
 
   /** A refreshed list keeps only diffs whose file is unchanged, then re-reads whichever of those the stream still wants. */
@@ -464,6 +516,7 @@ class ChangesWindowViewModel(
         mutableState.update { old -> project(old, filter = action.text) }
         if (state.value.selectedPath != selectedBefore) loadDiff()
       }
+      is ChangesWindowAction.SetView -> setView(action.view)
       is ChangesWindowAction.SelectFile -> {
         mutableState.update {
           it.copy(
@@ -490,10 +543,22 @@ class ChangesWindowViewModel(
         mutableState.update { it.copy(anchor = action.fromId) }
         requestScope(range)
       }
+      is ChangesWindowAction.PickCommit -> pickCommit(action)
+      is ChangesWindowAction.DragCommits -> {
+        val current = state.value
+        val span = commitSpan(current.commits, action.fromSha, action.toSha)
+        if (span.isNotEmpty()) {
+          mutableState.update { it.copy(commitAnchor = action.fromSha) }
+          requestScope(ChangeScope.Commits(span))
+        }
+      }
       is ChangesWindowAction.SelectQuickScope -> selectQuickScope(action.kind)
       is ChangesWindowAction.Step -> {
-        val target = subtaskTarget() ?: return
-        stepTarget(target.subtasks, state.value.scope, action.forward)?.let(::selectSubtask)
+        val current = state.value
+        val target = current.target ?: return
+        if (current.view == ChangesView.Commits) {
+          commitStepTarget(current.commits, current.scope, action.forward)?.let { requestScope(ChangeScope.Commits(listOf(it))) }
+        } else stepTarget(target.subtasks, current.scope, action.forward)?.let(::selectSubtask)
       }
       ChangesWindowAction.TogglePicker -> if (state.value.pickerOpen) closePicker() else openPicker()
       ChangesWindowAction.OpenPicker -> openPicker()
@@ -557,9 +622,35 @@ class ChangesWindowViewModel(
     requestScope(scope)
   }
 
+  private fun setView(view: ChangesView) {
+    val current = state.value
+    val target = current.target?.takeIf { ScopeKind.Subtasks in availableScopes(it) && ScopeKind.Commits in availableScopes(it) } ?: return
+    if (current.view == view) return
+    val next = if (view == ChangesView.Commits) commitSelectionOf(target, current.scope) else subtaskSelectionOf(target, current.scope)
+    mutableState.update { it.copy(view = view, pickerOpen = false) }
+    requestScope(next)
+  }
+
+  private fun pickCommit(action: ChangesWindowAction.PickCommit) {
+    val current = state.value
+    if (current.commits.none { it.sha == action.sha }) return
+    if (!action.extend) {
+      if (action.fromPicker) closePicker()
+      mutableState.update { it.copy(commitAnchor = action.sha) }
+      requestScope(ChangeScope.Commits(listOf(action.sha)))
+      return
+    }
+    val anchor = current.commitAnchor ?: action.sha
+    val span = commitSpan(current.commits, anchor, action.sha)
+    if (span.isNotEmpty()) {
+      mutableState.update { it.copy(commitAnchor = anchor) }
+      requestScope(ChangeScope.Commits(span))
+    }
+  }
+
   private fun pickSubtask(action: ChangesWindowAction.PickSubtask) {
     val target = subtaskTarget() ?: return
-    if (target.subtasks.none { it.id == action.id && it.selectable }) return
+    if (action.id !in selectableSubtaskIds(target.subtasks)) return
     if (!action.extend) {
       if (action.fromPicker) closePicker()
       selectSubtask(action.id)
@@ -575,14 +666,14 @@ class ChangesWindowViewModel(
     if (state.value.quick.none { it.kind == kind && it.enabled }) return
     when (kind) {
       QuickScope.All -> requestScope(ChangeScope.All)
-      QuickScope.Outside -> requestScope(ChangeScope.Outside)
+      QuickScope.Operator -> requestScope(ChangeScope.Operator)
       QuickScope.Uncommitted -> requestScope(ChangeScope.Uncommitted)
       QuickScope.Running -> state.value.subtasks.firstOrNull { it.state == ScopeSubtaskState.RUNNING }?.let { selectSubtask(it.id) }
     }
   }
 
   private fun openPicker() {
-    if (subtaskTarget() == null) return
+    if (state.value.target?.let { ScopeKind.Subtasks in availableScopes(it) } != true) return
     mutableState.update { it.copy(pickerOpen = true, pickerQuery = "") }
   }
 
@@ -612,7 +703,8 @@ class ChangesWindowViewModel(
 
   fun requestScope(scope: ChangeScope) {
     val target = (state.value.content as? WindowContent.Ready)?.target
-    val effective = target?.let { effectiveScope(it, scope) } ?: scope
+    val mapped = if (state.value.view == ChangesView.Commits && target != null && (scope is ChangeScope.Subtasks || scope == ChangeScope.Operator)) commitSelectionOf(target, scope) else scope
+    val effective = target?.let { effectiveScope(it, mapped) } ?: mapped
     if (requestedScope.value == effective && state.value.scope == effective) return
     invalidateDiffRead()
     resetStream()
@@ -620,7 +712,8 @@ class ChangesWindowViewModel(
     mutableState.update { old ->
       // A range set from outside the strip (the detail screen, a chip) starts a new anchor.
       val anchor = (effective as? ChangeScope.Subtasks)?.let { range -> old.anchor?.takeIf { it in range.from..range.to } ?: range.from } ?: old.anchor
-      project(old.copy(anchor = anchor), list = if (old.scope == effective) old.list else ScopeListUi.Loading, scope = effective)
+      val commitAnchor = (effective as? ChangeScope.Commits)?.let { selected -> old.commitAnchor?.takeIf { it in selected.shas } ?: selected.shas.firstOrNull() } ?: old.commitAnchor
+      project(old.copy(anchor = anchor, commitAnchor = commitAnchor), list = if (old.scope == effective) old.list else ScopeListUi.Loading, scope = effective)
     }
     if (target != null) setTarget(target)
   }
@@ -641,8 +734,10 @@ internal const val REMOVED_WORKTREE_FILE_NOT_OPENED = "The goal's worktree was r
 
 private data class QuickKey(val target: ChangeScopeTarget, val running: Boolean)
 
-private data class QuickReads(val key: QuickKey, val uncommitted: ScopeChangesState?, val outside: ScopeChangesState?) {
-  operator fun get(scope: ChangeScope): ScopeChangesState? = if (scope == ChangeScope.Outside) outside else uncommitted
+private data class AllCountKey(val target: ChangeScopeTarget, val running: Boolean)
+
+private data class QuickReads(val key: QuickKey, val uncommitted: ScopeChangesState?, val operator: ScopeChangesState?) {
+  operator fun get(scope: ChangeScope): ScopeChangesState? = if (scope == ChangeScope.Operator) operator else uncommitted
 }
 
 private fun ScopeChangesState.settledOver(previous: ScopeChangesState?): ScopeChangesState =

@@ -45,6 +45,8 @@ sealed interface NewTaskAction {
   data object OpenRepositoryPicker : NewTaskAction
   data object CloseRepositoryPicker : NewTaskAction
   data object Send : NewTaskAction
+  data object Stop : NewTaskAction
+  data object SendNow : NewTaskAction
   data object Discard : NewTaskAction
   data object NewChat : NewTaskAction
   data object DismissResume : NewTaskAction
@@ -99,6 +101,8 @@ class NewTaskViewModel(
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
       NewTaskAction.Send -> send()
+      NewTaskAction.Stop -> draft.stop()
+      NewTaskAction.SendNow -> draft.sendNow()
       NewTaskAction.Discard -> draft.discard()
       NewTaskAction.NewChat -> draft.launch { draft.close() }
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }

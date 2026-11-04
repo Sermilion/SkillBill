@@ -394,8 +394,10 @@ test account, so every in-app action is allowed, and it picks a Local or staging
 environment, never production; a production-only app settles `skipped` and
 names the missing environment. It builds and tests in a temporary worktree of the
 tree under test, created by the runtime under the invocation directory with the
-repository's ignored local configuration files, and it may edit any file there
-to reach a state the criteria need, such as an injected fault. The runtime
+repository's ignored local configuration files. When a criterion needs a state
+the environment does not produce on its own, QA forces it, for example with an
+injected fault or a network cut, and leaves a flow unexercised only after a
+forced attempt failed. The runtime
 deletes that worktree afterwards; QA never edits the working tree, commits,
 pushes, or opens a PR. A standalone QA agent reports live progress with `skill-bill qa plan`,
 `skill-bill qa step`, and `skill-bill qa target`. These commands exit 0 for `recorded`, `rejected`,

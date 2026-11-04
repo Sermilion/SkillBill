@@ -1,3 +1,11 @@
+## [2026-11-04] SKILL-480 interaction-trace audit recoveryAreas: runtime-engine featuretask output gate and acceptance persistence
+- The first malformed interaction-trace completion enters the retryable terminal path for one correction. Other completion rejections keep their existing behavior.
+- A second malformed completion degrades pending scenarios to unknown, retains prior recheck evidence and returns repair to ACCEPTED.
+- Private rejection diagnostics retain the submitted envelope value as UTF-8; public rejection reasons remain payload-free.
+- The re-ask marker stays in memory, so a process restart can permit another correction.
+Feature flag: N/A
+Acceptance criteria: 3/3 subtask criteria implemented
+
 # featuretask runtime boundary history
 
 ## [2026-11-01] SKILL-458 standalone review verifies findings before presentation

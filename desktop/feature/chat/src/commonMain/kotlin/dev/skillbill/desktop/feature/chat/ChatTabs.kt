@@ -37,7 +37,7 @@ sealed interface ChatMessage {
     val finishedAt: Instant? = null,
   ) : ChatMessage
 
-  data class Notice(val text: String) : ChatMessage
+  data class Notice(val text: String, val confirmation: Boolean = false) : ChatMessage
 
   data class Error(val failure: ChatFailure?, val text: String) : ChatMessage
 }

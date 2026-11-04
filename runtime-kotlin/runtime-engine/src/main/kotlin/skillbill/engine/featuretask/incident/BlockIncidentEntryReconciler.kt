@@ -89,9 +89,9 @@ public class BlockIncidentEntryReconciler(
   }
 
   private fun importSpool(): Boolean {
-    val entries = diagnostics.bestEffort(SPOOL_SCAN_FAILED, null) { spool.pending(ENTRY_BATCH) } ?: return false
+    val entries = diagnostics.bestEffort(SPOOL_SCAN_FAILED, null) { spool.pending(Int.MAX_VALUE) } ?: return false
     for (entry in entries) {
-      if (!importEntry(entry)) return false
+      if (!importEntry(entry)) continue
       diagnostics.bestEffort("Imported block incident spool record ${entry.recordId} could not be removed.", Unit) {
         spool.remove(entry.recordId)
       }

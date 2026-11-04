@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -38,7 +39,8 @@ class AgentRunLauncherProcessTest {
     assertEquals("claude", captured.launch.command[0])
     assertEquals(AGENT_RUN_LAUNCHER_PHASE_PROMPT, captured.launch.stdinText)
 
-    assertEquals("--add-dir", captured.launch.command[captured.launch.command.size - 2])
+    assertContains(captured.launch.command, "--add-dir")
+    assertFalse(AGENT_RUN_LAUNCHER_PHASE_PROMPT in captured.launch.command)
   }
 
   @Test

@@ -78,13 +78,23 @@ class DefaultGoalRunnerAssessmentGateTest {
     val result = fixture.assess()
 
     assertEquals(
-      listOf(AssessmentCall.SECOND_SUBTASK, AssessmentCall.CROSS_SUBTASK, AssessmentCall.VERIFIER),
+      listOf(
+        AssessmentCall.TEST_VALUE_REVIEW,
+        AssessmentCall.SECOND_SUBTASK,
+        AssessmentCall.CROSS_SUBTASK,
+        AssessmentCall.VERIFIER,
+      ),
       fixture.calls,
     )
     val round = result.record.rounds.single()
     assertEquals(recorded.rounds.single().findings.single().findingRef, round.findings.single().findingRef)
     val expectedRuns =
-      listOf(GoalAssessmentRole.SUBTASK to 1, GoalAssessmentRole.SUBTASK to 2, GoalAssessmentRole.CROSS_SUBTASK to null)
+      listOf(
+        GoalAssessmentRole.SUBTASK to 1,
+        GoalAssessmentRole.TEST_VALUE_REVIEW to null,
+        GoalAssessmentRole.SUBTASK to 2,
+        GoalAssessmentRole.CROSS_SUBTASK to null,
+      )
     assertEquals(
       expectedRuns + (GoalAssessmentRole.VERIFIER to null),
       round.assessorRuns.map { it.role to it.subtaskId },

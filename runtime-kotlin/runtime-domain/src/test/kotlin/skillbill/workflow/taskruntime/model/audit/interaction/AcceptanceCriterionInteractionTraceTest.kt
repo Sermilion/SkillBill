@@ -58,12 +58,9 @@ class AcceptanceCriterionInteractionTraceTest {
   }
 
   @Test
-  fun `parser rejects owners outside the scenario missing citations missing lines and duplicates`() {
+  fun `parser rejects owners outside the scenario missing decisions and duplicates`() {
     listOf(
       "Interaction IS-001: broken owner AC-003 trace src/A.kt:1",
-      "Interaction IS-001: broken owner AC-001 trace no citation here",
-      "Interaction IS-001: holds trace nothing cited",
-      "Interaction IS-001: unknown",
       "no scenario line at all",
       "Interaction IS-001: holds trace src/A.kt:1\nInteraction IS-001: holds trace src/B.kt:2",
     ).forEach { prose ->
@@ -107,13 +104,9 @@ class AcceptanceCriterionInteractionTraceTest {
       )
 
     assertEquals(AcceptanceCriterionInteractionVerdict.HOLDS, parsed.entries.single().verdict)
-    assertEquals("src/Flow.kt:11, src/State.kt:20", parsed.rechecks.single().evidenceRef)
-    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
-      AcceptanceCriterionInteractionTraceParser.parse(
-        "IS-001 (tap Profiles) holds, but the route is not known.\nAC-001 still holds.",
-        listOf(scenario),
-        listOf("AC-001"),
-      ),
+    assertEquals(
+      "The selection is checked at src/Flow.kt:11 and src/State.kt:20.",
+      parsed.rechecks.single().evidenceRef,
     )
     assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
       AcceptanceCriterionInteractionTraceParser.parse(
@@ -145,6 +138,64 @@ class AcceptanceCriterionInteractionTraceTest {
         listOf("AC-001"),
       ),
     )
+    val semicolonParsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(
+          "Recheck AC-001: holds evidence src/Flow.kt:71-93;123-133; src/State.kt:10;20",
+          emptyList(),
+          listOf("AC-001"),
+        ),
+      )
+    assertEquals(parsed.rechecks.single().evidenceRef, semicolonParsed.rechecks.single().evidenceRef)
+    val semicolonFiles =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(
+          "Recheck AC-001: holds evidence src/A.kt:10; src/B.kt:20",
+          emptyList(),
+          listOf("AC-001"),
+        ),
+      )
+    assertEquals("src/A.kt:10, src/B.kt:20", semicolonFiles.rechecks.single().evidenceRef)
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "Recheck AC-001: holds evidence src/A.kt:10; not-a-file",
+        emptyList(),
+        listOf("AC-001"),
+      ),
+    )
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "Recheck AC-001: holds evidence 71-93; src/Flow.kt:123",
+        emptyList(),
+        listOf("AC-001"),
+      ),
+    )
+  }
+
+  @Test
+  fun `evidence punctuation and prose do not prevent audit decisions`() {
+    val parsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(
+          "Interaction IS-001: holds trace The route reaches the selected profile.\n" +
+            "Recheck AC-001: holds evidence src/Flow.kt:10; src/State.kt:20",
+          listOf(scenario),
+          listOf("AC-001"),
+        ),
+      )
+    assertEquals("The route reaches the selected profile.", parsed.entries.single().traceRef)
+    assertEquals("src/Flow.kt:10, src/State.kt:20", parsed.rechecks.single().evidenceRef)
+  }
+
+  @Test
+  fun `decisions do not require explanations on the decision line`() {
+    val prose = "The selection reaches the profile.\nInteraction IS-001: holds\nRecheck AC-001: holds"
+    val parsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(prose, listOf(scenario), listOf("AC-001")),
+      )
+    assertEquals(prose, parsed.entries.single().traceRef)
+    assertEquals(prose, parsed.rechecks.single().evidenceRef)
   }
 
   @Test

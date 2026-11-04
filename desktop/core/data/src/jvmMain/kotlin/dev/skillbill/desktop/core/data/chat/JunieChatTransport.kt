@@ -4,8 +4,11 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -28,7 +31,7 @@ class JunieChatTransport(
   override val agentId = "junie"
 
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> = turnWithImages(request) { text ->
-    val history = if (request.scope is dev.skillbill.desktop.core.domain.model.ChatScope.NewTask) {
+    val history = if (request.scope is ChatScope.NewTask) {
       store.newTaskHistory(request.sessionId)
     } else if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
     val prompt = juniePrompt(scopeSystemPrompt(request.scope, request.mode), history, text)
@@ -44,6 +47,10 @@ class JunieChatTransport(
         is ChatEvent.TextDelta -> reply.append(event.text)
         ChatEvent.Completed -> store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
         else -> Unit
+      }
+    }.onCompletion { cause ->
+      if (cause is CancellationException && reply.isNotBlank() && request.scope !is ChatScope.NewTask) {
+        store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
       }
     }
   }

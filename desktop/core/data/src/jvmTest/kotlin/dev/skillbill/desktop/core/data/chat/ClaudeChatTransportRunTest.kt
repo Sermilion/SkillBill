@@ -9,7 +9,9 @@ import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -26,14 +29,16 @@ import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ClaudeChatTransportRunTest {
   // One scripted claude process: the test reads what the app writes to stdin and decides what stdout prints.
-  private class FakeClaude : LiveChatProcessLauncher {
+  private class FakeClaude(val holdStop: CompletableDeferred<Unit>? = null) : LiveChatProcessLauncher {
     val opened: MutableList<ChatCommand> = Collections.synchronizedList(mutableListOf())
     val stdin = Channel<String>(Channel.UNLIMITED)
     val stdout = Channel<ChatProcessOutput>(Channel.UNLIMITED)
     val stopped = CompletableDeferred<Unit>()
+    val stopHeld = CompletableDeferred<Unit>()
 
     override fun open(command: ChatCommand, input: ReceiveChannel<String>): Flow<ChatProcessOutput> = channelFlow {
       opened += command
@@ -42,6 +47,8 @@ class ClaudeChatTransportRunTest {
         for (output in stdout) send(output)
       } finally {
         stopped.complete(Unit)
+        stopHeld.complete(Unit)
+        withContext(NonCancellable) { holdStop?.await() }
       }
     }
 
@@ -113,6 +120,34 @@ class ClaudeChatTransportRunTest {
     turn.cancel()
 
     claude.stopped.await()
+  }
+
+  @Test
+  fun `the next turn waits for a stopped process before opening claude again`() = runTest {
+    val holdStop = CompletableDeferred<Unit>()
+    val claude = FakeClaude(holdStop)
+    val diagnostics = RecordingDiagnostics()
+    val transport = transport(claude, diagnostics)
+
+    val first = async { transport.run(chatRequest()).toList() }
+    claude.nextMessage()
+    first.cancelAndJoin()
+    claude.stopHeld.await()
+
+    val second = async { transport.run(chatRequest(firstTurn = false)).toList() }
+    testScheduler.runCurrent()
+    assertFalse("chat.stop_wait_expired" in diagnostics.categories)
+    assertEquals(1, claude.opened.size)
+
+    testScheduler.advanceUntilIdle()
+    assertTrue("chat.stop_wait_expired" in diagnostics.categories)
+
+    claude.nextMessage()
+    assertEquals(2, claude.opened.size)
+    assertTrue("--resume" in claude.opened[1].argv)
+
+    holdStop.complete(Unit)
+    second.cancel()
   }
 
   // Through a login shell a missing agent binary exits 127; a process that never started points at the worktree or the shell.

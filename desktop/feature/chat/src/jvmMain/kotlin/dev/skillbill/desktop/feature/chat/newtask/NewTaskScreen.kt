@@ -36,10 +36,8 @@ import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
-import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.feature.chat.ChatTranscript
-import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
 
 private val CONTENT_MAX_WIDTH = 680.dp
@@ -61,7 +59,6 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
-  val onOfferStart = remember(draft) { { kind: NewTaskKind -> draft.start(kind) } }
   LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -77,8 +74,6 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
       NewTaskHomeBody(state, draft, host, focus, onAction, Modifier.weight(1f))
     } else {
       key(chat) {
-        val firstTurnEnded by chat.firstTurnEnded.collectAsState()
-        val transcript by chat.thread.transcript.collectAsState()
         ChatTranscript(
           chat.thread,
           gone = false,
@@ -86,15 +81,12 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
           modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
           allowStartActions = host.onStart != null,
           allowSuggestedActions = !offer.starting,
-          footer = if (showGoalOfferCard(firstTurnEnded, transcript, offer)) {
+          footer = if (offer.prefixKind != null) {
             {
-              NewTaskOfferCard(
-                draft.baseBranch,
-                chipText(draft.selectedAgent),
-                chatBusy,
-                offer,
-                onOfferStart,
-                draft::retryPrefix,
+              NewTaskPrefixPrompt(
+                offer.choices,
+                enabled = !chatBusy && !offer.starting && offer.started == null,
+                onChoose = draft::retryPrefix,
               )
             }
           } else null,

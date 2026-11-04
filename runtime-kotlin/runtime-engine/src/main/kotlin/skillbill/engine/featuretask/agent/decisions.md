@@ -1,3 +1,8 @@
+## [2026-11-04] Route interaction-trace correction through the existing retry pathContext: A malformed interaction-trace completion reached a schema block before the documented re-ask and degraded settlement could run.
+Decision: Route the active interaction-trace rejection through PhaseStepOutputCheck.Retry. Keep other completion rejections on their existing paths.
+Reason: The retry continuation stays in the same JVM loop and preserves the in-memory re-ask marker. Changing audit session policy or retrying ordinary schema failures would widen the behavior.
+Revisit when: The retry continuation moves to a new process or the marker must survive process death.
+
 ## [2026-11-03] Inline review lists every finding with a status
 Context: Inline review fixed findings in session and listed only what remained, so a review that fixed five defects was stored with zero findings. Repaired and refuted findings also kept the `carried` outcome and displayed as open.
 Decision: Inline review fixes every severity in session and lists each finding with `status=fixed`, `open` or `refuted`. Fixed and refuted findings are stored with an outcome and skip verification, repair and the unaddressed ledger. Verification rejections record `rejected`. Repair receipts record `addressed` for fixed and no-edit entries.

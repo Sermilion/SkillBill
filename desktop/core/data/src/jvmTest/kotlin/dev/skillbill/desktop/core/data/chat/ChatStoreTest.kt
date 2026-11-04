@@ -96,15 +96,16 @@ class ChatStoreTest {
   }
 
   @Test
-  fun `suggested action target round-trips through the store`() {
+  fun `suggested action target and branch round-trip through the store`() {
     val diagnostics = RecordingDiagnostics()
     val store = ChatStore(host, diagnostics, Clock.System)
     val action = ChatSuggestedAction(
-      "Run phase:monitor",
-      "Watch the PR.",
+      "Run operation:verify",
+      "Verify the branch.",
       ChatPermissionMode.ReadOnly,
-      NewTaskActionKind.Monitor,
-      target = "https://github.com/org/repo/pull/9",
+      NewTaskActionKind.Verify,
+      target = "SKILL-9",
+      branch = "feat/fp-5175",
     )
     val saved = entry("target", 11).copy(
       lines = listOf(

@@ -40,7 +40,7 @@ import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationStepRunner
-import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.engine.operation.unittestvalue.UnitTestValueCheckReview
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.TestWorkBoardReadModelProjector
@@ -58,6 +58,7 @@ import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.system.CheckedOutBranchSource
+import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -210,6 +211,7 @@ internal class VerifyOperationHarness : AutoCloseable {
         OperationConfirmationGate(proposals, git, clock),
         OperationStepRunner(runner, git),
         FixedProjectStorePort(projectStoreRoot),
+        RecordingBranchWorktreeResources(),
       )
   }
 
@@ -490,7 +492,7 @@ internal class VerifyScriptedRunner : PhaseRunner {
           "## Key technical constraints\nNone.\n",
         VerifyPromptSections.FEATURE_FLAG_AUDIT_STEP to "SKIPPED: no flag in spec or diff.\n",
         VerifyPromptSections.CODE_REVIEW_STEP to VerifyOperationHarness.REVIEW_REGISTER,
-        UnitTestValueCheckPromptRules.REVIEW_STEP to "GreeterTest.kt: no assertions.\n",
+        UnitTestValueCheckReview.REVIEW_STEP to "GreeterTest.kt: no assertions.\n",
         VerifyPromptSections.COMPLETENESS_AUDIT_STEP to "[PASS] 1. Greets by name.\n",
         VerifyPromptSections.QA_STEP to "QA receipt written.\n",
         VerifyPromptSections.VERDICT_STEP to "--- VERDICT ---\nAPPROVE\n",
