@@ -1,3 +1,8 @@
+## [2026-11-03] Signal diff comments without joining the board topic catalog
+Context: Comment writes must invalidate desktop readers without making comments a primary board topic.
+Decision: Add `DIFF_COMMENTS_TOPIC` to `SIGNALLED_TOPICS` only, seed its revision row on migrate and fresh install, and register both comment tables for desktop change triggers.
+Reason: Commit signals and observation helpers consume signalled topics; leaving it out of `TOPICS` preserves existing board catalog semantics.
+
 ## [2026-10-30] Keep activity writes off board topics
 Context: Worktree journal writes and lease heartbeats bumped goals and phases, so the board re-read on every probe and heartbeat.
 Decision: Journal inserts and lease updates that touch only heartbeat_at or expires_at bump only activity. Journal UPDATE and DELETE triggers are dropped. Lease identity changes still bump goals and phases.
