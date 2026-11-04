@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
@@ -94,7 +93,6 @@ fun testPhaseStrategies(
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
   inlineRubricResolver: InlineReviewRubricResolver? = null,
   phaseInstructionSource: PhaseInstructionFileSource? = null,
-  comments: DiffCommentService? = null,
 ): PhaseStrategyLookup {
   val runner = DefaultPhaseRunner(launcher, gitOperations)
   val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
@@ -111,12 +109,9 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(planFanOut, runner),
         PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner),
+        PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner, inlineRubricResolver), codeReviewRunner),
         PhaseStrategyRegistration(
-          InlineReviewStrategy(codeReviewRunner, inlineRubricResolver, comments),
-          codeReviewRunner,
-        ),
-        PhaseStrategyRegistration(
-          InlineStandaloneReviewStrategy(codeReviewRunner, inlineRubricResolver, comments),
+          InlineStandaloneReviewStrategy(codeReviewRunner, inlineRubricResolver),
           codeReviewRunner,
         ),
         delegatedReviewRunner?.let {

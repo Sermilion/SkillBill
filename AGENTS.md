@@ -2,7 +2,7 @@
 
 ## Project Context
 
-skill-bill governs skill authoring, routing, validation, installation, and measurement, with orchestration, telemetry, workflow state, and review, check, feature, verification, and PR shells.
+skill-bill governs skill authoring, routing, validation, installation, and measurement. It provides orchestration, telemetry, workflow state, and shells for review, checks, feature work, verification, and PRs.
 
 Non-negotiable contracts:
 
@@ -22,7 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Goals use runtime-owned worktrees at `<state>/goals/<repo>/<goal>/checkout`, removed after completion is recorded unless they hold unpublished work. Standalone phases use the caller's checkout. Desktop starts naming a branch use that branch's checkout or a runtime-created sibling, removed after its last run.
+Each goal runs in its own runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after recording completion unless it holds unpublished work. Standalone phases keep working in the caller's checkout. A desktop start naming a branch runs in that branch's checkout or a runtime-created sibling worktree, removed once its last run completes.
 
 ## Product Intent
 
@@ -78,7 +78,7 @@ Code review: pack root + conforming manifest/`content.md`, manifest-registered p
 
 ## Writing And Comments
 
-Write direct, active prose without filler, stale wording, praise or repetition; preserve names, numbers and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
+Write direct, active prose; drop filler, stale wording, praise and repetition; preserve names, numbers and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
 
 ## Testing
 
@@ -98,9 +98,9 @@ comments. `CommentAndInterfaceKdocArchitectureTest` enforces this alongside
 
 ## Coding Conventions
 
-**Required reading.** Before any `runtime-kotlin` planning, design, change or review, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md). Apply A1–A12, G1–G7, and P1–P8. Every runtime-kotlin review runs its section 5 checklist and cites rule IDs.
+**Required reading.** Before planning, designing, changing, or reviewing `runtime-kotlin`, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md). Apply A1–A12, G1–G7, and P1–P8. Every runtime-kotlin review runs its section 5 checklist and cites rule IDs.
 
-Apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles). It owns dependency direction, state and resource ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs mechanical rules with proving tests; other requirements stay review-only. Existing violations do not authorize new ones.
+Before designing, changing, or reviewing `runtime-kotlin`, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles). It owns dependency direction, state and resource ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs mechanical rules with proving tests; other requirements stay review-only. Existing violations do not authorize new ones.
 
 Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, package clustering, imports, file-size limits, and architecture guards. Mechanical enforcement lives under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
 
@@ -108,4 +108,4 @@ Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, package c
 
 ## Quality Checks
 
-Prefer `/skill-bill phase:validation` (`skill-bill phase validation`); it uses the same agent validation strategy as goal validate. The agent discovers required checks from repository instructions, build configuration, scripts, and CI, runs them, and repairs failures. Compilation alone does not complete validation. Bias: stable base commands, platform depth behind routers, explicit gate argv, validator-backed rules, acceptance and rejection tests.
+Prefer `/skill-bill phase:validation` (`skill-bill phase validation`); it uses the same agent validation strategy as goal validate. The agent discovers and runs all required project checks from repository instructions, build configuration, scripts, and CI, then repairs failures. Compilation alone does not complete validation. Bias: stable base commands, platform depth behind routers, explicit gate argv, validator-backed rules, acceptance and rejection tests.

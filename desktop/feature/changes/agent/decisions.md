@@ -8,16 +8,10 @@ Context: Inline threads add LazyColumn items, while jump-to-file and visible-row
 Decision: `diffRows` and `FileDiffStream` use the same per-line thread slots; file indexes account for General and file thread rows.
 Reason: A separate scroll row model let file positions disagree with the rendered list.
 
-## [2026-11-04] Animate thread cards with lazy item animation
-Context: The approved mock calls for fade-and-slide motion when thread cards appear and disappear. Compose 1.12 provides `Modifier.animateItem`.
-Decision: Thread and composer rows use `animateItem` with fade-in, placement and fade-out specs keyed by `thread:<id>`. Reduced motion passes null specs.
-Reason: An `AnimatedVisibility` state inside the lazy item was lost when the card scrolled off-screen, so every card replayed its entrance on scroll-back, and removed cards vanished with no exit.
-Supersedes: "Animate thread cards with visibility transitions".
-
-## [2026-11-04] Count only listed comment reads as a branch change
-Context: A failed comment read has no branch. Treating it as a branch change dropped the composer and an in-progress edit, and the recovered read could not restore the typed text.
-Decision: `ChangesWindowViewModel` remembers the branch of the last listed read. Loading and unavailable reads replace the comments but keep drafts, review bar and toast; a listed read on a different branch clears them.
-Reason: Drafts belong to a branch, and only a listed read names one.
+## [2026-11-04] Animate thread cards with visibility transitions
+Context: The approved mock calls for fade-and-slide motion, while the current Compose Desktop version lacks `Modifier.animateItem`.
+Decision: Use `AnimatedVisibility` with fade and vertical expansion, disabled when reduced motion is enabled.
+Reason: This provides the requested motion without a Compose upgrade.
 
 ## [2026-11-04] Attribute timeline commits by trailer then recorded SHA
 Context: Recorded subtask ranges can point to pruned commits after an amend or rebase and can credit operator work to a subtask.

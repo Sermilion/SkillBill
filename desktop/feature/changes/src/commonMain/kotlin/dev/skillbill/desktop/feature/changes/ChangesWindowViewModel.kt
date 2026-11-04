@@ -84,7 +84,6 @@ class ChangesWindowViewModel(
   private var wantedDiffs: List<String> = emptyList()
   private var streamRead: Job? = null
   private var streamKey: ScopeReadKey? = null
-  private var listedCommentBranch: String? = null
   init {
     detail.observe(item).onEach { observed ->
       val runningChanged = mutableState.value.item.running != observed.header.running
@@ -129,33 +128,22 @@ class ChangesWindowViewModel(
     observeScopeReads()
     state.map { it.target?.allBaseline }.distinctUntilChanged().flatMapLatest { baseline ->
       baseline?.let(comments::observe) ?: flowOf(DiffCommentsState.Loading)
-    }.onEach(::applyComments).launchIn(viewModelScope)
-    observeCommitStats()
-  }
-
-  /** Only a listed read names a branch, so a failed or loading read keeps the drafts until a listed read shows another branch. */
-  private fun applyComments(value: DiffCommentsState) {
-    val listed = value as? DiffCommentsState.Available
-    if (listed == null) {
-      mutableState.update { it.copy(comments = value) }
-      return
-    }
-    val changedBranch = listed.branch != listedCommentBranch
-    listedCommentBranch = listed.branch
-    if (changedBranch) authoringActions.cancelToast()
-    mutableState.update { old ->
+    }.onEach { value ->
+      val priorBranch = (mutableState.value.comments as? DiffCommentsState.Available)?.branch
+      val nextBranch = (value as? DiffCommentsState.Available)?.branch
+      if (priorBranch != nextBranch) authoringActions.cancelToast()
+      mutableState.update { old ->
+      val changedBranch = (old.comments as? DiffCommentsState.Available)?.branch != (value as? DiffCommentsState.Available)?.branch
       val edit = old.editing
-      val editingPending = edit != null && listed.threads.any { thread ->
+      val editingPending = edit != null && (value as? DiffCommentsState.Available)?.threads?.any { thread ->
         thread.id == edit.threadId && thread.state == CommentState.Pending && thread.comments.any { it.id == edit.commentId && it.author == CommentAuthor.User }
+      } == true
+      old.copy(comments = value, composer = if (changedBranch || (value as? DiffCommentsState.Available)?.canAuthor != true) null else old.composer,
+        editing = old.editing?.takeIf { editingPending && !changedBranch }, review = if (changedBranch) ReviewBarUi() else old.review,
+        reviewToast = if (changedBranch) null else old.reviewToast)
       }
-      old.copy(
-        comments = value,
-        composer = if (changedBranch || !listed.canAuthor) null else old.composer,
-        editing = edit?.takeIf { editingPending && !changedBranch },
-        review = if (changedBranch) ReviewBarUi() else old.review,
-        reviewToast = if (changedBranch) null else old.reviewToast,
-      )
-    }
+    }.launchIn(viewModelScope)
+    observeCommitStats()
   }
 
   private fun stopGoalObservation() {

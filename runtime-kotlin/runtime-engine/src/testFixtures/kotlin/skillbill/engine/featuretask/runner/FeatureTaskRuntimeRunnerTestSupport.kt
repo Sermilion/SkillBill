@@ -7,7 +7,6 @@ import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.idestatus.AgentActivityStampWriter
-import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.review.spec.SpecIntentProjectionExtractor
@@ -745,7 +744,6 @@ data class RuntimeHarnessConfig(
   val standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
   val qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   val qaReports: QaReportSettlement = unavailableQaReportSettlement(),
-  val comments: DiffCommentService? = null,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -1392,7 +1390,6 @@ private fun harnessPhaseStrategies(
     qaExecution = runtimeConfig.qaExecution,
     qaReports = runtimeConfig.qaReports,
     qaOutcomes = FeatureTaskQaOutcomeRecorder(database, testHarnessClock),
-    comments = runtimeConfig.comments,
   )
 
 private fun telemetryHarnessRunner(

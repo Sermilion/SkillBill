@@ -57,8 +57,7 @@ internal fun parseLocalReplyOutcome(
   diagnostics: RuntimeDiagnostics,
 ): Pair<DiffCommentOutcome, String> {
   val lines = reply.lines()
-  val first = lines.indexOfFirst(String::isNotBlank)
-  val match = OUTCOME_LINE.matchEntire(lines.getOrNull(first).orEmpty())
+  val match = OUTCOME_LINE.matchEntire(lines.firstOrNull().orEmpty())
   val declared = match?.groupValues?.get(1)?.lowercase()?.let(DiffCommentOutcome::fromWire)
   val outcome =
     declared ?: if (changedPaths.isNotEmpty()) DiffCommentOutcome.FIXED else DiffCommentOutcome.SKIPPED
@@ -68,13 +67,7 @@ internal fun parseLocalReplyOutcome(
       "seam=local_review_reply_outcome value_expected=declared_outcome value_used=${outcome.wireValue} cause=$cause",
     )
   }
-  val body =
-    if (match == null) {
-      reply.trim()
-    } else {
-      val rest = match.groupValues[2].trim().trimStart { it in OUTCOME_SEPARATORS }.trim()
-      (listOf(rest) + lines.drop(first + 1)).joinToString("\n").trim()
-    }
+  val body = if (match == null) reply.trim() else lines.drop(1).joinToString("\n").trim()
   return outcome to body
 }
 
@@ -87,5 +80,4 @@ private fun localLocation(thread: DiffCommentThread): String =
 
 private const val LOCAL_ANALYSIS_DIRECTIVE = "/skillbill/engine/operation/prreviewfix/local-analysis-directive.md"
 private const val LOCAL_THREAD_DIRECTIVE = "/skillbill/engine/operation/prreviewfix/local-thread-directive.md"
-private val OUTCOME_LINE = Regex("""(?i)\s*[*_`>]*\s*outcome\s*[*_`]*\s*[:=][*_`\s]*([a-z]+)[*_`]*(.*)""")
-private const val OUTCOME_SEPARATORS = ".,;:-–—*_`"
+private val OUTCOME_LINE = Regex("""(?i)outcome:\s*(\w+)""")

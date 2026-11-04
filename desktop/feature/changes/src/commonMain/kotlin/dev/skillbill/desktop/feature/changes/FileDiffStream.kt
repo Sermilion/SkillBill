@@ -1,6 +1,13 @@
 package dev.skillbill.desktop.feature.changes
 
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -42,7 +48,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
-import dev.skillbill.desktop.core.designsystem.SkillBillMotion
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
 import dev.skillbill.desktop.core.domain.model.CommentThread
@@ -163,7 +168,7 @@ internal fun FileDiffStream(
           }
           placement.general.forEach { thread ->
             item(key = "thread:${thread.id}", contentType = "thread") {
-              ThreadCard(threadWidth, horizontalScroll) {
+              ThreadAppearing(threadWidth, horizontalScroll) {
                 Column {
                   thread.path?.let { path -> BasicText(if (thread.line == null) path else "$path:${thread.line}", style = changesMono(11f, FontWeight.Medium, SkillBillTheme.colors.fgFaint)) }
                   threadContent(thread.id)
@@ -187,11 +192,11 @@ internal fun FileDiffStream(
           }
           placement.files[index].fileSlot.forEach { thread ->
             item(key = "thread:${thread.id}", contentType = "thread") {
-              ThreadCard(threadWidth, horizontalScroll) { threadContent(thread.id) }
+              ThreadAppearing(threadWidth, horizontalScroll) { threadContent(thread.id) }
             }
           }
           if (fileComposer != null) item(key = "composer:${file.path}", contentType = "composer") {
-            ThreadCard(threadWidth, horizontalScroll) { CommentComposer(fileComposer.text, fileComposer.problem, fileComposer.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
+            ThreadAppearing(threadWidth, horizontalScroll) { CommentComposer(fileComposer.text, fileComposer.problem, fileComposer.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
           }
           val diff = usable[index]
           val state = diff?.state
@@ -207,8 +212,8 @@ internal fun FileDiffStream(
               ) { slotId ->
                 if (slotId.startsWith("composer:")) {
                   val draft = composer ?: return@DiffLineSlots
-                  ThreadCard(threadWidth, horizontalScroll) { CommentComposer(draft.text, draft.problem, draft.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
-                } else ThreadCard(threadWidth, horizontalScroll) { threadContent(slotId) }
+                  ThreadAppearing(threadWidth, horizontalScroll) { CommentComposer(draft.text, draft.problem, draft.saving, "Leave a comment", "Stays pending until you add the review", "Add to review", { onAction(ChangesWindowAction.ComposerText(it)) }, { onAction(ChangesWindowAction.SavePending) }, { onAction(ChangesWindowAction.CancelComposer) }, onCommentFocusChanged) }
+                } else ThreadAppearing(threadWidth, horizontalScroll) { threadContent(slotId) }
               }
               val affordance = if (canAuthor) DiffLineAffordance(
                 onAdd = { line -> commentAnchorFor(line)?.let { onAction(ChangesWindowAction.OpenComposer(file.path, it.side, it.line)) } },
@@ -227,20 +232,17 @@ internal fun FileDiffStream(
   }
 }
 
-/**
- * A thread or composer row. The list animates it only when its key is inserted or removed, so scrolling it back into view does not
- * replay the fade, and the rows around it slide to their new places.
- */
 @Composable
-private fun LazyItemScope.ThreadCard(width: Dp, scroll: ScrollState, content: @Composable () -> Unit) {
+private fun ThreadAppearing(width: Dp, scroll: ScrollState, content: @Composable () -> Unit) {
   val reduced = LocalReducedMotion.current
-  Box(
-    Modifier.animateItem(
-      fadeInSpec = if (reduced) null else tween(SkillBillMotion.MENU_MS, easing = SkillBillMotion.easing),
-      placementSpec = if (reduced) null else tween(SkillBillMotion.MENU_MS, easing = SkillBillMotion.easing),
-      fadeOutSpec = if (reduced) null else tween(SkillBillMotion.MENU_MS, easing = SkillBillMotion.easing),
-    ).then(threadItemModifier(width, scroll)),
-  ) { content() }
+  val appear = remember(reduced) { MutableTransitionState(reduced).apply { if (!reduced) targetState = true } }
+  AnimatedVisibility(
+    appear,
+    enter = if (reduced) EnterTransition.None else fadeIn() + expandVertically(),
+    exit = if (reduced) ExitTransition.None else fadeOut() + shrinkVertically(),
+  ) {
+    Box(threadItemModifier(width, scroll)) { content() }
+  }
 }
 
 private fun threadItemModifier(width: Dp, scroll: ScrollState): Modifier =
