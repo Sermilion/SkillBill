@@ -47,7 +47,7 @@ internal object AcceptanceCriterionRecheckParser {
 
   private fun citationsOf(rest: String): String? {
     val listed = EVIDENCE.matchEntire(rest)?.groupValues?.get(1) ?: return null
-    val parts = listed.split(',').map { it.trim().trimEnd('*', '`', '_', '.') }
+    val parts = listed.split(',', ';').map { it.trim().trimEnd('*', '`', '_', '.') }
     var path: String? = null
     val expanded =
       parts.map { part ->

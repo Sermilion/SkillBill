@@ -35,8 +35,8 @@ public object AcceptanceCriterionInteractionTraceRound {
 
   internal const val RECHECK_GRAMMAR =
     "For each listed re-check, answer with exactly one line of the form " +
-      "`Recheck AC-NNN: holds evidence <path:line, path:line>` or " +
-      "`Recheck AC-NNN: regressed evidence <path:line, path:line>`."
+      "`Recheck AC-NNN: holds evidence <path:line list>` or " +
+      "`Recheck AC-NNN: regressed evidence <path:line list>`. Separate citations with commas or semicolons."
 
   public fun scopeKey(state: AcceptanceCriterionRepairState): String =
     sha256Hex(

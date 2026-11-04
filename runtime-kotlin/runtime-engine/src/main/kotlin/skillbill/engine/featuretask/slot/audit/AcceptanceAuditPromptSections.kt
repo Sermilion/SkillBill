@@ -43,7 +43,8 @@ internal object AcceptanceAuditPromptSections {
   private const val RECHECK_DIRECTIVE: String =
     "Re-check every listed accepted criterion against the current tree: read the production code its closure " +
       "evidence cites together with the files the repair touched, answer holds with fresh path:line evidence " +
-      "when its required behavior still holds, or regressed when a change broke it. A regressed answer " +
+      "when its required behavior still holds. Separate path:line citations with commas or semicolons. Answer " +
+      "regressed when a change broke the behavior. A regressed answer " +
       "reopens that criterion for repair. "
 
   private const val TRACE_COMMON: String =

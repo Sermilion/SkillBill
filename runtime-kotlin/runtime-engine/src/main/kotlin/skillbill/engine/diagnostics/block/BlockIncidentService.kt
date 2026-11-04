@@ -42,9 +42,17 @@ internal object BlockIncidentService {
     clock: Clock,
     record: BlockIncidentSpoolRecord,
   ): BlockIncident {
+    val aliasToken = BlockIncidentAliases.token(record.alias)
+    val linkedToken = record.occurrenceToken.takeIf { it != aliasToken }
+    val linkedOccurrence = linkedToken?.let(repository::find)
+    if (linkedToken != null && linkedOccurrence == null) {
+      throw SkillBillRuntimeException(
+        BlockIncidentFailureCode.PERSISTENCE,
+        "Linked block incident is not durable yet.",
+      )
+    }
     val linkToken =
-      record.occurrenceToken
-        .takeIf { it != BlockIncidentAliases.token(record.alias) && repository.find(it) != null }
+      linkedOccurrence?.occurrence?.occurrenceToken
     return observe(
       repository,
       record.toObservation(linkToken),
