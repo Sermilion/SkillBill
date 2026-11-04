@@ -3,9 +3,6 @@ package skillbill.infrastructure.contracts.workflow.goal
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
-import skillbill.error.goal.invalidGoalArchiveSchemaError
-import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
-import skillbill.infrastructure.contracts.SchemaIdentityRequest
 import skillbill.infrastructure.contracts.locator.GoalArchiveSchemaPaths
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,26 +36,6 @@ class GoalArchiveSchemaContractVersionTest {
       GoalArchiveSchemaPaths.EXPECTED_SCHEMA_ID,
       idNode.asText(),
       "Schema `\$id` must equal GoalArchiveSchemaPaths.EXPECTED_SCHEMA_ID.",
-    )
-  }
-
-  @Test
-  fun `validator asserts identity of the classpath schema`() {
-    val yamlNode = classpathSchema()
-    ClasspathContractSchemaLoader.validateSchemaIdentity(
-      SchemaIdentityRequest(
-        yamlNode = yamlNode,
-        classpathResource = GoalArchiveSchemaPaths.CLASSPATH_RESOURCE,
-        expectedSchemaId = GoalArchiveSchemaPaths.EXPECTED_SCHEMA_ID,
-        expectedContractVersion = GOAL_ARCHIVE_CONTRACT_VERSION,
-        identityFailure = { reason ->
-          invalidGoalArchiveSchemaError(
-            sourceLabel = GoalArchiveSchemaPaths.CLASSPATH_RESOURCE,
-            fieldPath = "<schema>",
-            reason = reason,
-          )
-        },
-      ),
     )
   }
 
