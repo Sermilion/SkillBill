@@ -19,6 +19,8 @@ private const val MAX_TEST_FORKS = 8
 private const val TEST_FORK_CPU_DIVISOR = 2
 private const val TEST_MAX_HEAP = "2g"
 private const val TASK_TEMP_KEY_WIDTH = 8
+private const val SKILL_BILL_STATE_SEGMENT = "/.skill-bill/"
+private val UNIX_SHARED_TEMP = File("/tmp")
 
 private val HARNESS_ENVIRONMENT_GATES =
   listOf(
@@ -93,12 +95,20 @@ private fun Project.configureKotlinJvmTestDefaults() {
 private fun Test.isolateJvmTempDir() {
   val taskKey =
     "${project.rootDir.absolutePath}$path".hashCode().toUInt().toString(radix = 16).padStart(TASK_TEMP_KEY_WIDTH, '0')
-  val tempDir = File(System.getProperty("java.io.tmpdir"), "$TEST_TEMP_PREFIX$taskKey")
+  val tempDir = File(isolatedTempBase(), "$TEST_TEMP_PREFIX$taskKey")
   jvmArgumentProviders.add(JvmTempDirArgument(tempDir))
+  environment["TMPDIR"] = tempDir.absolutePath
   doFirst {
     tempDir.deleteRecursively()
     tempDir.mkdirs()
   }
+}
+
+private fun isolatedTempBase(): File {
+  val configured = File(System.getProperty("java.io.tmpdir")).absoluteFile
+  val portable = configured.path.replace('\\', '/')
+  val underState = portable.contains(SKILL_BILL_STATE_SEGMENT) || portable.endsWith("/.skill-bill")
+  return if (underState && UNIX_SHARED_TEMP.isDirectory) UNIX_SHARED_TEMP else configured
 }
 
 internal const val TEST_TEMP_PREFIX = "sbt-"

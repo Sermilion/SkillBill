@@ -1,5 +1,13 @@
 package dev.skillbill.desktop.feature.changes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.animateItem
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -134,16 +141,17 @@ internal fun FileDiffStream(
           item(key = "general:header", contentType = "general-header") {
             BasicText(
               "General · ${placement.general.size}",
-              threadItemModifier(threadWidth, horizontalScroll, Modifier).semantics { heading() },
+              threadItemModifier(threadWidth, horizontalScroll).semantics { heading() },
               style = changesMono(12f, FontWeight.SemiBold, SkillBillTheme.colors.fg2),
             )
           }
           placement.general.forEach { thread ->
             item(key = "thread:${thread.id}", contentType = "thread") {
-              val animation = if (LocalReducedMotion.current) Modifier else Modifier.animateItem()
-              Column(threadItemModifier(threadWidth, horizontalScroll, animation)) {
-                thread.path?.let { path -> BasicText(if (thread.line == null) path else "$path:${thread.line}", style = changesMono(11f, FontWeight.Medium, SkillBillTheme.colors.fgFaint)) }
-                threadContent(thread.id)
+              ThreadAppearing(threadWidth, horizontalScroll) {
+                Column {
+                  thread.path?.let { path -> BasicText(if (thread.line == null) path else "$path:${thread.line}", style = changesMono(11f, FontWeight.Medium, SkillBillTheme.colors.fgFaint)) }
+                  threadContent(thread.id)
+                }
               }
             }
           }
@@ -152,8 +160,7 @@ internal fun FileDiffStream(
           item(key = "file:${file.path}", contentType = "file") { if (index == 0) Spacer(Modifier.height(0.dp)) else FileSeparator(file) }
           placement.files[index].fileSlot.forEach { thread ->
             item(key = "thread:${thread.id}", contentType = "thread") {
-              val animation = if (LocalReducedMotion.current) Modifier else Modifier.animateItem()
-              Box(threadItemModifier(threadWidth, horizontalScroll, animation)) { threadContent(thread.id) }
+              ThreadAppearing(threadWidth, horizontalScroll) { threadContent(thread.id) }
             }
           }
           val diff = usable[index]
@@ -164,8 +171,7 @@ internal fun FileDiffStream(
               val lineSlots = DiffLineSlots(
                 placement.files[index].afterLine.mapValues { (_, values) -> values.map { it.id } },
               ) { threadId ->
-                val animation = if (LocalReducedMotion.current) Modifier else Modifier.animateItem()
-                Box(threadItemModifier(threadWidth, horizontalScroll, animation)) { threadContent(threadId) }
+                ThreadAppearing(threadWidth, horizontalScroll) { threadContent(threadId) }
               }
               diffRows(state.diff, file.path, lineSlots)
             }
@@ -177,8 +183,21 @@ internal fun FileDiffStream(
   }
 }
 
-private fun threadItemModifier(width: Dp, scroll: ScrollState, animation: Modifier): Modifier =
-  Modifier.width(width).offset { IntOffset(scroll.value, 0) }.then(animation).padding(start = 48.dp, end = 12.dp, bottom = 8.dp)
+@Composable
+private fun ThreadAppearing(width: Dp, scroll: ScrollState, content: @Composable () -> Unit) {
+  val reduced = LocalReducedMotion.current
+  val appear = remember(reduced) { MutableTransitionState(reduced).apply { if (!reduced) targetState = true } }
+  AnimatedVisibility(
+    appear,
+    enter = if (reduced) EnterTransition.None else fadeIn() + expandVertically(),
+    exit = if (reduced) ExitTransition.None else fadeOut() + shrinkVertically(),
+  ) {
+    Box(threadItemModifier(width, scroll)) { content() }
+  }
+}
+
+private fun threadItemModifier(width: Dp, scroll: ScrollState): Modifier =
+  Modifier.width(width).offset { IntOffset(scroll.value, 0) }.padding(start = 48.dp, end = 12.dp, bottom = 8.dp)
 
 /** The list index of each file's separator row; a file with no read yet has one placeholder row after it. */
 internal fun fileStartIndexes(loaded: List<LoadedDiff?>, placement: ThreadPlacement = ThreadPlacement(emptyList(), loaded.map { FileThreads() })): IntArray {

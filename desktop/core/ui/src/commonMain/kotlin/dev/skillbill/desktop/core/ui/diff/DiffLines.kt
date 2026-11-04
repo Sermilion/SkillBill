@@ -85,7 +85,7 @@ fun LazyListScope.diffRows(diff: FileDiff, key: String, slots: DiffLineSlots = D
     hunk.lines.forEachIndexed { i, line ->
       item(key = "$key:l$h:$i", contentType = "line") { DiffLineRow(line) }
       val threadIds = slots.keys[DiffLineAddress(h, i)].orEmpty()
-      items(threadIds, key = { "thread:$it" }, contentType = { "thread" }) { threadId -> slots.content(threadId) }
+      items(threadIds, key = { "thread:$it" }, contentType = { "thread" }, itemContent = slots.content)
     }
   }
 }
