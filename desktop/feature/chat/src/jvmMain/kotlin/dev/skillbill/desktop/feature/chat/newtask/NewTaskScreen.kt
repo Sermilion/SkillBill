@@ -59,7 +59,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
-  LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
+  LaunchedEffect(Unit) { draft.refreshSaved() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = listOf(Crumb("New task")),
