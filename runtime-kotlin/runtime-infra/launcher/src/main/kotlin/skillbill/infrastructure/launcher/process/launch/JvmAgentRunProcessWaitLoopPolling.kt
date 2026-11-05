@@ -3,6 +3,7 @@ package skillbill.infrastructure.launcher.process.launch
 import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.ports.agentrun.model.AgentRunOutputStream
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
@@ -30,6 +31,7 @@ internal fun ProcessWaitLoop.pollProgress(): ProcessWait? {
   pollWorkflowProgress(nowNanos)
   pollFileActivity(nowNanos)
   pollOutputActivity(nowNanos)
+  pollApprovalWait(nowNanos)
   pollStatusHeartbeat(nowNanos)
   return if (declaredTracker.hasDeclaredEvent) {
     declaredProgressWait(nowNanos)
@@ -71,7 +73,11 @@ internal fun ProcessWaitLoop.declaredProgressWait(nowNanos: Long): ProcessWait? 
           ),
       )
     GoalRunnerLivenessState.IDLE ->
-      if (idleTimeoutNanos != null && nowNanos - declaredTracker.lastAdvanceNanos >= idleTimeoutNanos) {
+      if (approvalWaitActive) {
+        null
+      } else if (
+        idleTimeoutNanos != null && nowNanos - idleSince(declaredTracker.lastAdvanceNanos) >= idleTimeoutNanos
+      ) {
         val processLiveWithinWindow =
           request.probes.idlePolicy.extendIdleWindow(idleSignals(idleTimeoutNanos, nowNanos))
         if (processLiveWithinWindow) {
@@ -99,7 +105,9 @@ internal fun ProcessWaitLoop.declaredProgressWait(nowNanos: Long): ProcessWait? 
 }
 
 internal fun ProcessWaitLoop.legacyIdleWait(nowNanos: Long): ProcessWait? =
-  if (idleTimeoutNanos != null && nowNanos - lastWorkflowProgressNanos >= idleTimeoutNanos) {
+  if (approvalWaitActive) {
+    null
+  } else if (idleTimeoutNanos != null && nowNanos - idleSince(lastWorkflowProgressNanos) >= idleTimeoutNanos) {
     val graceActive =
       fileActivityWindowStartNanos?.let { windowStart ->
         nowNanos - windowStart < fileActivityGraceNanos
@@ -126,6 +134,26 @@ internal fun ProcessWaitLoop.legacyIdleWait(nowNanos: Long): ProcessWait? =
   } else {
     null
   }
+
+internal fun ProcessWaitLoop.pollApprovalWait(nowNanos: Long) {
+  val channel = approval ?: return
+  channel.enforceOpening()
+  val pending = channel.pendingWait()
+  val holding = pending != null && clock.instant().isBefore(pending.earliestDeadline)
+  if (holding && !approvalWaitActive) {
+    request.launch.outputSink.write(
+      AgentRunOutputStream.STDERR,
+      "skill-bill: awaiting operator approval: ${pending.latestTitle}\n",
+    )
+  }
+  if (approvalWaitActive && !holding) lastApprovalEndedNanos = nowNanos
+  approvalWaitActive = holding
+}
+
+internal fun ProcessWaitLoop.idleSince(lastProgressNanos: Long): Long {
+  val approvalEnded = lastApprovalEndedNanos ?: return lastProgressNanos
+  return if (approvalEnded - lastProgressNanos > 0L) approvalEnded else lastProgressNanos
+}
 
 internal fun ProcessWaitLoop.idleSignals(
   idleTimeoutNanos: Long,

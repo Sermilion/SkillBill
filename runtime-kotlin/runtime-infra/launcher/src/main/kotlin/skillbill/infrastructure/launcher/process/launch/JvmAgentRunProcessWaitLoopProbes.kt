@@ -72,10 +72,12 @@ internal fun ProcessWaitLoop.pollStatusHeartbeat(nowNanos: Long) {
   }
   val workflowLabel = lastProgressLabel?.takeIf(String::isNotBlank)
   val activityLabel = lastActivityLabel?.takeIf(String::isNotBlank)
+  val approvalWait = approval?.pendingWait()?.takeIf { approvalWaitActive }
   val details =
     listOfNotNull(
       workflowLabel?.let { "workflow: $it" },
       activityLabel?.let { "file activity: $it" },
+      approvalWait?.let { "awaiting operator approval (${it.count} pending): ${it.latestTitle}" },
     ).joinToString("; ")
       .takeIf(String::isNotBlank)
       ?.let { "; $it" }

@@ -1,9 +1,12 @@
 package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.Diagnostics
+import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
@@ -17,21 +20,36 @@ import kotlinx.serialization.json.putJsonObject
 import java.util.Base64
 
 /**
+ * What a live process was started for: its permission mode and effective Claude config directory (empty means the
+ * default account). A turn whose binding differs needs a new process, and so a new approval generation.
+ */
+internal data class ChatProcessBinding(val mode: ChatPermissionMode, val configDir: String)
+
+/**
  * One `claude` process kept across a chat session's turns. Claude replays each operator message with the uuid the app gave
  * it; the output after that replay, up to its `result`, belongs to the turn that sent it. Output that starts while no turn
  * owns the stream, such as a reply after a background command finished, goes to [unprompted]. Only the reader calls [accept]
  * and [abandon]; turns call [register] from any thread.
  */
 internal class ClaudeLiveSession(
+  val binding: ChatProcessBinding,
   private val diagnostics: Diagnostics,
   private val unprompted: (ChatEvent) -> Unit,
 ) {
   val input = Channel<String>(Channel.UNLIMITED)
   lateinit var job: Job
 
+  /** Completed once the provider answered the initialize request successfully; the first user frame waits for it. */
+  val initializedSignal = CompletableDeferred<Unit>()
+
+  /** The broker generation of this process; a permission request with none bound is denied, never answered silently. */
+  var approval: ClaudeChatApproval? = null
+
   private val lock = Any()
   private val pending = HashMap<String, SendChannel<ChatEvent>>()
   private var closed = false
+  private var initialized = false
+  private val held = ArrayList<String>()
 
   private var target: SendChannel<ChatEvent>? = null
   private var unpromptedOpen = false
@@ -45,8 +63,37 @@ internal class ClaudeLiveSession(
     true
   }
 
+  /** A turn's user frame is held until the initialize exchange succeeded, then flushed in order. */
   fun send(uuid: String, text: String, images: List<ChatImage>) {
-    input.trySend(userMessage(uuid, text, images))
+    val frame = userMessage(uuid, text, images)
+    synchronized(lock) {
+      if (initialized) input.trySend(frame) else held.add(frame)
+    }
+  }
+
+  /** The initialize request was answered successfully: sends every held user frame, then sends directly. */
+  private fun initializedByProvider() {
+    synchronized(lock) {
+      if (initialized) return
+      initialized = true
+      held.forEach { input.trySend(it) }
+      held.clear()
+    }
+    initializedSignal.complete(Unit)
+  }
+
+  /**
+   * The provider cannot host permission control: every waiting turn fails visibly with [message] and the process is
+   * stopped. May be called from any thread; it touches only the waiting turns under the lock.
+   */
+  fun failStartup(message: String) {
+    val failure = ChatEvent.Failed(ChatFailure.ProcessFailed, message)
+    val waiting = close()
+    waiting.forEach {
+      it.trySend(failure)
+      it.close()
+    }
+    approval?.stop(message)
   }
 
   fun accept(output: ChatProcessOutput) {
@@ -63,6 +110,7 @@ internal class ClaudeLiveSession(
    */
   fun abandon() {
     val waiting = close()
+    approval?.release()
     target?.close()
     target = null
     unpromptedOpen = false
@@ -79,6 +127,18 @@ internal class ClaudeLiveSession(
       }
     }
     val root = parseStreamLine(text)
+    if (root != null && root.string("type") == "control_request") {
+      approval?.handle(root, text) ?: diagnostics.record("chat.control_request_without_approval")
+      return
+    }
+    if (root != null && root.string("type") == "control_response") {
+      when (val outcome = approval?.handleControlResponse(root)) {
+        ChatInitializeOutcome.Initialized -> initializedByProvider()
+        is ChatInitializeOutcome.Refused -> failStartup(outcome.message)
+        ChatInitializeOutcome.Unrelated, null -> Unit
+      }
+      return
+    }
     if (root != null && root.string("type") == "user" && (root["isReplay"] as? JsonPrimitive)?.booleanOrNull == true) {
       val sink = synchronized(lock) { root.string("uuid")?.let(pending::remove) } ?: return
       if (unpromptedOpen) emit(ChatEvent.Completed)
@@ -93,6 +153,17 @@ internal class ClaudeLiveSession(
       reply = ChatReplyStream(diagnostics)
     }
     events.forEach(::emit)
+  }
+
+  /**
+   * Shows a permission card in the turn that owns the stream, else through [unprompted]. A card is not reply text: it
+   * neither opens nor closes a reply, so a card arriving between turns never leaves a turn waiting for a completion. Only
+   * the reader calls it, from the control request it is handling.
+   */
+  fun showCard(card: ApprovalCard) {
+    val event = ChatEvent.ApprovalRequested(card)
+    val sink = target
+    if (sink != null) sink.trySend(event) else unprompted(event)
   }
 
   private fun emit(event: ChatEvent) {
@@ -111,6 +182,7 @@ internal class ClaudeLiveSession(
 
   private fun exited(failure: ChatEvent.Failed) {
     val waiting = close()
+    approval?.release()
     when {
       target != null || unpromptedOpen -> emit(failure)
       waiting.isEmpty() -> diagnostics.record("chat.live_process_exited")

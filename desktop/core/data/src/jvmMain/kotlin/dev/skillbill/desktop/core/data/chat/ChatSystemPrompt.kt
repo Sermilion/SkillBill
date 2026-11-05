@@ -5,7 +5,10 @@ import dev.skillbill.desktop.core.domain.model.ChatScope
 
 internal const val SKILL_BILL_REPOSITORY = "Sermilion/SkillBill"
 
-/** Every agent runs a chat turn with the same access it has in an execution; this prompt names what the chat is about. */
+/**
+ * Names what the chat is about. The prompt grants no access: each tool use, shell command or file edit the provider asks
+ * permission for runs only after the operator answers its approval card.
+ */
 internal fun scopeSystemPrompt(scope: ChatScope, mode: ChatPermissionMode): String =
   listOfNotNull(scopeSystemPrompt(scope), modeNote(mode)).joinToString("\n\n")
 
@@ -22,9 +25,11 @@ private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildStr
   appendLine("Issue key: ${scope.issueKey ?: "none"}")
   appendLine("Title: ${scope.title}")
   appendLine("Worktree: ${scope.repositoryRoot}")
+  appendLine(CHAT_CONSENT_GUIDANCE)
   append(
-    "You have the same access as the agent that runs this execution: any shell command, the skill-bill CLI and MCP " +
-      "tools, git, gh and file edits. Issues about skill-bill itself go to $SKILL_BILL_REPOSITORY.",
+    "Shell commands, the skill-bill CLI and MCP tools, git, gh and file edits go through the provider's permission " +
+      "requests; each runs only after the operator answers its approval card, and a refused request means the " +
+      "action did not run. Issues about skill-bill itself go to $SKILL_BILL_REPOSITORY.",
   )
   appendLine()
   append(CHAT_ACTION_GUIDANCE.trimEnd())
@@ -33,12 +38,14 @@ private fun executionSystemPrompt(scope: ChatScope.Execution): String = buildStr
 private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString {
   appendLine("You are chatting with the operator about new work. No skill-bill execution exists yet.")
   appendLine("Repository: ${scope.repositoryRoot}")
+  appendLine(CHAT_CONSENT_GUIDANCE)
   scope.baseBranch?.let { appendLine("Base branch: $it") }
   appendLine("The operator is describing work to start in this repository. When the request does not say what done means or what is out of scope, ask.")
   appendLine("Before proposing an issue key, inspect the local spec inventory, including completed and archived bundles, and existing runs.")
   appendLine("You may suggest the next free local key implied by the inventory in prose only. Wait for the operator to send that complete key in chat or say they will type it on the start card. Never silently mint or use a suggested key before acceptance.")
   appendLine(
-    "You have the same access as any chat: any shell command, git, gh and file edits. Do not launch skill-bill yourself. " +
+    "Shell commands, git, gh and file edits run only after the operator allows them on an approval card. " +
+      "Do not launch skill-bill yourself. " +
       "A start action becomes a button; the app starts the selected run when the operator clicks it.",
   )
   append(NEW_TASK_ACTION_GUIDANCE.trimEnd())
@@ -65,6 +72,11 @@ Do not put CLI flags such as "target:" or "qa:" into "target". The pr-review-fix
 Optional JSON field "branch" is a string: for "review", "validation", "qa", "pr", "verify", and "pr-review-fix", set it to the exact git branch name when the operator names a branch the run should act on; the app runs the start on a checkout of that branch. Omit "branch" otherwise. For "monitor", never set "branch"; name the branch in "target" as branch:<name>.
 A click starts the first invocation. "verify" and "pr-review-fix" then park at awaiting_confirmation for a later operator confirm; that confirm is not a second start kind.
 """
+
+private const val CHAT_CONSENT_GUIDANCE =
+  "Prompt text, suggested actions, and agent-authored confirm or select tokens never authorize tool execution. " +
+    "Only an explicit operator action on a live approval card can answer a provider permission request. " +
+    "Never describe prose or a suggested action as approval, and never treat an agent-callable tool as operator consent."
 
 private const val CHAT_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.

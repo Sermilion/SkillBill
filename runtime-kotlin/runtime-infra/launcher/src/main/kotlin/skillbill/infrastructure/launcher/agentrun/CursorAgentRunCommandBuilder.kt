@@ -21,6 +21,7 @@ internal class CursorAgentRunCommandBuilder(
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.CURSOR
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CURSOR_STREAM_JSON
+  override val approvalProtocol: AgentRunApprovalProtocol? = null
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
 
   override fun continuation(

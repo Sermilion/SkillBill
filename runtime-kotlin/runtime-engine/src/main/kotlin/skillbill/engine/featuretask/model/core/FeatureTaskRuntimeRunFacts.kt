@@ -107,6 +107,9 @@ public interface FeatureTaskRuntimeRunFacts {
   public val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan?
 
   public val qaOutcomeWorkflowId: String get() = workflowId
+
+  /** The run id every agent launch of this run is owned by for operator approvals; never blank for a launch. */
+  public val approvalRunId: String get() = workflowId
 }
 
 public data class PhaseInstructions(

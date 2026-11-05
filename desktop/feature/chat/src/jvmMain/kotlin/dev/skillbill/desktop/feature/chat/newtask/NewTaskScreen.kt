@@ -37,6 +37,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.feature.chat.ChatApprovalActions
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import kotlin.time.Instant
 
@@ -90,6 +91,11 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
               )
             }
           } else null,
+          approvals = ChatApprovalActions(
+            live = chat.approvalLive.collectAsState().value,
+            onDecide = chat::decideApproval,
+            onDismiss = chat::dismissApproval,
+          ),
         ) { _, action ->
           val start = action.start
           if (start == null) {

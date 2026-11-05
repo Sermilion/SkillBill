@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -39,6 +40,19 @@ sealed interface ChatMessage {
 
   data class Notice(val text: String, val confirmation: Boolean = false) : ChatMessage
 
+  /**
+   * A permission request of the chat's process, shown with its complete stored record and current outcome. [card] is
+   * replaced in place as the request changes. [restoredCopy] marks a card read back from saved history: it is a display
+   * copy, so its controls never enable. [submitting] is the key of the decision this window sent and is still awaiting an
+   * answer; [refusal] is why the runtime refused the last click.
+   */
+  data class Approval(
+    val card: ApprovalCard,
+    val restoredCopy: Boolean = false,
+    val submitting: Boolean = false,
+    val refusal: String? = null,
+  ) : ChatMessage
+
   data class Error(val failure: ChatFailure?, val text: String) : ChatMessage
 }
 
@@ -46,7 +60,15 @@ sealed interface ChatMessage {
  * One chat tab. [id] names the chat; an execution's first chat uses the execution's `WorkItem.id`, and every further chat
  * on it gets its own id. [ordinal] counts the execution's chats, so the second one shows as "SKILL-1 (2)".
  */
-data class ChatTab(val id: String, val executionId: String, val title: String, val kind: WorkKind?, val ordinal: Int = 1) {
+data class ChatTab(
+  val id: String,
+  val executionId: String,
+  val title: String,
+  val kind: WorkKind?,
+  val ordinal: Int = 1,
+  /** Set on a tab that lists one repository's approval requests instead of a chat; it is that repository's root. */
+  val approvalsRepository: String? = null,
+) {
   val label: String get() = if (ordinal > 1) "$title ($ordinal)" else title
 }
 

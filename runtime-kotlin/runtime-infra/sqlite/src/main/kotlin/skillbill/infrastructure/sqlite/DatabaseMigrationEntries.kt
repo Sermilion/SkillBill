@@ -23,6 +23,9 @@ import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDep
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
+import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalLeasesAndGrantFacts
+import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalOwnerLeaseExpiry
+import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalRecordsAndRules
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
@@ -972,4 +975,19 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 101,
       name = "record-diff-comments",
       operation = ::recordDiffComments,
+    ) +
+    DatabaseMigration(
+      version = 102,
+      name = "add-operator-approval-records-and-rules",
+      operation = ::addOperatorApprovalRecordsAndRules,
+    ) +
+    DatabaseMigration(
+      version = 103,
+      name = "add-operator-approval-leases-and-grant-facts",
+      operation = ::addOperatorApprovalLeasesAndGrantFacts,
+    ) +
+    DatabaseMigration(
+      version = 104,
+      name = "add-operator-approval-owner-lease-expiry",
+      operation = ::addOperatorApprovalOwnerLeaseExpiry,
     )

@@ -167,6 +167,15 @@ private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: sus
     }
   }.flowOn(Dispatchers.IO)
 
+private val approvalShutdownHookInstalled = AtomicBoolean(false)
+
+/** Installs the one JVM shutdown hook that releases the open session's approvals on app exit; later calls do nothing. */
+internal fun installApprovalShutdownHook(release: () -> Unit) {
+  if (approvalShutdownHookInstalled.compareAndSet(false, true)) {
+    Runtime.getRuntime().addShutdownHook(Thread(release, "skill-bill-approval-shutdown"))
+  }
+}
+
 private object ChatProcesses {
   const val STDERR_TAIL = 2000
   const val STDERR_DRAIN_MS = 2000L

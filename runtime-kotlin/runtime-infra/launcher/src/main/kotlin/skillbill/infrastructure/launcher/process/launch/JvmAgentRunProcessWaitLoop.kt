@@ -6,6 +6,7 @@ import skillbill.goalrunner.model.GoalRunnerLivenessDecision
 import skillbill.goalrunner.model.GoalRunnerLivenessInputs
 import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerProcessState
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannel
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
@@ -47,6 +48,7 @@ internal class ProcessWaitLoop(
   internal val lifecycleEmitter: ProcessLifecycleEmitter,
   internal val clock: Clock,
   internal val degradation: ProcessRunDegradationRecorder,
+  internal val approval: AgentRunApprovalChannel? = null,
 ) {
   internal val process: Process get() = tree.process
   internal val timeoutMillis =
@@ -86,6 +88,10 @@ internal class ProcessWaitLoop(
   internal var lastObservedOutputMillis: Long? = null
   internal var lastOutputNanos: Long? = null
   internal var declaredTracker = DeclaredProgressTracker(startNanos)
+
+  internal var approvalWaitActive = false
+
+  internal var lastApprovalEndedNanos: Long? = null
 
   fun wait(): ProcessWait {
     var wait: ProcessWait? = null

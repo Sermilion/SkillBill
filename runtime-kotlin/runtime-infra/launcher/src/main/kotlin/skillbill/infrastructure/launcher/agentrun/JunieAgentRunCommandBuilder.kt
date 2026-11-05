@@ -22,6 +22,7 @@ internal class JunieAgentRunCommandBuilder(
   override val agent: SupportedAgent = SupportedAgent.JUNIE
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.JUNIE_TEXT
+  override val approvalProtocol: AgentRunApprovalProtocol? = null
 
   override fun continuation(
     command: AgentRunCommand,

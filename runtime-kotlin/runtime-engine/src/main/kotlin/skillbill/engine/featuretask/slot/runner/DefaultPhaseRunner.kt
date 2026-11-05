@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
@@ -132,6 +133,7 @@ public class DefaultPhaseRunner(
           progressIdleTimeout =
             if (readOnly) READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes else facts.progressIdleTimeout,
           spawnAuthorization = facts.spawnAuthorization,
+          approval = AgentRunApprovalRequirement.Owned(facts.approvalRunId),
           activityStampSink = observation.activityStampSink,
           worktreeEditObserver = observation.worktreeEditObserver,
           progressEmitter =

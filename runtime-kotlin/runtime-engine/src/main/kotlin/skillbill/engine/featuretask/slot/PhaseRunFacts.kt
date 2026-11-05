@@ -25,6 +25,7 @@ internal fun PhaseRun.stepFacts(
     attempt = attempt,
     observeLaunch = true,
     briefingText = "",
+    approvalRunId = request.approvalRunId,
   )
 }
 

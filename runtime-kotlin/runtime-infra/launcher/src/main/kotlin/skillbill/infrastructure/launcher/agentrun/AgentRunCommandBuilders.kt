@@ -5,6 +5,7 @@ import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
 import skillbill.infrastructure.launcher.mcp.claudeRuntimeMcpArguments
+import skillbill.infrastructure.launcher.mcp.claudeRuntimeSettlementToolArguments
 import skillbill.infrastructure.launcher.mcp.codexRuntimeMcpArguments
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
@@ -13,6 +14,7 @@ import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.AGENT_LAUNCHER_CLIS
 import skillbill.install.model.AgentLauncherCli
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
@@ -34,13 +36,21 @@ internal data class AgentRunCommand(
   val conversationIsolation: ReviewConversationIsolation? = null,
   val outputDecoder: AgentRunOutputDecoder? = null,
   val environmentPassthroughKeys: Set<String> = emptySet(),
+  val approvalProtocol: AgentRunApprovalProtocol? = null,
 )
+
+internal enum class AgentRunApprovalProtocol {
+  CLAUDE_HOST,
+}
 
 internal interface AgentRunCommandBuilder {
   val agent: SupportedAgent
   val outputDecoder: AgentRunOutputDecoder get() = AgentRunOutputDecoder.PLAIN
   val reviewIsolation: ReviewLaunchIsolationStrategy get() = ReviewLaunchIsolationStrategy.UNSUPPORTED
   val governedReviewLaunchCapability: GovernedReviewLaunchCapability
+
+  /** The approval protocol this CLI can host; null means it cannot run card-required work at all. */
+  val approvalProtocol: AgentRunApprovalProtocol?
 
   /** The headless CLI this builder's command execs, resolved against PATH before every spawn. */
   val launcherCli: AgentLauncherCli get() =
@@ -170,6 +180,7 @@ internal class ClaudeAgentRunCommandBuilder(
   override val agent: SupportedAgent = SupportedAgent.CLAUDE
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CLAUDE_JSON
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
+  override val approvalProtocol: AgentRunApprovalProtocol = AgentRunApprovalProtocol.CLAUDE_HOST
 
   override fun continuation(
     command: AgentRunCommand,
@@ -179,43 +190,30 @@ internal class ClaudeAgentRunCommandBuilder(
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)
-    val streaming = request.streamProviderOutput || request.streamOutputForLiveness
+    val hosted = request.approval is AgentRunApprovalRequirement.Owned
+    val streaming = hosted || request.streamProviderOutput || request.streamOutputForLiveness
     return goalContinuationCommand(request, agent, databasePath) ?: AgentRunCommand(
       command =
         buildList {
           add(SupportedAgent.CLAUDE.wireValue)
           add("--print")
+          if (hosted) {
+            add("--input-format")
+            add("stream-json")
+          }
           add("--output-format")
-
           add(if (streaming) "stream-json" else "json")
           if (streaming) add("--verbose")
-          request.modelOverride?.let {
-            add("--model")
-            add(it)
-          }
-          request.effortOverride?.let {
-            add("--effort")
-            add(it)
-          }
-          request.reviewEvidenceEndpoint?.let { endpoint ->
-            request.nativeReviewWorkerName?.let { worker ->
-              add("--agent")
-              add(worker)
-            }
-            add("--mcp-config")
-            add(endpoint.descriptor.mcpConfigPath.toString())
-            add("--strict-mcp-config")
-            add("--tools")
-            add(governedReviewToolList(request.reviewFanOut))
-          }
+          addAll(claudeModelArguments(request))
+          addAll(claudeGovernedReviewArguments(request))
           addAll(claudeRuntimeMcpArguments(request, runtimeMcpBin, databasePath))
-          add("--dangerously-skip-permissions")
+          addAll(claudePermissionArguments(request, hosted, runtimeMcpBin))
           val writableDirectories = listOf(request.repoRoot) + request.additionalWritableDirectories
           writableDirectories.forEach { directory ->
             add("--add-dir")
             add(directory.toString())
           }
-          addAll(claudeWriteSettingsArguments(request, writableDirectories))
+          if (!hosted) addAll(claudeWriteSettingsArguments(request, writableDirectories))
         },
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
@@ -234,9 +232,49 @@ internal class ClaudeAgentRunCommandBuilder(
       outputDecoder = AgentRunOutputDecoder.CLAUDE_STREAM_JSON.takeIf { streaming },
       environmentPassthroughKeys =
         if (request.reviewEvidenceBroker != null) CLAUDE_PROVIDER_PASSTHROUGH_KEYS else emptySet(),
+      approvalProtocol = approvalProtocol.takeIf { hosted },
     )
   }
 }
+
+private fun claudeModelArguments(request: SkillRunRequest): List<String> =
+  buildList {
+    request.modelOverride?.let {
+      add("--model")
+      add(it)
+    }
+    request.effortOverride?.let {
+      add("--effort")
+      add(it)
+    }
+  }
+
+private fun claudeGovernedReviewArguments(request: SkillRunRequest): List<String> =
+  buildList {
+    request.reviewEvidenceEndpoint?.let { endpoint ->
+      request.nativeReviewWorkerName?.let { worker ->
+        add("--agent")
+        add(worker)
+      }
+      add("--mcp-config")
+      add(endpoint.descriptor.mcpConfigPath.toString())
+      add("--strict-mcp-config")
+      add("--tools")
+      add(governedReviewToolList(request.reviewFanOut))
+    }
+  }
+
+private fun claudePermissionArguments(
+  request: SkillRunRequest,
+  hosted: Boolean,
+  runtimeMcpBin: Path?,
+): List<String> =
+  if (hosted) {
+    listOf("--permission-prompts", "host", "--permission-mode", "manual") +
+      claudeRuntimeSettlementToolArguments(request, runtimeMcpBin)
+  } else {
+    listOf("--dangerously-skip-permissions")
+  }
 
 private fun claudeWriteSettingsArguments(
   request: SkillRunRequest,
@@ -281,6 +319,7 @@ internal class CodexAgentRunCommandBuilder(
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.CODEX
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CODEX_JSONL
+  override val approvalProtocol: AgentRunApprovalProtocol? = null
   override val reviewIsolation: ReviewLaunchIsolationStrategy =
     ReviewLaunchIsolationStrategy.CODEX_NATIVE_FORK_TURNS_NONE
 

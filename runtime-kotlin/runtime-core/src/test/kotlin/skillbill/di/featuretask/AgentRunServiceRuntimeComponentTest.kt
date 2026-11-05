@@ -11,6 +11,7 @@ import skillbill.infrastructure.launcher.agentrun.PathExecutableLookup
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -48,6 +49,7 @@ class AgentRunServiceRuntimeComponentTest {
               repoRoot = tempDir,
               subtaskId = 2,
               promptOverride = "Phase: validate",
+              approval = AgentRunApprovalRequirement.GovernedReview,
             ),
         ),
       )
@@ -103,6 +105,7 @@ class AgentRunServiceRuntimeComponentTest {
               repoRoot = tempDir,
               subtaskId = 1,
               promptOverride = "Phase: implement",
+              approval = AgentRunApprovalRequirement.GovernedReview,
               spawnAuthorization =
                 object : AgentRunSpawnAuthorization {
                   override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> =

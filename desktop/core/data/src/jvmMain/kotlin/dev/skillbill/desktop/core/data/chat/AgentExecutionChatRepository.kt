@@ -51,6 +51,14 @@ class AgentExecutionChatRepository(
     if (transport == null) {
       diagnostics.record("chat.agent_unsupported")
       emit(ChatEvent.Failed(ChatFailure.AgentUnsupported, request.agent.agentId))
+    } else if (!transport.approvalCapable) {
+      diagnostics.record("chat.approval_unavailable")
+      emit(
+        ChatEvent.Failed(
+          ChatFailure.AgentUnsupported,
+          "${request.agent.agentId} cannot host operator approval cards, so its chat was not started. Use claude.",
+        ),
+      )
     } else {
       emitAll(transport.run(request))
     }

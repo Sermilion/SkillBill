@@ -155,6 +155,11 @@ internal class ChatTurns(
    */
   suspend fun unprompted(session: ChatSession, event: ChatEvent) {
     if (session.thread.dropUnprompted) return
+    if (event is ChatEvent.ApprovalRequested) {
+      // A card is not a reply: it neither holds the composer nor ends with a completion, so it never starts an own turn.
+      session.thread.show(session.agentState.value, event)
+      return
+    }
     val ownTurn = session.turnJob == null
     if (ownTurn) {
       session.busyState.value = true
@@ -179,6 +184,12 @@ internal class ChatTurns(
       !session.started -> session.restart(UUID.randomUUID().toString())
       agent != null -> save(session, agent)
     }
+  }
+
+  /** Saves the chat after an approval outcome changed outside a turn, so the saved copy shows the final outcome. */
+  suspend fun approvalChanged(session: ChatSession) {
+    val agent = session.agentState.value
+    if (agent != null && session.started) save(session, agent)
   }
 
   private suspend fun save(session: ChatSession, agent: ChatAgent) {

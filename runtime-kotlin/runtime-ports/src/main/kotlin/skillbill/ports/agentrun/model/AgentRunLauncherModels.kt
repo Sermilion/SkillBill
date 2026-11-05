@@ -48,9 +48,22 @@ data class SkillRunRequest(
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
   val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
+  val approval: AgentRunApprovalRequirement = AgentRunApprovalRequirement.Unowned(),
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
+    when (approval) {
+      is AgentRunApprovalRequirement.Owned ->
+        require(reviewEvidenceBroker == null) { "A card-required launch cannot carry a governed review transport." }
+      AgentRunApprovalRequirement.RuntimeHosted ->
+        require(goalContinuation != null && promptOverride == null) {
+          "A runtime-hosted launch is a goal-continuation wrapper without a prompt override."
+        }
+      AgentRunApprovalRequirement.GovernedReview,
+      AgentRunApprovalRequirement.OutsideApproval,
+      is AgentRunApprovalRequirement.Unowned,
+      -> Unit
+    }
     promptOverride?.let { prompt -> require(prompt.isNotBlank()) { "promptOverride must be non-blank when provided." } }
     modelOverride?.let { model -> require(model.isNotBlank()) { "modelOverride must be non-blank when provided." } }
     effortOverride?.let { effort -> require(effort.isNotBlank()) { "effortOverride must be non-blank when provided." } }
@@ -69,6 +82,35 @@ data class SkillRunRequest(
     }
     require(!reviewFanOut || reviewEvidenceBroker != null) {
       "A review fan-out surface is valid only for a governed review launch."
+    }
+  }
+}
+
+/**
+ * How a launch relates to operator approval cards. Only the owning engine or operation boundary knows this, so it is a
+ * fact carried on the request; the launcher refuses a request that does not say.
+ */
+sealed interface AgentRunApprovalRequirement {
+  /** Card-required: the launcher opens a fresh owner generation per spawn under [runId], a caller-owned identity. */
+  data class Owned(val runId: String) : AgentRunApprovalRequirement {
+    init {
+      require(runId.isNotBlank()) { "An approval run id is required." }
+    }
+  }
+
+  /** The governed review pipeline, whose separate isolation and launch strategy is unchanged. */
+  data object GovernedReview : AgentRunApprovalRequirement
+
+  /** A runtime command wrapper; the nested agent child it starts is itself launched as [Owned]. */
+  data object RuntimeHosted : AgentRunApprovalRequirement
+
+  /** A non-phase launch the spec keeps outside approval cards; its existing launch strategy is unchanged. */
+  data object OutsideApproval : AgentRunApprovalRequirement
+
+  /** No classification was supplied; every agent spawn is refused, citing [reason]. */
+  data class Unowned(val reason: String = "this launch supplied none") : AgentRunApprovalRequirement {
+    init {
+      require(reason.isNotBlank()) { "An unowned launch must say why it has no approval facts." }
     }
   }
 }

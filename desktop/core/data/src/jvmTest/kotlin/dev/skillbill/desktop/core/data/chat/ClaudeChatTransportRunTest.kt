@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
@@ -33,7 +34,10 @@ import kotlin.test.assertTrue
 
 class ClaudeChatTransportRunTest {
   // One scripted claude process: the test reads what the app writes to stdin and decides what stdout prints.
-  private class FakeClaude(val holdStop: CompletableDeferred<Unit>? = null) : LiveChatProcessLauncher {
+  private class FakeClaude(
+    val holdStop: CompletableDeferred<Unit>? = null,
+    val loginOutput: List<String> = emptyList(),
+  ) : LiveChatProcessLauncher {
     val opened: MutableList<ChatCommand> = Collections.synchronizedList(mutableListOf())
     val stdin = Channel<String>(Channel.UNLIMITED)
     val stdout = Channel<ChatProcessOutput>(Channel.UNLIMITED)
@@ -42,7 +46,16 @@ class ClaudeChatTransportRunTest {
 
     override fun open(command: ChatCommand, input: ReceiveChannel<String>): Flow<ChatProcessOutput> = channelFlow {
       opened += command
-      launch { for (line in input) stdin.send(line) }
+      launch {
+        for (line in input) {
+          if (INITIALIZE_REQUEST in line) {
+            loginOutput.forEach { stdout.send(ChatProcessOutput.Line(it)) }
+            stdout.send(ChatProcessOutput.Line(INITIALIZE_SUCCESS))
+          } else {
+            stdin.send(line)
+          }
+        }
+      }
       try {
         for (output in stdout) send(output)
       } finally {
@@ -59,12 +72,21 @@ class ClaudeChatTransportRunTest {
     }
 
     suspend fun print(vararg lines: String) = lines.forEach { stdout.send(ChatProcessOutput.Line(it)) }
+
+    companion object {
+      const val INITIALIZE_REQUEST = "\"subtype\":\"initialize\""
+      const val INITIALIZE_SUCCESS =
+        """{"type":"control_response","response":{"subtype":"success","request_id":"skill-bill-init"}}"""
+    }
   }
 
   private fun TestScope.transport(claude: FakeClaude, diagnostics: RecordingDiagnostics = RecordingDiagnostics()) = ClaudeChatTransport(
     HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", ""),
     FakeAppSettingsRepository(),
     claude,
+    { _, root, _, _, writeLine, stopProcess, onCard ->
+      ChatApprovalOpening.Opened(ClaudeChatApproval(root, writeLine, stopProcess, diagnostics, onCard))
+    },
     diagnostics,
     ApplicationCoroutineScope(backgroundScope),
   )
@@ -72,7 +94,7 @@ class ClaudeChatTransportRunTest {
   // A background build the agent started used to die when its turn's process exited, and nothing reported back.
   @Test
   fun `the process outlives the turn, a reply the agent starts on its own reaches unprompted, and the next turn reuses it`() = runTest {
-    val claude = FakeClaude()
+    val claude = FakeClaude(loginOutput = listOf("Agent pid 4242"))
     val diagnostics = RecordingDiagnostics()
     val transport = transport(claude, diagnostics)
     val unprompted = async(start = CoroutineStart.UNDISPATCHED) { transport.unprompted("session-1").take(2).toList() }
@@ -80,7 +102,6 @@ class ClaudeChatTransportRunTest {
     val first = async { transport.run(chatRequest()).toList() }
     val (uuid, text) = claude.nextMessage()
     claude.print(
-      "Agent pid 4242",
       """{"type":"system","subtype":"init"}""",
       replay(uuid),
       textDelta("Started the build"),
@@ -186,6 +207,22 @@ class ClaudeChatTransportRunTest {
 
     transport.end("session-1")
     claude.stopped.await()
+  }
+
+  // A user frame written before the provider accepted host permission control would run without approval cards.
+  @Test
+  fun `a turn's user frame is held until the provider answers initialize`() {
+    val diagnostics = RecordingDiagnostics()
+    val session = ClaudeLiveSession(ChatProcessBinding(ChatPermissionMode.Act, ""), diagnostics) {}
+    session.approval = ClaudeChatApproval("/work/skill-bill", { true }, {}, diagnostics, onCard = {})
+
+    session.send("uuid-1", "operator prompt", emptyList())
+    assertTrue(session.input.tryReceive().isFailure)
+
+    session.accept(ChatProcessOutput.Line(FakeClaude.INITIALIZE_SUCCESS))
+    val frame = Json.parseToJsonElement(session.input.tryReceive().getOrThrow()).jsonObject
+    assertEquals("uuid-1", frame.getValue("uuid").jsonPrimitive.content)
+    assertTrue(session.initializedSignal.isCompleted)
   }
 
   private fun replay(uuid: String) =

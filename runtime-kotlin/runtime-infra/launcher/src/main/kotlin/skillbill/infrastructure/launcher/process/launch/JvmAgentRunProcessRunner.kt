@@ -5,6 +5,8 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.infrastructure.host.jvm.GateJvmResolver
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannel
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -48,6 +50,41 @@ class JvmAgentRunProcessRunner(
     )
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
+    val approval =
+      when (val opened = request.approval.channel?.open()) {
+        null -> null
+        is AgentRunApprovalOpenResult.Refused -> return approvalRefused(opened.reason, request)
+        is AgentRunApprovalOpenResult.Opened -> opened.channel
+      }
+    try {
+      return runGovernedSpawn(request, approval)
+    } finally {
+      approval?.let { channel ->
+        catchingNonCancellation { channel.finish() }
+          .onFailure { failure -> agentRunTeardownLogger.warning(approvalFinishFailureMessage(failure)) }
+      }
+    }
+  }
+
+  private fun approvalRefused(
+    reason: String,
+    request: AgentRunProcessRequest,
+  ): AgentRunProcessResult {
+    catchingNonCancellation { request.launch.outputSink.write(AgentRunOutputStream.STDERR, "skill-bill: $reason\n") }
+    return AgentRunProcessResult(
+      exitStatus = null,
+      stdout = "",
+      stderr = reason,
+      timedOut = false,
+      interrupted = false,
+      spawnFailed = true,
+    )
+  }
+
+  private fun runGovernedSpawn(
+    request: AgentRunProcessRequest,
+    approval: AgentRunApprovalChannel?,
+  ): AgentRunProcessResult {
     var startedProcess: ProcessStart? = null
     var settled = false
     val authorized =
@@ -67,7 +104,7 @@ class JvmAgentRunProcessRunner(
         cleanupProcessStart(startedProcess)
         spawnDenied(authorized)
       }
-      is AgentRunSpawnAuthorizationResult.Authorized -> settleProcessStart(authorized.value, request)
+      is AgentRunSpawnAuthorizationResult.Authorized -> settleProcessStart(authorized.value, request, approval)
     }
   }
 
@@ -85,6 +122,7 @@ class JvmAgentRunProcessRunner(
   private fun settleProcessStart(
     processStart: ProcessStart,
     request: AgentRunProcessRequest,
+    approval: AgentRunApprovalChannel?,
   ): AgentRunProcessResult =
     when (processStart) {
       is ProcessStart.Failed -> spawnFailure(processStart.error)
@@ -94,6 +132,7 @@ class JvmAgentRunProcessRunner(
           stdoutStream = processStart.tree.process.inputStream,
           stderrStream = processStart.tree.process.errorStream,
           request = request,
+          approval = approval,
         )
     }
 
@@ -153,6 +192,9 @@ class JvmAgentRunProcessRunner(
       return (message ?: failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty())
         .take(TEARDOWN_FAILURE_DETAIL_LIMIT)
     }
+
+    private fun approvalFinishFailureMessage(failure: Throwable): String =
+      "skillbill agent run: approval generation teardown failed; detail=${boundedTeardownFailureDetail(failure)}"
 
     private const val TEARDOWN_FAILURE_DETAIL_LIMIT = 240
 
@@ -244,6 +286,7 @@ class JvmAgentRunProcessRunner(
     stdoutStream: InputStream,
     stderrStream: InputStream,
     request: AgentRunProcessRequest,
+    approval: AgentRunApprovalChannel?,
   ): AgentRunProcessResult {
     val process = tree.process
     val degradation = ProcessRunDegradationRecorder()
@@ -258,6 +301,7 @@ class JvmAgentRunProcessRunner(
           request,
           outputTracker,
           degradation,
+          approval,
         ),
       )
     var mcpStartupObservedAtStart = false
@@ -268,11 +312,13 @@ class JvmAgentRunProcessRunner(
       mcpStartupObservedAtStart = request.probes.mcpStartupProbe.readStartupObserved(degradation).value == true
       resources.stdout.start()
       resources.stderr.start()
-      writeAndCloseStdin(process, request.launch.stdinText, degradation)
+      openStdin(process, request, approval, degradation)
       lifecycleEmitter.emitStarted(process.isAlive)
       waitResult =
         try {
-          Result.success(waitForProcess(tree, request, outputTracker, lifecycleEmitter, degradation))
+          Result.success(
+            ProcessWaitLoop(tree, request, outputTracker, lifecycleEmitter, clock, degradation, approval).wait(),
+          )
         } catch (interrupted: InterruptedException) {
           Result.failure(interrupted)
         }
@@ -280,6 +326,10 @@ class JvmAgentRunProcessRunner(
       primaryFailure = failure
       rethrow(failure)
     } finally {
+      approval?.let { channel ->
+        catchingNonCancellation { channel.finish() }
+          .onFailure { failure -> degradation.recordCleanupFailure("approval_generation_finish", failure) }
+      }
       cleanupFailure = catchingNonCancellation { resources.lifetime.release(waitResult) }.exceptionOrNull()
       exportRunDegradationEvidence(degradation, request.launch.outputSink)
       if (primaryFailure != null && cleanupFailure != null && cleanupFailure !== primaryFailure) {
@@ -301,6 +351,22 @@ class JvmAgentRunProcessRunner(
     )
   }
 
+  private fun openStdin(
+    process: Process,
+    request: AgentRunProcessRequest,
+    approval: AgentRunApprovalChannel?,
+    degradation: ProcessRunDegradationRecorder,
+  ) {
+    if (approval == null) {
+      writeAndCloseStdin(process, request.launch.stdinText, degradation)
+      return
+    }
+    if (!approval.attach(process)) {
+      degradation.recordStdinDeliveryFailure(IOException("approval channel could not write its opening frames"))
+      approval.finish()
+    }
+  }
+
   private data class ProcessResources(
     val stdout: Utf8Drain,
     val stderr: Utf8Drain,
@@ -314,6 +380,7 @@ class JvmAgentRunProcessRunner(
     val request: AgentRunProcessRequest,
     val outputTracker: OutputObservationTracker,
     val degradation: ProcessRunDegradationRecorder,
+    val approval: AgentRunApprovalChannel?,
   )
 
   private fun createProcessResources(args: ProcessResourceRequest): ProcessResources {
@@ -322,7 +389,10 @@ class JvmAgentRunProcessRunner(
         input = args.stdoutStream,
         outputStream = AgentRunOutputStream.STDOUT,
         outputSink = args.request.launch.outputSink,
-        onChunkRead = { args.outputTracker.markObserved() },
+        onChunkRead = { chunk ->
+          args.outputTracker.markObserved()
+          args.approval?.observe(chunk)
+        },
       )
     val stderr =
       Utf8Drain(
@@ -429,14 +499,6 @@ class JvmAgentRunProcessRunner(
       outputCaptureIncomplete = release.outputCaptureIncomplete,
     )
   }
-
-  private fun waitForProcess(
-    tree: AgentRunProcessTree,
-    request: AgentRunProcessRequest,
-    outputTracker: OutputObservationTracker,
-    lifecycleEmitter: ProcessLifecycleEmitter,
-    degradation: ProcessRunDegradationRecorder,
-  ): ProcessWait = ProcessWaitLoop(tree, request, outputTracker, lifecycleEmitter, clock, degradation).wait()
 
   private fun spawnFailure(error: Exception): AgentRunProcessResult =
     AgentRunProcessResult(

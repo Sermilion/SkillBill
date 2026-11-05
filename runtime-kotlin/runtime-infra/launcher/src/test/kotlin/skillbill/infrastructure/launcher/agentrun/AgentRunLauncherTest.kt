@@ -9,6 +9,7 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -19,6 +20,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
@@ -121,11 +123,47 @@ class HeadlessAgentRunAdapterTest {
       launcher.launch(
         AgentRunLaunchRequest(
           agentId = "cursor",
-          skillRunRequest = skillRunRequest(),
+          skillRunRequest = skillRunRequest().copy(approval = AgentRunApprovalRequirement.GovernedReview),
         ),
       )
 
     assertFalse(outcome is UnsupportedAgentRunLaunch, "cursor launch must not be refused")
+  }
+
+  @Test
+  fun `launch outside approval cards reaches a codex process`() {
+    val runner = RecordingAgentRunProcessRunner()
+    val launcher = FileSystemAgentRunLauncher(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+
+    val outcome =
+      launcher.launch(
+        AgentRunLaunchRequest(
+          agentId = "codex",
+          skillRunRequest = skillRunRequest().copy(approval = AgentRunApprovalRequirement.OutsideApproval),
+        ),
+      )
+
+    assertFalse(outcome is UnsupportedAgentRunLaunch, "a launch outside approval cards must not be refused")
+    assertEquals(1, runner.requests.size)
+  }
+
+  @Test
+  fun `unowned launch is refused with its stated reason and spawns nothing`() {
+    val runner = RecordingAgentRunProcessRunner()
+    val launcher = FileSystemAgentRunLauncher(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+
+    val outcome =
+      launcher.launch(
+        AgentRunLaunchRequest(
+          agentId = "claude",
+          skillRunRequest =
+            skillRunRequest().copy(approval = AgentRunApprovalRequirement.Unowned("goal SKILL-88 has no manifest")),
+        ),
+      )
+
+    val refused = assertIs<UnsupportedAgentRunLaunch>(outcome)
+    assertTrue(refused.reason.contains("goal SKILL-88 has no manifest"), refused.reason)
+    assertTrue(runner.requests.isEmpty())
   }
 
   @Test

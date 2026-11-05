@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
+import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -23,6 +24,7 @@ import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
+import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
@@ -63,6 +65,7 @@ class NewTaskDraft(
   private val toasts: ToastQueue,
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
+  private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
 ) {
   private val scope = windowScope.scope
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
@@ -363,6 +366,7 @@ class NewTaskDraft(
       pendingTurnLineIndex,
       missing,
       chatDispatcher,
+      approvals,
     ).also {
       clearChatFeedback()
       chatState.value = it

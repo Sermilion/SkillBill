@@ -69,6 +69,7 @@ private object ChatStoreKeys {
   const val TITLE = "title"
   const val TARGET = "target"
   const val BRANCH = "branch"
+  const val APPROVAL = "approval"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -213,7 +214,8 @@ private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList 
         when (line.role) {
           ChatHistoryRole.Operator -> ChatExchange(line.text, "")
           ChatHistoryRole.Agent -> ChatExchange("", line.text)
-          ChatHistoryRole.Notice, ChatHistoryRole.Error -> error("Non-conversation line reached exchange conversion")
+          ChatHistoryRole.Notice, ChatHistoryRole.Error, ChatHistoryRole.Approval ->
+            error("Non-conversation line reached exchange conversion")
         },
       )
       index++
@@ -241,6 +243,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
           line.failure?.let { put(ChatStoreKeys.FAILURE, it.name) }
           if (line.actions.isNotEmpty()) put(ChatStoreKeys.ACTIONS, buildJsonArray { line.actions.forEach { add(it.toJson()) } })
           line.selectedAction?.let { put(ChatStoreKeys.SELECTED_ACTION, it.toJson()) }
+          line.approval?.let { put(ChatStoreKeys.APPROVAL, it.toJson()) }
         })
       }
     },
@@ -281,6 +284,7 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
           ChatFailure.entries.firstOrNull { it.name == line.string(ChatStoreKeys.FAILURE) },
           line.actions(ChatStoreKeys.ACTIONS, diagnostics),
           line.selectedAction(diagnostics),
+          (line[ChatStoreKeys.APPROVAL] as? JsonObject)?.toApprovalCard(diagnostics),
         )
       }
     },

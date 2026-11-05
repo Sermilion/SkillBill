@@ -10,11 +10,15 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import dev.skillbill.desktop.feature.chat.ChatApprovals
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.QueuedChatMessage
 import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
+import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
+import dev.skillbill.desktop.feature.chat.savedApprovalLine
 import dev.skillbill.desktop.feature.chat.show
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +29,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -54,6 +61,7 @@ internal class NewTaskChat(
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+  approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
 ) {
   @Volatile
   var sessionId: String = initialSessionId
@@ -61,6 +69,11 @@ internal class NewTaskChat(
 
   val thread = ChatThread(clock)
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
+  private val approvalFlow = ChatApprovals(approvals)
+
+  /** True only while the approval feed holds this window's operator registration for the draft's repository. */
+  val approvalLiveState = MutableStateFlow(false)
+  val approvalLive: StateFlow<Boolean> = approvalLiveState.asStateFlow()
   private val saveLock = Mutex()
   @Volatile
   private var turnRunning = false
@@ -81,6 +94,28 @@ internal class NewTaskChat(
     thread.agentState.value = agent
     thread.agentSupportedState.value = chat.supports(agent.agentId)
     observeUnprompted()
+    followApprovals()
+  }
+
+  // Collecting the feed is what makes this window the repository's operator consumer; it ends with the draft's job.
+  private fun followApprovals() {
+    if (repositoryMissing) return
+    scope.launch(job + dispatcher) {
+      approvalFlow.follow(thread, approvalLiveState, { repositoryRoot }, { it.key.runId == sessionId }) {
+        if (!closing && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      }
+    }
+  }
+
+  /** The operator's click on one option of a pending card; it sends nothing unless the feed holds a live registration. */
+  fun decideApproval(approvalId: String, optionId: String, alwaysAllow: Boolean) {
+    if (!approvalLiveState.value || closing) return
+    scope.launch(job + dispatcher) { approvalFlow.decide(thread, approvalId, optionId, alwaysAllow) }
+  }
+
+  fun dismissApproval(approvalId: String) {
+    if (!approvalLiveState.value || closing) return
+    scope.launch(job + dispatcher) { approvalFlow.dismiss(thread, approvalId) }
   }
 
   fun send(text: String, action: ChatSuggestedAction? = null, onAccepted: () -> Unit = {}) {
@@ -261,6 +296,12 @@ internal class NewTaskChat(
 
   private suspend fun showUnprompted(event: ChatEvent) {
     if (thread.dropUnprompted) return
+    if (event is ChatEvent.ApprovalRequested) {
+      // A card is not reply text: it neither opens a turn nor holds the composer busy.
+      thread.show(thread.agentState.value, event)
+      if (started && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      return
+    }
     val ownTurn = !turnRunning
     if (ownTurn) {
       thread.busyState.value = true
@@ -285,6 +326,8 @@ internal class NewTaskChat(
       is ChatMessage.Notice -> if (repositoryMissing && message.text.startsWith("This draft's repository no longer exists:")) null
         else ChatHistoryLine(ChatHistoryRole.Notice, message.text)
       is ChatMessage.Error -> ChatHistoryLine(ChatHistoryRole.Error, message.text, message.failure)
+      // Every approval request and outcome of the draft is saved, whole, with no clipping.
+      is ChatMessage.Approval -> message.card.savedApprovalLine()
       is ChatMessage.StateLine -> null
     }
   }

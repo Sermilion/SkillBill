@@ -100,6 +100,13 @@ class ChatSession internal constructor(
   internal val modeState = MutableStateFlow(modeFor(item))
   val mode: StateFlow<ChatPermissionMode> = modeState.asStateFlow()
 
+  /**
+   * True only while the approval feed holds this window's operator registration for the chat's repository. Every card
+   * control is disabled while it is false, and a restored or stored card never turns it on.
+   */
+  internal val approvalLiveState = MutableStateFlow(false)
+  val approvalLive: StateFlow<Boolean> = approvalLiveState.asStateFlow()
+
   internal val goneState = MutableStateFlow(false)
   val gone: StateFlow<Boolean> = goneState.asStateFlow()
 

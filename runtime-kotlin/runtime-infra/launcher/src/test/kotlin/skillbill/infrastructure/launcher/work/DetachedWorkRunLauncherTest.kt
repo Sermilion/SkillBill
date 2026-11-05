@@ -3,7 +3,6 @@ package skillbill.infrastructure.launcher.work
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.system.HostAgentHomesPort
 import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
@@ -152,7 +151,6 @@ class DetachedWorkRunLauncherTest {
   ) = DetachedWorkRunLauncher(
     EnvironmentContext(environment = environment, userHome = home),
     NoopRuntimeDiagnostics,
-    FixedProjectStorePort(home.resolve("project-store")),
     agentHomes,
   )
 
@@ -161,7 +159,6 @@ class DetachedWorkRunLauncherTest {
       EnvironmentContext(environment = TRAY_ENVIRONMENT, userHome = home),
       NoopRuntimeDiagnostics,
       Duration.ZERO,
-      FixedProjectStorePort(home.resolve("project-store")),
       HostAgentHomesPort { emptyMap() },
     )
 

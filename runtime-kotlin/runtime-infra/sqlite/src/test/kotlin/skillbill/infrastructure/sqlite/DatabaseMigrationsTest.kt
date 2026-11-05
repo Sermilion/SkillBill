@@ -2494,6 +2494,9 @@ private val expectedMigrationDefinitions =
     99 to "record-standalone-qa-checklist",
     100 to "drop-goal-shared-preplans-issue-key-unique",
     101 to "record-diff-comments",
+    102 to "add-operator-approval-records-and-rules",
+    103 to "add-operator-approval-leases-and-grant-facts",
+    104 to "add-operator-approval-owner-lease-expiry",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

@@ -14,6 +14,7 @@ import skillbill.application.review.verification.parseCitationsWithDiagnostics
 import skillbill.application.review.verification.parseJsonObject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewFindingPayloadKeys
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -241,6 +242,7 @@ class ReviewSpecAdjudicationRunner(
               timeout = env.timeout,
               promptOverride = prompt,
               modelOverride = env.modelOverride,
+              approval = AgentRunApprovalRequirement.GovernedReview,
               additionalWritableDirectories = listOf(env.projectStoreRoot),
             ).boundedReviewLane(env.laneProgressIdleTimeout),
         ),

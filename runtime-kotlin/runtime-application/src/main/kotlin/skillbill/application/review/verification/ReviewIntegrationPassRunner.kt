@@ -5,6 +5,7 @@ import skillbill.application.review.model.ReviewIntegrationPassRunRequest
 import skillbill.application.review.model.ReviewLaneIntegrationInput
 import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.toIntegrationLaunchEnvelope
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -62,6 +63,7 @@ internal class ReviewIntegrationPassRunner(
               timeout = request.launch.timeout,
               promptOverride = prompt,
               modelOverride = request.launch.modelOverride,
+              approval = AgentRunApprovalRequirement.GovernedReview,
               additionalWritableDirectories = listOf(request.launch.projectStoreRoot),
             ).boundedReviewLane(request.launch.laneProgressIdleTimeout),
         ),

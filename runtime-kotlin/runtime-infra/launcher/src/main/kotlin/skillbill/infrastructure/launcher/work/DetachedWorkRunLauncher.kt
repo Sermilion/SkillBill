@@ -3,12 +3,8 @@ package skillbill.infrastructure.launcher.work
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
-import skillbill.infrastructure.launcher.agentrun.workRunHarnessCommand
-import skillbill.install.model.AGENT_LAUNCHER_CLIS
-import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.system.HostAgentHomesPort
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunExit
@@ -28,21 +24,19 @@ class DetachedWorkRunLauncher internal constructor(
   private val environment: EnvironmentContext,
   private val diagnostics: RuntimeDiagnostics,
   private val startupGrace: Duration,
-  private val projectStore: ProjectStorePort,
   private val agentHomes: HostAgentHomesPort,
 ) : WorkRunLauncher {
   @Inject
   constructor(
     environment: EnvironmentContext,
     diagnostics: RuntimeDiagnostics,
-    projectStore: ProjectStorePort,
     agentHomes: HostAgentHomesPort,
-  ) : this(environment, diagnostics, STARTUP_GRACE, projectStore, agentHomes)
+  ) : this(environment, diagnostics, STARTUP_GRACE, agentHomes)
 
   override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
     val launchEnvironment = launchEnvironment(request)
     val launch =
-      when (val resolved = installedLaunch(request, launchEnvironment)) {
+      when (val resolved = installedLaunch(request)) {
         is InstalledLaunch.Refused -> return refuse(resolved.reason)
         is InstalledLaunch.Ready -> resolved
       }
@@ -94,43 +88,20 @@ class DetachedWorkRunLauncher internal constructor(
       ("PATH" to searchDirectories().joinToString(pathSeparator().toString()))
   }
 
-  private fun installedLaunch(
-    request: WorkRunLaunchRequest,
-    launchEnvironment: Map<String, String>,
-  ): InstalledLaunch =
+  private fun installedLaunch(request: WorkRunLaunchRequest): InstalledLaunch =
     when (val kind = request.kind) {
-      is WorkRunLaunchKind.AgentHarness -> harnessLaunch(request, kind, launchEnvironment)
+      is WorkRunLaunchKind.AgentHarness -> harnessLaunch(kind)
       is WorkRunLaunchKind.RuntimeCommand ->
         resolveExecutable(listOf(RUNTIME_EXECUTABLE))
           ?.let { InstalledLaunch.Ready(listOf(it.toString()) + kind.arguments) }
           ?: InstalledLaunch.Refused("The $RUNTIME_EXECUTABLE runtime is not installed or is not on PATH.")
     }
 
-  private fun harnessLaunch(
-    request: WorkRunLaunchRequest,
-    harness: WorkRunLaunchKind.AgentHarness,
-    launchEnvironment: Map<String, String>,
-  ): InstalledLaunch {
-    val agent =
-      SupportedAgent.entries.firstOrNull { it.id == harness.agentId }
-        ?: return InstalledLaunch.Refused("The selected agent is not supported.")
-    val executable =
-      resolveExecutable(requireNotNull(AGENT_LAUNCHER_CLIS[agent]).executables)
-        ?: return InstalledLaunch.Refused("The ${agent.id} harness is not installed or is not on PATH.")
-    val built =
-      workRunHarnessCommand(
-        request,
-        harness,
-        agent,
-        launchEnvironment,
-        projectStore.resolve(request.repositoryRoot).root,
-      )
-    return InstalledLaunch.Ready(
-      listOf(executable.toString()) + built.command.drop(1),
-      built.stdinText,
-      built.environment,
+  private fun harnessLaunch(harness: WorkRunLaunchKind.AgentHarness): InstalledLaunch =
+    InstalledLaunch.Refused(
+      "The ${harness.agentId} harness cannot be started directly: it has no operator approval channel, so " +
+        "permission requests could not be shown on a card. Start the run through the skill-bill runtime instead.",
     )
-  }
 
   private fun startInstalled(
     built: InstalledLaunch.Ready,

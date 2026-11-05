@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.infrastructure.sqlite.approval.SqliteApprovalStore
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteProductReportRepository
@@ -40,6 +41,7 @@ import skillbill.learnings.model.LearningRecord
 import skillbill.learnings.model.LearningSourceValidation
 import skillbill.learnings.model.RejectedLearningSourceOutcome
 import skillbill.learnings.model.UpdateLearningRequest
+import skillbill.ports.approval.ApprovalStore
 import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
@@ -114,6 +116,7 @@ internal class SQLiteUnitOfWork(
     SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
+  override val approvals: ApprovalStore = SqliteApprovalStore(connection, diagnostics)
   override val blockIncidents: BlockIncidentRepository =
     SqliteBlockIncidentRepository(connection, clock, blockIncidentContractValidator, diagnostics)
   override val blockIncidentRecoveries: BlockIncidentRecoveryRepository =

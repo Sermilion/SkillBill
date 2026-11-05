@@ -92,6 +92,9 @@ sealed interface ChatEvent {
 
   data class SuggestedActions(val actions: List<ChatSuggestedAction>) : ChatEvent
 
+  /** A permission request of this chat's process, or its settled outcome; the same card may arrive again as it changes. */
+  data class ApprovalRequested(val card: ApprovalCard) : ChatEvent
+
   data object Completed : ChatEvent
 
   data class Failed(val failure: ChatFailure, val detail: String?) : ChatEvent
@@ -100,14 +103,19 @@ sealed interface ChatEvent {
 /** Why a turn ended without an answer. */
 enum class ChatFailure { AgentUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
 
-enum class ChatHistoryRole { Operator, Agent, Notice, Error }
+enum class ChatHistoryRole { Operator, Agent, Notice, Error, Approval }
 
+/**
+ * One saved line. An [ChatHistoryRole.Approval] line carries the complete structured [approval] record and its outcome;
+ * [text] is only a one-line label. A restored card is a display copy and never authority.
+ */
 data class ChatHistoryLine(
   val role: ChatHistoryRole,
   val text: String,
   val failure: ChatFailure? = null,
   val actions: List<ChatSuggestedAction> = emptyList(),
   val selectedAction: ChatSuggestedAction? = null,
+  val approval: ApprovalCard? = null,
 )
 
 /** Where a saved new-task draft runs; it marks the save as a draft, which references no execution. */

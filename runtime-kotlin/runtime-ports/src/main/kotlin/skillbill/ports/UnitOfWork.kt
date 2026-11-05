@@ -1,5 +1,6 @@
 package skillbill.ports
 
+import skillbill.ports.approval.ApprovalStore
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.ProductReportRepository
@@ -53,6 +54,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository
   val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository
   val operationProposals: OperationProposalRepository
+  val approvals: ApprovalStore
   val blockIncidents: BlockIncidentRepository
   val blockIncidentRecoveries: BlockIncidentRecoveryRepository
   val productReports: ProductReportRepository

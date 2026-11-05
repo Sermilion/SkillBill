@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
@@ -56,14 +57,72 @@ internal class ChatThread(private val clock: Clock) {
    * saved; an image-only message keeps its `[Image #N]` labels as text so it neither restores as an empty bubble nor
    * leaves the saved chat untitled.
    */
-  fun historyLines(limit: Int = SAVED_LINES): List<ChatHistoryLine> = messages.value.mapNotNull { message ->
-    when {
-      message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
-      message is ChatMessage.Agent && !message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty()) ->
-        ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
-      else -> null
+  fun historyLines(limit: Int = SAVED_LINES): List<ChatHistoryLine> {
+    val lines = messages.value.mapNotNull { message ->
+      when {
+        message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
+        message is ChatMessage.Agent && !message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty()) ->
+          ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
+        message is ChatMessage.Approval -> message.card.savedApprovalLine()
+        else -> null
+      }
     }
-  }.takeLast(limit)
+    // The limit clips conversation prose only: every approval request and outcome of the chat is kept, in order.
+    val keptProse = lines.withIndex().filter { it.value.role != ChatHistoryRole.Approval }.takeLast(limit).map { it.index }.toSet()
+    return lines.filterIndexed { index, line -> line.role == ChatHistoryRole.Approval || index in keptProse }
+  }
+
+  /**
+   * Shows [card] in place of the earlier card of the same request, or appends it. A request never goes back from a
+   * settled outcome to pending, and a live card keeps the grant eligibility the feed already supplied.
+   */
+  fun showApproval(card: ApprovalCard, live: Boolean = true) = messages.update { list ->
+    val index = list.indexOfFirst { it is ChatMessage.Approval && it.card.key.approvalId == card.key.approvalId }
+    if (index < 0) return@update list + ChatMessage.Approval(card, restoredCopy = !live)
+    val existing = list[index] as ChatMessage.Approval
+    if (!existing.card.isPending && card.isPending) return@update list
+    val merged = if (card.isPending && card.grants == null) card.copy(grants = existing.card.grants) else card
+    val settled = !merged.isPending
+    list.toMutableList().also {
+      it[index] = existing.copy(
+        card = merged,
+        restoredCopy = existing.restoredCopy && !live,
+        submitting = existing.submitting && !settled,
+        refusal = existing.refusal.takeUnless { settled },
+      )
+    }
+  }
+
+  /** The card currently shown for [approvalId], if the transcript has one. */
+  fun approval(approvalId: String): ApprovalCard? =
+    messages.value.firstNotNullOfOrNull { (it as? ChatMessage.Approval)?.card?.takeIf { card -> card.key.approvalId == approvalId } }
+
+  /**
+   * Claims the one click on a live pending card: returns its card and marks it submitting, or null when it is already
+   * submitting, settled or only a restored copy. This is what keeps a double click from sending two decisions.
+   */
+  fun beginApprovalDecision(approvalId: String): ApprovalCard? {
+    var begun: ApprovalCard? = null
+    messages.update { list ->
+      begun = null
+      list.map {
+        if (it is ChatMessage.Approval && it.card.key.approvalId == approvalId && !it.submitting && !it.restoredCopy && it.card.isPending) {
+          begun = it.card
+          it.copy(submitting = true, refusal = null)
+        } else {
+          it
+        }
+      }
+    }
+    return begun
+  }
+
+  /** Marks the card of [approvalId] as awaiting the answer to a click sent from this window. */
+  fun approvalSubmitting(approvalId: String, submitting: Boolean, refusal: String? = null) = messages.update { list ->
+    list.map {
+      if (it is ChatMessage.Approval && it.card.key.approvalId == approvalId) it.copy(submitting = submitting, refusal = refusal) else it
+    }
+  }
 
   fun appendDelta(text: String) = updateStreaming { it.copy(text = it.text + text) }
 
@@ -83,15 +142,21 @@ internal class ChatThread(private val clock: Clock) {
 
   fun suggestActions(actions: List<ChatSuggestedAction>) = updateStreaming { it.copy(actions = actions) }
 
+  // An approval card can follow the streaming reply, so every streaming reply ends, not only the last message.
   fun endStreaming() = messages.update { list ->
-    val last = list.lastOrNull()
-    if (last is ChatMessage.Agent && last.streaming) list.dropLast(1) + last.copy(streaming = false, finishedAt = clock.now()) else list
+    if (list.none { it is ChatMessage.Agent && it.streaming }) {
+      list
+    } else {
+      list.map { if (it is ChatMessage.Agent && it.streaming) it.copy(streaming = false, finishedAt = clock.now()) else it }
+    }
   }
 
+  // A streaming reply keeps taking output past an approval card that follows it; any other message starts a new reply.
   private fun updateStreaming(change: (ChatMessage.Agent) -> ChatMessage.Agent) = messages.update { list ->
-    val last = list.lastOrNull()
+    val index = list.indexOfLast { it !is ChatMessage.Approval }
+    val last = list.getOrNull(index)
     if (last is ChatMessage.Agent && last.streaming) {
-      list.dropLast(1) + change(last)
+      list.toMutableList().also { it[index] = change(last) }
     } else {
       list + change(ChatMessage.Agent("", streaming = true, tools = emptyList(), startedAt = clock.now()))
     }
@@ -104,6 +169,7 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
     is ChatEvent.ToolUse -> appendTool(event.call)
     is ChatEvent.ToolResult -> recordToolResult(event)
     is ChatEvent.SuggestedActions -> suggestActions(event.actions)
+    is ChatEvent.ApprovalRequested -> showApproval(event.card)
     ChatEvent.Completed -> endStreaming()
     is ChatEvent.Failed -> {
       endStreaming()
@@ -127,4 +193,10 @@ internal fun restored(line: ChatHistoryLine): ChatMessage = when (line.role) {
   ChatHistoryRole.Agent -> ChatMessage.Agent(line.text, streaming = false, tools = emptyList(), actions = line.actions)
   ChatHistoryRole.Notice -> ChatMessage.Notice(line.text, confirmation = line.text.endsWith(START_AGAIN_SUFFIX))
   ChatHistoryRole.Error -> ChatMessage.Error(line.failure, line.text)
+  // A saved card with no record cannot be shown as a card, so it falls back to its one-line label.
+  ChatHistoryRole.Approval -> line.approval?.let { ChatMessage.Approval(it, restoredCopy = true) } ?: ChatMessage.Notice(line.text)
 }
+
+/** The saved form of a card: the complete record, without the runtime's grant answer, which is never stored. */
+internal fun ApprovalCard.savedApprovalLine(): ChatHistoryLine =
+  ChatHistoryLine(ChatHistoryRole.Approval, "${title}: ${state}", approval = copy(grants = null))

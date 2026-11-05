@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.ApprovalRulesResult
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
@@ -17,6 +18,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.toNewTaskKind
+import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
@@ -53,6 +55,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import java.io.File
 import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -71,6 +74,25 @@ internal const val PAUSE_TIMEOUT_NOTICE =
 
 internal const val CLEARED_NOTICE =
   "Cleared the chat. The next turn starts a new conversation with the current execution state."
+
+/**
+ * One repository's approval requests as a tab: its thread holds only approval cards, and [liveState] follows the feed's
+ * operator registration for [repositoryRoot]. Its [job] ends with the tab, which ends the registration.
+ */
+internal class RepositoryApprovals(val repositoryRoot: String, val job: Job, val thread: ChatThread) {
+  val liveState = MutableStateFlow(false)
+
+  /** The repository's durable always-allow rules as last read; listing never decides anything. */
+  val rules = MutableStateFlow<RepositoryRulesState>(RepositoryRulesState.Loading)
+
+  /** Rule ids whose revoke call is in flight, so a repeated click is inert. */
+  val revoking = MutableStateFlow<Set<String>>(emptySet())
+
+  /** The latest revoke result or error, shown as visible status text. */
+  val rulesNote = MutableStateFlow<RulesNote?>(null)
+}
+
+private fun approvalsTabId(repositoryRoot: String) = "approvals:$repositoryRoot"
 
 /**
  * The window's chats, keyed by chat id. Opening an execution shows its first chat; [newChat] starts another one on the same
@@ -92,11 +114,14 @@ class ChatWorkspace(
   private val panes: ShellPanes,
   private val selection: SelectionHolder,
   private val newTask: NewTaskDraft,
+  private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
 ) : ChatCommands {
   private val scope = windowScope.scope
+  private val approvalFlow = ChatApprovals(approvals)
   override val newTaskDraftOpen: StateFlow<Boolean> = newTask.chat.map { it != null }.stateIn(scope, SharingStarted.Eagerly, false)
   private val turns = ChatTurns(chat, details, clock)
   private val sessions = LinkedHashMap<String, ChatSession>()
+  private val approvalTabs = LinkedHashMap<String, RepositoryApprovals>()
   private val resumeJobs = LinkedHashSet<Job>()
   private var observer: Job? = null
 
@@ -193,6 +218,7 @@ class ChatWorkspace(
     val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]), clock, id)
     sessions[id] = session
     followUnprompted(session)
+    followApprovals(session)
     session.append(stateCard(item))
     session.busyState.value = true
     session.stoppableState.value = opening
@@ -228,6 +254,14 @@ class ChatWorkspace(
    * background commands. A pending resume still runs.
    */
   fun close(id: String) {
+    val approvalTab = approvalTabs.remove(id)
+    if (approvalTab != null) {
+      // The tab's collector held the operator registration; leaving ends it, which cancels what is still unanswered.
+      approvalTab.job.cancel()
+      tabState.update { it.without(id) }
+      observeActive()
+      return
+    }
     val session = sessions.remove(id) ?: return
     drafts.remove(id)
     pastedImages.remove(id)
@@ -254,6 +288,8 @@ class ChatWorkspace(
       chat.end(it.sessionId)
     }
     sessions.clear()
+    approvalTabs.values.forEach { it.job.cancel() }
+    approvalTabs.clear()
     drafts.clear()
     pastedImages.clear()
     tabState.value = ChatTabsState()
@@ -261,7 +297,8 @@ class ChatWorkspace(
 
   fun executeAction(id: String, reply: ChatMessage.Agent, action: ChatSuggestedAction) {
     val session = sessions[id] ?: return
-    if (session.transcript.value.lastOrNull() !== reply) return
+    // An approval card after the reply does not move the suggested actions off their reply.
+    if (session.transcript.value.lastOrNull { it !is ChatMessage.Approval } !== reply) return
     if (reply.streaming || action !in reply.actions || !session.agentSupportedState.value || session.agentState.value == null) return
     val start = action.start
     if (start != null) {
@@ -657,6 +694,94 @@ class ChatWorkspace(
         }
       }
     }
+  }
+
+  // Collecting the feed is what makes this window the repository's operator consumer, so it lives exactly as long as the chat.
+  private fun followApprovals(session: ChatSession) {
+    scope.launch(session.job) {
+      approvalFlow.follow(
+        thread = session.thread,
+        live = session.approvalLiveState,
+        repositoryRoot = { session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot },
+        // The chat's own process requests, and the execution's phase requests, whose run is the execution itself.
+        owns = { it.key.runId == session.sessionId || it.key.runId == session.item.id },
+        changed = { turns.approvalChanged(session) },
+      )
+    }
+  }
+
+  /** The operator's click on one option of a pending card; it sends nothing unless the feed holds a live registration. */
+  /** The tab listing [repositoryRoot]'s approval requests, including runs no chat is attached to; opened once per repository. */
+  fun openApprovals(repositoryRoot: String) {
+    setPaneOpen(true)
+    val id = approvalsTabId(repositoryRoot)
+    if (id in approvalTabs) {
+      refreshApprovalRules(id)
+      return activate(id)
+    }
+    val tab = RepositoryApprovals(repositoryRoot, SupervisorJob(scope.coroutineContext[Job]), ChatThread(clock))
+    approvalTabs[id] = tab
+    scope.launch(tab.job) {
+      // A card that settled through a new always-allow rule changes the list, so the list is read again.
+      approvalFlow.follow(tab.thread, tab.liveState, { repositoryRoot }, { true }) { refreshApprovalRules(id) }
+    }
+    refreshApprovalRules(id)
+    tabState.update { it.withTab(ChatTab(id, id, "Approvals · ${File(repositoryRoot).name}", null, approvalsRepository = repositoryRoot)) }
+    observeActive()
+  }
+
+  internal fun approvalsTab(id: String): RepositoryApprovals? = approvalTabs[id]
+
+  /** Reads the repository's durable rules into the tab. It only lists: nothing is selected, granted or revoked. */
+  internal fun refreshApprovalRules(tabId: String) {
+    val tab = approvalTabs[tabId] ?: return
+    scope.launch(tab.job) {
+      tab.rules.value = when (val result = approvals.rules(tab.repositoryRoot)) {
+        is ApprovalRulesResult.Listed -> RepositoryRulesState.Listed(result.rules)
+        is ApprovalRulesResult.Unavailable -> RepositoryRulesState.Unavailable(result.reason)
+      }
+    }
+  }
+
+  /** The operator's explicit click on one rule's Revoke. It removes authority only; a repeated click is inert. */
+  internal fun revokeApprovalRule(tabId: String, ruleId: String) {
+    val tab = approvalTabs[tabId] ?: return
+    var started = false
+    tab.revoking.update {
+      started = ruleId !in it
+      if (started) it + ruleId else it
+    }
+    if (!started) return
+    scope.launch(tab.job) {
+      try {
+        tab.rulesNote.value = approvals.revokeRule(tab.repositoryRoot, ruleId).toNote(ruleId)
+      } finally {
+        tab.revoking.update { it - ruleId }
+      }
+      refreshApprovalRules(tabId)
+    }
+  }
+
+  internal fun decideRepositoryApproval(id: String, approvalId: String, optionId: String, alwaysAllow: Boolean) {
+    val tab = approvalTabs[id]?.takeIf { it.liveState.value } ?: return
+    scope.launch(tab.job) { approvalFlow.decide(tab.thread, approvalId, optionId, alwaysAllow) }
+  }
+
+  internal fun dismissRepositoryApproval(id: String, approvalId: String) {
+    val tab = approvalTabs[id]?.takeIf { it.liveState.value } ?: return
+    scope.launch(tab.job) { approvalFlow.dismiss(tab.thread, approvalId) }
+  }
+
+  fun decideApproval(id: String, approvalId: String, optionId: String, alwaysAllow: Boolean) {
+    val session = sessions[id] ?: return
+    if (!session.approvalLiveState.value) return
+    scope.launch(session.job) { approvalFlow.decide(session.thread, approvalId, optionId, alwaysAllow) }
+  }
+
+  fun dismissApproval(id: String, approvalId: String) {
+    val session = sessions[id] ?: return
+    if (!session.approvalLiveState.value) return
+    scope.launch(session.job) { approvalFlow.dismiss(session.thread, approvalId) }
   }
 
   // Keeps the active session's header, mode and gone state current while its tab is shown.

@@ -403,7 +403,8 @@ public class PhaseRunEntry(
         ?.let { FeatureTaskRuntimeResolvedBranch(branch = it.worktree.branch, baseBranch = it.target.base.ref) }
         ?: plans.currentBranch(request)
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
-    val resolutionFacts = InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context)
+    val resolutionFacts =
+      InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context, invocationId)
     val executionPlan =
       acceptedExecutionPlan?.let { encoded ->
         plans.validateGoalQualityExecutionPlan(encoded, request.definitionId, request.invokedAgentId)
@@ -415,6 +416,7 @@ public class PhaseRunEntry(
         intake,
         workflowId,
         standalone?.context,
+        invocationId,
       )
     if (expectedBranch != null && branch?.branch != expectedBranch) {
       return PhaseRunResult.Blocked(

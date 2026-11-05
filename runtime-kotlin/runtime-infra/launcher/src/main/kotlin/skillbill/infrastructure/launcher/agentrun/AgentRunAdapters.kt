@@ -3,7 +3,15 @@ package skillbill.infrastructure.launcher.agentrun
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import skillbill.approval.model.ApprovalExecutionMode
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.error.core.catchingNonCancellation
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
+import skillbill.infrastructure.launcher.process.interaction.CLAUDE_APPROVAL_PROVIDER
+import skillbill.infrastructure.launcher.process.interaction.ClaudeApprovalChannelOpening
+import skillbill.infrastructure.launcher.process.interaction.ClaudeApprovalLaunch
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessApprovalFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessEnvironmentFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessProbeFields
@@ -18,6 +26,7 @@ import skillbill.install.model.AgentLauncherCli
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.agentLauncherUnavailableMessage
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
@@ -26,10 +35,16 @@ import skillbill.ports.agentrun.model.MAX_REPORTED_LAUNCH_IDENTITIES
 import skillbill.ports.agentrun.model.ReportedLaunchIdentity
 import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.approval.ApprovalOwnerAuthority
+import skillbill.ports.approval.claudeProfileIdentity
+import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import kotlin.time.Duration
 
 internal sealed interface LauncherResolution {
   data class Resolved(val command: List<String>) : LauncherResolution
@@ -43,7 +58,12 @@ internal class ProcessAgentRunAdapter(
   private val processRunner: AgentRunProcessRunner,
   private val executableLookup: ExecutableLookup = PathExecutableLookup(),
   private val diagnostics: RuntimeDiagnostics,
+  private val approvals: AgentRunApprovalOwners? = null,
+  private val inheritedEnvironment: Map<String, String> = emptyMap(),
+  private val userHome: Path? = null,
 ) {
+  val canHostApprovalCards: Boolean get() = commandBuilder.approvalProtocol != null
+
   fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
     val built = commandBuilder.build(request)
     val command =
@@ -188,7 +208,46 @@ internal class ProcessAgentRunAdapter(
         reviewEvidenceEndpoint = request.reviewEvidenceEndpoint,
         spawnAuthorization = request.spawnAuthorization,
       ),
+    approval = AgentRunProcessApprovalFields(channel = approvalOpening(command, request)),
   )
+
+  private fun approvalOpening(
+    command: AgentRunCommand,
+    request: SkillRunRequest,
+  ): AgentRunApprovalChannelOpening? {
+    val owned = request.approval as? AgentRunApprovalRequirement.Owned ?: return null
+    return when (command.approvalProtocol) {
+      AgentRunApprovalProtocol.CLAUDE_HOST -> {
+        val owners = approvals ?: return refusedOpening("no approval authority is configured")
+        ClaudeApprovalChannelOpening(
+          authority = owners.authority,
+          openRequest =
+            ApprovalOwnerOpenRequest(
+              checkoutRoot = command.workingDirectory,
+              runId = owned.runId,
+              provider = CLAUDE_APPROVAL_PROVIDER,
+              executionMode = if (request.readOnlyPhase) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
+              profileIdentity =
+                claudeProfileIdentity(
+                  command.environment[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR]
+                    ?: inheritedEnvironment[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR],
+                  userHome,
+                ),
+              enclosingDeadline = approvalEnclosingDeadline(owners.clock, request.timeout),
+            ),
+          launch =
+            ClaudeApprovalLaunch(
+              openingPrompt = requireNotNull(command.stdinText) { "A hosted approval launch needs its prompt." },
+              workingDirectory = command.workingDirectory.toString(),
+              outputSink = request.outputSink,
+            ),
+          clock = owners.clock,
+          diagnostics = diagnostics,
+        )
+      }
+      null -> refusedOpening("agent '${agent.id}' cannot host approval cards for this launch")
+    }
+  }
 
   private fun recordReportedLaunchIdentity(
     request: SkillRunRequest,
@@ -394,6 +453,8 @@ internal const val RAW_OUTPUT_PREVIEW_MAX_CHARS = 2_000
 internal data class AgentRunWorkerBinding(
   val databasePath: Path? = null,
   val runtimeMcpBin: Path? = null,
+  val approvals: AgentRunApprovalOwners? = null,
+  val userHome: Path? = null,
 )
 
 internal fun headlessAgentRunAdapters(
@@ -423,5 +484,21 @@ internal fun headlessAgentRunAdapters(
         processRunner = processRunner,
         executableLookup = executableLookup,
         diagnostics = diagnostics,
+        approvals = workerBinding.approvals,
+        inheritedEnvironment = providerEnvironment,
+        userHome = workerBinding.userHome,
       )
   }
+
+internal data class AgentRunApprovalOwners(
+  val authority: ApprovalOwnerAuthority,
+  val clock: Clock,
+)
+
+private fun refusedOpening(reason: String): AgentRunApprovalChannelOpening =
+  AgentRunApprovalChannelOpening { AgentRunApprovalOpenResult.Refused("Operator approvals are unavailable: $reason.") }
+
+private fun approvalEnclosingDeadline(
+  clock: Clock,
+  timeout: Duration?,
+): Instant? = timeout?.let { clock.instant().plusMillis(it.inWholeMilliseconds) }
