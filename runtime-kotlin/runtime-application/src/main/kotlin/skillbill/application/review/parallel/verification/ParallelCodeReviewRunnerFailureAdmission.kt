@@ -9,6 +9,7 @@ import skillbill.application.review.parallel.planning.PARALLEL_REVIEW_REGISTER_A
 import skillbill.application.review.parallel.planning.PARALLEL_REVIEW_STDERR_EXCERPT_MAX_LENGTH
 import skillbill.application.review.parallel.planning.ParallelCodeReviewInlineParentLaunch
 import skillbill.application.review.parallel.planning.ParallelCodeReviewSoftRegisterAdmission
+import skillbill.application.review.verification.reviewLaunchProviderLimitPauseReason
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.terminalStatus
@@ -102,10 +103,11 @@ class ParallelCodeReviewRunnerFailureAdmission(
       is AgentRunTermination.Exited ->
         when {
           termination.code != 0 ->
-            buildString {
-              append("agent exited with status ${termination.code}")
-              appendAgentFailureExcerpt(facts)
-            }
+            reviewLaunchProviderLimitPauseReason(facts, facts.agent.wireValue)
+              ?: buildString {
+                append("agent exited with status ${termination.code}")
+                appendAgentFailureExcerpt(facts)
+              }
           facts.stdoutTruncated -> "agent output exceeded the retention cap before completion"
           else -> null
         }

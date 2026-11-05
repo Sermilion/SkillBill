@@ -1,5 +1,25 @@
 # goalrunner boundary history
 
+## [2026-11-05] SKILL-452 subtask 3 — goal-finish quality pauses on provider limits
+Areas: runtime-goalrunner qa and execution/core; runtime-engine featuretask phaserun
+- Goal QA adds GoalQaGateResult.Paused from settleAfterQa, validateAfterQa, and resumeValidation when the blocked reason classifies, before Warned, SETTLED_WARNED, or repair warnings; buildAfterQaFixWarning skips provider-limit PHASE_BUILD blocks.
+- GoalRunnerFinalization pauseForProviderLimit covers QA pause before history or publication, monitor and history-writer agent blocks, and classified PR-writer limits via ProviderPaused instead of warn-and-fallback.
+- PhaseRunEntry skips persisting terminalBlocked on classified provider-limit Blocked results.
+- Pattern: classify Blocked at goal-finish consumers with FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason; reusable pauseForProviderLimit and GoalQaGateResult.Paused.
+- Limits: GoalRunnerPostChangeValidation and DefaultGoalRunnerCiMonitor unchanged; standalone and desktop pause projection were subtask 4.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
+## [2026-11-05] SKILL-452 subtask 2 — goal assessment provider-limit pause
+Areas: runtime-goalrunner assessment, execution/core finalization, assessment and goalrunner tests
+- Goal assessment assessors, verifiers, fix agents, and post-fix validation classify subtask-1 provider-limit PhaseRunResult.Blocked as GoalRunnerStopReason.PAUSED instead of ASSESSMENT_UNAVAILABLE or a failed fix row.
+- GoalAssessmentRoundRun, GoalAssessmentFixStep, and GoalAssessmentLoop propagate pause without unavailable exits or FAILED assessor/fix records so resume retries the blocked agent and repair budget stays unchanged.
+- GoalRunnerAssessmentGate.run returns GoalAssessmentStageResult; finalizePublication pauseNows with overwriteExistingReason=true then stopped(PAUSED) before publicationBlockReason.
+- Pattern: classify only through FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason; no goalrunner-side detector. reusable
+- Tests: GoalAssessmentProviderLimitPauseTest uses real slot launches with Codex limit stderr; GoalRunnerTest stubs the gate for finalization pauseNow. Ordinary blocked stderr still unavailable.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-03] SKILL-472: reuse completed and cancelled keys for independent goals
 Areas: runtime-goalrunner, runtime-application/workflow/decomposition, runtime-domain, runtime-infra/sqlite
 - A key is reusable for new work only when every matching decomposed parent is completed or abandoned. Occupancy uses parent workflowStatus, not isActiveGoalRuntime. FAILED, RUNNING, PAUSED, BLOCKED, PENDING, and TIMED_OUT still occupy.

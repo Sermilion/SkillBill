@@ -24,6 +24,7 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -108,11 +109,32 @@ internal class AssessmentDiagnostics : RuntimeDiagnostics {
   ) = Unit
 }
 
+internal fun GoalRunnerAssessmentGate.runRecord(
+  state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
+): GoalAssessmentRecord =
+  when (val stage = run(state, request)) {
+    is GoalAssessmentStageResult.Completed -> stage.record
+    is GoalAssessmentStageResult.ProviderPaused -> error("expected a finished assessment record, got provider pause")
+  }
+
+internal const val CODEX_PROVIDER_LIMIT_STDERR =
+  "usage_limit_exceeded\n" +
+    "You've hit your usage limit. Please try again at Nov 5th, 2026 2:05 AM"
+
+internal fun codexProviderLimitLaunchFacts(): AgentRunLaunchFacts =
+  agentRunLaunchFacts(
+    SupportedAgent.CODEX,
+    termination = AgentRunTermination.Exited(1),
+    stderr = CODEX_PROVIDER_LIMIT_STDERR,
+  )
+
 internal class GoalAssessmentGateFixture(
   private val home: Path,
   val store: AssessmentOutcomeStore = AssessmentOutcomeStore(),
   private val subtaskOf: (Int) -> DecompositionSubtask = { id -> committedSubtask(id) },
   private val fixedWorktreeStatus: String = "",
+  private val agentLaunch: (AssessmentCall) -> AgentRunLaunchFacts? = { null },
   private val script: (AssessmentCall) -> String?,
 ) {
   private val clock = Clock.systemUTC()
@@ -133,6 +155,7 @@ internal class GoalAssessmentGateFixture(
       calls += call
       prompts[call] = prompt
       if (call == AssessmentCall.FIX) git.worktreeStatusValue = fixedWorktreeStatus
+      agentLaunch(call)?.let { return@RuntimeRecordingLauncher it }
       script(call)?.let { prose -> facts(settledOutput(call, prose)) }
         ?: agentRunLaunchFacts(SupportedAgent.CLAUDE, termination = AgentRunTermination.Exited(1))
     }

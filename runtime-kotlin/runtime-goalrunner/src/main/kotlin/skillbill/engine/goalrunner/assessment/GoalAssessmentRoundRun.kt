@@ -30,6 +30,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.branchForFinalPullRequest
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 internal class GoalAssessmentRunServices(
   val phaseRunEntry: PhaseRunEntry,
@@ -108,23 +109,36 @@ internal class GoalAssessmentRoundRun(
   private var verificationReady = true
   private val previousTarget: String? = earlier.lastOrNull()?.targetRef
 
-  fun execute(): GoalAssessmentRoundResult {
+  fun execute(): GoalAssessmentRoundResult = assessUntilUsable() ?: verifyAndPersist()
+
+  private fun assessUntilUsable(): GoalAssessmentRoundResult? {
     val plan = planned()
-    plan.filterNot(::isRecorded).forEach(::runAssessor)
+    for (planned in plan.filterNot(::isRecorded)) {
+      runAssessor(planned)?.let { return pausedResult(it) }
+    }
     val usable =
       plan.all { planned ->
         round.assessorRuns.any {
           it.role == planned.role && it.subtaskId == planned.subtaskId && it.status == COMPLETED
         }
       }
-    if (!usable) return unavailable("an assessor failed or produced no usable output")
-    verify()
+    return if (usable) null else unavailable("an assessor failed or produced no usable output")
+  }
+
+  private fun verifyAndPersist(): GoalAssessmentRoundResult {
+    verify()?.let { return pausedResult(it) }
     if (!verificationReady) return unavailable("independent verification did not settle every selected item")
     save()
     val record = recordOf(null)
-    if (persisted) return GoalAssessmentRoundResult.Assessed(record, GoalAssessmentVerdicts.fixSetOf(earlier + round))
-    return unavailable("the verified round could not be persisted, so it grants no fix authority")
+    return if (persisted) {
+      GoalAssessmentRoundResult.Assessed(record, GoalAssessmentVerdicts.fixSetOf(earlier + round))
+    } else {
+      unavailable("the verified round could not be persisted, so it grants no fix authority")
+    }
   }
+
+  private fun pausedResult(paused: Launch.Paused): GoalAssessmentRoundResult.Paused =
+    GoalAssessmentRoundResult.Paused(recordOf(null), paused.reason, paused.stepId)
 
   private fun planned(): List<PlannedRun> {
     val assessable = bundle.subtasks.filter { it.range != GoalAssessmentCommitRange.NoCommit }
@@ -152,20 +166,30 @@ internal class GoalAssessmentRoundRun(
     }
   }
 
-  private fun runAssessor(planned: PlannedRun) {
+  private fun runAssessor(planned: PlannedRun): Launch.Paused? {
     missingInput(planned)?.let { reason ->
       warn("${planned.label()} did not run because its input is unavailable: $reason.")
       record(GoalAssessmentRun(planned.role, planned.subtaskId, GoalAssessmentRunStatus.FAILED))
-      return
+      return null
     }
-    val focus =
-      when {
-        roundNumber == 1 ->
-          planned.subtaskId?.let { GoalAssessmentFocus.Subtask(it) } ?: GoalAssessmentFocus.CrossSubtask
-        previousTarget?.startsWith("IS-") == true -> GoalAssessmentFocus.Scenario(requireNotNull(previousTarget))
-        else -> GoalAssessmentFocus.Regression(requireNotNull(previousTarget))
-      }
-    val launched = launch(focus, planned.label())
+    val launched = launch(assessorFocus(planned), planned.label())
+    if (launched is Launch.Paused) return launched
+    recordAssessorLaunch(planned, launched)
+    return null
+  }
+
+  private fun assessorFocus(planned: PlannedRun): GoalAssessmentFocus =
+    when {
+      roundNumber == 1 ->
+        planned.subtaskId?.let { GoalAssessmentFocus.Subtask(it) } ?: GoalAssessmentFocus.CrossSubtask
+      previousTarget?.startsWith("IS-") == true -> GoalAssessmentFocus.Scenario(requireNotNull(previousTarget))
+      else -> GoalAssessmentFocus.Regression(requireNotNull(previousTarget))
+    }
+
+  private fun recordAssessorLaunch(
+    planned: PlannedRun,
+    launched: Launch,
+  ) {
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseAssessor(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
     (parsed as? GoalAssessmentParse.Malformed)?.let { warn("${planned.label()} output was malformed: ${it.reason}") }
@@ -179,17 +203,18 @@ internal class GoalAssessmentRoundRun(
     record(GoalAssessmentRun(planned.role, planned.subtaskId, statusOf(launched, report != null && verificationReady)))
   }
 
-  private fun verify() {
+  private fun verify(): Launch.Paused? {
     val candidates =
       GoalAssessmentVerdicts.candidatesOf(round.findings) +
         GoalAssessmentVerdicts.carriedCandidatesOf(earlier.flatMap { it.findings })
           .filter { it.findingRef == previousTarget }
-    if (candidates.isEmpty()) return
+    if (candidates.isEmpty()) return null
     round.assessorRuns.firstOrNull { it.role == GoalAssessmentRole.VERIFIER }?.let {
       verificationReady = it.status == COMPLETED
-      return
+      return null
     }
     val launched = launch(GoalAssessmentFocus.Verifier(candidates), "the verifier")
+    if (launched is Launch.Paused) return launched
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseVerifier(it.text) }
     val report = (parsed as? GoalAssessmentParse.Parsed)?.report
     (parsed as? GoalAssessmentParse.Malformed)?.let { warn("the verifier output was malformed: ${it.reason}") }
@@ -202,6 +227,7 @@ internal class GoalAssessmentRoundRun(
     record(
       GoalAssessmentRun(GoalAssessmentRole.VERIFIER, null, statusOf(launched, report != null && verificationReady)),
     )
+    return null
   }
 
   private fun statusOf(
@@ -357,7 +383,12 @@ internal class GoalAssessmentRoundRun(
       is PhaseRunResult.Completed ->
         (result.acceptedOutput ?: result.value)?.takeIf(String::isNotBlank)?.let(Launch::Value)
           ?: failed("$label completed without a value")
-      is PhaseRunResult.Blocked -> failed("$label stopped at '${result.stepId}': ${result.reason}")
+      is PhaseRunResult.Blocked ->
+        if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)) {
+          Launch.Paused(result.reason, result.stepId)
+        } else {
+          failed("$label stopped at '${result.stepId}': ${result.reason}")
+        }
     }
   }
 
@@ -375,6 +406,8 @@ internal class GoalAssessmentRoundRun(
     data class Value(val text: String) : Launch
 
     data object Failed : Launch
+
+    data class Paused(val reason: String, val stepId: String) : Launch
   }
 
   private data class PlannedRun(val role: GoalAssessmentRole, val subtaskId: Int?) {

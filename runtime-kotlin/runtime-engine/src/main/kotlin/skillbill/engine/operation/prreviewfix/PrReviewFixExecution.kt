@@ -14,6 +14,7 @@ import skillbill.ports.review.pullrequest.model.ReviewThreadReplyResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 internal class PrReviewFixExecution(
   private val context: OperationContext,
@@ -38,10 +39,14 @@ internal class PrReviewFixExecution(
             PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId, modelAssignment = modelAssignment),
           )
       ) {
-        is PhaseRunResult.Blocked ->
+        is PhaseRunResult.Blocked -> {
+          if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(validation.reason)) {
+            return OperationOutcome.Blocked(validation.reason)
+          }
           return stopped(
             "validation (${validation.invocationId}) blocked at '${validation.stepId}': ${validation.reason}",
           )
+        }
         is PhaseRunResult.Completed ->
           "Quality gate: validation passed (${validation.invocationId}).\n${validation.value.orEmpty().trimEnd()}"
       }

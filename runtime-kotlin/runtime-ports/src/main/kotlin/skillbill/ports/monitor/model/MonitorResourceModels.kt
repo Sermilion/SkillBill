@@ -101,6 +101,7 @@ enum class MonitorRetentionReason(val wireValue: String) {
 enum class MonitorOutcomeKind(val wireValue: String) {
   COMPLETED("completed"),
   BLOCKED("blocked"),
+  PAUSED("paused"),
   SETUP_FAILED("setup_failed"),
   RUN_FAILED("run_failed"),
   CANCELLED("cancelled"),

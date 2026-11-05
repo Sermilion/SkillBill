@@ -1,3 +1,14 @@
+## [2026-11-05] SKILL-452 subtask 4 — standalone CLI and IDE pause for provider usage limits
+Areas: runtime-engine featuretask phaserun and qa; runtime-engine work IdeStatusProjector; runtime-cli phase and codereview; runtime-ports monitor models; orchestration/contracts standalone-monitor
+- Classified provider-limit PhaseRunResult.Blocked settles standalone IDE state as paused, skips block-incident capture, maps monitor primary outcome to PAUSED, and passes QA without an INCOMPLETE verdict.
+- Standalone phase and code-review CLI print paused copy and exit 2; ordinary blocked phases stay exit 1 with blocked copy.
+- Goal and standalone desktop projection show lifecycle PAUSED and usage-limit copy without AWAITING_OPERATOR_DECISION when a work item is blocked or a current subtask exists.
+- Additive MonitorOutcomeKind.PAUSED and schema enum member paused at unchanged standalone-monitor contract_version 1.0.
+- reusable: isProviderLimitPauseReason at settle, monitor, QA, CLI, and projector seams; no PhaseRunResult.Paused or IDE pause-reason enum extension.
+- Limit: OperationCommand pause handling was subtask 5.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-04] SKILL-480 interaction-trace audit recoveryAreas: runtime-engine featuretask output gate and acceptance persistence
 - The first malformed interaction-trace completion enters the retryable terminal path for one correction. Other completion rejections keep their existing behavior.
 - A second malformed completion degrades pending scenarios to unknown, retains prior recheck evidence and returns repair to ACCEPTED.

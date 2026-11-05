@@ -19,6 +19,7 @@ import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.cli.GOAL_EXIT_PAUSED
 import skillbill.cli.kernel.cli.StandaloneCodeReviewTarget
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.cli.resolveStandaloneCodeReviewTarget
@@ -37,6 +38,7 @@ import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
 
@@ -292,7 +294,18 @@ private fun writePhaseReviewResult(
   state: CliRunState,
   phase: PhaseRunResult,
 ) {
-  val blocked = (phase as? PhaseRunResult.Blocked)?.reason
+  val blockedResult = phase as? PhaseRunResult.Blocked
+  if (blockedResult != null &&
+    FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(blockedResult.reason)
+  ) {
+    state.completeText(
+      "Phase '${SkeletonDefinition.REVIEW.id}' paused at '${blockedResult.stepId}': ${blockedResult.reason}",
+      emptyMap(),
+      exitCode = GOAL_EXIT_PAUSED,
+    )
+    return
+  }
+  val blocked = blockedResult?.reason
   val result = phase.reviewResult
   if (result == null) {
     state.completeText(blocked ?: "The review phase produced no review result.", emptyMap(), exitCode = 1)

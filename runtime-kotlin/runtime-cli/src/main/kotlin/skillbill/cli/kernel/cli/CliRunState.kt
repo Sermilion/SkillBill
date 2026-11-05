@@ -4,6 +4,8 @@ import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliStdoutCompletion
 
+internal const val GOAL_EXIT_PAUSED: Int = 2
+
 class CliRunState(private val stdinText: String?) {
   var result: CliExecutionResult? = null
     private set

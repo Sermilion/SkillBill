@@ -30,6 +30,7 @@ import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingVerdict
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -39,6 +40,44 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class ReviewClaimVerificationRunnerTest {
+  @Test
+  fun `usage limit stderr is classified as provider pause not agent exited with status`() {
+    val facts =
+      agentRunLaunchFacts(
+        agent = SupportedAgent.fromNormalizedId("codex", label = "agentId"),
+        termination = AgentRunTermination.Exited(1),
+        stderr = "You've hit your usage limit",
+      )
+    val reason = requireNotNull(launchFailureReason(facts))
+    assertTrue(FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(reason))
+    assertFalse(reason.contains("agent exited with status"))
+    var launches = 0
+    val outcome =
+      runner(
+        launcher = { request ->
+          launches += 1
+          if (launches == 1) {
+            facts(request, CONFIRMED)
+          } else {
+            agentRunLaunchFacts(
+              agent = SupportedAgent.fromNormalizedId(request.invokedAgentId, label = "agentId"),
+              termination = AgentRunTermination.Exited(1),
+              stderr = "You've hit your usage limit",
+            )
+          }
+        },
+      ).run(
+        verificationRequest(
+          findings = listOf(finding("F-001"), finding("F-002", "src/B.kt:4", "other bug")),
+          repoRoot = Files.createTempDirectory("verify-pause"),
+        ),
+      )
+    assertEquals(2, launches)
+    assertEquals(listOf(ReviewClaimVerdict.CONFIRMED), outcome.verdicts.map { it.claimVerdict })
+    assertTrue(outcome.verdicts.none { it.claimVerdict == ReviewClaimVerdict.UNRESOLVED })
+    assertTrue(FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(requireNotNull(outcome.skipReason)))
+  }
+
   @Test
   fun `each finding launches alone without siblings narrative or parent transcript`() {
     val launches = mutableListOf<GoalRunnerSubtaskLaunchRequest>()

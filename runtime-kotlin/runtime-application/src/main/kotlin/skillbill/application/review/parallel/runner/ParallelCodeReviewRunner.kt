@@ -10,6 +10,7 @@ import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewAnalysisStageFailure
 import skillbill.application.review.model.ReviewClaimVerificationOutcome
+import skillbill.application.review.model.ReviewSpecAdjudicationOutcome
 import skillbill.application.review.model.ReviewWorkerKind
 import skillbill.application.review.parallel.planning.ParallelCodeReviewInitialRun
 import skillbill.application.review.parallel.planning.ParallelCodeReviewRunnerPlanning
@@ -42,6 +43,7 @@ import skillbill.review.model.ReviewRunLane
 import skillbill.review.model.ReviewStage
 import skillbill.review.parallel.ParallelReviewMerger
 import skillbill.review.stage.ReviewStageDegradationSelection
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 @Inject
 class ParallelCodeReviewRunner(
@@ -227,7 +229,8 @@ class ParallelCodeReviewRunner(
       resultAssembly.recordMergedFindingLanes(initial.request.reviewRunId)
       val verificationOutcome = verificationStages.runClaimVerification(initial, result)
       result = withVerificationFailures(initial, result, verificationOutcome)
-      val adjudicationOutcome = verificationStages.runSpecAdjudication(initial, result)
+      val adjudicationOutcome = adjudicationAfterVerification(initial, result)
+      result = failLaneOnProviderLimitPause(result, adjudicationOutcome.skipReason)
       val recordedVerdicts =
         verificationStages.recordedFindingVerdicts(
           initial.request.reviewRunId,
@@ -295,15 +298,35 @@ class ParallelCodeReviewRunner(
           )
         },
       ) + workerFailures(verificationOutcome.verdicts)
+    val paused = failLaneOnProviderLimitPause(reviewResult, verificationOutcome.nonSuccess?.detail)
     val verificationVerdicts =
       verificationStages.recordedFindingVerdicts(
         initial.request.reviewRunId,
         verificationOutcome.verdicts,
       )
-    return reviewResult.copy(
+    return paused.copy(
       analysisStageFailures =
-        (reviewResult.analysisStageFailures + failures + workerFailures(verificationVerdicts)).distinct(),
+        (paused.analysisStageFailures + failures + workerFailures(verificationVerdicts)).distinct(),
     )
+  }
+
+  private fun adjudicationAfterVerification(
+    initial: ParallelCodeReviewInitialRun,
+    result: ParallelCodeReviewResult,
+  ): ReviewSpecAdjudicationOutcome {
+    val pause = result.lane1.failureReason?.takeIf(FeatureTaskRuntimeProviderLimitPause::isProviderLimitPauseReason)
+    if (pause != null) {
+      return ReviewSpecAdjudicationOutcome(verdicts = emptyList(), skipReason = pause)
+    }
+    return verificationStages.runSpecAdjudication(initial, result)
+  }
+
+  private fun failLaneOnProviderLimitPause(
+    result: ParallelCodeReviewResult,
+    reason: String?,
+  ): ParallelCodeReviewResult {
+    val pause = reason?.takeIf(FeatureTaskRuntimeProviderLimitPause::isProviderLimitPauseReason) ?: return result
+    return result.copy(lane1 = result.lane1.copy(success = false, failureReason = pause))
   }
 
   private fun standaloneReportOnly(initial: ParallelCodeReviewInitialRun): Boolean =

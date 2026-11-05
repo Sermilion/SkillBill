@@ -36,6 +36,7 @@ import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseRunHarness
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.time.Clock
 import java.util.UUID
 import java.util.concurrent.CancellationException
@@ -187,12 +188,16 @@ public class PhaseRunEntry(
       when (result) {
         is PhaseRunResult.Completed -> latest.copy(terminalCompleted = true)
         is PhaseRunResult.Blocked ->
-          latest.copy(
-            terminalBlockedStep = result.stepId,
-            terminalBlockedReason = result.reason,
-          )
+          if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)) {
+            null
+          } else {
+            latest.copy(
+              terminalBlockedStep = result.stepId,
+              terminalBlockedReason = result.reason,
+            )
+          }
       }
-    if (!sink(terminal)) {
+    if (terminal != null && !sink(terminal)) {
       throw SkillBillRuntimeException(
         WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
         "Could not persist terminal '${request.definitionId}' progress for '$invocationId'.",

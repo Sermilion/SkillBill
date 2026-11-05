@@ -16,9 +16,14 @@ object FeatureTaskRuntimeProviderLimitDetector {
       """(?:status|code|http)\D{0,10}429""",
       """quota exceeded""",
       """insufficient_quota""",
+      """usage_limit_exceeded""",
     ).map { Regex(it, RegexOption.IGNORE_CASE) }
 
-  private val RESET_HINT = Regex("""reset[s]?(?:\s+(?:at|on|in))?\s+([^\n]{1,60})""", RegexOption.IGNORE_CASE)
+  private val RESET_HINT =
+    Regex(
+      """(?:reset[s]?(?:\s+(?:at|on|in))?\s+|try again at\s+)([^\n]{1,60})""",
+      RegexOption.IGNORE_CASE,
+    )
 
   fun detect(vararg outputs: String): FeatureTaskRuntimeProviderLimitSignal? =
     outputs.firstNotNullOfOrNull(::detectInTail)
@@ -32,7 +37,20 @@ object FeatureTaskRuntimeProviderLimitDetector {
         ?: return null
     return FeatureTaskRuntimeProviderLimitSignal(
       evidence = line.take(EVIDENCE_MAX_CHARS),
-      resetHint = RESET_HINT.find(line)?.groupValues?.get(1)?.trim()?.trimEnd('.', ',')?.takeIf(String::isNotBlank),
+      resetHint = extractResetHint(tail),
     )
   }
+
+  private fun extractResetHint(tail: String): String? =
+    tail.lineSequence()
+      .map(String::trim)
+      .firstNotNullOfOrNull(::resetHintInLine)
+
+  private fun resetHintInLine(line: String): String? =
+    RESET_HINT.find(line)
+      ?.groupValues
+      ?.get(1)
+      ?.trim()
+      ?.trimEnd('.', ',')
+      ?.takeIf(String::isNotBlank)
 }

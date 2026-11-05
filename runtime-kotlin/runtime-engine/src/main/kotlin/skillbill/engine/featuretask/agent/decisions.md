@@ -1,3 +1,18 @@
+## [2026-11-05] Project provider-limit pause without IdeStatusPauseReasonCode
+Context: Desktop showed AWAITING_OPERATOR_DECISION for usage-limit pauses when a blocked row or current subtask was present.
+Decision: Treat classifier-accepted pause text as PAUSED lifecycle and exactPauseReason; skip operator-decision overlays for that string.
+Reason: ide-status-schema must not gain a provider-limit code; the shared pause copy is already durable on control or terminal result.
+
+## [2026-11-05] Add paused monitor outcome at contract_version 1.0
+Context: Standalone monitor ownership mapped every Blocked to blocked; provider-limit pauses must not retain blocked cleanup semantics.
+Decision: Add MonitorOutcomeKind.PAUSED and the paused schema enum member without bumping standalone-monitor contract_version.
+Reason: A version bump would loud-fail in-flight acquiring records; the new kind is additive wire vocabulary only.
+
+## [2026-11-05] Classify provider-limit pause on Blocked results
+Context: Standalone phases already receive provider-limit stops as PhaseRunResult.Blocked with shared copy from subtask 1.
+Decision: Branch on the classifier at settle, monitor, QA, CLI, and IDE projection instead of adding PhaseRunResult.Paused.
+Reason: Detection and pause copy already exist; pause is a settlement and projection choice, not a separate terminal result type.
+
 ## [2026-11-04] Route interaction-trace correction through the existing retry pathContext: A malformed interaction-trace completion reached a schema block before the documented re-ask and degraded settlement could run.
 Decision: Route the active interaction-trace rejection through PhaseStepOutputCheck.Retry. Keep other completion rejections on their existing paths.
 Reason: The retry continuation stays in the same JVM loop and preserves the in-memory re-ask marker. Changing audit session policy or retrying ordinary schema failures would widen the behavior.

@@ -1,3 +1,15 @@
+## [2026-11-05] SKILL-452 subtask 5 — operations and review-launch provider-limit pause
+Areas: runtime-engine operation core, verify, pr-review-fix, featureguardcleanup; runtime-application review verification and parallel review; runtime-cli operation
+- OperationStepRunner maps PhaseLaunchFailureKind.PROVIDER_LIMIT to Refused(Blocked) with subtask-1 pause copy; ordinary launch failures stay Failed.
+- PrReviewFixExecution and FeatureGuardCleanupOperation classify validation PhaseRunResult.Blocked through the shared classifier and return Blocked instead of Failed.
+- Verify QA and code-review steps propagate Refused without incrementing verify repair budgets or settling incomplete QA.
+- ReviewAgentLaunchLimitPause centralizes detect-then-build for direct AgentRunLauncher callers; claim verification, integration pass, and parallel lane admission call it before generic agent-exited copy.
+- ReviewClaimVerificationRunner treats a classified launch pause as a non-success skip, not UNRESOLVED; parallel verification fails lane1 with the pause reason when admission classifies a limit.
+- OperationCommand prints paused: and exits OPERATION_EXIT_PAUSED (2) only when the classifier accepts the Blocked reason.
+- Pattern: reuse subtask-1 detector, builder, and classifier only; reusable
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-03] SKILL-463 subtask 2 - Repair pushable branches, document the target, start monitor from chat
 Areas: runtime-engine featuretask (phaserun/monitor, runloop/finalization/standalone, slot/monitor/standalone) and work/control; runtime-ports monitor; runtime-infra workflow/monitor; desktop core domain/data and feature/chat; skills/skill-bill; README; docs/runtime-command-guidance
 - MEDIUM feature. Branch targets are REPORT_ONLY when they are the default branch, protected is not false, or repositoryPush is not true (null data fails safe); otherwise REPOSITORY_PUSH. Report-only blocks name the reason and that no repair ran. Pushable failures route to repair with a null pull-request digest.

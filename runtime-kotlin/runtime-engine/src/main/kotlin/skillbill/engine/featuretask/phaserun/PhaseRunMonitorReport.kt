@@ -13,6 +13,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorTargetIdentity
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 internal fun earlyReport(
   selector: String,
@@ -30,7 +31,13 @@ public fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOutc
     onSuccess = { result ->
       when (result) {
         is PhaseRunResult.Completed -> MonitorPrimaryOutcome(MonitorOutcomeKind.COMPLETED, "completed")
-        is PhaseRunResult.Blocked -> MonitorPrimaryOutcome(MonitorOutcomeKind.BLOCKED, result.reason)
+        is PhaseRunResult.Blocked -> {
+          val providerLimitPause = FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)
+          MonitorPrimaryOutcome(
+            if (providerLimitPause) MonitorOutcomeKind.PAUSED else MonitorOutcomeKind.BLOCKED,
+            result.reason,
+          )
+        }
       }
     },
     onFailure = { failure ->

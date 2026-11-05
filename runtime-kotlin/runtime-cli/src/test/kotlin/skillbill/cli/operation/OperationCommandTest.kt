@@ -14,6 +14,8 @@ import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationResult
 import skillbill.ports.telemetry.model.RemoteTransportResponse
 import skillbill.ports.telemetry.transport.RemoteTransportPort
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -22,6 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -173,6 +176,26 @@ class OperationCommandTest {
     assertTrue(result.stdout.startsWith(summary.trimEnd()), result.stdout)
     assertContains(lines, "Operation invocation ID: opr-1")
     assertEquals("status: awaiting_confirmation confirm:opt-7", lines.last())
+  }
+
+  @Test
+  fun `a classified provider limit blocked outcome prints paused and exits 2`() {
+    val state = CliRunState(stdinText = null)
+    val reason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Operation step 'verify'",
+        agentId = "codex",
+        resumePhaseId = "verify",
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage_limit_exceeded", resetHint = null),
+      )
+
+    writeOperationResult(state, "verify", OperationResult("opr-3", OperationOutcome.Blocked(reason)))
+    val result = assertNotNull(state.result)
+
+    assertEquals(OPERATION_EXIT_PAUSED, result.exitCode)
+    assertContains(result.stdout, "Operation 'verify' paused:")
+    assertFalse("blocked:" in result.stdout, result.stdout)
+    assertFalse("failed:" in result.stdout, result.stdout)
   }
 
   @Test

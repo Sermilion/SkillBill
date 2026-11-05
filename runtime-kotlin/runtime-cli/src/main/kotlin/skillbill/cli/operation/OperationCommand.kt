@@ -21,6 +21,7 @@ import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationResult
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 @Inject
 class OperationCommand(
@@ -194,7 +195,12 @@ internal fun writeOperationResult(
   val (lines, exitCode) =
     when (val outcome = result.outcome) {
       is OperationOutcome.Completed -> listOf(outcome.text.trimEnd(), invocationLine) to 0
-      is OperationOutcome.Blocked -> listOf("Operation '$operationId' blocked: ${outcome.reason}", invocationLine) to 1
+      is OperationOutcome.Blocked ->
+        if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(outcome.reason)) {
+          listOf("Operation '$operationId' paused: ${outcome.reason}", invocationLine) to OPERATION_EXIT_PAUSED
+        } else {
+          listOf("Operation '$operationId' blocked: ${outcome.reason}", invocationLine) to 1
+        }
       is OperationOutcome.Usage -> throw UsageError(outcome.reason)
       is OperationOutcome.Failed -> listOf("Operation '$operationId' failed: ${outcome.reason}", invocationLine) to 1
       is OperationOutcome.AwaitingConfirmation ->

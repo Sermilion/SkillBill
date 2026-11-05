@@ -259,6 +259,7 @@ internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRu
 internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   val (executionPlans, crashReconciler) = goalRunnerExecutionPlans(wiring)
   val progressReader = GoalRunnerProgressReader(wiring.outcomeStore)
+  val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore, wiring.clock)
   val finalization =
     GoalRunnerFinalization(
       finalizationTestOutcomes(wiring.outcomeStore),
@@ -269,6 +270,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       wiring.ciMonitor,
       wiring.qaGate,
       wiring.assessmentGate,
+      pauseBoundary,
       wiring.finalHistoryWriter,
       GoalRunnerPullRequests(
         wiring.outcomeStore,
@@ -280,7 +282,6 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         wiring.pullRequestWriter,
       ),
     )
-  val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
   val intakePreparation = goalRunnerIntakePreparation(wiring)
   val perRunLoopAssembler =
     testGoalRunnerLoopAssembler(wiring, executionPlans, progressReader, finalization, pauseBoundary)

@@ -23,7 +23,6 @@ import skillbill.engine.goalrunner.model.GoalProgressEventDraft
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
-import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
@@ -448,6 +447,7 @@ public class DefaultGoalRunnerQaGate(
     run: GoalQaRun,
     quality: GoalQualityExecutionRecord,
   ): GoalQaGateResult {
+    goalQaProviderLimitPause(run.result)?.let { return it }
     val buildWarning = buildAfterQaFixWarning(run.result)
     val qaWarning =
       buildWarning ?: (run.result as? PhaseRunResult.Blocked)?.let { "QA stopped at '${it.stepId}': ${it.reason}" }
@@ -479,15 +479,33 @@ public class DefaultGoalRunnerQaGate(
       )
     qaWarning?.let { recordContainedEnvironmentFailure(state, it) }
     val validationWarnings =
-      if (!validationRequired) {
-        emptyList()
-      } else {
-        validateAfterQa(state, request, run, buildWarning, current).also { current = it.second }.first
+      when (
+        val validationStep =
+          if (!validationRequired) {
+            ValidationAfterQaStep.Advance(emptyList(), current)
+          } else {
+            validateAfterQa(state, request, run, buildWarning, current)
+          }
+      ) {
+        is ValidationAfterQaStep.Paused -> return validationStep.pause
+        is ValidationAfterQaStep.Advance -> {
+          current = validationStep.quality
+          validationStep.warnings
+        }
       }
     val warnings = listOfNotNull(current.execution?.warning, effectiveQaWarning) + validationWarnings
+    return settleAfterQaOutcome(state, request, current, warnings)
+  }
+
+  private fun settleAfterQaOutcome(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    quality: GoalQualityExecutionRecord,
+    warnings: List<String>,
+  ): GoalQaGateResult {
     repairOutputs.warning(
       state.parentWorkflowId,
-      requireNotNull(current.execution).invocationId,
+      requireNotNull(quality.execution).invocationId,
       warnings.joinToString(" ").takeIf(String::isNotBlank),
     )
     val terminalStatus =
@@ -496,20 +514,23 @@ public class DefaultGoalRunnerQaGate(
       } else {
         GoalQualityExecutionStatus.SETTLED_WARNED
       }
-    current =
-      transitionQuality(
-        state,
-        current,
-        current.settle(
-          terminalStatus,
-          warnings.joinToString(" ").takeIf(String::isNotBlank),
-          currentContentFingerprint(
-            state,
-            request,
-          ),
+    transitionQuality(
+      state,
+      quality,
+      quality.settle(
+        terminalStatus,
+        warnings.joinToString(" ").takeIf(String::isNotBlank),
+        currentContentFingerprint(
+          state,
+          request,
         ),
-      )
-    return if (warnings.isEmpty()) GoalQaGateResult.Passed else GoalQaGateResult.Warned(warnings.joinToString(" "))
+      ),
+    )
+    return if (warnings.isEmpty()) {
+      GoalQaGateResult.Passed
+    } else {
+      GoalQaGateResult.Warned(warnings.joinToString(" "))
+    }
   }
 
   private fun validateAfterQa(
@@ -518,7 +539,7 @@ public class DefaultGoalRunnerQaGate(
     run: GoalQaRun,
     buildWarning: String?,
     quality: GoalQualityExecutionRecord,
-  ): Pair<List<String>, GoalQualityExecutionRecord> {
+  ): ValidationAfterQaStep {
     var current = transitionQuality(state, quality, quality.startValidation())
     val repairPersistenceFailure = AtomicReference<SkillBillRuntimeException?>()
     val validation =
@@ -546,6 +567,7 @@ public class DefaultGoalRunnerQaGate(
     )
     repairPersistenceFailure.get()?.let { throw it }
     repairOutputs.reconcile(state, SkeletonDefinition.VALIDATION, validation)
+    goalQaProviderLimitPause(validation)?.let { return ValidationAfterQaStep.Paused(it) }
     val validationWarning =
       (validation as? PhaseRunResult.Blocked)?.let { blocked ->
         "Validation after QA stopped at '${blocked.stepId}': ${blocked.reason}"
@@ -569,7 +591,7 @@ public class DefaultGoalRunnerQaGate(
         )
       }
     }
-    return listOfNotNull(validationWarning, changedWarning) to current
+    return ValidationAfterQaStep.Advance(listOfNotNull(validationWarning, changedWarning), current)
   }
 
   private fun resumeValidation(
@@ -621,6 +643,7 @@ public class DefaultGoalRunnerQaGate(
     )
     persistenceFailure.get()?.let { throw it }
     repairOutputs.reconcile(state, SkeletonDefinition.VALIDATION, validation)
+    goalQaProviderLimitPause(validation)?.let { return it }
     val validationWarning =
       (validation as? PhaseRunResult.Blocked)?.let { "Validation after QA stopped at '${it.stepId}': ${it.reason}" }
     current =
@@ -1117,7 +1140,7 @@ public class DefaultGoalRunnerQaGate(
     recordProgress(
       state,
       request,
-      progressDraft(state, request, phaseId, kind, outcome).copy(
+      clock.goalQaProgressDraft(state, request, phaseId, kind, outcome).copy(
         launchedModel = started?.model,
         effort = started?.effort,
       ),
@@ -1135,7 +1158,13 @@ public class DefaultGoalRunnerQaGate(
     recordProgress(
       state,
       request,
-      progressDraft(state, request, stepName, GoalProgressEventKind.OPERATION_HEARTBEAT, GoalProgressOutcome.NONE).copy(
+      clock.goalQaProgressDraft(
+        state,
+        request,
+        stepName,
+        GoalProgressEventKind.OPERATION_HEARTBEAT,
+        GoalProgressOutcome.NONE,
+      ).copy(
         operationName = boundedActivity.take(MAX_OPERATION_NAME_LENGTH),
         expectedLong = true,
       ),
@@ -1158,39 +1187,4 @@ public class DefaultGoalRunnerQaGate(
       ),
     ) { "Goal finalization could not record progress for '${state.parentWorkflowId}'." }
   }
-
-  private fun progressDraft(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-    phaseId: String,
-    kind: GoalProgressEventKind,
-    outcome: GoalProgressOutcome,
-  ): GoalProgressEventDraft =
-    GoalProgressEventDraft(
-      eventKind = kind,
-      workflowId = state.parentWorkflowId,
-      workflowPhase = phaseId,
-      processAlive = true,
-      timestamp = clock.instant(),
-      stepId = phaseId,
-      operationKind = GOAL_FINALIZATION_OPERATION_KIND,
-      outcome = outcome,
-      agentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
-    )
 }
-
-private data class GoalQaRun(
-  val request: PhaseRunRequest,
-  val branch: String,
-  val startTree: WorkflowGitOperationResult,
-  val result: PhaseRunResult,
-)
-
-private const val MAX_ACTIVITY_LENGTH = 500
-private const val MAX_OPERATION_NAME_LENGTH = 160
-
-private data class GoalQualityPhaseInput(
-  val definition: SkeletonDefinition,
-  val inputs: GoalQualityExecutionInputs,
-  val execution: GoalQualityExecution? = null,
-)

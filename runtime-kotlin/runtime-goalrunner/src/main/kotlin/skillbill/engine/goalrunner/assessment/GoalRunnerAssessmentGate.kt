@@ -18,13 +18,13 @@ public interface GoalRunnerAssessmentGate {
 
   /**
    * Runs the whole assessment stage once for the goal in [state]: assess, verify, fix, validate and commit until an
-   * exit rule fires, then returns the record carrying the exit reason. A recorded exit skips the stage. Never throws
-   * on a stage failure: those degrade into a warning and the record's exit.
+   * exit rule fires, then returns the finished record or a provider-limit pause. A recorded exit skips the stage.
+   * Never throws on a stage failure: those degrade into a warning and the record's exit.
    */
   public fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): GoalAssessmentRecord
+  ): GoalAssessmentStageResult
 
   /** Records `skipped_no_changes` for a goal that finished without changes, unless an exit is already recorded. */
   public fun skipNoChanges(state: GoalRunnerManifestState): Unit
@@ -42,4 +42,22 @@ public sealed interface GoalAssessmentRoundResult {
     override val record: GoalAssessmentRecord,
     public val reason: String,
   ) : GoalAssessmentRoundResult
+
+  public data class Paused(
+    override val record: GoalAssessmentRecord,
+    public val reason: String,
+    public val lastResumableStep: String,
+  ) : GoalAssessmentRoundResult
+}
+
+public sealed interface GoalAssessmentStageResult {
+  public val record: GoalAssessmentRecord
+
+  public data class Completed(override val record: GoalAssessmentRecord) : GoalAssessmentStageResult
+
+  public data class ProviderPaused(
+    override val record: GoalAssessmentRecord,
+    public val reason: String,
+    public val lastResumableStep: String,
+  ) : GoalAssessmentStageResult
 }

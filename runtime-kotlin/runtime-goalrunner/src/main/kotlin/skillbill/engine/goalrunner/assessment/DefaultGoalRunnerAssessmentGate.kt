@@ -47,10 +47,10 @@ public class DefaultGoalRunnerAssessmentGate(
   override fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): GoalAssessmentRecord =
+  ): GoalAssessmentStageResult =
     catchingNonCancellation { loop.run(state, request) }.getOrElse { failure ->
       warnContained("the assessment stage could not complete", failure)
-      persistUnavailable(state)
+      GoalAssessmentStageResult.Completed(persistUnavailable(state))
     }
 
   private fun persistUnavailable(state: GoalRunnerManifestState): GoalAssessmentRecord {
