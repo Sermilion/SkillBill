@@ -72,6 +72,30 @@ class AgentChatTransportsTest {
     assertEquals(listOf<ChatEvent>(ChatEvent.Failed(ChatFailure.ProcessFailed, "stream disconnected")), second)
   }
 
+  // Codex reports config warnings as `error` items before the turn starts; they are notices, not tool calls.
+  @Test
+  fun `codex error items stay out of the transcript and become the detail of a later failure`() {
+    val warning =
+      """{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  user (/home/sermilion/.codex/config.toml): `features.experimental_use_rmcp_client` is ignored."}}"""
+    val message = "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n" +
+      "  user (/home/sermilion/.codex/config.toml): `features.experimental_use_rmcp_client` is ignored."
+
+    val completed = CodexStreamDecoder {}.let { decoder ->
+      listOf(
+        warning,
+        warning.replace("item_0", "item_1"),
+        """{"type":"turn.started"}""",
+        """{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"ok"}}""",
+        """{"type":"turn.completed","usage":{}}""",
+      ).flatMap(decoder::decode)
+    }
+    assertEquals(listOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed), completed)
+
+    val crashed = CodexStreamDecoder {}
+    assertEquals(emptyList(), crashed.decode(warning))
+    assertEquals(listOf<ChatEvent>(ChatEvent.Failed(ChatFailure.ProcessFailed, message)), crashed.exited(1, "stderr tail"))
+  }
+
   // Cursor reports its chat id on every line; the next turn must resume it with permissions still forced.
   @Test
   fun `cursor forces tools, maps tool calls and resumes the reported chat`() = runTest {
