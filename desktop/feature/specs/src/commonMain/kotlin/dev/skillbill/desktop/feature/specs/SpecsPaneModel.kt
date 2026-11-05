@@ -38,6 +38,9 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.feedback.controlFeedback
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
+import dev.skillbill.desktop.core.designsystem.overlay.CommandItem
+import dev.skillbill.desktop.core.ui.navigation.CommandSection
+import dev.skillbill.desktop.core.ui.navigation.ShellCommand
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -167,6 +170,7 @@ class SpecsPaneModel(
   private var observedSelection = false
   private var userAgentFor: SelectionIdentity? = null
   private var selectedIdentity: SelectionIdentity? = null
+  private var pendingStartIdentity: SelectionIdentity? = null
   private var controlIdentity: SelectionIdentity? = null
   private var cancelConfirmationFor: SelectionIdentity? = null
   private var purgeConfirmationFor: SelectionIdentity? = null
@@ -212,6 +216,25 @@ class SpecsPaneModel(
       ),
     )
   }.stateIn(scope, SharingStarted.Eagerly, SpecsUiState())
+
+  fun commandSection(current: SpecsUiState): CommandSection? {
+    val path = (current.toolbar.selection as? ToolbarSelection.Bundle)?.path ?: return null
+    val bundle = findNode((current.tree as? SpecTreeState.Loaded)?.tree?.roots.orEmpty(), path) as? SpecNode.Bundle ?: return null
+    val commands = specMenuActions(bundle, current).filterIsInstance<SpecMenuAction.Item>().mapIndexed { index, entry ->
+      ShellCommand(
+        CommandItem(
+          id = "spec-$index",
+          label = entry.label,
+          icon = entry.icon,
+          shortcut = entry.shortcut,
+          danger = entry.danger,
+          enabled = entry.enabled,
+          end = entry.reason,
+        ),
+      ) { onAction(entry.action) }
+    }
+    return commands.takeIf { it.isNotEmpty() }?.let { CommandSection(current.toolbar.bundleKey ?: bundle.issueKey ?: bundle.name, it) }
+  }
 
   init {
     scope.launch {
@@ -370,8 +393,15 @@ class SpecsPaneModel(
       }
       is SpecsAction.Activate -> {
         pendingReveal = null
-        click(action.path)
+        when (findNode(roots(), action.path)) {
+          is SpecNode.Bundle -> {
+            selectPath(action.path)
+            if (selectedBundle() != null) onAction(SpecsAction.OpenSelectedSpec)
+          }
+          else -> click(action.path)
+        }
       }
+      SpecsAction.Deselect -> invalidateSelection(clearPath = true)
       SpecsAction.CollapseAll -> treePresentation.collapseAll()
       SpecsAction.Retry -> retry()
       SpecsAction.Reveal -> reveal()
@@ -381,19 +411,30 @@ class SpecsPaneModel(
       SpecsAction.OpenBarMenu -> local.value = local.value.copy(barMenuOpen = true)
       SpecsAction.DismissBarMenu -> local.value = local.value.copy(barMenuOpen = false)
       SpecsAction.OpenSearch -> local.value = local.value.copy(searchOpen = true)
+      SpecsAction.CloseSearch -> {
+        treePresentation.updateFilters(text = "")
+        local.value = local.value.copy(searchOpen = false)
+      }
       SpecsAction.OpenSelectedSpec -> selectedBundle()?.children?.filterIsInstance<SpecNode.File>()
         ?.firstOrNull { it.kind == dev.skillbill.desktop.core.domain.model.SpecFileKind.ParentSpec }
         ?.let { file -> scope.launch { if (specs.openFile(file.absolutePath) == OpenOutcome.NotOpened) problem("Couldn't open ${file.name}.") } }
       SpecsAction.CopyBundleKey -> selectedBundle()?.issueKey?.let(clipboard::copy)
-      SpecsAction.OpenAgentMenu -> if (controlContext()?.let { !local.value.toolbar.inFlight && !isReserved(it) } == true) {
+      SpecsAction.OpenAgentMenu -> if (controlContext()?.let { it.control.canStart && !local.value.toolbar.inFlight && !isReserved(it) } == true) {
         local.value = local.value.copy(toolbar = local.value.toolbar.copy(agentMenuOpen = true))
       }
-      SpecsAction.DismissAgentMenu -> local.value = local.value.copy(toolbar = local.value.toolbar.copy(agentMenuOpen = false))
+      SpecsAction.DismissAgentMenu -> {
+        pendingStartIdentity = null
+        local.value = local.value.copy(toolbar = local.value.toolbar.copy(agentMenuOpen = false))
+      }
       is SpecsAction.ChooseAgent -> {
         controlContext()?.let { target ->
           if (!local.value.toolbar.inFlight && !isReserved(target) && action.agentId in target.control.agentChoices) {
             userAgentFor = target.identity
             local.value = local.value.copy(toolbar = local.value.toolbar.copy(chosenAgent = action.agentId, agentMenuOpen = false))
+            if (pendingStartIdentity == target.identity) {
+              pendingStartIdentity = null
+              start()
+            }
           }
         }
       }
@@ -630,6 +671,7 @@ class SpecsPaneModel(
     val previous = base.toolbar
     val keepAgent = sameIdentity && userAgentFor == identity
     if (!sameIdentity) {
+      pendingStartIdentity = null
       controlJob?.cancel()
       controlJob = null
       controlLifetime++
@@ -683,6 +725,8 @@ class SpecsPaneModel(
         if (accepted != null && userAgentFor == identity && !keepAgent) userAgentFor = null
         val keepCancel = accepted?.control?.canCancel == true
         val keepPurge = accepted?.control?.let { it.purgeVisible && it.canPurge } == true
+        val keepAgentMenu = accepted?.control?.canStart == true
+        if (!keepAgentMenu) pendingStartIdentity = null
         if (!keepCancel) cancelConfirmationFor = null
         if (!keepPurge) purgeConfirmationFor = null
         local.value = local.value.copy(toolbar = toolbar.copy(
@@ -692,7 +736,7 @@ class SpecsPaneModel(
             keepAgent -> toolbar.chosenAgent
             else -> accepted.control.agentId
           },
-          agentMenuOpen = toolbar.agentMenuOpen && accepted != null,
+          agentMenuOpen = toolbar.agentMenuOpen && keepAgentMenu,
           confirmingCancel = toolbar.confirmingCancel && keepCancel,
           purgeDialogOpen = toolbar.purgeDialogOpen && keepPurge,
           exportLiveDialogOpen = toolbar.exportLiveDialogOpen,
@@ -702,6 +746,7 @@ class SpecsPaneModel(
   }
 
   private fun invalidateSelection(clearPath: Boolean, base: SpecsUiState = local.value) {
+    pendingStartIdentity = null
     controlJob?.cancel()
     controlJob = null
     controlLifetime++
@@ -827,6 +872,7 @@ class SpecsPaneModel(
     val current = local.value
     if (current.toolbar.inFlight || !target.control.canStart || isReserved(target)) return
     if (target.agent == null) {
+      pendingStartIdentity = target.identity
       local.value = current.copy(toolbar = current.toolbar.copy(agentMenuOpen = true))
       return
     }

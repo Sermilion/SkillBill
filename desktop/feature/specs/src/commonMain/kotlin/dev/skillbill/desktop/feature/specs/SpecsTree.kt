@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,7 +62,7 @@ internal fun shouldClearSpecsTreeFocus(focusedPath: String?, rowPath: String, ha
   !hasFocus && focusedPath == rowPath
 
 @Composable
-internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, modifier: Modifier = Modifier) {
+internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onNavigate: ((Int) -> Boolean) -> Unit, onFocusSelection: (() -> Boolean) -> Unit, modifier: Modifier = Modifier) {
   val shellInput = LocalShellInput.current
   DisposableEffect(shellInput) {
     onDispose { shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, false) }
@@ -94,6 +95,7 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
 
   fun focusRow(index: Int): Boolean {
     val path = state.rows.getOrNull(index)?.node?.path ?: return false
+    onAction(SpecsAction.Select(path))
     scope.launch {
       val visible = listState.layoutInfo.visibleItemsInfo.any { it.key == path }
       if (!visible) listState.scrollToItem(index)
@@ -101,6 +103,42 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
     }
     return true
   }
+
+  val navigateBundles: (Int) -> Boolean = { delta ->
+    val bundles = state.rows.withIndex().filter { it.value.node is SpecNode.Bundle }
+    if (bundles.isEmpty()) false else {
+      val selected = bundles.indexOfFirst {
+        val path = state.selectedPath
+        it.value.node.path == path || path?.startsWith("${it.value.node.path}/") == true
+      }
+      val next = if (selected < 0) {
+        if (delta > 0) 0 else bundles.lastIndex
+      } else (selected + delta).coerceIn(0, bundles.lastIndex)
+      val rowIndex = bundles[next].index
+      val path = bundles[next].value.node.path
+      onAction(SpecsAction.Select(path))
+      focusedPath = path
+      rowOwnsFocus = true
+      scope.launch {
+        if (!listState.layoutInfo.visibleItemsInfo.any { it.key == path }) listState.scrollToItem(rowIndex)
+        requesters[path]?.requestFocus()
+      }
+      true
+    }
+  }
+  SideEffect { onNavigate(navigateBundles) }
+  val focusSelection: () -> Boolean = {
+    val path = state.selectedPath
+    val index = state.rows.indexOfFirst { it.node.path == path }
+    if (path == null || index < 0) false else {
+      scope.launch {
+        if (!listState.layoutInfo.visibleItemsInfo.any { it.key == path }) listState.scrollToItem(index)
+        requesters[path]?.requestFocus()
+      }
+      true
+    }
+  }
+  SideEffect { onFocusSelection(focusSelection) }
 
   LazyColumn(
     state = listState,
@@ -142,7 +180,7 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
       Box {
         DesignTreeRow(
           title = row.node.treeTitle(),
-          onClick = { focusedPath = row.node.path; onAction(SpecsAction.Click(row.node.path)) },
+          onClick = { focusedPath = row.node.path; onAction(SpecsAction.Click(row.node.path)); requester.requestFocus() },
           level = row.depth,
           expandable = row.hasChildren,
           expanded = row.expanded,
@@ -194,7 +232,19 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
 @Composable
 internal fun SpecActionsMenu(bundle: SpecNode.Bundle, state: SpecsUiState, onAction: (SpecsAction) -> Unit, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, dismissAction: SpecsAction = SpecsAction.DismissRowMenu) {
   val close = { onAction(dismissAction) }
-  val entries = specMenuActions(bundle, state).map { entry ->
+  val actions = specMenuActions(bundle, state)
+  val actionItems = actions.filterIsInstance<SpecMenuAction.Item>()
+  val shortcuts = actionItems.filter { it.enabled }.mapNotNull { entry ->
+    val key = when (entry.shortcut) {
+      "R" -> Key.R
+      "P" -> Key.P
+      "A" -> Key.A
+      "F" -> Key.F
+      else -> null
+    } ?: return@mapNotNull null
+    key to { onAction(entry.action); close() }
+  }.toMap()
+  val entries = actions.map { entry ->
     when (entry) {
       SpecMenuAction.Separator -> SbMenuEntry.Separator
       is SpecMenuAction.Item -> SbMenuEntry.Item(
@@ -210,7 +260,7 @@ internal fun SpecActionsMenu(bundle: SpecNode.Bundle, state: SpecsUiState, onAct
   }
   ShellLayer(close)
   // The anchor is the click point; -4 cancels the popover's anchor gap so the menu's corner sits on the pointer.
-  SbPopover(expanded = true, onDismissRequest = close, offset = DpOffset(0.dp, (-4).dp), placement = placement) { SbMenu(entries) }
+  SbPopover(expanded = true, onDismissRequest = close, offset = DpOffset(0.dp, (-4).dp), placement = placement, specMenuKeyboard = true, keyboardShortcuts = shortcuts) { SbMenu(entries) }
 }
 
 // screens.js specTree: status icons take the default half fill; the n/m text carries the progress.

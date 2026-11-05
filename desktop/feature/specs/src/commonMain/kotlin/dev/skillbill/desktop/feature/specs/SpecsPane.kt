@@ -18,9 +18,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -65,14 +82,47 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.ShellLayer
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.input.ShellEdit
+import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 
 /** Specs pane with project actions, count filters, a weighted tree, and the selected bundle bar. */
 @Composable
 internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onClose: () -> Unit) {
   val colors = SkillBillTheme.colors
+  val shellInput = LocalShellInput.current
+  DisposableEffect(shellInput) { onDispose { shellInput.setFocusSource(ShellInput.SPECS_BAR_SOURCE, false) } }
+  val filterFocusRequester = remember { FocusRequester() }
+  var navigateTree by remember { mutableStateOf<(Int) -> Boolean>({ false }) }
+  var focusTreeSelection by remember { mutableStateOf<() -> Boolean>({ false }) }
+  var previousSearchOpen by remember { mutableStateOf(state.searchOpen) }
+  LaunchedEffect(state.searchOpen) {
+    if (state.searchOpen) filterFocusRequester.requestFocus()
+    else if (previousSearchOpen) focusTreeSelection()
+    previousSearchOpen = state.searchOpen
+  }
+  if (state.searchOpen) ShellEdit(onCancel = { onAction(SpecsAction.CloseSearch) }, onSave = {})
   val project = state.project
   SidePane(
+    modifier = Modifier.onPreviewKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown || shellInput.layerOpen || shellInput.editOpen) return@onPreviewKeyEvent false
+    val treeOrBarFocused = shellInput.specsTreeFocused || shellInput.specsBarFocused
+    if (!treeOrBarFocused || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return@onPreviewKeyEvent false
+    val char = event.utf16CodePoint.takeIf { it >= ' '.code }?.toChar()?.lowercaseChar()
+    if (char == '/') {
+      onAction(SpecsAction.OpenSearch)
+      true
+    } else if (event.isShiftPressed) false else when (char) {
+      'j' -> navigateTree(1)
+      'k' -> navigateTree(-1)
+      'r' -> state.selectedPath != null && run { onAction(SpecsAction.Start); true }
+      'p' -> state.selectedPath != null && run { onAction(SpecsAction.Pause); true }
+      'a' -> state.selectedPath != null && run { onAction(SpecsAction.OpenAgentMenu); true }
+      'f' -> state.selectedPath != null && run { onAction(SpecsAction.ToggleFavorite); true }
+      else -> false
+    }
+    },
     title = "Specs",
     head = {
       Box {
@@ -119,7 +169,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     ) {
       Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (state.searchOpen || state.filterText.isNotEmpty()) {
-          SbInput(state.filterText, { onAction(SpecsAction.FilterChanged(it)) }, Modifier.weight(1f).gatesShortcutsWhileFocused(), placeholder = FILTER_HINT, leadingIcon = LucideIcons.search)
+          SbInput(state.filterText, { onAction(SpecsAction.FilterChanged(it)) }, Modifier.weight(1f).focusRequester(filterFocusRequester).gatesShortcutsWhileFocused(), placeholder = FILTER_HINT, leadingIcon = LucideIcons.search)
           SbIconButton(LucideIcons.x, "Clear filters", { onAction(SpecsAction.ClearFilters) }, size = SbControlSize.Small)
         } else {
           Spacer(Modifier.weight(1f))
@@ -157,13 +207,13 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
               SbButton("Clear filters", { onAction(SpecsAction.ClearFilters) })
             })
           }
-        } else SpecsTree(state, onAction, Modifier.fillMaxWidth())
+        } else SpecsTree(state, onAction, { navigateTree = it }, { focusTreeSelection = it }, Modifier.fillMaxWidth())
       }
       state.deleteTarget?.let { DeleteSpecFilesDialog(it, onAction) }
     }
     if (state.toolbar.selection is ToolbarSelection.Bundle) SpecSelectionBar(
       state, onAction,
-      Modifier.fillMaxWidth().rule(bottom = false, colors.borderSubtle).padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+      Modifier.fillMaxWidth().onFocusChanged { shellInput.setFocusSource(ShellInput.SPECS_BAR_SOURCE, it.hasFocus) }.rule(bottom = false, colors.borderSubtle).padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
     )
     state.importDialog?.let { target ->
       ShellLayer { onAction(SpecsAction.DismissImport) }

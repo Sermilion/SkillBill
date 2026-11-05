@@ -32,6 +32,7 @@ class ShellInput {
   val textInputFocused: Boolean get() = focusedSources.any { it != TERMINAL_SOURCE && it != SUBTASK_LIST_SOURCE }
   val terminalFocused: Boolean get() = TERMINAL_SOURCE in focusedSources
   val specsTreeFocused: Boolean get() = SPECS_TREE_SOURCE in focusedSources
+  val specsBarFocused: Boolean get() = SPECS_BAR_SOURCE in focusedSources
 
   /** The detail's Subtasks index has focus: it takes ↑, ↓ and Enter, while J and K still page work items. */
   val subtaskListFocused: Boolean get() = SUBTASK_LIST_SOURCE in focusedSources
@@ -74,6 +75,7 @@ class ShellInput {
   companion object {
     const val TERMINAL_SOURCE = "terminal"
     const val SPECS_TREE_SOURCE = "specs-tree"
+    const val SPECS_BAR_SOURCE = "specs-bar"
     const val SUBTASK_LIST_SOURCE = "subtask-list"
   }
 }

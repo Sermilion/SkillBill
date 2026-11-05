@@ -151,6 +151,56 @@ class SpecsPaneModelTest {
   }
 
   @Test
+  fun `choosing an agent resumes only a start that opened the picker`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(
+      control(runState = SpecRunState.Paused, canStart = true).copy(agentId = null, agentChoices = listOf("codex")),
+      goal,
+    )
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.Start)
+    advanceUntilIdle()
+    assertTrue(model.state.value.toolbar.agentMenuOpen)
+    model.onAction(SpecsAction.ChooseAgent("codex"))
+    advanceUntilIdle()
+
+    assertEquals(listOf("launch"), controls.calls.map { it.control })
+    assertEquals("codex", controls.calls.single().agentId)
+  }
+
+  @Test
+  fun `ordinary agent choice does not start and a forbidden agent menu stays closed`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(
+      control(runState = SpecRunState.Paused, canStart = false).copy(agentId = null, agentChoices = listOf("codex")),
+      goal,
+    )
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.OpenAgentMenu)
+    assertFalse(model.state.value.toolbar.agentMenuOpen)
+    model.onAction(SpecsAction.ChooseAgent("codex"))
+    advanceUntilIdle()
+    assertTrue(controls.calls.isEmpty())
+
+    model.onAction(SpecsAction.Deselect)
+    advanceUntilIdle()
+    assertNull(model.state.value.selectedPath)
+    assertEquals(ToolbarSelection.None, model.state.value.toolbar.selection)
+  }
+
+  @Test
   fun `a bundle click selects without changing its expansion`() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     Dispatchers.setMain(dispatcher)
@@ -228,6 +278,34 @@ class SpecsPaneModelTest {
     assertEquals(PAUSE_NOTICE, entries.first { it.label == "Pause requested" }.reason)
     assertFalse(entries.last().enabled)
     assertEquals(DELETE_LIVE, entries.last().reason)
+    assertEquals("F", entries.first { it.action == SpecsAction.ToggleFavorite }.shortcut)
+    assertEquals("R", entries.first { it.action == SpecsAction.Start }.shortcut)
+    assertEquals("A", entries.first { it.action == SpecsAction.OpenAgentMenu }.shortcut)
+  }
+
+  @Test
+  fun `command palette maps the shared spec actions in their menu order`() = runTest {
+    val model = model(StandardTestDispatcher(testScheduler))
+    val bundle = specs.loadedTree.roots.single() as SpecNode.Bundle
+    val state = SpecsUiState(
+      project = project,
+      tree = SpecTreeState.Loaded(specs.loadedTree, project.specsRoot),
+      selectedPath = bundle.path,
+      toolbar = SpecToolbarState(
+        selection = ToolbarSelection.Bundle(bundle.path),
+        control = SpecControlState.Loaded(
+          control(canStart = true, canCancel = true, canDelete = false).copy(pauseRequested = true),
+          goal,
+        ),
+      ),
+    )
+
+    val menuActions = specMenuActions(bundle, state).filterIsInstance<SpecMenuAction.Item>()
+    val paletteCommands = model.commandSection(state)!!.commands
+
+    assertEquals(menuActions.map { it.label }, paletteCommands.map { it.item.label })
+    assertEquals(menuActions.map { it.enabled }, paletteCommands.map { it.item.enabled })
+    assertEquals(PAUSE_NOTICE, paletteCommands.single { it.item.label == "Pause requested" }.item.end)
   }
 
   @Test

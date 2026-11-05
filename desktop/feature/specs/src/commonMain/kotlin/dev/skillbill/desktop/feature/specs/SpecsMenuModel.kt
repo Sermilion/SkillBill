@@ -39,7 +39,7 @@ internal fun specMenuActions(bundle: SpecNode.Bundle, state: SpecsUiState): List
   val runActions = mutableListOf<SpecMenuAction.Item>()
   val destructiveActions = mutableListOf<SpecMenuAction.Item>()
   if (bundle.children.any { it is SpecNode.File && it.kind == dev.skillbill.desktop.core.domain.model.SpecFileKind.ParentSpec }) {
-    actions += item("Open spec", SpecsAction.OpenSelectedSpec, LucideIcons.fileText)
+    actions += item("Open spec", SpecsAction.OpenSelectedSpec, LucideIcons.fileText, shortcut = "↵")
   }
   actions += item("Reveal folder", SpecsAction.RevealBundle, LucideIcons.folder)
   if (key != null) actions += item("Copy key", SpecsAction.CopyBundleKey, LucideIcons.copy)
@@ -47,6 +47,7 @@ internal fun specMenuActions(bundle: SpecNode.Bundle, state: SpecsUiState): List
     if (state.toolbar.favorite) "Remove favorite" else "Add favorite",
     SpecsAction.ToggleFavorite,
     LucideIcons.star,
+    shortcut = "F",
     enabled = state.toolbar.favoriteAvailable && !state.toolbar.favoriteInFlight,
   )
   if (key != null && !state.project?.repoRoot.isNullOrBlank()) {
@@ -54,17 +55,17 @@ internal fun specMenuActions(bundle: SpecNode.Bundle, state: SpecsUiState): List
   }
   if (control != null) {
     if (control.canStart) {
-      runActions += item(control.startLabel, SpecsAction.Start, LucideIcons.play, enabled = !state.toolbar.inFlight && !state.toolbar.reserved)
+      runActions += item(control.startLabel, SpecsAction.Start, LucideIcons.play, shortcut = "R", enabled = !state.toolbar.inFlight && !state.toolbar.reserved)
     }
     if (control.pauseRequested) {
       runActions += item("Pause requested", SpecsAction.Pause, LucideIcons.pause, enabled = false, reason = PAUSE_NOTICE)
     } else if (control.canPause && liveGoal) {
-      runActions += item("Pause after subtask", SpecsAction.Pause, LucideIcons.pause, enabled = !state.toolbar.inFlight)
+      runActions += item("Pause after subtask", SpecsAction.Pause, LucideIcons.pause, shortcut = "P", enabled = !state.toolbar.inFlight)
     }
     if (control.canStart) {
       val chosenAgent = state.toolbar.chosenAgent
       val agentLabel = chosenAgent?.let { "Change agent, now $it" } ?: "Choose agent"
-      runActions += item(agentLabel, SpecsAction.OpenAgentMenu, LucideIcons.bot, enabled = !state.toolbar.inFlight && !state.toolbar.reserved)
+      runActions += item(agentLabel, SpecsAction.OpenAgentMenu, LucideIcons.bot, shortcut = "A", enabled = !state.toolbar.inFlight && !state.toolbar.reserved)
     }
   }
   if (control?.canCancel == true) {

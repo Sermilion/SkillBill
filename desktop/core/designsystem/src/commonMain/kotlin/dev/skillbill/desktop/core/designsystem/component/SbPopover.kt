@@ -32,6 +32,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -64,7 +68,7 @@ private val POPOVER_WINDOW_MARGIN = 8.dp
 enum class SbPopoverPlacement { Auto, Above }
 
 @Composable
-fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, maxWidth: Dp = POPOVER_MAX_WIDTH, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, arrowKeysMoveFocus: Boolean = true, specMenuKeyboard: Boolean = false, keyboardShortcuts: Map<Key, () -> Unit> = emptyMap(), content: @Composable ColumnScope.() -> Unit) {
   val density = LocalDensity.current
   val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
   val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
@@ -115,8 +119,16 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
               if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+              if (specMenuKeyboard && (it.isCtrlPressed || it.isMetaPressed || it.isAltPressed)) return@onPreviewKeyEvent false
+              if (it.key == Key.Escape) { onDismissRequest(); return@onPreviewKeyEvent true }
+              if (specMenuKeyboard && it.key == Key.Tab) { onDismissRequest(); return@onPreviewKeyEvent true }
+              if (specMenuKeyboard && it.isShiftPressed) return@onPreviewKeyEvent false
+              keyboardShortcuts[it.key]?.let { action -> action(); return@onPreviewKeyEvent true }
               when (it.key) {
-                Key.Escape -> { onDismissRequest(); true }
+                Key.Escape -> true
+                Key.Tab -> false
+                Key.MoveHome -> if (specMenuKeyboard) { focusManager.clearFocus(force = true); focusManager.moveFocus(FocusDirection.Next); true } else false
+                Key.MoveEnd -> if (specMenuKeyboard) { focusManager.clearFocus(force = true); focusManager.moveFocus(FocusDirection.Previous); true } else false
                 Key.DirectionDown -> {
                   if (!arrowKeysMoveFocus) return@onPreviewKeyEvent false
                   if (!focusManager.moveFocus(FocusDirection.Next)) {
@@ -133,6 +145,8 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
                   }
                   true
                 }
+                Key.J -> if (specMenuKeyboard) { focusManager.moveFocus(FocusDirection.Next); true } else false
+                Key.K -> if (specMenuKeyboard) { focusManager.moveFocus(FocusDirection.Previous); true } else false
                 else -> false
               }
             },

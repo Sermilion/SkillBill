@@ -81,6 +81,7 @@ sealed interface SpecsAction {
   data class Select(val path: String) : SpecsAction
   data class Activate(val path: String) : SpecsAction
   data class Click(val path: String) : SpecsAction
+  data object Deselect : SpecsAction
   data object CollapseAll : SpecsAction
   data object Retry : SpecsAction
   data object Reveal : SpecsAction
@@ -90,6 +91,7 @@ sealed interface SpecsAction {
   data object OpenBarMenu : SpecsAction
   data object DismissBarMenu : SpecsAction
   data object OpenSearch : SpecsAction
+  data object CloseSearch : SpecsAction
   data object OpenSelectedSpec : SpecsAction
   data object CopyBundleKey : SpecsAction
   data object OpenAgentMenu : SpecsAction
