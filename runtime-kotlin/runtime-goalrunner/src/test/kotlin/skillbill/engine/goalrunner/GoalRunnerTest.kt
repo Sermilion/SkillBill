@@ -123,6 +123,7 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.model.history.GoalChildHistoryDraft
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
@@ -498,6 +499,49 @@ class GoalRunnerTest {
     assertEquals(pauseReason, store.controlState.pauseReason)
     assertTrue(pr.requests.isEmpty())
     assertFalse("Goal assessment did not accept the goal" in report.stop.blockedReason.orEmpty())
+  }
+
+  @Test
+  fun `provider limited goal QA pauses before commit push and pull request`() {
+    val pauseReason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Feature-task-runtime phase 'qa'",
+        agentId = "claude",
+        resumePhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage limit exceeded", resetHint = null),
+      )
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val outcomes = RecordingOutcomeStore()
+    val pr = RecordingPullRequestPort()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
+          outcomeStore = outcomes,
+          pullRequestPort = pr,
+        ).copy(
+          qaGate =
+            GoalRunnerQaGate { _, _ ->
+              GoalQaGateResult.Paused(pauseReason, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA)
+            },
+        ),
+      )
+
+    val report = assertIs<GoalRunnerRunReport.Stopped>(runner.run(runRequest()))
+
+    assertEquals(GoalRunnerStopReason.PAUSED, report.stop.reason)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA, report.stop.lastResumableStep)
+    assertEquals(pauseReason, report.stop.blockedReason)
+    assertTrue(store.controlState.paused)
+    assertEquals(pauseReason, store.controlState.pauseReason)
+    assertTrue(pr.requests.isEmpty())
+    assertTrue(outcomes.blockedWorkflows.isEmpty())
+    val quality = outcomes.goalQualityExecution(store.parentWorkflowId)?.execution
+    assertTrue(quality == null || quality.status != GoalQualityExecutionStatus.SETTLED_WARNED)
   }
 
   @Test
@@ -2136,6 +2180,57 @@ class GoalRunnerLinearScratchFinalizeTest {
     assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
     assertIs<GoalRunnerRunReport.Completed>(runner.run(request))
     assertEquals(2, monitorAttempts)
+  }
+
+  @Test
+  fun `provider limited monitoring pauses without accepting a goal block`() {
+    val repoRoot = Files.createTempDirectory("goal-monitor-provider-limit")
+    val pauseReason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Feature-task-runtime phase 'monitor'",
+        agentId = "claude",
+        resumePhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage limit exceeded", resetHint = null),
+      )
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+        initialControlState = GoalRunnerControlState(goalBlockedReason = "Stale unrelated block incident"),
+      )
+    val outcomes = RecordingOutcomeStore()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
+          outcomeStore = outcomes,
+          pullRequestPort =
+            GoalPullRequestPort {
+              GoalPullRequestResult.Existing("https://github.com/example/repo/pull/1")
+            },
+        ).copy(
+          ciMonitor =
+            GoalRunnerCiMonitor { _, _ ->
+              PhaseRunResult.Blocked(
+                "goal-monitor",
+                emptyList(),
+                null,
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+                pauseReason,
+              )
+            },
+        ),
+      )
+    val request = linearRunRequest(repoRoot).copy(issueKey = "SKILL-56")
+
+    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(request))
+
+    assertEquals(GoalRunnerStopReason.PAUSED, stopped.stop.reason)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR, stopped.stop.lastResumableStep)
+    assertEquals(pauseReason, stopped.stop.blockedReason)
+    assertTrue(store.controlState.paused)
+    assertEquals(pauseReason, store.controlState.pauseReason)
+    assertTrue(outcomes.blockedWorkflows.isEmpty())
   }
 
   @Test

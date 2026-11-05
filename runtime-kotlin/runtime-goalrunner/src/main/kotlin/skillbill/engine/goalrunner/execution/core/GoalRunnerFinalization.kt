@@ -73,6 +73,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import java.security.MessageDigest
 
@@ -169,17 +170,7 @@ public class GoalRunnerFinalization(
   ): GoalRunnerRunReport {
     val prepared =
       try {
-        val qaResult = qaGate.run(finalState, request)
-        if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
-        val invocationId =
-          outcomeStore.goalQualityExecution(finalState.parentWorkflowId)?.execution?.invocationId
-            ?: return writeHistoryStopped(
-              finalState,
-              attempted,
-              "Final quality invocation is missing before boundary history writing.",
-            )
-        writeGoalHistory(finalState, request, attempted, invocationId)?.let { return it }
-        invocationId to qaResult
+        readyValidatedPublication(finalState, request, attempted)
       } catch (failure: SkillBillRuntimeException) {
         return writeHistoryStopped(
           finalState,
@@ -188,7 +179,40 @@ public class GoalRunnerFinalization(
           failure.failureCodeLabel(),
         )
       }
-    return commitAndPublish(finalState, request, attempted, prepared.first, prepared.second)
+    return when (prepared) {
+      is ValidatedPublicationPrep.Ready ->
+        commitAndPublish(finalState, request, attempted, prepared.invocationId, prepared.qaResult)
+      is ValidatedPublicationPrep.Stopped -> prepared.report
+    }
+  }
+
+  private fun readyValidatedPublication(
+    finalState: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+  ): ValidatedPublicationPrep {
+    val qaResult = qaGate.run(finalState, request)
+    if (qaResult is GoalQaGateResult.Paused) {
+      return ValidatedPublicationPrep.Stopped(
+        pauseForProviderLimit(finalState, attempted, qaResult.reason, qaResult.stepId),
+      )
+    }
+    if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
+    val invocationId =
+      outcomeStore.goalQualityExecution(finalState.parentWorkflowId)?.execution?.invocationId
+        ?: return ValidatedPublicationPrep.Stopped(
+          writeHistoryStopped(
+            finalState,
+            attempted,
+            "Final quality invocation is missing before boundary history writing.",
+          ),
+        )
+    val historyStop = writeGoalHistory(finalState, request, attempted, invocationId)
+    return if (historyStop != null) {
+      ValidatedPublicationPrep.Stopped(historyStop)
+    } else {
+      ValidatedPublicationPrep.Ready(invocationId, qaResult)
+    }
   }
 
   private fun commitAndPublish(
@@ -223,14 +247,33 @@ public class GoalRunnerFinalization(
     }
     val result = publication.openPullRequest(finalState, request, qaResult)
     return when (result) {
+      is GoalPullRequestOpenOutcome.ProviderPaused ->
+        pauseForProviderLimit(
+          finalState,
+          attempted,
+          result.reason,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
+        )
+      is GoalPullRequestOpenOutcome.Ready ->
+        finishPublishedPullRequest(finalState, request, attempted, result.result)
+    }
+  }
+
+  private fun finishPublishedPullRequest(
+    finalState: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+    pullRequest: GoalPullRequestResult,
+  ): GoalRunnerRunReport =
+    when (pullRequest) {
       is GoalPullRequestResult.Opened ->
-        completeMonitoredGoal(finalState, request, attempted, result.url, GoalPullRequestStatus.OPENED)
+        completeMonitoredGoal(finalState, request, attempted, pullRequest.url, GoalPullRequestStatus.OPENED)
       is GoalPullRequestResult.Existing ->
         completeMonitoredGoal(
           finalState,
           request,
           attempted,
-          result.url,
+          pullRequest.url,
           GoalPullRequestStatus.EXISTING,
         )
       is GoalPullRequestResult.Failed ->
@@ -242,12 +285,32 @@ public class GoalRunnerFinalization(
               finalState.manifest.currentSubtaskIntent.subtaskId.takeIf { it > 0 }
                 ?: finalState.manifest.subtasks.last().id,
             reason = GoalRunnerStopReason.PULL_REQUEST_FAILED,
-            blockedReason = result.reason,
+            blockedReason = pullRequest.reason,
             workflowId = null,
             lastResumableStep = "pr_description",
           ),
         )
     }
+
+  private fun pauseForProviderLimit(
+    state: GoalRunnerManifestState,
+    attempted: List<Int>,
+    reason: String,
+    lastResumableStep: String,
+    reportReason: String = reason,
+  ): GoalRunnerRunReport {
+    pauseBoundary.pauseNow(state.parentWorkflowId, reason)
+    return stopped(
+      StoppedReportArgs(
+        issueKey = state.manifest.issueKey,
+        attempted = attempted,
+        subtaskId = 0,
+        reason = GoalRunnerStopReason.PAUSED,
+        blockedReason = reportReason,
+        workflowId = state.parentWorkflowId,
+        lastResumableStep = lastResumableStep,
+      ),
+    )
   }
 
   private fun writeGoalHistory(
@@ -350,29 +413,40 @@ public class GoalRunnerFinalization(
         state.parentWorkflowId,
         branch,
       )
-    val output =
-      (result as? PhaseRunResult.Completed)?.acceptedOutput?.takeIf(String::isNotBlank)
-        ?: return writeHistoryStopped(
-          state,
-          attempted,
-          "The boundary history writer did not complete with accepted output.",
-        )
-    val afterTree = goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot)
-    if (afterTree !is WorkflowGitOperationResult.Ok || afterTree.value.isBlank()) {
-      return writeHistoryStopped(state, attempted, "Could not read repository contents after boundary history writing.")
+    if (result is PhaseRunResult.Blocked &&
+      FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)
+    ) {
+      return pauseForProviderLimit(state, attempted, result.reason, result.stepId)
     }
-    val postWriterContentFingerprint = afterTree.value.trim()
-    val completion =
-      GoalHistoryCompletion(
-        inputFingerprint = goalHistoryFingerprint(writerInput, preWriterContentFingerprint),
-        preWriterContentFingerprint = preWriterContentFingerprint,
-        postWriterContentFingerprint = postWriterContentFingerprint,
-        acceptedOutput = output,
+    val output = (result as? PhaseRunResult.Completed)?.acceptedOutput?.takeIf(String::isNotBlank)
+    val afterTree = output?.let { goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot) }
+    val postWriterContentFingerprint =
+      (afterTree as? WorkflowGitOperationResult.Ok)?.value?.trim()?.takeIf(String::isNotBlank)
+    if (output != null &&
+      postWriterContentFingerprint != null &&
+      outcomeStore.saveGoalHistoryCompletion(
+        state.parentWorkflowId,
+        invocationId,
+        GoalHistoryCompletion(
+          inputFingerprint = goalHistoryFingerprint(writerInput, preWriterContentFingerprint),
+          preWriterContentFingerprint = preWriterContentFingerprint,
+          postWriterContentFingerprint = postWriterContentFingerprint,
+          acceptedOutput = output,
+        ),
       )
-    if (!outcomeStore.saveGoalHistoryCompletion(state.parentWorkflowId, invocationId, completion)) {
-      return writeHistoryStopped(state, attempted, "Could not durably record boundary history writer completion.")
+    ) {
+      return null
     }
-    return null
+    return writeHistoryStopped(
+      state,
+      attempted,
+      when {
+        output == null -> "The boundary history writer did not complete with accepted output."
+        postWriterContentFingerprint == null ->
+          "Could not read repository contents after boundary history writing."
+        else -> "Could not durably record boundary history writer completion."
+      },
+    )
   }
 
   private fun qualityInvocationIsCurrent(
@@ -481,22 +555,27 @@ public class GoalRunnerFinalization(
           publication.resolveFindingsLedger(state.manifest.issueKey),
         ).copy(monitoringSummary = acceptedMonitoringSummary(result.completedOutputs))
       }
-      is PhaseRunResult.Blocked ->
-        stopped(
-          StoppedReportArgs(
-            issueKey = state.manifest.issueKey,
-            attempted = attempted,
-            subtaskId = 0,
-            reason = GoalRunnerStopReason.BLOCKED,
-            blockedReason =
-              listOf(result.reason, acceptedMonitoringSummary(result.completedOutputs))
-                .filterNotNull()
-                .filter(String::isNotBlank)
-                .joinToString("\n\n"),
-            workflowId = state.parentWorkflowId,
-            lastResumableStep = result.stepId,
-          ),
-        )
+      is PhaseRunResult.Blocked -> {
+        val summary = acceptedMonitoringSummary(result.completedOutputs)
+        val blockedReason =
+          listOfNotNull(result.reason.takeIf(String::isNotBlank), summary?.takeIf(String::isNotBlank))
+            .joinToString("\n\n")
+        if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)) {
+          pauseForProviderLimit(state, attempted, result.reason, result.stepId, blockedReason)
+        } else {
+          stopped(
+            StoppedReportArgs(
+              issueKey = state.manifest.issueKey,
+              attempted = attempted,
+              subtaskId = 0,
+              reason = GoalRunnerStopReason.BLOCKED,
+              blockedReason = blockedReason,
+              workflowId = state.parentWorkflowId,
+              lastResumableStep = result.stepId,
+            ),
+          )
+        }
+      }
     }
 
   private fun acceptedMonitoringSummary(completedOutputs: List<String>): String? =
@@ -712,6 +791,12 @@ private data class GoalHistoryWriteInput(
   val preWriterContentFingerprint: String,
 )
 
+internal sealed interface GoalPullRequestOpenOutcome {
+  data class Ready(val result: GoalPullRequestResult) : GoalPullRequestOpenOutcome
+
+  data class ProviderPaused(val reason: String) : GoalPullRequestOpenOutcome
+}
+
 @Inject
 public class GoalRunnerPullRequests(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
@@ -726,7 +811,7 @@ public class GoalRunnerPullRequests(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     qaResult: GoalQaGateResult,
-  ): GoalPullRequestResult {
+  ): GoalPullRequestOpenOutcome {
     val facts =
       state.manifest.pullRequestFacts(
         goalQaSummary = goalQaSummary(state, qaResult),
@@ -738,7 +823,8 @@ public class GoalRunnerPullRequests(
         unknownScenarios = { subtask -> unknownScenariosFor(state, subtask) },
       )
     val fallback = state.manifest.pullRequestRequestOf(request.repoRoot, facts)
-    return writtenPullRequest(state, request, fallback, facts) ?: pullRequestPort.open(fallback)
+    writtenPullRequest(state, request, fallback, facts)?.let { return it }
+    return GoalPullRequestOpenOutcome.Ready(pullRequestPort.open(fallback))
   }
 
   private fun writtenPullRequest(
@@ -746,21 +832,27 @@ public class GoalRunnerPullRequests(
     request: GoalRunnerRunRequest,
     fallback: GoalPullRequestRequest,
     facts: List<GoalPullRequestFactSection>,
-  ): GoalPullRequestResult? {
+  ): GoalPullRequestOpenOutcome? {
     val head = fallback.headBranch.takeIf(String::isNotBlank) ?: return null
     if (pullRequestIdentityLookup.lookup(request.repoRoot, head) != PullRequestIdentity.Absent) return null
     val instructions = state.manifest.pullRequestDescriptionInstructions(fallback, facts)
-    catchingNonCancellation {
-      pullRequestWriter.run(goalPullRequestPhaseRequest(request, instructions), state.parentWorkflowId, head)
-    }.onSuccess { result ->
-      if (result is PhaseRunResult.Blocked) warnPullRequestWriter("stopped at '${result.stepId}': ${result.reason}")
-    }.onFailure { failure ->
-      val contained = containableFailure(failure)
-      warnPullRequestWriter("failed: ${contained.javaClass.simpleName}: ${contained.message}")
+    val writerResult =
+      catchingNonCancellation {
+        pullRequestWriter.run(goalPullRequestPhaseRequest(request, instructions), state.parentWorkflowId, head)
+      }.getOrElse { failure ->
+        val contained = containableFailure(failure)
+        warnPullRequestWriter("failed: ${contained.javaClass.simpleName}: ${contained.message}")
+        null
+      }
+    if (writerResult is PhaseRunResult.Blocked) {
+      if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(writerResult.reason)) {
+        return GoalPullRequestOpenOutcome.ProviderPaused(writerResult.reason)
+      }
+      warnPullRequestWriter("stopped at '${writerResult.stepId}': ${writerResult.reason}")
     }
     return when (val written = pullRequestIdentityLookup.lookup(request.repoRoot, head)) {
-      is PullRequestIdentity.Found -> GoalPullRequestResult.Opened(written.url)
-      is PullRequestIdentity.Merged -> GoalPullRequestResult.Existing(written.url)
+      is PullRequestIdentity.Found -> GoalPullRequestOpenOutcome.Ready(GoalPullRequestResult.Opened(written.url))
+      is PullRequestIdentity.Merged -> GoalPullRequestOpenOutcome.Ready(GoalPullRequestResult.Existing(written.url))
       else -> {
         warnPullRequestWriter("left no pull request on '$head'; opening it with the runtime-composed description.")
         null
@@ -845,6 +937,7 @@ public class GoalRunnerPullRequests(
     }
     val recorded = outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)
     return when {
+      result is GoalQaGateResult.Paused -> GoalQaSummary.NotRecorded
       result is GoalQaGateResult.Warned -> GoalQaSummary.Warned(result.reason, recorded)
       recorded != null -> GoalQaSummary.Recorded(recorded)
       else -> GoalQaSummary.NotRecorded
@@ -929,6 +1022,17 @@ public class PhaseRunGoalPullRequestWriter(
     parentWorkflowId: String,
     branch: String,
   ): PhaseRunResult = phaseRunEntry.runForGoal(request, parentWorkflowId, branch)
+}
+
+private sealed interface ValidatedPublicationPrep {
+  data class Ready(
+    val invocationId: String,
+    val qaResult: GoalQaGateResult,
+  ) : ValidatedPublicationPrep
+
+  data class Stopped(
+    val report: GoalRunnerRunReport,
+  ) : ValidatedPublicationPrep
 }
 
 private const val MAX_WARNING_REASON = 200

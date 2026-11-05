@@ -4,6 +4,7 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.phaserun.PhaseRunEntryFixture
+import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.phaserun.plans
@@ -23,6 +24,8 @@ import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
+import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -37,6 +40,10 @@ import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.CancellationException
@@ -45,6 +52,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DefaultGoalRunnerQaGateTest {
   @TempDir lateinit var home: Path
@@ -159,6 +167,82 @@ class DefaultGoalRunnerQaGateTest {
     assertEquals(StandaloneQaOutcome.INCOMPLETE, recorded.outcome)
     assertEquals(FeatureTaskQaFailureKind.ENVIRONMENT, recorded.failureKind)
     assertEquals(message, recorded.reason)
+  }
+
+  @Test
+  fun `provider limit pause maps blocked QA and build phases without qa_fix build warning`() {
+    val pauseReason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Feature-task-runtime phase 'qa'",
+        agentId = "claude",
+        resumePhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage limit exceeded", resetHint = null),
+      )
+    val git =
+      RecordingWorkflowGitOperations().apply {
+        repositoryFingerprintValue = TREE_IDENTITY
+        trackedPathsValue = listOf("src/HomeScreen.kt")
+      }
+    val outcomes =
+      object : QaGateOutcomeStore() {
+        override fun goalQualityPhaseProgress(
+          parentWorkflowId: String,
+          invocationId: String,
+          definitionId: String,
+          acceptedPlan: String,
+        ) = GoalQualityPhaseProgress(
+          terminalBlockedStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+          terminalBlockedReason = pauseReason,
+        )
+      }
+    val qaPack =
+      kotlinPackWithValidationGate().copy(
+        qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), "qa/android-qa.md"),
+      )
+    val invariants =
+      FeatureTaskRuntimeRunInvariantsRead.Read(
+        FeatureTaskRuntimeRunInvariants(
+          specReference = "SKILL-431",
+          acceptanceCriteria = listOf("The home screen shows the signed-in user name."),
+          mandatesAndOverrides = emptyList(),
+        ),
+      )
+
+    val result = gate(git, outcomes, listOf(qaPack), invariants = invariants).run(state(), request())
+
+    assertEquals(
+      GoalQaGateResult.Paused(pauseReason, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA),
+      result,
+    )
+    assertEquals(
+      GoalQualityExecutionStatus.QA_PENDING,
+      outcomes.goalQualityExecution("goal-parent")?.execution?.status,
+    )
+    assertNull(outcomes.goalFinalRepairContext("goal-parent")?.warning)
+    assertEquals(emptyList(), outcomes.goalFinalRepairContext("goal-parent")?.outputs.orEmpty())
+    val blockedAtBuild =
+      PhaseRunResult.Blocked(
+        "quality-inv",
+        emptyList(),
+        null,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+        pauseReason,
+      )
+    assertEquals(
+      GoalQaGateResult.Paused(pauseReason, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX),
+      goalQaProviderLimitPause(blockedAtBuild),
+    )
+    assertNull(buildAfterQaFixWarning(blockedAtBuild))
+    val ordinaryBlock =
+      PhaseRunResult.Blocked(
+        "quality-inv",
+        emptyList(),
+        null,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+        "compile failed after qa_fix",
+      )
+    assertNull(goalQaProviderLimitPause(ordinaryBlock))
+    assertTrue(buildAfterQaFixWarning(ordinaryBlock)?.contains("qa_fix left the app without a passing build") == true)
   }
 
   @Test
