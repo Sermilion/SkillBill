@@ -1,3 +1,13 @@
+## [2026-11-05] Classify direct review launches on stderr before generic exit messages
+Context: Application review runners call AgentRunLauncher without DefaultPhaseRunner PROVIDER_LIMIT classification.
+Decision: reviewLaunchProviderLimitPauseReason runs FeatureTaskRuntimeProviderLimitDetector on non-zero exits before agent exited with status or PROCESS_FAILURE copy.
+Reason: Usage-limit stderr would otherwise surface as repairable review failures despite sharing the same detector as feature-task slots.
+
+## [2026-11-05] No OperationOutcome.Paused or OperationStepResult.Paused
+Context: Provider-limit pauses must not consume repair attempts, but the bundle forbids new pause outcome types outside feature-task slot settlement.
+Decision: Operations keep OperationOutcome.Blocked and OperationStepResult.Refused while the subtask-1 classifier distinguishes provider-limit pause copy from other blocked reasons.
+Reason: One marker-bearing reason string aligns CLI, verify loops, and projections without widening operation result enums.
+
 ## [2026-11-03] Classify unsafe branches as report-only before repair
 Context: Subtask 1 treated every branch as report-only. Subtask 2 must repair some branches without pushing to the default branch, a protected branch, or a branch the caller cannot push.
 Decision: Classify REPORT_ONLY in that order of reasons, with null protection or push data counting as report-only. MAINTAINER_CAN_MODIFY is never used for a branch target. A REPORT_ONLY failure names the reason and does not repair.

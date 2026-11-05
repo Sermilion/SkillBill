@@ -1,3 +1,18 @@
+## [2026-11-05] Tail-wide reset extraction with earliest match
+Context: Codex emits usage_limit_exceeded before try again at timestamps in the same tail.
+Decision: extractResetHint scans the full inspected tail for both reset and try again at patterns and keeps the earliest capture with existing trim and bounds.
+Reason: Line-only extraction left resetHint null and dropped Access resets from pause copy.
+
+## [2026-11-05] Single detector and domain-owned pause marker
+Context: Later subtasks must not fork provider-limit regexes or pause prose.
+Decision: Extend FeatureTaskRuntimeProviderLimitDetector only; centralize marker and reason in FeatureTaskRuntimeProviderLimitPause with engine delegation.
+Reason: Duplicate lists would diverge when provider wording changes; subtasks 2–5 depend on one marker substring.
+
+## [2026-11-05] Keep PhaseRunResult Completed|Blocked with a string classifier
+Context: Subtask 1 shares pause copy without restructuring feature-task phase settlement.
+Decision: Leave PhaseRunResult as Completed|Blocked; classify pause copy via isProviderLimitPauseReason on the reason string only.
+Reason: Later subtasks read Blocked.reason without a new result type; LaunchResult.ProviderLimited already pauses the run.
+
 ## [2026-10-19] Add goal-child revision 4 instead of editing revision 3
 Context: SKILL-431 removes QA from goal children, but goals in flight have children recorded on goal-child revision 3 with qa and qa_fix steps.
 Decision: GOAL_CHILD becomes revision 4 without the QA slot, and the old definition stays in entries as GOAL_CHILD_REVISION_3. admittedForRun still returns only the newest constant.

@@ -1,5 +1,15 @@
 # Boundary History — runtime-domain
 
+## [2026-11-05] SKILL-452 subtask 1 — Shared pause vocabulary
+Areas: runtime-domain workflow/taskruntime/validation; runtime-engine featuretask runner and DefaultPhaseRunner classify
+- FeatureTaskRuntimeProviderLimitDetector adds case-insensitive usage_limit_exceeded and scans the full inspected tail for reset and Codex try-again-at hints; earliest match wins; compilation RateLimiter tails still yield null.
+- FeatureTaskRuntimeProviderLimitPause owns the marker, reason builder, and isProviderLimitPauseReason substring classifier; providerLimitPauseReason delegates with agent id from invokedAgentId or launch agent wire value.
+- DefaultPhaseRunner still wraps providerLimitSignal as PROVIDER_LIMIT only; LaunchResult.ProviderLimited and PhaseAttemptOnce pause settlement unchanged.
+- Pattern: one detector and one domain pause-copy owner for later consumers; reusable
+- Limits: goal assessment, standalone, operations, and application-review wiring land in SKILL-452 subtasks 2–5; no PhaseRunResult.Paused or auto-retry at reset time.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented for this subtask
+
 ## [2026-11-03] SKILL-463 Accept Windows drive paths in repository identity decode
 Areas: runtime-domain FeatureTaskExecutionIdentityPolicy; runtime-application identity tests
 - Identity decode treats a drive-letter absolute Git root as valid, same as a Unix absolute root. Drive-relative forms such as C:repo still fail, as do relative paths after the prefix.
