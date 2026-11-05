@@ -37,6 +37,7 @@ internal class ClaudeLiveSession(
   private var unpromptedOpen = false
   private var reply: ChatReplyStream? = null
   private var streamStarted = false
+  private var wroteText = false
 
   /** Routes the reply to the message [uuid] into [sink]; false once the process ended, so the caller starts a new one. */
   fun register(uuid: String, sink: SendChannel<ChatEvent>): Boolean = synchronized(lock) {
@@ -83,16 +84,25 @@ internal class ClaudeLiveSession(
       val sink = synchronized(lock) { root.string("uuid")?.let(pending::remove) } ?: return
       if (unpromptedOpen) emit(ChatEvent.Completed)
       target = sink
-      reply = ChatReplyStream(diagnostics)
+      openReply()
       return
     }
-    val events = decodeClaudeLine(text)
+    val events = buildList {
+      if (wroteText && root?.startsClaudeTextBlock() == true) add(ChatEvent.TextDelta(TEXT_BLOCK_SEPARATOR))
+      addAll(decodeClaudeLine(text))
+    }
     if (events.isEmpty()) return
     if (target == null && !unpromptedOpen) {
       unpromptedOpen = true
-      reply = ChatReplyStream(diagnostics)
+      openReply()
     }
+    if (events.any { it is ChatEvent.TextDelta }) wroteText = true
     events.forEach(::emit)
+  }
+
+  private fun openReply() {
+    reply = ChatReplyStream(diagnostics)
+    wroteText = false
   }
 
   private fun emit(event: ChatEvent) {
@@ -158,3 +168,5 @@ private fun userMessage(uuid: String, text: String, images: List<ChatImage>): St
     }
   }
 }.toString()
+
+private const val TEXT_BLOCK_SEPARATOR = "\n\n"
