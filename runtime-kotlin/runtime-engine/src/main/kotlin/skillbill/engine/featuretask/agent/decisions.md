@@ -1,3 +1,8 @@
+## [2026-11-05] Treat repeated empty check observations as an operational completion result
+Context: A PR can report no checks even though checks may register later. A failed lookup does not establish an empty result, and indefinite waiting prevents goals without reported checks from completing.
+Decision: Accept two successful empty observations at least two minutes apart for the same PR and nonblank head, followed by fresh matching identity confirmation, as `NoChecksReported`. Keep the existing outcome token and scope prior-check evidence to the PR identity. Goal monitoring requires a supplied published SHA to match.
+Reason: The operator's bounded observation policy allows completion without claiming that CI is unconfigured or that no checks will appear later. Users must inspect the PR again if delayed checks matter.
+
 ## [2026-11-05] Project provider-limit pause without IdeStatusPauseReasonCode
 Context: Desktop showed AWAITING_OPERATOR_DECISION for usage-limit pauses when a blocked row or current subtask was present.
 Decision: Treat classifier-accepted pause text as PAUSED lifecycle and exactPauseReason; skip operator-decision overlays for that string.

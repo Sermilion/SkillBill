@@ -590,7 +590,10 @@ public class GoalRunnerFinalization(
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR -> "CI result"
             else -> return@mapNotNull null
           }
-        output.output.value.takeIf(String::isNotBlank)?.let { "$label: $it" }
+        output.output.value.takeIf(String::isNotBlank)?.let {
+          val resultLabel = if (it.startsWith("No checks were reported")) "Monitoring result" else label
+          "$resultLabel: $it"
+        }
       }
       .takeIf { it.isNotEmpty() }
       ?.joinToString("\n")

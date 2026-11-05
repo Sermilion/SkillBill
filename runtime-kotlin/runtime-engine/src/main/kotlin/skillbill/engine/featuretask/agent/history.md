@@ -1,3 +1,10 @@
+## [2026-11-05] TWS-1 complete goals without CI
+Areas: runtime-engine featuretask monitor and goalrunner finalization; runtime command guidance; workflow playbook; skill-bill source
+- Goal and standalone PR monitors accept two successful empty check observations at least two minutes apart for the same PR and nonblank head, followed by fresh identity confirmation. Goal monitoring also matches a supplied published SHA.
+- Failed reads and identity changes reset the candidate. A check previously seen for that identity prevents an empty result; reported checks follow normal monitoring. Standalone branch monitoring keeps its separate policy.
+- Goal completion records `no checks reported`. Delayed or conditional checks may appear later, so guidance asks users to inspect the PR again when those checks matter.
+- Recovery guidance requires fresh identity, ownership, lease, PR and check evidence before an eligible supported resume. It preserves completed work and the existing PR.
+
 ## [2026-11-05] SKILL-452 subtask 4 — standalone CLI and IDE pause for provider usage limits
 Areas: runtime-engine featuretask phaserun and qa; runtime-engine work IdeStatusProjector; runtime-cli phase and codereview; runtime-ports monitor models; orchestration/contracts standalone-monitor
 - Classified provider-limit PhaseRunResult.Blocked settles standalone IDE state as paused, skips block-incident capture, maps monitor primary outcome to PAUSED, and passes QA without an INCOMPLETE verdict.
