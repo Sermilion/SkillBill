@@ -2,19 +2,23 @@ package dev.skillbill.runtime.buildlogic
 
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.withType
+import org.gradle.process.CommandLineArgumentProvider
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+import java.io.File
 
 private const val JDK_VERSION = 21
 private const val MAX_TEST_FORKS = 8
 private const val TEST_FORK_CPU_DIVISOR = 2
 private const val TEST_MAX_HEAP = "2g"
+private const val TASK_TEMP_KEY_WIDTH = 8
 
 private val HARNESS_ENVIRONMENT_GATES =
   listOf(
@@ -61,6 +65,7 @@ private fun Project.configureKotlinJvmTestDefaults() {
         environment(gate, value.get())
       }
     }
+    isolateJvmTempDir()
     if (project.hasProperty("update-snapshots")) {
       systemProperty("update-snapshots", "true")
     }
@@ -83,4 +88,41 @@ private fun Project.configureKotlinJvmTestDefaults() {
       }
     }
   }
+}
+
+private fun Test.isolateJvmTempDir() {
+  val taskKey =
+    "${project.rootDir.absolutePath}$path".hashCode().toUInt().toString(radix = 16).padStart(TASK_TEMP_KEY_WIDTH, '0')
+  val tempRoot = project.gradle.gradleUserHomeDir
+  val tempDir = File(tempRoot, "$TEST_TEMP_PREFIX$taskKey")
+  jvmArgumentProviders.add(JvmTempDirArgument(tempDir))
+  doFirst {
+    sweepStaleTestTempDirs(tempRoot, System.currentTimeMillis())
+    tempDir.deleteRecursively()
+    tempDir.mkdirs()
+  }
+  doLast {
+    tempDir.deleteRecursively()
+  }
+}
+
+internal fun sweepStaleTestTempDirs(
+  root: File,
+  nowMillis: Long,
+) {
+  root
+    .listFiles { file ->
+      file.isDirectory &&
+        file.name.startsWith(TEST_TEMP_PREFIX) &&
+        nowMillis - file.lastModified() > STALE_TEST_TEMP_MILLIS
+    }?.forEach(File::deleteRecursively)
+}
+
+internal const val TEST_TEMP_PREFIX = "sbt-"
+internal const val STALE_TEST_TEMP_MILLIS = 24L * 60L * 60L * 1000L
+
+private class JvmTempDirArgument(
+  @get:Internal val tempDir: File,
+) : CommandLineArgumentProvider {
+  override fun asArguments(): Iterable<String> = listOf("-Djava.io.tmpdir=${tempDir.absolutePath}")
 }

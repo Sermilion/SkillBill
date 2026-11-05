@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.data.runtime.BoardPage
 import dev.skillbill.desktop.core.data.runtime.BoardReads
 import dev.skillbill.desktop.core.data.signal.ChangedIds
 import dev.skillbill.desktop.core.data.signal.SignalSnapshot
+import skillbill.contracts.persistence.DesktopReadSchema
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardCounts
 import dev.skillbill.desktop.core.domain.model.BoardQuery
@@ -50,6 +51,7 @@ class BoardObservationTest {
     assertEquals(allItems, observedItems)
     assertEquals(1, reads.completeReads)
     assertEquals(0, reads.pageReads)
+    assertEquals(DesktopReadSchema.SIGNALLED_TOPICS.toSet(), signal().revisions.keys)
   }
 
   @Test
@@ -192,7 +194,7 @@ internal fun signal(
   changed: Map<String, ChangedIds> = emptyMap(),
 ) = SignalSnapshot(
   generation = "g1",
-  revisions = mapOf("goals" to goals, "phases" to phases, "activity" to activity, "specs" to 1L),
+  revisions = mapOf("goals" to goals, "phases" to phases, "activity" to activity, "specs" to 1L, "diff_comments" to 1L),
   changed = changed,
   resynchronize = false,
   resyncEpoch = 0,

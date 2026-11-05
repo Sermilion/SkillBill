@@ -58,16 +58,16 @@ public class GoalAssessmentStrategy : PhaseStrategy() {
         "the checked-out feature branch head, not at the commit where a subtask landed; use a subtask's " +
         "commit range only to locate what it changed, because a later subtask can break or repair an earlier " +
         "one. Nothing else tells you what was reviewed, audited, validated, or accepted before you. " +
-        "Report concrete evidence-backed defects at every severity. Leave speculation unconfirmed. Skip style " +
-        "and preference. Include the complete machine projection and finish assessor output with " +
-        "`Projection complete: <record count>`. Answer with plain lines in the grammar the role focus names. " +
+        "Report only a defect you can state as a concrete failure scenario: an input or state, the code path " +
+        "that mishandles it, and the wrong result. Skip style, preference, and speculation. Answer with " +
+        "plain lines in the grammar the role focus names, one record per line, and nothing else. " +
         "Findings: `Finding: <Blocker|Major|Minor> <path>:<line> scenario <failure scenario>`, or " +
         "`Finding: none` when you found no defect. " +
         "Tests that guard nothing: `Test value: <test path>:<line> guards <path>:<line> reason <why the test " +
         "would still pass if the guarded behavior broke>`. " +
         "Declared scenarios: `Scenario <IS-NNN>: <holds|broken> evidence <path:line citations>`. " +
         "Declared regressions: `Regression <TR-NNN>: <restored|not_restored> evidence <path:line citations>`. " +
-        "Only a verifier role writes `Verify` lines; its role section names that grammar. " +
-        "Cite file and line for every claim."
+        "Verification: `Verify <GA-NNN>: <confirmed|refuted> evidence <path:line citations>`, or " +
+        "`Verify: none` when no candidate was listed. Cite file and line for every claim."
   }
 }

@@ -169,6 +169,29 @@ class RuntimeLayerBoundaryArchitectureTest {
   }
 
   @Test
+  fun `thread constructor guard rejects JVM threads without rejecting comment thread names`() {
+    val source =
+      SourceFile(
+        relativePath = "runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/Synthetic.kt",
+        packageName = "skillbill.application",
+        imports = emptyList(),
+        source = "fun addAgentThread() = DiffCommentThread(findThread())",
+      )
+    assertNoBannedSourceReferences(listOf(source), listOf("Thread("), "environment API reference")
+    listOf("Thread()", "java.lang.Thread ()", "Thread {}").forEach { constructor ->
+      val failure =
+        assertFails {
+          assertNoBannedSourceReferences(
+            listOf(source.copy(source = "val worker = $constructor")),
+            listOf("Thread("),
+            "environment API reference",
+          )
+        }
+      assertContains(failure.message.orEmpty(), "contains environment API reference Thread(")
+    }
+  }
+
+  @Test
   fun `application domain and ports avoid direct file IO`() {
     assertNoDirectFileIo(sourceFiles())
   }

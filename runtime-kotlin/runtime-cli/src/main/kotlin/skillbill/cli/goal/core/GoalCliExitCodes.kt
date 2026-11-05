@@ -1,11 +1,11 @@
 package skillbill.cli.goal.core
 
+import skillbill.cli.kernel.cli.GOAL_EXIT_PAUSED
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 
 internal const val GOAL_EXIT_COMPLETE: Int = 0
 internal const val GOAL_EXIT_FAILED: Int = 1
-internal const val GOAL_EXIT_PAUSED: Int = 2
 internal const val GOAL_EXIT_BLOCKED: Int = 3
 
 internal fun GoalRunnerRunReport.goalRunExitCode(): Int =

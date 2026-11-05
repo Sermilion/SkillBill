@@ -36,8 +36,10 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -420,6 +422,101 @@ class IdeStatusServiceGoalProjectionTest {
       assertEquals(IdeStatusLifecycleState.BLOCKED, result.snapshot.lifecycleState)
       assertEquals("Goal SKILL-148 is blocked.", result.snapshot.summary)
     }
+  }
+
+  @Test
+  fun `provider limit paused goal projects paused without awaiting operator decision`() {
+    val pauseReason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Goal assessment",
+        agentId = "claude",
+        resumePhaseId = "goal_assessment",
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage limit", resetHint = null),
+      )
+    val fixture = gitRepoFixture("ide-status-goal-provider-limit-pause")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val control =
+      GoalRunnerControlState(
+        paused = true,
+        pauseReason = pauseReason,
+        pausedAt = "2026-08-02T10:00:00Z",
+        repositoryIdentity = identity,
+      )
+    val service =
+      ideStatusService(
+        TrackingDatabase(
+          work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, "blocked", "2026-08-06T10:00:00Z")),
+          workflows = IdeStatusWorkflowStates(),
+          controls =
+            object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+              override fun controlState(parentWorkflowId: String): GoalRunnerControlState = control
+            },
+        ),
+        manifestStore =
+          StubGoalManifestStore(
+            goalManifestState(fixture, identity, childWorkflowId = "w-child")
+              .copy(controlState = control),
+          ),
+      )
+
+    val status =
+      service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+    val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+    assertEquals(IdeStatusLifecycleState.PAUSED, status.snapshot.lifecycleState)
+    assertNull(status.snapshot.pauseReason)
+    assertEquals(pauseReason, detail.exactPauseReason)
+    assertEquals(IdeStatusLifecycleState.PAUSED, detail.snapshot.lifecycleState)
+  }
+
+  @Test
+  fun `provider limit paused goal with leftover operator decision child stays paused`() {
+    val pauseReason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Goal assessment",
+        agentId = "claude",
+        resumePhaseId = "goal_assessment",
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage limit", resetHint = null),
+      )
+    val fixture = gitRepoFixture("ide-status-goal-provider-limit-leftover-operator")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val control =
+      GoalRunnerControlState(
+        paused = true,
+        pauseReason = pauseReason,
+        pausedAt = "2026-08-02T10:00:00Z",
+        repositoryIdentity = identity,
+      )
+    val database =
+      goalWithLaunchedChildDatabase(
+        identity,
+        Instant.parse("2026-08-06T09:15:00Z"),
+        childArtifactsJson =
+          blockedQualityGateChildArtifacts(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+            "Configure GITHUB_REGISTRY_AUTH then run npm ci:safe",
+            FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+          ),
+        childCurrentStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+      )
+    val service =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            goalManifestState(fixture, identity, childWorkflowId = "w-child")
+              .copy(controlState = control),
+          ),
+      )
+
+    val status =
+      service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+    val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+    assertEquals(IdeStatusLifecycleState.PAUSED, status.snapshot.lifecycleState)
+    assertNull(status.snapshot.pauseReason)
+    assertEquals(pauseReason, detail.exactPauseReason)
+    assertEquals(IdeStatusLifecycleState.PAUSED, detail.snapshot.lifecycleState)
   }
 
   @Test

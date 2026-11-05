@@ -8,7 +8,14 @@ import dev.skillbill.desktop.core.domain.model.ChangeScopeTarget
 import dev.skillbill.desktop.core.domain.model.ChangeSet
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
+import dev.skillbill.desktop.core.domain.model.Comment
+import dev.skillbill.desktop.core.domain.model.CommentAuthor
+import dev.skillbill.desktop.core.domain.model.CommentRejection
+import dev.skillbill.desktop.core.domain.model.CommentSide
+import dev.skillbill.desktop.core.domain.model.CommentState
+import dev.skillbill.desktop.core.domain.model.CommentThread
 import dev.skillbill.desktop.core.domain.model.ChangesState
+import dev.skillbill.desktop.core.domain.model.DiffCommentsState
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailSections
@@ -25,9 +32,12 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.repository.WorkChangeScopesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
+import dev.skillbill.desktop.core.domain.repository.DiffCommentRepository
+import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +45,8 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -48,6 +60,7 @@ class ChangesWindowViewModelTest {
   private val details = FakeWorkDetailRepository()
   private val scopes = FakeChangeScopes()
   private val opener = RecordingOpener()
+  private val comments = FakeDiffComments()
   private val baseline = ChangeBaseline.RunStart("/repo", "base", emptyList())
 
   @AfterTest
@@ -59,7 +72,7 @@ class ChangesWindowViewModelTest {
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
 
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.Subtasks(2, 2), details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.Subtasks(2, 2), details, scopes, opener, comments)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.All, viewModel.state.value.scope)
@@ -67,11 +80,98 @@ class ChangesWindowViewModelTest {
   }
 
   @Test
+  fun `a failed submit keeps the drafts and shows the reason`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    comments.submitResult = Outcome.Failure(CommentRejection("closed"))
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.SubmitReview)
+    runCurrent()
+
+    assertEquals(2, viewModel.state.value.pendingCount)
+    assertEquals("closed", viewModel.state.value.review.problem)
+    assertEquals(false, viewModel.state.value.review.submitting)
+    assertEquals(null, viewModel.state.value.reviewToast)
+  }
+
+  @Test
+  fun `a successful submit clears the bar and the toast expires`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    comments.submitResult = Outcome.Success(2)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.SubmitReview)
+    runCurrent()
+    assertEquals(0, viewModel.state.value.pendingCount)
+    assertEquals("Review added · 2 comments", viewModel.state.value.reviewToast)
+
+    advanceTimeBy(2_600)
+    runCurrent()
+    assertEquals(null, viewModel.state.value.reviewToast)
+  }
+
+  @Test
+  fun `a completed save does not erase a replacement draft at the same anchor`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    val write = CompletableDeferred<Outcome<Unit, CommentRejection>>()
+    comments.pendingWrite = write
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+    viewModel.onAction(ChangesWindowAction.OpenComposer("src/A.kt", CommentSide.New, 10))
+    viewModel.onAction(ChangesWindowAction.ComposerText("original"))
+    viewModel.onAction(ChangesWindowAction.SavePending)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.CancelComposer)
+    viewModel.onAction(ChangesWindowAction.OpenComposer("src/A.kt", CommentSide.New, 10))
+    viewModel.onAction(ChangesWindowAction.ComposerText("replacement"))
+    write.complete(Outcome.Success(Unit))
+    runCurrent()
+
+    assertEquals("replacement", viewModel.state.value.composer?.text)
+    assertEquals(false, viewModel.state.value.composer?.saving)
+  }
+
+  @Test
+  fun `a submit completed after a branch change cannot show feedback on the new branch`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    val write = CompletableDeferred<Outcome<Int, CommentRejection>>()
+    comments.reviewWrite = write
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+    viewModel.onAction(ChangesWindowAction.SubmitReview)
+    runCurrent()
+
+    comments.state.value = availablePending().copy(branch = "other")
+    runCurrent()
+    write.complete(Outcome.Success(2))
+    runCurrent()
+
+    assertEquals(2, viewModel.state.value.pendingCount)
+    assertEquals(null, viewModel.state.value.reviewToast)
+    assertEquals(ReviewBarUi(), viewModel.state.value.review)
+  }
+
+  @Test
   fun `a refresh keeps a still-listed selection and otherwise selects the first file`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
     advanceUntilIdle()
 
@@ -99,7 +199,7 @@ class ChangesWindowViewModelTest {
       stats = mapOf(3 to SubtaskStats(listOf(foo), 1, 0), 5 to SubtaskStats(listOf(foo), 1, 0)),
       timeline = timelineFor(listOf(subtask(3), subtask(5))),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/Bar.kt"), foo)
     advanceUntilIdle()
     viewModel.onAction(ChangesWindowAction.SelectFile(foo.path))
@@ -133,7 +233,7 @@ class ChangesWindowViewModelTest {
       timeline = timelineFor(listOf(subtask(3), subtask(5))),
     )
     scopes.list(ChangeScope.Subtasks(3, 3)).value = ScopeChangesState.BaseUnavailable("start3 is not in the repository")
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(3, 3), details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(3, 3), details, scopes, opener, comments)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.Subtasks(3, 3), viewModel.state.value.scope)
@@ -153,7 +253,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     val detail = detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
     advanceUntilIdle()
 
     detail.value = DetailState(phase, DetailSections.Gone)
@@ -218,7 +318,7 @@ class ChangesWindowViewModelTest {
         ScopeCommit("c", "op", "last", listOf(2)),
       )),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
     advanceUntilIdle()
     viewModel.requestScope(ChangeScope.Subtasks(2, 2))
 
@@ -258,7 +358,7 @@ class ChangesWindowViewModelTest {
       "/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap(), timeline = timelineFor(listOf(subtask(1))),
     )
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(1, 1), details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.Subtasks(1, 1), details, scopes, opener, comments)
     advanceUntilIdle()
 
     assertEquals(ChangeScope.Subtasks(1, 1), viewModel.state.value.scope)
@@ -270,7 +370,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"))
     advanceUntilIdle()
     val request = viewModel.state.value.scrollRequest
@@ -296,7 +396,7 @@ class ChangesWindowViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"), file("b/B.kt"), file("c/C.kt"))
     advanceUntilIdle()
     viewModel.onAction(ChangesWindowAction.EnsureDiffs(listOf("b/B.kt", "c/C.kt")))
@@ -318,7 +418,7 @@ class ChangesWindowViewModelTest {
     scopes.subtasks.value = SubtaskScopesState.Listed(
       "/repo", "main", rangesSupported = true, subtasks = listOf(subtask(1)), stats = emptyMap(), timeline = timelineFor(listOf(subtask(1))),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
     scopes.list(ChangeScope.All).value = listed(file("a/A.kt"))
     advanceUntilIdle()
     viewModel.onAction(ChangesWindowAction.EnsureDiffs(listOf("a/A.kt")))
@@ -330,11 +430,32 @@ class ChangesWindowViewModelTest {
   }
 
   @Test
+  fun `a rejected state change keeps the stored state and shows its reason`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = DiffCommentsState.Available("main", listOf(
+      CommentThread("thread", "src/A.kt", CommentSide.New, 2, null, CommentState.Open, false, null, null, null,
+        listOf(Comment("comment", CommentAuthor.User, null, "Question", null, epoch, null))),
+    ), canAuthor = true)
+    comments.stateChange = Outcome.Failure(CommentRejection("closed"))
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    advanceUntilIdle()
+
+    viewModel.onAction(ChangesWindowAction.SetThreadState("thread", CommentState.Resolved))
+    advanceUntilIdle()
+
+    val available = viewModel.state.value.comments as DiffCommentsState.Available
+    assertEquals(CommentState.Open, available.threads.single().state)
+    assertEquals("closed", viewModel.state.value.threadUi.getValue("thread").problem)
+  }
+
+  @Test
   fun `file moves stop at the end and open skips deleted files`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val phase = workItem("P", kind = WorkKind.Phase)
     detailOf(phase)
-    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
     val deleted = ChangedFile("a/Gone.kt", null, ChangeStatus.Deleted, 0, 3)
     scopes.list(ChangeScope.All).value = listed(deleted, file("a/Kept.kt"))
     advanceUntilIdle()
@@ -367,7 +488,7 @@ class ChangesWindowViewModelTest {
       "/repo", "main", rangesSupported = true, subtasks = subtasks, stats = emptyMap(),
       timeline = ChangeScopeTimeline("base", "head", commits),
     )
-    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener)
+    val viewModel = ChangesWindowViewModel(goal, ChangeScope.All, details, scopes, opener, comments)
     advanceUntilIdle()
     return viewModel
   }
@@ -386,6 +507,27 @@ class ChangesWindowViewModelTest {
       opened += baseline.worktreeRoot to file.path
       return outcome
     }
+  }
+
+  private class FakeDiffComments : DiffCommentRepository {
+    val state = MutableStateFlow<DiffCommentsState>(DiffCommentsState.Loading)
+    var stateChange: Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
+    var submitResult: Outcome<Int, CommentRejection> = Outcome.Success(0)
+    var pendingWrite: CompletableDeferred<Outcome<Unit, CommentRejection>>? = null
+    var reviewWrite: CompletableDeferred<Outcome<Int, CommentRejection>>? = null
+
+    override fun observe(baseline: ChangeBaseline): Flow<DiffCommentsState> = state
+    override suspend fun reply(threadId: String, body: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
+    override suspend fun setState(threadId: String, state: CommentState): Outcome<Unit, CommentRejection> = stateChange
+    override suspend fun deleteComment(commentId: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
+    override suspend fun addPending(baseline: ChangeBaseline, branch: String, path: String, side: CommentSide?, line: Int?, body: String): Outcome<Unit, CommentRejection> = pendingWrite?.await() ?: Outcome.Success(Unit)
+    override suspend fun editComment(commentId: String, body: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
+    override suspend fun submitReview(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> {
+      reviewWrite?.let { return it.await() }
+      if (submitResult is Outcome.Success) state.value = availablePending().copy(threads = availablePending().threads.map { it.copy(state = CommentState.Open) })
+      return submitResult
+    }
+    override suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> = Outcome.Success(0)
   }
 
   private fun detailOf(item: WorkItem): MutableStateFlow<DetailState> {
@@ -432,6 +574,11 @@ class ChangesWindowViewModelTest {
 
   private companion object {
     val epoch: Instant = Instant.fromEpochMilliseconds(0)
+
+    fun availablePending() = DiffCommentsState.Available("main", listOf(
+      CommentThread("pending-1", "src/A.kt", CommentSide.New, 10, null, CommentState.Pending, false, null, null, null, emptyList()),
+      CommentThread("pending-2", "src/A.kt", CommentSide.New, 11, null, CommentState.Pending, false, null, null, null, emptyList()),
+    ), canAuthor = true)
 
     fun detail(baseline: ChangeBaseline) = Detail(
       featureTitle = null, workflowId = null, invocationId = null, activeAgent = null, executionLiveness = null,

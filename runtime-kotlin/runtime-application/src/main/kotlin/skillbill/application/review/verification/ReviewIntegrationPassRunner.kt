@@ -87,7 +87,8 @@ internal class ReviewIntegrationPassRunner(
     launchBytes: Long,
     reportContract: ParallelCodeReviewReportContract,
   ): ReviewIntegrationPassOutcome {
-    val terminal = terminalOutcomeOf(facts)
+    val pauseDetail = reviewLaunchProviderLimitPauseReason(facts, INTEGRATION_PASS_PHASE_LABEL)
+    val terminal = terminalOutcomeOf(facts, pauseDetail)
     val reportOnly = reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY
     val parsed =
       if (terminal == ReviewIntegrationTerminalOutcome.COMPLETED || reportOnly) {
@@ -104,7 +105,12 @@ internal class ReviewIntegrationPassRunner(
       launchBytes = launchBytes,
       resultBytes = facts.stdout.toByteArray(Charsets.UTF_8).size.toLong(),
       modelTurns = 1,
-      failureReason = if (terminal == ReviewIntegrationTerminalOutcome.COMPLETED) null else terminal.wireValue,
+      failureReason =
+        when {
+          terminal == ReviewIntegrationTerminalOutcome.COMPLETED -> null
+          pauseDetail != null -> pauseDetail
+          else -> terminal.wireValue
+        },
       rawOutput = if (reportOnly) facts.stdout else "",
       outputTruncated = reportOnly && facts.stdoutTruncated,
     )
@@ -213,8 +219,12 @@ internal class ReviewIntegrationPassRunner(
       }
     }
 
-  private fun terminalOutcomeOf(facts: AgentRunLaunchFacts): ReviewIntegrationTerminalOutcome =
+  private fun terminalOutcomeOf(
+    facts: AgentRunLaunchFacts,
+    pauseDetail: String?,
+  ): ReviewIntegrationTerminalOutcome =
     when {
+      pauseDetail != null -> ReviewIntegrationTerminalOutcome.FAILED
       facts.termination == AgentRunTermination.TimedOut -> ReviewIntegrationTerminalOutcome.TIMEOUT
       facts.termination == AgentRunTermination.Interrupted -> ReviewIntegrationTerminalOutcome.INTERRUPTED
       facts.termination == AgentRunTermination.SpawnFailed -> ReviewIntegrationTerminalOutcome.SPAWN_FAILURE

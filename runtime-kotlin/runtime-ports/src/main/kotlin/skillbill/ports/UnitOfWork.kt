@@ -20,6 +20,7 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
+import skillbill.ports.review.diffcomment.DiffCommentStore
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -53,6 +54,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val blockIncidents: BlockIncidentRepository
   val blockIncidentRecoveries: BlockIncidentRecoveryRepository
   val productReports: ProductReportRepository
+  val diffComments: DiffCommentStore
 
   fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
 

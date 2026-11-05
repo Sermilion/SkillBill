@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner
 
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.assessment.GoalAssessmentRoundResult
+import skillbill.engine.goalrunner.assessment.GoalAssessmentStageResult
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
@@ -20,9 +21,11 @@ internal class RecordingGoalRunnerAssessmentGate(
   override fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): GoalAssessmentRecord {
+  ): GoalAssessmentStageResult {
     events += "assessment"
-    return GoalAssessmentRecord(state.manifest.issueKey, exitReason = exitReason)
+    return GoalAssessmentStageResult.Completed(
+      GoalAssessmentRecord(state.manifest.issueKey, exitReason = exitReason),
+    )
   }
 
   override fun skipNoChanges(state: GoalRunnerManifestState) {

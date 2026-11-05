@@ -8,11 +8,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.io.TempDir
+import skillbill.contracts.persistence.DesktopReadSchema
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 
@@ -35,6 +37,7 @@ class CommitSignalWatcherTest {
         watcher.snapshots.first { it.generation == "g1" }
         replace(signal, "g2", revision = 2)
         val next = watcher.snapshots.first { it.generation == "g2" }
+        assertEquals(2L, next.revisions[DesktopReadSchema.DIFF_COMMENTS_TOPIC])
         assertTrue(next.resynchronize)
       }
       job.cancelAndJoin()
@@ -43,7 +46,7 @@ class CommitSignalWatcherTest {
 
   private fun replace(signal: Path, generation: String, revision: Long) {
     val staged = Files.createTempFile(signal.parent, "signal", ".tmp")
-    Files.writeString(staged, "generation=$generation\ngoals=$revision\nphases=$revision\nactivity=$revision\nspecs=$revision\n")
+    Files.writeString(staged, "generation=$generation\ngoals=$revision\nphases=$revision\nactivity=$revision\nspecs=$revision\ndiff_comments=$revision\n")
     Files.move(staged, signal, ATOMIC_MOVE, REPLACE_EXISTING)
   }
 }

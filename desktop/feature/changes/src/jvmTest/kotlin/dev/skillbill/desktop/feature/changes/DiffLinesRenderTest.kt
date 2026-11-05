@@ -22,7 +22,9 @@ class DiffLinesRenderTest {
     val file = ChangedFile("a/B.html", null, ChangeStatus.Added, 1, 0)
     val loaded = LoadedDiff(file, FileDiffState.Shown(diff), diffRowCount(diff), diffLongestChars(diff))
     val scene = ImageComposeScene(1200, 800, Density(2f)) {
-      SkillBillTheme(reducedMotion = true) { FileDiffStream(listOf(file), mapOf(file.path to loaded), file.path, 0, {}) }
+      SkillBillTheme(reducedMotion = true) {
+        FileDiffStream(listOf(file), mapOf(file.path to loaded), file.path, 0, emptyList(), {}, {})
+      }
     }
     try {
       repeat(3) { scene.render(it * 16_000_000L) }

@@ -7,6 +7,37 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeProviderLimitDetectorTest {
   @Test
+  fun `recognizes Codex usage_limit_exceeded without inventing a reset time`() {
+    val signal = requireNotNull(FeatureTaskRuntimeProviderLimitDetector.detect("usage_limit_exceeded"))
+
+    assertEquals("usage_limit_exceeded", signal.evidence)
+    assertNull(signal.resetHint)
+  }
+
+  @Test
+  fun `extracts try again at reset hint from later lines in the inspected tail`() {
+    val stderr =
+      "usage_limit_exceeded\n" +
+        "You've hit your usage limit. Please try again at Nov 5th, 2026 2:05 AM"
+    val signal = requireNotNull(FeatureTaskRuntimeProviderLimitDetector.detect(stderr))
+
+    assertEquals("usage_limit_exceeded", signal.evidence)
+    assertEquals("Nov 5th, 2026 2:05 AM", signal.resetHint)
+  }
+
+  @Test
+  fun `a reset at the end of an earlier line does not steal a later try-again timestamp`() {
+    val stderr =
+      "please reset\n" +
+        "usage_limit_exceeded\n" +
+        "You've hit your usage limit. Please try again at Nov 5th, 2026 2:05 AM"
+    val signal = requireNotNull(FeatureTaskRuntimeProviderLimitDetector.detect(stderr))
+
+    assertEquals("usage_limit_exceeded", signal.evidence)
+    assertEquals("Nov 5th, 2026 2:05 AM", signal.resetHint)
+  }
+
+  @Test
   fun `recognizes a session-limit refusal and keeps the provider's own reset statement`() {
     val signal =
       requireNotNull(

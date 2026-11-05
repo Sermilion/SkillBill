@@ -212,19 +212,19 @@ class AuthoringRenderOutputTest {
     val packRoot = repoRoot.resolve("platform-packs/fixturepack")
     val skillDir = packRoot.resolve("code-review/bill-fixturepack-code-review")
     Files.createDirectories(skillDir)
-    Files.createDirectories(repoRoot.resolve("shared"))
-    val classesDir = repoRoot.resolve("orchestration/skill-classes")
-    Files.createDirectories(classesDir)
+    val classesDir = Files.createDirectories(repoRoot.resolve("orchestration/skill-classes"))
     Files.writeString(
-      classesDir.resolve("fixture.yaml"),
+      classesDir.resolve("fixture-render.yaml"),
       """
-      class: fixture
+      class: fixture-render
       contract_version: "1.8"
       matchers:
         - exact: bill-fixturepack-code-review
       pointers: []
+      ceremony_lines: []
       """.trimIndent() + "\n",
     )
+    Files.createDirectories(repoRoot.resolve("shared"))
     Files.writeString(repoRoot.resolve("shared/z.md"), "# z")
     Files.writeString(repoRoot.resolve("shared/a.md"), "# a")
     Files.writeString(skillDir.resolve("content.md"), platformFixtureContent())

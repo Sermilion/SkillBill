@@ -16,6 +16,11 @@ public sealed interface GoalQaGateResult {
   public data class Skipped(public val reason: GoalQaSkipReason) : GoalQaGateResult
 
   public data class Warned(public val reason: String) : GoalQaGateResult
+
+  public data class Paused(
+    public val reason: String,
+    public val stepId: String,
+  ) : GoalQaGateResult
 }
 
 public enum class GoalQaSkipReason(internal val wireValue: String) {

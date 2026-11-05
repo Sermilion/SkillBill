@@ -1,3 +1,14 @@
+## [2026-11-04] SKILL-451 inline diff comments in Changes
+Areas: desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/feature/changes, runtime-kotlin/runtime-application
+- Threads render inline under diff lines, at file separators, or in a General block. `ThreadPlacement` decides this at layout time from the thread list and scope; `LoadedDiff` stays hunks only. reusable
+- `DiffCommentRepository` re-lists on the diff comment topic and baseline changes, and allows authoring only when the worktree branch matches the listed branch. reusable
+- `FileDiffStream` interleaves thread items with stable `thread:<id>` keys; `diffRows` and file start indexes share one slot model so jump-to-file and scroll-follow stay aligned.
+- Thread cards support reply, resolve, decline, reopen and delete; rejected writes show the reason on the card. Motion uses `AnimatedVisibility`, off under reduced motion.
+- Hover and `c`-key authoring anchor to OLD or NEW lines or the file; drafts compose and edit inline. A floating bar publishes or discards pending drafts, derives its count from rendered state, keeps drafts on failure, and shows a local 2.6-second toast on success.
+- Limits: comments are local to the repository branch; detached HEAD or a branch mismatch rejects writes.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-04] SKILL-461 Changes window commit timeline
 Areas: desktop/core/domain, desktop/core/data, desktop/core/ui, desktop/feature/changes, desktop/feature/detail, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-infra/workflow, runtime-kotlin/runtime-ports
 - The runtime reads merge-base..HEAD and attributes commits by valid subtask trailers, then recorded SHA. Other commits are Operator commits. Finished subtasks show a changed-after-finish badge when ownership differs from the recorded SHA.

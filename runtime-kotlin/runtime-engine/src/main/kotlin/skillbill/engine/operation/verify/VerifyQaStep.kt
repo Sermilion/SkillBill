@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.report.QaReports
 import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.slot.qa.QaPromptSections
+import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -134,17 +135,23 @@ public class VerifyQaStep(
     run: VerifyRun,
     prior: Map<String, String>,
   ): VerifyStepDone {
-    val settled =
+    val launchResult =
       execution.withExecution(run.context.repoRoot, QaPolicy.ON, revision = run.target.headRevision) { qa ->
         when (val target = qa.target) {
-          is QaExecutionTarget.Skipped -> QaReports.skipped(target.reason, target.detail)
+          is QaExecutionTarget.Skipped -> QaStepLaunchResult.Report(QaReports.skipped(target.reason, target.detail))
           is QaExecutionTarget.Supported -> launch(run, target.checkout, qa, prior)
         }
       }
-    val retained = QaReports.withRetainedResources(settled.value, settled.retainedResources, RETAINED_GUIDANCE)
-    val report = retained.copy(warnings = retained.warnings + settled.warnings)
-    settlement.recordDiagnostics(report)
-    return settled(report)
+    when (val inner = launchResult.value) {
+      is QaStepLaunchResult.Refused -> return VerifyStepDone.Refused(inner.refusal)
+      is QaStepLaunchResult.Report -> {
+        val retained =
+          QaReports.withRetainedResources(inner.report, launchResult.retainedResources, RETAINED_GUIDANCE)
+        val report = retained.copy(warnings = retained.warnings + launchResult.warnings)
+        settlement.recordDiagnostics(report)
+        return settled(report)
+      }
+    }
   }
 
   private fun launch(
@@ -152,7 +159,7 @@ public class VerifyQaStep(
     checkout: Path,
     qa: QaExecutionContext,
     prior: Map<String, String>,
-  ): QaReport {
+  ): QaStepLaunchResult {
     val directive =
       VerifyPromptSections.qaDirective(
         checkout,
@@ -165,9 +172,9 @@ public class VerifyQaStep(
           (run.context.additionalWritableDirectories + listOf(qa.workspace.directory)).distinct(),
       )
     return when (val step = run.context.steps.runReportOnly(context, VerifyPromptSections.QA_STEP, directive, prior)) {
-      is OperationStepResult.Failed -> stopped(step.reason)
-      is OperationStepResult.Refused -> stopped(step.refusal.reason)
-      is OperationStepResult.Settled -> settlement.settle(qa)
+      is OperationStepResult.Failed -> QaStepLaunchResult.Report(stopped(step.reason))
+      is OperationStepResult.Refused -> QaStepLaunchResult.Refused(step.refusal)
+      is OperationStepResult.Settled -> QaStepLaunchResult.Report(settlement.settle(qa))
     }
   }
 
@@ -212,4 +219,10 @@ public class VerifyQaStep(
         "<state dir>/qa/<repo-key>/leases/ (state dir: SKILL_BILL_STATE_DIR, else ~/.skill-bill) once no QA run " +
         "uses the device. Remove a retained QA checkout with `git worktree remove --force <path>`."
   }
+}
+
+private sealed interface QaStepLaunchResult {
+  data class Report(val report: QaReport) : QaStepLaunchResult
+
+  data class Refused(val refusal: OperationOutcome.Blocked) : QaStepLaunchResult
 }

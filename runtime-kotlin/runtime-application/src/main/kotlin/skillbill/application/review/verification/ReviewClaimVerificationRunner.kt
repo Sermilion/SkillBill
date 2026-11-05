@@ -36,6 +36,7 @@ import skillbill.review.model.ReviewVerificationNonSuccess
 import skillbill.review.model.repositoryRelativePathViolation
 import skillbill.review.parsing.ReviewFindingFieldCodec
 import skillbill.review.stage.ReviewStageDegradationSelection
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.time.Clock
 
 class ReviewClaimVerificationRunner(
@@ -80,30 +81,7 @@ class ReviewClaimVerificationRunner(
         skipReason = "every finding already holds a durable verification verdict",
       )
     }
-    val recordedAt = clock.instant().toString()
-    val citationDiagnostics = mutableListOf<ReviewFindingCitationDiagnosticWithFinding>()
-    val verdicts =
-      pending.map { finding ->
-        verifyOne(
-          VerificationFindingInput(
-            packet = request.packet,
-            reviewOutput = request.reviewOutput,
-            finding = finding,
-            mode = request.mode,
-            launch = request.launch,
-            recordedAt = recordedAt,
-          ),
-        ).also { outcome ->
-          citationDiagnostics += outcome.citationDiagnostics
-        }.verdict
-      }
-    return ReviewClaimVerificationOutcome(
-      verdicts =
-        request.existingVerdicts.filter {
-          it.stage == ReviewStage.VERIFICATION && it.findingRef in durableRefs
-        } + verdicts,
-      citationDiagnostics = citationDiagnostics,
-    )
+    return verifyPendingFindings(request, request.packet, pending, durableRefs, clock.instant().toString())
   }
 
   private fun verifyReviewOutput(input: ProseVerificationInput): ReviewClaimVerificationOutcome {
@@ -185,15 +163,72 @@ class ReviewClaimVerificationRunner(
       nonSuccess = ReviewVerificationNonSuccess(reason, detail),
     )
 
-  private data class VerificationFindingOutcome(
-    val verdict: ReviewFindingVerdict,
-    val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
-  )
+  private fun verifyPendingFindings(
+    request: ReviewClaimVerificationRunRequest,
+    packet: ReviewContextPacket,
+    pending: List<ParallelReviewMergedFinding>,
+    durableRefs: Set<String>,
+    recordedAt: String,
+  ): ReviewClaimVerificationOutcome {
+    val citationDiagnostics = mutableListOf<ReviewFindingCitationDiagnosticWithFinding>()
+    val verdicts = mutableListOf<ReviewFindingVerdict>()
+    val durable =
+      request.existingVerdicts.filter {
+        it.stage == ReviewStage.VERIFICATION && it.findingRef in durableRefs
+      }
+    for (finding in pending) {
+      when (
+        val outcome =
+          verifyOne(
+            VerificationFindingInput(
+              packet = packet,
+              reviewOutput = request.reviewOutput,
+              finding = finding,
+              mode = request.mode,
+              launch = request.launch,
+              recordedAt = recordedAt,
+            ),
+          )
+      ) {
+        is VerificationFindingOutcome.Pause ->
+          return ReviewClaimVerificationOutcome(
+            verdicts = durable + verdicts,
+            skipReason = outcome.reason,
+            nonSuccess =
+              ReviewVerificationNonSuccess(
+                ReviewStageDegradationReason.WORKER_LAUNCH_OR_RETURN_FAILED,
+                outcome.reason,
+              ),
+            citationDiagnostics = citationDiagnostics + outcome.citationDiagnostics,
+          )
+        is VerificationFindingOutcome.Settled -> {
+          citationDiagnostics += outcome.citationDiagnostics
+          verdicts += outcome.verdict
+        }
+      }
+    }
+    return ReviewClaimVerificationOutcome(
+      verdicts = durable + verdicts,
+      citationDiagnostics = citationDiagnostics,
+    )
+  }
+
+  private sealed interface VerificationFindingOutcome {
+    data class Settled(
+      val verdict: ReviewFindingVerdict,
+      val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
+    ) : VerificationFindingOutcome
+
+    data class Pause(
+      val reason: String,
+      val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
+    ) : VerificationFindingOutcome
+  }
 
   private fun verifyOne(input: VerificationFindingInput): VerificationFindingOutcome {
     val region =
       citedRegionOf(input.finding)
-        ?: return VerificationFindingOutcome(
+        ?: return VerificationFindingOutcome.Settled(
           unresolved(input.finding, input.recordedAt, "finding has no cited file:line region"),
         )
     val launch =
@@ -209,7 +244,7 @@ class ReviewClaimVerificationRunner(
     val envelope = launch.toVerificationLaunchEnvelope().asWireMap()
     val launchBytes = JsonCodec.mapToJsonString(envelope).toByteArray(Charsets.UTF_8).size.toLong()
     if (launchBytes > input.launch.budget.maxLaneLaunchBytes) {
-      return VerificationFindingOutcome(
+      return VerificationFindingOutcome.Settled(
         ReviewFindingVerdict(
           stage = ReviewStage.VERIFICATION,
           findingRef = input.finding.fNumber,
@@ -243,7 +278,7 @@ class ReviewClaimVerificationRunner(
       )
     return when (outcome) {
       is UnsupportedAgentRunLaunch ->
-        VerificationFindingOutcome(
+        VerificationFindingOutcome.Settled(
           unresolved(input.finding, input.recordedAt, "unsupported agent: ${outcome.reason}"),
         )
       is AgentRunLaunchDenied -> error("Review claim verification never launches with a spawn authorization.")
@@ -257,16 +292,21 @@ class ReviewClaimVerificationRunner(
     recordedAt: String,
   ): VerificationFindingOutcome {
     launchFailureReason(facts)?.let { reason ->
-      return VerificationFindingOutcome(unresolved(finding, recordedAt, reason))
+      if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(reason)) {
+        return VerificationFindingOutcome.Pause(reason)
+      }
+      return VerificationFindingOutcome.Settled(unresolved(finding, recordedAt, reason))
     }
     val worker =
       parseWorkerResult(facts.stdout)
-        ?: return VerificationFindingOutcome(unresolved(finding, recordedAt, "unparseable verification output"))
+        ?: return VerificationFindingOutcome.Settled(
+          unresolved(finding, recordedAt, "unparseable verification output"),
+        )
     val diagnostics =
       worker.citationDiagnostics.map { diagnostic ->
         diagnostic.withFindingRef(finding.fNumber)
       }
-    return VerificationFindingOutcome(
+    return VerificationFindingOutcome.Settled(
       verdict = ReviewClaimVerdictAdmission.admit(finding, worker, recordedAt).verdict,
       citationDiagnostics = diagnostics,
     )
@@ -418,14 +458,19 @@ internal fun intValue(raw: Any?): Int? =
     else -> null
   }
 
-internal fun launchFailureReason(facts: AgentRunLaunchFacts): String? =
+internal fun launchFailureReason(
+  facts: AgentRunLaunchFacts,
+  phaseLabel: String = CLAIM_VERIFICATION_PHASE_LABEL,
+): String? =
   when (val termination = facts.termination) {
     AgentRunTermination.TimedOut -> "agent timed out"
     AgentRunTermination.SpawnFailed -> "agent process failed to spawn"
     AgentRunTermination.Interrupted -> "agent was interrupted"
     is AgentRunTermination.Exited ->
       when {
-        termination.code != 0 -> "agent exited with status ${termination.code}"
+        termination.code != 0 ->
+          reviewLaunchProviderLimitPauseReason(facts, phaseLabel)
+            ?: "agent exited with status ${termination.code}"
         facts.stdoutTruncated -> "agent output exceeded the retention cap before completion"
         else -> null
       }

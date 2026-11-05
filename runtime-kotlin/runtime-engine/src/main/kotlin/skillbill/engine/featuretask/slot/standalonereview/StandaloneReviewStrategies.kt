@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.slot.standalonereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.application.review.diffcomment.DiffCommentService
+import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.application.review.model.InlineReviewRubricPlan
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewReportContract
@@ -12,6 +14,7 @@ import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.service.StandaloneReviewReportReader
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -40,6 +43,7 @@ import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -48,6 +52,7 @@ import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINU
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.review.diffcomment.model.DiffCommentOutcome
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewLaneReviewDisposition
@@ -66,7 +71,8 @@ import kotlin.time.Duration.Companion.minutes
 public open class InlineStandaloneReviewStrategy(
   runner: PhaseRunner,
   rubricResolver: InlineReviewRubricResolver? = null,
-) : StandaloneReviewStrategy(runner, null, rubricResolver) {
+  comments: DiffCommentService? = null,
+) : StandaloneReviewStrategy(runner, null, rubricResolver, comments) {
   override val strategyId: String = ID
 
   public companion object {
@@ -77,7 +83,8 @@ public open class InlineStandaloneReviewStrategy(
 public open class DelegatedStandaloneReviewStrategy(
   runner: PhaseRunner,
   reviewRunner: ParallelCodeReviewRunner,
-) : StandaloneReviewStrategy(runner, reviewRunner) {
+  comments: DiffCommentService? = null,
+) : StandaloneReviewStrategy(runner, reviewRunner, comments = comments) {
   override val strategyId: String = ID
 
   public companion object {
@@ -90,6 +97,7 @@ public abstract class StandaloneReviewStrategy(
   private val reviewRunner: ParallelCodeReviewRunner?,
   private val rubricResolver: InlineReviewRubricResolver? =
     reviewRunner?.let { InlineReviewRubricResolver(it::resolveInlineCodeQualityRubric) },
+  private val comments: DiffCommentService? = null,
 ) : PhaseStrategy() {
   override val slot: PhaseSlot = PhaseSlot.STANDALONE_REVIEW
   override val steps: List<String> = listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS)
@@ -282,14 +290,84 @@ public abstract class StandaloneReviewStrategy(
       )
       return PhaseOutcome.blocked(presented)
     }
+    val accepted = verification as VerificationResult.Accepted
+    postStandaloneThreads(run, binding, reviewRunId, report)
+    refuteRejectedStandaloneThreads(run, binding, reviewRunId, report, accepted)
     return completeReport(
       binding,
       iteration,
       report.copy(
-        registerOutput = (verification as VerificationResult.Accepted).register,
-        verdict = verification.verdict,
+        registerOutput = accepted.register,
+        verdict = accepted.verdict,
       ),
     )
+  }
+
+  private fun postStandaloneThreads(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+    reviewRunId: String,
+    report: StandaloneReviewReport,
+  ) {
+    val comments = comments ?: return
+    val findings = report.findingGroups.mapNotNull { group -> group.finding?.copy(fNumber = group.identity) }
+    val diagnostics = binding.reviewExecutionContext().diagnostics
+    val agentId = run.resolvedAgent.resolvedAgentId
+    val posted =
+      catchingNonCancellation {
+        comments.recordReviewFindings(run.request.repoRoot, "review:$reviewRunId", agentId, findings)
+      }
+    val failure = posted.exceptionOrNull()
+    val counts = posted.getOrNull()
+    if (failure != null || counts?.failed?.let { it > 0 } == true) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Feature-task-runtime could not post review diff comments for issue ${run.request.issueKey}, " +
+          "review run $reviewRunId; operation post review diff comments; written=${counts?.written ?: 0}, " +
+          "reused=${counts?.reused ?: 0}, failed=${counts?.failed ?: 0}, " +
+          "first_failure=${counts?.firstFailureReason ?: failure?.message ?: "none"}.",
+        failure,
+      )
+    }
+  }
+
+  private fun refuteRejectedStandaloneThreads(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+    reviewRunId: String,
+    report: StandaloneReviewReport,
+    accepted: VerificationResult.Accepted,
+  ) {
+    val comments = comments ?: return
+    val diagnostics = binding.reviewExecutionContext().diagnostics
+    val agentId = run.resolvedAgent.resolvedAgentId
+    report.findingGroups
+      .filter { group ->
+        group.finding != null &&
+          group.members.all { member -> accepted.sourceFindingDispositions[member.identity] == "rejected" }
+      }
+      .forEach { group ->
+        val result =
+          catchingNonCancellation {
+            comments.replyReviewOutcome(
+              run.request.repoRoot,
+              "review:$reviewRunId:${group.identity}",
+              "Refuted during review verification.",
+              DiffCommentOutcome.REFUTED,
+              agentId,
+            )
+          }
+        val error = result.exceptionOrNull()
+        val value = result.getOrNull()
+        if (error != null || value !is DiffCommentThreadResult.Saved) {
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Feature-task-runtime could not reply refuted to review finding ${group.identity} for review run " +
+              "$reviewRunId; operation reply refuted.",
+            error,
+          )
+        }
+      }
   }
 
   private fun retainRawReview(
@@ -444,21 +522,31 @@ public abstract class StandaloneReviewStrategy(
             verification.warningClassifications.getValue(warning.identity)
           }
       }
-    val verdict = verifiedFindingVerdict(report, verification.findingDispositions, warningClassifications)
+    val findingDispositions =
+      report.findingGroups.associate { group ->
+        group.identity to disposition(group.members.map { verification.findingDispositions.getValue(it.identity) })
+      }
+    val verdict = verifiedFindingVerdict(report, findingDispositions, warningClassifications)
     val register =
       buildString {
         appendLine(presentedFindings(report))
         appendLine()
         appendLine(StandaloneReviewReportReader.VERIFICATION_HEADING)
-        report.census.forEach { finding ->
-          appendLine("- ${presentedLabel(finding)}: ${verification.findingDispositions.getValue(finding.identity)}")
+        report.findingGroups.forEach { group ->
+          appendLine("- ${presentedLabel(group)}: ${findingDispositions.getValue(group.identity)}")
+          appendLine(
+            "Source classifications for ${group.identity}: " +
+              group.members.joinToString(", ") { member ->
+                "${member.identity}=${verification.findingDispositions.getValue(member.identity)}"
+              },
+          )
         }
         report.reviewWarnings.forEach { warning ->
           appendLine("- ${warning.identity} (${warning.source}): ${warningClassifications.getValue(warning.identity)}")
         }
         append("verdict: $verdict")
       }
-    return VerificationResult.Accepted(register, verdict)
+    return VerificationResult.Accepted(register, verdict, findingDispositions, verification.findingDispositions)
   }
 
   private fun presentedFindings(report: StandaloneReviewReport): String =
@@ -467,10 +555,14 @@ public abstract class StandaloneReviewStrategy(
       .joinToString("\n")
       .trimEnd()
 
-  private fun presentedLabel(finding: StandaloneReviewFinding): String =
-    StandaloneReviewReportReader.read(finding.text)?.findings?.singleOrNull()?.ref
-      ?.takeIf { finding.text.contains("[$it]") }
-      ?: "${finding.identity} (unstructured report text)"
+  private fun presentedLabel(group: StandaloneReviewFindingGroup): String = group.identity
+
+  private fun disposition(sourceDispositions: List<String>): String =
+    when {
+      sourceDispositions.any { it == "unresolved" } -> "unresolved"
+      sourceDispositions.any { it == "confirmed" } -> "confirmed"
+      else -> "rejected"
+    }
 
   private fun verificationInput(
     run: PhaseRun,
@@ -810,11 +902,11 @@ internal fun verifiedFindingVerdict(
 ): String {
   val changes =
     warningClassifications.values.any { it == "incomplete" } ||
-      report.census.any { finding ->
-        when (findingDispositions.getValue(finding.identity)) {
+      report.findingGroups.any { group ->
+        when (findingDispositions.getValue(group.identity)) {
           "unresolved" -> true
           "rejected" -> false
-          "confirmed" -> finding.requiresChangesWhenConfirmed
+          "confirmed" -> group.members.any(StandaloneReviewFinding::requiresChangesWhenConfirmed)
           else -> true
         }
       }
@@ -866,7 +958,12 @@ private data class StandaloneReviewLaunchInput(
 )
 
 private sealed interface VerificationResult {
-  data class Accepted(val register: String, val verdict: String) : VerificationResult
+  data class Accepted(
+    val register: String,
+    val verdict: String,
+    val findingDispositions: Map<String, String> = emptyMap(),
+    val sourceFindingDispositions: Map<String, String> = emptyMap(),
+  ) : VerificationResult
 
   data class Blocked(val reason: String, val evidence: String = "") : VerificationResult
 }

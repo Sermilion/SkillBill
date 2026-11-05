@@ -274,3 +274,8 @@ Reason: The IO pool already bounds blocking threads. SQLite in WAL mode runs con
 Context: The terminal's SwingPanel painted over the Changes dialog and its scrim.
 Decision: DesktopLauncher enables `compose.interop.blending` before either the runtime refusal window or the application initializes Compose.
 Reason: SwingPanel otherwise paints above Compose content regardless of composable order. Blending lets dialogs, scrims and other overlays cover the terminal while its session stays attached.
+
+## [2026-11-04] Keep review submission feedback in the diff pane
+Context: Review publishing needs a short success message tied to the comment bar and diff context.
+Decision: Render the review toast in the Changes diff pane and expire it after 2.6 seconds through the view-model coroutine delay.
+Reason: The application toast stack has a fixed 5-second lifetime and appears outside the review context.

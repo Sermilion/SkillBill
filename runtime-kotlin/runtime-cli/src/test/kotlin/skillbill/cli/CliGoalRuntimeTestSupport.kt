@@ -504,10 +504,8 @@ internal class GoalFixtureAgentRunLauncher(
     return agentRunLaunchFacts(
       agent = SupportedAgent.CODEX,
       stdout =
-        if ("# Goal assessment:" in skillRequest.promptOverride.orEmpty() ||
-          "# Operation: unit-test-value-check (review)" in skillRequest.promptOverride.orEmpty()
-        ) {
-          "Finding: none\nProjection complete: 0"
+        if ("# Goal assessment:" in skillRequest.promptOverride.orEmpty()) {
+          "Finding: none"
         } else {
           phasePlanningPayload(phaseId)
         },
@@ -877,17 +875,6 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
 
   override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "2".repeat(64))
-
-  override fun revisionTreeIdentity(
-    repoRoot: Path,
-    revision: String,
-  ): WorkflowGitOperationResult = repositoryTreeIdentity(repoRoot)
-
-  override fun reviewablePathsAtRevision(
-    repoRoot: Path,
-    revision: String,
-    candidates: List<String>,
-  ): WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(candidates)
 
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,

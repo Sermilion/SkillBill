@@ -2493,6 +2493,7 @@ private val expectedMigrationDefinitions =
     98 to "record-goal-blocked-reason",
     99 to "record-standalone-qa-checklist",
     100 to "drop-goal-shared-preplans-issue-key-unique",
+    101 to "record-diff-comments",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

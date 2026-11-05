@@ -59,6 +59,8 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
   val filterFocus = remember { FocusRequester() }
   val pickerSearch = remember { FocusRequester() }
   var filterFocused by remember { mutableStateOf(false) }
+  val authoring = remember { DiffAuthoringInput() }
+  var focusedReplyId by remember { mutableStateOf<String?>(null) }
   var filterFocusRequests by remember { mutableIntStateOf(0) }
   // The request waits a frame so the `/` typed after its key-down does not land in the filter.
   LaunchedEffect(filterFocusRequests) {
@@ -68,22 +70,33 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
   }
   val focusManager = LocalFocusManager.current
   val textFocused by rememberUpdatedState(filterFocused)
+  val replyFocused by rememberUpdatedState(focusedReplyId)
   val currentOnClose by rememberUpdatedState(onClose)
   DisposableEffect(keys, viewModel) {
     keys.handler = handler@{ event ->
       val key = windowKeyFor(event) ?: return@handler false
-      val open = viewModel.state.value.pickerOpen
+      val current = viewModel.state.value
+      val open = current.pickerOpen
       // The picker popup shares the window scene, so this handler sees its keys first.
       // While it is open its search owns typing. Esc unwinds one level: picker, then filter, then the panel.
       if (key == WindowKey.Escape) {
         when {
+          current.review.confirmingDiscard -> viewModel.onAction(ChangesWindowAction.KeepPending)
           open -> viewModel.onAction(ChangesWindowAction.ClosePicker)
+          replyFocused != null -> return@handler false
+          current.editing != null -> { viewModel.onAction(ChangesWindowAction.CancelEdit); focusManager.clearFocus(); authoring.commentTextFocused = false }
+          current.composer != null -> { viewModel.onAction(ChangesWindowAction.CancelComposer); focusManager.clearFocus(); authoring.commentTextFocused = false }
           textFocused -> focusManager.clearFocus()
           else -> currentOnClose()
         }
         return@handler true
       }
-      if (textFocused || open) return@handler false
+      if (open) return@handler false
+      if (textFocused || authoring.commentTextFocused || replyFocused != null) return@handler false
+      if (key == WindowKey.AddReview) {
+        if (current.pendingCount > 0) viewModel.onAction(ChangesWindowAction.SubmitReview)
+        return@handler true
+      }
       when (key) {
         WindowKey.OpenPicker -> viewModel.onAction(ChangesWindowAction.OpenPicker)
         WindowKey.Previous -> viewModel.onAction(ChangesWindowAction.Step(forward = false))
@@ -94,8 +107,10 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
         WindowKey.FocusFilter -> filterFocusRequests++
         WindowKey.Open -> viewModel.onAction(ChangesWindowAction.OpenSelectedFile)
         WindowKey.Escape -> Unit
+        WindowKey.Comment -> authoring.hovered?.takeIf { current.canAuthor }?.let { viewModel.onAction(ChangesWindowAction.OpenComposer(it.path, it.anchor.side, it.anchor.line)) }
+        WindowKey.AddReview -> Unit
       }
-      true
+      key != WindowKey.Comment || authoring.hovered?.let { current.canAuthor } == true
     }
     onDispose { keys.handler = { false } }
   }
@@ -140,10 +155,12 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
           val listWidth = minOf(FILE_LIST_WIDTH, maxWidth * FILE_LIST_MAX_SHARE)
           Row(Modifier.fillMaxSize()) {
             FileListPane(state, onAction, Modifier.width(listWidth).fillMaxHeight())
-            DiffPane(state, onAction, Modifier.weight(1f).fillMaxHeight())
+            DiffPane(state, onAction, Modifier.weight(1f).fillMaxHeight(), authoring, onReplyFocusChanged = { id, focused ->
+              if (focused) focusedReplyId = id else if (focusedReplyId == id) focusedReplyId = null
+            })
           }
         }
-        ChangesFooter(state.subtasksAvailable, state.view)
+        ChangesFooter(state.subtasksAvailable, state.view, state.canAuthor)
       }
     }
   }
@@ -153,7 +170,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
 private fun CenterHint(text: String) = Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Hint(text) }
 
 @Composable
-private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView) {
+private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView, canAuthor: Boolean) {
   val colors = SkillBillTheme.colors
   val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
   Row(
@@ -169,8 +186,9 @@ private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView) {
     FooterHint(listOf("j", "k"), "file")
     FooterHint(listOf("/"), "filter")
     FooterHint(listOf("o"), "open in editor")
+    if (canAuthor) FooterHint(listOf("c"), "comment")
     Spacer(Modifier.weight(1f))
-    BasicText("Read-only · refreshes every 3 s while the ${if (subtasksAvailable) "goal" else "run"} runs", style = text, maxLines = 1, softWrap = false)
+    BasicText("Refreshes every 3 s while the ${if (subtasksAvailable) "goal" else "run"} runs", style = text, maxLines = 1, softWrap = false)
   }
 }
 

@@ -163,8 +163,13 @@ internal class AgentRunProcessTree(val process: Process) {
   fun refresh(): Set<ProcessHandle> =
     synchronized(lock) {
       observationComplete = false
-      val roots = listOf(process.toHandle()) + descendants.filter(ProcessHandle::isAlive)
-      roots.forEach { root -> root.descendants().use { stream -> descendants.addAll(stream.toList()) } }
+      val covered = process.toHandle().descendants().use { stream -> stream.toList() }.toMutableSet()
+      descendants.forEach { handle ->
+        if (handle !in covered && handle.isAlive) {
+          handle.descendants().use { stream -> covered.addAll(stream.toList()) }
+        }
+      }
+      descendants.addAll(covered)
       observationComplete = true
       descendants.toSet()
     }

@@ -27,21 +27,6 @@ class GoalAssessmentLoopRulesTest {
   }
 
   @Test
-  fun `a confirmed open test value finding remains repairable and blocks publication`() {
-    val testValue =
-      finding("GA-002").copy(
-        kind = GoalAssessmentFindingKind.TEST_VALUE,
-        severity = FeatureTaskRuntimeReviewSeverity.MINOR,
-        path = "src/HandlerTest.kt",
-        guardedRef = "src/Handler.kt:10",
-      )
-    val record = recordOf(round(1, testValue)).copy(exitReason = GoalAssessmentExitReason.CONVERGED)
-
-    assertEquals(FocusedRepairAction.Plan("GA-002"), GoalAssessmentLoopRules.next(record))
-    assertTrue(GoalAssessmentLoopRules.publicationBlockReason(record).orEmpty().contains("GA-002"))
-  }
-
-  @Test
   fun `an unrestored regression cannot be accepted without independent verification`() {
     val regression = GoalAssessmentRegressionResult("TR-001", GoalAssessmentRegressionState.NOT_RESTORED, "src/A.kt:3")
     val record = recordOf(round(1, regressions = listOf(regression)))

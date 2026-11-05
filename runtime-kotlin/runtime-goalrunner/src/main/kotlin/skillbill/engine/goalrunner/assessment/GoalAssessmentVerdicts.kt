@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.assessment
 
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionState
 import skillbill.goalrunner.assessment.model.GoalAssessmentRound
@@ -18,7 +19,7 @@ public data class GoalAssessmentFixSet(
 internal object GoalAssessmentVerdicts {
   fun candidatesOf(findings: List<GoalAssessmentFinding>): List<GoalAssessmentVerifierCandidate> =
     findings.filter(::needsVerdict).map {
-      GoalAssessmentVerifierCandidate(it.findingRef, it.kind, it.path, it.line, it.guardedRef, it.failureScenario)
+      GoalAssessmentVerifierCandidate(it.findingRef, it.path, it.line, it.failureScenario)
     }
 
   fun apply(
@@ -53,11 +54,7 @@ internal object GoalAssessmentVerdicts {
         GoalAssessmentVerification.CONFIRMED ->
           finding.copy(fixRoundsSurvived = finding.fixRoundsSurvived + 1, verificationEvidence = evidence)
         GoalAssessmentVerification.REFUTED ->
-          finding.copy(
-            verification = GoalAssessmentVerification.REFUTED,
-            state = GoalAssessmentFindingState.FIXED,
-            verificationEvidence = evidence,
-          )
+          finding.copy(state = GoalAssessmentFindingState.FIXED, verificationEvidence = evidence)
         else -> finding
       }
     }
@@ -65,13 +62,14 @@ internal object GoalAssessmentVerdicts {
 
   fun carriedCandidatesOf(findings: List<GoalAssessmentFinding>): List<GoalAssessmentVerifierCandidate> =
     findings.filter(::isCarried).map {
-      GoalAssessmentVerifierCandidate(it.findingRef, it.kind, it.path, it.line, it.guardedRef, it.failureScenario)
+      GoalAssessmentVerifierCandidate(it.findingRef, it.path, it.line, it.failureScenario)
     }
 
   fun withDispositions(findings: List<GoalAssessmentFinding>): List<GoalAssessmentFinding> =
     findings.map { finding ->
       val fix =
         finding.state == GoalAssessmentFindingState.OPEN &&
+          finding.kind == GoalAssessmentFindingKind.DEFECT &&
           finding.verification == GoalAssessmentVerification.CONFIRMED
       finding.copy(disposition = if (fix) GoalAssessmentDisposition.FIX else GoalAssessmentDisposition.PR_ONLY)
     }
@@ -102,9 +100,11 @@ internal object GoalAssessmentVerdicts {
   }
 
   private fun isCarried(finding: GoalAssessmentFinding): Boolean =
-    finding.verification == GoalAssessmentVerification.CONFIRMED &&
+    finding.kind == GoalAssessmentFindingKind.DEFECT &&
+      finding.verification == GoalAssessmentVerification.CONFIRMED &&
       finding.state == GoalAssessmentFindingState.OPEN
 
   private fun needsVerdict(finding: GoalAssessmentFinding): Boolean =
-    finding.verification == GoalAssessmentVerification.UNVERIFIED
+    finding.kind == GoalAssessmentFindingKind.DEFECT &&
+      finding.verification == GoalAssessmentVerification.UNVERIFIED
 }

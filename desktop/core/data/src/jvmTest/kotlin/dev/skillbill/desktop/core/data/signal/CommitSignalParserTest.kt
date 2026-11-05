@@ -11,6 +11,7 @@ class CommitSignalParserTest {
     phases=7
     activity=3
     specs=1
+    diff_comments=0
     goals.changed=12:a,b
     phases.changed=7:*
   """.trimIndent()
@@ -20,7 +21,7 @@ class CommitSignalParserTest {
     val snapshot = SignalSnapshot.Initial.advance(parseCommitSignal(payload))
 
     assertEquals("g1", snapshot.generation)
-    assertEquals(mapOf("goals" to 12L, "phases" to 7L, "activity" to 3L, "specs" to 1L), snapshot.revisions)
+    assertEquals(mapOf("goals" to 12L, "phases" to 7L, "activity" to 3L, "specs" to 1L, "diff_comments" to 0L), snapshot.revisions)
     assertEquals(ChangedIds.Ids(12, listOf("a", "b")), snapshot.changed["goals"])
     assertEquals(ChangedIds.All, snapshot.changed["phases"])
     assertEquals(ChangedIds.All, snapshot.changed["activity"])

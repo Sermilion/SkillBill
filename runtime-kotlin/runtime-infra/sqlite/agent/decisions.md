@@ -1,3 +1,8 @@
+## [2026-11-03] Signal diff comments without joining the board topic catalog
+Context: Comment writes must invalidate desktop readers without making comments a primary board topic.
+Decision: Add `DIFF_COMMENTS_TOPIC` to `SIGNALLED_TOPICS` only, seed its revision row on migrate and fresh install, and register both comment tables for desktop change triggers.
+Reason: Commit signals and observation helpers consume signalled topics; leaving it out of `TOPICS` preserves existing board catalog semantics.
+
 ## [2026-10-30] Keep activity writes off board topics
 Context: Worktree journal writes and lease heartbeats bumped goals and phases, so the board re-read on every probe and heartbeat.
 Decision: Journal inserts and lease updates that touch only heartbeat_at or expires_at bump only activity. Journal UPDATE and DELETE triggers are dropped. Lease identity changes still bump goals and phases.
@@ -99,3 +104,8 @@ Reason: One status request needs a consistent snapshot and bounded connection li
 Context: Desktop control admission validates the durable goal and lease before invoking the existing control service. A second SQLite connection cannot write while admission owns the write lock.
 Decision: Nested reads, transactions, and self-managed writes on the same factory and thread join the outer write unit. The outer transaction owns commit and rollback. Thread state clears in finally. An independent write within a read snapshot keeps its existing ownership.
 Reason: Validation and the admitted control must see one durable identity and commit together. The nested-write regression proves rollback and reuse after failure. Desktop status projection joins readIfPresent, which refuses missing or incompatible stores without initialization. CLI read retains its fresh-store initialization contract.
+
+## [2026-11-04] Allocate migration 101 to diff comments
+Context: The spec requested migration 100, which already belongs to `drop-goal-shared-preplans-issue-key-unique`.
+Decision: Add `record-diff-comments` as migration 101 and set `DesktopReadSchema.VERSION` to 101.
+Reason: The next free migration number avoids colliding with the existing migration.

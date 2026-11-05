@@ -148,6 +148,7 @@ properties:
         enum:
           - completed
           - blocked
+          - paused
           - setup_failed
           - run_failed
           - cancelled
