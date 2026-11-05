@@ -50,4 +50,20 @@ class ChatActionButtonsTest {
     onNodeWithText("Run phase:review").performClick()
     assertEquals(listOf(review), chosen)
   }
+
+  @Test
+  fun `run suggestions explain their effects even when disabled`() = runComposeUiTest {
+    val actions = listOf(
+      ChatSuggestedAction("Run phase:pr", "Open a PR.", ChatPermissionMode.Act, NewTaskActionKind.Pr),
+      ChatSuggestedAction("Run operation:feature-guard", "Add a flag.", ChatPermissionMode.Act),
+    )
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ChatActionButtons(actions, false, ChatPermissionMode.Act) {}
+      }
+    }
+
+    onNodeWithText("Commits and pushes changes, opens or updates a pull request, and monitors CI.").assertExists()
+    onNodeWithText("Proposes a feature flag, then adds it after confirmation.").assertExists()
+  }
 }
