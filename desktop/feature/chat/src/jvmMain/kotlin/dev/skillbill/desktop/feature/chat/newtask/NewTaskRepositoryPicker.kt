@@ -173,7 +173,7 @@ internal fun NewTaskRepositoryPickerContent(
                 defaultRow.name ?: "default branch",
                 { composerFocus.requestFocus(); onAction(NewTaskAction.ChooseBaseBranch("")) },
                 endText = "default",
-                checked = draft.baseBranch.isBlank(),
+                checked = draft.baseBranch.isBlank() || (defaultRow.name != null && draft.baseBranch == defaultRow.name),
                 mono = true,
               ),
               highlighted = branchIndex == 0,

@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -34,6 +35,7 @@ import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.RepositoryBranch
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
@@ -79,6 +81,82 @@ class NewTaskComposerTest {
 
     onNodeWithText("Base branch").assertExists()
     onAllNodes(hasSetTextAction()).assertCountEquals(2)
+  }
+
+  @Test
+  fun `the default row reflects the restored branch without changing the draft`() = runComposeUiTest {
+    val repository = NewTaskRepository("/work/app", "app")
+    val draft = testNewTaskDraft().apply {
+      this.repository = repository
+      baseBranch = "main"
+    }
+    val branches = RepositoryBranches(
+      repository.root,
+      "main",
+      listOf(RepositoryBranch("feature/local", Instant.fromEpochMilliseconds(1))),
+      listOf(RepositoryBranch("origin/feature/remote", Instant.fromEpochMilliseconds(3))),
+    )
+    var state by mutableStateOf(NewTaskUiState(
+      repositories = listOf(repository),
+      repositoryPickerOpen = true,
+      branchRead = BranchReadState.Loaded(repository.root, branches),
+    ))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(state, draft) {}
+        }
+      }
+    }
+    waitForIdle()
+
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("main", draft.baseBranch)
+    onNodeWithContentDescription("feature/local", substring = true, useUnmergedTree = true).assert(notSelected())
+    onNodeWithContentDescription("origin/feature/remote", substring = true, useUnmergedTree = true).assert(notSelected())
+
+    onNodeWithContentDescription("Filter branches").performTextInput("mai")
+    waitForIdle()
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("main", draft.baseBranch)
+
+    onNodeWithContentDescription("Filter branches").performTextReplacement("")
+    waitForIdle()
+    runOnIdle { draft.baseBranch = "feature/local" }
+    waitForIdle()
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assert(notSelected())
+    onNodeWithContentDescription("feature/local", substring = true, useUnmergedTree = true).assertIsSelected()
+    assertEquals("feature/local", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "origin/feature/remote" }
+    waitForIdle()
+    onNodeWithContentDescription("origin/feature/remote", substring = true, useUnmergedTree = true).assertIsSelected()
+    assertEquals("origin/feature/remote", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "" }
+    waitForIdle()
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "main" }
+    waitForIdle()
+    runOnIdle {
+      draft.repository = NewTaskRepository("/work/other", "other")
+      state = state.copy(repositories = state.repositories + draft.repository!!)
+    }
+    waitForIdle()
+    onNodeWithContentDescription("default branch, default", useUnmergedTree = true).assert(notSelected())
+    assertEquals("main", draft.baseBranch)
+
+    runOnIdle { state = state.copy(branchRead = BranchReadState.Failed("/work/other", "unavailable")) }
+    waitForIdle()
+    onNodeWithContentDescription("default branch, default", useUnmergedTree = true).assert(notSelected())
+    assertEquals("main", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "" }
+    waitForIdle()
+    onNodeWithContentDescription("default branch, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("", draft.baseBranch)
   }
 
   @Test
@@ -514,6 +592,10 @@ class NewTaskComposerTest {
       }
     }
     waitForIdle()
+  }
+
+  private fun notSelected() = SemanticsMatcher("not selected") {
+    it.config.getOrNull(SemanticsProperties.Selected) != true
   }
 
   private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {
