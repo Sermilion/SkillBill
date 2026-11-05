@@ -1,6 +1,7 @@
 package skillbill.goalrunner.assessment
 
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
@@ -13,6 +14,8 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSever
 import skillbill.contracts.workflow.featuretask.GoalAssessmentRecordPayloadKeys as Keys
 
 object GoalAssessmentRecordShape {
+  const val MAX_UNAVAILABLE_REASON_LENGTH = 1000
+
   fun issues(record: GoalAssessmentRecord): List<GoalAssessmentRecordIssue> =
     buildList {
       if (record.issueKey.isBlank()) add(GoalAssessmentRecordIssue(Keys.ISSUE_KEY, "must not be blank."))
@@ -22,7 +25,24 @@ object GoalAssessmentRecordShape {
       record.rounds.forEachIndexed { index, round -> addAll(roundIssues("${Keys.ROUNDS}[$index]", index + 1, round)) }
       addAll(duplicateFindingRefIssues(record))
       addAll(openRefIssues(record))
+      addAll(unavailableReasonIssues(record))
     }
+
+  private fun unavailableReasonIssues(record: GoalAssessmentRecord): List<GoalAssessmentRecordIssue> {
+    val reason = record.unavailableReason ?: return emptyList()
+    return when {
+      record.exitReason != GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE ->
+        listOf(GoalAssessmentRecordIssue(Keys.UNAVAILABLE_REASON, "must accompany an assessment_unavailable exit."))
+      reason.isBlank() || reason.length > MAX_UNAVAILABLE_REASON_LENGTH ->
+        listOf(
+          GoalAssessmentRecordIssue(
+            Keys.UNAVAILABLE_REASON,
+            "must be nonblank and at most $MAX_UNAVAILABLE_REASON_LENGTH characters.",
+          ),
+        )
+      else -> emptyList()
+    }
+  }
 
   private fun roundIssues(
     path: String,

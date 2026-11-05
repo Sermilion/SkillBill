@@ -70,6 +70,7 @@ internal fun StringBuilder.appendAssessmentLines(projection: GoalRunnerStatusPro
   val open = assessment.openFindingRefs.takeIf { it.isNotEmpty() }?.joinToString(",") ?: "none"
   val exit = assessment.exitReason?.wireValue ?: "pending"
   appendLine("goal_assessment: round=${assessment.round} exit=$exit confirmed=$confirmed refuted=$refuted open=$open")
+  assessment.unavailableReason?.let { appendLine("goal_assessment_unavailable_reason: ${it.assessmentToken()}") }
   assessment.findings.forEach { finding ->
     appendLine(
       "goal_assessment_finding: ref=${finding.ref} severity=${finding.severity.wireValue} " +

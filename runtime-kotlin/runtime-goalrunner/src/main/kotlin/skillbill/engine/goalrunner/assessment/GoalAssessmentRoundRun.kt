@@ -11,6 +11,7 @@ import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.error.core.catchingNonCancellation
+import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
@@ -345,7 +346,7 @@ internal class GoalAssessmentRoundRun(
   }
 
   private fun unavailable(reason: String): GoalAssessmentRoundResult.Unavailable {
-    val record = recordOf(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
+    val record = GoalAssessmentLoopRules.unavailable(recordOf(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE), reason)
     services.persist(state, record)
     warn("assessment unavailable: $reason.")
     return GoalAssessmentRoundResult.Unavailable(record, reason)

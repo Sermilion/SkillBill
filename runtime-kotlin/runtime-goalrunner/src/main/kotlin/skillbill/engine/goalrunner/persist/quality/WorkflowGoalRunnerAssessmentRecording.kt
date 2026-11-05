@@ -162,7 +162,7 @@ internal class WorkflowGoalRunnerAssessmentRecording(
             round
           }
         }
-      val resumed = reset.copy(exitReason = null, rounds = rounds)
+      val resumed = reset.copy(exitReason = null, rounds = rounds, unavailableReason = null)
       val wire = resumed.asGoalAssessmentRecordWireMap()
       wireArtifactValidator.validate(KIND, wire, ARTIFACT.label())
       engine.saveRunnerArtifactPatch(unit.workflowStates, family, parent, mapOf(ARTIFACT.entry(wire)))

@@ -35,6 +35,20 @@ class GoalAssessmentLoopRulesTest {
     assertNotNull(GoalAssessmentLoopRules.publicationBlockReason(record))
   }
 
+  @Test
+  fun `an unavailable reason is flattened, bounded and named in the block message`() {
+    val record = GoalAssessmentLoopRules.unavailable(recordOf(), "  no merge base\n  with main.  " + "x".repeat(2000))
+
+    assertEquals(GoalAssessmentRecordShape.MAX_UNAVAILABLE_REASON_LENGTH, record.unavailableReason?.length)
+    assertTrue(record.unavailableReason.orEmpty().startsWith("no merge base with main. x"))
+    assertTrue(GoalAssessmentRecordShape.issues(record).isEmpty())
+    assertTrue(
+      GoalAssessmentLoopRules.publicationBlockReason(record).orEmpty().startsWith(
+        "Goal assessment did not accept the goal: assessment_unavailable. Reason: no merge base",
+      ),
+    )
+  }
+
   private fun recordOf(vararg rounds: GoalAssessmentRound) =
     GoalAssessmentRecord(issueKey = "SKILL-442", rounds = rounds.toList())
 

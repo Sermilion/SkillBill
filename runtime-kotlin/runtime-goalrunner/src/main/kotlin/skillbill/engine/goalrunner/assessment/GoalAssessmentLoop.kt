@@ -18,11 +18,7 @@ internal class GoalAssessmentLoop(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalAssessmentStageResult {
-    val record =
-      stored(state)
-        ?: return GoalAssessmentStageResult.Completed(
-          GoalAssessmentRecord(issueKey = state.manifest.issueKey, exitReason = UNAVAILABLE),
-        )
+    val record = stored(state)
     if (record.exitReason != null) return GoalAssessmentStageResult.Completed(record)
     return drive(state, request, record)
   }
@@ -66,7 +62,10 @@ internal class GoalAssessmentLoop(
       when (val result = assessRound(state, request, roundNumber)) {
         is GoalAssessmentRoundResult.Unavailable ->
           return LoopStep.Exit(
-            result.record.takeIf { it.rounds.size >= record.rounds.size } ?: record,
+            GoalAssessmentLoopRules.unavailable(
+              result.record.takeIf { it.rounds.size >= record.rounds.size } ?: record,
+              result.reason,
+            ),
             UNAVAILABLE,
           )
         is GoalAssessmentRoundResult.Paused ->
@@ -90,14 +89,18 @@ internal class GoalAssessmentLoop(
   ): LoopStep {
     val rounds = record.rounds.map { if (it.round == roundNumber) it.copy(targetRef = targetRef) else it }
     val selected = record.copy(rounds = rounds)
-    if (!services.persist(state, selected)) return LoopStep.Exit(selected, UNAVAILABLE)
+    if (!services.persist(state, selected)) {
+      val reason = "the repair target $targetRef could not be persisted"
+      return LoopStep.Exit(GoalAssessmentLoopRules.unavailable(selected, reason), UNAVAILABLE)
+    }
     when (val outcome = fixStep.run(state, request, selected, roundNumber, fixSet(targetRef))) {
       is GoalAssessmentFixOutcome.ProviderPaused ->
         return LoopStep.ProviderPause(outcome.record, outcome.reason, outcome.lastResumableStep)
       is GoalAssessmentFixOutcome.Done -> {
         val fix = outcome.record.rounds.firstOrNull { it.round == roundNumber }?.fix
         return if (fix == null || fix.status == GoalAssessmentFixStatus.COMPLETED && fix.commitSha == null) {
-          LoopStep.Exit(outcome.record, UNAVAILABLE)
+          val reason = "the repair of $targetRef finished without a recorded fix commit"
+          LoopStep.Exit(GoalAssessmentLoopRules.unavailable(outcome.record, reason), UNAVAILABLE)
         } else {
           LoopStep.Continue(outcome.record, roundNumber + 1)
         }
@@ -122,19 +125,20 @@ internal class GoalAssessmentLoop(
     )
 
   fun skipNoChanges(state: GoalRunnerManifestState) {
-    val record = stored(state) ?: return
+    val record = stored(state)
     if (record.exitReason != null) return
     services.warn("seam=goal_assessment value_expected=assessment value_used=skipped reason=no_changes")
     services.persist(state, record.copy(exitReason = GoalAssessmentExitReason.SKIPPED_NO_CHANGES))
   }
 
-  private fun stored(state: GoalRunnerManifestState): GoalAssessmentRecord? =
+  private fun stored(state: GoalRunnerManifestState): GoalAssessmentRecord =
     when (val read = services.outcomeStore.prepareGoalAssessmentRecord(state.parentWorkflowId)) {
       GoalAssessmentRecordRead.Absent -> GoalAssessmentRecord(issueKey = state.manifest.issueKey)
       is GoalAssessmentRecordRead.Recorded -> read.record
       is GoalAssessmentRecordRead.Corrupt -> {
-        services.warn("assessment cannot accept the goal because its stored record is unreadable: ${read.reason}")
-        null
+        val reason = "assessment cannot accept the goal because its stored record is unreadable: ${read.reason}"
+        services.warn(reason)
+        GoalAssessmentLoopRules.unavailable(GoalAssessmentRecord(issueKey = state.manifest.issueKey), reason)
       }
     }
 
@@ -148,7 +152,9 @@ internal class GoalAssessmentLoop(
         exitReason = reason,
         openFindingRefs = GoalAssessmentLoopRules.openFindings(record).map { it.findingRef },
       )
-    return if (services.persist(state, exited)) exited else exited.copy(exitReason = UNAVAILABLE)
+    if (services.persist(state, exited)) return exited
+    return exited.takeIf { it.unavailableReason != null }
+      ?: GoalAssessmentLoopRules.unavailable(exited, "the assessment exit could not be persisted")
   }
 
   private companion object {

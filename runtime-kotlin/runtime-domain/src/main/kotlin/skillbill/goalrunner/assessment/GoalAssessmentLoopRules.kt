@@ -13,6 +13,20 @@ import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.model.repair.RepairTargetProgress
 
 object GoalAssessmentLoopRules {
+  private val REASON_WHITESPACE = Regex("""\s+""")
+
+  fun unavailable(
+    record: GoalAssessmentRecord,
+    reason: String,
+  ): GoalAssessmentRecord =
+    record.copy(
+      exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE,
+      openFindingRefs = openFindings(record).map { it.findingRef },
+      unavailableReason =
+        reason.trim().replace(REASON_WHITESPACE, " ")
+          .take(GoalAssessmentRecordShape.MAX_UNAVAILABLE_REASON_LENGTH).trimEnd(),
+    )
+
   fun openFindings(record: GoalAssessmentRecord): List<GoalAssessmentFinding> =
     record.rounds.flatMap { it.findings }.filter { it.state == GoalAssessmentFindingState.OPEN }
 
@@ -39,7 +53,8 @@ object GoalAssessmentLoopRules {
   fun publicationBlockReason(record: GoalAssessmentRecord): String? =
     when {
       record.exitReason != GoalAssessmentExitReason.CONVERGED ->
-        "Goal assessment did not accept the goal: ${record.exitReason?.wireValue ?: "unfinished"}."
+        "Goal assessment did not accept the goal: ${record.exitReason?.wireValue ?: "unfinished"}." +
+          record.unavailableReason?.let { " Reason: ${it.trimEnd('.')}." }.orEmpty()
       pendingRefs(record).isNotEmpty() -> "Goal assessment has unresolved items: ${pendingRefs(record).joinToString()}."
       record.rounds.lastOrNull()?.fix != null -> "The last assessment repair still needs independent verification."
       else -> null

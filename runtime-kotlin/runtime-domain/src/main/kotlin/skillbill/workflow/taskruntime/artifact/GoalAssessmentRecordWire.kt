@@ -37,7 +37,7 @@ fun GoalAssessmentRecord.asGoalAssessmentRecordWireMap(): FeatureTaskRuntimeWork
       Keys.ROUNDS to rounds.map(::roundWire),
       Keys.EXIT_REASON to exitReason?.wireValue,
       Keys.OPEN_FINDING_REFS to openFindingRefs,
-    ),
+    ) + unavailableReason?.let { mapOf(Keys.UNAVAILABLE_REASON to it) }.orEmpty(),
   )
 }
 
@@ -98,7 +98,7 @@ private fun findingWire(finding: GoalAssessmentFinding): Map<String, Any?> =
 private class GoalAssessmentRecordDecoder(private val sourceLabel: String) {
   fun decode(raw: FeatureTaskRuntimeWorkflowArtifactMap): GoalAssessmentRecord {
     if (!raw.isObject) fail(ROOT, "must be an object.")
-    val root = objectOf(raw, ROOT, TOP_LEVEL_KEYS)
+    val root = objectOf(raw, ROOT, TOP_LEVEL_KEYS, setOf(Keys.UNAVAILABLE_REASON))
     if (root[Keys.CONTRACT_VERSION] != GOAL_ASSESSMENT_RECORD_CONTRACT_VERSION) {
       fail(Keys.CONTRACT_VERSION, "must be $GOAL_ASSESSMENT_RECORD_CONTRACT_VERSION.")
     }
@@ -112,6 +112,7 @@ private class GoalAssessmentRecordDecoder(private val sourceLabel: String) {
             choice(it, Keys.EXIT_REASON, GoalAssessmentExitReason.entries, GoalAssessmentExitReason::wireValue)
           },
         openFindingRefs = strings(root[Keys.OPEN_FINDING_REFS], Keys.OPEN_FINDING_REFS),
+        unavailableReason = root[Keys.UNAVAILABLE_REASON]?.let { text(it, Keys.UNAVAILABLE_REASON) },
       )
     GoalAssessmentRecordShape.issues(record).firstOrNull()?.let { fail(it.fieldPath, it.reason) }
     return record
@@ -274,9 +275,10 @@ private class GoalAssessmentRecordDecoder(private val sourceLabel: String) {
     value: Any?,
     path: String,
     keys: Set<String>,
+    optionalKeys: Set<String> = emptySet(),
   ): Map<*, *> {
     val map = value as? Map<*, *> ?: fail(path, "must be an object.")
-    val unknown = map.keys.filterNot { it is String && it in keys }
+    val unknown = map.keys.filterNot { it is String && (it in keys || it in optionalKeys) }
     val missing = keys.filterNot { map.containsKey(it) }
     if (unknown.isNotEmpty() || missing.isNotEmpty()) {
       fail(path, "has unknown fields $unknown or missing fields $missing.")

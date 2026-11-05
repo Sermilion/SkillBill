@@ -8,6 +8,7 @@ object GoalAssessmentRecordPayloadKeys {
   const val TARGET_REF = "target_ref"
   const val REPAIR_PLAN = "repair_plan"
   const val EXIT_REASON = "exit_reason"
+  const val UNAVAILABLE_REASON = "unavailable_reason"
   const val OPEN_FINDING_REFS = "open_finding_refs"
   const val ROUND = "round"
   const val HEAD_SHA = "head_sha"

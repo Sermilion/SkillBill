@@ -5,6 +5,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidGoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
@@ -51,6 +52,23 @@ class GoalAssessmentRecordContractTest {
 
     assertTrue(violations(wire).isEmpty())
     assertEquals(record, wire.toGoalAssessmentRecord("test"))
+  }
+
+  @Test
+  fun `an unavailable reason round trips and is only accepted on an unavailable exit`() {
+    val record =
+      record().copy(exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, unavailableReason = "no merge base")
+
+    val wire = record.asGoalAssessmentRecordWireMap()
+
+    assertTrue(violations(wire).isEmpty())
+    assertEquals(record, wire.toGoalAssessmentRecord("test"))
+    assertFailsWith<SkillBillRuntimeException> {
+      artifact(
+        record().asGoalAssessmentRecordWireMap(),
+        Keys.UNAVAILABLE_REASON to "no merge base",
+      ).toGoalAssessmentRecord("test")
+    }
   }
 
   @Test

@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.assessment
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
+import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
@@ -21,6 +22,48 @@ import kotlin.test.assertTrue
 
 class DefaultGoalRunnerAssessmentGateTest {
   @TempDir lateinit var home: Path
+
+  @Test
+  fun `an exception during a round keeps the saved rounds and names the failure`() {
+    val saved = GoalAssessmentGateFixture(home) { NO_FINDING }.assess().record.copy(exitReason = null)
+    val fixture =
+      GoalAssessmentGateFixture(
+        home,
+        AssessmentOutcomeStore(GoalAssessmentRecordRead.Recorded(saved)),
+        subtaskOf = ::subtaskWithUnreadableSpecPath,
+      ) { NO_FINDING }
+
+    val result = fixture.gate().runRound(fixture.state(), fixture.request(), 1)
+
+    assertIs<GoalAssessmentRoundResult.Unavailable>(result)
+    assertEquals(saved.rounds, result.record.rounds)
+    assertTrue("InvalidPathException" in result.reason, result.reason)
+  }
+
+  @Test
+  fun `a thrown assessment failure reaches the stored record and the block message`() {
+    val fixture = GoalAssessmentGateFixture(home, subtaskOf = ::subtaskWithUnreadableSpecPath) { NO_FINDING }
+
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
+
+    val reason = fixture.store.persisted.last().unavailableReason.orEmpty()
+    assertTrue("assessment could not complete: InvalidPathException" in reason, reason)
+    assertTrue(reason in GoalAssessmentLoopRules.publicationBlockReason(record).orEmpty())
+  }
+
+  @Test
+  fun `an unreadable stored record names why it could not be read`() {
+    val store = AssessmentOutcomeStore(GoalAssessmentRecordRead.Corrupt("rounds[0]: must be an object."))
+    val fixture = GoalAssessmentGateFixture(home, store) { NO_FINDING }
+
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
+
+    assertTrue("rounds[0]: must be an object." in record.unavailableReason.orEmpty(), record.unavailableReason)
+    assertTrue(store.persisted.isEmpty())
+  }
+
+  private fun subtaskWithUnreadableSpecPath(id: Int) =
+    GoalAssessmentGateFixture.committedSubtask(id).copy(specPath = "spec\u0000.md")
 
   @Test
   fun `a refuted Major is recorded as refuted, stays pr only and grants no fix authority`() {

@@ -104,11 +104,14 @@ properties:
     oneOf:
       - { type: 'null' }
       - { enum: [converged, round_cap, persistent_finding, assessment_unavailable, skipped_no_changes] }
+  unavailable_reason: { type: string, pattern: '\S', maxLength: 1000 }
   open_finding_refs:
     type: array
     uniqueItems: true
     items: { type: string, pattern: '^GA-[0-9]{3}$' }
 x-coherence-checks:
+  - id: unavailable-reason-exit
+    description: An unavailable reason appears only on an assessment_unavailable exit; the codec owns this check.
   - id: unique-finding-refs
     description: Finding refs are unique across every round of the record; the codec owns this check.
   - id: ordered-rounds

@@ -126,6 +126,7 @@ class GoalAssessmentLoopTest {
     val record = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, record.exitReason)
+    assertEquals("independent verification did not settle every selected item", record.unavailableReason)
     assertEquals(listOf("GA-001"), record.openFindingRefs)
     assertTrue(AssessmentCall.FIX !in fixture.calls)
   }

@@ -1,5 +1,12 @@
 # goalrunner boundary history
 
+## [2026-11-05] goal assessment keeps its unavailable reason
+Areas: runtime-goalrunner assessment; runtime-domain assessment record; goal status
+- SKILL-482 stopped at assessment_unavailable with no rounds and no cause: the reason went only to a logger that is off without verbose mode.
+- The record now stores an optional bounded unavailable_reason on every such exit, and the block message and goal status print it. Operator resume clears it. Additive, so the contract version stays.
+- An exception during a round now keeps saved rounds instead of replacing them with an empty record.
+Feature flag: N/A
+
 ## [2026-11-05] SKILL-452 subtask 3 — goal-finish quality pauses on provider limits
 Areas: runtime-goalrunner qa and execution/core; runtime-engine featuretask phaserun
 - Goal QA adds GoalQaGateResult.Paused from settleAfterQa, validateAfterQa, and resumeValidation when the blocked reason classifies, before Warned, SETTLED_WARNED, or repair warnings; buildAfterQaFixWarning skips provider-limit PHASE_BUILD blocks.
