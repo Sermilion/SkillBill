@@ -17,7 +17,7 @@
       { id: 1, directory: '~/IdeaProjects/skill-bill', name: 'skill-bill', branch: 'feat/SKILL-417-keep-ide-status-on-the-live-goal-phase' },
       { id: 2, directory: '~/dev/infra-terraform', name: 'infra-terraform', branch: 'feat/INF-7-remote-state-backend' },
     ],
-    chosenAgent: {}, prereqs: new Set(), recovered: new Set(), opDecision: {}, secCollapse: {}, reasonOpen: new Set(),
+    chosenAgent: {}, prereqs: new Set(), recovered: new Set(), secCollapse: {}, reasonOpen: new Set(),
     /* Subtask index: selection per goal ('3' or 'finish'), inline expansion per goal (narrow windows), open breakdowns, full activity feeds */
     subSel: {}, subOpen: {}, bdOpen: new Set(), feedAll: new Set(), narrow: false,
     settingsPage: 'general', agent: 'claude', cfgOpen: null, draft: null, matrix: JSON.parse(JSON.stringify(D.MATRIX)), phaseTiers: {},
@@ -339,8 +339,6 @@
     'agent-menu'(id, el) { st.popover = Object.assign({ type: 'agent', arg: id }, anchorPos(el)); render(); },
     'agent-pick'(arg) { const [id, agent] = arg.split('|'); st.chosenAgent[id] = agent; st.popover = null; render(); },
     cancel(id) { const it = item(id); st.popover = null; if (!it || !it.runOptions || !it.runOptions.canCancel) return render(); Object.assign(it, { lifecycle: 'canceled', live: false, pauseRequested: false, runOptions: Object.assign({}, it.runOptions, { canCancel: false, canLaunch: true, launchLabel: 'Run again' }) }); render(); toast({ state: 'canceled', title: 'Cancel recorded', body: `${X.rowKey(it)} is marked canceled. Its branch and commits stay.` }); },
-    'op-decision'(v) { const id = st.detailId; st.opDecision[id] = Object.assign({ instructions: '', recorded: false }, st.opDecision[id], { decision: v }); render(); },
-    'op-record'(id) { const d = Object.assign({ decision: 'retry_fix', instructions: '' }, st.opDecision[id]); if (d.decision === 'retry_fix' && !d.instructions.trim()) return; st.opDecision[id] = Object.assign(d, { recorded: true }); render(); toast({ icon: 'checkCircle', title: 'Decision recorded', body: 'Resume the goal to apply it.' }); },
     prereq(key) { st.prereqs.has(key) ? st.prereqs.delete(key) : st.prereqs.add(key); render(); },
     recover(id) { const it = item(id); if (!it || !X.recoveryOffered(st, it)) return; st.dialog = { type: 'recover', arg: id }; render(); },
     'recover-confirm'(id) { st.recovered.add(id); st.dialog = null; render(); toast({ icon: 'refresh', title: 'Recovery request finished', body: 'Incident details were refreshed.' }); },
@@ -508,7 +506,6 @@
     if (k === 'ed-model') { st.draft.model = t.value; render(); }
     if (k === 'ed-effort') { st.draft.effort = t.value; }
     if (k === 'ed-field') { const had = st.draft.error; st.draft[t.id.slice(3)] = t.value; st.draft.error = null; if (had) render(); }
-    if (k === 'op-instructions') { const id = st.detailId; st.opDecision[id] = Object.assign({ decision: 'retry_fix', recorded: false }, st.opDecision[id], { instructions: t.value }); render(); }
     if (k === 'db-path') { st.prefs.dbDraft = t.value; render(); }
     if (k === 'gradle') { st.prefs.gradleWrapper = t.value; render(); }
   });

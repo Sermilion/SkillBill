@@ -208,14 +208,12 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
 }
 
-/** HANDOFF 9.2 item 7, with the operator decision inside it; a decision with no incident gets its own section. */
+/** HANDOFF 9.2 item 7, with the operator decision notice inside it; a decision with no incident gets its own section. */
 private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val incident = detail?.incident
   val decision: @Composable () -> Unit = {
-    view.decision?.let {
-      OperatorDecisionBlock(it, view.recordEnabled, view.usable && state.controls.inFlight == null, state.controls.inFlight == InFlightControl.Decision, onAction)
-    }
+    view.decision?.let { OperatorDecisionNotice(it) { text -> onAction(DetailAction.Copy(text)) } }
   }
   val sectionCollapse = collapse
   if (incident != null) item(key = "incident") {

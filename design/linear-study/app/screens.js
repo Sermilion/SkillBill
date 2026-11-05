@@ -145,18 +145,13 @@
     return workArea(st, header, `<div class="sb-scroll" data-scroll="work">${body || empty}</div>`);
   }
 
-  /* Operator decision for a subtask the goal paused on (GoalOperatorDecisionService.record) */
-  const DECISIONS = [['retry_fix', 'Retry fix'], ['accept_and_advance', 'Accept and advance'], ['abandon_subtask', 'Abandon subtask']];
+  /* A no-change pause waits for an operator decision. The app only explains it: the operator settles it in chat or runs the
+   * command, then resumes the goal. */
   function operatorDecision(st, it) {
-    const d = st.opDecision[it.id] || { decision: 'retry_fix', instructions: '', recorded: false };
-    if (d.recorded) return S.Hint({ tone: 'success', icon: 'check', text: `Decision recorded for subtask ${it.current}: ${DECISIONS.find((x) => x[0] === d.decision)[1].toLowerCase()}. Resume the goal to apply it.` });
-    const retry = d.decision === 'retry_fix';
-    const blank = retry && !d.instructions.trim();
-    return `<div class="l-col g-3" style="padding:12px;border:1px solid var(--border-subtle);border-radius:var(--r-md)">
-      <div class="l-row g-2" style="font-size:var(--t-sm)"><b style="font-weight:500">Decide subtask ${it.current}</b><span class="t-faint">Recorded now, applied when the goal resumes</span></div>
-      ${S.Segmented({ act: 'op-decision', value: d.decision, items: DECISIONS.map(([id, label]) => ({ id, label })) })}
-      ${retry ? S.Field({ for: 'op-instructions', label: 'Instructions for the retry', control: S.Input({ id: 'op-instructions', value: d.instructions, placeholder: 'What should the agent change?', input: 'op-instructions' }), help: 'Required for Retry fix.' }) : ''}
-      <div class="l-row g-2">${S.Button({ label: 'Record decision', variant: 'primary', act: 'op-record', arg: it.id, disabled: blank })}</div>
+    const cmd = `skill-bill goal operator-decision ${it.id} --subtask ${it.current} --decision retry_fix|accept_and_advance|abandon_subtask`;
+    return `<div class="l-col g-2">
+      ${S.Hint({ tone: 'info', text: `Subtask ${it.current} finished with no code changes and is waiting for your decision. Settle it in chat, or run this command and then resume the goal. Pass --instructions with retry_fix.` })}
+      <div class="l-row g-2"><span class="mono t-muted" style="flex:1;font-size:var(--t-sm)">${esc(cmd)}</span>${S.IconButton({ icon: 'copy', label: 'Copy decision command', act: 'copy', arg: cmd, size: 'sm' })}</div>
     </div>`;
   }
 

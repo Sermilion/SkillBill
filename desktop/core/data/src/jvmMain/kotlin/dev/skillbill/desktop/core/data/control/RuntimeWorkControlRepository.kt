@@ -17,9 +17,7 @@ import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
-import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
-import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PrerequisiteInstruction
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
@@ -51,8 +49,6 @@ import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.di.core.RuntimeComponent
-import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
-import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportRefusalCategory
@@ -78,7 +74,6 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkRecoveryPreviewResult
 import skillbill.ports.work.model.WorkStoreObservation
-import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
@@ -477,39 +472,6 @@ class RuntimeWorkControlRepository(
     }
   }
 
-  override suspend fun recordOperatorDecision(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome {
-    decisionPrecheck(item, decision, instructions)?.let { return it }
-    val session = currentSession(item)
-      ?: return DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
-    val issueKey = checkNotNull(item.issueKey)
-    val subtaskId = checkNotNull(item.currentSubtaskId?.toIntOrNull())
-    val observation = item.control.databaseFile?.toObservation()
-      ?: return DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
-    if (!sessionIsCurrent(session, item)) return DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
-    return callInSession(session, "operator_decision", DecisionOutcome::Failed, stale = {
-      DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
-    }) { runtime ->
-      if (!sessionIsCurrent(session, item)) return@callInSession DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
-      val request = GoalRunnerOperatorDecisionRequest(
-        issueKey = issueKey,
-        subtaskId = subtaskId,
-        decision = GoalSubtaskOperatorDecision.valueOf(decision.name),
-        repoRoot = Path.of(item.repositoryRoot),
-        instructions = instructions?.trim()?.ifBlank { null },
-      )
-      when (val result = runtime.databaseSession.transactionFenced(observation) {
-        if (!sessionIsCurrent(session, item)) null else runtime.goalOperatorDecisionService.record(request)
-      }) {
-        FencedTransactionResult.ChangedTarget -> DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
-        is FencedTransactionResult.Committed -> when (val recorded = result.value) {
-          null -> DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
-          is GoalRunnerOperatorDecisionResult.Recorded -> DecisionOutcome.Recorded(recorded.subtaskId, decision)
-          is GoalRunnerOperatorDecisionResult.Rejected -> DecisionOutcome.Refused(recorded.reason)
-        }
-      }
-    }
-  }
-
   override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome {
     if (issueKey.isBlank()) return PurgeOutcome.Refused("issue key required")
     val session = sessions.sessions.value ?: return PurgeOutcome.Failed(NO_SESSION)
@@ -725,14 +687,6 @@ class RuntimeWorkControlRepository(
       is Outcome.Failure -> if (closed) stale?.invoke() ?: failed(result.error) else failed(result.error)
     }
   }
-}
-
-/** The blank-retry and missing-goal checks, run before any runtime call so the request's own `require` never throws. */
-internal fun decisionPrecheck(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome? = when {
-  item.issueKey.isNullOrBlank() -> DecisionOutcome.Unavailable
-  (item.currentSubtaskId?.toIntOrNull() ?: 0) <= 0 -> DecisionOutcome.Unavailable
-  decision == OperatorDecision.RETRY_FIX && instructions.isNullOrBlank() -> DecisionOutcome.InstructionsRequired
-  else -> null
 }
 
 private fun DatabaseFileIdentity.toObservation() = DatabaseFileObservation(Path.of(path), fileKey)

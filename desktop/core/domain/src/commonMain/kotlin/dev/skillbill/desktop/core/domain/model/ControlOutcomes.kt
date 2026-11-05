@@ -95,22 +95,6 @@ sealed interface RecoveryOutcome {
   data class Failed(val problem: ReadProblem) : RecoveryOutcome
 }
 
-enum class OperatorDecision { RETRY_FIX, ACCEPT_AND_ADVANCE, ABANDON_SUBTASK }
-
-sealed interface DecisionOutcome {
-  data class Recorded(val subtaskId: Int, val decision: OperatorDecision) : DecisionOutcome
-
-  /** A retry needs instructions; nothing was sent. */
-  data object InstructionsRequired : DecisionOutcome
-
-  /** The item has no goal issue key or current subtask to decide on; nothing was sent. */
-  data object Unavailable : DecisionOutcome
-
-  data class Refused(val reason: String) : DecisionOutcome
-
-  data class Failed(val problem: ReadProblem) : DecisionOutcome
-}
-
 sealed interface PurgeOutcome {
   data class Purged(val removedRows: Int, val removedPaths: Int, val specActions: Int) : PurgeOutcome
 

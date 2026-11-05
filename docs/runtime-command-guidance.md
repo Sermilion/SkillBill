@@ -109,6 +109,23 @@ The retry schedules a read-only source audit before further repairs. A stopped
 repair planner can also return to audit after scoped crash reconciliation confirms
 its worker is dead and releases ownership. A live or unverifiable worker blocks retry.
 
+## No-change pause decisions
+
+When a goal subtask finishes with no code changes, its audit pauses and the goal
+waits for an operator decision. The desktop app only shows the pause. Record the
+decision with
+`skill-bill goal operator-decision <issue-key> --subtask <n> --decision <decision>`,
+then resume the goal. The decision takes effect on that resume.
+
+- `retry_fix` settles the paused audit as a rejected no-change claim. The criteria
+  the claim covered stay open, and the instructions go to the next repair. It
+  requires `--instructions "<text>"`.
+- `accept_and_advance` closes the subtask as no-change and moves to the next one.
+- `abandon_subtask` stops the subtask as abandoned.
+
+Resuming without a decision reruns the paused audit and applies none of these.
+The command rejects subtasks without an undecided no-change pause.
+
 ## Ambiguous historical quality state
 
 A goal whose parent workflow was imported without proof that final quality never
