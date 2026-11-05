@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
+import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
@@ -188,8 +189,50 @@ class ClaudeChatTransportRunTest {
     claude.stopped.await()
   }
 
+  // Claude streams each message between tool calls as its own text block; joined without a break they read as one run-on paragraph.
+  @Test
+  fun `a new text block after a tool call starts a new paragraph, but a new turn does not`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+
+    val first = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    claude.print(
+      replay(uuid),
+      textBlockStart(),
+      textDelta("Probing each take."),
+      """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"bash-1","name":"Bash","input":{}}]}}""",
+      """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"bash-1","content":"ok"}]}}""",
+      textBlockStart(),
+      textDelta("Take 1 hit the cap."),
+      """{"type":"result","is_error":false,"result":""}""",
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.TextDelta("Probing each take."),
+        ChatEvent.ToolUse(ChatToolCall("bash-1", "Bash", "{}", null)),
+        ChatEvent.ToolResult("bash-1", "ok", false),
+        ChatEvent.TextDelta("\n\n"),
+        ChatEvent.TextDelta("Take 1 hit the cap."),
+        ChatEvent.Completed,
+      ),
+      first.await(),
+    )
+
+    val second = async { transport.run(chatRequest(firstTurn = false)).toList() }
+    val (secondUuid, _) = claude.nextMessage()
+    claude.print(replay(secondUuid), textBlockStart(), textDelta("Done."), """{"type":"result","is_error":false,"result":""}""")
+    assertEquals(listOf(ChatEvent.TextDelta("Done."), ChatEvent.Completed), second.await())
+
+    transport.end("session-1")
+    claude.stopped.await()
+  }
+
   private fun replay(uuid: String) =
     """{"type":"user","uuid":"$uuid","isReplay":true,"message":{"role":"user","content":"operator prompt"}}"""
+
+  private fun textBlockStart() =
+    """{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}"""
 
   private fun textDelta(text: String) = """{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"$text"}}}"""
 }
