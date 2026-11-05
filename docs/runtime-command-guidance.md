@@ -118,6 +118,10 @@ quality evidence is gone, record the operator's choice with
 record becomes clean and unstarted, and the next goal run admits a fresh quality
 execution with new cycles.
 
+A goal relaunched from a project-store manifest needs no operator choice when it
+plans before any subtask starts. Once a completed plan governs its parent spec,
+the runner clears the ambiguity itself.
+
 The same command handles a goal that blocks with "The outcome of goal-quality
 step '<step>#<attempt>' is unknown". That happens when the runner died during an
 agent-backed QA or validation step, before the step recorded its outcome. The

@@ -274,6 +274,14 @@ public interface GoalRunnerQualityExecutionStore {
    */
   public fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean
 
+  /**
+   * Clears ambiguous historical state once a plan governing the parent's project-store spec has
+   * completed and no manifest subtask has started. A parent imported after that plan is judged on
+   * the same facts, so a goal that opens its own plan after import reaches the same readiness.
+   * Returns false when nothing changed.
+   */
+  public fun settleGoalQualityReadinessFromCompletedPlan(parentWorkflowId: String): Boolean
+
   public fun resolvedGoalQualityChildIds(
     parentWorkflowId: String,
     expectedSelection: List<Pair<Int, String?>>,

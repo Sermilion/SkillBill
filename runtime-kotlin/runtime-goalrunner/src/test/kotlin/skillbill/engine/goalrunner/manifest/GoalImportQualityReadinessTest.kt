@@ -3,11 +3,14 @@ package skillbill.engine.goalrunner.manifest
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
+import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.slot.testExecutionPlan
+import skillbill.engine.goalrunner.persist.testWorkflowGoalRunnerQualityExecutionStore
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
@@ -79,6 +82,99 @@ class GoalImportQualityReadinessTest {
     )
   }
 
+  @Test
+  fun `a goal whose own plan completes after import leaves final quality admissible`() {
+    assertEquals(
+      GoalQualityReadiness.CLEAN_UNSTARTED,
+      readinessAfterPlanCompletesPostImport(DecompositionSubtask(1, "Filters", "specs/APP-123-filters/subtask.md")),
+    )
+  }
+
+  @Test
+  fun `a plan completing after import does not clear ambiguity once a subtask has started`() {
+    assertEquals(
+      GoalQualityReadiness.HISTORICAL_AMBIGUITY,
+      readinessAfterPlanCompletesPostImport(
+        DecompositionSubtask(1, "Filters", "specs/APP-123-filters/subtask.md", status = "complete", commitSha = "abc"),
+      ),
+    )
+  }
+
+  @Test
+  fun `a plan for another spec completing after import does not clear ambiguity`() {
+    assertEquals(
+      GoalQualityReadiness.HISTORICAL_AMBIGUITY,
+      readinessAfterPlanCompletesPostImport(
+        DecompositionSubtask(1, "Filters", "specs/APP-123-filters/subtask.md"),
+        plan = PlanIdentity(NEW_CHECKOUT, "specs/APP-123-other/spec.md"),
+      ),
+    )
+  }
+
+  @Test
+  fun `a checked-in manifest whose plan completes after import keeps quality history ambiguous`() {
+    assertEquals(
+      GoalQualityReadiness.HISTORICAL_AMBIGUITY,
+      readinessAfterPlanCompletesPostImport(
+        DecompositionSubtask(1, "Filters", ".feature-specs/APP-123-filters/subtask.md"),
+        plan = PlanIdentity(NEW_CHECKOUT, ".feature-specs/APP-123-filters/spec.md"),
+        parentSpecPath = ".feature-specs/APP-123-filters/spec.md",
+      ),
+    )
+  }
+
+  private fun readinessAfterPlanCompletesPostImport(
+    subtask: DecompositionSubtask,
+    plan: PlanIdentity = PlanIdentity(NEW_CHECKOUT, "specs/APP-123-filters/spec.md"),
+    parentSpecPath: String = "specs/APP-123-filters/spec.md",
+  ): GoalQualityReadiness? {
+    val home = Files.createTempDirectory("goal-readiness-after-plan")
+    val clock = Clock.fixed(Instant.parse("2026-11-02T15:31:41Z"), ZoneOffset.UTC)
+    val database = sqliteSessionFactoryForTests(home, environment = emptyMap(), clock = clock)
+    try {
+      val imported =
+        assertNotNull(
+          manifestLoader(database, clock).importFromManifestProjection(manifest(subtask, parentSpecPath), listOf(NEW_CHECKOUT)),
+        )
+      val store = testWorkflowGoalRunnerQualityExecutionStore(database, testWorkflowSnapshotValidator)
+      assertEquals(
+        GoalQualityReadiness.HISTORICAL_AMBIGUITY,
+        store.goalQualityExecution(imported.parentWorkflowId)?.readiness,
+      )
+      database.transaction { unit -> seedCompletedPlan(unit, "APP-123", plan) }
+      store.settleGoalQualityReadinessFromCompletedPlan(imported.parentWorkflowId)
+      return store.goalQualityExecution(imported.parentWorkflowId)?.readiness
+    } finally {
+      home.toFile().deleteRecursively()
+    }
+  }
+
+  private fun manifest(
+    subtask: DecompositionSubtask,
+    parentSpecPath: String = "specs/APP-123-filters/spec.md",
+  ) = DecompositionManifest(
+    issueKey = "APP-123",
+    featureName = "filters",
+    parentSpecPath = parentSpecPath,
+    baseBranch = "main",
+    featureBranch = "feat/APP-123-filters",
+    currentSubtaskIntent = CurrentSubtaskIntent(1, "start"),
+    subtasks = listOf(subtask),
+  )
+
+  private fun manifestLoader(
+    database: DatabaseSessionFactory,
+    clock: Clock,
+  ) = WorkflowGoalRunnerManifestLoader(
+    database,
+    testDecompositionManifestValidator,
+    TestDecompositionManifestStore,
+    clock,
+    Random(1),
+    testProjectStore,
+    parentProjection = GoalParentProjectionWriter(testDecompositionManifestValidator),
+  )
+
   private data class PlanIdentity(
     val repositoryIdentity: String,
     val governedSpecPath: String,
@@ -92,28 +188,10 @@ class GoalImportQualityReadinessTest {
     val home = Files.createTempDirectory("goal-import-quality-readiness")
     val clock = Clock.fixed(Instant.parse("2026-10-28T10:00:00Z"), ZoneOffset.UTC)
     val database = sqliteSessionFactoryForTests(home, environment = emptyMap(), clock = clock)
-    val manifest =
-      DecompositionManifest(
-        issueKey = "APP-123",
-        featureName = "filters",
-        parentSpecPath = "specs/APP-123-filters/spec.md",
-        baseBranch = "main",
-        featureBranch = "feat/APP-123-filters",
-        currentSubtaskIntent = CurrentSubtaskIntent(1, "start"),
-        subtasks = listOf(subtask),
-      )
+    val manifest = manifest(subtask)
     try {
       database.transaction { unit -> seedCompletedPlan(unit, manifest.issueKey, plan) }
-      val loader =
-        WorkflowGoalRunnerManifestLoader(
-          database,
-          testDecompositionManifestValidator,
-          TestDecompositionManifestStore,
-          clock,
-          Random(1),
-          testProjectStore,
-          parentProjection = GoalParentProjectionWriter(testDecompositionManifestValidator),
-        )
+      val loader = manifestLoader(database, clock)
       val imported = assertNotNull(loader.importFromManifestProjection(manifest, listOf(importIdentity)))
       val parent =
         assertNotNull(

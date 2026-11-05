@@ -949,6 +949,8 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean = false
 
+  override fun settleGoalQualityReadinessFromCompletedPlan(parentWorkflowId: String): Boolean = false
+
   override fun resolvedGoalQualityChildIds(
     parentWorkflowId: String,
     expectedSelection: List<Pair<Int, String?>>,

@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist.quality
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowIdForProjectSpec
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_FINALIZATION_HISTORY_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
@@ -28,6 +29,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
+import skillbill.workflow.decomposition.runtime.importedGoalQualityReadiness
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -82,6 +84,27 @@ public class WorkflowGoalRunnerQualityExecutionStore
             current.execution?.status?.isUnsettled() == true -> retireActiveExecution(unitOfWork, parentWorkflowId)
             else -> false
           }
+        }
+      }
+
+    override fun settleGoalQualityReadinessFromCompletedPlan(parentWorkflowId: String): Boolean =
+      withQualityPersistence {
+        database.transaction { unitOfWork ->
+          val parent = parent(unitOfWork, parentWorkflowId)
+          val payload =
+            DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
+              ?: return@transaction false
+          val current = decode(payload)
+          validateParentIdentity(current, parentWorkflowId)
+          val manifest = parent.decompositionRuntime() ?: return@transaction false
+          val settled =
+            current.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY &&
+              importedGoalQualityReadiness(
+                manifest,
+                unitOfWork.workflowStates.findCompletedPlanWorkflowIdForProjectSpec(manifest),
+              ) == CLEAN_UNSTARTED
+          if (settled) persist(unitOfWork, parent, current.copy(readiness = CLEAN_UNSTARTED, execution = null))
+          settled
         }
       }
 

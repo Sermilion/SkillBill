@@ -754,6 +754,14 @@ private fun fixtureGit(
   check(process.waitFor() == 0) { output }
 }
 
+internal fun GoalCliFixture.markFirstSubtaskStarted() {
+  val manifest = parentSpec.resolveSibling("decomposition-manifest.yaml")
+  Files.writeString(
+    manifest,
+    Files.readString(manifest).replaceFirst("last_resumable_step: null", "last_resumable_step: \"implement\""),
+  )
+}
+
 internal fun seedParentWorkflow(fixture: GoalCliFixture) {
   val opened =
     RuntimeWorkflowTestSupport.open(

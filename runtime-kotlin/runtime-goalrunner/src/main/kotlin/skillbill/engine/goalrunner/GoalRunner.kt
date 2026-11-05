@@ -297,6 +297,9 @@ public class GoalRunner(
         )
       }
       val prepared = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll
+      if (prepared.planWorkflowId != null) {
+        outcomeStore.settleGoalQualityReadinessFromCompletedPlan(state.parentWorkflowId)
+      }
       state = prepared.state ?: state
       val validationQualityState = GoalRunnerValidationQualityPendingState(manifestStore)
       validationQualityState.bind(state.parentWorkflowId)

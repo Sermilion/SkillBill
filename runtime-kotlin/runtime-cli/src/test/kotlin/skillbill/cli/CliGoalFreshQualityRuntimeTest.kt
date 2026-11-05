@@ -10,7 +10,7 @@ import kotlin.test.assertFalse
 class CliGoalFreshQualityRuntimeTest {
   @Test
   fun `fresh-quality clears an ambiguous historical quality block for the next goal run`() {
-    val fixture = goalFixture(subtaskCount = 1)
+    val fixture = goalFixture(subtaskCount = 1).also(GoalCliFixture::markFirstSubtaskStarted)
     val recoveredDb = fixture.tempDir.resolve("recovered.db")
     val launcher = GoalFixtureAgentRunLauncher(fixture, dbPath = recoveredDb)
     val blocked = CliRuntime.run(fixture.goalCommand(dbPath = recoveredDb), fixture.context(launcher = launcher))
