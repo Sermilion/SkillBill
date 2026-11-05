@@ -34,6 +34,11 @@ Decision: The picker passes the displayed remote name as the base branch, matchi
 Reason: Stripping the prefix can make checkout fail. Run and merge handling do not yet share a branch representation.
 Revisit when: Remote base branches share a representation across checkout and merge paths.
 
+## [2026-11-05] Pass app-owned icon files to NativeTray
+Context: Compose tray icon renderers and the path-based Tray API create temporary files outside the desktop temp authority.
+Decision: Render PNG and ICO files under the desktop temp root and pass their paths directly to NativeTray. Retain the current and previous icon for each tray instance and render outside the availability gate.
+Reason: Direct updates avoid the library's temp-file copy. Retaining the previous icon protects a path the native tray may still use, and rendering outside the gate permits recovery after failure.
+
 ## [2026-11-04] Keep spec favorite reveals pending through project loading
 Context: Selecting a bundle immediately after switching projects can be dropped while the new tree loads. A favorite can also refer to a project other than the one currently followed.
 Decision: Keep the requested project and bundle path pending until the matching tree loads, and give that request precedence over automatic project following. Open the Specs pane for the selection rather than navigating to a run detail.

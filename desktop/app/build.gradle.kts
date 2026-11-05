@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.Exec
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.jvm.toolchain.JvmVendorSpec
@@ -131,6 +132,14 @@ if (System.getProperty("os.name").contains("mac", true)) {
 tasks.named<Test>("jvmTest") {
   systemProperty("desktopRoot", rootDir.absolutePath)
   inputs.files(rootDir.resolve("settings.gradle.kts"), rootDir.resolve("build.gradle.kts")).withPropertyName("desktopRootBuildScripts")
+  inputs.files(
+    rootDir.resolve("gradlew"),
+    rootDir.resolve("build-logic/convention/build.gradle.kts"),
+    rootDir.resolve("build-logic/convention/src/main/kotlin"),
+    rootProject.subprojects.flatMap { module ->
+      listOf(module.file("src/commonMain/kotlin"), module.file("src/jvmMain/kotlin"))
+    },
+  ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("sharedTempRootSources")
 }
 
 tasks.register<Exec>("packagedDataSmoke") {

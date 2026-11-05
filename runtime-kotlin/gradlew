@@ -89,6 +89,21 @@ APP_BASE_NAME=${0##*/}
 APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s
 ' "$PWD" ) || exit
 
+if [ "$(uname -s)" = Linux ]; then
+    case "${JAVA_TOOL_OPTIONS:-}" in
+        *java.io.tmpdir=*) ;;
+        *)
+            skill_bill_jvm_temp_root="${SKILL_BILL_STATE_DIR:-$HOME/.skill-bill}/scratch/jvm"
+            if mkdir -p "$skill_bill_jvm_temp_root" 2>/dev/null; then
+                JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }-Djava.io.tmpdir=\"$skill_bill_jvm_temp_root\""
+                export JAVA_TOOL_OPTIONS
+            else
+                echo "WARNING: could not create $skill_bill_jvm_temp_root; Gradle JVMs keep their default temp directory." >&2
+            fi
+            ;;
+    esac
+fi
+
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum
 

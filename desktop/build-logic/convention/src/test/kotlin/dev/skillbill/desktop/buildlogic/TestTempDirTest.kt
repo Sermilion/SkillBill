@@ -38,6 +38,20 @@ class TestTempDirTest {
   }
 
   @Test
+  fun `test workers use a directory inside run scratch only when that directory exists`() {
+    val gradleHome = directory.resolve("gradle-home")
+    val scratch = directory.resolve("scratch").apply { mkdirs() }
+
+    assertEquals(scratch.resolve("t-key"), resolveTestTempDir(scratch.path, gradleHome, "key"))
+    assertEquals(
+      gradleHome.resolve("sbt-key"),
+      resolveTestTempDir(directory.resolve("gone").path, gradleHome, "key"),
+    )
+    assertEquals(gradleHome.resolve("sbt-key"), resolveTestTempDir(" ", gradleHome, "key"))
+    assertEquals(gradleHome.resolve("sbt-key"), resolveTestTempDir(null, gradleHome, "key"))
+  }
+
+  @Test
   fun `sweep removes only stale test temp dirs from the Gradle user home`() {
     val now = STALE_TEST_TEMP_MILLIS * 2
     val stale = directory.resolve("${TEST_TEMP_PREFIX}stale").apply { mkdirs() }

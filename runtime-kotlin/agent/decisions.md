@@ -1,3 +1,9 @@
+## [2026-11-05] Set JVM temp roots at launch
+Context: The JDK snapshots java.io.tmpdir before main, so setting it in the CLI or MCP entry point does not redirect default-root JDK temp calls.
+Decision: Start scripts pass run scratch as a JVM option. JAVA_TOOL_OPTIONS and Linux wrappers name the shared state scratch root; test workers receive run scratch through their task configuration.
+Reason: Launch-time options reach JDK temp calls. A common shared root for Gradle clients and daemons avoids giving each run a different daemon temp setting. The in-process property still helps libraries that read it later.
+Alternatives considered: Setting the property only in main leaves default-root JDK temp calls on the original root.
+
 ## [2026-11-04] Keep review comment writes outside settlement
 Context: Review findings and repair receipts are authoritative workflow evidence; diff comments are an auxiliary projection.
 Decision: Write finding threads and outcome replies beside the owning review or receipt mutation, treating failures as best-effort and diagnostic.
@@ -3494,3 +3500,11 @@ The application environment guard matched `Thread(` as a substring, rejecting do
 ## [2026-11-04] Test temp dirs live under the Gradle user home
 
 Each Test task sets `java.io.tmpdir` to `<gradle-user-home>/sbt-<hash>`. `/tmp` is a RAM-backed tmpfs on developer machines, and leaked fixture dirs filled it and pushed other memory into swap. A module `build/` directory is not an option because tests need paths outside any git repository, and Unix socket tests need a short root for the 104-byte macOS path limit. The task deletes the directory on success and keeps it on failure for debugging. A later test task removes any `sbt-*` directory untouched for 24 hours, which covers failed runs from checkouts that no longer exist. `desktop/build-logic` carries the same rule because the two builds share no convention code.
+
+## [2026-11-05] Keep JVM temp writers behind each build's authority
+
+The `sbt-<hash>` directory under the Gradle user home remains the fallback outside a run. Inside a run, `AgentRunScratchSpace` supplies `<state>/scratch/jvm`; its seven-day age sweep removes abandoned entries. The JVM itself still writes `/tmp/hsperfdata_<user>` and `/tmp/.java_pid<pid>` under Q3, so those two files are outside the application rule.
+
+The runtime exemptions are narrow. `JdkHostPlatformPort.kt` is the only runtime reader of `java.io.tmpdir`. `RuntimeTempRoot.kt` compares the configured root with the real `/tmp` path and returns `/tmp` only when the configured value is blank and fallback directory creation failed. `GovernedReviewEvidenceEndpoint.kt` uses `/tmp` only for its Unix socket fallback when the path is too long, then removes the directory on close. `DesktopTempRoot.kt` holds the same temp-root decision for desktop code.
+
+The decomposition lock stays under `<state>/locks`. Run temp roots differ, but two runs must resolve the same lock file to exclude each other. The source guard catches literal `/tmp` paths and default-root temp creation, including absent, string, `null`, and all-caps first arguments. It cannot distinguish a lowercase variable or qualified constant from a `Path`; those forms remain review cases. No production call currently uses either form.

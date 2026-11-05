@@ -1,21 +1,14 @@
 package skillbill.infrastructure.host
+import skillbill.infrastructure.host.jvm.expandAndNormalizeTelemetryPath
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.infrastructure.host.system.configDocumentIoException
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
-import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
-
-fun resolveTelemetryStateDir(
-  environment: Map<String, String>,
-  userHome: Path,
-): Path =
-  environment[STATE_DIR_ENVIRONMENT_KEY]?.takeIf(String::isNotBlank)?.let {
-    expandAndNormalizeTelemetryPath(it, userHome)
-  } ?: userHome.resolve(".skill-bill").toAbsolutePath().normalize()
 
 fun resolveTelemetryConfigPath(
   environment: Map<String, String>,
@@ -65,19 +58,6 @@ fun resolveTelemetryConfigMigrationLockPaths(
   environment: Map<String, String>,
   userHome: Path,
 ): List<Path> = resolveTelemetryConfigLockPaths(environment, userHome)
-
-internal fun expandAndNormalizeTelemetryPath(
-  rawPath: String,
-  userHome: Path,
-): Path {
-  val normalized =
-    when {
-      rawPath == "~" -> userHome.toString()
-      rawPath.startsWith("~/") -> userHome.resolve(rawPath.removePrefix("~/")).toString()
-      else -> rawPath
-    }
-  return Path.of(normalized).toAbsolutePath().normalize()
-}
 
 private fun configPathAttributes(path: Path): BasicFileAttributes? =
   try {

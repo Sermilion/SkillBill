@@ -17,5 +17,6 @@ object JdkHostPlatformPort : HostPlatformPort {
 
   override fun resolveWorkingDirectory(): Path = Path.of(System.getProperty("user.dir"))
 
-  override fun resolveTemporaryDirectory(): Path = Path.of(System.getProperty("java.io.tmpdir"))
+  override fun resolveTemporaryDirectory(): Path =
+    resolveRuntimeTempRoot(System.getProperty("java.io.tmpdir"), resolveEnvironment(), resolveUserHome())
 }

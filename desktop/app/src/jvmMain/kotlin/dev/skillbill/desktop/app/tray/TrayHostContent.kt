@@ -11,7 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
@@ -31,12 +31,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
-import dev.nucleusframework.composenativetray.tray.api.Tray
+import dev.nucleusframework.composenativetray.tray.api.NativeTray
 import dev.skillbill.desktop.app.display.DesktopUiScale
 import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.host.HostIntent
 import dev.skillbill.desktop.app.host.HostIntents
 import dev.skillbill.desktop.app.tray.macos.MacStatusItemBridge
+import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.TrayStatus
@@ -45,10 +46,10 @@ import dev.skillbill.desktop.feature.tray.TrayBoard
 import dev.skillbill.desktop.feature.tray.TrayPopoverContent
 import dev.skillbill.desktop.feature.tray.TrayViewModel
 import dev.skillbill.desktop.feature.tray.trayHover
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.awt.SystemTray
 import java.awt.event.WindowEvent
 import java.awt.event.WindowFocusListener
 
@@ -75,6 +76,10 @@ fun ApplicationScope.TrayHost(
   val placement = remember { TrayPopoverPlacement() }
   val density = LocalDensity.current.density.toDouble()
   val linux = System.getProperty("os.name").contains("linux", true)
+  val overlay = NativeTrayHost.showsOverlay(System.getProperty("os.name"))
+  val iconFiles = remember { TrayIconFiles { currentDesktopTempRoot().resolve("tray-icons") } }
+  DisposableEffect(iconFiles) { onDispose { iconFiles.close() } }
+  var iconPaths by remember { mutableStateOf<TrayIconPaths?>(null) }
   LaunchedEffect(available.probeComplete, available.available) {
     if (available.probeComplete && !available.available) {
       visible = false
@@ -95,9 +100,25 @@ fun ApplicationScope.TrayHost(
   val running = loaded?.counts?.running ?: 0
   val goals = loaded?.goals.orEmpty()
   val phases = loaded?.let { it.livePhases + it.finishedPhases + it.liveOperations + it.finishedOperations }.orEmpty()
+  // This sits above the gate below because a failure here closes that gate, which would cancel an effect inside it.
+  LaunchedEffect(status, running, overlay, reducedMotion) {
+    if (mac) return@LaunchedEffect
+    fun fail() {
+      TrayDiagnostics.record("tray_icon_failed")
+      availability.unavailable()
+    }
+    try {
+      iconPaths = withContext(Dispatchers.IO) { renderTrayIcon(iconFiles, status, running, overlay, reducedMotion) }
+    } catch (failure: CancellationException) {
+      throw failure
+    } catch (_: Exception) {
+      fail()
+    } catch (_: LinkageError) {
+      fail()
+    }
+  }
   if (!available.probeComplete || available.available) if (mac) NativeTrayHost.MacStatusItem(status, running, goals, phases,
     onPrimary = { scope.launch(Dispatchers.Main) {
-      availability.available()
       if (!mainVisible) {
         intents.send(HostIntent.ShowMain)
       } else {
@@ -110,7 +131,6 @@ fun ApplicationScope.TrayHost(
       }
     } },
     onMenuAction = { action -> scope.launch(Dispatchers.Main) {
-      availability.available()
       when {
         action in 0..7 -> goals.getOrNull(action)?.let { intents.send(HostIntent.OpenDetail(it)) }
         action in 1000..1007 -> phases.getOrNull(action - 1000)?.let { intents.send(HostIntent.OpenDetail(it)) }
@@ -124,15 +144,9 @@ fun ApplicationScope.TrayHost(
     onFailure = availability::unavailable,
     onDismiss = { scope.launch(Dispatchers.Main) { visible = false } },
   ) else {
-    SideEffect {
-      if (SystemTray.isSupported()) availability.available() else availability.unavailable()
-    }
-    Tray(
-      iconContent = {
-        SkillBillTheme(reducedMotion) {
-          TrayIconRenderer.Content(status, running, NativeTrayHost.showsOverlay(System.getProperty("os.name")))
-        }
-      },
+    iconPaths?.let { paths -> NativeTrayFiles(
+      paths,
+      availability,
       tooltip = if (linux) state.trayHover() else when {
         state.problem != null -> "Skill Bill could not refresh the board · ${state.problem?.summary()}"
         state.stale -> "Skill Bill is showing stale work data"
@@ -142,7 +156,6 @@ fun ApplicationScope.TrayHost(
         else -> "Skill Bill is idle"
       },
       primaryAction = {
-        availability.available()
         if (!mainVisible) intents.send(HostIntent.ShowMain)
         else if (visible) visible = false
         else if (!opening) {
@@ -158,7 +171,7 @@ fun ApplicationScope.TrayHost(
           }
         }
       },
-    )
+    ) }
   }
   if (visible) Window(
     onCloseRequest = { visible = false },
@@ -215,6 +228,29 @@ fun ApplicationScope.TrayHost(
           }
         }
       }
+    }
+  }
+}
+
+@Composable
+private fun NativeTrayFiles(paths: TrayIconPaths, availability: TrayAvailability, tooltip: String, primaryAction: () -> Unit) {
+  val currentAction by rememberUpdatedState(primaryAction)
+  val tray = remember { NativeTray() }
+  DisposableEffect(tray) { onDispose { tray.dispose() } }
+  LaunchedEffect(paths, tooltip) {
+    try {
+      withContext(Dispatchers.IO) {
+        tray.update(paths.png, paths.ico, tooltip, { currentAction() }, {}, {})
+      }
+      availability.available()
+    } catch (failure: CancellationException) {
+      throw failure
+    } catch (_: Exception) {
+      availability.unavailable()
+      TrayDiagnostics.record("tray_icon_failed")
+    } catch (_: LinkageError) {
+      availability.unavailable()
+      TrayDiagnostics.record("tray_icon_failed")
     }
   }
 }

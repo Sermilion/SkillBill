@@ -4,6 +4,7 @@ import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.nio.file.Files
 
 class RepoTestConventionPluginTest {
   @Test
@@ -24,5 +25,19 @@ class RepoTestConventionPluginTest {
       reported.contains(":runtime-example") && reported.contains("src/repoTest/kotlin"),
       "Silently skipping the wiring would drop the repoTest suites from check with a green build: $reported",
     )
+  }
+
+  @Test
+  fun `governed inputs include the wrapper and each module main source root`() {
+    val rootDir = Files.createTempDirectory("repo-test-inputs").toFile()
+    Files.writeString(rootDir.toPath().resolve("gradlew"), "")
+    val root = ProjectBuilder.builder().withName("runtime-kotlin").withProjectDir(rootDir).build()
+    val moduleDir = rootDir.resolve("runtime-example")
+    Files.createDirectories(moduleDir.toPath().resolve("src/main/kotlin"))
+    val module = ProjectBuilder.builder().withName("runtime-example").withParent(root).withProjectDir(moduleDir).build()
+
+    val inputs = module.governedRepositorySources().files
+    assertTrue(inputs.contains(rootDir.resolve("gradlew")), "A regenerated wrapper must rerun repoTest.")
+    assertTrue(inputs.contains(moduleDir.resolve("src/main/kotlin")), "Every module source root must rerun repoTest.")
   }
 }
