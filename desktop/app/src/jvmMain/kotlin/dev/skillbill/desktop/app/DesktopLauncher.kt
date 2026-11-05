@@ -2,6 +2,7 @@ package dev.skillbill.desktop.app
 
 import dev.skillbill.desktop.core.data.identity.BuildIdentityRecord
 import dev.skillbill.desktop.core.data.runtime.InstalledRuntimeBuildGate
+import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import dev.skillbill.desktop.core.data.runtime.runtimeInstallRoot
 import dev.skillbill.desktop.core.domain.model.RuntimeAvailability
 import java.io.File
@@ -22,6 +23,7 @@ private const val RESOURCES_DIRECTORY_PROPERTY = "compose.application.resources.
  * when Retry finds a matched runtime, its jars join the loader and the app starts there, so Compose's native libraries load once.
  */
 fun main(args: Array<String>) {
+  System.setProperty("java.io.tmpdir", currentDesktopTempRoot().toString())
   System.setProperty("compose.interop.blending", "true")
   val runtimeRoot = runtimeInstallRoot(System.getenv(), System.getProperty("user.home"))
   val appRecord = appIdentityPath()

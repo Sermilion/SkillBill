@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.app.tray.macos
 
+import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import java.nio.file.Files
 
@@ -16,7 +17,7 @@ object MacStatusItemBridge {
     try {
       val library = MacStatusItemBridge::class.java.getResourceAsStream("/macos/libskillbilltray.dylib")
         ?: error("native tray library unavailable")
-      val path = Files.createTempFile("skillbill-tray-", ".dylib")
+      val path = Files.createTempFile(currentDesktopTempRoot(), "skillbill-tray-", ".dylib")
       library.use { Files.copy(it, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
       path.toFile().deleteOnExit()
       System.load(path.toAbsolutePath().toString())

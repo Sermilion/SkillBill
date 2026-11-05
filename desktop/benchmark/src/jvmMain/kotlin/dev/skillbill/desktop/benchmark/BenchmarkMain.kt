@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.benchmark
 
+import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
 import java.net.URLClassLoader
@@ -21,7 +22,7 @@ private fun runBenchmark(args: Array<String>): Int {
     System.err.println("Usage: benchmark [<store path>] [--bursts N] [--samples N] [--cold-runs N]")
     return 2
   }
-  val temporary = Files.createTempDirectory("skill-bill-benchmark-")
+  val temporary = Files.createTempDirectory(currentDesktopTempRoot(), "skill-bill-benchmark-")
   var status = 0
   try {
     val original = options.store
