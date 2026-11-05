@@ -23,6 +23,8 @@ import skillbill.cli.goal.control.GoalReplanCommand
 import skillbill.cli.goal.control.GoalResetCommand
 import skillbill.cli.goal.control.GoalResumeCommand
 import skillbill.cli.goal.control.GoalStopCommand
+import skillbill.cli.goal.export.GoalExportCommand
+import skillbill.cli.goal.import.GoalImportCommand
 import skillbill.cli.goal.purge.GoalPurgeCommand
 import skillbill.cli.goal.run.DEFAULT_GOAL_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.cli.goal.run.GoalFindingsCommand
@@ -76,8 +78,10 @@ class GoalControlFlowCommands(
   resume: GoalResumeCommand,
   reset: GoalResetCommand,
   purge: GoalPurgeCommand,
+  export: GoalExportCommand,
+  importCommand: GoalImportCommand,
 ) {
-  val commands: List<CliktCommand> = listOf(pause, stop, resume, reset, purge)
+  val commands: List<CliktCommand> = listOf(pause, stop, resume, reset, purge, export, importCommand)
 }
 
 @Inject

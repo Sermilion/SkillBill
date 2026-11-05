@@ -8,6 +8,10 @@ import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
+import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
@@ -131,5 +135,10 @@ class DetailControlsTest {
     override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome = error("unused")
     override suspend fun recover(item: WorkItem, preview: RecoveryPreview): RecoveryOutcome = error("unused")
     override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome = error("unused")
+    override suspend fun preflightExport(issueKey: String, repoRoot: String?): ExportPreflightOutcome = error("unused")
+    override suspend fun export(issueKey: String, repoRoot: String?, outputPath: String): ExportOutcome =
+      error("unused")
+    override suspend fun inspectArchive(archivePath: String, repoRoot: String?): ArchiveInspectOutcome = error("unused")
+    override suspend fun import(archivePath: String, repoRoot: String?, fingerprint: String): ImportOutcome = error("unused")
   }
 }

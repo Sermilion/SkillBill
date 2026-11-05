@@ -22,6 +22,11 @@ import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PrerequisiteInstruction
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
+import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
+import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RecoveryAttemptStatus
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
@@ -49,6 +54,13 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
+import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
+import skillbill.engine.goalrunner.model.GoalRunnerExportRefusalCategory
+import skillbill.engine.goalrunner.model.GoalRunnerImportRequest
+import skillbill.engine.goalrunner.model.GoalRunnerExportPreflightResult
+import skillbill.engine.goalrunner.model.GoalRunnerExportResult
+import skillbill.engine.goalrunner.model.GoalRunnerArchiveInspectResult
+import skillbill.engine.goalrunner.model.GoalRunnerImportResult
 import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
@@ -520,6 +532,119 @@ class RuntimeWorkControlRepository(
         result.leftovers.isNotEmpty() -> PurgeOutcome.Incomplete(result.leftovers)
         result.nothingToRemove -> PurgeOutcome.NothingToRemove
         else -> PurgeOutcome.Purged(result.removedRowCounts.values.sum(), result.removedPaths.size, result.specBundleActions.size)
+      }
+    }
+  }
+
+  override suspend fun preflightExport(issueKey: String, repoRoot: String?): ExportPreflightOutcome {
+    if (issueKey.isBlank()) return ExportPreflightOutcome.Refused("issue key required")
+    val session = sessions.sessions.value ?: return ExportPreflightOutcome.Failed(NO_SESSION)
+    if (!sessionIsCurrent(session)) return ExportPreflightOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    return callInSession(session, "export_preflight", ExportPreflightOutcome::Failed, stale = {
+      ExportPreflightOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    }) { runtime ->
+      if (!sessionIsCurrent(session)) {
+        return@callInSession ExportPreflightOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+      }
+      val observation = session.purgeIdentity.observation
+        ?: return@callInSession ExportPreflightOutcome.Refused(
+          "The selected database identity is unavailable. Reopen the database before exporting.",
+        )
+      when (
+        val result = runtime.goalRunnerStatusService.preflightExport(
+          issueKey,
+          repoRoot?.let(Path::of),
+          observation,
+        )
+      ) {
+        is GoalRunnerExportPreflightResult.Ready -> ExportPreflightOutcome.Ready(result.featureBranch, result.commitSha)
+        is GoalRunnerExportPreflightResult.Refused -> ExportPreflightOutcome.Refused(result.reason, result.category.toDesktopCategory())
+        is GoalRunnerExportPreflightResult.Failed -> ExportPreflightOutcome.Failed(ReadProblem.Runtime(result.message))
+      }
+    }
+  }
+
+  override suspend fun export(issueKey: String, repoRoot: String?, outputPath: String): ExportOutcome {
+    if (issueKey.isBlank()) return ExportOutcome.Refused("issue key required")
+    if (outputPath.isBlank()) return ExportOutcome.Refused("output path required")
+    val session = sessions.sessions.value ?: return ExportOutcome.Failed(NO_SESSION)
+    if (!sessionIsCurrent(session)) return ExportOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    return callInSession(session, "export", ExportOutcome::Failed, stale = {
+      ExportOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    }) { runtime ->
+      if (!sessionIsCurrent(session)) {
+        return@callInSession ExportOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+      }
+      val observation = session.purgeIdentity.observation
+        ?: return@callInSession ExportOutcome.Refused(
+          "The selected database identity is unavailable. Reopen the database before exporting.",
+        )
+      val request = GoalRunnerExportRequest(issueKey, repoRoot?.let(Path::of), Path.of(outputPath))
+      when (val result = runtime.goalRunnerStatusService.export(request, observation)) {
+        is GoalRunnerExportResult.Exported ->
+          ExportOutcome.Exported(
+            result.issueKey,
+            result.featureBranch,
+            result.commitSha,
+            result.archivePath.toString(),
+          )
+        is GoalRunnerExportResult.Refused -> ExportOutcome.Refused(result.reason, result.category.toDesktopCategory())
+        is GoalRunnerExportResult.Failed -> ExportOutcome.Failed(ReadProblem.Runtime(result.message))
+      }
+    }
+  }
+
+  private fun GoalRunnerExportRefusalCategory.toDesktopCategory(): ExportRefusalCategory =
+    when (this) {
+      GoalRunnerExportRefusalCategory.LIVENESS -> ExportRefusalCategory.LIVENESS
+      GoalRunnerExportRefusalCategory.BRANCH -> ExportRefusalCategory.BRANCH
+      GoalRunnerExportRefusalCategory.OTHER -> ExportRefusalCategory.OTHER
+    }
+
+  override suspend fun inspectArchive(archivePath: String, repoRoot: String?): ArchiveInspectOutcome {
+    if (archivePath.isBlank()) return ArchiveInspectOutcome.Refused("archive path required")
+    val session = sessions.sessions.value ?: return ArchiveInspectOutcome.Failed(NO_SESSION)
+    if (!sessionIsCurrent(session)) return ArchiveInspectOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    return callInSession(session, "inspect_archive", ArchiveInspectOutcome::Failed, stale = {
+      ArchiveInspectOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    }) { runtime ->
+      if (!sessionIsCurrent(session)) {
+        return@callInSession ArchiveInspectOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+      }
+      when (val result = runtime.goalRunnerStatusService.inspectArchive(Path.of(archivePath))) {
+        is GoalRunnerArchiveInspectResult.Ready ->
+          ArchiveInspectOutcome.Ready(
+            result.issueKey,
+            result.featureBranch,
+            result.commitSha,
+            result.fingerprint,
+          )
+        is GoalRunnerArchiveInspectResult.Refused -> ArchiveInspectOutcome.Refused(result.reason)
+        is GoalRunnerArchiveInspectResult.Failed -> ArchiveInspectOutcome.Failed(ReadProblem.Runtime(result.message))
+      }
+    }
+  }
+
+  override suspend fun import(archivePath: String, repoRoot: String?, fingerprint: String): ImportOutcome {
+    if (archivePath.isBlank()) return ImportOutcome.Refused("archive path required")
+    val session = sessions.sessions.value ?: return ImportOutcome.Failed(NO_SESSION)
+    if (!sessionIsCurrent(session)) return ImportOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    return callInSession(session, "import_archive", ImportOutcome::Failed, stale = {
+      ImportOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    }) { runtime ->
+      if (!sessionIsCurrent(session)) return@callInSession ImportOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+      val observation = session.purgeIdentity.observation
+        ?: return@callInSession ImportOutcome.Refused(
+          "The selected database identity is unavailable. Reopen the database before importing.",
+        )
+      val request = GoalRunnerImportRequest(Path.of(archivePath), repoRoot?.let(Path::of), fingerprint)
+      when (val result = runtime.goalRunnerStatusService.import(request, observation)) {
+        is GoalRunnerImportResult.Imported ->
+          ImportOutcome.Imported(result.issueKey, result.featureBranch, result.commitSha)
+        is GoalRunnerImportResult.Incomplete ->
+          ImportOutcome.Incomplete(result.missingSpecPaths)
+        is GoalRunnerImportResult.Refused -> ImportOutcome.Refused(result.reason)
+        is GoalRunnerImportResult.Failed -> ImportOutcome.Failed(ReadProblem.Runtime(result.message))
       }
     }
   }

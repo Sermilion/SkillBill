@@ -1,0 +1,57 @@
+package skillbill.engine.goalrunner.model
+
+import java.nio.file.Path
+
+public data class GoalRunnerExportRequest(
+  public val issueKey: String,
+  public val repoRoot: Path?,
+  public val outputPath: Path,
+)
+
+public enum class GoalRunnerExportRefusalCategory {
+  LIVENESS,
+  BRANCH,
+  OTHER,
+}
+
+public sealed interface GoalRunnerExportResult {
+  public val issueKey: String
+
+  public data class Exported(
+    override val issueKey: String,
+    public val featureBranch: String,
+    public val commitSha: String,
+    public val archivePath: Path,
+    public val fileCount: Int,
+    public val rowCounts: Map<String, Int>,
+  ) : GoalRunnerExportResult
+
+  public data class Refused(
+    override val issueKey: String,
+    public val reason: String,
+    public val category: GoalRunnerExportRefusalCategory = GoalRunnerExportRefusalCategory.OTHER,
+  ) : GoalRunnerExportResult
+
+  public data class Failed(
+    override val issueKey: String,
+    public val message: String,
+  ) : GoalRunnerExportResult
+}
+
+public sealed interface GoalRunnerExportPreflightResult {
+  public val issueKey: String
+
+  public data class Ready(
+    override val issueKey: String,
+    public val featureBranch: String,
+    public val commitSha: String,
+  ) : GoalRunnerExportPreflightResult
+
+  public data class Refused(
+    override val issueKey: String,
+    public val reason: String,
+    public val category: GoalRunnerExportRefusalCategory = GoalRunnerExportRefusalCategory.OTHER,
+  ) : GoalRunnerExportPreflightResult
+
+  public data class Failed(override val issueKey: String, public val message: String) : GoalRunnerExportPreflightResult
+}

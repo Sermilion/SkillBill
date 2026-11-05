@@ -8,4 +8,6 @@ internal object GoalRunnerControlPayloadKeys {
   const val EXECUTION_WORKTREE_RETENTION_REASON = "execution_worktree_retention_reason"
   const val EXECUTION_WORKTREE_RETENTION_DETAIL = "execution_worktree_retention_detail"
   const val LAUNCH_WARNING = "launch_warning"
+  const val ARCHIVE_IMPORT_FINGERPRINT = "archive_import_fingerprint"
+  const val ARCHIVE_IMPORT_SPECS_PENDING = "archive_import_specs_pending"
 }

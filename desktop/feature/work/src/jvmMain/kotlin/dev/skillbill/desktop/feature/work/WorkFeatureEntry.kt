@@ -19,10 +19,14 @@ import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.navigation.LocalEntryToken
+import dev.skillbill.desktop.core.ui.navigation.WorkImportRequests
 import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.nio.file.Path
@@ -41,12 +45,26 @@ class WorkFeatureEntry(
   private val toasts: ToastQueue,
   private val shellPanes: ShellPanes,
   private val paneCommands: PaneCommands,
+  private val session: DatabaseSessionController,
+  private val workImportRequests: WorkImportRequests,
 ) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = route is WorkRoute
 
   @Composable
   override fun Content(route: AppRoute) {
     val viewModel = rememberEntryViewModel("work") { createViewModel() }
+    val entryToken = LocalEntryToken.current
+    val pendingImport by workImportRequests.pending.collectAsState()
+    val sessionState by session.state.collectAsState()
+    LaunchedEffect(pendingImport, sessionState, viewModel, entryToken) {
+      val request = pendingImport?.takeIf { it.entryToken === entryToken } ?: return@LaunchedEffect
+      val openSessionId = (sessionState as? DatabaseSessionState.Open)?.sessionId
+      if (openSessionId != request.sessionId || !navigator.isCurrentEntry(entryToken, request.sessionId)) {
+        workImportRequests.cancel(request)
+      } else if (workImportRequests.consume(request)) {
+        viewModel.onAction(WorkAction.RequestImport)
+      }
+    }
     val section = (route as WorkRoute).section
     LaunchedEffect(section) { viewModel.onAction(WorkAction.ShowSection(section)) }
     LaunchedEffect(viewModel) {

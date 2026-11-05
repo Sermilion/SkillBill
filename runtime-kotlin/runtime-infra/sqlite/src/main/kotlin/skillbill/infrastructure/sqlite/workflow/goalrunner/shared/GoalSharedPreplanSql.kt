@@ -8,14 +8,17 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.hydratedProv
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.normalizedIdentityFailure
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.optionalRepairEvidence
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.rejectLegacy
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.repairEvidenceJsonValue
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requireColumn
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requireParentGoalWorkflowId
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.tableHasColumn
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import skillbill.text.sha256HexUtf8
 import java.sql.Connection
 import java.sql.ResultSet
 
@@ -63,6 +66,71 @@ internal class GoalSharedPreplanSql(
       it.bindAll(parentGoalWorkflowId)
       it.executeUpdate()
     }
+
+  fun insertOrReplace(checkpoint: SharedGoalPreplanCheckpoint) {
+    requireHydratedSharedPreplan(checkpoint)
+    if (sha256HexUtf8(checkpoint.preplanPayload) != checkpoint.payloadSha256) {
+      throw invalidGoalPlanningPreparationSchemaError(
+        checkpoint.identity.parentGoalWorkflowId,
+        "payload_sha256",
+        "payload_sha256 does not match the exact UTF-8 payload bytes",
+      )
+    }
+    val repairJson = repairEvidenceJsonValue(checkpoint.repairEvidence)
+    val hasRepairColumn = connection.tableHasColumn("goal_shared_preplans", "repair_evidence_json")
+    val repairClause = if (hasRepairColumn) ", repair_evidence_json" else ""
+    val repairPlaceholder = if (hasRepairColumn) ", ?" else ""
+    val createdAt = checkpoint.createdAt.takeIf(String::isNotBlank)
+    connection.prepareStatement(
+      """
+      INSERT OR REPLACE INTO goal_shared_preplans (
+        parent_goal_workflow_id, normalized_issue_key, repository_identity, preparation_status,
+        contract_version, parent_spec_hash, decomposition_manifest_hash, planning_contract_id,
+        planning_contract_version, phase_output_contract_id, phase_output_contract_version,
+        payload_sha256, preplan_payload_json, created_at$repairClause
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP)$repairPlaceholder)
+      """.trimIndent(),
+    ).use { statement ->
+      var index = 1
+      statement.setString(index++, checkpoint.identity.parentGoalWorkflowId)
+      statement.setString(index++, checkpoint.identity.normalizedIssueKey)
+      statement.setString(index++, checkpoint.identity.repositoryIdentity)
+      statement.setString(index++, checkpoint.preparationStatus.wireValue)
+      statement.setString(index++, checkpoint.contractVersion)
+      statement.setString(index++, checkpoint.provenance.parentSpecHash)
+      statement.setString(index++, checkpoint.provenance.decompositionManifestHash)
+      statement.setString(index++, checkpoint.provenance.planningContractId)
+      statement.setString(index++, checkpoint.provenance.planningContractVersion)
+      statement.setString(index++, checkpoint.provenance.phaseOutputContractId)
+      statement.setString(index++, checkpoint.provenance.phaseOutputContractVersion)
+      statement.setString(index++, checkpoint.payloadSha256)
+      statement.setString(index++, checkpoint.preplanPayload)
+      statement.setString(index++, createdAt)
+      if (hasRepairColumn) {
+        if (repairJson == null) {
+          statement.setObject(index++, null)
+        } else {
+          statement.setString(index++, repairJson)
+        }
+      }
+      statement.executeUpdate()
+    }
+  }
+
+  fun listForExport(parentGoalWorkflowId: String): List<SharedGoalPreplanCheckpoint> {
+    return connection.prepareStatement(
+      "SELECT * FROM goal_shared_preplans WHERE parent_goal_workflow_id = ?",
+    ).use { statement ->
+      statement.bindAll(parentGoalWorkflowId)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) {
+            add(rows.toExportShared(parentGoalWorkflowId))
+          }
+        }
+      }
+    }
+  }
 }
 
 private fun requireHydratedSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
@@ -78,6 +146,34 @@ private fun requireHydratedSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint
   if (failure != null) {
     throw invalidGoalPlanningPreparationSchemaError(label, failure.first, failure.second)
   }
+}
+
+private fun ResultSet.toExportShared(parentGoalWorkflowId: String): SharedGoalPreplanCheckpoint {
+  val identity =
+    GoalPlanningIdentity(
+      requireColumn(this, parentGoalWorkflowId, "parent_goal_workflow_id"),
+      requireColumn(this, parentGoalWorkflowId, "normalized_issue_key"),
+      requireColumn(this, parentGoalWorkflowId, "repository_identity"),
+    )
+  val status = decodeState(parentGoalWorkflowId, requireColumn(this, parentGoalWorkflowId, "preparation_status"))
+  return SharedGoalPreplanCheckpoint(
+    identity = identity,
+    preparationStatus = status,
+    provenance =
+      GoalPlanningContractProvenance(
+        requireColumn(this, parentGoalWorkflowId, "parent_spec_hash"),
+        requireColumn(this, parentGoalWorkflowId, "decomposition_manifest_hash"),
+        requireColumn(this, parentGoalWorkflowId, "planning_contract_id"),
+        requireColumn(this, parentGoalWorkflowId, "planning_contract_version"),
+        requireColumn(this, parentGoalWorkflowId, "phase_output_contract_id"),
+        requireColumn(this, parentGoalWorkflowId, "phase_output_contract_version"),
+      ),
+    payloadSha256 = requireColumn(this, parentGoalWorkflowId, "payload_sha256"),
+    preplanPayload = requireColumn(this, parentGoalWorkflowId, "preplan_payload_json"),
+    repairEvidence = optionalRepairEvidence(this, parentGoalWorkflowId, "repair_evidence_json"),
+    createdAt = getString("created_at").orEmpty(),
+    contractVersion = requireColumn(this, parentGoalWorkflowId, "contract_version"),
+  )
 }
 
 private fun ResultSet.toShared(expected: GoalPlanningIdentity): SharedGoalPreplanLookupResult {

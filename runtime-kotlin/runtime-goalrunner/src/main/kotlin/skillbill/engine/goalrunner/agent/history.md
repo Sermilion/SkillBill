@@ -1,5 +1,21 @@
 # goalrunner boundary history
 
+## [2026-11-04] SKILL-474: transfer paused goals by archive
+Areas: runtime-goalrunner, runtime-cli, runtime-contracts, runtime-ports, runtime-infra/sqlite, orchestration/contracts, desktop
+- Goal export writes a versioned zip containing specs and purge-owned workflow and planning state. It refuses non-idle work, branch mismatches, sibling worktrees and unclassified rows.
+- Goal import checks the contract, branch, paths and collisions before restoring DB state and specs. Imported goals land paused and idle; an incomplete spec write can be retried.
+- reusable: GoalArchiveSnapshotPort, GoalArchiveEnvelopeValidator and archive import and export operations share runtime policy with CLI and desktop.
+- Archives exclude worktrees, unpublished git objects and telemetry. Import does not check out git or replace a different existing parent.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
+## [2026-11-04] SKILL-477.1 fix confirmed assessment findings
+Areas: runtime-goalrunner assessment and persistence, runtime-engine unit-test review, runtime-domain assessment, runtime-contracts, runtime-ports, runtime-infra workflow, orchestration/contracts
+- The first assessment round reviews existing unit tests in the committed goal scope. It records a distinct completed review identity even for an empty test scope and fails closed when scope or read-only integrity cannot be established.
+- Assessment requires a complete counted projection and completion marker. Malformed, incomplete or over-capacity output makes assessment unavailable rather than dropping findings.
+- Independent verification covers defect and test-value candidates at every severity. Confirmed findings enter focused repair and require same-reference verification after repair; open confirmed findings block publication. Refuted findings receive no repair authority.
+- reusable: the engine-owned unit-test value review is shared by standalone review and goal assessment.
+- Assessment record 0.3 carries the review identity and guarded production references. Version 0.2 records are quarantined and regenerated; resume retains only an actual completed review identity. Completed historical runs are not reopened.
 ## [2026-11-05] goal assessment keeps its unavailable reason
 Areas: runtime-goalrunner assessment; runtime-domain assessment record; goal status
 - SKILL-482 stopped at assessment_unavailable with no rounds and no cause: the reason went only to a logger that is off without verbose mode.

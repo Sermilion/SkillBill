@@ -5,6 +5,10 @@ import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
+import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
@@ -37,4 +41,12 @@ interface WorkControlRepository {
   suspend fun recordOperatorDecision(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome
 
   suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome
+
+  suspend fun preflightExport(issueKey: String, repoRoot: String?): ExportPreflightOutcome
+
+  suspend fun export(issueKey: String, repoRoot: String?, outputPath: String): ExportOutcome
+
+  suspend fun inspectArchive(archivePath: String, repoRoot: String?): ArchiveInspectOutcome
+
+  suspend fun import(archivePath: String, repoRoot: String?, fingerprint: String): ImportOutcome
 }

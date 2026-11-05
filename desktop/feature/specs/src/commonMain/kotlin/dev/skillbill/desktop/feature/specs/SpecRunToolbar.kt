@@ -25,6 +25,8 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.IdTag
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbDialog
+import dev.skillbill.desktop.core.designsystem.component.SbDialogText
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
@@ -87,6 +89,12 @@ internal fun SpecRunToolbar(state: SpecsUiState, onAction: (SpecsAction) -> Unit
           }
           SbButton(if (control?.pauseRequested == true) "Pause requested" else "Pause", { onAction(SpecsAction.Pause) }, size = SbControlSize.Small, icon = LucideIcons.pause, enabled = control?.canPause == true && control?.pauseRequested == false && !toolbar.inFlight)
           SbButton("Cancel", { onAction(SpecsAction.RequestCancel) }, size = SbControlSize.Small, variant = SbButtonVariant.Danger, icon = LucideIcons.x, enabled = control?.canCancel == true && !toolbar.inFlight)
+          SbIconButton(
+            LucideIcons.file,
+            "Export work",
+            { onAction(SpecsAction.RequestExport) },
+            size = SbControlSize.Small,
+          )
           if (control?.purgeVisible == true) {
             Spacer(Modifier.weight(1f))
             val enabled = control.canPurge && !toolbar.inFlight
@@ -113,6 +121,21 @@ internal fun SpecRunToolbar(state: SpecsUiState, onAction: (SpecsAction) -> Unit
           else -> Unit
         }
         if (toolbar.purgeDialogOpen && key != null) PurgeConfirmationDialog(key, onAction)
+        if (toolbar.exportLiveDialogOpen) {
+          ShellLayer { onAction(SpecsAction.DismissExportLive) }
+          SbDialog(
+            title = "Pause before exporting",
+            onDismissRequest = { onAction(SpecsAction.DismissExportLive) },
+            actions = {
+              SbButton("Dismiss", { onAction(SpecsAction.DismissExportLive) }, variant = SbButtonVariant.Ghost)
+              if (control?.canPause == true && !control.pauseRequested && !toolbar.inFlight &&
+                (toolbar.control as? SpecControlState.Loaded)?.liveGoal != null
+              ) {
+                SbButton("Pause", { onAction(SpecsAction.Pause); onAction(SpecsAction.DismissExportLive) })
+              }
+            },
+          ) { SbDialogText("This goal must be paused before it can be exported.") }
+        }
       }
     }
   }

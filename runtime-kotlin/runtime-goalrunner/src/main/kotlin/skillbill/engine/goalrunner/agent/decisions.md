@@ -1,5 +1,34 @@
 # goalrunner boundary decisions
 
+## [2026-11-04] Keep archive coordination beside purge
+Context: Archive export shares the goalrunner ownership census with purge. A separate coordinator package introduced a dependency cycle.
+Decision: Keep GoalRunnerArchiveCoordinator beside purge and delegate archive work to import and export operations. Validate envelopes through a ports interface implemented by infra-contracts.
+Reason: This preserves the census dependency direction and keeps schema validation out of CLI and the goalrunner implementation dependencies.
+
+## [2026-11-04] Export planning rows by parent ownership
+Context: A saved subtask plan can refer to descriptors absent from the current governed list.
+Decision: Snapshot planning rows by parent goal workflow id and reuse their existing payload encodings.
+Reason: The normal plan read can classify descriptor drift as a conflict, while purge still owns those rows and import needs them.
+
+## [2026-11-04] Let git carry unpublished work separately
+Context: Purge protects worktree contents, but an archive contains neither the worktree nor unpublished git objects.
+Decision: Export does not apply purge's unpublished-work retention refusal. It requires the recorded feature branch and rejects sibling-worktree state.
+Reason: The operator must push or stash local work separately; the archive records the branch and HEAD commit rather than transferring git objects.
+
+## [2026-11-04] Commit imported state before writing specs
+Context: SQLite and the filesystem cannot share a transaction. A spec write can fail after database restore commits.
+Decision: Commit DB state first, then write specs. Report an incomplete import and permit a matching retry to finish the spec write without duplicating rows.
+Reason: The committed database state is authoritative, and a retry must not be mistaken for a collision with a different parent.
+
+## [2026-11-04] Land imported goals paused under the destination identity
+Context: Source identities name another machine, and restoring a worker lease or an auto-cleared pause would make the imported goal appear in flight.
+Decision: Rewrite imported identities for the destination, skip worker leases and persist the imported pause reason with no execution lease.
+Reason: Destination lookups need the destination identity. An absent worker lease and a durable pause leave the goal idle until the operator resumes it. Ordinary binding of existing local records retains its separate identity rule.
+
+## [2026-11-04] Verify test-value findings before focused repair
+Context: A test can pass while the production regression it should guard remains. The previous focused-repair decision left test-value notes as report-only.
+Decision: Review the committed goal test scope read-only and independently verify defect and test-value candidates at every severity. Confirmed candidates use the existing focused repair budget and receive same-reference verification after repair; refuted candidates receive no repair authority. Missing or incomplete evidence makes assessment unavailable.
+Reason: A report-only finding can leave a confirmed regression unresolved. Independent verification grants repair authority only to confirmed cases, and post-fix verification prevents a repair from claiming convergence while the regression remains.
 ## [2026-11-05] PR-writer provider limit uses a goalrunner-internal pause outcome
 Context: GoalPullRequestPort stays Opened, Existing, or Failed only; a pause is not a failed open.
 Decision: GoalPullRequestOpenOutcome carries ProviderPaused for classified writer blocks; commitAndPublish maps it to pauseForProviderLimit at pr without warnPullRequestWriter or port fallback.

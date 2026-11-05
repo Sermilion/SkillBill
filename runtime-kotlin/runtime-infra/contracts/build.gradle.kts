@@ -248,6 +248,11 @@ governedResources {
     "SKILL-128: canonical goal planning preparation schema",
   )
   copy(
+    "copyGoalArchiveSchema",
+    "goal-archive-schema.yaml",
+    "SKILL-474: canonical goal archive envelope schema",
+  )
+  copy(
     "copyGoalPlanningPreparationHistoricalPhaseOutput06Schema",
     "goal-planning-preparation-schema-0.2-phase-output-0.6.yaml",
     "LOCAL-274870733146662: historical goal planning preparation schema for phase output 0.6",

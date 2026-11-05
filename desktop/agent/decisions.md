@@ -1,3 +1,8 @@
+## [2026-11-04] Keep archive admission and inspection in the runtime
+Context: Desktop needs to refuse live export before file selection and show archive identity before import confirmation.
+Decision: Delegate preflight and inspection through WorkControlRepository. Recheck export admission and bind import to the inspected fingerprint and selected database observation.
+Reason: The runtime owns liveness and restore rules. The fingerprint prevents confirmation of one archive from authorizing a changed archive.
+
 ## [2026-11-05] Make the New Task repository pill static once a chat starts
 Context: SKILL-467 allowed repository and agent changes after the first message. SKILL-482 requires a static repository pill once a chat starts.
 Decision: The repository pill has no click or chevron and its popup does not compose after chat starts. The agent chip retains its rebind behavior.

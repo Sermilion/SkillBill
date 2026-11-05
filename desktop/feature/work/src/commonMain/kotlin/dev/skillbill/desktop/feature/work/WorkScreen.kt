@@ -1,8 +1,11 @@
 package dev.skillbill.desktop.feature.work
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -10,7 +13,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -18,13 +24,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbDialog
+import dev.skillbill.desktop.core.designsystem.component.SbDialogText
+import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -40,6 +52,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
+import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import kotlin.math.roundToInt
 
@@ -97,6 +110,7 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(WorkAction.Refresh) })
         SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
+        SbButton("Import work…", { onAction(WorkAction.RequestImport) }, size = SbControlSize.Small)
       },
     )
     Box(Modifier.weight(1f)) {
@@ -104,6 +118,87 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
         BoardState.Loading -> ScrollBody { EmptyState("Loading your work", LucideIcons.inbox) }
         is BoardState.Failed -> ScrollBody { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
         is BoardState.Loaded -> WorkBody(state, board, host, narrow, onAction)
+      }
+    }
+    state.exportLiveTarget?.let { item ->
+      ShellLayer { onAction(WorkAction.DismissExportLive) }
+      SbDialog(
+        title = "Pause before exporting",
+        onDismissRequest = { onAction(WorkAction.DismissExportLive) },
+        actions = {
+          SbButton("Dismiss", { onAction(WorkAction.DismissExportLive) }, variant = SbButtonVariant.Ghost)
+          if (state.canPauseNow(item)) {
+            SbButton("Pause", {
+              onAction(WorkAction.PauseNow(item))
+              onAction(WorkAction.DismissExportLive)
+            })
+          }
+          if (state.canPauseAfterSubtask(item)) {
+            SbButton("Pause after subtask", {
+              onAction(WorkAction.PauseAfterSubtask(item))
+              onAction(WorkAction.DismissExportLive)
+            })
+          }
+        },
+      ) { SbDialogText("This goal must be paused before it can be exported.") }
+    }
+    state.importDialog?.let { target ->
+      ShellLayer { onAction(WorkAction.DismissImport) }
+      SbDialog(
+        title = "Import ${target.issueKey}?",
+        onDismissRequest = { onAction(WorkAction.DismissImport) },
+        actions = {
+          SbButton("Cancel", { onAction(WorkAction.DismissImport) }, variant = SbButtonVariant.Ghost, enabled = !target.importing)
+          SbButton(
+            if (target.importing) "Importing…" else if (target.retryPending) "Retry import" else "Import work",
+            { onAction(WorkAction.ConfirmImport) },
+            enabled = target.repositoryRoot != null && !target.importing,
+          )
+        },
+      ) {
+        SbDialogText("Issue key: ${target.issueKey}")
+        SbDialogText("Branch: ${target.featureBranch}")
+        SbDialogText("Commit: ${target.commitSha}")
+        SbDialogText("Import into repository")
+        target.repositories.forEach { repository ->
+          Row(
+            Modifier.fillMaxWidth().selectable(
+              selected = target.repositoryRoot == repository.root,
+              enabled = !target.retryPending && !target.importing,
+              onClick = { onAction(WorkAction.ChooseImportRepository(repository.root)) },
+              role = Role.RadioButton,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            RadioButton(
+              selected = target.repositoryRoot == repository.root,
+              onClick = if (target.retryPending || target.importing) null else {
+                { onAction(WorkAction.ChooseImportRepository(repository.root)) }
+              },
+            )
+            Text("${repository.name} · ${repository.root}")
+          }
+        }
+        SbDialogText("Or enter a checkout path")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+          SbInput(
+            value = target.destinationPath,
+            onValueChange = { onAction(WorkAction.ImportDestinationPathChanged(it)) },
+            modifier = Modifier.weight(1f),
+            placeholder = "/path/to/checkout",
+            mono = true,
+            enabled = !target.retryPending && !target.importing && !target.resolvingDestination,
+            onSubmit = { onAction(WorkAction.ResolveImportDestination) },
+          )
+          SbButton(
+            if (target.resolvingDestination) "Checking…" else "Use path",
+            { onAction(WorkAction.ResolveImportDestination) },
+            enabled = !target.retryPending && !target.importing && !target.resolvingDestination && target.destinationPath.isNotBlank(),
+            size = SbControlSize.Small,
+          )
+        }
+        target.destinationError?.let { SbDialogText(it) }
+        if (target.retryPending) SbDialogText("Retry stays bound to this repository, archive, and database session.")
       }
     }
   }

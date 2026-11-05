@@ -1,0 +1,34 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/goal-archive-schema.yaml"
+title: "Goal archive envelope"
+description: >
+  Portable goal archive metadata written as archive.json at the zip root.
+  Zip layout: archive.json (this schema), specs/ (decomposition manifest and governed
+  spec copies with store-relative paths), records/workflows.json (WorkflowStateRecord
+  field maps), records/planning.json (shared preplans, subtask plans, legacy preparations
+  using goal-planning-preparation-schema.yaml envelopes), records/owned-tables.json
+  (purge-owned satellite rows keyed by table name).
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - issue_key
+  - feature_branch
+  - commit_sha
+  - exported_at
+properties:
+  contract_version:
+    type: string
+    const: "1.0"
+  issue_key:
+    $ref: "https://skill-bill.dev/contracts/issue-key-schema.yaml"
+  feature_branch:
+    type: string
+    minLength: 1
+  commit_sha:
+    type: string
+    minLength: 1
+  exported_at:
+    type: string
+    minLength: 1
+    description: ISO-8601 UTC instant when export completed.

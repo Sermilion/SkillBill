@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.status
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.goal.GOAL_PLANNING_OPERATION_KIND
 import skillbill.engine.goal.GoalRunnerStatusRequest
@@ -44,6 +45,23 @@ class GoalRunnerStatusProjectionLivenessTest {
     object : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
       override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ExactLive
     }
+
+  @Test
+  fun `runtime workflow without worker ownership is idle`() {
+    val database = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
+    val recorder = testPhaseRecorder(database, testWorkflowSnapshotValidator)
+    val workflowId = "wftr-no-worker-ownership"
+    assertTrue(recorder.openTestWorkflow(workflowId, sessionId = "goal-status-liveness-test"))
+
+    assertEquals(
+      ExecutionLiveness.IDLE,
+      resolveRuntimeWorkflowExecutionLiveness(
+        workflowId,
+        FeatureTaskRuntimePhaseQuery(database),
+        NoopFeatureTaskRuntimeWorkerSupervisor,
+      ),
+    )
+  }
 
   @Test
   fun `reused pid and unsupported process inspection cannot prove a live goal owner`() {

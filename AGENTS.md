@@ -84,7 +84,7 @@ Write direct, active prose; drop filler, stale wording, praise and repetition; p
 
 Write few, high-value tests; name the realistic bug each would catch before authoring. Assert observable boundaries, not implementation structure. `skill-bill operation unit-test-value-check` is the review gate.
 
-No timing-based tests. A test must not pass or fail depending on wall-clock time or thread scheduling. That rules out real sleeps (`Thread.sleep`, shell `sleep N`) racing a timeout, idle window or poll interval, and assertions on elapsed duration or poll counts. It also rules out real-time deadline polling loops, latch or join awaits whose expiry decides the result, and real `delay` outside `runTest` virtual time. CI runs on a loaded self-hosted runner where these flake, and a CI failure is never fixed by widening sleeps or deadlines. Inject the clock and the scheduler (fake `Clock`, `runTest` virtual time, explicit latches signalled by the code under test) so the test controls every transition. If a behavior can only be checked with real time, leave it untested rather than add a flaky test.
+No timing-based tests. Tests must not depend on wall-clock time or thread scheduling. Ban real sleeps (`Thread.sleep`, shell `sleep N`) racing timeouts, idle windows or poll intervals; elapsed-time or poll-count assertions; real-time deadline polling; latch or join timeouts; and real `delay` outside `runTest`. CI's loaded self-hosted runner makes these flaky, so do not widen sleeps or deadlines. Inject a clock and scheduler (fake `Clock`, `runTest` virtual time or code-signalled latches) to control every transition. Leave real-time-only behavior untested.
 
 ## Comments
 
