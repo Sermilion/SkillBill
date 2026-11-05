@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -50,20 +49,18 @@ import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.metricValueStyle
 import dev.skillbill.desktop.core.designsystem.detail.relativeAge
-import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
-import dev.skillbill.desktop.core.domain.model.QaChecklistFinding
 import dev.skillbill.desktop.core.domain.model.QaTargetState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import kotlinx.coroutines.launch
 
-internal const val QA_FINDINGS_SECTION = "qa-findings"
+internal const val QA_RESULTS_SECTION = "qa-results"
 
 internal fun qaFindingRowKey(id: String) = "qa-finding-$id"
 
@@ -75,7 +72,7 @@ internal fun rememberQaFindingScroller(listState: LazyListState, collapse: Secti
   return remember(listState, collapse, keys, scope) {
     { id ->
       scope.launch {
-        if (collapse.isCollapsed(QA_FINDINGS_SECTION)) collapse.toggle(QA_FINDINGS_SECTION)
+        if (collapse.isCollapsed(QA_RESULTS_SECTION)) collapse.toggle(QA_RESULTS_SECTION)
         repeat(5) {
           val index = keys.indexOf(qaFindingRowKey(id))
           if (index != null) {
@@ -256,18 +253,6 @@ internal fun DetailSections.qaTestPlanSection(view: QaChecklistView, onOpenFindi
   }) {
     items(cases, key = { "qa-case-${it.id}" }) { case ->
       QaCaseCard(case, view.invocationDirectory, onOpenFinding) { action -> onAction(action) }
-    }
-  }
-}
-
-internal fun DetailSections.qaFindingsSection(findings: List<QaChecklistFinding>) {
-  if (findings.isEmpty()) return
-  section(QA_FINDINGS_SECTION, "Findings", count = findings.size.toString()) {
-    itemsIndexed(findings, key = { _, finding -> qaFindingRowKey(finding.id) }) { index, finding ->
-      Row(Modifier.fillMaxWidth().sbBoxSegment(index, findings.size).padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        BasicText(finding.id, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.stFailed))
-        BasicText(finding.title, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg))
-      }
     }
   }
 }

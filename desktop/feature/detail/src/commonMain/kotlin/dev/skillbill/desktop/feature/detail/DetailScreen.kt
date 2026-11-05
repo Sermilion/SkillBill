@@ -252,9 +252,8 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       briefingSection(item, detail, onAction)
       reviewActionsSection(item, detail, onAction)
       standaloneResultSection(item, detail)
-      qaReportSection(item, detail, onAction)
       if (item.kind != WorkKind.Goal) {
-        goalQaSection(detail)
+        goalQaSection(detail, item.running, onAction)
         goalAssessmentSection(detail)
       }
       // Standalone phases and operations keep their dependencies, validation, phase results and spec bundle in the document.
@@ -289,14 +288,18 @@ private fun DetailSections.qaDocument(
   val item = state.header
   val run = qaDisplayedRun(item, detail, state.selectedQaRun)
   val findings = run?.let(::qaFindings).orEmpty()
+  val live = run != null && qaRunLive(item, run)
+  val results = run?.let { qaResultsView(standaloneQaInput(item, it)) }
   incident(state, view, onAction)
+  if (results != null && !live) qaResultsSection(QA_RESULTS_SECTION, "QA results", results, onAction)
   qaStatusStrip(item, run, qaView)
   qaTargetsSection(qaView)
   qaTestPlanSection(qaView, { id -> if (findings.any { it.id == id }) onOpenFinding(id) }, onAction)
   changesSection(state.changes, onAction)
   qaActivitySection(item, detail, state, onAction)
-  qaFindingsSection(findings)
-  qaReportSection(item, detail, onAction, run)
+  if (results != null && live && (findings.isNotEmpty() || results.report != null)) {
+    qaResultsSection(QA_RESULTS_SECTION, "QA results", results, onAction)
+  }
   briefingSection(item, detail, onAction)
   dependencySection(item, detail, state, onAction)
   validationSection(item, detail)
