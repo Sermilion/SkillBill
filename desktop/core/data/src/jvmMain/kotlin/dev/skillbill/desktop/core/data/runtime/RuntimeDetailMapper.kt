@@ -196,7 +196,9 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     goalQa = goal?.goalQaResult?.let { qa ->
       GoalQaResult(
         qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
-        qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePath, it.fixed) }, qa.reportText, qa.failureKind,
+        qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePaths.firstOrNull() ?: it.reportPath, it.fixed) },
+        qa.reportText,
+        qa.failureKind,
       )
     },
     goalAssessment = goal?.goalAssessmentResult?.let { assessment ->

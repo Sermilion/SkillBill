@@ -25,6 +25,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehav
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.time.Clock
 import java.time.Duration
@@ -48,6 +49,7 @@ public class StandalonePhaseStatusEventSink(
   private var monitorCleanup: StandaloneMonitorCleanup? = null
   private var qaOutcome: StandaloneQaOutcome? = null
   private var qaReportText: String? = null
+  private var qaDetails: QaRunDetails? = null
   private var planReport: StandalonePlanReport? = null
   private var reviewRunId: String? = null
 
@@ -96,6 +98,7 @@ public class StandalonePhaseStatusEventSink(
         is PhaseRunResult.Completed -> {
           result.qaOutcome?.let(::recordQaOutcome)
           qaReportText = result.qaReportText
+          qaDetails = result.qaDetails
           reviewRunId = result.reviewRunId
           persist(
             state = "terminal",
@@ -274,6 +277,7 @@ public class StandalonePhaseStatusEventSink(
             monitorCleanup = monitorCleanup,
             qaOutcome = qaOutcome,
             qaReportText = qaReportText,
+            qaDetails = qaDetails,
             planReport = planReport,
             reviewRunId = reviewRunId,
           ),

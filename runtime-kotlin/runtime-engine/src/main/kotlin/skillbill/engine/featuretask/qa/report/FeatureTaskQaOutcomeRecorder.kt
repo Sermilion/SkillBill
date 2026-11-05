@@ -6,6 +6,7 @@ import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import java.time.Clock
 
 @Inject
@@ -51,6 +52,13 @@ public class FeatureTaskQaOutcomeRecorder(
           ),
           tested.report?.text,
           tested.failureKind,
+          QaRunDetailsMapping.goal(
+            tested.report,
+            tested.reportPath,
+            tested.evidencePrefix,
+            tested.producedReason,
+            previous?.details,
+          ),
         ),
       )
     }
@@ -65,6 +73,27 @@ public class FeatureTaskQaOutcomeRecorder(
       val recorded = outcomes.find(workflowId) ?: return@transaction
       if (recorded.qaFixAttempts >= qaFixAttempts) return@transaction
       outcomes.upsert(recorded.copy(qaFixAttempts = qaFixAttempts, recordedAt = "${clock.instant()}"))
+    }
+  }
+
+  internal fun recordRetainedResources(
+    workflowId: String,
+    resources: List<QaRetainedResource>,
+  ) {
+    if (resources.isEmpty()) return
+    database.transaction { unitOfWork ->
+      val outcomes = unitOfWork.featureTaskQaOutcomes
+      val recorded =
+        outcomes.find(workflowId)
+          ?: incompleteRow(workflowId, "QA retained resources before recording an outcome", null)
+      val details = recorded.details ?: QaRunDetails()
+      val retained = (details.retainedResources + QaRunDetailsMapping.retained(resources)).distinct()
+      outcomes.upsert(
+        recorded.copy(
+          recordedAt = "${clock.instant()}",
+          details = details.copy(retainedResources = retained),
+        ),
+      )
     }
   }
 
@@ -133,4 +162,6 @@ public data class QaSettledRun(
   public val reportPath: String? = null,
   internal val legacyFindings: List<FeatureTaskQaFinding> = emptyList(),
   public val failureKind: FeatureTaskQaFailureKind? = null,
+  public val evidencePrefix: String? = null,
+  public val producedReason: String? = null,
 )

@@ -37,6 +37,9 @@ class QaPromptSectionsTest {
     assertContains(standalone, "\"contract_version\": \"0.1\"")
     assertContains(standalone, "Progress commands never decide the verdict")
     assertContains(standalone, "Edit nothing outside the QA checkout and the invocation directory")
+    assertContains(standalone, "`- [passed|failed|not_exercised] <title>: <detail>. Evidence: <paths>`")
+    assertContains(standalone, "`Steps:`, `Expected:`, `Observed:` and `Evidence:`")
+    assertContains(standalone, "`[not restored]` only when the edit outlives the QA checkout")
     listOf(QaPolicy.AUTO, QaPolicy.ON).forEach { policy ->
       assertFalse("skill-bill qa plan" in QaPromptSections.supplement(context(policy)))
     }

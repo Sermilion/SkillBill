@@ -3,8 +3,11 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_DETAILS_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_FAILURE_KIND_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_REPORT_TEXT_COLUMN
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.decodeQaDetails
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeQaDetails
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -22,8 +25,8 @@ internal class SqliteFeatureTaskQaOutcomeStore(
       """
       INSERT INTO feature_task_qa_outcomes (
         workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
-        $QA_REPORT_TEXT_COLUMN, $QA_FAILURE_KIND_COLUMN
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        $QA_REPORT_TEXT_COLUMN, $QA_FAILURE_KIND_COLUMN, $QA_DETAILS_COLUMN
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(workflow_id) DO UPDATE SET
         outcome = excluded.outcome,
         reason = excluded.reason,
@@ -32,7 +35,8 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         recorded_at = excluded.recorded_at,
         findings_summary = excluded.findings_summary,
         $QA_REPORT_TEXT_COLUMN = excluded.$QA_REPORT_TEXT_COLUMN,
-        $QA_FAILURE_KIND_COLUMN = excluded.$QA_FAILURE_KIND_COLUMN
+        $QA_FAILURE_KIND_COLUMN = excluded.$QA_FAILURE_KIND_COLUMN,
+        $QA_DETAILS_COLUMN = excluded.$QA_DETAILS_COLUMN
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -45,6 +49,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         outcome.findings.takeIf(List<FeatureTaskQaFinding>::isNotEmpty)?.let(::encodeFindings),
         outcome.reportText,
         outcome.failureKind?.wireValue,
+        outcome.details?.let(::encodeQaDetails),
       )
       statement.executeUpdate()
     }
@@ -54,7 +59,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
     connection.prepareStatement(
       """
       SELECT workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
-             $QA_REPORT_TEXT_COLUMN, $QA_FAILURE_KIND_COLUMN
+             $QA_REPORT_TEXT_COLUMN, $QA_FAILURE_KIND_COLUMN, $QA_DETAILS_COLUMN
       FROM feature_task_qa_outcomes
       WHERE workflow_id = ?
       """.trimIndent(),
@@ -78,6 +83,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
           findings = decodedFindings,
           reportText = storedReportText,
           failureKind = FeatureTaskQaFailureKind.fromWire(rows.getString(QA_FAILURE_KIND_COLUMN)),
+          details = rows.getString(QA_DETAILS_COLUMN)?.let(::decodeQaDetails),
         )
       }
     }
@@ -91,6 +97,9 @@ internal class SqliteFeatureTaskQaOutcomeStore(
           SqliteFeatureTaskQaFindingKeys.EVIDENCE_PATHS to finding.evidencePaths,
           SqliteFeatureTaskQaFindingKeys.RECEIPT_PATH to finding.reportPath,
           QaOutcomePayloadKeys.STATUS to finding.status.wireValue,
+          SqliteFeatureTaskQaFindingKeys.OBSERVED_TEXT to finding.observed,
+          SqliteFeatureTaskQaFindingKeys.EXPECTED to finding.expected,
+          SqliteFeatureTaskQaFindingKeys.STEPS to finding.steps,
         )
       },
     )
@@ -112,6 +121,9 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         status =
           FeatureTaskQaFindingStatus.fromWire(status)
             ?: invalidStoredFindings("Stored QA finding status '$status' is not known."),
+        observed = entry[SqliteFeatureTaskQaFindingKeys.OBSERVED_TEXT] as? String,
+        expected = entry[SqliteFeatureTaskQaFindingKeys.EXPECTED] as? String,
+        steps = entry[SqliteFeatureTaskQaFindingKeys.STEPS] as? String,
       )
     }
   }
@@ -122,4 +134,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
 internal object SqliteFeatureTaskQaFindingKeys {
   const val EVIDENCE_PATHS: String = "evidence_paths"
   const val RECEIPT_PATH: String = "receipt_path"
+  const val OBSERVED_TEXT: String = "observed_text"
+  const val EXPECTED: String = QaOutcomePayloadKeys.EXPECTED
+  const val STEPS: String = QaOutcomePayloadKeys.STEPS
 }

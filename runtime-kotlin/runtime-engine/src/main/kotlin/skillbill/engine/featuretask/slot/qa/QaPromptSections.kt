@@ -226,18 +226,20 @@ internal object QaPromptSections {
     |- For a `skipped` or `incomplete` verdict, the second line is `Reason: <token>`, using one of these tokens:
     |  $REASON_TOKENS. Add any detail after the token or in the body.
     |- Write each finding under its own `### <id> <title>` heading, for example `### QA-1 Save button stays disabled`.
-    |  Under it give the steps, the expected result, the observed result, and evidence paths. Use `#` or `##` for
+    |  Under it write the labelled lines `Steps:`, `Expected:`, `Observed:` and `Evidence:`. Use `#` or `##` for
     |  every other heading so a finding section ends where the next heading starts.
-    |- Describe the flows you exercised and the flows you left untested, with the reason, in your own words.
     |- Under a `## Coverage` heading, write one bullet per target kind listed in the QA run section, in the form
     |  `- <kind>: <passed|findings_open|skipped|incomplete> [reason: <token>] [backend: real|mocked|none]`. The
     |  `backend:` field is required on a `web` line.
-    |- Under a `## Assertions` heading, list each exercised assertion with its flow and outcome.
+    |- Under a `## Assertions` heading, write one bullet per assertion, including those you did not exercise, in the
+    |  form `- [passed|failed|not_exercised] <title>: <detail>. Evidence: <paths>`. A `failed` assertion must have a
+    |  finding. A `not_exercised` assertion names what you tried and why it failed.
     |- Under a `## Isolation` heading, record the selected environment or app defaults. For backend and web
     |  targets also state the disposable database or its absence, outbound substitutes, and rejected configuration.
     |  Never include secret values.
-    |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
-    |  the flows the change made possible. Write `None.` when you changed nothing.
+    |- Under a `## Temporary edits` heading, write one bullet per file you changed in the QA checkout, in the form
+    |  `` - `<path>`: <what changed> ``, and name the flows the change made possible. Prefix a bullet with
+    |  `[not restored]` only when the edit outlives the QA checkout. Write `None.` when you changed nothing.
     """.trimMargin()
 
   private fun progressRules(qa: QaExecutionContext): String {

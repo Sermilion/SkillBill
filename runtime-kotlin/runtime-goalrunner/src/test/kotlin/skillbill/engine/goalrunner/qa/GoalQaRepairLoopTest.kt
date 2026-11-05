@@ -249,7 +249,7 @@ class GoalQaRepairLoopTest {
     )
     val open = outcome.notFixedFindings.single()
     assertEquals("Home screen stays blank", open.title)
-    assertContains(assertNotNull(open.evidencePath), "home-F-2.png")
+    assertContains(open.evidencePaths.single(), "home-F-2.png")
     val body = fixture.state.manifest.toPullRequestRequest(home, GoalQaSummary.Recorded(outcome)).body
     assertContains(body, "fixed: F-1")
     assertContains(body, "not fixed, review them yourself: F-2 \"Home screen stays blank\"")

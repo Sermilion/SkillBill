@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.qa.report
 
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.scaffold.model.QaTargetKind
+import skillbill.workflow.taskruntime.model.qa.QaRunAssertion
+import skillbill.workflow.taskruntime.model.qa.QaRunTemporaryEdit
 
 public enum class QaVerdict(internal val wireValue: String) {
   PASSED("passed"),
@@ -25,6 +27,9 @@ public data class QaReportFinding(
   val title: String,
   val section: String,
   val evidencePaths: List<String>,
+  val observed: String? = null,
+  val expected: String? = null,
+  val steps: String? = null,
 )
 
 public enum class QaBackendAttribution(internal val wireValue: String) {
@@ -61,6 +66,8 @@ public data class QaReport(
   val coverage: List<QaTargetCoverage> = emptyList(),
   val assertionsReported: Boolean = true,
   val coverageWarnings: List<String> = emptyList(),
+  val assertions: List<QaRunAssertion> = emptyList(),
+  val temporaryEdits: List<QaRunTemporaryEdit> = emptyList(),
 ) {
   init {
     require(reason == null || QaSkipReason.fromWire(reason) != null) {

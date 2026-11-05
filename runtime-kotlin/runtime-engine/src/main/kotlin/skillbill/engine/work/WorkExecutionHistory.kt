@@ -140,6 +140,7 @@ internal fun workExecutionHistory(
             },
           qaChecklist = it.qaChecklist,
           qaFindings = qaFindingsOf(it.qaReportText),
+          qaDetails = it.qaDetails,
         )
       }
   } else {

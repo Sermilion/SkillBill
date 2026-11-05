@@ -27,6 +27,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -92,6 +93,7 @@ public sealed interface PhaseRunResult {
     public val qaReportText: String? = null,
     public override val identifiedCompletedOutputs: List<PhaseRunCompletedOutput> = emptyList(),
     public val reviewRunId: String? = null,
+    public val qaDetails: QaRunDetails? = null,
   ) : PhaseRunResult
 
   public data class Blocked(
