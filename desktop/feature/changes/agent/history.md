@@ -1,3 +1,17 @@
+## [2026-11-05] SKILL-502 comment caret and diff word highlight
+Areas: desktop/core/ui, desktop/feature/changes
+- The comment composer and the thread reply box now draw their caret with a cursorBrush in colors.fg, the value SbInput uses.
+- DiffWords.kt holds the pure word logic in rendered-text coordinates, meaning the prefix plus the tab-expanded, cut text. wordHitAt resolves one offset to Word, Ignored or Blank, and wordMatchRanges returns case-sensitive whole-word ranges. Word characters are letters, digits and underscore; surrogate pairs count as non-word. No-newline marker lines never match. reusable
+- DiffWordHighlight is a snapshot-backed holder that ChangesScreen creates. diffRows takes it as an optional last parameter, and a null holder leaves rows as they were. Clicking the selected word again in the same file clears it, wherever the occurrence is; the same word in another file starts a new selection there. reusable
+- DiffLineRow draws matches as span backgrounds, accentRing on the clicked occurrence and accent at 0.22 alpha on the others. A tap on the gutter does nothing, a tap on the text padding clears, and a tap on text applies the word hit.
+- The FileDiffStream root clears on any tap no child consumed. PendingReviewBar and ReviewToast absorb taps, so a tap on them keeps the highlight.
+- Esc clears a selection after every earlier level and before closing the panel, so with a highlight active the first Esc no longer closes. FileDiffStream also clears on dispose, which covers scope and filter changes, and when the selected file leaves the list.
+- Validation at 9759e0af, whose tree matches 3f0a38cc: desktop clean check passed on Linux with 511 tests, including the 4 in DiffWordsTest. Mutation probes killed all 4.
+- Limits: only the word logic has unit tests. Pointer, Esc, caret and highlight rendering have none by plan, and that validation did not exercise them. The plan read clickable's press handling in androidx sources, not the desktop fork, and did not read BasicTextField's. A double-click selects and then clears. There is no keyboard path to start a highlight and no text selection in diff lines. macOS and Windows desktop checks were not run on the Linux host.
+- Unresolved: the spec assigns caret blink, pointer order and match visibility to QA, and no QA result reached this entry.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-04] SKILL-451 inline diff comments in Changes
 Areas: desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/feature/changes, runtime-kotlin/runtime-application
 - Threads render inline under diff lines, at file separators, or in a General block. `ThreadPlacement` decides this at layout time from the thread list and scope; `LoadedDiff` stays hunks only. reusable
