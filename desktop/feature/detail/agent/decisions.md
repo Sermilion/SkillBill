@@ -1,3 +1,28 @@
+## [2026-11-05] Derive QA results from recorded fields
+Context: The full report buried open problems and untested work, and reports without tags cannot establish check counts.
+Decision: Derive the displayed verdict and sentence from recorded fields and counts. Untagged passes remain grey and show no check counts.
+Reason: Agent prose can contain detail after a reason token and cannot reliably determine the displayed verdict.
+
+## [2026-11-05] Keep live standalone QA results at the finding slot
+Context: Test-plan finding links target results rows while standalone QA is running.
+Decision: Show live results after activity when findings or report text exist. Move settled results above the status strip.
+Reason: Hiding live results would leave finding links without a scroll target.
+
+## [2026-11-05] Scope QA results fold state to each run
+Context: QA rows and folds are independent lazy items, and operators can page between runs.
+Decision: Store collapse state above the lazy list under keys scoped to the goal recording or standalone invocation.
+Reason: State survives scrolling without carrying open folds to a different run.
+
+## [2026-11-05] Count only unrestored edits as left behind
+Context: QA lists temporary edits in a disposable checkout that the runtime deletes.
+Decision: Carry every listed edit, but count only edits tagged `[not restored]` as left behind.
+Reason: Counting every temporary edit would flag forced-fault runs and name files removed with the checkout.
+
+## [2026-11-05] Show an attempted QA retest as running
+Context: A running goal retest can retain an attempted outcome from an earlier result.
+Decision: Display Running while the item runs and its outcome is null or attempted.
+Reason: Saying QA could not fix a problem would be premature during the retest.
+
 ## [2026-11-02] Separate displayed QA runs from live controls
 Context: An operator can inspect an older run while a newer QA invocation is active.
 Decision: Show the displayed run's commit, criteria, findings and report. A run displays live state only when unfinished and matching the control invocation; status, freshness and Cancel remain tied to the work item and live run.
