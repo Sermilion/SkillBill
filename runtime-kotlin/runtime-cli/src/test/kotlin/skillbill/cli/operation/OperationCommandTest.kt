@@ -111,7 +111,7 @@ class OperationCommandTest {
   }
 
   @Test
-  fun `spec, target, and mode reach verify and are usage errors on any other operation`() {
+  fun `mode reaches verify and pr-review-fix while other verify keys stay scoped`() {
     val invocation =
       OperationInvocationParser.parse("verify", listOf("spec:docs/spec.md", "target:main..HEAD", "mode:delegated"))
 
@@ -119,9 +119,11 @@ class OperationCommandTest {
       OperationArguments(spec = "docs/spec.md", target = "main..HEAD", mode = "delegated"),
       invocation.arguments,
     )
-    listOf("spec:docs/spec.md", "target:12", "mode:inline").forEach { token ->
+    assertEquals("remote", OperationInvocationParser.parse("pr-review-fix", listOf("mode:remote")).arguments.mode)
+    listOf("spec:docs/spec.md", "target:12").forEach { token ->
       assertFailsWith<UsageError> { OperationInvocationParser.parse("pr-review-fix", listOf(token)) }
     }
+    assertFailsWith<UsageError> { OperationInvocationParser.parse("release", listOf("mode:remote")) }
   }
 
   @Test

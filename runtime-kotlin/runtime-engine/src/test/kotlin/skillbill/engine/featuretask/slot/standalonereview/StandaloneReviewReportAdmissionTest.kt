@@ -320,6 +320,32 @@ class StandaloneReviewReportAdmissionTest {
   }
 
   @Test
+  fun `a merged identity collision retains unmerged findings with distinct identities`() {
+    val rawOutput =
+      "- [F-001] Major | High | src/Auth.kt:1 | broken authorization\n" +
+        "- [F-002] Minor | High | src/Style.kt:8 | simplify this expression\n" +
+        "verdict: changes_requested"
+    val merged =
+      ParallelReviewMergedFinding(
+        "F-002",
+        listOf("codex"),
+        ParallelReviewSeverity.MAJOR,
+        "High",
+        "src/Auth.kt:1",
+        "broken authorization",
+      )
+    val result = emptyResult().copy(mergeResult = ParallelReviewMergeResult(listOf(merged), ""))
+
+    val report = StandaloneReviewReportAdmission.admit(rawOutput, result, false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("F-002", report.findingGroups.first().identity)
+    assertEquals(2, report.findingGroups.map { it.identity }.toSet().size)
+    assertEquals(report.census, report.findingGroups.flatMap { it.members })
+    assertEquals(merged, report.findingGroups.first().finding)
+  }
+
+  @Test
   fun `complete reports admit both verdicts with blank lines and trailing whitespace`() {
     val finding =
       ParallelReviewMergedFinding(

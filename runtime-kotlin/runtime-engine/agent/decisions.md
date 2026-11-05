@@ -457,3 +457,8 @@ Reason: QA already keeps its agent-writable directory outside `.git/` for the sa
 Alternatives considered: Asking operators to allow edits under `.git/`, rejected because allow rules do not lift the sensitive-file guard. A directory beside the checkout, rejected for the reasons above.
 
 Revisit when: Ownership written under the old `.git/skill-bill/standalone-monitor/` location matters. A retained worktree there no longer blocks a new monitor of that PR; remove it with `git worktree remove` once its work is saved.
+
+## [2026-11-04] Build comment-enabled review strategies with the registry runner
+Context: Review strategies that post diff comments must use the same `PhaseRunner` instance held by registry registrations.
+Decision: Provide review strategies through a factory and invoke it with the registry's runner.
+Reason: This preserves shared runner identity without adding a new scope or engine collaborator bag.

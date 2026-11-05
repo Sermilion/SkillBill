@@ -8,7 +8,11 @@ import skillbill.application.telemetry.validation.featureVerifyCompletionStatuse
 import skillbill.application.telemetry.validation.historySignalValues
 import skillbill.application.telemetry.validation.qualityCheckResults
 import skillbill.application.telemetry.validation.qualityCheckScopeTypes
+import skillbill.contracts.review.DiffCommentPayloadKeys
 import skillbill.mcp.core.McpToolRegistry
+import skillbill.review.diffcomment.model.DiffCommentOutcome
+import skillbill.review.diffcomment.model.DiffCommentSide
+import skillbill.review.diffcomment.model.DiffCommentThreadState
 import skillbill.testing.repoRootFromTest
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -108,6 +112,22 @@ class McpTelemetrySchemaEnumParityTest {
     )
     assertEquals(listOf("", "day", "week"), enumOnBranch(defs, "goalStatsEvent", "group_by"))
     assertEquals(listOf("", "day", "week"), enumOnBranch(defs, "telemetryRemoteStatsEvent", "group_by"))
+    assertEquals(
+      DiffCommentThreadState.entries.map { it.wireValue },
+      enumOnBranch(defs, "diffCommentListEvent", DiffCommentPayloadKeys.STATE),
+    )
+    assertEquals(
+      DiffCommentSide.entries.map { it.wireValue },
+      enumOnBranch(defs, "diffCommentAddEvent", DiffCommentPayloadKeys.SIDE),
+    )
+    assertEquals(
+      DiffCommentOutcome.entries.map { it.wireValue },
+      enumOnBranch(defs, "diffCommentReplyEvent", DiffCommentPayloadKeys.OUTCOME),
+    )
+    assertEquals(
+      DiffCommentThreadState.entries.filter { it != DiffCommentThreadState.PENDING }.map { it.wireValue },
+      enumOnBranch(defs, "diffCommentSetStateEvent", DiffCommentPayloadKeys.STATE),
+    )
 
     val knownTools = McpToolRegistry.tools.map { it.name }.toSet()
     defs.fields().forEach { (defName, defNode) ->

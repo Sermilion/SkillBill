@@ -159,6 +159,10 @@ internal fun separateDesktopChangeSignals(connection: Connection) {
     statement.execute(
       "INSERT OR IGNORE INTO ${DesktopReadSchema.REVISIONS_TABLE} VALUES ('${DesktopReadSchema.SPECS_TOPIC}', 0)",
     )
+    statement.execute(
+      "INSERT OR IGNORE INTO ${DesktopReadSchema.REVISIONS_TABLE} " +
+        "VALUES ('${DesktopReadSchema.DIFF_COMMENTS_TOPIC}', 0)",
+    )
   }
   connection.prepareStatement(
     "INSERT OR IGNORE INTO ${DesktopReadSchema.GENERATION_TABLE} (id, generation) VALUES (1, ?)",
@@ -170,12 +174,29 @@ internal fun separateDesktopChangeSignals(connection: Connection) {
 }
 
 internal fun installDesktopChangeTriggers(connection: Connection) {
-  val columns = DESKTOP_CHANGE_TABLES.associate { table -> table.name to connection.tableColumns(table.name) }
+  val installedTables = DESKTOP_CHANGE_TABLES.filterNot { it.installedLater }
+  val columns = installedTables.associate { table -> table.name to connection.tableColumns(table.name) }
   connection.createStatement().use { statement ->
-    DESKTOP_CHANGE_TABLES.forEach { table ->
+    installedTables.forEach { table ->
       TRIGGER_SUFFIXES.forEach { suffix -> statement.execute("DROP TRIGGER IF EXISTS ${triggerName(table, suffix)}") }
     }
-    DESKTOP_CHANGE_TABLES.forEach { table -> createChangeTriggers(statement, table, columns.getValue(table.name)) }
+    installedTables.forEach { table -> createChangeTriggers(statement, table, columns.getValue(table.name)) }
+  }
+}
+
+internal fun installLaterDesktopChangeTriggers(
+  connection: Connection,
+  names: Set<String>,
+) {
+  val tables = DESKTOP_CHANGE_TABLES.filter { it.name in names && it.installedLater }
+  require(tables.size == names.size)
+  connection.createStatement().use { statement ->
+    tables.forEach { table ->
+      TRIGGER_SUFFIXES.filter { it != ACTIVITY_UPDATE_SUFFIX }.forEach { suffix ->
+        statement.execute("DROP TRIGGER IF EXISTS ${triggerName(table, suffix)}")
+      }
+      createChangeTriggers(statement, table, connection.tableColumns(table.name))
+    }
   }
 }
 
@@ -251,6 +272,7 @@ private class DesktopChangeTable(
   val topics: List<String>,
   val insertOnly: Boolean = false,
   val keys: (String) -> String,
+  val installedLater: Boolean = false,
 )
 
 private fun column(name: String): (String) -> String = { row -> "SELECT $row.$name AS k" }
@@ -311,6 +333,18 @@ private val DESKTOP_CHANGE_TABLES =
     DesktopChangeTable("block_incident_report_links", DesktopReadSchema.TOPICS, keys = incidentKey),
     DesktopChangeTable("block_incident_reports", DesktopReadSchema.TOPICS, keys = reportKey),
     DesktopChangeTable(LEASES_TABLE, DesktopReadSchema.TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable(
+      "diff_comment_threads",
+      listOf(DesktopReadSchema.DIFF_COMMENTS_TOPIC),
+      keys = column("thread_id"),
+      installedLater = true,
+    ),
+    DesktopChangeTable(
+      "diff_comments",
+      listOf(DesktopReadSchema.DIFF_COMMENTS_TOPIC),
+      keys = column("thread_id"),
+      installedLater = true,
+    ),
   )
 
 internal fun installWorkBoardChangeTriggers(connection: Connection) {

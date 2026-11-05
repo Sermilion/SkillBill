@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.data.repository.BoardObservations
 import dev.skillbill.desktop.core.data.repository.ChangeObservations
 import dev.skillbill.desktop.core.data.repository.ChangeScopeObservations
 import dev.skillbill.desktop.core.data.repository.DetailObservations
+import dev.skillbill.desktop.core.data.repository.DiffCommentObservations
 import dev.skillbill.desktop.core.data.repository.SpecObservations
 import dev.skillbill.desktop.core.data.repository.WorkingTreeReads
 import dev.skillbill.desktop.core.data.runtime.DetailRead
@@ -58,6 +59,7 @@ interface DatabaseSessionComponent {
   val changes: ChangeObservations
   val changeScopes: ChangeScopeObservations
   val activity: ActivityObservations
+  val diffComments: DiffCommentObservations
 
   @ContributesSubcomponent.Factory(AppScope::class)
   interface Factory {
@@ -143,6 +145,15 @@ interface RuntimeSessionProviders {
   @SingleIn(DatabaseSessionScope::class)
   fun activityObservations(reads: RuntimeReads, runtime: RuntimeComponent, diagnostics: Diagnostics): ActivityObservations =
     ActivityObservations(runtime, diagnostics) { id -> reads.read("work_activity") { it.workActivityService.timeline(id) } }
+
+  @Provides
+  @SingleIn(DatabaseSessionScope::class)
+  fun diffCommentObservations(
+    reads: RuntimeReads,
+    runtime: RuntimeComponent,
+    signals: CommitSignalWatcher,
+    diagnostics: Diagnostics,
+  ): DiffCommentObservations = DiffCommentObservations(signals.snapshots, reads, runtime, diagnostics)
 
   @Provides
   @SingleIn(DatabaseSessionScope::class)

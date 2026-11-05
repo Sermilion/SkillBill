@@ -1,6 +1,11 @@
 package dev.skillbill.desktop.core.ui.diff
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,12 +16,32 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -28,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.hoverSpec
 import dev.skillbill.desktop.core.domain.model.DiffHunk
 import dev.skillbill.desktop.core.domain.model.DiffLine
 import dev.skillbill.desktop.core.domain.model.DiffLineKind
@@ -53,27 +79,47 @@ private const val CUT_MARKER_CHARS = 32
  * sideways when it does not fit: diff rows do not wrap.
  */
 @Composable
-fun DiffHorizontalScroll(longestChars: Int, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun DiffHorizontalScroll(longestChars: Int, modifier: Modifier = Modifier, scrollState: ScrollState = rememberScrollState(), content: @Composable () -> Unit) {
   val measurer = rememberTextMeasurer()
   val density = LocalDensity.current
   val mono = changesMono(FONT_SIZE, FontWeight.Normal, SkillBillTheme.colors.fg2, LINE_HEIGHT_SP)
   val charWidth = remember(measurer, mono, density) { with(density) { measurer.measure("0", mono).size.width.toDp() } }
   BoxWithConstraints(modifier.fillMaxSize()) {
     val width = maxOf(maxWidth, GUTTER_WIDTH * 2 + TEXT_START * 2 + charWidth * longestChars)
-    Box(Modifier.horizontalScroll(rememberScrollState()).width(width).fillMaxHeight()) { content() }
+    Box(Modifier.horizontalScroll(scrollState).width(width).fillMaxHeight()) { content() }
   }
 }
 
 /** One row per hunk header and line of [diff], keyed under [key]. */
-fun LazyListScope.diffRows(diff: FileDiff, key: String) {
+data class DiffLineAddress(val hunk: Int, val line: Int)
+
+class DiffLineSlots(
+  val keys: Map<DiffLineAddress, List<String>>,
+  val content: @Composable LazyItemScope.(String) -> Unit,
+) {
+  companion object {
+    val None = DiffLineSlots(emptyMap()) { }
+  }
+}
+
+class DiffLineAffordance(val onAdd: (DiffLine) -> Unit, val onHover: (DiffLine, Boolean) -> Unit)
+
+fun LazyListScope.diffRows(diff: FileDiff, key: String, slots: DiffLineSlots = DiffLineSlots.None, affordance: DiffLineAffordance? = null) {
   diff.hunks.forEachIndexed { h, hunk ->
-    item(key = "$key:h$h") { HunkHeaderRow(hunk) }
-    items(hunk.lines.size, key = { "$key:l$h:$it" }) { index -> DiffLineRow(hunk.lines[index]) }
+    item(key = "$key:h$h", contentType = "hunk") { HunkHeaderRow(hunk) }
+    hunk.lines.forEachIndexed { i, line ->
+      item(key = "$key:l$h:$i", contentType = "line") { DiffLineRow(line, affordance) }
+      val threadIds = slots.keys[DiffLineAddress(h, i)].orEmpty()
+      items(threadIds, key = { "thread:$it" }, contentType = { "thread" }, itemContent = slots.content)
+    }
   }
 }
 
 /** How many rows [diffRows] adds for [diff]. */
-fun diffRowCount(diff: FileDiff): Int = diff.hunks.sumOf { it.lines.size + 1 }
+fun diffRowCount(diff: FileDiff, slots: DiffLineSlots = DiffLineSlots.None): Int = diff.hunks.indices.sumOf { h ->
+  val hunk = diff.hunks[h]
+  hunk.lines.size + 1 + hunk.lines.indices.sumOf { slots.keys[DiffLineAddress(h, it)]?.size ?: 0 }
+}
 
 /** The widest row of [diff], in characters of diff text. */
 fun diffLongestChars(diff: FileDiff): Int = diff.hunks.maxOfOrNull(::hunkChars) ?: 0
@@ -123,7 +169,7 @@ private fun HunkHeaderRow(hunk: DiffHunk) {
 }
 
 @Composable
-private fun DiffLineRow(line: DiffLine) {
+private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?) {
   val colors = SkillBillTheme.colors
   val background = when (line.kind) {
     DiffLineKind.Added -> Modifier.background(colors.diffAddedBg)
@@ -142,7 +188,19 @@ private fun DiffLineRow(line: DiffLine) {
     DiffLineKind.NoNewlineMarker -> colors.fgMuted
   }
   val gutter = changesMono(FONT_SIZE, FontWeight.Normal, colors.fgFaint, LINE_HEIGHT_SP).copy(textAlign = TextAlign.End)
-  Row(Modifier.fillMaxWidth().height(LINE_HEIGHT).then(background).gutterRules(), verticalAlignment = Alignment.CenterVertically) {
+  val interaction = remember(line) { MutableInteractionSource() }
+  val hovered by interaction.collectIsHoveredAsState()
+  val focused by interaction.collectIsFocusedAsState()
+  val visibility by animateFloatAsState(if ((hovered || focused) && affordance != null) 1f else 0f, hoverSpec(), label = "diff-comment-affordance")
+  val currentAffordance by rememberUpdatedState(affordance)
+  LaunchedEffect(hovered, line, affordance != null) { currentAffordance?.onHover(line, hovered) }
+  DisposableEffect(line, affordance != null) {
+    val onHover = currentAffordance?.onHover
+    onDispose { onHover?.invoke(line, false) }
+  }
+  val density = LocalDensity.current
+  Box(Modifier.fillMaxWidth().height(LINE_HEIGHT).then(background).gutterRules().then(if (affordance != null) Modifier.hoverable(interaction) else Modifier)) {
+    androidx.compose.foundation.layout.Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
     GutterCell(line.oldNumber, GUTTER_WIDTH, gutter)
     GutterCell(line.newNumber, GUTTER_WIDTH, gutter)
     BasicText(
@@ -152,6 +210,18 @@ private fun DiffLineRow(line: DiffLine) {
       maxLines = 1,
       softWrap = false,
     )
+    }
+    if (affordance != null && line.kind != DiffLineKind.NoNewlineMarker) {
+      Box(
+        Modifier.offset { IntOffset(with(density) { (GUTTER_WIDTH * 2 - 10.dp).roundToPx() }, 0) }
+          .align(Alignment.CenterStart).size(18.dp).alpha(visibility).scale(.85f + visibility * .15f)
+          .clip(RoundedCornerShape(5.dp)).background(SkillBillTheme.colors.accent)
+          .clickable(interactionSource = interaction, indication = null, role = Role.Button) { affordance.onAdd(line) }
+          .pointerHoverIcon(PointerIcon.Hand)
+          .semantics { contentDescription = "Add comment" },
+        contentAlignment = Alignment.Center,
+      ) { BasicText("+", style = changesMono(13f, FontWeight.SemiBold, SkillBillTheme.colors.accentFg)) }
+    }
   }
 }
 

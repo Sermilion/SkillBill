@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
@@ -63,13 +64,14 @@ internal interface CodeReviewPass {
 internal class CodeReviewSlot(
   runner: PhaseRunner,
   private val pass: CodeReviewPass,
+  comments: DiffCommentService? = null,
 ) : PhaseLoopCapability,
   PhaseResumeCapability,
   PhaseStatusCapability,
   PhaseVerdictCapability {
-  private val review = CodeReviewStep(runner, pass)
-  private val verifyFindings = VerifyFindingsStep()
-  private val implementFix = ImplementFixStep()
+  private val review = CodeReviewStep(runner, pass, comments)
+  private val verifyFindings = VerifyFindingsStep(comments)
+  private val implementFix = ImplementFixStep(comments)
   private val reviewDescriptor =
     PhaseStepDescriptor(ReviewBindingFamily, review, InlineReviewLoopRules) { run, state ->
       review.run(

@@ -10,6 +10,30 @@ import kotlin.test.assertNotNull
 
 class PrReviewFixOperationAnalysisTest {
   @Test
+  fun `omitted mode analyzes the current branch local comments by default`() {
+    PrReviewFixHarness().use { harness ->
+      val completed = assertIs<OperationOutcome.Completed>(harness.invokeLocal())
+
+      assertEquals("No open local diff comments on '${PrReviewFixHarness.PR_BRANCH}'.", completed.text)
+      assertEquals(emptyList(), harness.github.replies)
+      assertEquals(emptyList(), harness.pushes)
+    }
+  }
+
+  @Test
+  fun `invalid mode and remote-only tokens in local mode are usage errors`() {
+    PrReviewFixHarness().use { harness ->
+      val invalidMode = assertIs<OperationOutcome.Usage>(harness.invoke(OperationArguments(mode = "inline")))
+      val localPush = assertIs<OperationOutcome.Usage>(harness.invokeLocal(OperationArguments(push = "on")))
+      val localPullRequest = assertIs<OperationOutcome.Usage>(harness.invokeLocal(instructions = "#42"))
+
+      assertContains(invalidMode.reason, "Unknown mode:inline")
+      assertEquals("push: and replies: apply only to mode:remote", localPush.reason)
+      assertContains(localPullRequest.reason, "mode:local fixes local diff comments; pass mode:remote to fix PR #42")
+    }
+  }
+
+  @Test
   fun `analysis proposes the matrix anchored to the PR head and live threads without replying, pushing, or editing`() {
     PrReviewFixHarness().use { harness ->
       val proposed = assertIs<OperationOutcome.AwaitingConfirmation>(harness.invoke())

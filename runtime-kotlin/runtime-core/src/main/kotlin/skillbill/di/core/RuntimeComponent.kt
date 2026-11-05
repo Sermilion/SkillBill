@@ -9,6 +9,7 @@ import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.application.install.InstallService
 import skillbill.application.learning.LearningService
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.service.ReviewService
 import skillbill.application.review.snapshot.ReviewSnapshotPruneService
 import skillbill.application.runtime.RuntimeSingleton
@@ -37,6 +38,7 @@ import skillbill.di.install.RuntimeInstallPlanProvides
 import skillbill.di.install.RuntimeInstallTargetProvides
 import skillbill.di.install.RuntimeInstallerProvides
 import skillbill.di.operation.RuntimeOperationProvides
+import skillbill.di.review.RuntimeDiffCommentProvides
 import skillbill.di.review.RuntimeReviewAddonCatalogProvides
 import skillbill.di.review.RuntimeReviewEvidenceProvides
 import skillbill.di.review.RuntimeReviewLaunchProvides
@@ -150,6 +152,7 @@ abstract class RuntimeComponent(
     RuntimeReviewLaunchProvides,
     RuntimeReviewAddonCatalogProvides,
     RuntimeReviewEvidenceProvides,
+    RuntimeDiffCommentProvides,
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
     RuntimeStandaloneMonitorProvides,
@@ -348,6 +351,7 @@ abstract class RuntimeComponent(
   abstract val installNativeAgentLinkPort: InstallNativeAgentLinkPort
   abstract val installSelectionPersistencePort: InstallSelectionPersistencePort
   abstract val learningService: LearningService
+  abstract val diffCommentService: DiffCommentService
   abstract val lifecycleTelemetryService: LifecycleTelemetryService
   abstract val repoValidationGateway: RepoValidationGateway
   abstract val reviewService: ReviewService

@@ -1,3 +1,18 @@
+## [2026-11-04] Place diff comment threads at layout time
+Context: A thread can anchor to a line, file separator, or General block depending on its path, side, line, outdated state, and scope.
+Decision: `ThreadPlacement` runs while `FileDiffStream` renders from the current thread list; `LoadedDiff` remains hunks only.
+Reason: Cached diffs move across scopes and baselines, so storing threads in `LoadedDiff` would reload files when comments or scope change.
+
+## [2026-11-04] Keep interleaved diff row counts aligned
+Context: Inline threads add LazyColumn items, while jump-to-file and visible-row tracking use file indexes and row counts.
+Decision: `diffRows` and `FileDiffStream` use the same per-line thread slots; file indexes account for General and file thread rows.
+Reason: A separate scroll row model let file positions disagree with the rendered list.
+
+## [2026-11-04] Animate thread cards with visibility transitions
+Context: The approved mock calls for fade-and-slide motion, while the current Compose Desktop version lacks `Modifier.animateItem`.
+Decision: Use `AnimatedVisibility` with fade and vertical expansion, disabled when reduced motion is enabled.
+Reason: This provides the requested motion without a Compose upgrade.
+
 ## [2026-11-04] Attribute timeline commits by trailer then recorded SHA
 Context: Recorded subtask ranges can point to pruned commits after an amend or rebase and can credit operator work to a subtask.
 Decision: Attribute merge-base..HEAD commits to valid goal subtask trailers, then match recorded SHA only when no valid trailer exists. Other commits are operator commits.

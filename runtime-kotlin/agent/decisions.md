@@ -1,4 +1,10 @@
-## [2026-11-04] Preserve child cause separately from the parent standing stepContext: A parent goal stopped at plan_subtasks can be blocked by a child audit. Binding the child's accepted reference to the parent loses the phase and incident that caused the block.
+## [2026-11-04] Keep review comment writes outside settlement
+Context: Review findings and repair receipts are authoritative workflow evidence; diff comments are an auxiliary projection.
+Decision: Write finding threads and outcome replies beside the owning review or receipt mutation, treating failures as best-effort and diagnostic.
+Reason: Comment failures must leave review envelopes, verdicts, receipts, and step outcomes unchanged.
+
+## [2026-11-04] Preserve child cause separately from the parent standing step
+Context: A parent goal stopped at plan_subtasks can be blocked by a child audit. Binding the child's accepted reference to the parent loses the phase and incident that caused the block.
 Decision: Retain the child reference as the cause and keep the parent standing step in its block identity. Persist the cause with the parent incident token and check the child identity during recovery.
 Reason: Resume needs the parent step, while diagnostics need the child's phase and incident. Correlation prevents a stale child cause from being attributed to another parent incident.
 
@@ -3480,6 +3486,10 @@ the launcher's wall-clock rejection. Import aliases retain the same scope.
 ## [2026-11-03] GitGoalWorktreeResources add and wait rules
 
 The goal worktree add pins `LC_ALL=C` because git translates the `locked initializing` reason, and the adapter matches that exact field. `ADD_WAIT_POLLS` is the git add deadline divided by the poll interval. Every poll sleeps at least that interval, so a waiter outlasts the deadline of any add still running. A revision starting with `-` fails before the add because git would read it as an option. A concurrent winner makes the losing add exit with an error, so a timed-out add is always this launch's own process. After a failed add the adapter reads the list once more for a path another launch may own. `awaitInitializing` removes nothing, and an abandoned add's record ends in `Failed`.
+
+## 2026-11-03 — Match JVM thread constructors as identifiers
+
+The application environment guard matched `Thread(` as a substring, rejecting domain names such as `DiffCommentThread` and service methods such as `findThread`. Its constructor check now requires the `Thread` identifier boundary and accepts whitespace before the opening parenthesis. It also rejects the trailing-lambda constructor form. A fixture exercises the source-reference assertion with comment-thread names and all three JVM constructor forms. No production exception or baseline entry is added.
 
 ## [2026-11-04] Test temp dirs live under the Gradle user home
 

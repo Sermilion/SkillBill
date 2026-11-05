@@ -91,6 +91,10 @@ discriminator:
 #   Open-object tools use `additionalProperties: true` on the branch.
 oneOf:
   - $ref: "#/$defs/addLearningEvent"
+  - $ref: "#/$defs/diffCommentAddEvent"
+  - $ref: "#/$defs/diffCommentListEvent"
+  - $ref: "#/$defs/diffCommentReplyEvent"
+  - $ref: "#/$defs/diffCommentSetStateEvent"
   - $ref: "#/$defs/doctorEvent"
   - $ref: "#/$defs/featureTaskPhaseBlockEvent"
   - $ref: "#/$defs/featureTaskPhaseCompleteEvent"
@@ -472,6 +476,126 @@ $defs:
       source_finding_id:
         type: string
         minLength: 1
+  diffCommentAddEvent:
+    type: object
+    additionalProperties: false
+    required:
+      - event_name
+      - contract_version
+      - repo_root
+      - body
+    properties:
+      event_name:
+        const: diff_comment_add
+      contract_version:
+        const: "1.13.0"
+      repo_root:
+        type: string
+        minLength: 1
+        description: Repository root path.
+      body:
+        type: string
+        minLength: 1
+        description: Agent comment body.
+      path:
+        type: string
+        description: Repository-relative file path.
+      line:
+        type: integer
+        minimum: 1
+        description: Line number for an inline anchor.
+      side:
+        type: string
+        enum:
+          - old
+          - new
+        description: Diff side for a line anchor.
+      agent_id:
+        type: string
+        description: Agent identifier.
+  diffCommentListEvent:
+    type: object
+    additionalProperties: false
+    required:
+      - event_name
+      - contract_version
+      - repo_root
+    properties:
+      event_name:
+        const: diff_comment_list
+      contract_version:
+        const: "1.13.0"
+      repo_root:
+        type: string
+        minLength: 1
+        description: Repository root path.
+      branch:
+        type: string
+        description: Branch name; defaults to the current branch when omitted.
+      state:
+        type: string
+        enum:
+          - pending
+          - open
+          - resolved
+          - declined
+        description: Filter threads by state.
+  diffCommentReplyEvent:
+    type: object
+    additionalProperties: false
+    required:
+      - event_name
+      - contract_version
+      - thread_id
+      - body
+    properties:
+      event_name:
+        const: diff_comment_reply
+      contract_version:
+        const: "1.13.0"
+      thread_id:
+        type: string
+        minLength: 1
+        description: Diff comment thread id.
+      body:
+        type: string
+        minLength: 1
+        description: Agent reply body.
+      outcome:
+        type: string
+        enum:
+          - fixed
+          - refuted
+          - skipped
+          - failed
+        description: Agent outcome for the reply.
+      agent_id:
+        type: string
+        description: Agent identifier.
+  diffCommentSetStateEvent:
+    type: object
+    additionalProperties: false
+    required:
+      - event_name
+      - contract_version
+      - thread_id
+      - state
+    properties:
+      event_name:
+        const: diff_comment_set_state
+      contract_version:
+        const: "1.13.0"
+      thread_id:
+        type: string
+        minLength: 1
+        description: Diff comment thread id.
+      state:
+        type: string
+        enum:
+          - open
+          - resolved
+          - declined
+        description: New thread state.
   doctorEvent:
     type: object
     additionalProperties: true

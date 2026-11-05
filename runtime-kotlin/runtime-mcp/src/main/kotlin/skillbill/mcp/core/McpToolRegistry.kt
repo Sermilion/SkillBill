@@ -11,6 +11,10 @@ import skillbill.mcp.lifecycle.prDescriptionGenerated
 import skillbill.mcp.lifecycle.qualityCheckFinished
 import skillbill.mcp.lifecycle.qualityCheckStarted
 import skillbill.mcp.review.addLearning
+import skillbill.mcp.review.diffCommentAdd
+import skillbill.mcp.review.diffCommentList
+import skillbill.mcp.review.diffCommentReply
+import skillbill.mcp.review.diffCommentSetState
 import skillbill.mcp.review.featureVerifyStats
 import skillbill.mcp.review.goalStats
 import skillbill.mcp.review.importReview
@@ -53,12 +57,35 @@ internal data class McpTool(
 }
 
 internal object McpToolRegistry {
+  private const val DIFF_COMMENT_DESKTOP_NOTE =
+    " for the skill-bill desktop Changes window. These are not GitHub PR comments."
+
   val tools: List<McpTool> =
     listOf(
       McpTool(
         name = McpToolPayloadKeys.ADD_LEARNING,
         description = "Create a learning from a rejected review finding after user confirmation.",
         handler = ::addLearning,
+      ),
+      McpTool(
+        name = "diff_comment_add",
+        description = "Add a local diff comment thread$DIFF_COMMENT_DESKTOP_NOTE",
+        handler = ::diffCommentAdd,
+      ),
+      McpTool(
+        name = "diff_comment_list",
+        description = "List local diff comment threads$DIFF_COMMENT_DESKTOP_NOTE",
+        handler = ::diffCommentList,
+      ),
+      McpTool(
+        name = "diff_comment_reply",
+        description = "Reply to a local diff comment thread$DIFF_COMMENT_DESKTOP_NOTE",
+        handler = ::diffCommentReply,
+      ),
+      McpTool(
+        name = "diff_comment_set_state",
+        description = "Change the state of a local diff comment thread$DIFF_COMMENT_DESKTOP_NOTE",
+        handler = ::diffCommentSetState,
       ),
       McpTool(
         name = "doctor",
