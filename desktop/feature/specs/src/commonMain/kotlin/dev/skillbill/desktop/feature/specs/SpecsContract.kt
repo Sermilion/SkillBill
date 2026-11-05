@@ -30,6 +30,7 @@ data class SpecsUiState(
   val selectedPath: String? = null,
   val projectMenuOpen: Boolean = false,
   val toolbar: SpecToolbarState = SpecToolbarState(),
+  val reservations: Set<String> = emptySet(),
   val filtersActive: Boolean = false,
   val rowMenuPath: String? = null,
   val deleteTarget: SpecDeleteTarget? = null,
@@ -131,9 +132,10 @@ internal const val DELETE_INTRO = "This removes the spec folder and every file i
 internal const val DELETE_KEEPS = "Run history stays in the database. Use Purge to remove it."
 internal const val DELETE_WARNING = "This can’t be undone."
 internal const val DELETE_LAUNCHING = "A launch for this spec is in flight. Wait for it before deleting the files."
+internal const val DELETE_LIVE = "Pause or cancel the goal first"
 
 internal fun fileHint(key: String) = "Actions run a whole spec folder, not one subtask. Select $key to control it."
-internal fun cancelPrompt(key: String) = "Cancel $key? The run stops and the goal is marked canceled. Its branch and commits stay."
+internal fun cancelPrompt(key: String) = "Cancel $key?"
 internal fun purgeLabel(key: String) = "Purge $key run history"
 internal fun startFailure(summary: String) = "Couldn't start: $summary"
 internal fun purgeFailure(summary: String) = "Couldn't purge: $summary"

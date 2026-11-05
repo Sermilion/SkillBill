@@ -32,6 +32,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.list.TreeRow as DesignTreeRow
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecFileKind
 import dev.skillbill.desktop.core.domain.model.SpecNode
 import dev.skillbill.desktop.core.domain.model.SpecStatus
@@ -144,8 +145,8 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
             onAction(SpecsAction.OpenRowMenu(row.node.path))
           } else null,
         )
-        if (state.rowMenuPath == row.node.path) {
-          Box(Modifier.offset { menuAt }.size(0.dp)) { SpecRowMenu(row.node.path, state.deleting, onAction) }
+        if (state.rowMenuPath == row.node.path && row.node is SpecNode.Bundle) {
+          Box(Modifier.offset { menuAt }.size(0.dp)) { SpecRowMenu(row.node, state, onAction) }
         }
       }
     }
@@ -154,10 +155,19 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
 
 /** A bundle row's context menu; each entry runs and then closes the menu. */
 @Composable
-private fun SpecRowMenu(path: String, deleting: Boolean, onAction: (SpecsAction) -> Unit) {
+private fun SpecRowMenu(bundle: SpecNode.Bundle, state: SpecsUiState, onAction: (SpecsAction) -> Unit) {
+  val path = bundle.path
   val close = { onAction(SpecsAction.DismissRowMenu) }
+  val selectedBundle = state.toolbar.selection as? ToolbarSelection.Bundle
+  val sameBundle = selectedBundle?.path == path
+  val control = (state.toolbar.control as? SpecControlState.Loaded)?.control?.takeIf { sameBundle && it.issueKey == bundle.issueKey }
+  val reason = when {
+    bundle.issueKey != null && bundle.issueKey in state.reservations -> DELETE_LAUNCHING
+    control?.canDelete == false -> DELETE_LIVE
+    else -> null
+  }
   val entries = listOf(
-    SbMenuEntry.Item(DELETE_SPEC_FILES, { onAction(SpecsAction.RequestDelete(path)) }, icon = LucideIcons.trash, danger = true, enabled = !deleting),
+    SbMenuEntry.Item(DELETE_SPEC_FILES, { onAction(SpecsAction.RequestDelete(path)) }, icon = LucideIcons.trash, danger = true, enabled = !state.deleting && reason == null, reason = reason),
   )
   ShellLayer(close)
   // The anchor is the click point; -4 cancels the popover's anchor gap so the menu's corner sits on the pointer.

@@ -203,6 +203,40 @@ class SpecsPaneModelTest {
   }
 
   @Test
+  fun `same bundle loaded false delete verdict prevents opening confirmation`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loaded(control(canDelete = false), goal)
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    model.onAction(SpecsAction.Select("SKILL-1"))
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    advanceUntilIdle()
+
+    assertNull(model.state.value.deleteTarget)
+    assertEquals(emptyList(), specs.deletes)
+  }
+
+  @Test
+  fun `delete stays available without loaded control`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    specs.controlState.value = SpecControlState.Loading
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+
+    model.onAction(SpecsAction.RequestDelete("SKILL-1"))
+    advanceUntilIdle()
+
+    assertEquals("SKILL-1", model.state.value.deleteTarget?.path)
+    assertEquals(emptyList(), specs.deletes)
+  }
+
+  @Test
   fun `a refused delete shows why and keeps the row`() = runTest {
     specs.deleteOutcome = SpecDeleteOutcome.Refused("The goal for this spec is running.")
     val model = openedModel()
@@ -372,6 +406,7 @@ class SpecsPaneModelTest {
     runState: SpecRunState = SpecRunState.NotStarted,
     canStart: Boolean = false,
     canCancel: Boolean = false,
+    canDelete: Boolean = true,
   ) = SpecBundleControlView(
     issueKey = "SKILL-1",
     runState = runState,
@@ -383,6 +418,7 @@ class SpecsPaneModelTest {
     canPause = false,
     pauseRequested = false,
     canCancel = canCancel,
+    canDelete = canDelete,
     purgeVisible = false,
     canPurge = false,
     agentId = "claude",

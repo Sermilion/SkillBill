@@ -202,6 +202,7 @@ class SpecsPaneModel(
     }
     val key = selectedBundleKey(current)
     current.copy(
+      reservations = reservations,
       toolbar = current.toolbar.copy(
         reserved = key != null && key in reservations,
         favorite = favorite,
@@ -556,11 +557,6 @@ class SpecsPaneModel(
 
   private fun click(path: String) {
     val node = findNode(roots(), path) ?: return
-    // main.js `spec-click`: every tree click drops an open Cancel confirmation, including a click on the same bundle.
-    if (cancelConfirmationFor != null || local.value.toolbar.confirmingCancel) {
-      cancelConfirmationFor = null
-      setToolbar { copy(confirmingCancel = false) }
-    }
     selectPath(path)
     when (node) {
       is SpecNode.Folder, is SpecNode.Bundle -> treePresentation.setExpansion(path, !treePresentation.isExpanded(path))
@@ -968,6 +964,12 @@ class SpecsPaneModel(
     val bundle = findNode(roots(), path) as? SpecNode.Bundle
     val current = local.value
     if (bundle == null || current.deleting) {
+      local.value = current.copy(rowMenuPath = null)
+      return
+    }
+    val sameBundle = (current.toolbar.selection as? ToolbarSelection.Bundle)?.path == path
+    val loadedControl = (current.toolbar.control as? SpecControlState.Loaded)?.control?.takeIf { sameBundle && it.issueKey == bundle.issueKey }
+    if ((bundle.issueKey != null && bundle.issueKey in controls.reservations.value) || loadedControl?.canDelete == false) {
       local.value = current.copy(rowMenuPath = null)
       return
     }

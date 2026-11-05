@@ -19,7 +19,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Avatar
-import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.IdTag
@@ -38,7 +37,6 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecRunState
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
-import dev.skillbill.desktop.core.ui.input.ShellEdit
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 
 /** The toolbar section of the pane (`.sb-toolbar`): one hint, or the selected bundle's header, run buttons and their notices. */
@@ -104,17 +102,7 @@ internal fun SpecRunToolbar(state: SpecsUiState, onAction: (SpecsAction) -> Unit
           }
         }
         control?.unavailableReason?.let { Hint(it, FeedbackTone.Error) }
-        if (toolbar.confirmingCancel && key != null) {
-          ShellEdit(onCancel = { onAction(SpecsAction.KeepRunning) }, onSave = {})
-          Callout(
-            tone = FeedbackTone.Error,
-            body = cancelPrompt(key),
-            actions = {
-              SbButton(KEEP_RUNNING, { onAction(SpecsAction.KeepRunning) }, size = SbControlSize.Small)
-              SbButton(CANCEL_GOAL, { onAction(SpecsAction.ConfirmCancel) }, size = SbControlSize.Small, variant = SbButtonVariant.DangerSolid)
-            },
-          )
-        }
+        if (toolbar.confirmingCancel && key != null) CancelConfirmationDialog(key, onAction)
         if (control?.pauseRequested == true) Hint(PAUSE_NOTICE, FeedbackTone.Info)
         when (val load = toolbar.control) {
           is SpecControlState.Unavailable -> Hint(readProblemText(load.problem), FeedbackTone.Error)
