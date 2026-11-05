@@ -99,7 +99,9 @@ skill-bill qa lease acquire --invocation <invocation id> --device <serial>
 
 - Build or locate the debug APK for the tested revision with the project's own Gradle task (for example `./gradlew :app:assembleDebug`). Name its path in the report.
 - Install with `adb -s <serial> install -r <apk>`.
-- Launch with `adb -s <serial> shell monkey -p <applicationId> -c android.intent.category.LAUNCHER 1` or the launcher activity through `am start`.
+- Launch an explicit activity, never through `monkey -c android.intent.category.LAUNCHER`: debug builds often add a second launcher activity to the same package, such as LeakCanary's, and monkey picks between them at random.
+- List the launcher activities with `adb -s <serial> shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER` and keep the ones under the applicationId. When more than one remains, pick the app's own activity and skip debug-tool launchers such as `leakcanary.*`.
+- Launch it with `adb -s <serial> shell am start -n <applicationId>/<activity>`, then confirm `adb -s <serial> shell dumpsys activity activities | grep topResumedActivity` names that activity. If a debug-tool screen is in front, launch the app's activity again before exercising anything.
 
 ## Exercise the criteria
 
