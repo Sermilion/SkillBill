@@ -1,3 +1,23 @@
+## [2026-11-05] Keep spec deletion refusal in the runtime
+Context: Desktop control facts and the runtime board projection can disagree while a goal changes state.
+Decision: Guard desktop deletion with matching loaded canDelete verdicts and launch reservations, while allowing requests without loaded control. SpecBrowserService.deleteBundle retains the final refusal.
+Reason: Desktop facts can be stale or absent, so they cannot replace the runtime check for a live goal or errors.
+
+## [2026-11-05] Share bundle targets and Specs actions across surfaces
+Context: A selected file needs its own tree highlight, while controls, favorites and reservations belong to its bundle. Menus and the command palette expose the same actions.
+Decision: Resolve the parent bundle for controls and derive menu and palette entries from SpecsMenuModel. Keep extended popover keyboard handling opt-in and retain control identity when selection moves within a bundle.
+Reason: A shared target prevents actions from operating on a file path and avoids reloading control within a bundle. A shared action source keeps order and availability aligned without changing other popovers.
+
+## [2026-11-05] Admit Specs export through its preflight
+Context: Export is offered when a bundle has an issue key and checkout, including while run control loads.
+Decision: Send export to the existing runtime preflight without waiting for a control verdict, and check session and bundle identity across asynchronous steps.
+Reason: Preflight owns export admission, including live-work refusal. Waiting for a separate control read would hide an action that preflight can assess.
+
+## [2026-11-05] Bind a pending start to the selected bundle
+Context: Starting without an agent requires a choice, while selection or the runtime verdict can change with the picker open.
+Decision: Bind the pending start to selection identity and clear it on dismissal, selection change or loss of canStart. An ordinary agent choice does not start a bundle.
+Reason: An agent choice must not launch a different bundle or bypass a changed runtime verdict.
+
 ## [2026-11-04] Keep archive admission and inspection in the runtime
 Context: Desktop needs to refuse live export before file selection and show archive identity before import confirmation.
 Decision: Delegate preflight and inspection through WorkControlRepository. Recheck export admission and bind import to the inspected fingerprint and selected database observation.
