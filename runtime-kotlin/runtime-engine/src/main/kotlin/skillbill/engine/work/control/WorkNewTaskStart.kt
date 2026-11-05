@@ -284,8 +284,9 @@ public class WorkNewTaskStart(
         is BranchCheckout.Refused -> return NewTaskStartResult.Refused(resolved.reason)
       }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val ownedTarget = launchTarget.takeUnless { run.holder.id == QA_PHASE }
     val ownership =
-      listOfNotNull("$identity:${run.holder.id}:standalone", launchTarget, branch?.let { "branch:$it" })
+      listOfNotNull("$identity:${run.holder.id}:standalone", ownedTarget, branch?.let { "branch:$it" })
         .joinToString(":")
     val args =
       buildList {
@@ -395,16 +396,34 @@ public class WorkNewTaskStart(
     if (intake == null) return null
     val trimmed = intake.trim()
     if (trimmed.isEmpty()) return null
-    return when {
-      phaseId != MONITOR_PHASE ->
-        NewTaskStartResult.Refused("Intake is supported only for standalone monitor runs.")
-      trimmed.contains(' ') || trimmed.any { it.isISOControl() } ->
-        NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
-      trimmed.startsWith(MONITOR_INTAKE_MODE_PREFIX) || trimmed.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
-        NewTaskStartResult.Refused("Monitor intake must name the target directly, not as a phase option.")
+    val reason =
+      when (phaseId) {
+        MONITOR_PHASE -> monitorIntakeRefusal(trimmed)
+        QA_PHASE -> qaInstructionsRefusal(trimmed)
+        else -> "Intake is supported only for standalone QA and monitor runs."
+      }
+    return reason?.let(NewTaskStartResult::Refused)
+  }
+
+  private fun monitorIntakeRefusal(intake: String): String? =
+    when {
+      intake.contains(' ') || intake.any { it.isISOControl() } ->
+        "Monitor intake must be a single token naming the target."
+      intake.startsWithPhaseOption() -> "Monitor intake must name the target directly, not as a phase option."
       else -> null
     }
-  }
+
+  private fun qaInstructionsRefusal(instructions: String): String? =
+    when {
+      instructions.startsWithPhaseOption() ->
+        "QA instructions cannot start with mode: or target:, because the CLI would read them as a phase option."
+      instructions.toByteArray(Charsets.UTF_8).size > MAX_INTAKE_BYTES ->
+        "QA instructions are too long. Shorten them to under $MAX_INTAKE_BYTES bytes."
+      else -> null
+    }
+
+  private fun String.startsWithPhaseOption(): Boolean =
+    startsWith(PHASE_OPTION_MODE_PREFIX) || startsWith(PHASE_OPTION_TARGET_PREFIX)
 
   private fun runFailure(
     exit: CompletionStage<WorkRunExit>,
@@ -529,10 +548,11 @@ public class WorkNewTaskStart(
     const val MAX_INTAKE_BYTES = 30_000
     const val MAX_REASON_CHARS = 500
     const val MONITOR_PHASE = "monitor"
-    val STANDALONE_PHASES = setOf("review", "validation", "qa", "pr", MONITOR_PHASE)
+    const val QA_PHASE = "qa"
+    val STANDALONE_PHASES = setOf("review", "validation", QA_PHASE, "pr", MONITOR_PHASE)
     val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
-    const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
-    const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
+    const val PHASE_OPTION_MODE_PREFIX = "mode:"
+    const val PHASE_OPTION_TARGET_PREFIX = "target:"
   }
 }
 
