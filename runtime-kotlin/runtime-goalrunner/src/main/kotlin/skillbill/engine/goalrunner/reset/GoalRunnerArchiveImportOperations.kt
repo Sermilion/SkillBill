@@ -54,10 +54,13 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -300,10 +303,10 @@ public class GoalRunnerArchiveImportOperations(
       }.distinctBy(WorkflowStateRecord::workflowId)
     val existingParents = workflows.listDecomposedParentsForPurge(context.issueKey, destIdentity).parents
     val existingPlans = workflows.listPlanWorkflowsForPurge(context.issueKey, destIdentity)
-    val matchingRows = recoveryWorkflowsMatch(existing.workflows, bundle.snapshot.workflows)
+    val matchingRows = recoveryWorkflowsMatch(existing.workflows, bundle.snapshot.workflows, destIdentity)
     val archivedForIssue =
       bundle.snapshot.workflows.filter { it.matchesIssueKeyForFeatureTaskDiscovery(context.issueKey) }
-    val matchingIssueRows = recoveryWorkflowsMatch(existingForIssue, archivedForIssue)
+    val matchingIssueRows = recoveryWorkflowsMatch(existingForIssue, archivedForIssue, destIdentity)
     val expectedPlanIds = bundle.snapshot.workflows.filter { it.isPlanWorkflow() }.map { it.workflowId }.toSet()
     val matchingParents = existingParents.map { it.record.workflowId }.toSet() == context.parentIds
     val matchingPlans = existingPlans.map(WorkflowStateRecord::workflowId).toSet() == expectedPlanIds
@@ -444,6 +447,7 @@ public class GoalRunnerArchiveImportOperations(
   private fun recoveryWorkflowsMatch(
     restored: List<WorkflowStateRecord>,
     archived: List<WorkflowStateRecord>,
+    destIdentity: String,
   ): Boolean {
     val restoredById = restored.associateBy(WorkflowStateRecord::workflowId)
     val archivedById = archived.associateBy(WorkflowStateRecord::workflowId)
@@ -451,8 +455,21 @@ public class GoalRunnerArchiveImportOperations(
       restoredById.keys == archivedById.keys &&
       archivedById.all { (workflowId, archivedRecord) ->
         recoveryWorkflowRecord(restoredById.getValue(workflowId), archivedRecord) ==
-          recoveryWorkflowRecord(archivedRecord, archivedRecord)
+          recoveryWorkflowRecord(archivedRecord.rewritePlanningImportIdentity(destIdentity), archivedRecord)
       }
+  }
+
+  private fun WorkflowStateRecord.rewritePlanningImportIdentity(destIdentity: String): WorkflowStateRecord {
+    val planningImport = typedArtifacts.goalPlanningImport() ?: return this
+    return copy(
+      typedArtifacts =
+        DurableWorkflowArtifacts.fromMap(
+          typedArtifacts +
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(
+              planningImport.copy(repositoryIdentity = destIdentity),
+            ),
+        ),
+    )
   }
 
   private fun withoutJournalId(row: GoalArchiveTableRow): GoalArchiveTableRow =
@@ -501,7 +518,10 @@ public class GoalRunnerArchiveImportOperations(
   ): Map<String, Int> {
     val destIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
     for (workflow in bundle.snapshot.workflows) {
-      unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflow, FeatureTaskWorkflowMode.RUNTIME)
+      unitOfWork.workflowStates.saveFeatureTaskWorkflow(
+        workflow.rewritePlanningImportIdentity(destIdentity),
+        FeatureTaskWorkflowMode.RUNTIME,
+      )
     }
     restoreIdentities(bundle, destIdentity, issueKey, unitOfWork.workflowStates)
     restorePlanning(bundle, destIdentity, issueKey, unitOfWork.goalPlanningPreparations)

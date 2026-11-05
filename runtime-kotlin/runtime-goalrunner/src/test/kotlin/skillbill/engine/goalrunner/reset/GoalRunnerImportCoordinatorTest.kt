@@ -15,12 +15,16 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.model.GoalRunnerImportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerImportResult
 import skillbill.engine.goalrunner.persist.seedCurrentParent
+import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
+import skillbill.engine.goalrunner.planning.model.provenanceMismatches
+import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkflowIds
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_IMPORTED
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -36,6 +40,7 @@ import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
@@ -46,10 +51,18 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.text.sha256HexUtf8
+import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.taskruntime.artifact.goalPlanningImport
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImportSource
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import java.nio.file.Files
 import java.nio.file.Path
@@ -66,6 +79,167 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalRunnerImportCoordinatorTest {
+  @Test
+  fun `repository identity rewrite leaves conflicting planning provenance detectable`() {
+    val imported =
+      FeatureTaskRuntimeGoalPlanningImport(
+        parentGoalWorkflowId = "wfl-parent",
+        normalizedIssueKey = "SKILL-245",
+        repositoryIdentity = "destination-repository",
+        parentSpecHash = "parent-spec-hash",
+        decompositionManifestHash = "manifest-hash",
+        planningContractId = "wrong-planning-contract",
+        planningContractVersion = "planning-version",
+        phaseOutputContractId = "phase-output-contract",
+        phaseOutputContractVersion = "phase-output-version",
+        subtaskId = 1,
+        manifestOrder = 0,
+        governedSubSpecPath = "spec_subtask_1.md",
+        subSpecHash = "sub-spec-hash",
+        preplanPayloadSha256 = "preplan-payload-sha",
+        planPayloadSha256 = "plan-payload-sha",
+      )
+    val request =
+      GoalChildPlanningHydrationRequest(
+        identity = GoalPlanningIdentity("wfl-parent", "SKILL-245", "destination-repository"),
+        provenance =
+          GoalPlanningContractProvenance(
+            parentSpecHash = "parent-spec-hash",
+            decompositionManifestHash = "manifest-hash",
+            planningContractId = "expected-planning-contract",
+            planningContractVersion = "planning-version",
+            phaseOutputContractId = "phase-output-contract",
+            phaseOutputContractVersion = "phase-output-version",
+          ),
+        descriptor = GovernedGoalSubtaskDescriptor(1, 0, "spec_subtask_1.md", "sub-spec-hash"),
+      )
+
+    assertEquals(listOf("planning_contract_id"), imported.provenanceMismatches(request))
+  }
+
+  @Test
+  fun `archive import rewrites child planning identities and resumes interrupted spec writes`() {
+    val sources = planningSources()
+    sources.forEachIndexed { index, source ->
+      val fixture = importFixture(bundleName = "specs")
+      val sourceImport = planningImport(source)
+      val child =
+        taskRuntimeWorkflowRecord("wfl-child", "wfl-parent", "SKILL-245").let { record ->
+          if (sourceImport == null) {
+            record
+          } else {
+            record.copy(
+              typedArtifacts =
+                DurableWorkflowArtifacts.fromMap(
+                  record.typedArtifacts +
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(sourceImport),
+                ),
+            )
+          }
+        }
+      val archive = exportImportArchive(fixture, parentSnapshot(workflows = listOf(child)))
+      val destinationRoot = Files.createTempDirectory("goal-import-child-destination-$index")
+      val destinationPort = FixedProjectStorePort(destinationRoot)
+      val states = InMemoryWorkflowStates()
+      val failingStore = failFirstSpecWrite(storeAwareTestDecompositionManifestStore(destinationPort))
+      val importService =
+        testGoalRunnerStatusService(
+          manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+          outcomeStore = RecordingOutcomeStore(),
+          ports =
+            GoalRunnerStatusTestPorts(
+              gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+              projectStore = destinationPort,
+            ),
+          database = FakeDatabaseSessionFactory(states, goalRunnerControls = RecordingImportControls()),
+          decompositionManifestStore = failingStore,
+        )
+
+      assertIs<GoalRunnerImportResult.Incomplete>(
+        importService.import(GoalRunnerImportRequest(archive, destinationRoot)),
+      )
+      assertIs<GoalRunnerImportResult.Imported>(
+        importService.import(GoalRunnerImportRequest(archive, destinationRoot)),
+      )
+
+      val restoredChild = requireNotNull(states.get(WorkflowFamily.TASK_RUNTIME, "wfl-child"))
+      val restoredImport = restoredChild.artifacts.goalPlanningImport()
+      assertEquals(
+        child.typedArtifacts - DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.label(),
+        restoredChild.artifacts - DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.label(),
+      )
+      if (sourceImport == null) {
+        assertNull(restoredImport)
+      } else {
+        val destinationIdentity = goalRepositoryIdentity(destinationRoot)
+        assertEquals(sourceImport.copy(repositoryIdentity = destinationIdentity), restoredImport)
+        if (sourceImport.source?.kind == FeatureTaskRuntimeGoalPlanningImportSource.PLAN_WORKFLOW) {
+          assertEquals(
+            listOf("wfl-plan"),
+            states.findImportedSubtaskPlanWorkflowIds(
+              GoalPlanningIdentity("wfl-parent", "SKILL-245", destinationIdentity),
+              listOf(DecompositionSubtask(1, "Child", "spec_subtask_1.md", workflowId = "wfl-child")),
+            ),
+          )
+        }
+      }
+    }
+  }
+
+  private fun planningSources(): List<FeatureTaskRuntimeGoalPlanningImportSource?> =
+    listOf(
+      FeatureTaskRuntimeGoalPlanningImportSource(
+        FeatureTaskRuntimeGoalPlanningImportSource.PLAN_WORKFLOW,
+        "wfl-plan",
+        "plan-details-sha",
+      ),
+      FeatureTaskRuntimeGoalPlanningImportSource(
+        FeatureTaskRuntimeGoalPlanningImportSource.LEGACY_TABLES,
+        detailsSha256 = "legacy-details-sha",
+      ),
+      null,
+    )
+
+  private fun failFirstSpecWrite(delegate: DecompositionManifestStore): DecompositionManifestStore =
+    object : DecompositionManifestStore by delegate {
+      private var failWrite = true
+
+      override fun <T> writeBundleAtomically(
+        writes: List<Pair<Path, String>>,
+        verify: () -> T,
+      ): T {
+        if (failWrite) {
+          failWrite = false
+          error("spec write failed")
+        }
+        return delegate.writeBundleAtomically(writes, verify)
+      }
+    }
+
+  private fun planningImport(
+    source: FeatureTaskRuntimeGoalPlanningImportSource?,
+  ): FeatureTaskRuntimeGoalPlanningImport? =
+    source?.let {
+      FeatureTaskRuntimeGoalPlanningImport(
+        parentGoalWorkflowId = "wfl-parent",
+        normalizedIssueKey = "SKILL-245",
+        repositoryIdentity = "repo-root-realpath-v1:/archived/source",
+        parentSpecHash = "parent-spec-hash",
+        decompositionManifestHash = "manifest-hash",
+        planningContractId = "planning-contract",
+        planningContractVersion = "planning-version",
+        phaseOutputContractId = "phase-output-contract",
+        phaseOutputContractVersion = "phase-output-version",
+        subtaskId = 1,
+        manifestOrder = 0,
+        governedSubSpecPath = "specs/specs/spec_subtask_1.md",
+        subSpecHash = "sub-spec-hash",
+        preplanPayloadSha256 = "preplan-payload-sha",
+        planPayloadSha256 = "plan-payload-sha",
+        source = it,
+      )
+    }
+
   @Test
   fun `archive import preserves control choices while clearing execution ownership`() {
     val sourceRoot = Files.createTempDirectory("goal-import-control-source")
@@ -902,12 +1076,13 @@ private class BranchHeadGit(
 
 private fun parentSnapshot(
   sharedPreplans: List<SharedGoalPreplanCheckpoint> = emptyList(),
+  workflows: List<WorkflowStateRecord> = emptyList(),
 ): RecordingGoalArchiveSnapshotPort {
   val states = InMemoryWorkflowStates()
   seedCurrentParent(states, "wfl-child", "SKILL-245")
   val parent = requireNotNull(states.getFeatureTaskWorkflow("wfl-parent")).copy(issueKey = "SKILL-245")
   return RecordingGoalArchiveSnapshotPort {
-    GoalArchiveOwnedSnapshot(listOf(parent), sharedPreplans, emptyList(), emptyList())
+    GoalArchiveOwnedSnapshot(listOf(parent) + workflows, sharedPreplans, emptyList(), emptyList())
   }
 }
 
