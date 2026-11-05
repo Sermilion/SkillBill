@@ -153,6 +153,14 @@ object PrincipleEnforcementInventory {
       "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeBootstrapBindings.kt",
     )
 
+  val sharedTempRootExemptions: Set<String> =
+    setOf(
+      "runtime-kotlin/runtime-infra/host/src/main/kotlin/skillbill/infrastructure/host/jvm/JdkHostPlatformPort.kt",
+      "runtime-kotlin/runtime-infra/host/src/main/kotlin/skillbill/infrastructure/host/jvm/RuntimeTempRoot.kt",
+      "runtime-kotlin/runtime-infra/launcher/src/main/kotlin/skillbill/infrastructure/launcher/review/" +
+        "GovernedReviewEvidenceEndpoint.kt",
+    )
+
   val processAdapterModules: Set<String> =
     setOf("runtime-infra:host", "runtime-infra:launcher", "runtime-infra:workflow")
 
@@ -210,6 +218,14 @@ object PrincipleEnforcementInventory {
           "allowed only in the runtime-infra:host, runtime-infra:launcher and runtime-infra:workflow process " +
           "adapters named by processAdapterModules.",
         RuntimeApplicationAmbientClockArchitectureTest::class,
+      ),
+      EnforcedRule(
+        "SHARED_TEMP_ROOT: runtime main sources use the host temp-root authority for filesystem temp access.",
+        SharedTempRootArchitectureTest::class,
+      ),
+      EnforcedRule(
+        "TEST_TASK_TEMP_ISOLATION: runtime test tasks and the Gradle wrapper use an isolated JVM temp root.",
+        TestTaskTempIsolationArchitectureTest::class,
       ),
       EnforcedRule(
         "No @Inject constructor defaults: @Inject constructors carry no default arguments in any module main " +
