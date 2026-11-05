@@ -13,7 +13,6 @@ private val RESTORE_SKIP_TABLES =
   setOf(
     "feature_task_runtime_worker_leases",
     "feature_task_execution_identities",
-    "goal_runner_controls",
   )
 
 private val RESTORE_ALLOWED_TABLES =
@@ -29,6 +28,7 @@ private val RESTORE_ALLOWED_TABLES =
       "goal_issue_progress",
       "goal_run_sessions",
       "feature_task_runtime_sessions",
+      "goal_runner_controls",
     )
 
 private val SQL_IDENTIFIER = Regex("^[A-Za-z_][A-Za-z0-9_]*$")

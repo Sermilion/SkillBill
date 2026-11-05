@@ -7,7 +7,9 @@ import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.application.workflow.decomposition.listDecomposedParentsForPurge
 import skillbill.application.workflow.decomposition.listPlanWorkflowsForPurge
 import skillbill.application.workflow.decomposition.matchesIssueKeyForFeatureTaskDiscovery
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.goalrunner.GoalRunnerControlPayloadKeys
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
 import skillbill.contracts.workflow.goal.GOAL_ARCHIVE_CONTRACT_VERSION
@@ -331,7 +333,8 @@ public class GoalRunnerArchiveImportOperations(
     val pendingParents =
       context.parentIds.all { parentId ->
         val control = unitOfWork.goalRunnerControls.controlState(parentId)
-        control.archiveImportFingerprint == bundle.fingerprint && control.archiveImportSpecsPending
+        control.archiveImportFingerprint == bundle.fingerprint && control.archiveImportSpecsPending &&
+          archivedControlSettingsMatch(bundle, parentId, control)
       }
     return if (listOf(
         matchingRows,
@@ -502,16 +505,17 @@ public class GoalRunnerArchiveImportOperations(
     }
     restoreIdentities(bundle, destIdentity, issueKey, unitOfWork.workflowStates)
     restorePlanning(bundle, destIdentity, issueKey, unitOfWork.goalPlanningPreparations)
+    unitOfWork.restoreGoalArchiveOwnedTables(bundle.snapshot.ownedTables)
     for (parentId in parentIds) {
+      val archivedControl = unitOfWork.goalRunnerControls.controlState(parentId)
       unitOfWork.goalRunnerControls.persistControlState(
         parentId,
-        importedControlState(destIdentity).copy(
+        importedControlState(destIdentity, archivedControl).copy(
           archiveImportFingerprint = bundle.fingerprint,
           archiveImportSpecsPending = true,
         ),
       )
     }
-    unitOfWork.restoreGoalArchiveOwnedTables(bundle.snapshot.ownedTables)
     return rowCounts(bundle)
   }
 
@@ -731,8 +735,11 @@ public class GoalRunnerArchiveImportOperations(
     return reason?.let { GoalRunnerImportResult.Refused(issueKey, it) }
   }
 
-  private fun importedControlState(destIdentity: String): GoalRunnerControlState =
-    GoalRunnerControlState(
+  private fun importedControlState(
+    destIdentity: String,
+    archived: GoalRunnerControlState,
+  ): GoalRunnerControlState =
+    archived.copy(
       paused = true,
       pauseRequested = false,
       pauseConsumed = false,
@@ -745,6 +752,34 @@ public class GoalRunnerArchiveImportOperations(
       executionWorktreeRetentionReason = null,
       executionWorktreeRetentionDetail = null,
     )
+
+  private fun archivedControlSettingsMatch(
+    bundle: ParsedGoalArchiveBundle,
+    parentId: String,
+    control: GoalRunnerControlState,
+  ): Boolean {
+    val row =
+      bundle.snapshot.ownedTables.rows("goal_runner_controls").orEmpty().firstOrNull { archived ->
+        archived.orderedEntries().toMap()[GoalRunnerControlPayloadKeys.PARENT_WORKFLOW_ID] == parentId
+      } ?: return control.stopAfterSubtaskId == null && control.validationQualityRetriesBySubtask.isEmpty()
+    val raw =
+      row.orderedEntries().toMap()[GoalRunnerControlPayloadKeys.CONTROL_STATE_JSON] as? String
+        ?: return control.stopAfterSubtaskId == null && control.validationQualityRetriesBySubtask.isEmpty()
+    val archivedState =
+      JsonCodec.parseObjectOrNull(raw)
+        ?.let(JsonCodec::jsonElementToValue)
+        ?.let(JsonCodec::anyToStringAnyMap) ?: return false
+    val stopAfter =
+      (archivedState[GoalRunnerControlPayloadKeys.STOP_AFTER_SUBTASK_ID] as? Number)?.toInt()
+    val retries =
+      (archivedState[GoalRunnerControlPayloadKeys.VALIDATION_QUALITY_RETRIES_BY_SUBTASK] as? Map<*, *>)
+        ?.mapNotNull { (key, value) ->
+          val subtaskId = key?.toString()?.toIntOrNull()
+          val retryCount = (value as? Number)?.toInt()
+          if (subtaskId == null || retryCount == null) null else subtaskId to retryCount
+        }?.toMap().orEmpty()
+    return control.stopAfterSubtaskId == stopAfter && control.validationQualityRetriesBySubtask == retries
+  }
 
   private fun archiveParentWorkflowIds(
     issueKey: String,

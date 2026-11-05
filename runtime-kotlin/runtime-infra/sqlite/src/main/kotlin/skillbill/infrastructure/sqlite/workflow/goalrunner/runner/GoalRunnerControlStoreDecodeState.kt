@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.time.parsePersistedInstantOrNull
+import skillbill.contracts.goalrunner.GoalRunnerControlPayloadKeys as SharedGoalRunnerControlPayloadKeys
 
 internal fun decodeControlState(raw: String): GoalRunnerControlState {
   val state =
@@ -17,7 +18,9 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
     }
   }
   return GoalRunnerControlState(
-    stopAfterSubtaskId = state["stop_after_subtask_id"].toPositiveIntOrNull("stop_after_subtask_id"),
+    stopAfterSubtaskId =
+      state[SharedGoalRunnerControlPayloadKeys.STOP_AFTER_SUBTASK_ID]
+        .toPositiveIntOrNull(SharedGoalRunnerControlPayloadKeys.STOP_AFTER_SUBTASK_ID),
     pauseRequested = state.booleanOrDefault("pause_requested", false),
     pauseConsumed = state.booleanOrDefault("pause_consumed", false),
     paused = state.booleanOrDefault("paused", false),
@@ -32,7 +35,10 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
     currentSubtaskId = state["current_subtask_id"].toPositiveIntOrNull("current_subtask_id"),
     subtaskActiveDurationMs = state.nonNegativeLongOrDefault("subtask_active_duration_ms"),
     subtaskActiveDurationAsOf = state.nullableString("subtask_active_duration_as_of"),
-    validationQualityRetriesBySubtask = state.intIntMap("validation_quality_retries_by_subtask"),
+    validationQualityRetriesBySubtask =
+      state.intIntMap(
+        SharedGoalRunnerControlPayloadKeys.VALIDATION_QUALITY_RETRIES_BY_SUBTASK,
+      ),
     pendingReAttemptCauseBySubtask = state.intStringMap("pending_re_attempt_cause_by_subtask"),
     pendingCausingLoopEntryBySubtask = state.intStringMap("pending_causing_loop_entry_by_subtask"),
     goalCompletedAt =
@@ -67,7 +73,7 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
 
 private val allowedControlKeys =
   setOf(
-    "stop_after_subtask_id",
+    SharedGoalRunnerControlPayloadKeys.STOP_AFTER_SUBTASK_ID,
     "pause_requested",
     "pause_consumed",
     "paused",
@@ -81,7 +87,7 @@ private val allowedControlKeys =
     "current_subtask_id",
     "subtask_active_duration_ms",
     "subtask_active_duration_as_of",
-    "validation_quality_retries_by_subtask",
+    SharedGoalRunnerControlPayloadKeys.VALIDATION_QUALITY_RETRIES_BY_SUBTASK,
     "pending_re_attempt_cause_by_subtask",
     "pending_causing_loop_entry_by_subtask",
     "goal_completed_at",

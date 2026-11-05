@@ -1,6 +1,9 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.goalrunner.GoalRunnerControlPayloadKeys
 import skillbill.infrastructure.sqlite.workflow.goalrunner.archive.SqliteGoalArchiveSnapshotPort
+import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.persistence.model.GoalPurgeTarget
@@ -17,6 +20,42 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalArchiveSnapshotPersistenceTest {
+  @Test
+  fun `restore preserves archived goal runner control state for typed repository reads`() {
+    val tempDir = Files.createTempDirectory("goal-archive-control-restore")
+    val dbPath = tempDir.resolve("metrics.db")
+    val factory =
+      sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap())
+    val archive =
+      GoalArchiveOwnedTables.of(
+        mapOf(
+          "goal_runner_controls" to
+            listOf(
+              GoalArchiveTableRow(
+                mapOf(
+                  GoalRunnerControlPayloadKeys.PARENT_WORKFLOW_ID to "wftr-archived-control",
+                  GoalRunnerControlPayloadKeys.CONTROL_STATE_JSON to
+                    JsonCodec.mapToJsonString(
+                      mapOf(
+                        GoalRunnerControlPayloadKeys.STOP_AFTER_SUBTASK_ID to 7,
+                        GoalRunnerControlPayloadKeys.VALIDATION_QUALITY_RETRIES_BY_SUBTASK to mapOf("7" to 3),
+                      ),
+                    ),
+                ),
+              ),
+            ),
+        ),
+      )
+
+    SqliteGoalArchiveSnapshotPort(factory).restoreOwnedTables(archive)
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val restored = GoalRunnerControlStore(connection).controlState("wftr-archived-control")
+      assertEquals(7, restored.stopAfterSubtaskId)
+      assertEquals(mapOf(7 to 3), restored.validationQualityRetriesBySubtask)
+    }
+  }
+
   @Test
   fun `restore does not transfer an archived active worker lease to destination`() {
     val tempDir = Files.createTempDirectory("goal-archive-worker-lease-restore")
