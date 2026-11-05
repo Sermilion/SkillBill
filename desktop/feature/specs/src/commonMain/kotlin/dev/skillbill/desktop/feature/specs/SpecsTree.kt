@@ -45,6 +45,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
@@ -148,6 +151,13 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onN
       val index = state.rows.indexOfFirst { it.node.path == focusedPath }
       if (index < 0) return@onPreviewKeyEvent false
       val row = state.rows[index]
+      val modified = event.isCtrlPressed || event.isMetaPressed || event.isAltPressed || event.isShiftPressed
+      if (modified && when (event.key) {
+          Key.DirectionDown, Key.DirectionUp, Key.DirectionRight, Key.DirectionLeft,
+          Key.Enter, Key.NumPadEnter, Key.Spacebar -> true
+          else -> false
+        }
+      ) return@onPreviewKeyEvent false
       when (event.key) {
         Key.DirectionDown -> focusRow(index + 1)
         Key.DirectionUp -> focusRow(index - 1)

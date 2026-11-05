@@ -45,4 +45,14 @@ class ShellKeymapTest {
     assertEquals(ShellCommand.ToggleChat, ShellKeymap().resolve(key('l', ctrl = true), KeyContext(textInputFocused = true)))
     assertNull(ShellKeymap().resolve(key('l', ctrl = true), KeyContext(terminalFocused = true)))
   }
+
+  @Test
+  fun `modified Enter saves an open edit and passes through when no edit is open`() {
+    val keymap = ShellKeymap()
+
+    assertEquals(ShellCommand.SaveEdit, keymap.resolve(KeyPress(ShellKey.Enter, ctrl = true), KeyContext(editOpen = true)))
+    assertEquals(ShellCommand.SaveEdit, keymap.resolve(KeyPress(ShellKey.Enter, meta = true), KeyContext(editOpen = true)))
+    assertNull(keymap.resolve(KeyPress(ShellKey.Enter, ctrl = true), KeyContext()))
+    assertNull(keymap.resolve(KeyPress(ShellKey.Enter, meta = true), KeyContext()))
+  }
 }

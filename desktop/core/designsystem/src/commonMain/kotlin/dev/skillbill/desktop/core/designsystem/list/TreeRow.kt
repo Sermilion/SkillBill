@@ -29,6 +29,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -134,7 +137,16 @@ fun TreeRow(
         if (focused) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent,
         if (inPane) RoundedCornerShape(SkillBillRadius.sm) else RectangleShape,
       ).focusBar(focused)
-      .onSizeChanged { rowSize = it }.onFocusChanged { focusedWithin = it.hasFocus }.hoverable(interaction).then(menu).clickable(interaction, indication = null, role = Role.Button, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
+      .onSizeChanged { rowSize = it }.onFocusChanged { focusedWithin = it.hasFocus }.hoverable(interaction).then(menu)
+      .onPreviewKeyEvent {
+        val activationKey = when (it.key) {
+          Key.Enter, Key.NumPadEnter, Key.Spacebar -> true
+          else -> false
+        }
+        val modifiedActivation = activationKey &&
+          (it.isCtrlPressed || it.isMetaPressed || it.isAltPressed || it.isShiftPressed)
+        modifiedActivation
+      }.clickable(interaction, indication = null, role = Role.Button, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
       .then(if (expandable) Modifier.expandSemantics(expanded) else Modifier)
       .padding(start = if (inPane) paneBleed else treeBasePadding + treeIndent * level, end = if (inPane) paneBleed else 16.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
