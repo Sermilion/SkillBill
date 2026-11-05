@@ -252,15 +252,23 @@ private fun skippedSentence(token: String?): String = when (token) {
 }
 
 private val BARE_TOKEN = Regex("""^([a-z_]+)(?:$|;| ·)""")
+private val LEADING_TOKEN = Regex("""^[a-z_]+(?![a-z0-9_])""")
 private val REASON_LINE = Regex("""^reason:[ \t]*(.*)$""", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE))
 
-/** A stored reason can read "token · detail" or carry warnings after "; ", and a warning sentence must not yield its first word. */
-private fun skipToken(input: QaResultsInput): String? {
-  fun bare(text: String?) = text?.trim()?.let { BARE_TOKEN.find(it)?.groupValues?.get(1) }
-  return input.details?.skipReason?.takeIf { it.isNotBlank() }
-    ?: input.reportText?.let { report -> REASON_LINE.find(report)?.groupValues?.get(1) }.let(::bare)
-    ?: bare(input.reason)
+/**
+ * A stored reason can read "token · detail" or carry warnings after "; ", and any token counts there. A token followed by other
+ * detail ("token. detail") counts only if it is a known skip reason, so a free-text sentence must not yield its first word.
+ */
+private fun reasonToken(text: String?): String? {
+  val trimmed = text?.trim() ?: return null
+  return BARE_TOKEN.find(trimmed)?.groupValues?.get(1)
+    ?: LEADING_TOKEN.find(trimmed)?.value?.takeIf(::isKnownSkipReason)
 }
+
+private fun skipToken(input: QaResultsInput): String? =
+  input.details?.skipReason?.takeIf { it.isNotBlank() }
+    ?: input.reportText?.let { report -> REASON_LINE.find(report)?.groupValues?.get(1) }.let(::reasonToken)
+    ?: reasonToken(input.reason?.removePrefix("QA verdict: skipped: "))
 
 private fun leftPhrase(kind: String, count: Int): String = when {
   kind != "process" -> counted(count, humanized(kind))

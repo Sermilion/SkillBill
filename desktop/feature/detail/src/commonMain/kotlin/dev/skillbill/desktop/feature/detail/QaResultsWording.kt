@@ -34,6 +34,8 @@ private val SHORT_REASONS = mapOf(
   "browser_unavailable" to "browser driver missing",
 )
 
+internal fun isKnownSkipReason(token: String): Boolean = token == EMPTY_SCOPE || token in SKIP_PHRASES
+
 internal fun humanized(token: String): String = token.replace('_', ' ')
 
 internal fun capitalized(text: String): String = text.replaceFirstChar(Char::uppercase)

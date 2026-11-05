@@ -136,6 +136,45 @@ class QaResultsViewTest {
   }
 
   @Test
+  fun `older skipped rows yield a known token followed by detail`() {
+    val docker = "QA skipped this change because Docker is not available."
+    val environment = "QA skipped this change because an isolated environment could not be set up."
+    val unsupported = "QA skipped this change because the target is not supported."
+    val emptyScope = "QA skipped this change. No acceptance criterion describes behavior it can exercise."
+    fun reported(text: String) = qaResultsView(input(QaVerdict.Skipped, reportText = text))
+    assertHead(reported("Verdict: skipped\nReason: empty_scope. Only docs changed."), "Skipped", QaResultsTone.Faint, emptyScope)
+    assertHead(reported("Reason: docker_unavailable, no daemon"), "Skipped", QaResultsTone.Blocked, docker)
+    assertHead(reported("Reason: environment_unavailable. The host disk is full"), "Skipped", QaResultsTone.Blocked, environment)
+    assertHead(reported("Reason: unsupported_target — no artifact"), "Skipped", QaResultsTone.Blocked, unsupported)
+    val summary = "QA verdict: skipped: empty_scope; coverage: backend skipped (empty_scope)"
+    assertHead(qaResultsView(input(QaVerdict.Skipped, reason = summary)), "Skipped", QaResultsTone.Faint, emptyScope)
+  }
+
+  @Test
+  fun `an older standalone row reads its token with no run details`() {
+    val run = ExecutionInstance(
+      "run-1", "run-1", "completed", epoch, epoch, epoch, "QA verdict: skipped", null, QaVerdict.Skipped,
+      "Verdict: skipped\nReason: empty_scope. The tree under test changes only docs.", null,
+    )
+    assertHead(
+      qaResultsView(standaloneQaInput(workItem("QA", kind = WorkKind.Phase), run)),
+      "Skipped",
+      QaResultsTone.Faint,
+      "QA skipped this change. No acceptance criterion describes behavior it can exercise.",
+    )
+  }
+
+  @Test
+  fun `text that only resembles a skip token still says nothing was named`() {
+    val missing = "QA skipped this change and did not say what was missing."
+    listOf("Reason: empty scope", "Reason: the host disk is full. Retry.", "Reason: unknown_thing. detail", "Reason: empty_scope2").forEach { text ->
+      assertEquals(missing, qaResultsView(input(QaVerdict.Skipped, reportText = text)).sentence, text)
+    }
+    val perTargetOnly = "QA verdict: skipped; coverage: backend skipped (empty_scope)"
+    assertEquals(missing, qaResultsView(input(QaVerdict.Skipped, reason = perTargetOnly)).sentence)
+  }
+
+  @Test
   fun `failed scenario keeps the reason and has no report or targets`() {
     val view = qaResultsView(input(QaVerdict.Incomplete, reportText = null, reason = "Agent exited with status 137."))
     assertHead(view, "Did not finish", QaResultsTone.Failed, "QA stopped before it wrote a report, so this change has no QA result.")
