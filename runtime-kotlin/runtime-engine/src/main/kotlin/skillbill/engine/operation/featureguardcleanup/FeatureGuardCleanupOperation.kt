@@ -15,6 +15,7 @@ import skillbill.engine.operation.core.OperationStepResult
 import skillbill.engine.operation.core.applyStoredProposal
 import skillbill.engine.operation.core.missingIntake
 import skillbill.engine.operation.core.proposeFromStep
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 public class FeatureGuardCleanupOperation(
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
@@ -75,10 +76,14 @@ public class FeatureGuardCleanupOperation(
           "$applied\n\nValidation passed (${validation.invocationId}).\n${validation.value.orEmpty().trimEnd()}\n",
         )
       is PhaseRunResult.Blocked ->
-        OperationOutcome.Failed(
-          "$applied\n\nThe cleanup edits are in place, but validation (${validation.invocationId}) blocked at " +
-            "'${validation.stepId}': ${validation.reason}",
-        )
+        if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(validation.reason)) {
+          OperationOutcome.Blocked(validation.reason)
+        } else {
+          OperationOutcome.Failed(
+            "$applied\n\nThe cleanup edits are in place, but validation (${validation.invocationId}) blocked at " +
+              "'${validation.stepId}': ${validation.reason}",
+          )
+        }
     }
   }
 }
