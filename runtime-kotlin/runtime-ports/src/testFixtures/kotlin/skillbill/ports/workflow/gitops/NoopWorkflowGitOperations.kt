@@ -1,5 +1,7 @@
 package skillbill.ports.workflow.gitops
 
+import skillbill.ports.workflow.gitops.history.CheckpointHistoryGitOperations
+import skillbill.ports.workflow.gitops.history.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.worktree.WorkflowGitWorktreeOperations
 
 object NoopWorkflowGitOperations :

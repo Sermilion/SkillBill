@@ -1,12 +1,10 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,28 +23,19 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.component.SbField
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbMenu
-import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
-import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
-import dev.skillbill.desktop.feature.chat.ChatPill
 import dev.skillbill.desktop.feature.chat.ResumePicker
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
 import dev.skillbill.desktop.feature.chat.SendNowGate
@@ -56,8 +45,9 @@ import kotlin.time.Instant
 internal val COMPOSER_MAX_WIDTH = 728.dp
 
 private const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
-private const val PICKERS_DISABLED_STARTING = "Wait for the start to finish"
-private const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
+internal const val PICKERS_DISABLED_STARTING = "Wait for the start to finish"
+internal const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
+private val REPOSITORY_PICKER_WIDTH = 620.dp
 
 /** The task input with repository, agent, Send, Stop and Send now. Enter and Send share one condition; a busy turn queues the next message. */
 @Composable
@@ -117,9 +107,11 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      RepositoryPicker(state, draft, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy, onAction)
-      AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
-      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        RepositoryPicker(state, draft, chat, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
+        AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (stoppable) {
           SbButton(
             "Stop", { onAction(NewTaskAction.Stop); focus.requestFocus() },
@@ -145,56 +137,36 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
 }
 
 @Composable
-private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, enabled: Boolean, disabledWhy: String?, onAction: (NewTaskAction) -> Unit) {
+private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: NewTaskChat?, starting: Boolean, composerFocus: FocusRequester, now: () -> Instant, modifier: Modifier, onAction: (NewTaskAction) -> Unit) {
+  val pillFocus = remember { FocusRequester() }
+  val repositoryFilterFocus = remember { FocusRequester() }
+  val branchFilterFocus = remember { FocusRequester() }
+  var closeFocus by remember { mutableStateOf(pillFocus) }
   val close = { onAction(NewTaskAction.CloseRepositoryPicker) }
-  val why = disabledWhy.takeIf { !enabled }
-  Box {
-    val pillModifier = Modifier.then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-      .clickable(enabled = enabled, onClickLabel = "Change repository or base branch") { onAction(NewTaskAction.OpenRepositoryPicker) }
-      .then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
-    val pill = @Composable {
-      ChatPill(
-        draft.repository?.let { "${it.name} · ${draft.baseBranch.ifBlank { "default branch" }}" } ?: "Choose repository",
-        mono = true,
-        icon = LucideIcons.folder,
-        maxWidth = 280.dp,
-        modifier = pillModifier,
-      )
-    }
-    if (why != null) SbTooltip(why) { pill() } else pill()
-    if (enabled && state.repositoryPickerOpen) {
-      ShellLayer(close)
-      SbPopover(expanded = true, onDismissRequest = close) { RepositoryPickerContent(state, draft, onAction) }
-    }
-  }
-}
-
-@Composable
-private fun RepositoryPickerContent(state: NewTaskUiState, draft: NewTaskDraft, onAction: (NewTaskAction) -> Unit) {
-  var path by remember { mutableStateOf("") }
-  if (state.repositories.isNotEmpty()) {
-    SbMenu(
-      state.repositories.map { repository ->
-        SbMenuEntry.Item(repository.name, { onAction(NewTaskAction.ChooseRepository(repository)) }, checked = repository.root == draft.repository?.root)
-      },
-    )
-  }
-  Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    SbField("Repository path", error = state.repositoryError) {
-      SbInput(
-        path, { path = it },
-        modifier = fieldModifier.fillMaxWidth().gatesShortcutsWhileFocused(),
-        mono = true,
-        isError = isError,
-        onSubmit = { onAction(NewTaskAction.SubmitRepositoryPath(path)) },
-      )
-    }
-    SbField("Base branch") {
-      SbInput(
-        draft.baseBranch, { onAction(NewTaskAction.BaseBranchChanged(it)) },
-        modifier = fieldModifier.fillMaxWidth().gatesShortcutsWhileFocused(),
-        mono = true,
-      )
+  val repository = draft.repository
+  val mode = repositoryPillMode(chat, starting, repository)
+  Box(modifier) {
+    NewTaskRepositoryPill(
+      mode,
+      repository?.name,
+      repositoryPillBranch(draft.baseBranch, repository?.root, state.branchRead),
+      pillFocus,
+    ) { closeFocus = pillFocus; onAction(NewTaskAction.OpenRepositoryPicker) }
+    val open = (mode == RepositoryPillMode.Interactive || mode == RepositoryPillMode.Choose) && state.repositoryPickerOpen
+    if (open) ShellLayer(close)
+    SbPopover(
+      expanded = open,
+      onDismissRequest = close,
+      width = REPOSITORY_PICKER_WIDTH,
+      maxWidth = REPOSITORY_PICKER_WIDTH,
+      placement = SbPopoverPlacement.Above,
+      returnFocusTo = closeFocus,
+      arrowKeysMoveFocus = false,
+    ) {
+      NewTaskRepositoryPickerContent(state, draft, now = now, repositoryFilterFocus = repositoryFilterFocus, branchFilterFocus = branchFilterFocus, composerFocus = composerFocus, onAction = { action ->
+        if (action is NewTaskAction.ChooseBaseBranch) closeFocus = composerFocus
+        onAction(action)
+      })
     }
   }
 }

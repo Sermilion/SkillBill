@@ -12,6 +12,7 @@ kotlin {
     compileOnly("dev.skillbill:runtime-core")
     compileOnly("dev.skillbill:runtime-contracts")
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.filekit.dialogs)
   }
   sourceSets.jvmTest.dependencies {
     // compileOnly is invisible to tests, which run the runtime types they construct.
@@ -19,5 +20,22 @@ kotlin {
     implementation("dev.skillbill:runtime-contracts")
     implementation(projects.core.testing)
     implementation(libs.kotlinx.coroutines.test)
+  }
+}
+
+dependencies {
+  constraints {
+    add("jvmMainImplementation", libs.kotlinx.serialization.core) {
+      version { strictly(libs.versions.serialization.get()) }
+      because("The installed runtime bundles kotlinx-serialization-core 1.9.0, and FileKit requests a newer one.")
+    }
+    add("jvmMainImplementation", libs.jna) {
+      version { strictly(libs.versions.jna.get()) }
+      because("The installed runtime bundles JNA 5.14.0, and FileKit requests a newer one.")
+    }
+    add("jvmMainImplementation", libs.jna.platform) {
+      version { strictly(libs.versions.jna.get()) }
+      because("The installed runtime bundles JNA 5.14.0, and FileKit requests a newer jna-platform.")
+    }
   }
 }
