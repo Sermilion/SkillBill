@@ -134,7 +134,10 @@ class GoalImportQualityReadinessTest {
     try {
       val imported =
         assertNotNull(
-          manifestLoader(database, clock).importFromManifestProjection(manifest(subtask, parentSpecPath), listOf(NEW_CHECKOUT)),
+          manifestLoader(database, clock).importFromManifestProjection(
+            manifest(subtask, parentSpecPath),
+            listOf(NEW_CHECKOUT),
+          ),
         )
       val store = testWorkflowGoalRunnerQualityExecutionStore(database, testWorkflowSnapshotValidator)
       assertEquals(

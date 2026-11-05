@@ -272,9 +272,7 @@ public class GoalRunner(
     val telemetryEmitter =
       GoalRunnerTelemetryEmitter(telemetry, completionRecorder.clock(), state, outcomeStore, diagnostics)
     return captureForTeardown {
-      manifestStore.updateControlState(state.parentWorkflowId) { current ->
-        current.copy(goalBlockedReason = null)
-      }
+      manifestStore.updateControlState(state.parentWorkflowId) { it.copy(goalBlockedReason = null) }
       telemetryEmitter.goalStarted()
       pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
         val pausedReport = requireNotNull(paused.report)
