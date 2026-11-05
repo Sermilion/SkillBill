@@ -160,8 +160,10 @@ public class InMemoryPhaseRunRecords private constructor(
     }?.detached()?.let(FeatureTaskRuntimeProducerOutputRead::Found) ?: FeatureTaskRuntimeProducerOutputRead.Absent
 
   override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
-    phaseRecords[request.phaseId] =
-      featureTaskRuntimePhaseRecordFor(request, phaseRecords[request.phaseId], clock.instant()).detached()
+    applyPhaseRecord(phaseRecords, request, clock)
+    if (goalQualityProgressSink != null) {
+      persistGoalQualityProgress()
+    }
     return true
   }
 
@@ -188,7 +190,7 @@ public class InMemoryPhaseRunRecords private constructor(
       phaseRecords[request.phaseId] = replacement.detached()
       return RequiredPhaseWrite.Acknowledged
     }
-    recordPhaseState(request)
+    applyPhaseRecord(phaseRecords, request, clock)
     phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.START, request)
     persistGoalQualityProgress()
     return RequiredPhaseWrite.Acknowledged
@@ -199,7 +201,7 @@ public class InMemoryPhaseRunRecords private constructor(
     (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)?.let {
       acceptedOutputs[request.phaseId] = it
     }
-    recordPhaseState(request)
+    applyPhaseRecord(phaseRecords, request, clock)
     phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
     (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)?.let {
       acceptedOccurrences += GoalQualityAcceptedOutput(request.phaseId, request.attemptCount, it)
@@ -543,6 +545,15 @@ public fun FeatureTaskRuntimeValidationGateProgress.detached(): FeatureTaskRunti
     completeFindings = completeFindings.map { it.toMap() },
     lastAgentUnfixedCriteria = lastAgentUnfixedCriteria.toList(),
   )
+
+private fun applyPhaseRecord(
+  phaseRecords: MutableMap<String, FeatureTaskRuntimePhaseRecord>,
+  request: FeatureTaskRuntimePhaseStateRequest,
+  clock: Clock,
+) {
+  phaseRecords[request.phaseId] =
+    featureTaskRuntimePhaseRecordFor(request, phaseRecords[request.phaseId], clock.instant()).detached()
+}
 
 private fun phaseLedgerEntry(
   clock: Clock,
