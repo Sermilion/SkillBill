@@ -26,6 +26,19 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
+
+internal sealed interface GoalAssessmentFixOutcome {
+  val record: GoalAssessmentRecord
+
+  data class Done(override val record: GoalAssessmentRecord) : GoalAssessmentFixOutcome
+
+  data class ProviderPaused(
+    override val record: GoalAssessmentRecord,
+    val reason: String,
+    val lastResumableStep: String,
+  ) : GoalAssessmentFixOutcome
+}
 
 internal class GoalAssessmentFixStep(
   private val services: GoalAssessmentRunServices,
@@ -38,10 +51,18 @@ internal class GoalAssessmentFixStep(
     record: GoalAssessmentRecord,
     roundNumber: Int,
     fixSet: GoalAssessmentFixSet,
-  ): GoalAssessmentRecord {
+  ): GoalAssessmentFixOutcome {
     val run = FixRun(services, state, request, roundNumber, record)
-    if (run.round().fix == null && run.round().repairPlan == null) {
-      val plan =
+    return planIfNeeded(run, fixSet) ?: completeFix(run, fixSet)
+  }
+
+  private fun planIfNeeded(
+    run: FixRun,
+    fixSet: GoalAssessmentFixSet,
+  ): GoalAssessmentFixOutcome? {
+    if (run.round().fix != null || run.round().repairPlan != null) return null
+    return when (
+      val planLaunch =
         launch(
           run,
           inputText(run, fixSet).replace("# Goal assessment fix:", "# Goal assessment repair plan:") +
@@ -50,48 +71,98 @@ internal class GoalAssessmentFixStep(
             "Exclude immaterial cases. Do not edit files, build, test, validate, commit or push. " +
             "Return ordinary prose.",
           SkeletonDefinition.GOAL_ASSESSMENT,
-        )?.takeIf(String::isNotBlank) ?: return run.record
-      if (!run.savePlan(plan)) return run.record
+        )
+    ) {
+      is FixLaunch.ProviderPaused ->
+        GoalAssessmentFixOutcome.ProviderPaused(run.record, planLaunch.reason, planLaunch.stepId)
+      is FixLaunch.Failed -> GoalAssessmentFixOutcome.Done(run.record)
+      is FixLaunch.Output -> {
+        val plan = planLaunch.text.takeIf(String::isNotBlank) ?: return GoalAssessmentFixOutcome.Done(run.record)
+        if (run.savePlan(plan)) null else GoalAssessmentFixOutcome.Done(run.record)
+      }
     }
-    var fix = run.round().fix ?: run.save(agentFix(run, fixSet))
-    if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.validation == GoalAssessmentFixValidation.NOT_RUN) {
-      fix = run.save(validated(run, fix))
+  }
+
+  private fun completeFix(
+    run: FixRun,
+    fixSet: GoalAssessmentFixSet,
+  ): GoalAssessmentFixOutcome {
+    val afterAgent = run.round().fix?.let { GoalAssessmentFixOutcome.Done(run.record) } ?: agentFix(run, fixSet)
+    if (afterAgent is GoalAssessmentFixOutcome.ProviderPaused) return afterAgent
+    return commitValidatedFix(run)
+  }
+
+  private fun commitValidatedFix(run: FixRun): GoalAssessmentFixOutcome {
+    val fix = run.round().fix ?: return GoalAssessmentFixOutcome.Done(run.record)
+    val afterValidation =
+      if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.validation == GoalAssessmentFixValidation.NOT_RUN) {
+        validated(run, fix)
+      } else {
+        GoalAssessmentFixOutcome.Done(run.record)
+      }
+    if (afterValidation is GoalAssessmentFixOutcome.ProviderPaused) return afterValidation
+    val validatedFix = requireNotNull(run.round().fix)
+    if (validatedFix.status == GoalAssessmentFixStatus.COMPLETED && validatedFix.commitSha == null) {
+      run.save(committed(run, validatedFix))
     }
-    if (fix.status == GoalAssessmentFixStatus.COMPLETED && fix.commitSha == null) {
-      run.save(committed(run, fix))
-    }
-    return run.record
+    return GoalAssessmentFixOutcome.Done(run.record)
   }
 
   private fun agentFix(
     run: FixRun,
     fixSet: GoalAssessmentFixSet,
-  ): GoalAssessmentFix {
+  ): GoalAssessmentFixOutcome {
     val before = dirtyPaths(run).orEmpty().toSet()
-    val launched = launch(run, inputText(run, fixSet))
-    val changed = dirtyPaths(run)?.filterNot(before::contains)
-    return when {
-      launched == null || changed == null ->
-        GoalAssessmentFix(
-          GoalAssessmentFixStatus.FAILED,
-          changed.orEmpty(),
-          null,
-          GoalAssessmentFixValidation.NOT_RUN,
+    when (val launched = launch(run, inputText(run, fixSet))) {
+      is FixLaunch.ProviderPaused ->
+        return GoalAssessmentFixOutcome.ProviderPaused(run.record, launched.reason, launched.stepId)
+      is FixLaunch.Failed -> {
+        val changed = dirtyPaths(run)?.filterNot(before::contains)
+        run.save(
+          GoalAssessmentFix(
+            GoalAssessmentFixStatus.FAILED,
+            changed.orEmpty(),
+            null,
+            GoalAssessmentFixValidation.NOT_RUN,
+          ),
         )
-      else -> {
-        warnUnfixed(launched)
+        return GoalAssessmentFixOutcome.Done(run.record)
+      }
+      is FixLaunch.Output -> {
+        val changed = dirtyPaths(run)?.filterNot(before::contains)
+        if (changed == null) {
+          run.save(
+            GoalAssessmentFix(
+              GoalAssessmentFixStatus.FAILED,
+              emptyList(),
+              null,
+              GoalAssessmentFixValidation.NOT_RUN,
+            ),
+          )
+          return GoalAssessmentFixOutcome.Done(run.record)
+        }
+        warnUnfixed(launched.text)
         val status =
           if (changed.isEmpty()) GoalAssessmentFixStatus.NO_CHANGE else GoalAssessmentFixStatus.COMPLETED
-        GoalAssessmentFix(status, changed, null, GoalAssessmentFixValidation.NOT_RUN)
+        run.save(GoalAssessmentFix(status, changed, null, GoalAssessmentFixValidation.NOT_RUN))
+        return GoalAssessmentFixOutcome.Done(run.record)
       }
     }
+  }
+
+  private sealed interface FixLaunch {
+    data class Output(val text: String) : FixLaunch
+
+    data object Failed : FixLaunch
+
+    data class ProviderPaused(val reason: String, val stepId: String) : FixLaunch
   }
 
   private fun launch(
     run: FixRun,
     text: String,
     definition: SkeletonDefinition = SkeletonDefinition.GOAL_ASSESSMENT_FIX,
-  ): String? {
+  ): FixLaunch {
     val phaseRequest =
       services.phaseRequest(
         run.state,
@@ -114,14 +185,17 @@ internal class GoalAssessmentFixStep(
         .getOrElse { failure ->
           val contained = containableFailure(failure)
           services.warn("the fix agent failed: ${contained.javaClass.simpleName}: ${contained.message}", contained)
-          return null
+          return FixLaunch.Failed
         }
     return when (result) {
-      is PhaseRunResult.Completed -> (result.acceptedOutput ?: result.value).orEmpty()
-      is PhaseRunResult.Blocked -> {
-        services.warn("the fix agent stopped at '${result.stepId}': ${result.reason}")
-        null
-      }
+      is PhaseRunResult.Completed -> FixLaunch.Output((result.acceptedOutput ?: result.value).orEmpty())
+      is PhaseRunResult.Blocked ->
+        if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)) {
+          FixLaunch.ProviderPaused(result.reason, result.stepId)
+        } else {
+          services.warn("the fix agent stopped at '${result.stepId}': ${result.reason}")
+          FixLaunch.Failed
+        }
     }
   }
 
@@ -134,7 +208,7 @@ internal class GoalAssessmentFixStep(
   private fun validated(
     run: FixRun,
     fix: GoalAssessmentFix,
-  ): GoalAssessmentFix {
+  ): GoalAssessmentFixOutcome {
     val phaseRequest = services.phaseRequest(run.state, run.request, SkeletonDefinition.VALIDATION, null)
     val branch = services.branchOf(run.state)
     val outcome =
@@ -144,14 +218,26 @@ internal class GoalAssessmentFixStep(
           services.warn("validation after the fix failed: ${contained.javaClass.simpleName}: ${contained.message}")
           GoalPostChangeValidationResult.Stopped("validation", contained.message.orEmpty())
         }
+    if (outcome is GoalPostChangeValidationResult.Stopped &&
+      FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(outcome.reason)
+    ) {
+      return GoalAssessmentFixOutcome.ProviderPaused(
+        run.record,
+        outcome.reason,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
+      )
+    }
     val passed = outcome is GoalPostChangeValidationResult.Passed
     if (outcome is GoalPostChangeValidationResult.Stopped) {
       services.warn("validation after the fix stopped at '${outcome.stepId}': ${outcome.reason}")
     }
-    return fix.copy(
-      changedFiles = dirtyPaths(run) ?: fix.changedFiles,
-      validation = if (passed) GoalAssessmentFixValidation.PASSED else GoalAssessmentFixValidation.FAILED,
+    run.save(
+      fix.copy(
+        changedFiles = dirtyPaths(run) ?: fix.changedFiles,
+        validation = if (passed) GoalAssessmentFixValidation.PASSED else GoalAssessmentFixValidation.FAILED,
+      ),
     )
+    return GoalAssessmentFixOutcome.Done(run.record)
   }
 
   private fun committed(

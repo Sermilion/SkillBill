@@ -48,7 +48,7 @@ class GoalAssessmentLoopTest {
         }
       }
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
     assertEquals(7, record.rounds.size)
@@ -80,9 +80,9 @@ class GoalAssessmentLoopTest {
         }
       }
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
     val launches = fixture.calls.toList()
-    val reloaded = fixture.gate().run(fixture.state(), fixture.request())
+    val reloaded = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.PERSISTENT_FINDING, record.exitReason)
     assertEquals(3, fixture.calls.count { it == AssessmentCall.FIX })
@@ -108,7 +108,7 @@ class GoalAssessmentLoopTest {
         }
       }
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
     assertEquals(2, fixture.calls.count { it == AssessmentCall.FIX })
@@ -123,7 +123,7 @@ class GoalAssessmentLoopTest {
         if (call == AssessmentCall.FIRST_SUBTASK) MAJOR_FINDING else NO_FINDING
       }
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, record.exitReason)
     assertEquals(listOf("GA-001"), record.openFindingRefs)
@@ -141,7 +141,7 @@ class GoalAssessmentLoopTest {
         }
       }
 
-    fixture.gate().run(fixture.state(), fixture.request())
+    fixture.gate().runRecord(fixture.state(), fixture.request())
 
     listOf(AssessmentCall.FIRST_SUBTASK, AssessmentCall.CROSS_SUBTASK, AssessmentCall.VERIFIER).forEach { call ->
       assertTrue(MATERIALITY_RULE in fixture.prompts.getValue(call))
@@ -152,7 +152,7 @@ class GoalAssessmentLoopTest {
   fun `resume adopts a round commit that landed before its sha was recorded`() {
     val fixture = unrecordedCommitFixture(parentSha = ASSESSMENT_HEAD_SHA, changedPaths = listOf("src/Feature.kt"))
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(FIRST_FIX_SHA, record.rounds.first().fix?.commitSha)
     assertTrue(fixture.git.createCommitMessages.isEmpty())
@@ -164,7 +164,7 @@ class GoalAssessmentLoopTest {
   fun `resume does not adopt a head commit that is not the round's own commit`() {
     val fixture = unrecordedCommitFixture(parentSha = ASSESSMENT_BASE_SHA, changedPaths = listOf("src/Feature.kt"))
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(null, record.rounds.first().fix?.commitSha)
     assertTrue(fixture.git.createCommitMessages.isEmpty())
@@ -189,7 +189,7 @@ class GoalAssessmentLoopTest {
     val stored = GoalAssessmentRecordRead.Recorded(GoalAssessmentRecord("SKILL-442", listOf(round)))
     val fixture = GoalAssessmentGateFixture(home, AssessmentOutcomeStore(stored)) { NO_FINDING }
 
-    val record = fixture.gate().run(fixture.state(), fixture.request())
+    val record = fixture.gate().runRecord(fixture.state(), fixture.request())
 
     assertEquals(GoalAssessmentExitReason.CONVERGED, record.exitReason)
     assertEquals(ASSESSMENT_HEAD_SHA, record.rounds.single().headSha)
@@ -204,7 +204,7 @@ class GoalAssessmentLoopTest {
         error("A recorded exit must not launch an assessor.")
       }
 
-    assertEquals(exited, recorded.gate().run(recorded.state(), recorded.request()))
+    assertEquals(exited, recorded.gate().runRecord(recorded.state(), recorded.request()))
     recorded.gate().skipNoChanges(recorded.state())
     assertTrue(recorded.store.persisted.isEmpty())
 

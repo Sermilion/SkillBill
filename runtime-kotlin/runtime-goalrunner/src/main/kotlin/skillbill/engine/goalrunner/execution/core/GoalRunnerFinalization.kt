@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.assessment.GoalAssessmentStageResult
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.execution.support.GoalPullRequestFactSection
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
@@ -85,6 +86,7 @@ public class GoalRunnerFinalization(
   private val ciMonitor: GoalRunnerCiMonitor,
   private val qaGate: GoalRunnerQaGate,
   private val assessmentGate: GoalRunnerAssessmentGate,
+  private val pauseBoundary: GoalRunnerPauseBoundary,
   private val finalHistoryWriter: GoalRunnerFinalHistoryWriter,
   private val publication: GoalRunnerPullRequests,
 ) {
@@ -124,21 +126,38 @@ public class GoalRunnerFinalization(
       noChangeFinalization(finalState.manifest, request, attempted)?.also { assessmentGate.skipNoChanges(finalState) }
         ?: publication.publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
-    val assessment = assessmentGate.run(finalState, request)
-    GoalAssessmentLoopRules.publicationBlockReason(assessment)?.let { reason ->
-      return stopped(
-        StoppedReportArgs(
-          issueKey = finalState.manifest.issueKey,
-          attempted = attempted,
-          subtaskId = 0,
-          reason = GoalRunnerStopReason.BLOCKED,
-          blockedReason =
-            reason +
-              " Resume explicitly with skill-bill goal resume ${request.issueKey} before running the goal again.",
-          workflowId = finalState.parentWorkflowId,
-          lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
-        ),
-      )
+    when (val assessment = assessmentGate.run(finalState, request)) {
+      is GoalAssessmentStageResult.ProviderPaused -> {
+        pauseBoundary.pauseNow(finalState.parentWorkflowId, assessment.reason)
+        return stopped(
+          StoppedReportArgs(
+            issueKey = finalState.manifest.issueKey,
+            attempted = attempted,
+            subtaskId = 0,
+            reason = GoalRunnerStopReason.PAUSED,
+            blockedReason = assessment.reason,
+            workflowId = finalState.parentWorkflowId,
+            lastResumableStep = assessment.lastResumableStep,
+          ),
+        )
+      }
+      is GoalAssessmentStageResult.Completed -> {
+        GoalAssessmentLoopRules.publicationBlockReason(assessment.record)?.let { reason ->
+          return stopped(
+            StoppedReportArgs(
+              issueKey = finalState.manifest.issueKey,
+              attempted = attempted,
+              subtaskId = 0,
+              reason = GoalRunnerStopReason.BLOCKED,
+              blockedReason =
+                reason +
+                  " Resume explicitly with skill-bill goal resume ${request.issueKey} before running the goal again.",
+              workflowId = finalState.parentWorkflowId,
+              lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
+            ),
+          )
+        }
+      }
     }
     return finalizeValidatedPublication(finalState, request, attempted)
   }

@@ -17,17 +17,21 @@ internal class GoalAssessmentLoop(
   fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): GoalAssessmentRecord {
+  ): GoalAssessmentStageResult {
     val record =
-      stored(state) ?: return GoalAssessmentRecord(issueKey = state.manifest.issueKey, exitReason = UNAVAILABLE)
-    return if (record.exitReason != null) record else drive(state, request, record)
+      stored(state)
+        ?: return GoalAssessmentStageResult.Completed(
+          GoalAssessmentRecord(issueKey = state.manifest.issueKey, exitReason = UNAVAILABLE),
+        )
+    if (record.exitReason != null) return GoalAssessmentStageResult.Completed(record)
+    return drive(state, request, record)
   }
 
   private fun drive(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     stored: GoalAssessmentRecord,
-  ): GoalAssessmentRecord {
+  ): GoalAssessmentStageResult {
     var record = stored
     var roundNumber = record.rounds.size.coerceAtLeast(1)
     while (true) {
@@ -36,7 +40,9 @@ internal class GoalAssessmentLoop(
           record = step.record
           roundNumber = step.nextRound
         }
-        is LoopStep.Exit -> return exit(state, step.record, step.reason)
+        is LoopStep.Exit -> return GoalAssessmentStageResult.Completed(exit(state, step.record, step.reason))
+        is LoopStep.ProviderPause ->
+          return GoalAssessmentStageResult.ProviderPaused(step.record, step.reason, step.lastResumableStep)
       }
     }
   }
@@ -58,10 +64,13 @@ internal class GoalAssessmentLoop(
     }
     val assessed =
       when (val result = assessRound(state, request, roundNumber)) {
-        is GoalAssessmentRoundResult.Unavailable -> return LoopStep.Exit(
-          result.record.takeIf { it.rounds.size >= record.rounds.size } ?: record,
-          UNAVAILABLE,
-        )
+        is GoalAssessmentRoundResult.Unavailable ->
+          return LoopStep.Exit(
+            result.record.takeIf { it.rounds.size >= record.rounds.size } ?: record,
+            UNAVAILABLE,
+          )
+        is GoalAssessmentRoundResult.Paused ->
+          return LoopStep.ProviderPause(result.record, result.reason, result.lastResumableStep)
         is GoalAssessmentRoundResult.Assessed -> result.record
       }
     return when (val action = GoalAssessmentLoopRules.next(assessed)) {
@@ -82,12 +91,17 @@ internal class GoalAssessmentLoop(
     val rounds = record.rounds.map { if (it.round == roundNumber) it.copy(targetRef = targetRef) else it }
     val selected = record.copy(rounds = rounds)
     if (!services.persist(state, selected)) return LoopStep.Exit(selected, UNAVAILABLE)
-    val repaired = fixStep.run(state, request, selected, roundNumber, fixSet(targetRef))
-    val fix = repaired.rounds.last().fix
-    return if (fix == null || fix.status == GoalAssessmentFixStatus.COMPLETED && fix.commitSha == null) {
-      LoopStep.Exit(repaired, UNAVAILABLE)
-    } else {
-      LoopStep.Continue(repaired, roundNumber + 1)
+    when (val outcome = fixStep.run(state, request, selected, roundNumber, fixSet(targetRef))) {
+      is GoalAssessmentFixOutcome.ProviderPaused ->
+        return LoopStep.ProviderPause(outcome.record, outcome.reason, outcome.lastResumableStep)
+      is GoalAssessmentFixOutcome.Done -> {
+        val fix = outcome.record.rounds.firstOrNull { it.round == roundNumber }?.fix
+        return if (fix == null || fix.status == GoalAssessmentFixStatus.COMPLETED && fix.commitSha == null) {
+          LoopStep.Exit(outcome.record, UNAVAILABLE)
+        } else {
+          LoopStep.Continue(outcome.record, roundNumber + 1)
+        }
+      }
     }
   }
 
@@ -95,6 +109,9 @@ internal class GoalAssessmentLoop(
     data class Continue(val record: GoalAssessmentRecord, val nextRound: Int) : LoopStep
 
     data class Exit(val record: GoalAssessmentRecord, val reason: GoalAssessmentExitReason) : LoopStep
+
+    data class ProviderPause(val record: GoalAssessmentRecord, val reason: String, val lastResumableStep: String) :
+      LoopStep
   }
 
   private fun fixSet(ref: String): GoalAssessmentFixSet =
