@@ -1,3 +1,14 @@
+## [2026-11-05] Pass temp-root inputs through the host port
+Context: Runtime temp resolution needs the configured JVM directory, environment and user home, while ambient property reads are governed at the host boundary.
+Decision: JdkHostPlatformPort passes those inputs to resolveRuntimeTempRoot. If creating state scratch fails, the resolver logs a warning and returns the configured path, or /tmp when it is blank.
+Reason: Explicit inputs make the branches testable without changing process state or adding an ambient-read baseline. A read-only state directory should not stop a command that can still use the configured path.
+Revisit when: A shared temp path other than /tmp must be treated as shared.
+
+## [2026-11-05] Keep state path helpers in host.jvm
+Context: Runtime temp resolution needs the state path helpers, while the host package already depends on host.jvm.
+Decision: Move resolveTelemetryStateDir and expandAndNormalizeTelemetryPath to host.jvm without forwarding functions in host.
+Reason: The move avoids a host to host.jvm package cycle. A forwarder would keep two names for the same function.
+
 # Boundary decisions
 
 ## [2026-11-03] Cursor review harvest keeps a present verdict and never synthesizes one
