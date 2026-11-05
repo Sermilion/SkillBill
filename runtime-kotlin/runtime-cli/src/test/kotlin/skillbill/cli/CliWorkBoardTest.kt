@@ -9,6 +9,7 @@ import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -82,7 +83,7 @@ class CliWorkBoardTest {
   }
 
   @Test
-  fun `a goal plan phase leaves the board when its goal row appears`() {
+  fun `a goal plan phase stands in until its goal is listable`() {
     val home = Files.createTempDirectory("cli-work-board-goal-plan")
     val repo = Files.createTempDirectory("cli-work-board-goal-plan-repo")
     val dbPath = home.resolve("metrics.db")
@@ -109,39 +110,25 @@ class CliWorkBoardTest {
         ),
       )
     }
-    val boardIds = {
+    val boardSnapshots = {
       val result =
         CliRuntime.run(
           listOf("--db", dbPath.toString(), "work", "board", "--format", "json"),
           CliRuntimeContext(environment = emptyMap(), userHome = home),
         )
       assertEquals(0, result.exitCode, result.stderr)
-      (decodeJsonObject(result.stdout)["items"] as List<*>)
-        .map { ((it as Map<*, *>)["snapshot"] as Map<*, *>)["invocation_id"] }
+      (decodeJsonObject(result.stdout)["items"] as List<*>).map { (it as Map<*, *>)["snapshot"] as Map<*, *> }
     }
-    assertTrue("goal-plan" in boardIds(), "Before the goal has a row, its plan stands in for it.")
+    val planListed = { boardSnapshots().any { it["invocation_id"] == "goal-plan" } }
+    assertTrue(planListed(), "Before the goal has a row, its plan stands in for it.")
 
-    ensureTestDatabase(dbPath).use { connection ->
-      connection.prepareStatement("INSERT INTO feature_task_runtime_sessions (session_id) VALUES ('goal-session')")
-        .use { it.executeUpdate() }
-      connection.prepareStatement(
-        """
-        INSERT INTO feature_task_workflows (workflow_id, session_id, mode, contract_version, artifacts_json, issue_key)
-        VALUES ('goal-parent', 'goal-session', 'runtime', '0.1', ?, 'SKILL-9')
-        """.trimIndent(),
-      ).use {
-        it.setString(1, """{"decomposition_runtime":{"issue_key":"SKILL-9","status":"in_progress"}}""")
-        it.executeUpdate()
-      }
-      connection.prepareStatement(
-        "INSERT INTO goal_runner_controls (parent_workflow_id, control_state_json) VALUES ('goal-parent', ?)",
-      ).use {
-        it.setString(1, """{"repository_identity":"$identity"}""")
-        it.executeUpdate()
-      }
-    }
+    insertBlockedGoalParent(dbPath, identity)
+    assertTrue(planListed(), "A goal that blocked before it could be listed must not hide its plan.")
 
-    assertTrue("goal-plan" !in boardIds(), "The goal row already shows its planning progress.")
+    insertGoalProgress(dbPath, now)
+    val snapshots = boardSnapshots()
+    assertTrue(snapshots.none { it["invocation_id"] == "goal-plan" }, "The goal row shows its planning progress.")
+    assertTrue(snapshots.any { it["workflow_id"] == "goal-parent" }, "The goal row replaces the plan row.")
   }
 
   @Test
@@ -301,5 +288,63 @@ class CliWorkBoardTest {
         .map { (it as Map<*, *>)["snapshot"] as Map<*, *> }
         .map { it["invocation_id"] }
     assertEquals(listOf("recent-terminal-invocation"), ids)
+  }
+
+  private fun insertBlockedGoalParent(
+    dbPath: Path,
+    identity: String,
+  ) {
+    ensureTestDatabase(dbPath).use { connection ->
+      connection.prepareStatement("INSERT INTO feature_task_runtime_sessions (session_id) VALUES ('goal-session')")
+        .use { it.executeUpdate() }
+      connection.prepareStatement(
+        """
+        INSERT INTO feature_task_workflows (
+          workflow_id, session_id, mode, contract_version, workflow_status, current_step_id, steps_json,
+          artifacts_json, issue_key
+        )
+        VALUES (
+          'goal-parent', 'goal-session', 'runtime', '0.1', 'blocked', 'plan_subtasks',
+          '[{"step_id":"plan_subtasks","status":"blocked","attempt_count":0}]', ?, 'SKILL-9'
+        )
+        """.trimIndent(),
+      ).use {
+        it.setString(
+          1,
+          """
+          {"decomposition_runtime":{"contract_version":"0.5","issue_key":"SKILL-9","feature_name":"goal",
+          "parent_spec_path":"specs/SKILL-9-goal/spec.md","status":"pending",
+          "execution_model":"same_branch_commit_per_subtask","base_branch":"main","feature_branch":"feature/goal",
+          "stack_branches":[],"current_subtask_intent":{"subtask_id":1,"action":"start"},
+          "subtasks":[{"id":1,"name":"One","spec_path":"specs/SKILL-9-goal/spec_subtask_1_one.md","status":"pending",
+          "dependencies":[]}]}}
+          """.trimIndent(),
+        )
+        it.executeUpdate()
+      }
+      connection.prepareStatement(
+        "INSERT INTO goal_runner_controls (parent_workflow_id, control_state_json) VALUES ('goal-parent', ?)",
+      ).use {
+        it.setString(1, """{"repository_identity":"$identity"}""")
+        it.executeUpdate()
+      }
+    }
+  }
+
+  private fun insertGoalProgress(
+    dbPath: Path,
+    startedAt: Instant,
+  ) {
+    ensureTestDatabase(dbPath).use { connection ->
+      connection.prepareStatement(
+        """
+        INSERT INTO goal_issue_progress (parent_workflow_id, issue_key, first_started_at, status)
+        VALUES ('goal-parent', 'SKILL-9', ?, 'blocked')
+        """.trimIndent(),
+      ).use {
+        it.setString(1, startedAt.toString())
+        it.executeUpdate()
+      }
+    }
   }
 }
