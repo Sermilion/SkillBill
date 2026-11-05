@@ -21,7 +21,12 @@ import skillbill.engine.goalrunner.model.GoalRunnerExportResult
 import skillbill.engine.goalrunner.model.GoalRunnerImportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerImportResult
 import skillbill.engine.goalrunner.persist.seedCurrentParent
+import skillbill.goalrunner.model.GOAL_PAUSE_REASON_IMPORTED
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.infrastructure.sqlite.withGoalRunnerControlRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepositoryDefaults
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
@@ -32,16 +37,21 @@ import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
+import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -51,8 +61,137 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GoalRunnerImportCoordinatorTest {
+  @Test
+  fun `archive import preserves control choices while clearing execution ownership`() {
+    val sourceRoot = Files.createTempDirectory("goal-import-control-source")
+    val sourceDb = sourceRoot.resolve("metrics.db")
+    val parentId = "wfl-parent"
+    val reviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.DELEGATED)
+    val acceptance = testAcceptance()
+    val archivedControlRow = seedArchivedControls(sourceDb, parentId, reviewPolicy, acceptance)
+    val fixture = importFixture(bundleName = "specs")
+    val archive = fixture.root.resolve("archive.zip")
+    val snapshot = parentSnapshot()
+    val archiveSnapshotPort =
+      RecordingGoalArchiveSnapshotPort { target ->
+        snapshot.snapshot(target).copy(
+          ownedTables = GoalArchiveOwnedTables.of(mapOf("goal_runner_controls" to listOf(archivedControlRow))),
+        )
+      }
+    val exportService =
+      testGoalRunnerStatusService(
+        manifestStore = fixture.store,
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = fixture.port,
+            archiveSnapshotPort = archiveSnapshotPort,
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
+      )
+    assertIs<GoalRunnerExportResult.Exported>(
+      exportService.export(GoalRunnerExportRequest("SKILL-245", fixture.root, archive)),
+    )
+
+    val destinationRoot = Files.createTempDirectory("goal-import-control-destination")
+    val destinationPort = FixedProjectStorePort(destinationRoot)
+    val destinationDb = destinationRoot.resolve("metrics.db")
+    ensureTestDatabase(destinationDb).close()
+    val database =
+      sqliteDatabaseSessionFactory(
+        userHome = destinationRoot,
+        dbPathOverride = destinationDb.toString(),
+        environment = mapOf("SKILL_BILL_TEST" to "1"),
+      )
+    val importService =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest(subtaskCount = 1).copy(issueKey = "SKILL-OTHER")),
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
+            projectStore = destinationPort,
+            workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          ),
+        database = database,
+        decompositionManifestStore = storeAwareTestDecompositionManifestStore(destinationPort),
+      )
+
+    val result = importService.import(GoalRunnerImportRequest(archive, destinationRoot))
+    assertIs<GoalRunnerImportResult.Imported>(result, result.toString())
+
+    database.read { unit ->
+      val controls = unit.goalRunnerControls
+      val imported = controls.controlState(parentId)
+      assertEquals(FeatureTaskRuntimeQaSelection.OFF, imported.qaSelection)
+      assertTrue(imported.paused)
+      assertEquals(GOAL_PAUSE_REASON_IMPORTED, imported.pauseReason)
+      assertNull(imported.executionLease)
+      assertNull(imported.executionWorktreePath)
+      assertEquals(reviewPolicy, controls.reviewPolicy(parentId))
+      assertEquals(mapOf(2 to acceptance), controls.outOfBandAcceptances(parentId))
+    }
+  }
+
+  private fun testAcceptance() =
+    GoalRunnerOutOfBandAcceptance(
+      subtaskId = 2,
+      commitSha = "abc123",
+      reason = "accepted outside the runner",
+      acceptedAt = "2026-08-01T10:00:00Z",
+    )
+
+  private fun seedArchivedControls(
+    sourceDb: Path,
+    parentId: String,
+    reviewPolicy: GoalRunnerReviewPolicy,
+    acceptance: GoalRunnerOutOfBandAcceptance,
+  ): GoalArchiveTableRow {
+    withGoalRunnerControlRepository(sourceDb) { controls ->
+      controls.persistControlState(
+        parentId,
+        GoalRunnerControlState(
+          qaSelection = FeatureTaskRuntimeQaSelection.OFF,
+          executionLease =
+            GoalRunnerExecutionLease(
+              generation = 1,
+              ownerToken = "source-owner",
+              hostIdentity = "source-host",
+              bootIdentity = "source-boot",
+              pid = 123,
+              processBirthToken = "source-process",
+              heartbeatAt = Instant.parse("2026-08-01T10:00:00Z"),
+              expiresAt = Instant.parse("2026-08-01T10:01:00Z"),
+            ),
+          executionWorktreePath = "/source/worktree",
+        ),
+      )
+      controls.persistReviewPolicy(parentId, reviewPolicy)
+      controls.persistOutOfBandAcceptance(parentId, acceptance)
+    }
+    return ensureTestDatabase(sourceDb).use { connection ->
+      connection.prepareStatement(
+        "SELECT parent_workflow_id, control_state_json, review_policy_json, out_of_band_acceptances_json " +
+          "FROM goal_runner_controls WHERE parent_workflow_id = ?",
+      ).use { statement ->
+        statement.setString(1, parentId)
+        statement.executeQuery().use { rows ->
+          check(rows.next())
+          val columns = linkedMapOf<String, Any?>()
+          for (index in 1..rows.metaData.columnCount) {
+            columns[rows.metaData.getColumnName(index)] = rows.getObject(index)
+          }
+          GoalArchiveTableRow(columns)
+        }
+      }
+    }
+  }
+
   @Test
   fun `legacy checkout bundle exports and imports into destination project specs`() {
     val archive = exportLegacyBundle()
