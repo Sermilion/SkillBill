@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.domain.model.ExportRefusalCategory
 import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
+import dev.skillbill.desktop.core.domain.repository.DesktopClipboard
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.SpecBundleRef
 import dev.skillbill.desktop.core.domain.model.SpecBundleControlView
@@ -153,6 +154,7 @@ class SpecsPaneModel(
   private val session: DatabaseSessionController = DirectSessionController,
   private val archiveChooser: ArchiveFileChooser,
   private val board: WorkBoardRepository,
+  private val clipboard: DesktopClipboard,
 ) {
   private val scope = CoroutineScope(SupervisorJob() + dispatchers.ui)
   private val local = MutableStateFlow(SpecsUiState())
@@ -349,7 +351,10 @@ class SpecsPaneModel(
       SpecsAction.DismissProjectMenu -> local.value = local.value.copy(projectMenuOpen = false)
       is SpecsAction.FilterChanged -> treePresentation.updateFilters(text = action.text)
       is SpecsAction.ChooseStatus -> treePresentation.updateFilters(status = action.filter)
-      SpecsAction.ClearFilters -> treePresentation.updateFilters(text = "", status = SpecStatusFilter.ALL)
+      SpecsAction.ClearFilters -> {
+        treePresentation.updateFilters(text = "", status = SpecStatusFilter.ALL)
+        local.value = local.value.copy(searchOpen = false)
+      }
       is SpecsAction.Expand -> treePresentation.setExpansion(action.path, true)
       is SpecsAction.Collapse -> treePresentation.setExpansion(action.path, false)
       is SpecsAction.Toggle -> findNode(roots(), action.path)?.let { node ->
@@ -370,6 +375,16 @@ class SpecsPaneModel(
       SpecsAction.CollapseAll -> treePresentation.collapseAll()
       SpecsAction.Retry -> retry()
       SpecsAction.Reveal -> reveal()
+      SpecsAction.RevealBundle -> revealBundle()
+      SpecsAction.OpenPanelMenu -> local.value = local.value.copy(panelMenuOpen = true)
+      SpecsAction.DismissPanelMenu -> local.value = local.value.copy(panelMenuOpen = false)
+      SpecsAction.OpenBarMenu -> local.value = local.value.copy(barMenuOpen = true)
+      SpecsAction.DismissBarMenu -> local.value = local.value.copy(barMenuOpen = false)
+      SpecsAction.OpenSearch -> local.value = local.value.copy(searchOpen = true)
+      SpecsAction.OpenSelectedSpec -> selectedBundle()?.children?.filterIsInstance<SpecNode.File>()
+        ?.firstOrNull { it.kind == dev.skillbill.desktop.core.domain.model.SpecFileKind.ParentSpec }
+        ?.let { file -> scope.launch { if (specs.openFile(file.absolutePath) == OpenOutcome.NotOpened) problem("Couldn't open ${file.name}.") } }
+      SpecsAction.CopyBundleKey -> selectedBundle()?.issueKey?.let(clipboard::copy)
       SpecsAction.OpenAgentMenu -> if (controlContext()?.let { !local.value.toolbar.inFlight && !isReserved(it) } == true) {
         local.value = local.value.copy(toolbar = local.value.toolbar.copy(agentMenuOpen = true))
       }
@@ -414,10 +429,11 @@ class SpecsPaneModel(
         local.value = local.value.copy(importDialog = null)
       }
       SpecsAction.ConfirmImport -> confirmImport()
-      is SpecsAction.OpenRowMenu -> if (findNode(roots(), action.path) is SpecNode.Bundle) {
-        local.value = local.value.copy(rowMenuPath = action.path)
+      is SpecsAction.OpenRowMenu -> bundleTarget(action.path)?.let { bundle ->
+        selectPath(action.path)
+        local.value = local.value.copy(rowMenuPath = bundle.path, rowMenuAnchorPath = action.path)
       }
-      SpecsAction.DismissRowMenu -> local.value = local.value.copy(rowMenuPath = null)
+      SpecsAction.DismissRowMenu -> local.value = local.value.copy(rowMenuPath = null, rowMenuAnchorPath = null)
       is SpecsAction.RequestDelete -> requestDelete(action.path)
       SpecsAction.KeepSpecFiles -> local.value = local.value.copy(deleteTarget = null)
       SpecsAction.ConfirmDelete -> deleteBundle()
@@ -491,6 +507,7 @@ class SpecsPaneModel(
       rows = emptyList(),
       toolbar = emptyToolbar(),
       rowMenuPath = null,
+      rowMenuAnchorPath = null,
       deleteTarget = null,
     )
     observeProject(project)
@@ -559,7 +576,8 @@ class SpecsPaneModel(
     val node = findNode(roots(), path) ?: return
     selectPath(path)
     when (node) {
-      is SpecNode.Folder, is SpecNode.Bundle -> treePresentation.setExpansion(path, !treePresentation.isExpanded(path))
+      is SpecNode.Folder -> treePresentation.setExpansion(path, !treePresentation.isExpanded(path))
+      is SpecNode.Bundle -> Unit
       is SpecNode.File -> scope.launch {
         if (specs.openFile(node.absolutePath) == OpenOutcome.NotOpened) problem("Couldn't open ${node.name}.")
       }
@@ -623,12 +641,15 @@ class SpecsPaneModel(
     val nextControl = if (!bundleSelection) null else if (sameIdentity && controlIdentity == identity) previous.control ?: SpecControlState.Loading else SpecControlState.Loading
     local.value = base.copy(
       selectedPath = selected.node.path,
+      barMenuOpen = sameIdentity && base.barMenuOpen,
       toolbar = SpecToolbarState(
         selection = selected.toolbar,
         control = nextControl,
         bundleKey = bundle?.issueKey ?: bundle?.name,
         bundleTitle = bundle?.title,
         chosenAgent = if (keepAgent) previous.chosenAgent else if (sameIdentity) previous.chosenAgent else null,
+        subtasksDone = bundle?.subtasksDone,
+        subtasksTotal = bundle?.subtasksTotal,
         agentMenuOpen = sameIdentity && previous.agentMenuOpen,
         confirmingCancel = sameIdentity && previous.confirmingCancel,
         purgeDialogOpen = sameIdentity && previous.purgeDialogOpen,
@@ -788,6 +809,19 @@ class SpecsPaneModel(
     scope.launch { if (specs.revealFolder(path) == OpenOutcome.NotOpened) problem("Couldn't reveal the specs folder.") }
   }
 
+  private fun revealBundle() {
+    val bundle = selectedBundle() ?: return
+    scope.launch { if (specs.revealFolder(bundle.absolutePath) == OpenOutcome.NotOpened) problem("Couldn't reveal the spec folder.") }
+  }
+
+  private fun bundleTarget(path: String): SpecNode.Bundle? = when (val node = findNode(roots(), path)) {
+    is SpecNode.Bundle -> node
+    is SpecNode.File -> bundleFor(roots(), path)
+    else -> null
+  }
+
+  private fun selectedBundle(): SpecNode.Bundle? = local.value.selectedPath?.let(::bundleTarget)
+
   private fun start() {
     val target = controlContext() ?: return
     val current = local.value
@@ -863,20 +897,28 @@ class SpecsPaneModel(
   }
 
   private fun export() {
-    val target = controlContext() ?: return
+    val project = local.value.project ?: return
+    val bundle = selectedBundle() ?: return
     val selectedSession = session.state.value as? DatabaseSessionState.Open ?: return
-    val key = target.control.issueKey ?: return
-    if (target.project.repoRoot.isNullOrBlank()) {
+    val key = bundle.issueKey ?: return
+    if (project.repoRoot.isNullOrBlank()) {
       problem(NO_CHECKOUT)
       return
     }
+    val identity = selectedIdentity ?: return
+    fun stillSelected() = session.state.value == selectedSession && local.value.project == project &&
+      selectedIdentity == identity && selectedBundle()?.path == bundle.path
     scope.launch {
-      if (session.state.value != selectedSession || !isCurrentTarget(target)) return@launch
-      when (val preflight = controls.preflightExport(key, target.project.repoRoot)) {
-        is ExportPreflightOutcome.Ready -> if (session.state.value == selectedSession && isCurrentTarget(target)) archiveChooser.saveArchive("$key-archive.zip") { path ->
-          if (path != null && session.state.value == selectedSession && isCurrentTarget(target)) scope.launch {
-            if (session.state.value != selectedSession || !isCurrentTarget(target)) return@launch
-            when (val result = controls.export(key, target.project.repoRoot, path)) {
+      if (!stillSelected()) return@launch
+      val preflight = controls.preflightExport(key, project.repoRoot)
+      if (!stillSelected()) return@launch
+      when (preflight) {
+        is ExportPreflightOutcome.Ready -> if (stillSelected()) archiveChooser.saveArchive("$key-archive.zip") { path ->
+          if (path != null && stillSelected()) scope.launch {
+            if (!stillSelected()) return@launch
+            val result = controls.export(key, project.repoRoot, path)
+            if (!stillSelected()) return@launch
+            when (result) {
               is ExportOutcome.Exported -> toasts.show(
                 ToastMessage(ToastTone.Confirmation, "Exported ${result.issueKey} to ${result.archivePath}"),
               )
@@ -955,26 +997,39 @@ class SpecsPaneModel(
 
   private fun dropVanishedBundleTargets(roots: List<SpecNode>) {
     val current = local.value
-    val menu = current.rowMenuPath?.takeIf { findNode(roots, it) is SpecNode.Bundle }
+    val menu = current.rowMenuPath?.let { path -> when (findNode(roots, path)) {
+      is SpecNode.Bundle -> path
+      is SpecNode.File -> bundleFor(roots, path)?.path
+      else -> null
+    } }
     val delete = current.deleteTarget?.takeIf { findNode(roots, it.path) is SpecNode.Bundle }
-    if (menu != current.rowMenuPath || delete != current.deleteTarget) local.value = current.copy(rowMenuPath = menu, deleteTarget = delete)
+    val anchor = current.rowMenuAnchorPath?.takeIf { path ->
+      val target = when (findNode(roots, path)) {
+        is SpecNode.Bundle -> path
+        is SpecNode.File -> bundleFor(roots, path)?.path
+        else -> null
+      }
+      target != null && target == menu
+    }
+    if (menu != current.rowMenuPath || anchor != current.rowMenuAnchorPath || delete != current.deleteTarget) local.value = current.copy(rowMenuPath = menu, rowMenuAnchorPath = anchor, deleteTarget = delete)
   }
 
   private fun requestDelete(path: String) {
     val bundle = findNode(roots(), path) as? SpecNode.Bundle
     val current = local.value
     if (bundle == null || current.deleting) {
-      local.value = current.copy(rowMenuPath = null)
+      local.value = current.copy(rowMenuPath = null, rowMenuAnchorPath = null)
       return
     }
     val sameBundle = (current.toolbar.selection as? ToolbarSelection.Bundle)?.path == path
     val loadedControl = (current.toolbar.control as? SpecControlState.Loaded)?.control?.takeIf { sameBundle && it.issueKey == bundle.issueKey }
     if ((bundle.issueKey != null && bundle.issueKey in controls.reservations.value) || loadedControl?.canDelete == false) {
-      local.value = current.copy(rowMenuPath = null)
+      local.value = current.copy(rowMenuPath = null, rowMenuAnchorPath = null)
       return
     }
     local.value = current.copy(
       rowMenuPath = null,
+      rowMenuAnchorPath = null,
       deleteTarget = SpecDeleteTarget(bundle.path, bundle.issueKey, bundle.title, bundle.absolutePath),
     )
   }

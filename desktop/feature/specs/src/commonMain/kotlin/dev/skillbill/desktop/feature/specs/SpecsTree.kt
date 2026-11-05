@@ -9,6 +9,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +33,6 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.list.TreeRow as DesignTreeRow
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
-import dev.skillbill.desktop.core.domain.model.SpecControlState
 import dev.skillbill.desktop.core.domain.model.SpecFileKind
 import dev.skillbill.desktop.core.domain.model.SpecNode
 import dev.skillbill.desktop.core.domain.model.SpecStatus
@@ -51,7 +51,9 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
+import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
+import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import kotlin.math.roundToInt
 
@@ -65,12 +67,30 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
     onDispose { shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, false) }
   }
   var focusedPath by remember { mutableStateOf<String?>(null) }
+  var rowOwnsFocus by remember { mutableStateOf(false) }
   val listState = rememberLazyListState()
   val scope = rememberCoroutineScope()
   val requesters = remember { mutableMapOf<String, FocusRequester>() }
   // Where the bundle row was right-clicked, in row pixels; the row menu opens at that point, as WorkScreen's row menu does.
   var menuAt by remember { mutableStateOf(IntOffset.Zero) }
   val keyboardMenuAt = with(LocalDensity.current) { IntOffset(0, SkillBillSize.compactRow.roundToPx()) }
+
+  val selectedVisible = state.rows.any { it.node.path == state.selectedPath }
+  LaunchedEffect(state.selectedPath, selectedVisible) {
+    val selected = state.selectedPath ?: return@LaunchedEffect
+    val index = state.rows.indexOfFirst { it.node.path == selected }
+    if (index < 0) return@LaunchedEffect
+    val info = listState.layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull { it.key == selected }
+    if (item == null) {
+      listState.scrollToItem(index)
+      return@LaunchedEffect
+    }
+    val end = item.offset + item.size
+    if (item.offset < info.viewportStartOffset || end > info.viewportEndOffset) {
+      listState.scrollToItem(index)
+    }
+  }
 
   fun focusRow(index: Int): Boolean {
     val path = state.rows.getOrNull(index)?.node?.path ?: return false
@@ -86,6 +106,7 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
     state = listState,
     modifier = modifier.selectableGroup().onPreviewKeyEvent { event ->
       if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+      if (!rowOwnsFocus) return@onPreviewKeyEvent false
       val index = state.rows.indexOfFirst { it.node.path == focusedPath }
       if (index < 0) return@onPreviewKeyEvent false
       val row = state.rows[index]
@@ -103,7 +124,7 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
         }
         Key.Enter, Key.NumPadEnter -> { onAction(SpecsAction.Activate(row.node.path)); true }
         Key.Spacebar -> { onAction(SpecsAction.Select(row.node.path)); true }
-        Key.Menu, Key.F10 -> if ((event.key == Key.Menu || event.isShiftPressed) && row.node is SpecNode.Bundle) {
+        Key.Menu, Key.F10 -> if ((event.key == Key.Menu || event.isShiftPressed) && (row.node is SpecNode.Bundle || row.node is SpecNode.File)) {
           menuAt = keyboardMenuAt
           onAction(SpecsAction.OpenRowMenu(row.node.path))
           true
@@ -131,47 +152,65 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
           lead = { SpecLead(row.node) },
           id = row.node.treeId(),
           meta = { SpecMeta(row.node) },
+          chevron = if (row.node is SpecNode.Bundle && row.hasChildren) ({
+            SbIconButton(if (row.expanded) LucideIcons.chevronDown else LucideIcons.chevronRight, if (row.expanded) "Collapse ${row.node.title}" else "Expand ${row.node.title}", { onAction(SpecsAction.Toggle(row.node.path)) }, size = dev.skillbill.desktop.core.designsystem.component.SbControlSize.Small)
+          }) else null,
+          rowAction = if (row.node is SpecNode.Bundle) ({
+            SbIconButton(LucideIcons.more, "${row.node.issueKey ?: row.node.title} actions", {
+              menuAt = keyboardMenuAt
+              onAction(SpecsAction.OpenRowMenu(row.node.path))
+            }, size = dev.skillbill.desktop.core.designsystem.component.SbControlSize.Small)
+          }) else null,
           modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged {
             if (it.hasFocus) {
               shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, true)
+              rowOwnsFocus = it.isFocused
               if (it.isFocused) focusedPath = row.node.path
             } else if (shouldClearSpecsTreeFocus(focusedPath, row.node.path, it.hasFocus)) {
               focusedPath = null
+              rowOwnsFocus = false
               shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, false)
             }
           }.focusable(),
-          onContextMenu = if (row.node is SpecNode.Bundle) { at: Offset ->
+          onContextMenu = if (row.node is SpecNode.Bundle || row.node is SpecNode.File) { at: Offset ->
             menuAt = IntOffset(at.x.roundToInt(), at.y.roundToInt())
             onAction(SpecsAction.OpenRowMenu(row.node.path))
           } else null,
         )
-        if (state.rowMenuPath == row.node.path && row.node is SpecNode.Bundle) {
-          Box(Modifier.offset { menuAt }.size(0.dp)) { SpecRowMenu(row.node, state, onAction) }
+        val targetBundle = when (val node = row.node) {
+          is SpecNode.Bundle -> node
+          is SpecNode.File -> bundleFor((state.tree as? dev.skillbill.desktop.core.domain.model.SpecTreeState.Loaded)?.tree?.roots.orEmpty(), node.path)
+          is SpecNode.Folder -> null
+        }
+        if (state.rowMenuAnchorPath == row.node.path && targetBundle != null && targetBundle.path == state.rowMenuPath) {
+          Box(Modifier.offset { menuAt }.size(0.dp)) { SpecActionsMenu(targetBundle, state, onAction) }
         }
       }
     }
   }
 }
 
-/** A bundle row's context menu; each entry runs and then closes the menu. */
+/** Shared bundle actions for row context menus and the selection bar. */
 @Composable
-private fun SpecRowMenu(bundle: SpecNode.Bundle, state: SpecsUiState, onAction: (SpecsAction) -> Unit) {
-  val path = bundle.path
-  val close = { onAction(SpecsAction.DismissRowMenu) }
-  val selectedBundle = state.toolbar.selection as? ToolbarSelection.Bundle
-  val sameBundle = selectedBundle?.path == path
-  val control = (state.toolbar.control as? SpecControlState.Loaded)?.control?.takeIf { sameBundle && it.issueKey == bundle.issueKey }
-  val reason = when {
-    bundle.issueKey != null && bundle.issueKey in state.reservations -> DELETE_LAUNCHING
-    control?.canDelete == false -> DELETE_LIVE
-    else -> null
+internal fun SpecActionsMenu(bundle: SpecNode.Bundle, state: SpecsUiState, onAction: (SpecsAction) -> Unit, placement: SbPopoverPlacement = SbPopoverPlacement.Auto, dismissAction: SpecsAction = SpecsAction.DismissRowMenu) {
+  val close = { onAction(dismissAction) }
+  val entries = specMenuActions(bundle, state).map { entry ->
+    when (entry) {
+      SpecMenuAction.Separator -> SbMenuEntry.Separator
+      is SpecMenuAction.Item -> SbMenuEntry.Item(
+        entry.label,
+        { onAction(entry.action); close() },
+        icon = entry.icon,
+        shortcut = entry.shortcut,
+        enabled = entry.enabled,
+        danger = entry.danger,
+        reason = entry.reason,
+      )
+    }
   }
-  val entries = listOf(
-    SbMenuEntry.Item(DELETE_SPEC_FILES, { onAction(SpecsAction.RequestDelete(path)) }, icon = LucideIcons.trash, danger = true, enabled = !state.deleting && reason == null, reason = reason),
-  )
   ShellLayer(close)
   // The anchor is the click point; -4 cancels the popover's anchor gap so the menu's corner sits on the pointer.
-  SbPopover(expanded = true, onDismissRequest = close, offset = DpOffset(0.dp, (-4).dp)) { SbMenu(entries) }
+  SbPopover(expanded = true, onDismissRequest = close, offset = DpOffset(0.dp, (-4).dp), placement = placement) { SbMenu(entries) }
 }
 
 // screens.js specTree: status icons take the default half fill; the n/m text carries the progress.

@@ -11,7 +11,6 @@ data class SpecRow(val node: SpecNode, val depth: Int, val hasChildren: Boolean,
 
 sealed interface ToolbarSelection {
   data object None : ToolbarSelection
-  data class FileInBundle(val key: String) : ToolbarSelection
   data class Bundle(val path: String) : ToolbarSelection
 }
 
@@ -33,9 +32,13 @@ data class SpecsUiState(
   val reservations: Set<String> = emptySet(),
   val filtersActive: Boolean = false,
   val rowMenuPath: String? = null,
+  val rowMenuAnchorPath: String? = null,
   val deleteTarget: SpecDeleteTarget? = null,
   val deleting: Boolean = false,
   val importDialog: ImportConfirmation? = null,
+  val panelMenuOpen: Boolean = false,
+  val barMenuOpen: Boolean = false,
+  val searchOpen: Boolean = false,
 )
 
 data class ImportConfirmation(
@@ -51,6 +54,8 @@ data class SpecToolbarState(
   val control: SpecControlState? = null,
   val bundleKey: String? = null,
   val bundleTitle: String? = null,
+  val subtasksDone: Int? = null,
+  val subtasksTotal: Int? = null,
   val chosenAgent: String? = null,
   val agentMenuOpen: Boolean = false,
   val confirmingCancel: Boolean = false,
@@ -79,6 +84,14 @@ sealed interface SpecsAction {
   data object CollapseAll : SpecsAction
   data object Retry : SpecsAction
   data object Reveal : SpecsAction
+  data object RevealBundle : SpecsAction
+  data object OpenPanelMenu : SpecsAction
+  data object DismissPanelMenu : SpecsAction
+  data object OpenBarMenu : SpecsAction
+  data object DismissBarMenu : SpecsAction
+  data object OpenSearch : SpecsAction
+  data object OpenSelectedSpec : SpecsAction
+  data object CopyBundleKey : SpecsAction
   data object OpenAgentMenu : SpecsAction
   data object DismissAgentMenu : SpecsAction
   data class ChooseAgent(val agentId: String) : SpecsAction
@@ -103,7 +116,6 @@ sealed interface SpecsAction {
   data object ToggleFavorite : SpecsAction
 }
 
-internal const val HINT_SELECT_FOLDER = "Select a spec folder to start, pause or cancel it."
 internal const val PAUSE_NOTICE = "Pause recorded. The goal stops after its current subtask."
 internal const val PURGE_DISABLED_TOOLTIP = "Pause or cancel the goal before purging"
 internal const val NO_CHECKOUT = "This project has no checkout on this machine."
@@ -134,7 +146,6 @@ internal const val DELETE_WARNING = "This can’t be undone."
 internal const val DELETE_LAUNCHING = "A launch for this spec is in flight. Wait for it before deleting the files."
 internal const val DELETE_LIVE = "Pause or cancel the goal first"
 
-internal fun fileHint(key: String) = "Actions run a whole spec folder, not one subtask. Select $key to control it."
 internal fun cancelPrompt(key: String) = "Cancel $key?"
 internal fun purgeLabel(key: String) = "Purge $key run history"
 internal fun startFailure(summary: String) = "Couldn't start: $summary"
