@@ -83,7 +83,14 @@ fun ChatPane(workspace: ChatWorkspace) {
           )
           Column(Modifier.fillMaxSize()) {
             ChatHeader(session) { workspace.openApprovals(session.item.repositoryRoot) }
-            ChatTranscript(session.thread, gone, mode, Modifier.weight(1f), approvals = approvals) { reply, action ->
+            ChatTranscript(
+              session.thread,
+              gone,
+              mode,
+              Modifier.weight(1f),
+              approvals = approvals,
+              operationCards = workspace.operationCardActions(session.id),
+            ) { reply, action ->
               workspace.executeAction(session.id, reply, action)
             }
             ChatComposer(session, workspace)

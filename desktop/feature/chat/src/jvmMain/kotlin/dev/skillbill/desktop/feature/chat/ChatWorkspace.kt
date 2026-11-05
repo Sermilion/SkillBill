@@ -122,6 +122,7 @@ class ChatWorkspace(
   private val turns = ChatTurns(chat, details, clock)
   private val sessions = LinkedHashMap<String, ChatSession>()
   private val approvalTabs = LinkedHashMap<String, RepositoryApprovals>()
+  private val operationCards = HashMap<String, OperationCardCoordinator>()
   private val resumeJobs = LinkedHashSet<Job>()
   private var observer: Job? = null
 
@@ -265,6 +266,7 @@ class ChatWorkspace(
     val session = sessions.remove(id) ?: return
     drafts.remove(id)
     pastedImages.remove(id)
+    operationCards.remove(id)
     session.job.cancel()
     chat.end(session.sessionId)
     tabState.update { it.without(id) }
@@ -298,7 +300,7 @@ class ChatWorkspace(
   fun executeAction(id: String, reply: ChatMessage.Agent, action: ChatSuggestedAction) {
     val session = sessions[id] ?: return
     // An approval card after the reply does not move the suggested actions off their reply.
-    if (session.transcript.value.lastOrNull { it !is ChatMessage.Approval } !== reply) return
+    if (session.transcript.value.lastOrNull { !it.isCard } !== reply) return
     if (reply.streaming || action !in reply.actions || !session.agentSupportedState.value || session.agentState.value == null) return
     val start = action.start
     if (start != null) {
@@ -331,27 +333,38 @@ class ChatWorkspace(
       session.append(ChatMessage.Notice("The database session is not open."))
       return
     }
-    val agentId = session.agentState.value?.agentId ?: return
+    val agent = session.agentState.value ?: return
     val kind = start.toNewTaskKind()
     scope.launch {
-      val outcome = controls.startNewTask(
-        NewTaskStart(
-          repoRoot = session.item.repositoryRoot,
-          requirements = if (kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) action.instruction else "",
-          baseBranch = null,
-          agentId = agentId,
-          kind = kind,
-          keyChoice = keyChoice,
-          expectedDatabaseSessionId = open.sessionId,
-          target = action.target,
-          branch = action.branch,
-          checkoutRoot = session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot,
-        ),
+      val request = NewTaskStart(
+        repoRoot = session.item.repositoryRoot,
+        requirements = if (kind in setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)) action.instruction else "",
+        baseBranch = null,
+        agentId = agent.agentId,
+        profile = agent.profile,
+        kind = kind,
+        keyChoice = keyChoice,
+        expectedDatabaseSessionId = open.sessionId,
+        target = action.target,
+        branch = action.branch,
+        checkoutRoot = session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot,
       )
+      val outcome = controls.startNewTask(request)
       when (outcome) {
         is NewTaskStartOutcome.Started -> {
           session.append(ChatMessage.Notice("Started ${start.wire}."))
-          outcome.awaitFailure?.invoke()?.let { session.append(ChatMessage.Notice("${start.wire} stopped. $it")) }
+          val failure = outcome.awaitFailure?.invoke()
+          failure?.let { session.append(ChatMessage.Notice("${start.wire} stopped. $it")) }
+          outcome.launchId?.let { launchId ->
+            cards(session).remember(launchId, request)
+            if (failure == null) cards(session).show(session.thread, launchId)
+          }
+        }
+        is NewTaskStartOutcome.AwaitingConfirmation -> {
+          cards(session).remember(outcome.launchId, request)
+          if (!cards(session).show(session.thread, outcome.launchId)) {
+            session.append(ChatMessage.Notice("${start.wire} is waiting for confirmation, but its card could not be read."))
+          }
         }
         is NewTaskStartOutcome.Refused -> session.append(ChatMessage.Notice(outcome.message))
         is NewTaskStartOutcome.Failed -> session.append(ChatMessage.Error(null, readProblemText(outcome.problem)))
@@ -548,8 +561,36 @@ class ChatWorkspace(
           "The next turn continues it with the current execution state.",
       )
       session.replaceTranscript(listOf(stateCard(session.item), notice) + lines.map(::restored))
+      cards(session).revalidate(session.thread, lines.mapNotNull { it.operationCard?.token })
     }
   }
+
+  /** The Confirm, Dismiss, Adjust and option callbacks of the operation cards in chat [id], or null for an unknown chat. */
+  internal fun operationCardActions(id: String): ChatOperationCardActions? =
+    sessions[id]?.let { session -> cards(session).actions(session.thread) }
+
+  private fun cards(session: ChatSession): OperationCardCoordinator =
+    operationCards.getOrPut(session.id) {
+      OperationCardCoordinator(controls, scope, { kind ->
+        val open = databaseSession.state.value as? DatabaseSessionState.Open
+        val agent = session.agentState.value
+        if (open == null || agent == null) {
+          null
+        } else {
+          NewTaskStart(
+            repoRoot = session.item.repositoryRoot,
+            requirements = "",
+            baseBranch = null,
+            agentId = agent.agentId,
+            profile = agent.profile,
+            kind = kind,
+            keyChoice = null,
+            expectedDatabaseSessionId = open.sessionId,
+            checkoutRoot = session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot,
+          )
+        }
+      }, { turns.operationCardChanged(session) })
+    }
 
   private fun enqueue(id: String, message: QueuedChatMessage) {
     val session = sessions[id] ?: return

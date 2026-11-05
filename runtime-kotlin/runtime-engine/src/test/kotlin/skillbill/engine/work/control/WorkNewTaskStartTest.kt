@@ -13,13 +13,16 @@ import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.OperationStartRequest
 import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
@@ -31,6 +34,7 @@ import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeObservation
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.ports.workflow.goalworktree.InPlaceGoalWorktreeResources
@@ -46,6 +50,18 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+private fun WorkNewTaskStart.startOperation(
+  repoRoot: Path,
+  operationId: String,
+  target: String?,
+  agentId: String,
+  checkout: StandaloneCheckout = StandaloneCheckout(),
+): NewTaskStartResult =
+  startOperation(
+    repoRoot,
+    OperationStartRequest(operationId, target, agentId, checkout = checkout),
+  )
 
 class WorkNewTaskStartTest {
   private val repoRoot: Path = Files.createTempDirectory("work-new-task-start")
@@ -65,7 +81,10 @@ class WorkNewTaskStartTest {
         branch: String,
       ): Path? = branchHolder
     }
-  private val branchWorktrees = RecordingBranchWorktreeResources()
+  private val branchWorktrees =
+    RecordingBranchWorktreeResources(
+      observation = BranchWorktreeObservation.CallerOwned(repoRoot, repoRoot, "main", "abc123"),
+    )
   private val subject =
     WorkNewTaskStart(
       database,
@@ -78,6 +97,7 @@ class WorkNewTaskStartTest {
       NoopRuntimeDiagnostics,
       goalWorktrees,
       branchWorktrees,
+      OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
     )
 
   @Test
@@ -197,6 +217,7 @@ class WorkNewTaskStartTest {
     NoopRuntimeDiagnostics,
     goalWorktrees,
     branchWorktrees,
+    OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
   )
 
   private fun keyAdmission() =
@@ -249,6 +270,8 @@ class WorkNewTaskStartTest {
   @Test
   fun `a branch no checkout holds runs in the worktree created for it`() {
     branchWorktrees.creation = BranchWorktreeCreation.Created(siblingRoot)
+    branchWorktrees.observation =
+      BranchWorktreeObservation.RuntimeManaged(siblingRoot, repoRoot, "feat/x", "abc123", holderPresent = true)
 
     val result = subject.startOperation(repoRoot, "verify", "SKILL-1", "claude", StandaloneCheckout(branch = "feat/x"))
 

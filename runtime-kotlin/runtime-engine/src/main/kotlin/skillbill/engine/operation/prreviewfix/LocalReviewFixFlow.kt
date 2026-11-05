@@ -43,19 +43,31 @@ internal class LocalReviewFixFlow(
     return when (val step = context.steps.runReadOnly(context, ANALYSIS_STEP, directive)) {
       is OperationStepResult.Failed -> OperationRunResult.Finished(OperationOutcome.Failed(step.reason))
       is OperationStepResult.Refused -> OperationRunResult.Finished(step.refusal)
-      is OperationStepResult.Settled -> {
-        val matrix = step.value.trim() + "\n"
-        val summary = "Local review fix analysis for '${listed.branch}'\n\n$matrix"
-        if (context.arguments.scope == ANALYZE_ONLY) {
-          OperationRunResult.Finished(OperationOutcome.Completed(summary))
-        } else {
-          OperationRunResult.Proposed(
-            value = matrix,
-            summary = "$summary\nSelect with $SELECTION_FORMS.\n",
-            operationValues = anchors.toOperationValues(),
-          )
-        }
-      }
+      is OperationStepResult.Settled -> analyzed(context, listed.branch, anchors, step.value.trim() + "\n")
+    }
+  }
+
+  private fun analyzed(
+    context: OperationContext,
+    branch: String,
+    anchors: LocalReviewFixAnchors,
+    matrix: String,
+  ): OperationRunResult {
+    val summary = "Local review fix analysis for '$branch'\n\n$matrix"
+    if (context.arguments.scope == ANALYZE_ONLY) {
+      return OperationRunResult.Finished(OperationOutcome.Completed(summary))
+    }
+    return when (val extraction = PrReviewFixMatrix.extract(matrix, anchors.ordinals)) {
+      is PrReviewFixMatrixExtraction.Malformed ->
+        OperationRunResult.Finished(PrReviewFixMatrix.malformed(summary, extraction.problems))
+      is PrReviewFixMatrixExtraction.Extracted ->
+        OperationRunResult.Proposed(
+          value = matrix,
+          summary = "$summary\nSelect with $SELECTION_FORMS.\n",
+          operationValues = anchors.toOperationValues(),
+          details =
+            PrReviewFixMatrix.details(context.arguments, PrReviewFixMode.LOCAL.wireValue, null, extraction.threads),
+        )
     }
   }
 
@@ -78,14 +90,17 @@ internal class LocalReviewFixFlow(
     proposal: ConfirmedOperationProposal,
   ): OperationRefusal? {
     val anchors = storedAnchors(proposal) { return it }
-    val selection = parsePrReviewFixSelection(requireNotNull(context.arguments.select), anchors.ordinals)
-    return if (selection is PrReviewFixSelection.Invalid) {
-      selection.usage
-    } else {
-      branchRefusal(
-        context,
-        anchors.headBranch,
-      )
+    val select = requireNotNull(context.arguments.select)
+    return when (val selection = parsePrReviewFixSelection(select, anchors.ordinals)) {
+      is PrReviewFixSelection.Invalid -> selection.usage
+      is PrReviewFixSelection.Selected ->
+        PrReviewFixMatrix.offeredOptionRefusal(
+          proposal.token,
+          select,
+          proposal.value,
+          anchors.ordinals,
+          selection.threads,
+        ) ?: branchRefusal(context, anchors.headBranch)
     }
   }
 

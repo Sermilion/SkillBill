@@ -10,10 +10,12 @@ import skillbill.engine.goal.GoalPreflightPort
 import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -56,6 +58,7 @@ class NewTaskKeyChoiceTest {
       NoopRuntimeDiagnostics,
       InPlaceGoalWorktreeResources,
       RecordingBranchWorktreeResources(),
+      OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
     )
 
   @Test

@@ -1,0 +1,116 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/operator-operation-card-schema.yaml
+title: Operator operation proposal card
+type: object
+required:
+  - contract_version
+  - launch_id
+  - operation_id
+  - invocation_id
+  - repository_identity
+  - database_identity
+  - checkout_root
+  - branch
+  - source_anchors
+  - original_arguments
+  - selected_agent
+  - selected_profile
+  - token
+  - full_summary
+  - proposal_details
+  - status
+  - confirmation_invocation_id
+  - selection
+  - evidence
+properties:
+  contract_version:
+    const: '1.0'
+  launch_id: {type: string, minLength: 1}
+  operation_id:
+    enum: [verify, pr-review-fix]
+  invocation_id: {type: string, minLength: 1}
+  repository_identity: {type: string, minLength: 1}
+  database_identity: {type: string, minLength: 1}
+  checkout_root: {type: string, minLength: 1}
+  branch: {type: string, minLength: 1}
+  source_anchors:
+    type: object
+    additionalProperties: {type: string}
+  original_arguments:
+    type: array
+    items: {type: string}
+  selected_agent: {type: string, minLength: 1}
+  selected_profile: {type: [string, 'null']}
+  token: {type: string, minLength: 1}
+  full_summary: {type: string, minLength: 1}
+  proposal_details:
+    oneOf:
+      - {$ref: '#/$defs/verifyDetails'}
+      - {$ref: '#/$defs/prReviewFixDetails'}
+  status:
+    $ref: '#/$defs/status'
+  confirmation_invocation_id: {type: [string, 'null']}
+  selection: {type: [string, 'null']}
+  evidence: {type: [string, 'null']}
+additionalProperties: false
+$defs:
+  status:
+    type: string
+    enum:
+      - awaiting_confirmation
+      - confirming
+      - completed
+      - refused
+      - failed
+      - cancelled
+      - superseded
+      - consumed_uncertain
+  verifyDetails:
+    type: object
+    required: [kind, criteria, intake, spec, target, mode, qa]
+    properties:
+      kind: {const: verify}
+      criteria:
+        type: array
+        items: {type: string}
+      intake: {type: string, minLength: 1}
+      spec: {type: [string, 'null']}
+      target: {type: string, minLength: 1}
+      mode: {type: string, minLength: 1}
+      qa: {type: string, minLength: 1}
+    additionalProperties: false
+  prReviewFixDetails:
+    type: object
+    required: [kind, mode, pull_request, push, replies, threads]
+    properties:
+      kind: {const: pr-review-fix}
+      mode: {enum: [local, remote]}
+      pull_request: {type: [string, 'null']}
+      push: {type: [string, 'null']}
+      replies: {type: [string, 'null']}
+      threads:
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/$defs/thread'
+    additionalProperties: false
+  thread:
+    type: object
+    required: [ordinal, thread_id, options]
+    properties:
+      ordinal: {type: string, minLength: 1}
+      thread_id: {type: string, minLength: 1}
+      options:
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/$defs/option'
+    additionalProperties: false
+  option:
+    type: object
+    required: [option_id, label, recommended]
+    properties:
+      option_id: {type: string, minLength: 1}
+      label: {type: string, minLength: 1}
+      recommended: {type: boolean}
+    additionalProperties: false

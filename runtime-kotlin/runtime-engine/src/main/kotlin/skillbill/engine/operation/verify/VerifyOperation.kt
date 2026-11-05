@@ -8,11 +8,13 @@ import skillbill.application.workflow.model.WorkflowGetResult
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.contracts.operationcard.OperationCardDetails
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phaserun.IntakeIssueKeys
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.qa.execution.WorktreeBaseline
 import skillbill.engine.featuretask.qa.execution.worktreeBaseline
+import skillbill.engine.operation.core.OperationCardFacts
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationPrecheck
@@ -171,8 +173,24 @@ public class VerifyOperation(
       "Verify criteria for ${intake.label} against ${target.label}:\n\n${criteria.summary()}\n\n" +
         "QA: ${VerifyQaSelection.requested(context.arguments.qa).wireValue}\n\n" +
         "Confirm or adjust the criteria before the review runs.",
+      OperationCardFacts(cardDetails(context, intake, target, criteria)),
     )
   }
+
+  private fun cardDetails(
+    context: OperationContext,
+    intake: VerifyIntake,
+    target: VerifyTarget,
+    criteria: VerifyCriteria,
+  ): OperationCardDetails.Verify =
+    OperationCardDetails.Verify(
+      criteria = criteria.acceptanceCriteria.lines().map(String::trim).filter(String::isNotEmpty),
+      intake = intake.label,
+      spec = context.arguments.spec?.trim()?.takeIf(String::isNotEmpty),
+      target = target.label,
+      mode = (VerifyReviewMode.fromWire(context.arguments.mode) ?: VerifyReviewMode.INLINE).wireValue,
+      qa = VerifyQaSelection.requested(context.arguments.qa).wireValue,
+    )
 
   private fun failExtraction(
     workflowId: String,
@@ -370,6 +388,46 @@ public class VerifyOperation(
         step.takeIf { it in run.steps }
           ?: onFailure(OperationOutcome.Failed("Verify workflow '$workflowId' cannot resume at '$step'."))
     }
+  }
+
+  override fun withdraw(token: String): Boolean {
+    val snapshot =
+      skipUnreadable(token) { (workflows.get(WorkflowFamilyKind.VERIFY, token) as? WorkflowGetResult.Ok)?.snapshot }
+    if (snapshot == null || snapshot.workflowStatus in CLOSED_STATUSES || snapshot.currentStepId !in PARKED_STEPS) {
+      return false
+    }
+    val written =
+      store.write(
+        token,
+        WorkflowStatus.ABANDONED,
+        snapshot.currentStepId,
+        emptyList(),
+        mapOf(VerifyWorkflow.SESSION_NOTES to mapOf(VerifyWorkflow.WITHDRAWN_AT to clock.instant().toString())),
+      )
+    if (written is VerifyWrite.Rejected) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=verify_withdraw value_expected=abandon_write value_used=rejected workflow_id=$token " +
+          "error=${written.error}",
+      )
+      return false
+    }
+    return true
+  }
+
+  override fun confirmable(
+    token: String,
+    repoRoot: Path,
+  ): Boolean {
+    val snapshot =
+      (workflows.get(WorkflowFamilyKind.VERIFY, token) as? WorkflowGetResult.Ok)?.snapshot ?: return false
+    val input = snapshot.artifacts[VerifyWorkflow.INPUT_CONTEXT]
+    val storedRoot = VerifyWorkflow.string(input, VerifyWorkflow.REPO_ROOT)
+    return snapshot.workflowStatus == WorkflowStatus.PENDING &&
+      snapshot.currentStepId in PARKED_STEPS &&
+      input != null &&
+      snapshot.artifacts[VerifyWorkflow.CRITERIA_SUMMARY] != null &&
+      storedRoot == repoRoot.toAbsolutePath().normalize().toString()
   }
 
   private fun supersedeParked(

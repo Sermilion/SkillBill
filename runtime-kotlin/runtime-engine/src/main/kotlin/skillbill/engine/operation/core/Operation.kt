@@ -1,5 +1,6 @@
 package skillbill.engine.operation.core
 
+import skillbill.contracts.operationcard.OperationCardDetails
 import java.nio.file.Path
 
 /**
@@ -63,7 +64,19 @@ public sealed interface CurrentOperationAnchors {
  * An operation whose own durable workflow holds the pending proposal. The token is that workflow's id, so [run]
  * reads `confirm:<token>` itself and the confirmation gate stores nothing.
  */
-public interface SelfConfirmingOperation : Operation
+public interface SelfConfirmingOperation : Operation {
+  /** Reads whether [token] still owns a parked, confirmable workflow in [repoRoot]. */
+  public fun confirmable(
+    token: String,
+    repoRoot: Path,
+  ): Boolean
+
+  /**
+   * Closes the operation-owned parked state behind a [token] whose authority was dismissed or invalidated, so no
+   * continuation surface can resume it. Returns false when nothing was closed.
+   */
+  public fun withdraw(token: String): Boolean
+}
 
 public data class OperationContext(
   val invocationId: String,
@@ -74,6 +87,7 @@ public data class OperationContext(
   val instructions: String?,
   val steps: OperationStepRunner,
   val additionalWritableDirectories: List<Path> = emptyList(),
+  val desktopLaunchId: String? = null,
 ) {
   internal val confirming: Boolean get() = arguments.confirm != null
 }
@@ -109,6 +123,7 @@ public sealed interface OperationRunResult {
     val value: String,
     val summary: String,
     val operationValues: Map<String, String>,
+    val details: OperationCardDetails? = null,
   ) : OperationRunResult
 }
 

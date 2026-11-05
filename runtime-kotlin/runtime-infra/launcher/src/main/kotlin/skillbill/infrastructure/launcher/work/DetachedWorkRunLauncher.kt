@@ -1,11 +1,14 @@
 package skillbill.infrastructure.launcher.work
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.operationcard.OperationCardEnvironmentKeys
+import skillbill.contracts.operationcard.OperationCardExitCodes
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostAgentHomesPort
+import skillbill.ports.work.LaunchAgentHomesPort
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunExit
 import skillbill.ports.work.model.WorkRunLaunchKind
@@ -25,7 +28,8 @@ class DetachedWorkRunLauncher internal constructor(
   private val diagnostics: RuntimeDiagnostics,
   private val startupGrace: Duration,
   private val agentHomes: HostAgentHomesPort,
-) : WorkRunLauncher {
+) : WorkRunLauncher,
+  LaunchAgentHomesPort {
   @Inject
   constructor(
     environment: EnvironmentContext,
@@ -79,13 +83,25 @@ class DetachedWorkRunLauncher internal constructor(
 
   private fun ownership() = WorkHarnessOwnership(environment.userHome.resolve(".skill-bill/desktop/runs"), diagnostics)
 
+  override fun agentHomes(): Map<String, String> =
+    mergedEnvironment(emptyMap()).let { merged -> AgentHomeEnvironmentKeys.ALL.associateWith { merged[it].orEmpty() } }
+
   private fun launchEnvironment(request: WorkRunLaunchRequest): Map<String, String> {
-    val hostChoice = agentHomes.current().filterKeys { it in AgentHomeEnvironmentKeys.ALL }
-    val recorded =
-      request.agentEnvironment.filter { (key, value) -> key in AgentHomeEnvironmentKeys.ALL && value.isNotBlank() }
+    val pinned = request.pinnedAgentHomes?.filterKeys { it in AgentHomeEnvironmentKeys.ALL }
+    val base =
+      if (pinned == null) {
+        mergedEnvironment(request.agentEnvironment)
+      } else {
+        environment.environment + pinned.filterValues(String::isNotBlank) - pinned.filterValues(String::isBlank).keys
+      }
+    return base + ("PATH" to searchDirectories().joinToString(pathSeparator().toString()))
+  }
+
+  private fun mergedEnvironment(recorded: Map<String, String>): Map<String, String> {
+    val hostChoice = this.agentHomes.current().filterKeys { it in AgentHomeEnvironmentKeys.ALL }
+    val kept = recorded.filter { (key, value) -> key in AgentHomeEnvironmentKeys.ALL && value.isNotBlank() }
     val cleared = hostChoice.filterValues(String::isBlank).keys
-    return environment.environment + recorded + hostChoice.filterValues(String::isNotBlank) - cleared +
-      ("PATH" to searchDirectories().joinToString(pathSeparator().toString()))
+    return environment.environment + kept + hostChoice.filterValues(String::isNotBlank) - cleared
   }
 
   private fun installedLaunch(request: WorkRunLaunchRequest): InstalledLaunch =
@@ -128,16 +144,21 @@ class DetachedWorkRunLauncher internal constructor(
         ownership().stopStarted(process, unit)
         throw failure
       }
-      var failedEarly = false
+      var exitedEarly: Int? = null
       try {
-        failedEarly = process.waitFor(startupGrace.toMillis(), TimeUnit.MILLISECONDS) && process.exitValue() != 0
+        exitedEarly = process.takeIf { it.waitFor(startupGrace.toMillis(), TimeUnit.MILLISECONDS) }?.exitValue()
       } finally {
-        if (!failedEarly) {
+        if (exitedEarly == null || exitedEarly == 0) {
           releaseOnExit(process, request, log, input)
           handedOff = true
         }
       }
-      if (failedEarly) {
+      if (exitedEarly == OperationCardExitCodes.AWAITING_CONFIRMATION) {
+        diagnostics.info("seam=work-run.launch outcome=awaiting_confirmation log=$log")
+        ownership().clear(owner, process.pid())
+        return WorkRunLaunchResult.AwaitingConfirmation(log)
+      }
+      if (exitedEarly != null && exitedEarly != 0) {
         diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log")
         ownership().clear(owner, process.pid())
         return refuse("The runner exited before starting. See $log")
@@ -179,7 +200,7 @@ class DetachedWorkRunLauncher internal constructor(
   ) {
     process.onExit().whenComplete { finished, error ->
       try {
-        if (error != null || finished?.exitValue() != 0) {
+        if (error != null || finished?.exitValue() !in SUCCESSFUL_EXITS) {
           diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log", error)
         }
       } finally {
@@ -215,6 +236,8 @@ class DetachedWorkRunLauncher internal constructor(
         AgentHomeEnvironmentKeys.ALL.filterNot(launchEnvironment::containsKey).forEach(environment()::remove)
         environment().putAll(built.environment)
         environment()[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH] = request.databasePath.toString()
+        environment().remove(OperationCardEnvironmentKeys.LAUNCH_ID)
+        request.operationLaunchId?.let { environment()[OperationCardEnvironmentKeys.LAUNCH_ID] = it }
       }.start()
 
   private fun launchCommand(command: List<String>): List<String> {
@@ -247,6 +270,7 @@ class DetachedWorkRunLauncher internal constructor(
   private companion object {
     val STARTUP_GRACE: Duration = Duration.ofMillis(250)
     const val RUNTIME_EXECUTABLE = "skill-bill"
+    val SUCCESSFUL_EXITS = setOf(0, OperationCardExitCodes.AWAITING_CONFIRMATION)
   }
 
   private fun isWindows(): Boolean = environment.environment["OS"] == "Windows_NT"

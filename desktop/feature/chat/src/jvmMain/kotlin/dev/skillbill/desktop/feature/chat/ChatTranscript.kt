@@ -67,6 +67,7 @@ internal fun ChatTranscript(
   allowSuggestedActions: Boolean = true,
   footer: (@Composable () -> Unit)? = null,
   approvals: ChatApprovalActions? = null,
+  operationCards: ChatOperationCardActions? = null,
   onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
 ) {
   val busy by thread.busy.collectAsState()
@@ -96,7 +97,7 @@ internal fun ChatTranscript(
     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
   ) {
     items(messages) { message ->
-      ChatMessageRow(message, agent, !busy && supported && !gone && allowSuggestedActions && message === messages.lastOrNull { it !is ChatMessage.Approval }, mode, allowStartActions, approvals, onAction)
+      ChatMessageRow(message, agent, !busy && supported && !gone && allowSuggestedActions && message === messages.lastOrNull { !it.isCard }, mode, allowStartActions, approvals, operationCards, onAction)
     }
     if (footer != null) item(key = "chat-footer", contentType = "footer") { footer() }
   }
@@ -123,6 +124,7 @@ private fun ChatMessageRow(
   mode: ChatPermissionMode,
   allowStartActions: Boolean,
   approvals: ChatApprovalActions?,
+  operationCards: ChatOperationCardActions?,
   onAction: ((ChatMessage.Agent, ChatSuggestedAction) -> Unit)?,
 ) {
   val colors = SkillBillTheme.colors
@@ -130,6 +132,7 @@ private fun ChatMessageRow(
   when (message) {
     is ChatMessage.StateLine -> StateCard(message)
     is ChatMessage.Approval -> ChatApprovalCard(message, approvals)
+    is ChatMessage.OperationCard -> ChatOperationCard(message, operationCards)
     is ChatMessage.Operator -> OperatorMessage(message)
     is ChatMessage.Agent -> AgentTurn(message, agent, actionsEnabled, mode, allowStartActions, onAction?.let { act -> { action: ChatSuggestedAction -> act(message, action) } })
     is ChatMessage.Notice -> if (message.confirmation) {

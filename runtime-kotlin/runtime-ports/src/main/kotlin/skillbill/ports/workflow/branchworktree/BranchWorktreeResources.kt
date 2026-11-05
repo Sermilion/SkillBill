@@ -2,6 +2,7 @@ package skillbill.ports.workflow.branchworktree
 
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeObservation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import java.nio.file.Path
 
@@ -25,6 +26,11 @@ interface BranchWorktreeResources {
     checkoutRoot: Path,
     holder: BranchWorktreeHolder,
   ): Boolean
+
+  fun observe(
+    checkoutRoot: Path,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeObservation
 
   /**
    * Drops [holder] from the worktree at [checkoutRoot] when skill-bill created it, then removes the worktree once no

@@ -8,6 +8,9 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
+import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
+import dev.skillbill.desktop.core.domain.model.OperationCardReference
+import dev.skillbill.desktop.core.domain.model.OperationCardView
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,16 +63,104 @@ internal class ChatThread(private val clock: Clock) {
   fun historyLines(limit: Int = SAVED_LINES): List<ChatHistoryLine> {
     val lines = messages.value.mapNotNull { message ->
       when {
+        message is ChatMessage.Notice && message.operationCard != null ->
+          ChatHistoryLine(ChatHistoryRole.OperationCard, message.text, operationCard = message.operationCard)
         message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
         message is ChatMessage.Agent && !message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty()) ->
           ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
         message is ChatMessage.Approval -> message.card.savedApprovalLine()
+        message is ChatMessage.OperationCard -> message.savedOperationCardLine()
         else -> null
       }
     }
-    // The limit clips conversation prose only: every approval request and outcome of the chat is kept, in order.
-    val keptProse = lines.withIndex().filter { it.value.role != ChatHistoryRole.Approval }.takeLast(limit).map { it.index }.toSet()
-    return lines.filterIndexed { index, line -> line.role == ChatHistoryRole.Approval || index in keptProse }
+    // The limit clips conversation prose only: every approval request, operation card and outcome of the chat is kept, in order.
+    val keptProse = lines.withIndex().filter { !it.value.role.isCard }.takeLast(limit).map { it.index }.toSet()
+    return lines.filterIndexed { index, line -> line.role.isCard || index in keptProse }
+  }
+
+  /**
+   * Shows [card] in place of the earlier card of the same launch, or appends it. A card that settled never goes back to
+   * awaiting, so a late read of an older state cannot re-open a decision.
+   */
+  fun showOperationCard(card: OperationCardView, restoredCopy: Boolean = false) = messages.update { list ->
+    val index = list.indexOfFirst { it is ChatMessage.OperationCard && it.card.launchId == card.launchId }
+    if (index < 0) {
+      val placeholder = list.indexOfFirst {
+        (it as? ChatMessage.Notice)?.let { notice ->
+          notice.operationCard?.token == card.token || notice.text.startsWith(card.operationCardLabelPrefix())
+        } == true
+      }
+      val restored = (list.getOrNull(placeholder) as? ChatMessage.Notice)?.operationCard
+      val choices = restored?.draftChoices?.let { card.validateChoices(it) }.orEmpty()
+      val shown = ChatMessage.OperationCard(
+        card,
+        restoredCopy = restoredCopy,
+        refusal = restored?.refusal,
+        choices = choices,
+        choicesSaved = restored?.draftChoices != null,
+      )
+      return@update if (placeholder < 0) list + shown else list.toMutableList().also { it[placeholder] = shown }
+    }
+    val existing = list[index] as ChatMessage.OperationCard
+    if (existing.card.token != card.token || existing.card.launchId != card.launchId) return@update list
+    if (existing.card.state.terminal && !card.state.terminal) return@update list
+    list.toMutableList().also {
+      it[index] = existing.copy(
+        card = card,
+        restoredCopy = restoredCopy,
+        submitting = existing.submitting,
+        refusal = card.evidence ?: existing.refusal,
+        choices = existing.choices,
+      )
+    }
+  }
+
+  /** The card of [token] this chat shows, if any. */
+  fun operationCard(token: String): ChatMessage.OperationCard? =
+    messages.value.firstNotNullOfOrNull { (it as? ChatMessage.OperationCard)?.takeIf { message -> message.card.token == token } }
+
+  /** Records the offered [optionId] the operator picked for thread [ordinal] of the card of [token]. */
+  fun chooseOperationOption(token: String, ordinal: String, optionId: String) = updateOperationChoices(token) { it + (ordinal to optionId) }
+
+  /** Records the option each thread of the card of [token] marks as recommended; a thread without one stays unchosen. */
+  fun chooseRecommendedOptions(token: String) = updateOperationChoices(token) { chosen ->
+    val details = operationCard(token)?.card?.details as? OperationCardDetailsView.PrReviewFix ?: return@updateOperationChoices chosen
+    chosen + details.threads.mapNotNull { thread -> thread.options.firstOrNull { it.recommended }?.let { thread.ordinal to it.optionId } }
+  }
+
+  private fun updateOperationChoices(token: String, change: (Map<String, String>) -> Map<String, String>) = messages.update { list ->
+    list.map {
+      if (it is ChatMessage.OperationCard && it.card.token == token && !it.submitting && it.card.state.decidable && it.card.canConfirm) {
+        it.copy(choices = change(it.choices), choicesSaved = true, refusal = null)
+      } else {
+        it
+      }
+    }
+  }
+
+  /**
+   * Claims the one click on a live awaiting card: returns the card and marks it submitting, or null when it is already
+   * submitting, settled, not awaiting or only a restored copy. This is what keeps a double click from sending two decisions.
+   */
+  fun beginOperationDecision(token: String): ChatMessage.OperationCard? {
+    var begun: ChatMessage.OperationCard? = null
+    messages.update { list ->
+      begun = null
+      list.map {
+        if (it is ChatMessage.OperationCard && it.card.token == token && !it.submitting && it.card.state.decidable && it.card.canConfirm) {
+          it.copy(submitting = true, refusal = null).also { claimed -> begun = claimed }
+        } else {
+          it
+        }
+      }
+    }
+    return begun
+  }
+
+  fun operationCardSubmitting(token: String, submitting: Boolean, refusal: String? = null) = messages.update { list ->
+    list.map {
+      if (it is ChatMessage.OperationCard && it.card.token == token) it.copy(submitting = submitting, refusal = refusal) else it
+    }
   }
 
   /**
@@ -153,7 +244,7 @@ internal class ChatThread(private val clock: Clock) {
 
   // A streaming reply keeps taking output past an approval card that follows it; any other message starts a new reply.
   private fun updateStreaming(change: (ChatMessage.Agent) -> ChatMessage.Agent) = messages.update { list ->
-    val index = list.indexOfLast { it !is ChatMessage.Approval }
+    val index = list.indexOfLast { !it.isCard }
     val last = list.getOrNull(index)
     if (last is ChatMessage.Agent && last.streaming) {
       list.toMutableList().also { it[index] = change(last) }
@@ -195,6 +286,38 @@ internal fun restored(line: ChatHistoryLine): ChatMessage = when (line.role) {
   ChatHistoryRole.Error -> ChatMessage.Error(line.failure, line.text)
   // A saved card with no record cannot be shown as a card, so it falls back to its one-line label.
   ChatHistoryRole.Approval -> line.approval?.let { ChatMessage.Approval(it, restoredCopy = true) } ?: ChatMessage.Notice(line.text)
+  // An operation card keeps only its identity; it shows its label until the store answers the revalidation read.
+  ChatHistoryRole.OperationCard -> ChatMessage.Notice(line.text, operationCard = line.operationCard)
+}
+
+/** A card message sits beside the reply it follows instead of ending it. */
+internal val ChatMessage.isCard: Boolean get() = this is ChatMessage.Approval || this is ChatMessage.OperationCard
+
+internal val ChatHistoryRole.isCard: Boolean get() = this == ChatHistoryRole.Approval || this == ChatHistoryRole.OperationCard
+
+/** The start of a saved card's label; a restored card shows the label until the store answers, then is replaced in place. */
+internal fun OperationCardView.operationCardLabelPrefix(): String = "$operationId approval $token:"
+
+/** The saved form of an operation card: its identity and a one-line label; the card itself is read from the store again. */
+internal fun ChatMessage.OperationCard.savedOperationCardLine(): ChatHistoryLine =
+  ChatHistoryLine(
+    ChatHistoryRole.OperationCard,
+    "${card.operationCardLabelPrefix()} ${card.state.name}",
+    operationCard = OperationCardReference(
+      card.token,
+      card.launchId,
+      card.operationId,
+      card.state,
+      choices.takeIf { choicesSaved },
+      refusal,
+    ),
+  )
+
+private fun OperationCardView.validateChoices(choices: Map<String, String>): Map<String, String> {
+  val details = details as? OperationCardDetailsView.PrReviewFix ?: return emptyMap()
+  return choices.filter { (ordinal, optionId) ->
+    details.threads.any { thread -> thread.ordinal == ordinal && thread.options.any { it.optionId == optionId } }
+  }
 }
 
 /** The saved form of a card: the complete record, without the runtime's grant answer, which is never stored. */

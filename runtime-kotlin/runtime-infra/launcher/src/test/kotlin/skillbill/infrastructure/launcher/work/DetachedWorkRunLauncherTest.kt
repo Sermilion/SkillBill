@@ -69,6 +69,34 @@ class DetachedWorkRunLauncherTest {
   }
 
   @Test
+  fun `a runtime that exits 4 inside the startup grace is awaiting confirmation, not a failed runner`() {
+    val home = Files.createTempDirectory("early-parked")
+    executable(home, "#!/bin/sh\nexit 4", "skill-bill")
+
+    val result = launcher(home).start(runtimeRequest(home))
+
+    assertIs<WorkRunLaunchResult.AwaitingConfirmation>(result)
+  }
+
+  @Test
+  fun `a runtime that exits 4 after startup finishes with exit 4 and is not a failure`() {
+    val home = Files.createTempDirectory("late-parked")
+    executable(home, "#!/bin/sh\nuntil [ -e release ]; do :; done\nexit 4", "skill-bill")
+    val started =
+      assertIs<WorkRunLaunchResult.Started>(launcherWithoutStartupGrace(home).start(runtimeRequest(home)))
+    Files.createFile(home.resolve("release"))
+    assertEquals(4, assertNotNull(started.exit).toCompletableFuture().get().code)
+  }
+
+  @Test
+  fun `the operation launch id reaches the runtime command`() {
+    val home = Files.createTempDirectory("launch-id")
+    executable(home, "#!/bin/sh\nprintf '%s' \"\$SKILL_BILL_OPERATION_LAUNCH_ID\" > launch-id\nexit 0", "skill-bill")
+    launcher(home).start(runtimeRequest(home).copy(operationLaunchId = "opl-9"))
+    assertEquals("opl-9", recordedFile(home, "launch-id"))
+  }
+
+  @Test
   fun `the host agent home reaches a runtime command when the run recorded none`() {
     val home = Files.createTempDirectory("host-agent-home")
     executable(home, RECORD_AGENT_HOME, "skill-bill")
@@ -110,8 +138,13 @@ class DetachedWorkRunLauncherTest {
     assertEquals("", recordedAgentHome(home))
   }
 
-  private fun recordedAgentHome(home: Path): String {
-    val written = home.resolve("agent-home")
+  private fun recordedAgentHome(home: Path): String = recordedFile(home, "agent-home")
+
+  private fun recordedFile(
+    home: Path,
+    name: String,
+  ): String {
+    val written = home.resolve(name)
     val deadline = System.nanoTime() + RECORD_TIMEOUT.toNanos()
     while (!Files.exists(written) && System.nanoTime() < deadline) {
       Thread.sleep(POLL_MILLIS)

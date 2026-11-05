@@ -1,6 +1,7 @@
 package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.model.OperationAnchors
 import skillbill.ports.operation.model.OperationProposal
@@ -12,6 +13,7 @@ import java.util.UUID
 @Inject
 public class OperationConfirmationGate(
   private val proposals: OperationProposalRepository,
+  private val cards: OperationCardRepository,
   private val gitOperations: WorkflowGitOperations,
   private val clock: Clock,
 ) {
@@ -32,7 +34,83 @@ public class OperationConfirmationGate(
         createdAt = clock.instant().toString(),
       ),
     )
-    return OperationOutcome.AwaitingConfirmation(token, proposed.summary)
+    return OperationOutcome.AwaitingConfirmation(
+      token,
+      proposed.summary,
+      proposed.details?.let { details -> OperationCardFacts(details, sourceAnchors(anchors)) },
+    )
+  }
+
+  private fun sourceAnchors(anchors: OperationAnchors): Map<String, String> =
+    mapOf(HEAD_SHA_ANCHOR to anchors.headSha, BRANCH_ANCHOR to anchors.branch) + anchors.operationValues
+
+  internal fun bind(
+    operationId: String,
+    context: OperationContext,
+    token: String,
+  ): OperationProposal? {
+    val anchors = repositoryAnchors(context, emptyMap()) { return null }
+    return OperationProposal(
+      token = token,
+      operationId = operationId,
+      repoRoot = context.repoRoot.toString(),
+      anchors = anchors,
+      proposalValue = token,
+      createdAt = clock.instant().toString(),
+    )
+  }
+
+  internal fun confirmBound(
+    operation: SelfConfirmingOperation,
+    context: OperationContext,
+    token: String,
+    execute: () -> OperationOutcome,
+  ): OperationOutcome {
+    val proposal =
+      proposals.find(token) ?: return if (context.desktopLaunchId == null) execute() else unknownToken(token)
+    val refused = boundRefusal(operation.id, context, proposal)
+    return when {
+      refused != null -> refused
+      consume(token, context) -> execute()
+      else -> consumedToken(token)
+    }
+  }
+
+  internal fun revalidateAuthority(
+    token: String,
+    operationId: String,
+    repoRoot: String,
+    head: String,
+    branch: String,
+  ): OperationRefusal? {
+    val proposal = proposals.find(token) ?: return unknownToken(token)
+    return when {
+      proposal.consumedAt != null -> consumedToken(token)
+      proposal.supersededAt != null -> supersededToken(token)
+      proposal.operationId != operationId || proposal.repoRoot != repoRoot -> foreignToken(token, operationId, repoRoot)
+      proposal.anchors.headSha != head -> anchorsMoved(token, listOf(HEAD_SHA_ANCHOR))
+      proposal.anchors.branch != branch -> anchorsMoved(token, listOf(BRANCH_ANCHOR))
+      else -> null
+    }
+  }
+
+  private fun boundRefusal(
+    operationId: String,
+    context: OperationContext,
+    proposal: OperationProposal,
+  ): OperationRefusal? {
+    val token = proposal.token
+    val repoRoot = context.repoRoot.toString()
+    return when {
+      proposal.consumedAt != null -> consumedToken(token)
+      proposal.supersededAt != null -> supersededToken(token)
+      proposal.operationId != operationId || proposal.repoRoot != repoRoot ->
+        foreignToken(token, operationId, repoRoot)
+      else ->
+        movedAnchors(proposal.anchors, repositoryAnchors(context, emptyMap()) { return it })
+          .takeIf(List<String>::isNotEmpty)
+          ?.let { moved -> anchorsMoved(token, moved) }
+    }
   }
 
   internal fun confirm(
@@ -52,11 +130,19 @@ public class OperationConfirmationGate(
     context: OperationContext,
     confirmed: ConfirmedOperationProposal,
   ): OperationOutcome =
-    if (proposals.markConsumed(confirmed.token, clock.instant().toString())) {
+    if (consume(confirmed.token, context)) {
       operation.execute(context, confirmed)
     } else {
       consumedToken(confirmed.token)
     }
+
+  private fun consume(
+    token: String,
+    context: OperationContext,
+  ): Boolean =
+    context.desktopLaunchId?.let { launchId ->
+      cards.consumeClaimedConfirmation(token, launchId, context.invocationId, clock.instant().toString())
+    } ?: proposals.markConsumed(token, clock.instant().toString())
 
   private fun refusal(
     operation: ConfirmableOperation,
@@ -118,5 +204,5 @@ internal inline fun WorkflowGitOperationResult.gitValueOr(
 ): String = (this as? WorkflowGitOperationResult.Ok)?.value?.trim() ?: refuse(anchorUnreadable(what, error))
 
 private const val TOKEN_PREFIX = "opt-"
-private const val HEAD_SHA_ANCHOR = "HEAD"
-private const val BRANCH_ANCHOR = "branch"
+internal const val HEAD_SHA_ANCHOR = "HEAD"
+internal const val BRANCH_ANCHOR = "branch"

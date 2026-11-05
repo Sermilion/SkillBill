@@ -77,7 +77,7 @@ class AgentSessionCatalog(
     val xdgCursor = variables["XDG_CONFIG_HOME"]?.takeIf(String::isNotBlank)?.let { File(it, "cursor").path }
     val claude = agentProfiles(home, "claude", "projects", listOf(claudeSelected, variables[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR]))
     val codex = agentProfiles(home, "codex", "sessions", listOf(variables[AgentHomeEnvironmentKeys.CODEX_HOME]))
-    val cursor = agentProfiles(home, "cursor", "chats", listOf(variables[CURSOR_CONFIG_DIR], xdgCursor))
+    val cursor = agentProfiles(home, "cursor", "chats", listOf(variables[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR], xdgCursor))
     fun read(profiles: List<File>, sessions: (File, String) -> List<AgentSession>) =
       profiles.flatMap { profile -> readSafely("chat.session_store_unreadable") { sessions(profile, root) } }
     return read(claude, ::claudeSessions) + read(codex, ::codexSessions) + read(cursor, ::cursorSessions)

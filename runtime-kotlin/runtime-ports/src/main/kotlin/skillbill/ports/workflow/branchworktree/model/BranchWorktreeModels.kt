@@ -9,6 +9,25 @@ enum class BranchWorktreeHolderKind(val wireValue: String) {
 
 data class BranchWorktreeHolder(val kind: BranchWorktreeHolderKind, val id: String)
 
+sealed interface BranchWorktreeObservation {
+  data class RuntimeManaged(
+    val checkoutRoot: Path,
+    val primaryRepositoryRoot: Path,
+    val branch: String,
+    val head: String,
+    val holderPresent: Boolean,
+  ) : BranchWorktreeObservation
+
+  data class CallerOwned(
+    val checkoutRoot: Path,
+    val primaryRepositoryRoot: Path,
+    val branch: String,
+    val head: String,
+  ) : BranchWorktreeObservation
+
+  data class Unavailable(val reason: String) : BranchWorktreeObservation
+}
+
 sealed interface BranchWorktreeCreation {
   data class Created(val path: Path) : BranchWorktreeCreation
 

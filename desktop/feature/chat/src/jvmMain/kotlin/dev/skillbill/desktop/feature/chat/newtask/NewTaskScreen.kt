@@ -96,6 +96,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
             onDecide = chat::decideApproval,
             onDismiss = chat::dismissApproval,
           ),
+          operationCards = draft.operationCardActions(chat),
         ) { _, action ->
           val start = action.start
           if (start == null) {

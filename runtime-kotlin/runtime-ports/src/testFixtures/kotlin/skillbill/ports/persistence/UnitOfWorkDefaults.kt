@@ -50,7 +50,9 @@ import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
+import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
@@ -127,6 +129,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
     UnavailableFeatureTaskPhaseSettlementRepository
   open override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository()
   open override val operationProposals: OperationProposalRepository = UnavailableOperationProposalRepository
+  open override val operationCards: OperationCardRepository = UnavailableOperationCardRepository
   open override val approvals: ApprovalStore =
     object : ApprovalStore {
       override fun register(

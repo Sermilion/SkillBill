@@ -10,7 +10,9 @@ import skillbill.application.telemetry.service.TelemetryService
 import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
+import skillbill.engine.operation.core.OperationCardLifecycle
 import skillbill.engine.operation.core.OperationRegistry
+import skillbill.engine.operation.core.RepositoryOperationCardLifecycle
 import skillbill.engine.operation.featureguard.FeatureGuardOperation
 import skillbill.engine.operation.featureguardcleanup.FeatureGuardCleanupOperation
 import skillbill.engine.operation.prreviewfix.PrReviewFixOperation
@@ -22,11 +24,13 @@ import skillbill.engine.operation.verify.ServiceVerifyTelemetry
 import skillbill.engine.operation.verify.VerifyDelegatedReviewer
 import skillbill.engine.operation.verify.VerifyOperation
 import skillbill.engine.operation.verify.VerifyTelemetry
+import skillbill.infrastructure.sqlite.operation.SqliteOperationCardRepository
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.workflow.github.GhPullRequestReviewThreads
 import skillbill.infrastructure.workflow.github.GhReleaseBuildGate
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -88,6 +92,13 @@ internal interface RuntimeOperationProvides {
   @Provides
   fun operationProposalRepository(database: DatabaseSessionFactory): OperationProposalRepository =
     SqliteOperationProposalRepository(database)
+
+  @Provides
+  fun operationCardRepository(database: DatabaseSessionFactory): OperationCardRepository =
+    SqliteOperationCardRepository(database)
+
+  @Provides
+  fun operationCardLifecycle(lifecycle: RepositoryOperationCardLifecycle): OperationCardLifecycle = lifecycle
 
   @Provides
   fun pullRequestReviewThreadOperations(): PullRequestReviewThreadOperations = GhPullRequestReviewThreads()

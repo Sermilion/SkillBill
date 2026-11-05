@@ -6,6 +6,9 @@ import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardLookup
+import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
@@ -132,6 +135,10 @@ class DetailControlsTest {
     override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome = error("unused")
     override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome = error("unused")
     override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome = error("unused")
+    override suspend fun operationCardForLaunch(launchId: String): OperationCardView? = error("unused")
+    override suspend fun operationCard(token: String): OperationCardView? = error("unused")
+    override suspend fun revalidateOperationCard(token: String): OperationCardLookup = error("unused")
+    override suspend fun dismissOperationCard(token: String): OperationCardDismissOutcome = error("unused")
     override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome = error("unused")
     override suspend fun recover(item: WorkItem, preview: RecoveryPreview): RecoveryOutcome = error("unused")
     override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome = error("unused")

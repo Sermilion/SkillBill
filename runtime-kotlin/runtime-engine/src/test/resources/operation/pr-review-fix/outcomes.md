@@ -3,6 +3,14 @@ PR review fix analysis for PR #42 (https://github.com/acme/repo/pull/42)
 
 Thread T1 — a.kt:9
 Verdict: agree
+Options:
+1. (recommended) Rename as asked.
+2. Keep the name.
+Thread T2 — b.kt:4
+Verdict: agree
+Options:
+1. (recommended) Rename as asked.
+2. Keep the name.
 
 Select with select:all-recommended, select:fix-all-unresolved, or select:<thread>=<option>,... (thread T1..Tn or node id).
 

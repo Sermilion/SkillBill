@@ -14,6 +14,7 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
+import skillbill.contracts.operationcard.OperationCardEnvironmentKeys
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationOutcome
@@ -74,6 +75,7 @@ class OperationCommand(
           },
         arguments = invocation.arguments,
         instructions = invocation.instructions,
+        launchId = inputs.environment[OperationCardEnvironmentKeys.LAUNCH_ID]?.trim()?.takeIf(String::isNotEmpty),
       )
     writeOperationResult(state, request.operationId, executor.execute(request))
   }

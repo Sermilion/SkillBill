@@ -23,6 +23,9 @@ import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.feature.chat.ChatMessage
+import dev.skillbill.desktop.feature.chat.ChatOperationCardActions
+import dev.skillbill.desktop.feature.chat.ChatThread
+import dev.skillbill.desktop.feature.chat.OperationCardCoordinator
 import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
 import dev.skillbill.desktop.feature.chat.chipText
@@ -38,6 +41,7 @@ import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.util.UUID
+import java.util.IdentityHashMap
 import kotlin.time.Clock
 
 data class NewTaskRepository(val root: String, val name: String)
@@ -68,6 +72,26 @@ class NewTaskDraft(
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
 ) {
   private val scope = windowScope.scope
+  private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
+  private val cards = OperationCardCoordinator(workControls, scope, { kind ->
+    val agent = selectedAgent
+    val repo = repository
+    val open = databaseSession.state.value as? DatabaseSessionState.Open
+    if (agent == null || repo == null || open == null) {
+      null
+    } else {
+      NewTaskStart(
+        repo.root,
+        "",
+        baseBranch.ifBlank { null },
+        agent.agentId,
+        kind,
+        null,
+        open.sessionId,
+        profile = agent.profile,
+      )
+    }
+  }, { thread -> cardOwners[thread]?.persist() ?: false })
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private val offerState = MutableStateFlow(NewTaskOffer())
@@ -85,6 +109,9 @@ class NewTaskDraft(
   var selectedAgent: ChatAgent? by mutableStateOf(null)
 
   internal val chat: StateFlow<NewTaskChat?> = chatState.asStateFlow()
+
+  /** The Confirm, Dismiss, Adjust and option callbacks of the operation cards in [current]'s transcript. */
+  internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread)
 
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 
@@ -217,6 +244,7 @@ class NewTaskDraft(
       target = target?.trim()?.takeIf(String::isNotBlank) ?: action?.target?.trim()?.takeIf(String::isNotBlank),
       reuseRequested = reuseRequested,
       branch = action?.branch?.trim()?.takeIf(String::isNotBlank),
+      profile = agent.profile,
     )
     scope.launch {
       try {
@@ -237,8 +265,12 @@ class NewTaskDraft(
                 toasts.show(ToastMessage(ToastTone.Confirmation, message))
               }
             } else {
-              reportStandalone(current, kind, outcome)
+              reportStandalone(current, kind, outcome, startRequest)
             }
+          }
+          is NewTaskStartOutcome.AwaitingConfirmation -> {
+            cards.remember(outcome.launchId, startRequest)
+            showParkedCard(current, kind, outcome.launchId)
           }
           is NewTaskStartOutcome.NeedsKey -> {
             if (ownsChat(current)) {
@@ -329,6 +361,8 @@ class NewTaskDraft(
     val lines = entry.lines.map(::restored)
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
     resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
+    cardOwners[resumed.thread] = resumed
+    if (!missing) cards.revalidate(resumed.thread, entry.lines.mapNotNull { it.operationCard?.token })
     return true
   }
 
@@ -403,17 +437,37 @@ class NewTaskDraft(
     }
   }
 
-  private fun reportStandalone(current: NewTaskChat?, kind: NewTaskKind, outcome: NewTaskStartOutcome.Started) {
+  /** Shows the card [launchId] parked; a run that ended cleanly without one has nothing to show when [silentWhenAbsent]. */
+  private suspend fun showParkedCard(current: NewTaskChat?, kind: NewTaskKind, launchId: String, silentWhenAbsent: Boolean = false) {
+    if (!ownsChat(current)) {
+      if (!silentWhenAbsent) toasts.show(ToastMessage(ToastTone.Confirmation, "${kind.startName()} is waiting for confirmation."))
+      return
+    }
+    val chat = checkNotNull(current)
+    cardOwners[chat.thread] = chat
+    when {
+      cards.show(chat.thread, launchId) -> chat.persist()
+      !silentWhenAbsent ->
+        showStartProblem(current, kind, "${kind.startName()} is waiting for confirmation, but its card could not be read.")
+    }
+  }
+
+  private fun reportStandalone(current: NewTaskChat?, kind: NewTaskKind, outcome: NewTaskStartOutcome.Started, request: NewTaskStart) {
     val name = kind.startName()
     if (ownsChat(current)) {
       checkNotNull(current).thread.append(ChatMessage.Notice("Started $name. Follow it in Work."))
     } else {
       toasts.show(ToastMessage(ToastTone.Confirmation, "Started $name"))
     }
+    val launchId = outcome.launchId
+    launchId?.let { cards.remember(it, request) }
     val awaitFailure = outcome.awaitFailure ?: return
     scope.launch {
-      val reason = awaitFailure() ?: return@launch
-      showStartProblem(current, kind, "$name stopped. $reason")
+      val reason = awaitFailure()
+      when {
+        reason != null -> showStartProblem(current, kind, "$name stopped. $reason")
+        launchId != null -> showParkedCard(current, kind, launchId, silentWhenAbsent = true)
+      }
     }
   }
 

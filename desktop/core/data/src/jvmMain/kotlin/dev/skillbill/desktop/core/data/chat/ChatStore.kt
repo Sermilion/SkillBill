@@ -12,12 +12,15 @@ import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
+import dev.skillbill.desktop.core.domain.model.OperationCardReference
+import dev.skillbill.desktop.core.domain.model.OperationCardState
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import me.tatarka.inject.annotations.Inject
@@ -70,6 +73,13 @@ private object ChatStoreKeys {
   const val TARGET = "target"
   const val BRANCH = "branch"
   const val APPROVAL = "approval"
+  const val OPERATION_CARD = "operation_card"
+  const val TOKEN = "token"
+  const val LAUNCH_ID = "launch_id"
+  const val OPERATION_ID = "operation_id"
+  const val STATE = "state"
+  const val DRAFT_CHOICES = "draft_choices"
+  const val REFUSAL = "refusal"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -214,7 +224,7 @@ private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList 
         when (line.role) {
           ChatHistoryRole.Operator -> ChatExchange(line.text, "")
           ChatHistoryRole.Agent -> ChatExchange("", line.text)
-          ChatHistoryRole.Notice, ChatHistoryRole.Error, ChatHistoryRole.Approval ->
+          ChatHistoryRole.Notice, ChatHistoryRole.Error, ChatHistoryRole.Approval, ChatHistoryRole.OperationCard ->
             error("Non-conversation line reached exchange conversion")
         },
       )
@@ -244,6 +254,7 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
           if (line.actions.isNotEmpty()) put(ChatStoreKeys.ACTIONS, buildJsonArray { line.actions.forEach { add(it.toJson()) } })
           line.selectedAction?.let { put(ChatStoreKeys.SELECTED_ACTION, it.toJson()) }
           line.approval?.let { put(ChatStoreKeys.APPROVAL, it.toJson()) }
+          line.operationCard?.let { put(ChatStoreKeys.OPERATION_CARD, it.toJson()) }
         })
       }
     },
@@ -285,6 +296,7 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
           line.actions(ChatStoreKeys.ACTIONS, diagnostics),
           line.selectedAction(diagnostics),
           (line[ChatStoreKeys.APPROVAL] as? JsonObject)?.toApprovalCard(diagnostics),
+          (line[ChatStoreKeys.OPERATION_CARD] as? JsonObject)?.toOperationCardReference(),
         )
       }
     },
@@ -301,6 +313,27 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
         (root[ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX] as? JsonPrimitive)?.intOrNull,
       )
     },
+  )
+}
+
+private fun OperationCardReference.toJson(): JsonObject = buildJsonObject {
+  put(ChatStoreKeys.TOKEN, token)
+  put(ChatStoreKeys.LAUNCH_ID, launchId)
+  put(ChatStoreKeys.OPERATION_ID, operationId)
+  put(ChatStoreKeys.STATE, state.name)
+  draftChoices?.let { choices -> put(ChatStoreKeys.DRAFT_CHOICES, buildJsonObject { choices.forEach { (key, value) -> put(key, value) } }) }
+  refusal?.let { put(ChatStoreKeys.REFUSAL, it) }
+}
+
+private fun JsonObject.toOperationCardReference(): OperationCardReference? {
+  val state = OperationCardState.entries.firstOrNull { it.name == string(ChatStoreKeys.STATE) } ?: return null
+  return OperationCardReference(
+    token = string(ChatStoreKeys.TOKEN) ?: return null,
+    launchId = string(ChatStoreKeys.LAUNCH_ID) ?: return null,
+    operationId = string(ChatStoreKeys.OPERATION_ID) ?: return null,
+    state = state,
+    draftChoices = (get(ChatStoreKeys.DRAFT_CHOICES) as? JsonObject)?.mapValues { it.value.jsonPrimitive.content },
+    refusal = string(ChatStoreKeys.REFUSAL),
   )
 }
 

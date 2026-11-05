@@ -192,6 +192,13 @@ internal class ChatTurns(
     if (agent != null && session.started) save(session, agent)
   }
 
+  /** Saves the chat after an operation card changed outside a turn; false when the chat has no agent to save under. */
+  internal suspend fun operationCardChanged(session: ChatSession): Boolean {
+    val agent = session.agentState.value ?: return false
+    save(session, agent)
+    return true
+  }
+
   private suspend fun save(session: ChatSession, agent: ChatAgent) {
     val lines = session.historyLines()
     val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()

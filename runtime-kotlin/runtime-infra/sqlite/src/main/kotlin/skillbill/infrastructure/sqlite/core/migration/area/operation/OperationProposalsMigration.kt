@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration.area.operation
 
 import java.sql.Connection
 

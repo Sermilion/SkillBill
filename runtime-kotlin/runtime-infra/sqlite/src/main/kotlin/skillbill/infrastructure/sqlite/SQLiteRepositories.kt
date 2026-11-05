@@ -11,6 +11,7 @@ import skillbill.infrastructure.sqlite.diagnostics.FileRejectedOutputDiagnosticP
 import skillbill.infrastructure.sqlite.diagnostics.SqliteRejectedOutputDiagnosticRepository
 import skillbill.infrastructure.sqlite.goal.UnaddressedFindingsRuntime
 import skillbill.infrastructure.sqlite.idestatus.SqliteWorkBoardReadModelStore
+import skillbill.infrastructure.sqlite.operation.SqliteOperationCardStore
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalStore
 import skillbill.infrastructure.sqlite.review.accounting.loadReviewAccounting
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
@@ -64,6 +65,7 @@ import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
+import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
@@ -116,6 +118,7 @@ internal class SQLiteUnitOfWork(
     SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
+  override val operationCards: OperationCardRepository = SqliteOperationCardStore(connection)
   override val approvals: ApprovalStore = SqliteApprovalStore(connection, diagnostics)
   override val blockIncidents: BlockIncidentRepository =
     SqliteBlockIncidentRepository(connection, clock, blockIncidentContractValidator, diagnostics)

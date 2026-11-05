@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
 import skillbill.engine.operation.core.CurrentOperationAnchors
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationConfirmationGate
 import skillbill.engine.operation.core.OperationContext
@@ -28,6 +29,7 @@ import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalReposito
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.operation.ReleaseBuildGate
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.model.ReleaseBuildReadiness
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
@@ -68,18 +70,20 @@ class ReleaseOperationTest {
   private val executor =
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git, buildGate))),
-      OperationConfirmationGate(proposals, git, Clock.systemUTC()),
+      OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
       projectStore,
       RecordingBranchWorktreeResources(),
+      NoOperationCardLifecycle,
     )
   private val executorWithOtherOperation =
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git, buildGate), OtherConfirmableOperation)),
-      OperationConfirmationGate(proposals, git, Clock.systemUTC()),
+      OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
       projectStore,
       RecordingBranchWorktreeResources(),
+      NoOperationCardLifecycle,
     )
 
   init {

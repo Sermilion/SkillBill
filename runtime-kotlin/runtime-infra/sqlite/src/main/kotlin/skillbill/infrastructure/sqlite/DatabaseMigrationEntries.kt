@@ -17,7 +17,6 @@ import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseStrat
 import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
-import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
@@ -41,6 +40,10 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
+import skillbill.infrastructure.sqlite.core.migration.area.operation.OperationProposalsMigration
+import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationConfirmationExecutions
+import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationLaunchRetention
+import skillbill.infrastructure.sqlite.core.migration.area.operation.addOperationProposalCards
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -990,4 +993,19 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 104,
       name = "add-operator-approval-owner-lease-expiry",
       operation = ::addOperatorApprovalOwnerLeaseExpiry,
+    ) +
+    DatabaseMigration(
+      version = 105,
+      name = "add-operation-proposal-cards",
+      operation = ::addOperationProposalCards,
+    ) +
+    DatabaseMigration(
+      version = 106,
+      name = "add-operation-launch-retention",
+      operation = ::addOperationLaunchRetention,
+    ) +
+    DatabaseMigration(
+      version = 107,
+      name = "add-operation-confirmation-executions",
+      operation = ::addOperationConfirmationExecutions,
     )

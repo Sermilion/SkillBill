@@ -137,11 +137,23 @@ public class PrReviewFixOperation(
     if (context.arguments.scope == ANALYZE_ONLY) {
       return OperationRunResult.Finished(OperationOutcome.Completed(summary))
     }
-    return OperationRunResult.Proposed(
-      value = matrix,
-      summary = "$summary\nSelect with $SELECTION_FORMS.\n",
-      operationValues = anchors.toOperationValues(),
-    )
+    return when (val extraction = PrReviewFixMatrix.extract(matrix, anchors.ordinals)) {
+      is PrReviewFixMatrixExtraction.Malformed ->
+        OperationRunResult.Finished(PrReviewFixMatrix.malformed(summary, extraction.problems))
+      is PrReviewFixMatrixExtraction.Extracted ->
+        OperationRunResult.Proposed(
+          value = matrix,
+          summary = "$summary\nSelect with $SELECTION_FORMS.\n",
+          operationValues = anchors.toOperationValues(),
+          details =
+            PrReviewFixMatrix.details(
+              context.arguments,
+              PrReviewFixMode.REMOTE.wireValue,
+              pullRequest.url,
+              extraction.threads,
+            ),
+        )
+    }
   }
 
   override fun currentAnchors(context: OperationContext): CurrentOperationAnchors {
@@ -170,11 +182,21 @@ public class PrReviewFixOperation(
     proposal: ConfirmedOperationProposal,
   ): OperationRefusal? {
     val anchors = storedAnchors(proposal) { return it }
-    val selection = parsePrReviewFixSelection(requireNotNull(context.arguments.select), anchors.ordinals)
-    if (selection is PrReviewFixSelection.Invalid) return selection.usage
+    selectionRefusal(proposal, requireNotNull(context.arguments.select), anchors.ordinals)?.let { return it }
     val branch = requirePullRequestBranch(context, anchors.pullRequest) { return it }
     return if (context.arguments.push == PUSH_ON) pushRefusal(context, branch) else null
   }
+
+  private fun selectionRefusal(
+    proposal: ConfirmedOperationProposal,
+    select: String,
+    ordinals: Map<String, String>,
+  ): OperationRefusal? =
+    when (val selection = parsePrReviewFixSelection(select, ordinals)) {
+      is PrReviewFixSelection.Invalid -> selection.usage
+      is PrReviewFixSelection.Selected ->
+        PrReviewFixMatrix.offeredOptionRefusal(proposal.token, select, proposal.value, ordinals, selection.threads)
+    }
 
   private fun pushRefusal(
     context: OperationContext,

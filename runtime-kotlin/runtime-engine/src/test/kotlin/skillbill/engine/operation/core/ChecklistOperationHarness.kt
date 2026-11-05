@@ -14,6 +14,7 @@ import skillbill.engine.operation.unittestvalue.UnitTestValueCheckOperation
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.branchworktree.RecordingBranchWorktreeResources
 import java.nio.file.Files
@@ -49,10 +50,11 @@ internal class ChecklistOperationHarness : AutoCloseable {
           }),
         ),
       ),
-      OperationConfirmationGate(proposals, git, Clock.systemUTC()),
+      OperationConfirmationGate(proposals, UnavailableOperationCardRepository, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
       FixedProjectStorePort(root.resolve("project-store")),
       RecordingBranchWorktreeResources(),
+      NoOperationCardLifecycle,
     )
 
   init {

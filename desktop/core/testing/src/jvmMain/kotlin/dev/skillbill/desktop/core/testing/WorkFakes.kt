@@ -17,6 +17,9 @@ import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
 import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardLookup
+import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
@@ -104,6 +107,9 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
   val calls = mutableListOf<ControlCall>()
   val newTaskRequests = mutableListOf<NewTaskStart>()
   var newTaskOutcome: NewTaskStartOutcome = NewTaskStartOutcome.Refused("unused")
+  val operationCards = mutableMapOf<String, OperationCardView>()
+  val dismissedCards = mutableListOf<String>()
+  var dismissOutcome: OperationCardDismissOutcome = OperationCardDismissOutcome.Dismissed
   var exportPreflightOutcome: ExportPreflightOutcome = ExportPreflightOutcome.Refused("unused")
   var archiveInspectOutcome: ArchiveInspectOutcome = ArchiveInspectOutcome.Refused("unused")
   var exportOutcome: ExportOutcome = ExportOutcome.Refused("unused")
@@ -127,6 +133,18 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
   override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome {
     newTaskRequests += request
     return newTaskOutcome
+  }
+
+  override suspend fun operationCardForLaunch(launchId: String): OperationCardView? = operationCards[launchId]
+
+  override suspend fun operationCard(token: String): OperationCardView? = operationCards.values.firstOrNull { it.token == token }
+
+  override suspend fun revalidateOperationCard(token: String): OperationCardLookup =
+    operationCard(token)?.let(OperationCardLookup::Present) ?: OperationCardLookup.Missing
+
+  override suspend fun dismissOperationCard(token: String): OperationCardDismissOutcome {
+    dismissedCards += token
+    return dismissOutcome
   }
 
   override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome =

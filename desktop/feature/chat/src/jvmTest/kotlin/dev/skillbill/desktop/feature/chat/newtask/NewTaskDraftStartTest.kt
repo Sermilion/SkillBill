@@ -398,7 +398,7 @@ class NewTaskDraftStartTest {
     }
     runCurrent()
     val chat = assertNotNull(draft.chat.value)
-    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor) { failure.await() }
+    controls.newTaskOutcome = NewTaskStartOutcome.Started("monitor", NewTaskKind.Monitor, awaitFailure = { failure.await() })
 
     draft.start(NewTaskKind.Monitor, target = "https://github.com/acme/app/pull/42")
     runCurrent()

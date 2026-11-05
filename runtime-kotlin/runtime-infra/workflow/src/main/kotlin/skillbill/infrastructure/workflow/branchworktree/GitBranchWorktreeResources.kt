@@ -13,6 +13,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeObservation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import java.io.IOException
 import java.nio.channels.FileChannel
@@ -80,6 +81,68 @@ class GitBranchWorktreeResources(
     } catch (failure: IOException) {
       diagnostics.warning("seam=branch_worktree.hold outcome=failed path=$checkoutRoot", failure)
       false
+    }
+  }
+
+  override fun observe(
+    checkoutRoot: Path,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeObservation {
+    val top = monitorGit(checkoutRoot, "rev-parse", "--show-toplevel")
+    val branch = monitorGit(checkoutRoot, "symbolic-ref", "--short", "HEAD")
+    val head = monitorGit(checkoutRoot, "rev-parse", "HEAD")
+    val repository = repositoryOf(checkoutRoot)
+    return when {
+      !top.ok || !head.ok || repository == null ->
+        BranchWorktreeObservation.Unavailable("The checkout is missing or Git could not read its identity.")
+      !branch.ok ->
+        BranchWorktreeObservation.Unavailable(
+          "The checkout is on a detached HEAD; check out a branch before starting this operation.",
+        )
+      else ->
+        observeOwnership(
+          checkoutRoot,
+          repository,
+          ObservedCheckout(realPath(Path.of(top.output.trim())), branch.output.trim(), head.output.trim()),
+          holder,
+        )
+    }
+  }
+
+  private fun observeOwnership(
+    checkoutRoot: Path,
+    repository: Repository,
+    checkout: ObservedCheckout,
+    holder: BranchWorktreeHolder,
+  ): BranchWorktreeObservation {
+    val root = checkout.root
+    val actualBranch = checkout.branch
+    val admin =
+      adminDirectoryOf(root)
+        ?: return BranchWorktreeObservation.Unavailable("The checkout ownership record is unavailable.")
+    if (!Files.exists(admin.resolve(RECORD_FILE))) {
+      return BranchWorktreeObservation.CallerOwned(root, repository.primaryRoot, actualBranch, checkout.head)
+    }
+    return try {
+      locked(repository) {
+        val record =
+          readRecord(admin)
+            ?: return@locked BranchWorktreeObservation.Unavailable("The checkout ownership record is unreadable.")
+        if (realPath(Path.of(record.path)) != root || record.branch != actualBranch) {
+          BranchWorktreeObservation.Unavailable("The managed checkout path or branch changed.")
+        } else {
+          BranchWorktreeObservation.RuntimeManaged(
+            root,
+            repository.primaryRoot,
+            actualBranch,
+            checkout.head,
+            holder.token() in record.holders,
+          )
+        }
+      }
+    } catch (failure: IOException) {
+      diagnostics.warning("seam=branch_worktree.observe outcome=unreadable path=$checkoutRoot", failure)
+      BranchWorktreeObservation.Unavailable("The checkout ownership record could not be read.")
     }
   }
 
@@ -276,6 +339,8 @@ class GitBranchWorktreeResources(
   private data class Repository(val primaryRoot: Path, val commonDirectory: Path)
 
   private data class OwnedCheckout(val root: Path, val adminDirectory: Path, val repository: Repository)
+
+  private data class ObservedCheckout(val root: Path, val branch: String, val head: String)
 
   private data class OwnershipRecord(val branch: String, val path: String, val holders: Set<String>)
 

@@ -19,6 +19,7 @@ import dev.skillbill.desktop.feature.chat.QueuedChatMessage
 import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
 import dev.skillbill.desktop.feature.chat.UnavailableApprovalFeed
 import dev.skillbill.desktop.feature.chat.savedApprovalLine
+import dev.skillbill.desktop.feature.chat.savedOperationCardLine
 import dev.skillbill.desktop.feature.chat.show
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -319,15 +320,18 @@ internal class NewTaskChat(
 
   private fun snapshotLines(): List<ChatHistoryLine> = thread.transcript.value.mapNotNull { message ->
     when (message) {
+      is ChatMessage.Notice -> message.operationCard?.let {
+        ChatHistoryLine(ChatHistoryRole.OperationCard, message.text, operationCard = it)
+      } ?: if (repositoryMissing && message.text.startsWith("This draft's repository no longer exists:")) null
+        else ChatHistoryLine(ChatHistoryRole.Notice, message.text)
       is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text, selectedAction = message.action)
       is ChatMessage.Agent -> if (!message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty())) {
         ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
       } else null
-      is ChatMessage.Notice -> if (repositoryMissing && message.text.startsWith("This draft's repository no longer exists:")) null
-        else ChatHistoryLine(ChatHistoryRole.Notice, message.text)
       is ChatMessage.Error -> ChatHistoryLine(ChatHistoryRole.Error, message.text, message.failure)
       // Every approval request and outcome of the draft is saved, whole, with no clipping.
       is ChatMessage.Approval -> message.card.savedApprovalLine()
+      is ChatMessage.OperationCard -> message.savedOperationCardLine()
       is ChatMessage.StateLine -> null
     }
   }

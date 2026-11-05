@@ -81,6 +81,6 @@ internal const val SELECTION_FORMS: String =
 
 private const val ALL_RECOMMENDED = "all-recommended"
 private const val FIX_ALL_UNRESOLVED = "fix-all-unresolved"
-private const val RECOMMENDED_OPTION = "1"
+internal const val RECOMMENDED_OPTION: String = "1"
 private val OPTION_NUMBER = Regex("""[1-9]\d*""")
 internal const val FIX_AS_ASKED_OPTION: String = "fix-as-asked"

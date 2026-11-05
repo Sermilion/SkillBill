@@ -2497,6 +2497,9 @@ private val expectedMigrationDefinitions =
     102 to "add-operator-approval-records-and-rules",
     103 to "add-operator-approval-leases-and-grant-facts",
     104 to "add-operator-approval-owner-lease-expiry",
+    105 to "add-operation-proposal-cards",
+    106 to "add-operation-launch-retention",
+    107 to "add-operation-confirmation-executions",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {
