@@ -787,3 +787,20 @@ valid probe records as before. This supersedes the earlier probe correction requ
 
 Reason: Probe formatting does not determine whether project checks passed. Durable
 workflow and telemetry contracts still validate the records the runtime writes.
+
+## 2026-11-05: Reference interaction audit reports without multiplying prose
+
+Context: SKILL-453 child wftr-20261105-192716-v3h4 submitted a 27,634-byte report with six bare
+interaction verdicts and three bare re-check verdicts. Implicit evidence copied that report nine
+times into a generated audit result, exceeding its 196,608-byte contract limit after the settlement
+tool had acknowledged receipt.
+
+Decision: Runtime interaction parsing binds omitted evidence to the producing workflow, phase,
+attempt and serial revision, with a per-decision fragment. Explicit citations retain their original
+meaning. The full report remains in the settled envelope or retained producer output, rather than in
+every trace and re-check field. Unbound parser callers keep their existing prose fallback. A closure
+reference without source citations uses the existing conservative re-check-on-any-change policy. The
+phase recorder rejects oversized generated trace evidence before its owner-fenced transaction so
+output correction can reuse the attempt. Settlement guidance identifies an ok response as receipt
+pending runtime validation, not completed workflow authority. Limits and existing saved state remain
+unchanged.
