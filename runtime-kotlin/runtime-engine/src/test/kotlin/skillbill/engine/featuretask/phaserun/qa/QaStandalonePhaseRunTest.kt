@@ -20,7 +20,9 @@ import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaTargetKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
 import java.time.Instant
@@ -144,6 +146,27 @@ class QaStandalonePhaseRunTest {
     assertNull(result.qaReportText)
     assertTrue(result.targetReport.first().startsWith("Warning:"), result.targetReport.toString())
     assertContains(result.targetReport.first(), "agent timed out")
+  }
+
+  @Test
+  fun `provider limit blocked QA passes through without a quality verdict`() {
+    val reason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Feature-task-runtime phase 'qa'",
+        agentId = "claude",
+        resumePhaseId = "qa",
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage limit", resetHint = null),
+      )
+    val result =
+      assertIs<PhaseRunResult.Blocked>(
+        qaStandalonePhaseRun(git, listOf(androidPack), workspaces, leases).run(
+          PhaseRunRequest(SkeletonDefinition.QA.id, Path.of("/tmp/qa-repo"), "claude"),
+          INVOCATION,
+        ) { PhaseRunResult.Blocked(INVOCATION, emptyList(), null, "qa", reason) },
+      )
+
+    assertEquals(reason, result.reason)
+    assertEquals(listOf(INVOCATION), leases.releasedInvocations)
   }
 
   @Test

@@ -50,6 +50,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Instant
@@ -150,9 +151,12 @@ public class IdeStatusProjector(
     context: IdeStatusProjectionContext,
   ): IdeStatusProjection {
     candidate.standaloneStatus?.let { record ->
+      val exactPauseReason =
+        record.terminalResult?.takeIf { classifiedProviderLimitPause(it) }
+          ?: resolveExecutionReason(record, context.unitOfWork).text
       return IdeStatusProjection(
         projectStandalonePhase(context, record),
-        resolveExecutionReason(record, context.unitOfWork).text,
+        exactPauseReason,
         standaloneLaunchAgent(record, context.unitOfWork),
       )
     }
@@ -437,6 +441,8 @@ public class IdeStatusProjector(
       return IdeStatusLifecycleState.ACTIVE
     }
     return when {
+      projection?.paused == true && classifiedProviderLimitPause(projection.pauseReason) ->
+        IdeStatusLifecycleState.PAUSED
       candidateLifecycle != IdeStatusLifecycleState.ACTIVE -> candidateLifecycle
       projection?.paused == true -> IdeStatusLifecycleState.PAUSED
       projection?.executionLiveness != ExecutionLiveness.LIVE -> IdeStatusLifecycleState.IDLE
@@ -462,25 +468,20 @@ public class IdeStatusProjector(
     childContext: ChildOptionalContext,
     goalBlockedReason: String?,
   ): GoalPauseReasonProjection {
-    childContext.operatorDecisionPause?.let { pause ->
-      if (lifecycle == IdeStatusLifecycleState.PAUSED || lifecycle == IdeStatusLifecycleState.BLOCKED) {
-        return GoalPauseReasonProjection(
-          IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, pause.reason),
-          pause.reason,
-        )
-      }
-    }
-    if (lifecycle == IdeStatusLifecycleState.BLOCKED) {
-      val reason = projection?.currentSubtaskBlockedReason ?: projection?.planning?.reason ?: goalBlockedReason
-      val exact = reason?.takeIf(String::isNotBlank)
-      return GoalPauseReasonProjection(blockedGoalPauseReason(exact, projection?.currentSubtaskId), exact)
-    }
-    if (lifecycle != IdeStatusLifecycleState.PAUSED) return GoalPauseReasonProjection(null, null)
     val durableReason = projection?.pauseReason
-    val bounded =
-      IdeStatusPauseReasonCode.fromWire(durableReason)
-        ?.let { code -> IdeStatusPauseReason.of(code, null) }
-    return GoalPauseReasonProjection(bounded, durableReason)
+    val classifiedDurable = classifiedProviderLimitPause(durableReason)
+    return operatorDecisionGoalPauseReason(
+      lifecycle,
+      childContext.operatorDecisionPause,
+      classifiedDurable,
+      durableReason,
+    ) ?: pausedOrBlockedGoalPauseReason(
+      lifecycle,
+      projection,
+      goalBlockedReason,
+      classifiedDurable,
+      durableReason,
+    )
   }
 
   private fun childOptionalContext(
@@ -704,7 +705,49 @@ private val IN_PROGRESS_ASSESSMENT = setOf(GoalRunnerAssessmentState.PENDING, Go
 internal fun blockedGoalPauseReason(
   reason: String?,
   currentSubtaskId: Int?,
-): IdeStatusPauseReason? =
-  reason
+): IdeStatusPauseReason? {
+  if (classifiedProviderLimitPause(reason)) return null
+  return reason
     ?.takeIf { currentSubtaskId != null }
     ?.let { IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, it) }
+}
+
+private fun operatorDecisionGoalPauseReason(
+  lifecycle: IdeStatusLifecycleState,
+  pause: FeatureTaskRuntimeOperatorDecisionPause?,
+  classifiedDurable: Boolean,
+  durableReason: String?,
+): GoalPauseReasonProjection? {
+  if (pause == null) return null
+  if (lifecycle != IdeStatusLifecycleState.PAUSED && lifecycle != IdeStatusLifecycleState.BLOCKED) return null
+  if (classifiedDurable || classifiedProviderLimitPause(pause.reason)) {
+    return GoalPauseReasonProjection(null, if (classifiedDurable) durableReason else pause.reason)
+  }
+  return GoalPauseReasonProjection(
+    IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, pause.reason),
+    pause.reason,
+  )
+}
+
+private fun pausedOrBlockedGoalPauseReason(
+  lifecycle: IdeStatusLifecycleState,
+  projection: GoalRunnerStatusProjection?,
+  goalBlockedReason: String?,
+  classifiedDurable: Boolean,
+  durableReason: String?,
+): GoalPauseReasonProjection {
+  if (lifecycle == IdeStatusLifecycleState.BLOCKED) {
+    val reason = projection?.currentSubtaskBlockedReason ?: projection?.planning?.reason ?: goalBlockedReason
+    val exact = reason?.takeIf(String::isNotBlank)
+    return GoalPauseReasonProjection(blockedGoalPauseReason(exact, projection?.currentSubtaskId), exact)
+  }
+  if (lifecycle != IdeStatusLifecycleState.PAUSED) return GoalPauseReasonProjection(null, null)
+  if (classifiedDurable) return GoalPauseReasonProjection(null, durableReason)
+  val bounded =
+    IdeStatusPauseReasonCode.fromWire(durableReason)
+      ?.let { code -> IdeStatusPauseReason.of(code, null) }
+  return GoalPauseReasonProjection(bounded, durableReason)
+}
+
+private fun classifiedProviderLimitPause(reason: String?): Boolean =
+  reason != null && FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(reason)

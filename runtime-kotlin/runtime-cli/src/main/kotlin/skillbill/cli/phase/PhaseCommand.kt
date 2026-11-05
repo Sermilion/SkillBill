@@ -13,6 +13,7 @@ import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.cli.GOAL_EXIT_PAUSED
 import skillbill.cli.kernel.cli.namedStandaloneScope
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.cli.standaloneReportText
@@ -44,6 +45,7 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.net.URI
 import java.net.URISyntaxException
 import java.nio.file.Path
@@ -366,21 +368,35 @@ internal fun writePhaseResult(
         exitCode = 0,
       )
     is PhaseRunResult.Blocked ->
-      state.completeText(
-        listOfNotNull(
-          result.completedOutputs.takeIf { it.isNotEmpty() }?.joinToString("\n"),
-          register?.let { "Unaccepted report output:\n$it" },
-          review?.output?.takeIf { it.isNotBlank() && it != register }?.let { "Retained findings:\n$it" },
-          "Phase '$definitionId' blocked at '${result.stepId}': ${result.reason}",
-          review?.let(::blockedReviewDetails)?.takeIf(String::isNotBlank),
-          result.targetReport.takeIf { it.isNotEmpty() }?.joinToString("\n"),
-          "Phase invocation ID: ${result.invocationId}",
-          incidentLines.takeIf { it.isNotEmpty() }?.joinToString("\n"),
-        ).joinToString("\n"),
-        mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to incidentDetails.incidentPayload()),
-        exitCode = 1,
-      )
+      writeBlockedPhaseResult(state, definitionId, result, incidentLines, incidentDetails)
   }
+}
+
+private fun writeBlockedPhaseResult(
+  state: CliRunState,
+  definitionId: String,
+  result: PhaseRunResult.Blocked,
+  incidentLines: List<String>,
+  incidentDetails: List<GoalIncidentDetail>,
+) {
+  val providerLimitPause = FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)
+  val review = result.reviewResult
+  val register = review?.rawOutput?.takeIf(String::isNotBlank) ?: review?.output
+  val statusWord = if (providerLimitPause) "paused" else "blocked"
+  state.completeText(
+    listOfNotNull(
+      result.completedOutputs.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+      register?.let { "Unaccepted report output:\n$it" },
+      review?.output?.takeIf { it.isNotBlank() && it != register }?.let { "Retained findings:\n$it" },
+      "Phase '$definitionId' $statusWord at '${result.stepId}': ${result.reason}",
+      review?.let(::blockedReviewDetails)?.takeIf(String::isNotBlank),
+      result.targetReport.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+      "Phase invocation ID: ${result.invocationId}",
+      incidentLines.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+    ).joinToString("\n"),
+    mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to incidentDetails.incidentPayload()),
+    exitCode = if (providerLimitPause) GOAL_EXIT_PAUSED else 1,
+  )
 }
 
 private fun blockedReviewDetails(review: ParallelCodeReviewResult): String =

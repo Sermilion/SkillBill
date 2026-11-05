@@ -18,6 +18,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 @Inject
 public class QaStandalonePhaseRun(
@@ -45,30 +46,42 @@ public class QaStandalonePhaseRun(
     val settled =
       execution.withExecution(request.repoRoot, QaPolicy.STANDALONE, invocationId) { qa ->
         when (val target = qa.target) {
-          is QaExecutionTarget.Skipped -> QaAttempt(QaReports.skipped(target.reason, target.detail), emptyList())
+          is QaExecutionTarget.Skipped ->
+            QaStandaloneSettlement.Recorded(QaAttempt(QaReports.skipped(target.reason, target.detail), emptyList()))
           is QaExecutionTarget.Supported -> {
             seedChecklist(request, qa, target)
             when (val result = launch(request.copy(qaExecution = qa))) {
-              is PhaseRunResult.Blocked -> QaAttempt(stopped(result.reason), result.completedStepIds)
-              is PhaseRunResult.Completed -> QaAttempt(settlement.settle(qa), result.completedStepIds)
+              is PhaseRunResult.Blocked ->
+                if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)) {
+                  QaStandaloneSettlement.ProviderLimitPause(result)
+                } else {
+                  QaStandaloneSettlement.Recorded(QaAttempt(stopped(result.reason), result.completedStepIds))
+                }
+              is PhaseRunResult.Completed ->
+                QaStandaloneSettlement.Recorded(QaAttempt(settlement.settle(qa), result.completedStepIds))
             }
           }
         }
       }
-    val outcome = settled.value
-    settlement.recordDiagnostics(outcome.report)
-    val report =
-      QaReports.withRetainedResources(outcome.report, settled.retainedResources, RETAINED_GUIDANCE)
-        .let { it.copy(warnings = it.warnings + settled.warnings) }
-    return PhaseRunResult.Completed(
-      invocationId = invocationId,
-      completedStepIds = outcome.completedStepIds,
-      reviewResult = null,
-      value = report.summary(),
-      targetReport = report.targetReport(),
-      qaOutcome = report.qaOutcome(),
-      qaReportText = report.text,
-    )
+    return when (val outcome = settled.value) {
+      is QaStandaloneSettlement.ProviderLimitPause -> outcome.blocked
+      is QaStandaloneSettlement.Recorded -> {
+        val attempt = outcome.attempt
+        settlement.recordDiagnostics(attempt.report)
+        val report =
+          QaReports.withRetainedResources(attempt.report, settled.retainedResources, RETAINED_GUIDANCE)
+            .let { it.copy(warnings = it.warnings + settled.warnings) }
+        PhaseRunResult.Completed(
+          invocationId = invocationId,
+          completedStepIds = attempt.completedStepIds,
+          reviewResult = null,
+          value = report.summary(),
+          targetReport = report.targetReport(),
+          qaOutcome = report.qaOutcome(),
+          qaReportText = report.text,
+        )
+      }
+    }
   }
 
   private fun seedChecklist(
@@ -112,6 +125,12 @@ public class QaStandalonePhaseRun(
     val report: QaReport,
     val completedStepIds: List<String>,
   )
+
+  private sealed interface QaStandaloneSettlement {
+    data class Recorded(val attempt: QaAttempt) : QaStandaloneSettlement
+
+    data class ProviderLimitPause(val blocked: PhaseRunResult.Blocked) : QaStandaloneSettlement
+  }
 
   private companion object {
     const val RETAINED_GUIDANCE =

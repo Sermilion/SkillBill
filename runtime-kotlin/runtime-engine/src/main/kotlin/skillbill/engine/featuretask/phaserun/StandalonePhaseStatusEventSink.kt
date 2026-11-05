@@ -25,6 +25,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehav
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -104,12 +105,15 @@ public class StandalonePhaseStatusEventSink(
           )
         }
         is PhaseRunResult.Blocked -> {
+          val providerLimitPause = FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)
           persist(
-            state = "blocked",
+            state = if (providerLimitPause) "paused" else "blocked",
             finishedAt = null,
             terminalResult = result.reason,
           )
-          observeBlocked(result.reason, null, result.stepId)
+          if (!providerLimitPause) {
+            observeBlocked(result.reason, null, result.stepId)
+          }
         }
       }
     }.onFailure { error ->
