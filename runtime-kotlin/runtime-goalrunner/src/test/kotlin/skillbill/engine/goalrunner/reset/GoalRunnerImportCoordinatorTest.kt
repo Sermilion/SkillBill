@@ -24,6 +24,7 @@ import skillbill.engine.goalrunner.persist.seedCurrentParent
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_IMPORTED
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.goalrunner.model.targetReached
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.withGoalRunnerControlRepository
@@ -47,6 +48,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.text.sha256HexUtf8
+import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import java.nio.file.Files
@@ -74,13 +76,6 @@ class GoalRunnerImportCoordinatorTest {
     val archivedControlRow = seedArchivedControls(sourceDb, parentId, reviewPolicy, acceptance)
     val fixture = importFixture(bundleName = "specs")
     val archive = fixture.root.resolve("archive.zip")
-    val snapshot = parentSnapshot()
-    val archiveSnapshotPort =
-      RecordingGoalArchiveSnapshotPort { target ->
-        snapshot.snapshot(target).copy(
-          ownedTables = GoalArchiveOwnedTables.of(mapOf("goal_runner_controls" to listOf(archivedControlRow))),
-        )
-      }
     val exportService =
       testGoalRunnerStatusService(
         manifestStore = fixture.store,
@@ -89,7 +84,7 @@ class GoalRunnerImportCoordinatorTest {
           GoalRunnerStatusTestPorts(
             gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
             projectStore = fixture.port,
-            archiveSnapshotPort = archiveSnapshotPort,
+            archiveSnapshotPort = snapshotWithControls(archivedControlRow),
             workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
           ),
         decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
@@ -129,12 +124,30 @@ class GoalRunnerImportCoordinatorTest {
       val controls = unit.goalRunnerControls
       val imported = controls.controlState(parentId)
       assertEquals(FeatureTaskRuntimeQaSelection.OFF, imported.qaSelection)
+      assertEquals(2, imported.stopAfterSubtaskId)
+      assertEquals(mapOf(1 to 3, 2 to 1), imported.validationQualityRetriesBySubtask)
+      assertFalse(imported.stopAfterConsumed)
+      assertTrue(imported.targetReached(completedManifest()))
       assertTrue(imported.paused)
       assertEquals(GOAL_PAUSE_REASON_IMPORTED, imported.pauseReason)
       assertNull(imported.executionLease)
       assertNull(imported.executionWorktreePath)
       assertEquals(reviewPolicy, controls.reviewPolicy(parentId))
       assertEquals(mapOf(2 to acceptance), controls.outOfBandAcceptances(parentId))
+    }
+  }
+
+  private fun completedManifest() =
+    manifest(subtaskCount = 2).copy(
+      subtasks = manifest(2).subtasks.map { it.copy(status = DecompositionStatus.COMPLETE.wireValue) },
+    )
+
+  private fun snapshotWithControls(row: GoalArchiveTableRow): RecordingGoalArchiveSnapshotPort {
+    val snapshot = parentSnapshot()
+    return RecordingGoalArchiveSnapshotPort { target ->
+      snapshot.snapshot(target).copy(
+        ownedTables = GoalArchiveOwnedTables.of(mapOf("goal_runner_controls" to listOf(row))),
+      )
     }
   }
 
@@ -157,6 +170,8 @@ class GoalRunnerImportCoordinatorTest {
         parentId,
         GoalRunnerControlState(
           qaSelection = FeatureTaskRuntimeQaSelection.OFF,
+          stopAfterSubtaskId = 2,
+          validationQualityRetriesBySubtask = mapOf(1 to 3, 2 to 1),
           executionLease =
             GoalRunnerExecutionLease(
               generation = 1,
@@ -520,6 +535,14 @@ class GoalRunnerImportCoordinatorTest {
   fun `failed spec write retries without restoring workflow rows again`() {
     val fixture = importFixture(bundleName = "specs")
     val archive = fixture.root.resolve("archive.zip")
+    val sourceDb = Files.createTempDirectory("goal-import-retry-controls-source").resolve("metrics.db")
+    val archivedControlRow =
+      seedArchivedControls(
+        sourceDb,
+        "wfl-parent",
+        GoalRunnerReviewPolicy(CodeReviewExecutionMode.DELEGATED),
+        testAcceptance(),
+      )
     val exportService =
       testGoalRunnerStatusService(
         manifestStore = fixture.store,
@@ -528,7 +551,12 @@ class GoalRunnerImportCoordinatorTest {
           GoalRunnerStatusTestPorts(
             gitOperations = BranchHeadGit("feat/SKILL-245-goal", "abc123"),
             projectStore = fixture.port,
-            archiveSnapshotPort = parentSnapshot(),
+            archiveSnapshotPort =
+              RecordingGoalArchiveSnapshotPort { target ->
+                parentSnapshot().snapshot(target).copy(
+                  ownedTables = GoalArchiveOwnedTables.of(mapOf("goal_runner_controls" to listOf(archivedControlRow))),
+                )
+              },
           ),
         decompositionManifestStore = storeAwareTestDecompositionManifestStore(fixture.port),
       )
@@ -540,7 +568,7 @@ class GoalRunnerImportCoordinatorTest {
     val destinationPort = FixedProjectStorePort(destinationRoot)
     val destinationStates = InMemoryWorkflowStates()
     val controls = RecordingImportControls()
-    val database = FakeDatabaseSessionFactory(destinationStates, goalRunnerControls = controls)
+    val database = retryDatabase(sourceDb, destinationStates, controls, archivedControlRow)
     val delegate = storeAwareTestDecompositionManifestStore(destinationPort)
     var failWrite = true
     val failingStore =
@@ -570,11 +598,33 @@ class GoalRunnerImportCoordinatorTest {
       )
 
     assertIs<GoalRunnerImportResult.Incomplete>(importService.import(GoalRunnerImportRequest(archive, destinationRoot)))
+    assertEquals(2, controls.controlState("wfl-parent").stopAfterSubtaskId)
+    assertEquals(mapOf(1 to 3, 2 to 1), controls.controlState("wfl-parent").validationQualityRetriesBySubtask)
     val importedWorkflow = requireNotNull(destinationStates.getFeatureTaskWorkflow("wfl-parent"))
     destinationStates.failSaveWhen = { true }
     assertIs<GoalRunnerImportResult.Imported>(importService.import(GoalRunnerImportRequest(archive, destinationRoot)))
+    assertEquals(2, controls.controlState("wfl-parent").stopAfterSubtaskId)
+    assertEquals(mapOf(1 to 3, 2 to 1), controls.controlState("wfl-parent").validationQualityRetriesBySubtask)
     assertEquals(importedWorkflow, destinationStates.getFeatureTaskWorkflow("wfl-parent"))
     assertEquals("body of spec.md", Files.readString(destinationPort.root.resolve("specs/specs/spec.md")))
+  }
+
+  private fun retryDatabase(
+    sourceDb: Path,
+    states: InMemoryWorkflowStates,
+    controls: RecordingImportControls,
+    row: GoalArchiveTableRow,
+  ): FakeDatabaseSessionFactory {
+    lateinit var archivedControl: GoalRunnerControlState
+    withGoalRunnerControlRepository(sourceDb) { archivedControl = it.controlState("wfl-parent") }
+    return FakeDatabaseSessionFactory(
+      states,
+      goalRunnerControls = controls,
+      archiveOwnedRestorer = { tables ->
+        assertEquals(listOf(row), tables.rows("goal_runner_controls"))
+        controls.persistControlState("wfl-parent", archivedControl)
+      },
+    )
   }
 
   @Test

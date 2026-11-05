@@ -12,6 +12,7 @@ import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
+import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
@@ -66,6 +67,7 @@ class FakeDatabaseSessionFactory(
     EmptyGoalRunnerControlRepository,
   private val workList: WorkListRepository = EmptyWorkListRepository,
   private val archiveSnapshotReader: ((GoalPurgeTarget) -> GoalArchiveOwnedSnapshot)? = null,
+  private val archiveOwnedRestorer: ((GoalArchiveOwnedTables) -> Unit)? = null,
 ) : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection(): DatabasePathProtectionResult =
     DatabasePathProtectionResult.Acquired(AutoCloseable { })
@@ -100,6 +102,10 @@ class FakeDatabaseSessionFactory(
       override val workList = this@FakeDatabaseSessionFactory.workList
       override val goalPlanningPreparations = planningPreparations
       override val goalRunnerControls = this@FakeDatabaseSessionFactory.goalRunnerControls
+
+      override fun restoreGoalArchiveOwnedTables(ownedTables: GoalArchiveOwnedTables) {
+        archiveOwnedRestorer?.invoke(ownedTables)
+      }
 
       override fun snapshotGoalArchiveOwned(target: GoalPurgeTarget): GoalArchiveOwnedSnapshot =
         archiveSnapshotReader?.invoke(target)
