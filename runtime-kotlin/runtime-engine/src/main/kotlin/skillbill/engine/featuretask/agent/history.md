@@ -1,3 +1,12 @@
+## [2026-11-05] TWS-1 complete goals without CI
+Areas: runtime-engine featuretask monitor and goalrunner finalization; runtime command guidance; workflow playbook; skill-bill source
+- Goal and standalone PR monitors accept two successful empty check observations at least two minutes apart for the same PR and nonblank head, followed by fresh identity confirmation. Goal monitoring also matches a supplied published SHA.
+- Failed reads and identity changes reset the candidate. A check previously seen for that identity prevents an empty result; reported checks follow normal monitoring. Standalone branch monitoring keeps its separate policy.
+- Goal completion records `no checks reported`. Delayed or conditional checks may appear later, so guidance asks users to inspect the PR again when those checks matter.
+- Recovery guidance requires fresh identity, ownership, lease, PR and check evidence before an eligible supported resume. It preserves completed work and the existing PR.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-04] SKILL-480 interaction-trace audit recoveryAreas: runtime-engine featuretask output gate and acceptance persistence
 - The first malformed interaction-trace completion enters the retryable terminal path for one correction. Other completion rejections keep their existing behavior.
 - A second malformed completion degrades pending scenarios to unknown, retains prior recheck evidence and returns repair to ACCEPTED.
