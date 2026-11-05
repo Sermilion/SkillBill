@@ -122,6 +122,7 @@ internal const val PAUSE_NOTICE = "Pause recorded. The goal stops after its curr
 internal const val PURGE_DISABLED_TOOLTIP = "Pause or cancel the goal before purging"
 internal const val NO_CHECKOUT = "This project has no checkout on this machine."
 internal const val NO_WORK_ITEM = "This run has no work item."
+internal const val LOADING_SPECS = "Loading specs"
 internal const val NO_SPECS = "No specs yet"
 internal const val NO_SPECS_BODY = "Plan a feature with /skill-bill phase:plan and its bundle shows up here."
 internal const val NO_MATCH = "No specs match"

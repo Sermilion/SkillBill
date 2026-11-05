@@ -177,12 +177,14 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
         }
       }
       val counts = ((state.tree as? SpecTreeState.Loaded)?.tree?.counts)
+      // While the tree loads the counts are unknown, and a 0 would read as an empty project.
+      val filterLabel = { name: String, count: Int? -> if (state.tree == SpecTreeState.Loading) name else "$name ${count ?: 0}" }
       Segmented(
         options = listOf(
-          SegmentedOption(SpecStatusFilter.ALL, "All ${counts?.all ?: 0}"),
-          SegmentedOption(SpecStatusFilter.ACTIVE, "Active ${counts?.active ?: 0}"),
-          SegmentedOption(SpecStatusFilter.PENDING, "Pending ${counts?.pending ?: 0}"),
-          SegmentedOption(SpecStatusFilter.DONE, "Done ${counts?.done ?: 0}"),
+          SegmentedOption(SpecStatusFilter.ALL, filterLabel("All", counts?.all)),
+          SegmentedOption(SpecStatusFilter.ACTIVE, filterLabel("Active", counts?.active)),
+          SegmentedOption(SpecStatusFilter.PENDING, filterLabel("Pending", counts?.pending)),
+          SegmentedOption(SpecStatusFilter.DONE, filterLabel("Done", counts?.done)),
         ),
         selected = state.statusFilter,
         onSelect = { onAction(SpecsAction.ChooseStatus(it)) },
@@ -200,7 +202,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
         }
         SpecTreeState.NoCheckout -> TopEmpty { EmptyState(NO_CHECKOUT, icon = LucideIcons.folder) }
         is SpecTreeState.NoSpecs -> TopEmpty { EmptyState(NO_SPECS, icon = LucideIcons.fileText, body = noSpecsBody()) }
-        SpecTreeState.Loading -> Unit
+        SpecTreeState.Loading -> SpecsLoadingPlaceholder()
         is SpecTreeState.Loaded -> if (state.rows.isEmpty() && state.filtersActive) {
           TopEmpty {
             EmptyState(NO_MATCH, icon = LucideIcons.search, body = NO_MATCH_BODY, actions = {
