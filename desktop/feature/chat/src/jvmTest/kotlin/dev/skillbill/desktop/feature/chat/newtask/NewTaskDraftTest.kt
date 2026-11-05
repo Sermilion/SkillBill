@@ -106,6 +106,16 @@ class NewTaskDraftTest {
     draft.close()
   }
 
+  @Test
+  fun `a blank base branch reaches the new task chat as the default`() = runTest {
+    val draft = draft().apply { baseBranch = "" }
+    draft.say("add export")
+    runCurrent()
+
+    assertEquals(ChatScope.NewTask(root, null), chat.requests.single().scope)
+    draft.close()
+  }
+
   // A retry that resumes would point the agent at a session it never created.
   @Test
   fun `a failed first turn retries as a first turn and output makes the next one resume`() = runTest {

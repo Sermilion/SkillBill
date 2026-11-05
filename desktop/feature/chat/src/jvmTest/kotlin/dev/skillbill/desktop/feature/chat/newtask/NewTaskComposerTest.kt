@@ -34,6 +34,7 @@ import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
@@ -60,6 +61,26 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalTestApi::class)
 class NewTaskComposerTest {
+  @Test
+  fun `the open picker replaces the base branch input with a filter`() = runComposeUiTest {
+    val draft = testNewTaskDraft().apply { repository = NewTaskRepository("/work/app", "app") }
+    val read = RepositoryBranches("/work/app", "main", emptyList(), emptyList())
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(
+            NewTaskUiState(repositoryPickerOpen = true, branchRead = BranchReadState.Loaded("/work/app", read)),
+            draft,
+          ) {}
+        }
+      }
+    }
+    waitForIdle()
+
+    onNodeWithText("Base branch").assertExists()
+    onAllNodes(hasSetTextAction()).assertCountEquals(2)
+  }
+
   @Test
   fun `opening focuses the input and clearing focus releases the single-key shortcuts`() = runComposeUiTest {
     val input = ShellInput()

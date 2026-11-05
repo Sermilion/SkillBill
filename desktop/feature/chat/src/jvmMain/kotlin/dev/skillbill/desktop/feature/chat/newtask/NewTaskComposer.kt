@@ -11,7 +11,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -106,7 +108,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RepositoryPicker(state, draft, chat, offer.starting, Modifier.weight(1f, fill = false), onAction)
+        RepositoryPicker(state, draft, chat, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
       }
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -135,7 +137,11 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
 }
 
 @Composable
-private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: NewTaskChat?, starting: Boolean, modifier: Modifier, onAction: (NewTaskAction) -> Unit) {
+private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: NewTaskChat?, starting: Boolean, composerFocus: FocusRequester, now: () -> Instant, modifier: Modifier, onAction: (NewTaskAction) -> Unit) {
+  val pillFocus = remember { FocusRequester() }
+  val repositoryFilterFocus = remember { FocusRequester() }
+  val branchFilterFocus = remember { FocusRequester() }
+  var closeFocus by remember { mutableStateOf(pillFocus) }
   val close = { onAction(NewTaskAction.CloseRepositoryPicker) }
   val repository = draft.repository
   val mode = repositoryPillMode(chat, starting, repository)
@@ -144,7 +150,8 @@ private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: N
       mode,
       repository?.name,
       repositoryPillBranch(draft.baseBranch, repository?.root, state.branchRead),
-    ) { onAction(NewTaskAction.OpenRepositoryPicker) }
+      pillFocus,
+    ) { closeFocus = pillFocus; onAction(NewTaskAction.OpenRepositoryPicker) }
     val open = (mode == RepositoryPillMode.Interactive || mode == RepositoryPillMode.Choose) && state.repositoryPickerOpen
     if (open) ShellLayer(close)
     SbPopover(
@@ -153,7 +160,13 @@ private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: N
       width = REPOSITORY_PICKER_WIDTH,
       maxWidth = REPOSITORY_PICKER_WIDTH,
       placement = SbPopoverPlacement.Above,
+      returnFocusTo = closeFocus,
       arrowKeysMoveFocus = false,
-    ) { NewTaskRepositoryPickerContent(state, draft, onAction) }
+    ) {
+      NewTaskRepositoryPickerContent(state, draft, now = now, repositoryFilterFocus = repositoryFilterFocus, branchFilterFocus = branchFilterFocus, composerFocus = composerFocus, onAction = { action ->
+        if (action is NewTaskAction.ChooseBaseBranch) closeFocus = composerFocus
+        onAction(action)
+      })
+    }
   }
 }

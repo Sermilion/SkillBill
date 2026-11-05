@@ -49,11 +49,13 @@ data class NewTaskUiState(
   val detectedAgents: DetectedAgentsRead? = null,
   val resumePickerOpen: Boolean = false,
   val branchRead: BranchReadState = BranchReadState.Idle,
+  val repositoryPicks: Int = 0,
 )
 
 sealed interface NewTaskAction {
   data class TextChanged(val text: String) : NewTaskAction
-  data class BaseBranchChanged(val branch: String) : NewTaskAction
+  data class ChooseBaseBranch(val branch: String) : NewTaskAction
+  data object RetryBranches : NewTaskAction
   data class ChooseRepository(val repository: NewTaskRepository) : NewTaskAction
   data class SubmitRepositoryPath(val path: String) : NewTaskAction
   data class ChooseAgent(val agentId: String) : NewTaskAction
@@ -101,7 +103,12 @@ class NewTaskViewModel(
   fun onAction(action: NewTaskAction) {
     when (action) {
       is NewTaskAction.TextChanged -> draft.text = action.text
-      is NewTaskAction.BaseBranchChanged -> draft.baseBranch = action.branch
+      is NewTaskAction.ChooseBaseBranch -> {
+        pathCheck?.cancel()
+        draft.baseBranch = action.branch
+        mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
+      }
+      NewTaskAction.RetryBranches -> draft.repository?.root?.let { readBranches(it) }
       is NewTaskAction.ChooseRepository -> {
         pathCheck?.cancel()
         selectRepository(action.repository)
@@ -197,9 +204,9 @@ class NewTaskViewModel(
     draft.rebindChat()
   }
 
-  private fun readBranches() {
+  private fun readBranches(rootOverride: String? = null) {
     branchReadJob?.cancel()
-    val root = draft.repository?.root
+    val root = rootOverride ?: draft.repository?.root
     if (root == null) {
       mutableState.update { it.copy(branchRead = BranchReadState.Idle) }
       return
@@ -221,7 +228,7 @@ class NewTaskViewModel(
   private fun selectRepository(repository: NewTaskRepository, listed: RepositoryBranches? = null) {
     if (repository.root != draft.repository?.root) draft.baseBranch = ""
     draft.repository = repository
-    mutableState.update { it.copy(repositoryError = null) }
+    mutableState.update { it.copy(repositoryError = null, repositoryPicks = it.repositoryPicks + 1) }
     if (listed != null) {
       branchReadJob?.cancel()
       mutableState.update { it.copy(branchRead = BranchReadState.Loaded(repository.root, listed)) }

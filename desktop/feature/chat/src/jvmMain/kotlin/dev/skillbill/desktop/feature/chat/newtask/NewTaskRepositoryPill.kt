@@ -13,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.semantics
@@ -52,7 +54,7 @@ internal fun repositoryPillBranch(baseBranch: String, root: String?, read: Branc
 
 /** The repository and base branch chip; a long branch shrinks first, so the repository name and the chevron stay readable. */
 @Composable
-internal fun NewTaskRepositoryPill(mode: RepositoryPillMode, repositoryName: String?, branch: String, onClick: () -> Unit) {
+internal fun NewTaskRepositoryPill(mode: RepositoryPillMode, repositoryName: String?, branch: String, focusRequester: FocusRequester, onClick: () -> Unit) {
   val why = when (mode) {
     is RepositoryPillMode.Static -> mode.why
     RepositoryPillMode.Starting -> PICKERS_DISABLED_STARTING
@@ -62,7 +64,7 @@ internal fun NewTaskRepositoryPill(mode: RepositoryPillMode, repositoryName: Str
     is RepositoryPillMode.Static -> Modifier.semantics(mergeDescendants = true) {}
     RepositoryPillMode.Starting -> Modifier.clickable(enabled = false, onClickLabel = REPOSITORY_PILL_CLICK_LABEL, onClick = onClick)
     RepositoryPillMode.Choose, RepositoryPillMode.Interactive ->
-      Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(onClickLabel = REPOSITORY_PILL_CLICK_LABEL, onClick = onClick)
+      Modifier.focusRequester(focusRequester).pointerHoverIcon(PointerIcon.Hand).clickable(onClickLabel = REPOSITORY_PILL_CLICK_LABEL, onClick = onClick)
   }
   val pillModifier = interaction.then(if (why != null) Modifier.semantics { stateDescription = why } else Modifier)
   if (mode == RepositoryPillMode.Starting) {

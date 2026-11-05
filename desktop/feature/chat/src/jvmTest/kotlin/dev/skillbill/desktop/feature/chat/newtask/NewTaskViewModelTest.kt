@@ -300,6 +300,30 @@ class NewTaskViewModelTest {
   }
 
   @Test
+  fun `choosing a base branch closes the picker and retry reads the selected root again`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val repository = NewTaskRepository("/work/app", "app")
+    val draft = testNewTaskDraft().apply { this.repository = repository }
+    val branches = FakeBranches()
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), draft, branches = branches)
+    advanceUntilIdle()
+    model.onAction(NewTaskAction.OpenRepositoryPicker)
+    advanceUntilIdle()
+    model.onAction(NewTaskAction.ChooseRepository(repository))
+    assertEquals(1, model.state.value.repositoryPicks)
+    model.onAction(NewTaskAction.RetryBranches)
+    advanceUntilIdle()
+
+    assertEquals(listOf("/work/app", "/work/app", "/work/app"), branches.calls)
+    assertEquals(BranchReadState.Loaded("/work/app", listed("/work/app").branches), model.state.value.branchRead)
+    model.onAction(NewTaskAction.ChooseBaseBranch("origin/rel"))
+
+    assertEquals("origin/rel", draft.baseBranch)
+    assertEquals(false, model.state.value.repositoryPickerOpen)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
   fun `a non-git folder errors without projectFor and a later subfolder adds its repository root`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val previous = NewTaskRepository("/work/previous", "previous")
@@ -332,6 +356,7 @@ class NewTaskViewModelTest {
     assertEquals(listOf(app), draft.addedRepositories)
     assertEquals(null, model.state.value.repositoryError)
     assertEquals(BranchReadState.Loaded("/work/app", listed("/work/app").branches), model.state.value.branchRead)
+    assertEquals(1, model.state.value.repositoryPicks)
     assertTrue(model.state.value.repositoryPickerOpen)
     model.viewModelScope.cancel()
   }
@@ -484,7 +509,12 @@ class NewTaskViewModelTest {
   }
 
   private class FakeBranches(private val read: suspend (String) -> RepositoryBranchesRead = { listed(it) }) : RepositoryBranchesRepository {
-    override suspend fun branches(path: String): RepositoryBranchesRead = read(path)
+    val calls = mutableListOf<String>()
+
+    override suspend fun branches(path: String): RepositoryBranchesRead {
+      calls += path
+      return read(path)
+    }
   }
 
   private class FakeSpecs(

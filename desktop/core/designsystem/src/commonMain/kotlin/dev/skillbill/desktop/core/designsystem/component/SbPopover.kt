@@ -50,6 +50,7 @@ import androidx.compose.ui.window.PopupProperties
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.runAfterCurrentEvent
 import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.designsystem.menuSpec
 
@@ -81,7 +82,7 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
   val shouldReturnFocus = !expanded && wasExpanded
   SideEffect { wasExpanded = expanded }
   LaunchedEffect(expanded, shouldReturnFocus, returnFocusTo) {
-    if (shouldReturnFocus) returnFocusTo?.requestFocus()
+    if (shouldReturnFocus) returnFocusTo?.let { requester -> runAfterCurrentEvent { runCatching { requester.requestFocus() } } }
   }
   if (expanded) {
     val shape = RoundedCornerShape(SkillBillRadius.md)
