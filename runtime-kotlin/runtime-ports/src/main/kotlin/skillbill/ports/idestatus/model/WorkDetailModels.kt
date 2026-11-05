@@ -87,6 +87,7 @@ data class WorkDetailItem(
   val incidentHistory: List<WorkIncidentProjection> = emptyList(),
   val changeBaseline: WorkChangeBaseline? = null,
   val goalWorktree: GoalWorktreeView? = null,
+  val verifyRun: VerifyRunDetails? = null,
 )
 
 data class WorkDetailRuntimeStatus(
