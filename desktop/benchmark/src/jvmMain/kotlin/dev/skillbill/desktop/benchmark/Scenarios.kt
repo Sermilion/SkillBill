@@ -46,6 +46,7 @@ fun runScenarios(database: String, home: String, bursts: Int, samples: Int): Sce
   val burstBoardEmissions = mutableListOf<Int>()
   val burstRuntimeReads = mutableListOf<Int>()
   val emissions = AtomicInteger()
+  val refreshEvents = Channel<Long>(Channel.UNLIMITED)
   try {
     app.appSettingsRepository.setDatabasePath(database)
     app.databaseSessionManager.start()
@@ -78,7 +79,11 @@ fun runScenarios(database: String, home: String, bursts: Int, samples: Int): Sce
         }
       }
     }
+    app.applicationCoroutineScope.scope.launch {
+      app.workBoardRepository.observeRefreshes(query).collect { refreshEvents.send(System.nanoTime()) }
+    }
     for (item in sampleItems.distinctBy(WorkItem::id)) {
+      app.workDetailRepository.prefetch(item.id)
       var headerAtNanos: Long? = null
       var sectionsAtNanos: Long? = null
       val startedAtNanos = System.nanoTime()
@@ -119,7 +124,7 @@ fun runScenarios(database: String, home: String, bursts: Int, samples: Int): Sce
       val beforeReads = diagnostics.snapshot().size
       val burstStartedAtNanos = System.nanoTime()
       val updated = replayActivity(writer, live)
-      boardObservations.awaitEmissionAfter(burstStartedAtNanos)
+      boardObservations.awaitRefreshAfter(refreshEvents, burstStartedAtNanos)
       burstBoardEmissions += emissions.get() - beforeEmissions
       burstRuntimeReads += diagnostics.snapshot().size - beforeReads
       val lifecycle = commitLifecycle(writer, updated, root, namespace)
@@ -163,10 +168,10 @@ private class BoardObservationCursor(private val events: Channel<BoardEmission>)
     }
   }
 
-  suspend fun awaitEmissionAfter(startedAtNanos: Long) {
+  suspend fun awaitRefreshAfter(refreshEvents: Channel<Long>, startedAtNanos: Long) {
     withTimeout(30.seconds) {
       while (true) {
-        if (receive().atNanos >= startedAtNanos) return@withTimeout
+        if (refreshEvents.receive() >= startedAtNanos) return@withTimeout
       }
     }
   }

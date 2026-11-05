@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
+import dev.nucleusframework.composenativetray.tray.api.NativeTray
 import dev.skillbill.desktop.app.display.DesktopUiScale
 import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.host.HostIntent
@@ -49,11 +50,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.awt.TrayIcon
-import java.awt.image.BufferedImage
-import java.nio.file.Path
-import javax.imageio.ImageIO
-import java.awt.SystemTray
 import java.awt.event.WindowEvent
 import java.awt.event.WindowFocusListener
 
@@ -148,7 +144,7 @@ fun ApplicationScope.TrayHost(
     onFailure = availability::unavailable,
     onDismiss = { scope.launch(Dispatchers.Main) { visible = false } },
   ) else {
-    iconPaths?.let { paths -> IconFileTray(
+    iconPaths?.let { paths -> NativeTrayFiles(
       paths,
       availability,
       tooltip = if (linux) state.trayHover() else when {
@@ -237,13 +233,16 @@ fun ApplicationScope.TrayHost(
 }
 
 @Composable
-private fun IconFileTray(paths: TrayIconPaths, availability: TrayAvailability, tooltip: String, primaryAction: () -> Unit) {
+private fun NativeTrayFiles(paths: TrayIconPaths, availability: TrayAvailability, tooltip: String, primaryAction: () -> Unit) {
   val currentAction by rememberUpdatedState(primaryAction)
-  val icon = remember { TrayIcon(readTrayImage(paths.png), tooltip) }
+  val tray = remember { NativeTray() }
+  DisposableEffect(tray) { onDispose { tray.dispose() } }
   LaunchedEffect(paths, tooltip) {
     try {
-      icon.image = withContext(Dispatchers.IO) { readTrayImage(paths.png) }
-      icon.toolTip = tooltip
+      withContext(Dispatchers.IO) {
+        tray.update(paths.png, paths.ico, tooltip, { currentAction() }, {}, {})
+      }
+      availability.available()
     } catch (failure: CancellationException) {
       throw failure
     } catch (_: Exception) {
@@ -254,36 +253,7 @@ private fun IconFileTray(paths: TrayIconPaths, availability: TrayAvailability, t
       TrayDiagnostics.record("tray_icon_failed")
     }
   }
-  DisposableEffect(icon) {
-    val active = java.util.concurrent.atomic.AtomicBoolean(true)
-    val listener = java.awt.event.ActionListener { if (active.get()) currentAction() }
-    icon.addActionListener(listener)
-    try {
-      SystemTray.getSystemTray().add(icon)
-      availability.available()
-    } catch (_: Exception) {
-      active.set(false)
-      availability.unavailable()
-      TrayDiagnostics.record("tray_install_failed")
-    } catch (_: LinkageError) {
-      active.set(false)
-      availability.unavailable()
-      TrayDiagnostics.record("tray_install_failed")
-    }
-    onDispose {
-      active.set(false)
-      icon.removeActionListener(listener)
-      try {
-        SystemTray.getSystemTray().remove(icon)
-      } finally {
-        availability.unavailable()
-      }
-    }
-  }
 }
-
-private fun readTrayImage(path: String): BufferedImage =
-  ImageIO.read(Path.of(path).toFile()) ?: error("Tray icon could not be decoded")
 
 private fun ReadProblem.summary(): String = when (this) {
   is ReadProblem.Runtime -> message

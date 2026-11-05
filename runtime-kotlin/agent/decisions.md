@@ -1,3 +1,9 @@
+## [2026-11-05] Set JVM temp roots at launch
+Context: The JDK snapshots java.io.tmpdir before main, so setting it in the CLI or MCP entry point does not redirect default-root JDK temp calls.
+Decision: Start scripts pass run scratch as a JVM option. JAVA_TOOL_OPTIONS and Linux wrappers name the shared state scratch root; test workers receive run scratch through their task configuration.
+Reason: Launch-time options reach JDK temp calls. A common shared root for Gradle clients and daemons avoids giving each run a different daemon temp setting. The in-process property still helps libraries that read it later.
+Alternatives considered: Setting the property only in main leaves default-root JDK temp calls on the original root.
+
 ## [2026-11-04] Keep review comment writes outside settlement
 Context: Review findings and repair receipts are authoritative workflow evidence; diff comments are an auxiliary projection.
 Decision: Write finding threads and outcome replies beside the owning review or receipt mutation, treating failures as best-effort and diagnostic.

@@ -87,6 +87,18 @@ class PolicyRulesTest {
   }
 
   @Test
+  fun `tray sends app-owned icon files to NativeTray without file rendering`() {
+    val desktopRoot = Path.of(requireNotNull(System.getProperty("desktopRoot")) { "The desktopRoot system property is not set." })
+    val host = java.nio.file.Files.readString(desktopRoot.resolve("app/src/jvmMain/kotlin/dev/skillbill/desktop/app/tray/TrayHostContent.kt"))
+    val icons = java.nio.file.Files.readString(desktopRoot.resolve("app/src/jvmMain/kotlin/dev/skillbill/desktop/app/tray/TrayIconFiles.kt"))
+    assertTrue(host.contains("NativeTray()"))
+    assertTrue(host.contains("tray.update(paths.png, paths.ico"))
+    assertTrue(!host.contains("dev.nucleusframework.composenativetray.tray.api.Tray"))
+    assertTrue(!icons.contains("renderComposableToPngFile"))
+    assertTrue(!icons.contains("renderComposableToIcoFile"))
+  }
+
+  @Test
   fun `each pattern rejects a synthetic violation and ignores comments and strings`() {
     val violating = listOf(
       "items.sorted()", "items.sortedBy { it.title }", "items.sortedByDescending { it.title }", "items.sortedWith(order)",
