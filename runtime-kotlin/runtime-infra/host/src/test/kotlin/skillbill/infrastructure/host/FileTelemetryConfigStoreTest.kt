@@ -2,6 +2,7 @@ package skillbill.infrastructure.host
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.model.EnvironmentContext
 import skillbill.ports.telemetry.model.TelemetryConfigRead

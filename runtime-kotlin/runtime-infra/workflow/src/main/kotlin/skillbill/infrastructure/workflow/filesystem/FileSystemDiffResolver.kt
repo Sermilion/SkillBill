@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.filesystem
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
 import skillbill.infrastructure.host.process.BoundedExternalProcessResult
@@ -206,7 +207,7 @@ class FileSystemDiffResolver : DiffResolverPort {
 
   private fun createOutputFile(query: String): Path? =
     try {
-      Files.createTempFile("skillbill-diff", ".out")
+      Files.createTempFile(JdkHostPlatformPort.resolveTemporaryDirectory(), "skillbill-diff", ".out")
     } catch (error: IOException) {
       recordUnavailable(query, "null", "process output", "temp file creation failed", error)
       null

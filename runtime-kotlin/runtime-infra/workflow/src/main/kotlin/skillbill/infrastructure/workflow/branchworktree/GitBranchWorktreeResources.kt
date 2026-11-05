@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.branchworktree
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.host.resolveTelemetryStateDir
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.monitor.GitRun
 import skillbill.infrastructure.workflow.monitor.NO_PROMPT_ENVIRONMENT
 import skillbill.infrastructure.workflow.monitor.monitorGit

@@ -68,7 +68,8 @@ class GateJvmResolver(
         .getResourceAsStream(GUARD_CLASSPATH_RESOURCE)
         ?.use { stream -> stream.readBytes() }
         ?: throw GateJvmGuardResourceMissingException(GUARD_CLASSPATH_RESOURCE)
-    val guard = Files.createTempFile("skill-bill-java-guard", ".sh", OWNER_ONLY)
+    val guard =
+      Files.createTempFile(hostPlatform.resolveTemporaryDirectory(), "skill-bill-java-guard", ".sh", OWNER_ONLY)
     Files.write(guard, bytes)
     return guard
   }

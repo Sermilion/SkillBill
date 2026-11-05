@@ -54,6 +54,23 @@ private fun bestEffort(
   }
 }
 
+private fun deleteEndpointArtifacts(
+  directory: Path,
+  socketPath: Path,
+  mcpConfigPath: Path,
+) {
+  bestEffort("delete socket") { rollbackDeleteIfExists(socketPath) }
+  bestEffort("delete MCP config") { rollbackDeleteIfExists(mcpConfigPath) }
+  bestEffort("delete TOML config") {
+    rollbackDeleteIfExists(GovernedReviewMcpConfigWriter.tomlConfigPath(mcpConfigPath))
+  }
+  val cursorConfig = GovernedReviewMcpConfigWriter.cursorProjectConfigPath(mcpConfigPath)
+  bestEffort("delete Cursor config") { rollbackDeleteIfExists(cursorConfig) }
+  bestEffort("delete Cursor CLI config") { rollbackDeleteIfExists(cursorConfig.resolveSibling("cli.json")) }
+  bestEffort("delete Cursor config directory") { rollbackDeleteIfExists(cursorConfig.parent) }
+  bestEffort("delete endpoint directory") { rollbackDeleteIfExists(directory) }
+}
+
 @Inject
 class UnixSocketGovernedReviewEvidenceEndpointBinder(
   private val environment: EnvironmentContext,
@@ -106,19 +123,7 @@ class GovernedReviewEvidenceEndpoint private constructor(
     closed = true
     bestEffort("channel_close") { channel.close() }
     acceptor.interrupt()
-    deleteDirectory()
-  }
-
-  private fun deleteDirectory() {
-    bestEffort("delete socket") { rollbackDeleteIfExists(descriptor.socketPath) }
-    bestEffort("delete MCP config") { rollbackDeleteIfExists(descriptor.mcpConfigPath) }
-    bestEffort("delete TOML config") {
-      rollbackDeleteIfExists(GovernedReviewMcpConfigWriter.tomlConfigPath(descriptor.mcpConfigPath))
-    }
-    val cursorConfig = GovernedReviewMcpConfigWriter.cursorProjectConfigPath(descriptor.mcpConfigPath)
-    bestEffort("delete Cursor config") { rollbackDeleteIfExists(cursorConfig) }
-    bestEffort("delete Cursor config directory") { rollbackDeleteIfExists(cursorConfig.parent) }
-    bestEffort("delete endpoint directory") { rollbackDeleteIfExists(directory) }
+    deleteEndpointArtifacts(directory, descriptor.socketPath, descriptor.mcpConfigPath)
   }
 
   private fun acceptLoop() {
@@ -339,20 +344,7 @@ class GovernedReviewEvidenceEndpoint private constructor(
       directory: Path,
     ) {
       bestEffort("channel_close") { channel.close() }
-      bestEffort("delete socket") { rollbackDeleteIfExists(socketPath) }
-      bestEffort("delete MCP config") { rollbackDeleteIfExists(directory.resolve("mcp.json")) }
-      bestEffort("delete TOML config") {
-        rollbackDeleteIfExists(
-          GovernedReviewMcpConfigWriter.tomlConfigPath(directory.resolve("mcp.json")),
-        )
-      }
-      val cursorConfig = directory.resolve(".cursor").resolve("mcp.json")
-      bestEffort("delete Cursor config") { rollbackDeleteIfExists(cursorConfig) }
-      bestEffort("delete Cursor CLI config") {
-        rollbackDeleteIfExists(directory.resolve(".cursor").resolve("cli.json"))
-      }
-      bestEffort("delete Cursor config directory") { rollbackDeleteIfExists(cursorConfig.parent) }
-      bestEffort("delete endpoint directory") { rollbackDeleteIfExists(directory) }
+      deleteEndpointArtifacts(directory, socketPath, directory.resolve("mcp.json"))
     }
 
     private fun privateDirectory(): Path =

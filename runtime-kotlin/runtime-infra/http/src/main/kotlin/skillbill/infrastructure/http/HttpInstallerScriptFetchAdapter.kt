@@ -8,6 +8,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.InstallerScriptFetchPort
 import skillbill.ports.process.model.InstallerScriptFetchRequest
 import skillbill.ports.process.model.InstallerScriptFetchResult
+import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import java.io.IOException
 import java.nio.file.Files
@@ -18,11 +19,12 @@ import java.nio.file.StandardCopyOption
 class HttpInstallerScriptFetchAdapter(
   private val requester: RemoteTransportPort,
   private val diagnostics: RuntimeDiagnostics,
+  private val hostPlatform: HostPlatformPort,
 ) : InstallerScriptFetchPort {
   override fun fetch(request: InstallerScriptFetchRequest): InstallerScriptFetchResult {
     val stagingDirectory =
       try {
-        Files.createTempDirectory(STAGING_DIRECTORY_PREFIX)
+        Files.createTempDirectory(hostPlatform.resolveTemporaryDirectory(), STAGING_DIRECTORY_PREFIX)
       } catch (error: IOException) {
         return InstallerScriptFetchResult.Failed(errorMessage(error))
       }

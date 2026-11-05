@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.config.model.MachineConfigDocumentParse
 import skillbill.config.parseMachineConfigDocument
 import skillbill.contracts.JsonCodec
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.infrastructure.host.system.configDocumentIoException
 import skillbill.model.EnvironmentContext

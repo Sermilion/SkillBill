@@ -9,7 +9,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.projectstore.ProjectStoreFailureCode
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
-import skillbill.infrastructure.host.resolveTelemetryStateDir
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.host.withProcessDefaults
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics

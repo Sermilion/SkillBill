@@ -53,7 +53,8 @@ class FileSystemValidationGateRunner(
   ): ValidationGateRunResult {
     val started = System.nanoTime()
     val artifactFloor = clock.instant().truncatedTo(ChronoUnit.SECONDS)
-    val outputFile = Files.createTempFile("skillbill-validation-gate", ".out")
+    val outputFile =
+      Files.createTempFile(JdkHostPlatformPort.resolveTemporaryDirectory(), "skillbill-validation-gate", ".out")
     return try {
       gateJvm.applyTo(baselineEnvironment)
       val processResult =

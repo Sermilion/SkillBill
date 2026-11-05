@@ -2,7 +2,7 @@ package skillbill.infrastructure.workflow.monitor
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.host.resolveTelemetryStateDir
+import skillbill.infrastructure.host.jvm.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.git.standard.GitStandardWorkflowGitWorktreeOperations
 import skillbill.infrastructure.workflow.process.RecordedProcessLiveness
 import skillbill.infrastructure.workflow.process.livenessOf
