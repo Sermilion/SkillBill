@@ -20,7 +20,7 @@ import java.time.Clock
 import kotlin.random.Random
 import kotlin.time.TimeSource
 
-internal interface RuntimeDiagnosticsProvides {
+internal interface RuntimeDiagnosticsProvides : StandaloneOutputSchedulerProvides {
   @Provides
   fun runtimeDiagnostics(
     callbacks: OptionalCallbacks,

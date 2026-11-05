@@ -8,7 +8,7 @@ import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 const val IDE_STATUS_CONTRACT_VERSION: String = "0.6"
 const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
-const val WORK_DETAIL_CONTRACT_VERSION: String = "1.3"
+const val WORK_DETAIL_CONTRACT_VERSION: String = "1.4"
 
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
@@ -93,6 +93,9 @@ object WorkDetailPayloadKeys {
   const val COMPLETE_COUNT = "complete_count"
   const val PENDING_COUNT = "pending_count"
   const val BLOCKED_COUNT = "blocked_count"
+  const val PLAN_OUTPUT_TAIL = "plan_output_tail"
+  const val PLAN_OUTPUT_UPDATED_AT = "plan_output_updated_at"
+  const val PLAN_SUBTASK_LATEST_LINES = "plan_subtask_latest_lines"
 }
 
 const val GOAL_PLANNING_WAVE_CAP: Int = 5

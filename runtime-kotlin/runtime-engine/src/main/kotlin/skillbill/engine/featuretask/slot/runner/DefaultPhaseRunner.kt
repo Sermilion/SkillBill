@@ -19,6 +19,7 @@ import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
@@ -40,15 +41,30 @@ public class DefaultPhaseRunner(
   override fun run(
     input: PhaseStepInput,
     state: PhaseLaunchState,
-  ): PhaseStepOutput = run(input, state, PhaseStepSession(launcher::launch))
+  ): PhaseStepOutput = run(input, state, AgentRunOutputSink.NONE, false)
+
+  override fun run(
+    input: PhaseStepInput,
+    state: PhaseLaunchState,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+  ): PhaseStepOutput = run(input, state, PhaseStepSession(launcher::launch), outputSink, captureStreamOutput)
 
   override fun run(
     input: PhaseStepInput,
     state: PhaseLaunchState,
     session: PhaseStepSession,
+  ): PhaseStepOutput = run(input, state, session, AgentRunOutputSink.NONE, false)
+
+  override fun run(
+    input: PhaseStepInput,
+    state: PhaseLaunchState,
+    session: PhaseStepSession,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseStepOutput {
     val step = input.stepName
-    val attempt = input.facts.attempt ?: return launchUntracked(input, state, session)
+    val attempt = input.facts.attempt ?: return launchUntracked(input, state, session, outputSink, captureStreamOutput)
     val before =
       when (val captured = captureBefore(input)) {
         is BeforeCapture.Ready -> captured
@@ -58,7 +74,8 @@ public class DefaultPhaseRunner(
           )
       }
     val prepared = state.prepareLaunch(input) ?: return preparationRejected(step)
-    return launchPrepared(prepared, state, attempt, before, session)
+    val outcome = session.execute(launchRequest(prepared, state, outputSink, captureStreamOutput))
+    return launchPrepared(prepared, state, attempt, before, outcome)
   }
 
   private fun launchPrepared(
@@ -66,10 +83,9 @@ public class DefaultPhaseRunner(
     state: PhaseLaunchState,
     attempt: Int,
     before: BeforeCapture.Ready,
-    session: PhaseStepSession,
+    outcome: AgentRunLaunchOutcome,
   ): PhaseStepOutput {
     val step = input.stepName
-    val outcome = session.execute(launchRequest(input, state))
     if (outcome is AgentRunLaunchFacts) {
       state.recordTokenUsage(step, estimateTokens(input.facts.briefingText), estimateTokens(outcome.stdout))
     }
@@ -94,15 +110,19 @@ public class DefaultPhaseRunner(
     unprepared: PhaseStepInput,
     state: PhaseLaunchState,
     session: PhaseStepSession,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseStepOutput {
     val input = state.prepareLaunch(unprepared) ?: return preparationRejected(unprepared.stepName)
-    val outcome = session.execute(launchRequest(input, state))
+    val outcome = session.execute(launchRequest(input, state, outputSink, captureStreamOutput))
     return launched(outcome, null, PhaseSettledEnvelopeRead.None, classify(input, outcome))
   }
 
   private fun launchRequest(
     input: PhaseStepInput,
     state: PhaseLaunchState,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): GoalRunnerSubtaskLaunchRequest {
     val facts = input.facts
     val readOnly = input.policy.readOnlyIdle
@@ -125,9 +145,10 @@ public class DefaultPhaseRunner(
           modelOverride = facts.modelOverride,
           effortOverride = facts.effortOverride,
           compaction = facts.compaction,
-          outputSink = facts.outputSink,
+          outputSink = outputSink,
           promptOverride = composePrompt(input),
-          streamOutputForLiveness = facts.streamOutputForLiveness,
+          streamOutputForLiveness = facts.streamOutputForLiveness || captureStreamOutput,
+          captureDisplayOutput = captureStreamOutput,
           readOnlyPhase = readOnly,
           progressIdleTimeout =
             if (readOnly) READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes else facts.progressIdleTimeout,

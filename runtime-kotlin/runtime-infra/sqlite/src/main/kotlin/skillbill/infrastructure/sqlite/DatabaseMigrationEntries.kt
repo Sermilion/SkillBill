@@ -978,4 +978,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 102,
       name = "record-qa-details",
       operation = ::recordQaDetails,
+    ) +
+    DatabaseMigration(
+      version = 103,
+      name = "record-standalone-plan-output",
+      operation = { connection -> StandalonePhaseStatusMigration.createOutputCapture(connection) },
     )

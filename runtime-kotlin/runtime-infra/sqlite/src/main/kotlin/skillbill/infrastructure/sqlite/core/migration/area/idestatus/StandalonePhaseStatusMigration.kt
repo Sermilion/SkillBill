@@ -10,6 +10,21 @@ internal object StandalonePhaseStatusMigration {
     backfillWorkflowExecutions(connection)
   }
 
+  fun createOutputCapture(connection: Connection) {
+    connection.createStatement().use { statement ->
+      statement.execute(
+        """
+        CREATE TABLE IF NOT EXISTS standalone_phase_output (
+          execution_id TEXT PRIMARY KEY REFERENCES standalone_phase_status(execution_id) ON DELETE CASCADE,
+          tail_json TEXT NOT NULL CHECK (length(tail_json) <= 4096),
+          latest_line_at TEXT,
+          attributed_json TEXT NOT NULL CHECK (length(attributed_json) <= 32768)
+        )
+        """.trimIndent(),
+      )
+    }
+  }
+
   private fun createSchema(connection: Connection) {
     createExecutionRegistry(connection)
     createStandalonePhaseStatus(connection)

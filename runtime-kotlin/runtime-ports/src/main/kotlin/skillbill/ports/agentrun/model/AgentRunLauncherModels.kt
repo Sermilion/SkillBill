@@ -48,6 +48,7 @@ data class SkillRunRequest(
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
   val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
+  val captureDisplayOutput: Boolean = false,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

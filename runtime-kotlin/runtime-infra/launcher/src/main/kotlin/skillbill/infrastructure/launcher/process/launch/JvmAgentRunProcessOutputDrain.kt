@@ -91,6 +91,7 @@ internal class Utf8Drain(
   internal val outputStream: AgentRunOutputStream,
   internal val outputSink: AgentRunOutputSink,
   internal val onChunkRead: (String) -> Unit,
+  private val flushOutputStreamOnEnd: Boolean = false,
 ) {
   private val output = ByteArrayOutputStream(INITIAL_OUTPUT_BUFFER_BYTES)
 
@@ -153,9 +154,26 @@ internal class Utf8Drain(
       } catch (cancelled: CancellationException) {
         workerFailure = cancelled
       } finally {
-        workerCompleted = true
+        try {
+          flushOutput()
+        } catch (cancelled: CancellationException) {
+          workerFailure = workerFailure ?: cancelled
+        } catch (interrupted: InterruptedException) {
+          workerFailure = workerFailure ?: interrupted
+        } finally {
+          workerCompleted = true
+        }
       }
     }
+
+  private fun flushOutput() {
+    catchingNonCancellation {
+      if (flushOutputStreamOnEnd) outputSink.write(outputStream, "\u0000")
+    }.onFailure { failure ->
+      if (failure is Error) throw failure
+      workerFailure = workerFailure ?: failure
+    }
+  }
 
   fun start() {
     worker.start()

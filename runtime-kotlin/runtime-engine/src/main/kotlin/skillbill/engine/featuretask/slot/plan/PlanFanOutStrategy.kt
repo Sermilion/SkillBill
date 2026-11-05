@@ -50,8 +50,11 @@ public class PlanFanOutStrategy private constructor(
     )
 
   private val unitDescriptor =
-    PhaseStepDescriptor(PhaseBindingFamily.PlanningUnit, PlanSubtasksStepHooks) { run, state ->
-      runAgentStep(run, state)
+    PhaseStepDescriptor(
+      PhaseBindingFamily.PlanningUnit,
+      PlanSubtasksStepHooks,
+    ) { run, state, outputSink, captureStreamOutput ->
+      runAgentStep(run, state, outputSink, captureStreamOutput)
     }
 
   override val slot: PhaseSlot = PhaseSlot.PLAN
@@ -84,13 +87,19 @@ public class PlanFanOutStrategy private constructor(
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> =
     if (isSubtaskStep(stepId)) {
-      PhaseStepDescriptor(PhaseBindingFamily.PlanningFanOut, PlanSubtasksStepHooks) { run, planning ->
-        runSubtasks(run, planning)
+      PhaseStepDescriptor(
+        PhaseBindingFamily.PlanningFanOut,
+        PlanSubtasksStepHooks,
+      ) { run, planning, outputSink, captureStreamOutput ->
+        runSubtasks(run, planning, outputSink, captureStreamOutput)
       }
     } else {
-      PhaseStepDescriptor(PhaseBindingFamily.PlanningFanOut, AgentPlanStrategy.PlanStepHooks) { run, planning ->
+      PhaseStepDescriptor(
+        PhaseBindingFamily.PlanningFanOut,
+        AgentPlanStrategy.PlanStepHooks,
+      ) { run, planning, outputSink, captureStreamOutput ->
         planning.settleExistingBundle(run, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS)
-          ?: plan.runPlan(run, planning)
+          ?: runAgentStep(run, planning, outputSink, captureStreamOutput)
       }
     }
 
@@ -99,12 +108,14 @@ public class PlanFanOutStrategy private constructor(
   private fun runSubtasks(
     run: PhaseRun,
     planning: PhasePlanningStepBinding,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
     val fanOut = planning.fanOut(run.phaseId)
     planning.authorizeFanOutWave(run)
     val outcome =
       try {
-        runFanOutStep(run, fanOut)
+        runFanOutStep(run, fanOut, outputSink, captureStreamOutput)
       } finally {
         planning.releaseFanOutWave(run)
       }
@@ -121,6 +132,8 @@ public class PlanFanOutStrategy private constructor(
   private fun runFanOutStep(
     run: PhaseRun,
     fanOut: PhaseRunFanOut,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
     val pending =
       when (val units = fanOut.pendingUnits()) {
@@ -132,7 +145,9 @@ public class PlanFanOutStrategy private constructor(
       val nextWaveFirstId = waves.getOrNull(index + 1)?.first()
       val stopped =
         fanOut.pauseBefore(wave.first())
-          ?: runPlanFanOutWave(fanOutPort, planFanOutCap, fanOut, wave) { runUnit(run, fanOut, it) }
+          ?: runPlanFanOutWave(fanOutPort, planFanOutCap, fanOut, wave) {
+            runUnit(run, fanOut, it, outputSink, captureStreamOutput)
+          }
           ?: nextWaveFirstId?.let(fanOut::pauseBefore)
       if (stopped != null) return stopped
     }
@@ -143,14 +158,19 @@ public class PlanFanOutStrategy private constructor(
     run: PhaseRun,
     fanOut: PhaseRunFanOut,
     unitId: Int,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
-    val sink = UnitAttributedOutputSink(fanOutPort, fanOut.outputSink, unitId)
-    val state = fanOut.unitState(unitId, sink, unitDescriptor)
+    val sink = UnitAttributedOutputSink(fanOutPort, outputSink, unitId, captureStreamOutput)
+    val state = fanOut.unitState(unitId, unitDescriptor)
     return try {
-      unitDescriptor.execute(run, state)
+      unitDescriptor.execute(run, state, sink, captureStreamOutput)
     } finally {
-      state.finishStepExecution()
-      sink.flushTrailingLines()
+      try {
+        state.finishStepExecution()
+      } finally {
+        sink.flushTrailingLines()
+      }
     }
   }
 
@@ -173,6 +193,7 @@ public class PlanFanOutStrategy private constructor(
     private val fanOutPort: BoundedWorkFanOutPort,
     private val delegate: AgentRunOutputSink,
     unitId: Int,
+    private val boundPendingLines: Boolean,
   ) : AgentRunOutputSink {
     private val attribution = "[subtask $unitId] "
     private val pending = mutableMapOf<AgentRunOutputStream, StringBuilder>()
@@ -181,13 +202,14 @@ public class PlanFanOutStrategy private constructor(
       stream: AgentRunOutputStream,
       text: String,
     ) = fanOutPort.runExclusively {
-      val buffer = pending.getOrPut(stream) { StringBuilder() }.append(text)
-      var newline = buffer.indexOf("\n")
-      while (newline >= 0) {
-        val line = buffer.substring(0, newline + 1)
-        buffer.delete(0, newline + 1)
-        delegate.write(stream, attribution + line)
-        newline = buffer.indexOf("\n")
+      val buffer = pending.getOrPut(stream) { StringBuilder() }
+      text.forEach { character ->
+        if (character == '\n') {
+          delegate.write(stream, attribution + buffer + "\n")
+          buffer.setLength(0)
+        } else if (!boundPendingLines || buffer.length < MAX_PENDING_LINE_CHARS) {
+          buffer.append(character)
+        }
       }
     }
 
@@ -205,6 +227,7 @@ public class PlanFanOutStrategy private constructor(
   public companion object {
     public const val ID: String = "goal-plan-fan-out"
     private const val SEMANTIC_REVISION: Int = 2
+    private const val MAX_PENDING_LINE_CHARS: Int = 160
 
     private const val PLAN_SPEC_DIRECTIVE: String =
       "Plan the current governed sub-spec and write the plan into that same file. Edit only the assigned " +

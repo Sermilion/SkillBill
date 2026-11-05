@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, observed_at, item, page_size, next_cursor]
 properties:
-  contract_version: {type: string, const: "1.3"}
+  contract_version: {type: string, const: "1.4"}
   page_size: {type: integer, minimum: 1, maximum: 100}
   next_cursor: {type: [string, "null"], minLength: 1}
   observed_at: {type: string, format: date-time}
@@ -68,6 +68,12 @@ $defs:
             finished_at: {type: [string, "null"], format: date-time}
             result: {type: [string, "null"]}
       step_pipeline: {type: array, items: {type: string}}
+      plan_output_tail: {type: array, maxItems: 4, items: {type: string, maxLength: 160}}
+      plan_output_updated_at: {type: [string, "null"], format: date-time}
+      plan_subtask_latest_lines:
+        type: object
+        maxProperties: 32
+        additionalProperties: {type: string, maxLength: 160}
       goal_finish_pipeline: {type: array, items: {type: string}}
       active_agent: {type: [string, "null"]}
       execution_liveness: {type: [string, "null"]}

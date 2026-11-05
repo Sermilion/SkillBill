@@ -53,8 +53,11 @@ public class AgentPreplanStrategy : PhaseStrategy() {
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
-    return PhaseStepDescriptor(PhaseBindingFamily.Agent, PreplanTrackerBlockHooks) { run, state ->
-      runAgentStep(run, state)
+    return PhaseStepDescriptor(
+      PhaseBindingFamily.Agent,
+      PreplanTrackerBlockHooks,
+    ) { run, state, outputSink, captureStreamOutput ->
+      runAgentStep(run, state, outputSink, captureStreamOutput)
     }
   }
 

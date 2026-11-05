@@ -30,6 +30,7 @@ import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
+import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -107,6 +108,15 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         invocationId: String,
         checklist: StandaloneQaChecklist,
       ): StandaloneQaChecklistWriteResult = StandaloneQaChecklistWriteResult.MISSING
+
+      override fun writeOutputSnapshot(
+        executionId: String,
+        snapshot: StandalonePhaseOutputSnapshot,
+      ) {
+        error("Standalone phase status repository is unavailable in this fixture.")
+      }
+
+      override fun readOutput(executionId: String): StandalonePhaseOutputSnapshot? = null
     }
   open override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =
     UnavailableRejectedOutputDiagnosticRepository

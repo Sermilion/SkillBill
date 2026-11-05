@@ -55,6 +55,11 @@ internal fun workDetailItemWireMap(
       },
     )
     put(WorkDetailPayloadKeys.STEP_PIPELINE, item.stepPipeline)
+    if (item.stepPipeline.lastOrNull() == "plan_subtasks") {
+      put(WorkDetailPayloadKeys.PLAN_OUTPUT_TAIL, item.planOutputTail)
+      put(WorkDetailPayloadKeys.PLAN_OUTPUT_UPDATED_AT, item.planOutputUpdatedAt?.toString())
+      put(WorkDetailPayloadKeys.PLAN_SUBTASK_LATEST_LINES, item.planSubtaskLatestLines.mapKeys { it.key.toString() })
+    }
     put(
       WorkDetailPayloadKeys.EXECUTION_HISTORY,
       item.executionHistory.map { instance ->

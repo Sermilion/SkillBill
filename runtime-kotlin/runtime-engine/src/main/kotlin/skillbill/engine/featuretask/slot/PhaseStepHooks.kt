@@ -30,6 +30,7 @@ import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBin
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -640,20 +641,39 @@ public class PhaseStepDescriptor<B : PhaseAcceptedStepExecution> internal constr
   internal val family: PhaseBindingFamily<B>,
   internal val hooks: PhaseStepHooks<B>,
   internal val loopRules: PhaseStepLoopRules<B>? = null,
-  private val execution: (PhaseRun, B) -> PhaseOutcome,
+  private val execution: (PhaseRun, B, AgentRunOutputSink, Boolean) -> PhaseOutcome,
 ) {
+  internal constructor(
+    family: PhaseBindingFamily<B>,
+    hooks: PhaseStepHooks<B>,
+    loopRules: PhaseStepLoopRules<B>? = null,
+    execution: (PhaseRun, B) -> PhaseOutcome,
+  ) : this(family, hooks, loopRules, { run, binding, _, _ -> execution(run, binding) })
+
   public fun bind(factory: PhaseBindingFactory): B = family.construct(factory, hooks) { binding -> binding }
 
   public fun execute(
     run: PhaseRun,
     binding: B,
-  ): PhaseOutcome = execution(run, binding)
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
+  ): PhaseOutcome = execution(run, binding, outputSink, captureStreamOutput)
 
-  public fun <R> capture(visitor: PhaseStepCapture<R>): R = visitor.capture(this)
+  public fun <R> capture(
+    visitor: PhaseStepCapture<R>,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
+  ): R = visitor.capture(this, outputSink, captureStreamOutput)
 }
 
 public interface PhaseStepCapture<R> {
   public fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): R
+
+  public fun <B : PhaseAcceptedStepExecution> capture(
+    descriptor: PhaseStepDescriptor<B>,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+  ): R = capture(descriptor)
 }
 
 public class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution> internal constructor(

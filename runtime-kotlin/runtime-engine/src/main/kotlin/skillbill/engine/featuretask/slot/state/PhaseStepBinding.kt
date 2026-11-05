@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
@@ -97,6 +98,8 @@ public interface PhaseAgentExecution {
   public fun runAcceptedAgentStep(
     run: PhaseRun,
     call: PhaseStepCall,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome
 }
 

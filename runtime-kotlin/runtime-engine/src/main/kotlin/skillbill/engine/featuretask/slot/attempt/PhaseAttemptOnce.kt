@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
-import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -41,8 +40,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareL
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
-import skillbill.engine.featuretask.slot.withLaunchSink
 import skillbill.error.core.catchingNonCancellation
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
@@ -72,14 +71,22 @@ internal object PhaseAttemptOnce {
     context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
     requiredStartAlreadyAcknowledged: Boolean = false,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
   ): AttemptResult {
     args.call.acceptedExecution.requireAcceptedAttempt(args.context.run, args.call)
     val run = args.context.run
     return when {
-      requiredStartAlreadyAcknowledged -> attemptAfterRequiredStart(context, args)
+      requiredStartAlreadyAcknowledged -> attemptAfterRequiredStart(context, args, outputSink, captureStreamOutput)
       else ->
         when (val start = persistRequiredStart(context, run, args.context.iteration)) {
-          is RequiredPhaseWrite.Acknowledged -> attemptAfterRequiredStart(context, args)
+          is RequiredPhaseWrite.Acknowledged ->
+            attemptAfterRequiredStart(
+              context,
+              args,
+              outputSink,
+              captureStreamOutput,
+            )
           is RequiredPhaseWrite.Rejected -> AttemptResult.settled(blockRequiredWriteRejection(context, run, start))
         }
     }
@@ -88,10 +95,18 @@ internal object PhaseAttemptOnce {
   private fun attemptAfterRequiredStart(
     context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): AttemptResult {
     val run = args.context.run
     admissionOutcome(context, args)?.let { return AttemptResult.settled(it) }
-    val launch = launchAndCapture(context, run, args.context.iteration, args.priorCorrection, args.call)
+    val launch =
+      launchAndCapture(
+        context,
+        args,
+        outputSink,
+        captureStreamOutput,
+      )
     val rejection = launch.requiredWriteRejection
     return if (rejection == null) {
       settleRecordRejectionLaunchOutcome(context, args, launch)
@@ -170,11 +185,14 @@ internal object PhaseAttemptOnce {
 
   internal fun launchAndCapture(
     context: PhaseAttemptLaunchCollaborationScope,
-    run: PhaseRun,
-    iteration: Int,
-    priorCorrection: PriorAttemptCorrection?,
-    call: PhaseStepCall,
+    args: RecordRejectionAttemptArgs,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): LaunchResult {
+    val run = args.context.run
+    val iteration = args.context.iteration
+    val priorCorrection = args.priorCorrection
+    val call = args.call
     call.acceptedExecution.requireAcceptedAttempt(run, call)
     var rejected: LaunchResult? = null
     val preparingState =
@@ -218,19 +236,19 @@ internal object PhaseAttemptOnce {
           }
       }
     val output =
-      context.runPreparedStep(
-        run,
-        call,
+      context.runnerForAcceptedAttempt(run, call).run(
         PhaseStepInput(
           stepName = run.phaseId,
           directive = "",
           priorValues = emptyMap(),
           operatorInstructions = run.request.phaseInstructions?.forStep(run.phaseId),
           facts =
-            run.stepFacts(run.request.issueKey, iteration).withLaunchSink(call.acceptedExecution.launchState),
+            run.stepFacts(run.request.issueKey, iteration),
           policy = run.policy,
         ),
         preparingState,
+        outputSink,
+        captureStreamOutput,
       )
     return rejected ?: PhaseAttemptOnce.reconcileLaunch(context, run, output)
   }

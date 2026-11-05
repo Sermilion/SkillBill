@@ -45,7 +45,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.core.isCooperativeCancellation
-import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
@@ -69,8 +68,6 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   private val snapshots = PlanBundleSnapshots(planner)
   private val unitStates = ConcurrentHashMap<Int, FeatureTaskRuntimeRunLoopPlanUnitState>()
   private var staging: PromotionRequest? = null
-
-  override val outputSink: AgentRunOutputSink get() = parent.launchOutputSink
 
   override fun pendingUnits(): PhaseFanOutUnits {
     val wave = parent.stepBinding.requireAuthorizedFanOutWave()
@@ -96,7 +93,6 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
 
   override fun <B : PhaseAcceptedStepExecution> unitState(
     unitId: Int,
-    outputSink: AgentRunOutputSink,
     descriptor: PhaseStepDescriptor<B>,
   ): B {
     val run = parent.stepBinding.requireAuthorizedFanOutWave()
@@ -109,7 +105,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
         parent,
         facts,
         PlanUnit(facts.workflowId, stepId, unitId),
-        PlanUnitLaunch(outputSink, location?.toString(), staged != null),
+        PlanUnitLaunch(location?.toString(), staged != null),
         runLoopEntry,
       )
     unitStates[unitId] = unit
@@ -222,7 +218,6 @@ private const val STAGED_SUB_SPEC_NOTE =
   "This is a checkout staging copy; write only this file, and the runtime promotes it into the project store.\n"
 
 private data class PlanUnitLaunch(
-  val outputSink: AgentRunOutputSink,
   val subSpecLocation: String?,
   val staged: Boolean,
 )
@@ -242,7 +237,6 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   private val launch: PlanUnitLaunch,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
-  override val launchOutputSink: AgentRunOutputSink get() = launch.outputSink
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = parent.implementationChecklistStore
     set(value) {
