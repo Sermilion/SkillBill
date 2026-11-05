@@ -398,6 +398,47 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
+  fun `a check observed for a pull request head prevents a later empty result from completing`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))),
+        PullRequestChecks.Reported(emptyList()),
+        PullRequestChecks.Reported(emptyList()),
+        PullRequestChecks.Reported(emptyList()),
+        PullRequestChecks.Reported(emptyList()),
+        PullRequestChecks.Reported(emptyList()),
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
+      )
+
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
+
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
+    assertEquals(7, checks.calls)
+  }
+
+  @Test
+  fun `empty observations wait for the published head before starting the grace period`() {
+    var lookups = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        lookups += 1
+        PullRequestIdentity.Found(
+          PR_URL,
+          PR_NUMBER,
+          headSha = if (lookups < 7) "unpublished-head" else HEAD_SHA,
+        )
+      }
+    val checks = ScriptedChecks(PullRequestChecks.NoChecks)
+
+    val outcome =
+      watcher(checks, identityLookup = identities)
+        .watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead(HEAD_SHA))
+
+    assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
+    assertEquals(11, checks.calls)
+  }
+
+  @Test
   fun `unavailable recheck does not complete monitoring`() {
     val checks =
       ScriptedChecks(

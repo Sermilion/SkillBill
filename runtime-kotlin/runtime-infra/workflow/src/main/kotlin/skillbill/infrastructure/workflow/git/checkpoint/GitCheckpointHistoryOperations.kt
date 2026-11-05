@@ -2,7 +2,7 @@ package skillbill.infrastructure.workflow.git.checkpoint
 
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.infrastructure.workflow.process.withValue
-import skillbill.ports.workflow.gitops.CheckpointHistoryGitOperations
+import skillbill.ports.workflow.gitops.history.CheckpointHistoryGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path

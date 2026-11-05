@@ -61,7 +61,7 @@ fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false) {
     Modifier.fillMaxWidth().height(30.dp).background(if (active) colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, shape)
       .alpha(if (item.enabled) 1f else .4f).hoverable(interaction).clickable(interaction, null, enabled = item.enabled, onClick = item.onClick).handCursor(item.enabled)
       .sbFocusRing(interaction, shape)
-      .semantics { role = Role.Button; contentDescription = item.label; if (!item.enabled) disabled(); if (item.checked) selected = true }
+      .semantics { role = Role.Button; contentDescription = listOfNotNull(item.label, item.endText).joinToString(", "); if (!item.enabled) disabled(); if (item.checked) selected = true }
       .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     // `.sb-menu-item .sb-icon` stays fg-muted on hover.

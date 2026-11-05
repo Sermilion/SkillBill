@@ -27,6 +27,7 @@ internal class StandalonePullRequestWatcher(
   private val cancelled: () -> Boolean,
   private val pollInterval: Duration = DEFAULT_POLL_INTERVAL,
   private val startTimeout: Duration = DEFAULT_START_TIMEOUT,
+  private val noChecksGrace: Duration = DEFAULT_NO_CHECKS_GRACE,
   private val progressInterval: Duration = DEFAULT_PROGRESS_INTERVAL,
   private val refreshGrace: Duration = DEFAULT_REFRESH_GRACE,
 ) {
@@ -51,7 +52,10 @@ internal class StandalonePullRequestWatcher(
     var heads: StandaloneWatchHeads,
     val adoptHead: (String) -> String?,
     val refreshGraceEndsAt: Instant,
+    var expectedHeadObserved: Boolean = false,
     var ciStarted: Boolean = false,
+    var emptyObservedAt: Instant? = null,
+    val seenCheckHeads: MutableSet<String> = mutableSetOf(),
     val progress: StandaloneWatchProgress,
   )
 
@@ -82,9 +86,16 @@ internal class StandalonePullRequestWatcher(
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     state: WatchState,
   ): PollRound =
-    when (val observation = observe(pullRequest, state.heads)) {
+    when (val observation = observe(pullRequest, state)) {
       is Observation.Settled -> PollRound(observation.outcome)
-      Observation.NotYetVisible, Observation.Unknown -> PollRound()
+      Observation.NotYetVisible -> {
+        state.emptyObservedAt = null
+        PollRound()
+      }
+      Observation.Unknown -> {
+        state.emptyObservedAt = null
+        PollRound()
+      }
       is Observation.Moved -> PollRound(adopt(observation.headSha, state))
       is Observation.Open -> pollChecks(pullRequest, observation, onCiRunning, state)
     }
@@ -100,6 +111,7 @@ internal class StandalonePullRequestWatcher(
       )
     }
     state.heads = StandaloneWatchHeads(headSha, state.heads.superseded + state.heads.expected)
+    state.emptyObservedAt = null
     return null
   }
 
@@ -111,18 +123,27 @@ internal class StandalonePullRequestWatcher(
   ): PollRound {
     val reported = checks.checks(pullRequest)
     if (reported is PullRequestChecks.Unavailable) {
-      return confirmUnavailable(pullRequest, state.heads)
+      state.emptyObservedAt = null
+      return confirmUnavailable(pullRequest, state)
     }
     val reportedChecks = (reported as? PullRequestChecks.Reported)?.checks.orEmpty()
-    if (reportedChecks.isNotEmpty()) state.ciStarted = true
+    if (reportedChecks.isNotEmpty()) {
+      state.ciStarted = true
+      state.seenCheckHeads += open.headSha
+      state.emptyObservedAt = null
+    }
     val verdict =
       standaloneVerdictFor(reportedChecks, open.headSha, open.pullRequest.editableFieldsDigest)
         ?.takeUnless { it is PullRequestCiOutcome.Failed && !refreshed(reportedChecks, state) }
     if (verdict == null) {
       state.progress.report(pullRequest.url, reportedChecks, onCiRunning)
+      if (reportedChecks.isEmpty()) {
+        val outcome = confirmEmpty(pullRequest, open, state)
+        if (outcome != null) return outcome
+      }
       return PollRound(startTimeoutEligible = reportedChecks.isEmpty())
     }
-    return when (val confirmation = observe(pullRequest, state.heads)) {
+    return when (val confirmation = observe(pullRequest, state)) {
       is Observation.Settled -> PollRound(confirmation.outcome)
       Observation.NotYetVisible ->
         PollRound(
@@ -134,11 +155,47 @@ internal class StandalonePullRequestWatcher(
     }
   }
 
+  private fun confirmEmpty(
+    pullRequest: MonitorPullRequestIdentity,
+    open: Observation.Open,
+    state: WatchState,
+  ): PollRound? {
+    if (open.headSha in state.seenCheckHeads) {
+      state.emptyObservedAt = null
+      return null
+    }
+    val firstEmptyAt = state.emptyObservedAt
+    if (firstEmptyAt == null) {
+      state.emptyObservedAt = now()
+      return null
+    }
+    if (Duration.between(firstEmptyAt, now()) < noChecksGrace) return null
+    return when (val confirmation = observe(pullRequest, state)) {
+      is Observation.Settled -> PollRound(confirmation.outcome)
+      Observation.Unknown, Observation.NotYetVisible -> {
+        state.emptyObservedAt = null
+        null
+      }
+      is Observation.Moved -> {
+        state.emptyObservedAt = null
+        PollRound(adopt(confirmation.headSha, state))
+      }
+      is Observation.Open -> {
+        if (confirmation.headSha == open.headSha) {
+          PollRound(PullRequestCiOutcome.NoChecksReported)
+        } else {
+          state.emptyObservedAt = null
+          null
+        }
+      }
+    }
+  }
+
   private fun confirmUnavailable(
     pullRequest: MonitorPullRequestIdentity,
-    heads: StandaloneWatchHeads,
+    state: WatchState,
   ): PollRound =
-    when (val confirmation = observe(pullRequest, heads)) {
+    when (val confirmation = observe(pullRequest, state)) {
       is Observation.Settled -> PollRound(confirmation.outcome)
       Observation.NotYetVisible ->
         PollRound(
@@ -157,27 +214,29 @@ internal class StandalonePullRequestWatcher(
 
   private fun observe(
     pullRequest: MonitorPullRequestIdentity,
-    heads: StandaloneWatchHeads,
+    state: WatchState,
   ): Observation =
     when (val lookup = source.pullRequest(pullRequest.repository, pullRequest.number)) {
       is MonitorPullRequestLookup.Failed -> Observation.Unknown
       MonitorPullRequestLookup.Missing -> Observation.Settled(PullRequestCiOutcome.NoPullRequest)
-      is MonitorPullRequestLookup.Found -> observeFound(lookup.pullRequest, heads)
+      is MonitorPullRequestLookup.Found -> observeFound(lookup.pullRequest, state)
     }
 
   private fun observeFound(
     pullRequest: MonitorPullRequest,
-    heads: StandaloneWatchHeads,
+    state: WatchState,
   ): Observation {
     val headSha = pullRequest.head?.tip?.sha
+    if (headSha == state.heads.expected) state.expectedHeadObserved = true
     return when {
       pullRequest.state == MonitorPullRequestState.MERGED -> Observation.Settled(PullRequestCiOutcome.Merged)
       pullRequest.state == MonitorPullRequestState.CLOSED ->
         Observation.Settled(PullRequestCiOutcome.Blocked("The pull request was closed without merging."))
-      headSha == null -> Observation.Settled(PullRequestCiOutcome.Unavailable("The pull request head is unavailable."))
-      headSha == heads.expected && pullRequest.conflicting -> Observation.Settled(PullRequestCiOutcome.Conflicted)
-      headSha == heads.expected -> Observation.Open(pullRequest, headSha)
-      headSha in heads.superseded -> Observation.NotYetVisible
+      headSha.isNullOrBlank() ->
+        Observation.Settled(PullRequestCiOutcome.Unavailable("The pull request head is unavailable."))
+      headSha == state.heads.expected && pullRequest.conflicting -> Observation.Settled(PullRequestCiOutcome.Conflicted)
+      headSha == state.heads.expected -> Observation.Open(pullRequest, headSha)
+      !state.expectedHeadObserved && headSha in state.heads.superseded -> Observation.NotYetVisible
       else -> Observation.Moved(headSha)
     }
   }

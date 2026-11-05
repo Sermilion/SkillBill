@@ -59,8 +59,8 @@ import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaReportSource
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
-import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.history.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection

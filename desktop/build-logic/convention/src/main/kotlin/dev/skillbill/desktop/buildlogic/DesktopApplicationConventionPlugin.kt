@@ -33,7 +33,7 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     extensions.getByType(ComposeExtension::class.java).extensions.getByType(DesktopExtension::class.java).application {
       this.javaHome = javaHome
       nativeDistributions {
-        modules("java.sql", "java.net.http", "java.management", "jdk.unsupported")
+        modules("java.sql", "java.net.http", "java.management", "jdk.unsupported", "jdk.net", "jdk.security.auth")
         packageName = "Skill Bill"
         this.packageVersion = packageVersion
         macOS {

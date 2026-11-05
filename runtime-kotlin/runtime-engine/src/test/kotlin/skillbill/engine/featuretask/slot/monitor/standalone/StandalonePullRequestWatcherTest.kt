@@ -31,6 +31,7 @@ class StandalonePullRequestWatcherTest {
   private val sleeps = mutableListOf<Duration>()
   private var reported: PullRequestChecks = PullRequestChecks.NoChecks
   private val reportedSequence = ArrayDeque<PullRequestChecks>()
+  private val checkReads = mutableListOf<Instant>()
   private var state = MonitorPullRequestState.OPEN
   private var conflicting = false
   private var lookupFailure: String? = null
@@ -38,14 +39,17 @@ class StandalonePullRequestWatcherTest {
   private val running = mutableListOf<List<String>>()
   private val adopted = mutableListOf<String>()
   private var adoptionRefusal: String? = null
+  private var adoptionRefusalHead: String? = null
   private val checks =
     object : MonitorCheckSource {
-      override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks =
-        when {
+      override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks {
+        checkReads += clock
+        return when {
           reportedSequence.size > 1 -> reportedSequence.removeFirst()
           reportedSequence.isNotEmpty() -> reportedSequence.first()
           else -> reported
         }
+      }
 
       override fun commitChecks(
         repository: MonitorRepositoryIdentity,
@@ -88,7 +92,11 @@ class StandalonePullRequestWatcherTest {
     ).watch(
       identity(PR_NUMBER),
       StandaloneWatchHeads(expected, superseded, refreshAfter),
-      { sha -> adoptionRefusal.also { if (it == null) adopted += sha } },
+      { sha ->
+        val refusal =
+          adoptionRefusal ?: if (sha == adoptionRefusalHead) "The returned head cannot be followed." else null
+        refusal.also { if (it == null) adopted += sha }
+      },
     ) { _, pending ->
       running += pending.map(PullRequestCheck::name)
     }
@@ -101,13 +109,40 @@ class StandalonePullRequestWatcherTest {
   private fun reports(vararg checks: PullRequestCheck) = PullRequestChecks.Reported(checks.toList())
 
   @Test
-  fun `a pull request that never reports a check stops at the one hour obstacle`() {
+  fun `two empty observations complete a pull request after the grace period`() {
     heads += PUBLISHED
 
     val outcome = watch()
 
-    assertEquals(PullRequestCiOutcome.Blocked("CI did not start within 60 minutes."), outcome)
-    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofHours(1))
+    assertEquals(PullRequestCiOutcome.NoChecksReported, outcome)
+    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofMinutes(2))
+    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) < Duration.ofHours(1))
+    assertEquals(Instant.parse("2026-10-16T10:00:00Z"), checkReads.first())
+    assertTrue(checkReads.drop(1).any { !it.isBefore(Instant.parse("2026-10-16T10:02:00Z")) })
+  }
+
+  @Test
+  fun `a failure reported after an empty observation determines the outcome`() {
+    heads += PUBLISHED
+    val failing = check("build", CheckBucket.FAIL)
+    reportedSequence += reports()
+    reportedSequence += reports(failing)
+
+    assertEquals(PullRequestCiOutcome.Failed(listOf(failing), PUBLISHED), watch())
+    assertTrue(checkReads.size >= 2)
+  }
+
+  @Test
+  fun `a check observed for the head prevents a later empty result from completing`() {
+    heads += PUBLISHED
+    reportedSequence += reports(check("build", CheckBucket.PENDING))
+    repeat(5) { reportedSequence += reports() }
+    reportedSequence += reports(check("build", CheckBucket.PASS))
+
+    val outcome = watch()
+
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), outcome)
+    assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofMinutes(2))
   }
 
   @Test
@@ -158,6 +193,28 @@ class StandalonePullRequestWatcherTest {
 
     assertEquals(PullRequestCiOutcome.Failed(listOf(failing), FOREIGN), watch())
     assertEquals(listOf(FOREIGN), adopted)
+  }
+
+  @Test
+  fun `a returned earlier head is adopted and its checks determine the verdict`() {
+    heads += listOf(PUBLISHED, REPAIRED, PUBLISHED)
+    reportedSequence += reports(check("build", CheckBucket.PENDING))
+    reportedSequence += reports(check("build", CheckBucket.PASS))
+
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), watch())
+    assertEquals(listOf(REPAIRED, PUBLISHED), adopted)
+  }
+
+  @Test
+  fun `a returned earlier head blocks when adoption is refused`() {
+    heads += listOf(PUBLISHED, REPAIRED, PUBLISHED)
+    reportedSequence += reports(check("build", CheckBucket.PENDING))
+    adoptionRefusalHead = PUBLISHED
+
+    val outcome = assertIs<PullRequestCiOutcome.Blocked>(watch())
+
+    assertTrue("returned head cannot be followed" in outcome.reason, outcome.reason)
+    assertEquals(listOf(REPAIRED), adopted)
   }
 
   @Test

@@ -164,9 +164,12 @@ public class MonitorStrategy(
         "if no capacity detail is available, say it is unavailable and do not query administrative APIs. " +
         "Do not infer a commit link, check state, elapsed time, or runner capacity. " +
         "Monitoring waits while checks are pending. A failed GitHub identity or checks read is recorded and retried " +
-        "as unknown for that round; it does not establish that CI has not started. If no checks are reported " +
-        "two minutes after the first empty observation, monitoring completes with a " +
-        "no-checks-reported result. Delayed or conditional checks may appear later."
+        "as unknown for that round; it does not establish that CI has not started. A pull request with a known " +
+        "nonblank head completes with a no-checks-reported result only after two successful empty observations " +
+        "at least two minutes apart and a fresh lookup confirms the same PR and head. A failed read cannot confirm " +
+        "the result, and a changed head starts a new window. Checks that appear during the window follow the usual " +
+        "pending, failure, and success paths. Conditional or delayed checks may appear after completion; inspect " +
+        "the PR again when those checks matter."
 
     private const val MONITOR_FIX_DIRECTIVE: String =
       "Monitor repair completion requires both a fix for the recorded failure and passing runnable local " +

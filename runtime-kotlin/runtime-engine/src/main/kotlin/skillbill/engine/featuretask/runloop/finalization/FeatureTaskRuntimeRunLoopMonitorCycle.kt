@@ -81,9 +81,10 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
           iteration,
           monitorOutput(
             run.phaseId,
-            "No CI checks reported for the pull request head.",
-            "No CI checks were reported for branch '$branch' after the two-minute grace period. " +
-              "Delayed or conditional checks may still appear.",
+            "No checks reported for the pull request head.",
+            "No checks were reported for branch '$branch' after two successful empty observations at least " +
+              "two minutes apart. Conditional or delayed checks may appear after completion; inspect the pull " +
+              "request again if those checks matter.",
             verdict = null,
           ),
         )

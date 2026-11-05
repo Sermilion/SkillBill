@@ -13,8 +13,13 @@ internal object StandaloneMonitorDirectives {
       "grace. When the target is a pull request, a merge conflict starts merge repair without counting as a CI " +
       "failure. All checks passing, skipped, or cancelled completes the phase only when none is pending. While " +
       "checks are pending, report the target and the available check links, describe queued checks as waiting, and " +
-      "do not infer a commit link, check state, elapsed time, or runner capacity. If no check has been reported " +
-      "within an hour, or the GitHub CLI cannot report checks, monitoring blocks. When the target is a pull " +
+      "do not infer a commit link, check state, elapsed time, or runner capacity. For a pull request with a " +
+      "known nonblank head, two successful empty check observations at least two minutes apart, followed by a " +
+      "fresh lookup confirming the same open PR and head, complete with a no-checks-reported result. Failed or " +
+      "unavailable reads do not confirm it, and a changed head starts a new window. Checks that appear during " +
+      "the window follow the normal pending, failure, and success paths. Conditional or delayed checks may appear " +
+      "after completion; inspect the PR again if those checks matter. Branch targets keep their separate one-hour " +
+      "no-check policy. When the target is a pull " +
       "request, a pull request head that moved away from the last head this invocation published blocks. When the " +
       "target is a pull request, a base that advanced past the commit pinned when this invocation started blocks " +
       "repair and publication. A branch target follows its tip and names each commit. A report-only branch blocks " +
