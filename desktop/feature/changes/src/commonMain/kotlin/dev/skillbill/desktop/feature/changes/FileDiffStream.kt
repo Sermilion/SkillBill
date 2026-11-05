@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +57,7 @@ import dev.skillbill.desktop.core.domain.model.CommentThread
 import dev.skillbill.desktop.core.ui.diff.DiffLineSlots
 import dev.skillbill.desktop.core.ui.diff.DiffLineAddress
 import dev.skillbill.desktop.core.ui.diff.DiffLineAffordance
+import dev.skillbill.desktop.core.ui.diff.DiffWordHighlight
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
@@ -91,6 +95,7 @@ internal fun FileDiffStream(
   canAuthor: Boolean = false,
   onCommentFocusChanged: (Boolean) -> Unit = {},
   bottomPadding: Dp = 0.dp,
+  wordHighlight: DiffWordHighlight = remember { DiffWordHighlight() },
   modifier: Modifier = Modifier,
 ) {
   val listState = rememberLazyListState()
@@ -103,6 +108,10 @@ internal fun FileDiffStream(
   val currentSelected by rememberUpdatedState(selectedPath)
   var jumping by remember { mutableStateOf(false) }
   var followedPath by remember { mutableStateOf(selectedPath) }
+  DisposableEffect(wordHighlight) { onDispose { wordHighlight.clear() } }
+  LaunchedEffect(files) {
+    wordHighlight.selection?.let { selected -> if (files.none { it.path == selected.fileKey }) wordHighlight.clear() }
+  }
   LaunchedEffect(scrollRequest) {
     val index = currentFiles.indexOfFirst { it.path == currentSelected }
     if (index < 0) return@LaunchedEffect
@@ -152,7 +161,7 @@ internal fun FileDiffStream(
       currentFiles.subList(first.coerceAtMost(currentFiles.size), (last + 1 + READ_AHEAD_FILES).coerceAtMost(currentFiles.size)).map { it.path }
     }.distinctUntilChanged().collect { currentAction(ChangesWindowAction.EnsureDiffs(it)) }
   }
-  BoxWithConstraints(modifier.fillMaxSize()) {
+  BoxWithConstraints(modifier.fillMaxSize().pointerInput(wordHighlight) { detectTapGestures(onTap = { wordHighlight.clear() }) }) {
     val viewportWidth = maxWidth
     val threadWidth = minOf(viewportWidth, 760.dp)
     val horizontalScroll = rememberScrollState()
@@ -222,7 +231,7 @@ internal fun FileDiffStream(
                   if (entered) authoring.hovered = hovered else if (authoring.hovered == hovered) authoring.hovered = null
                 },
               ) else null
-              diffRows(state.diff, file.path, lineSlots, affordance)
+              diffRows(state.diff, file.path, lineSlots, affordance, wordHighlight)
             }
             state != null -> item(key = "note:${file.path}", contentType = "note") { PaneMessage(fileDiffNotice(state)) }
           }
