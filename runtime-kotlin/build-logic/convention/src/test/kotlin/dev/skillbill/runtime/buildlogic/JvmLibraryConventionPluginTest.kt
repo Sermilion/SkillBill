@@ -60,6 +60,22 @@ class JvmLibraryConventionPluginTest {
   }
 
   @Test
+  fun `test workers use a directory inside run scratch only when that directory exists`(
+    @TempDir workspace: File,
+  ) {
+    val gradleHome = workspace.resolve("gradle-home")
+    val scratch = workspace.resolve("scratch").apply { mkdirs() }
+
+    assertEquals(scratch.resolve("t-key"), resolveTestTempDir(scratch.path, gradleHome, "key"))
+    assertEquals(
+      gradleHome.resolve("sbt-key"),
+      resolveTestTempDir(workspace.resolve("gone").path, gradleHome, "key"),
+    )
+    assertEquals(gradleHome.resolve("sbt-key"), resolveTestTempDir(" ", gradleHome, "key"))
+    assertEquals(gradleHome.resolve("sbt-key"), resolveTestTempDir(null, gradleHome, "key"))
+  }
+
+  @Test
   fun `sweep removes only stale test temp dirs from the Gradle user home`(
     @TempDir gradleHome: File,
   ) {

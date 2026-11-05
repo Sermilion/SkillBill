@@ -1,11 +1,11 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
+import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRequest
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessReviewFields
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
-import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker

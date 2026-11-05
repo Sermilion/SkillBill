@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.validation
 import org.w3c.dom.Element
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
+import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -59,7 +60,7 @@ class FileSystemValidationGateJunitFindingsTest {
     val path = Files.createTempFile("junit-opaque-", ".xml")
     try {
       Files.writeString(path, xml)
-      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver())
+      val runner = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot())
       val finding = runner.parseJUnitXmlFile(path).single()
       assertEquals("IdeStatusServiceTestSupport.kt:231", finding.location)
       assertContains(finding.message, "Failed requirement.")

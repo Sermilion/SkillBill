@@ -5,6 +5,9 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.infrastructure.host.jvm.GateJvmResolver
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
+import skillbill.infrastructure.host.scratch.AgentRunScratchRoot
+import skillbill.infrastructure.host.scratch.AgentRunScratchSpace
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -26,7 +29,7 @@ class JvmAgentRunProcessRunner(
   private val gateJvmResolver: GateJvmResolver,
   scratchRoot: AgentRunScratchRoot,
 ) : AgentRunProcessRunner {
-  private val scratchSpace = AgentRunScratchSpace(scratchRoot.path)
+  private val scratchSpace = AgentRunScratchSpace(scratchRoot.path, clock)
 
   override fun run(request: AgentRunProcessRequest): AgentRunProcessResult {
     request.review.reviewEvidenceEndpoint?.let(liveEndpoints::add)
@@ -39,13 +42,15 @@ class JvmAgentRunProcessRunner(
     }
   }
 
-  private fun AgentRunProcessRequest.withScratchDirectory(directory: Path?): AgentRunProcessRequest =
-    copy(
+  private fun AgentRunProcessRequest.withScratchDirectory(directory: Path?): AgentRunProcessRequest {
+    val requested = environmentFields.environment
+    val inherited =
+      if (environmentFields.inheritEnvironment) JdkHostPlatformPort.resolveEnvironment() + requested else requested
+    return copy(
       environmentFields =
-        environmentFields.copy(
-          environment = environmentFields.environment + scratchSpace.environment(directory),
-        ),
+        environmentFields.copy(environment = requested + scratchSpace.environment(directory, inherited)),
     )
+  }
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
     var startedProcess: ProcessStart? = null
