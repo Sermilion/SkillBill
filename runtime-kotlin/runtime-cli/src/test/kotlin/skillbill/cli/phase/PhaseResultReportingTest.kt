@@ -2,8 +2,11 @@ package skillbill.cli.phase
 
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PhaseResultReportingTest {
@@ -76,5 +79,33 @@ class PhaseResultReportingTest {
     val output = requireNotNull(state.result).stdout
     target.forEach { line -> assertTrue(output.contains(line), output) }
     assertTrue(output.indexOf(target.last()) < output.indexOf("phr-reporting"), output)
+  }
+
+  @Test
+  fun `classified provider limit blocked reports paused and exits two`() {
+    val state = CliRunState(stdinText = null)
+    val reason =
+      FeatureTaskRuntimeProviderLimitPause.reason(
+        phaseLabel = "Feature-task-runtime phase 'validation'",
+        agentId = "codex",
+        resumePhaseId = "validation",
+        signal = FeatureTaskRuntimeProviderLimitSignal(evidence = "usage limit", resetHint = null),
+      )
+    val result =
+      PhaseRunResult.Blocked(
+        invocationId = "phr-reporting",
+        completedStepIds = emptyList(),
+        reviewResult = null,
+        stepId = "validate",
+        reason = reason,
+      )
+
+    writePhaseResult(state, "validation", result)
+
+    val output = requireNotNull(state.result).stdout
+    assertEquals(2, state.result?.exitCode)
+    assertTrue(output.contains("paused at"), output)
+    assertTrue(output.contains(reason), output)
+    assertFalse(output.contains("blocked at"), output)
   }
 }

@@ -1,9 +1,12 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.diffcomment.DiffCommentService
+import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeCarriedFindings
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeCompactFindingRef
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeOmittedFindingsRetryReason
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeProseMentions
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRemediationRoundNumberOrNull
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptFromProse
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptOmittedFindings
@@ -17,6 +20,8 @@ import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.review.diffcomment.model.DiffCommentOutcome
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -24,6 +29,8 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object ImplementFixReceipt {
+  private const val MAX_REPLY_MENTIONS_LENGTH = 300
+
   private const val WRITE_FAILURE_REASON =
     "the review persistence.state could not be updated with the repair receipt."
 
@@ -31,6 +38,7 @@ internal object ImplementFixReceipt {
     context: PhaseStepOutputContext,
     state: PhaseImplementFixStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+    comments: DiffCommentService? = null,
   ): PhaseStepOutputCheck {
     val prose = auditProseValue(outputMap) ?: return PhaseStepOutputCheck.Accept
     val reviewState = state.goalReviewState() ?: return PhaseStepOutputCheck.Accept
@@ -43,7 +51,24 @@ internal object ImplementFixReceipt {
         anchor.baseSha,
         anchor.roundNumber,
       )
-    return settleReceipt(context, state, reviewState, receipt, refuted)
+    val omitted = featureTaskRuntimeRepairReceiptOmittedFindings(receipt, reviewState, refuted)
+    return if (omitted.isNotEmpty()) {
+      PhaseStepOutputCheck.OweFindings(
+        featureTaskRuntimeOmittedFindingsRetryReason(omitted),
+        omitted.mapTo(linkedSetOf(), ::featureTaskRuntimeCompactFindingRef),
+      )
+    } else {
+      val failure = persist(context, state, receipt)
+      if (failure != null) {
+        PhaseStepOutputCheck.Block(failure)
+      } else {
+        val passNumber = reviewState.passResults.lastOrNull()?.passNumber
+        if (comments != null && passNumber != null) {
+          postReceiptReplies(context, receipt, comments, prose, passNumber)
+        }
+        repeatedUnresolvedBlock(receipt, reviewState) ?: PhaseStepOutputCheck.Accept
+      }
+    }
   }
 
   fun carriedFindingsSection(
@@ -71,23 +96,51 @@ internal object ImplementFixReceipt {
     }
   }
 
-  private fun settleReceipt(
+  private fun postReceiptReplies(
     context: PhaseStepOutputContext,
-    state: PhaseImplementFixStepBinding,
-    reviewState: GoalSubtaskReviewState,
     receipt: FeatureTaskRuntimeRepairReceipt,
-    refuted: Set<String>,
-  ): PhaseStepOutputCheck {
-    val omitted = featureTaskRuntimeRepairReceiptOmittedFindings(receipt, reviewState, refuted)
-    if (omitted.isNotEmpty()) {
-      return PhaseStepOutputCheck.OweFindings(
-        featureTaskRuntimeOmittedFindingsRetryReason(omitted),
-        omitted.mapTo(linkedSetOf(), ::featureTaskRuntimeCompactFindingRef),
-      )
+    comments: DiffCommentService,
+    prose: String,
+    passNumber: Int,
+  ) {
+    receipt.entries.forEach { entry ->
+      val (outcome, body) =
+        when (entry.outcome) {
+          FeatureTaskRuntimeRepairOutcome.ADDRESSED -> {
+            val mentions =
+              featureTaskRuntimeProseMentions(prose, entry.findingId).joinToString(" ").take(MAX_REPLY_MENTIONS_LENGTH)
+            DiffCommentOutcome.FIXED to
+              if (mentions.isEmpty()) "Fixed in repair round ${receipt.roundNumber}." else "Fixed: $mentions"
+          }
+          FeatureTaskRuntimeRepairOutcome.NO_EDIT_REQUIRED -> {
+            val reason = entry.noEditReason?.takeIf(String::isNotBlank) ?: "no edit required."
+            DiffCommentOutcome.SKIPPED to "Skipped: $reason"
+          }
+          FeatureTaskRuntimeRepairOutcome.ATTEMPTED_UNRESOLVED -> {
+            val reason = entry.unresolvedReason?.takeIf(String::isNotBlank) ?: "no reason given."
+            DiffCommentOutcome.FAILED to "Failed to fix: $reason"
+          }
+        }
+      val result =
+        catchingNonCancellation {
+          comments.replyReviewOutcome(
+            context.request.repoRoot,
+            "review:${context.request.workflowId}:pass-$passNumber:${entry.findingId}",
+            body,
+            outcome,
+          )
+        }
+      val error = result.exceptionOrNull()
+      if (error != null || result.getOrNull() !is DiffCommentThreadResult.Saved) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          context.diagnostics,
+          "Feature-task-runtime could not reply ${outcome.name.lowercase()} to finding ${entry.findingId} " +
+            "for issue ${context.request.issueKey}, workflow ${context.request.workflowId}; " +
+            "operation reply ${outcome.name.lowercase()}.",
+          error,
+        )
+      }
     }
-    return persist(context, state, receipt)?.let { reason -> PhaseStepOutputCheck.Block(reason) }
-      ?: repeatedUnresolvedBlock(receipt, reviewState)
-      ?: PhaseStepOutputCheck.Accept
   }
 
   private fun repeatedUnresolvedBlock(

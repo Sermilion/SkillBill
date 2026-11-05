@@ -1,6 +1,7 @@
 package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goal.goalRepositoryRootFromIdentity
 import skillbill.engine.work.eligibility.workControlEligible
@@ -592,9 +593,18 @@ public class WorkBoardItemProjection(
     val exact = standalone.repositoryIdentity
     val primary = decodeRepositoryRoot(exact)?.let(repositoryEnclosingRootPort::primaryRepositoryIdentity)
     return setOfNotNull(exact, primary).any { identity ->
-      unitOfWork.workList.goalParentCandidatePage(issueKey, identity, 0, 1).isNotEmpty()
+      unitOfWork.workList
+        .goalParentCandidatePage(issueKey, identity, 0, WorkPaginationLimits.MAX_PAGE_SIZE)
+        .any { parent -> isListedGoalParent(parent.workflowId, unitOfWork) }
     }
   }
+
+  private fun isListedGoalParent(
+    workflowId: String,
+    unitOfWork: UnitOfWork,
+  ): Boolean =
+    resolvedWorkItems(canonicalDetailMatches(unitOfWork.workList.findByWorkflowId(workflowId)), unitOfWork)
+      .any { it.repositoryIdentity != null }
 
   internal fun isExcludedGoalChild(
     routeScope: FeatureTaskRouteScope?,

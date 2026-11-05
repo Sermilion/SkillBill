@@ -50,10 +50,8 @@ public class GoalAssessmentFixStrategy : PhaseStrategy() {
     internal const val ID: String = "goal-assessment-fix"
 
     private const val DIRECTIVE: String =
-      "Fix only the one selected finding or regression in this repair attempt by editing the checked-out " +
-        "feature branch. Use the selected reference, kind, test and guarded locations, failure scenario, and " +
-        "verified evidence. A justified test-value fix may rewrite or delete a useless test. Never weaken tests, " +
-        "remove real regression coverage, or remove product behavior to silence a finding. Do not " +
+      "Fix every finding and regression the operator instructions list, in one pass, by editing the checked-out " +
+        "feature branch. Never weaken or delete a test, and never remove behavior, to silence a finding. Do not " +
         "build, run tests, validate, commit, or push; the runtime does that afterwards. Settle with one line per " +
         "item: `<ref>: fixed: <files and how>` or `<ref>: not fixed: <reason>`."
   }

@@ -61,6 +61,7 @@ private fun GoalAssessmentRecord.toStatusResult(): GoalRunnerAssessmentResult {
     state = statusState(),
     round = statusRound(),
     exitReason = exitReason,
+    unavailableReason = unavailableReason,
     fixRan = rounds.mapNotNull { it.fix }.any { it.status != GoalAssessmentFixStatus.NOT_RUN },
     openFindingRefs = findings.filter { it.state == GoalAssessmentFindingState.OPEN }.map { it.findingRef },
     findings =

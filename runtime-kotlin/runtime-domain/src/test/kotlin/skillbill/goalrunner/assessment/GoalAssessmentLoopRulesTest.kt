@@ -27,27 +27,26 @@ class GoalAssessmentLoopRulesTest {
   }
 
   @Test
-  fun `a confirmed open test value finding remains repairable and blocks publication`() {
-    val testValue =
-      finding("GA-002").copy(
-        kind = GoalAssessmentFindingKind.TEST_VALUE,
-        severity = FeatureTaskRuntimeReviewSeverity.MINOR,
-        path = "src/HandlerTest.kt",
-        guardedRef = "src/Handler.kt:10",
-      )
-    val record = recordOf(round(1, testValue)).copy(exitReason = GoalAssessmentExitReason.CONVERGED)
-
-    assertEquals(FocusedRepairAction.Plan("GA-002"), GoalAssessmentLoopRules.next(record))
-    assertTrue(GoalAssessmentLoopRules.publicationBlockReason(record).orEmpty().contains("GA-002"))
-  }
-
-  @Test
   fun `an unrestored regression cannot be accepted without independent verification`() {
     val regression = GoalAssessmentRegressionResult("TR-001", GoalAssessmentRegressionState.NOT_RESTORED, "src/A.kt:3")
     val record = recordOf(round(1, regressions = listOf(regression)))
 
     assertEquals(FocusedRepairAction.Plan("TR-001"), GoalAssessmentLoopRules.next(record))
     assertNotNull(GoalAssessmentLoopRules.publicationBlockReason(record))
+  }
+
+  @Test
+  fun `an unavailable reason is flattened, bounded and named in the block message`() {
+    val record = GoalAssessmentLoopRules.unavailable(recordOf(), "  no merge base\n  with main.  " + "x".repeat(2000))
+
+    assertEquals(GoalAssessmentRecordShape.MAX_UNAVAILABLE_REASON_LENGTH, record.unavailableReason?.length)
+    assertTrue(record.unavailableReason.orEmpty().startsWith("no merge base with main. x"))
+    assertTrue(GoalAssessmentRecordShape.issues(record).isEmpty())
+    assertTrue(
+      GoalAssessmentLoopRules.publicationBlockReason(record).orEmpty().startsWith(
+        "Goal assessment did not accept the goal: assessment_unavailable. Reason: no merge base",
+      ),
+    )
   }
 
   private fun recordOf(vararg rounds: GoalAssessmentRound) =

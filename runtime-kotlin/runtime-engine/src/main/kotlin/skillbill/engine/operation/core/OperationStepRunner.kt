@@ -3,6 +3,8 @@ package skillbill.engine.operation.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
+import skillbill.engine.featuretask.runner.providerLimitSignal
+import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -12,11 +14,14 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 @Inject
 public class OperationStepRunner(
@@ -90,12 +95,16 @@ public class OperationStepRunner(
     input ?: return OperationStepResult.Failed("Operation step '$stepName' launches an agent; name one with --agent.")
     val output =
       session?.let { runner.run(input, OperationPhaseLaunchState, it) } ?: runner.run(input, OperationPhaseLaunchState)
-    return failureOf(stepName, output, input.policy)?.let(OperationStepResult::Failed)
-      ?: OperationStepResult.Settled(
-        output.stdout.text,
-        output.fileManifest?.let { manifest -> manifest.after - manifest.before.toSet() }.orEmpty(),
-        output,
-      )
+    return when (val failure = failureOf(stepName, output, input, input.policy)) {
+      is OperationStepFailure.Failed -> OperationStepResult.Failed(failure.reason)
+      is OperationStepFailure.Refused -> OperationStepResult.Refused(failure.refusal)
+      null ->
+        OperationStepResult.Settled(
+          output.stdout.text,
+          output.fileManifest?.let { manifest -> manifest.after - manifest.before.toSet() }.orEmpty(),
+          output,
+        )
+    }
   }
 
   private fun stepInput(
@@ -134,13 +143,38 @@ public class OperationStepRunner(
   private fun failureOf(
     stepName: String,
     output: PhaseStepOutput,
+    input: PhaseStepInput,
     policy: PhaseStepPolicy,
-  ): String? {
+  ): OperationStepFailure? {
+    output.launchFailure?.let { launchFailure ->
+      if (launchFailure.kind == PhaseLaunchFailureKind.PROVIDER_LIMIT) {
+        val agentId = input.facts.invokedAgentId
+        val reason =
+          when {
+            FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(launchFailure.reason) ->
+              launchFailure.reason
+            else -> {
+              val facts = output.launchOutcome as? AgentRunLaunchFacts
+              val signal =
+                facts?.let { providerLimitSignal(it) }
+                  ?: FeatureTaskRuntimeProviderLimitSignal(evidence = launchFailure.reason, resetHint = null)
+              FeatureTaskRuntimeProviderLimitPause.reason(
+                phaseLabel = "Operation step '$stepName'",
+                agentId = agentId,
+                resumePhaseId = stepName,
+                signal = signal,
+              )
+            }
+          }
+        return OperationStepFailure.Refused(OperationOutcome.Blocked(reason))
+      }
+      return OperationStepFailure.Failed(launchFailure.reason)
+    }
     val manifest = output.fileManifest
     return when {
-      output.launchFailure != null -> output.launchFailure.reason
-      !policy.fileMutating && manifest != null && manifest.before != manifest.after -> readOnlyViolation(stepName)
-      output.stdout.text.isBlank() -> "Operation step '$stepName' produced no value."
+      !policy.fileMutating && manifest != null && manifest.before != manifest.after ->
+        OperationStepFailure.Failed(readOnlyViolation(stepName))
+      output.stdout.text.isBlank() -> OperationStepFailure.Failed("Operation step '$stepName' produced no value.")
       else -> null
     }
   }
@@ -168,6 +202,12 @@ public class OperationStepRunner(
       is WorkflowPathContentIdentitiesResult.Resolved -> identities.identities
       is WorkflowPathContentIdentitiesResult.Failed -> refuse(anchorUnreadable(CONTENT_IDENTITIES, identities.error))
     }
+}
+
+private sealed interface OperationStepFailure {
+  data class Failed(val reason: String) : OperationStepFailure
+
+  data class Refused(val refusal: OperationOutcome.Blocked) : OperationStepFailure
 }
 
 internal sealed interface OperationStepResult {

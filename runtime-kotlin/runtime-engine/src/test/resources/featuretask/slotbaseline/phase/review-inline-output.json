@@ -15,9 +15,9 @@
             "failure_reason": null,
             "success": true
         },
-        "output": "- [F-001] Blocker | High | src/Foo.kt:1 | Foo.kt leaks a connection in the error path\n\nVerification:\n- F-001: confirmed\nverdict: changes_requested",
+        "output": "- [F-001] Blocker | High | src/Foo.kt:1 | Foo.kt leaks a connection in the error path\n\nVerification:\n- F-001: confirmed\nSource classifications for F-001: F-001=confirmed\nverdict: changes_requested",
         "review_session_id": null
     },
     "status": "completed",
-    "value": "- [F-001] Blocker | High | src/Foo.kt:1 | Foo.kt leaks a connection in the error path\n\nVerification:\n- F-001: confirmed\nverdict: changes_requested"
+    "value": "- [F-001] Blocker | High | src/Foo.kt:1 | Foo.kt leaks a connection in the error path\n\nVerification:\n- F-001: confirmed\nSource classifications for F-001: F-001=confirmed\nverdict: changes_requested"
 }

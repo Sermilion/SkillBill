@@ -1,4 +1,16 @@
-## [2026-11-04] SKILL-480 audit citations and child incident attributionAreas: runtime-domain, runtime-contracts, runtime-engine, runtime-goalrunner
+## [2026-11-04] SKILL-451 local diff comment runtime
+Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-application, runtime-infra, runtime-cli, runtime-mcp, runtime-engine, runtime-core, orchestration/contracts
+- Migration 101 `record-diff-comments` adds thread and comment tables; `DesktopReadSchema.VERSION` is 101 and the diff comment topic is signalled to desktop readers.
+- `DiffCommentService` owns comment rules, outdated-on-read and idempotent agent threads keyed by `sourceRef`; CLI list/add/reply/set-state and four MCP tools map through shared primitive contracts. reusable
+- Completed review passes and standalone reviews post agent threads for merged findings; verifier rejections and repair receipts reply with outcomes. Writes stay best-effort after the owning review or receipt mutation.
+- `operation:pr-review-fix` defaults to local diff comments with stable T1..Tn ordinals, branch, HEAD and open-thread anchors, and per-thread replies; successful local work commits without pushing. `mode:remote` keeps the GitHub flow.
+- The application-environment guard matches the `Thread` identifier boundary so comment-thread names pass.
+- Limits: no GitHub sync or multi-user comments. Desktop builds must match schema 101 before opening a migrated database.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-11-04] SKILL-480 audit citations and child incident attribution
+Areas: runtime-domain, runtime-contracts, runtime-engine, runtime-goalrunner
 - Recheck citations accept commas and semicolons while retaining citation and line-range validation and comma-joined evidence normalization.
 - Parent goal blocks retain child accepted-phase references and report the child phase while keeping the parent standing step for resume.
 - A durable child-cause artifact correlates recovered observations with the parent incident and child identity.

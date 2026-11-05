@@ -6,6 +6,7 @@ import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.toAdjudicationLaunchEnvelope
 import skillbill.application.review.packet.toProjectionPayload
 import skillbill.application.review.preparation.ReviewPreparationService
+import skillbill.application.review.verification.SPEC_ADJUDICATION_PHASE_LABEL
 import skillbill.application.review.verification.appendPromptSuffix
 import skillbill.application.review.verification.citedRegionOf
 import skillbill.application.review.verification.launchFailureReason
@@ -33,6 +34,7 @@ import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.model.ReviewStage
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.time.Duration
@@ -50,42 +52,58 @@ class ReviewSpecAdjudicationRunner(
     survivorState.earlyOutcome?.let { return it }
     val recordedAt = clock.instant().toString()
     val citationDiagnostics = mutableListOf<ReviewFindingCitationDiagnosticWithFinding>()
-    val launched =
-      survivorState.pending.map { finding ->
-        when (
-          val job =
-            prepareLaunch(
-              AdjudicationPrepareInput(
-                packet = request.packet,
-                finding = finding,
-                stage1 = survivorState.stage1ByRef.getValue(finding.fNumber),
-                projection = request.projection,
-                launch =
-                  AdjudicationPrepareLaunch(
-                    budget = request.launch.budget,
-                    brokerId = request.launch.brokerId,
-                    recordedAt = recordedAt,
-                  ),
-              ),
-            )
-        ) {
-          is PreparedAdjudicationRejected -> job.verdict
-          is PreparedAdjudicationReady ->
-            launchOne(
-              job,
-              AdjudicationLaunchEnv(
-                repoRoot = request.launch.repoRoot,
-                projectStoreRoot = request.launch.projectStoreRoot,
-                timeout = request.launch.timeout,
-                modelOverride = request.launch.modelOverride,
-                promptSuffix = request.launch.promptSuffix,
-                laneProgressIdleTimeout = request.launch.laneProgressIdleTimeout,
-              ),
-              recordedAt,
-            ).also { outcome -> citationDiagnostics += outcome.citationDiagnostics }
-              .verdict
-        }
+    val launched = mutableListOf<ReviewFindingVerdict>()
+    val launchEnv =
+      AdjudicationLaunchEnv(
+        repoRoot = request.launch.repoRoot,
+        projectStoreRoot = request.launch.projectStoreRoot,
+        timeout = request.launch.timeout,
+        modelOverride = request.launch.modelOverride,
+        promptSuffix = request.launch.promptSuffix,
+        laneProgressIdleTimeout = request.launch.laneProgressIdleTimeout,
+      )
+    for (finding in survivorState.pending.sortedBy { it.fNumber }) {
+      when (
+        val job =
+          prepareLaunch(
+            AdjudicationPrepareInput(
+              packet = request.packet,
+              finding = finding,
+              stage1 = survivorState.stage1ByRef.getValue(finding.fNumber),
+              projection = request.projection,
+              launch =
+                AdjudicationPrepareLaunch(
+                  budget = request.launch.budget,
+                  brokerId = request.launch.brokerId,
+                  recordedAt = recordedAt,
+                ),
+            ),
+          )
+      ) {
+        is PreparedAdjudicationRejected -> launched += job.verdict
+        is PreparedAdjudicationReady ->
+          when (
+            val step =
+              launchOne(
+                job,
+                launchEnv,
+                recordedAt,
+              )
+          ) {
+            is AdjudicationLaunchStepResult.Pause ->
+              return ReviewSpecAdjudicationOutcome(
+                verdicts =
+                  survivorState.survivors.mapNotNull { survivorState.durableAdj[it.fNumber] } + launched,
+                skipReason = step.reason,
+                citationDiagnostics = citationDiagnostics,
+              )
+            is AdjudicationLaunchStepResult.Finding -> {
+              citationDiagnostics += step.outcome.citationDiagnostics
+              launched += step.outcome.verdict
+            }
+          }
       }
+    }
     return ReviewSpecAdjudicationOutcome(
       verdicts = survivorState.survivors.mapNotNull { survivorState.durableAdj[it.fNumber] } + launched,
       citationDiagnostics = citationDiagnostics,
@@ -199,11 +217,17 @@ class ReviewSpecAdjudicationRunner(
     val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
   )
 
+  private sealed class AdjudicationLaunchStepResult {
+    data class Finding(val outcome: AdjudicationFindingOutcome) : AdjudicationLaunchStepResult()
+
+    data class Pause(val reason: String) : AdjudicationLaunchStepResult()
+  }
+
   private fun launchOne(
     job: PreparedAdjudicationReady,
     env: AdjudicationLaunchEnv,
     recordedAt: String,
-  ): AdjudicationFindingOutcome {
+  ): AdjudicationLaunchStepResult {
     val prompt = appendPromptSuffix(adjudicationPrompt(job.launch), env.promptSuffix)
     val outcome =
       launcher.launch(
@@ -223,14 +247,16 @@ class ReviewSpecAdjudicationRunner(
       )
     return when (outcome) {
       is UnsupportedAgentRunLaunch ->
-        AdjudicationFindingOutcome(
-          ReviewFindingVerdict(
-            stage = ReviewStage.ADJUDICATION,
-            findingRef = job.finding.fNumber,
-            claimVerdict = job.stage1.claimVerdict,
-            scopeDisposition = ReviewScopeDisposition.IN_SCOPE,
-            recordedAt = recordedAt,
-            rejectionReason = "unsupported agent: ${outcome.reason}",
+        AdjudicationLaunchStepResult.Finding(
+          AdjudicationFindingOutcome(
+            ReviewFindingVerdict(
+              stage = ReviewStage.ADJUDICATION,
+              findingRef = job.finding.fNumber,
+              claimVerdict = job.stage1.claimVerdict,
+              scopeDisposition = ReviewScopeDisposition.IN_SCOPE,
+              recordedAt = recordedAt,
+              rejectionReason = "unsupported agent: ${outcome.reason}",
+            ),
           ),
         )
       is AgentRunLaunchDenied -> error("Review adjudication never launches with a spawn authorization.")
@@ -242,45 +268,54 @@ class ReviewSpecAdjudicationRunner(
     job: PreparedAdjudicationReady,
     facts: AgentRunLaunchFacts,
     recordedAt: String,
-  ): AdjudicationFindingOutcome {
-    launchFailureReason(facts)?.let { reason ->
-      return AdjudicationFindingOutcome(
-        ReviewFindingVerdict(
-          stage = ReviewStage.ADJUDICATION,
-          findingRef = job.finding.fNumber,
-          claimVerdict = job.stage1.claimVerdict,
-          scopeDisposition = ReviewScopeDisposition.IN_SCOPE,
-          recordedAt = recordedAt,
-          rejectionReason = reason,
-        ),
-      )
-    }
-    val worker =
-      parseAdjudicationWorkerResult(facts.stdout)
-        ?: return AdjudicationFindingOutcome(
+  ): AdjudicationLaunchStepResult {
+    launchFailureReason(facts, SPEC_ADJUDICATION_PHASE_LABEL)?.let { reason ->
+      if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(reason)) {
+        return AdjudicationLaunchStepResult.Pause(reason)
+      }
+      return AdjudicationLaunchStepResult.Finding(
+        AdjudicationFindingOutcome(
           ReviewFindingVerdict(
             stage = ReviewStage.ADJUDICATION,
             findingRef = job.finding.fNumber,
             claimVerdict = job.stage1.claimVerdict,
             scopeDisposition = ReviewScopeDisposition.IN_SCOPE,
             recordedAt = recordedAt,
-            rejectionReason = "unparseable adjudication output",
+            rejectionReason = reason,
+          ),
+        ),
+      )
+    }
+    val worker =
+      parseAdjudicationWorkerResult(facts.stdout)
+        ?: return AdjudicationLaunchStepResult.Finding(
+          AdjudicationFindingOutcome(
+            ReviewFindingVerdict(
+              stage = ReviewStage.ADJUDICATION,
+              findingRef = job.finding.fNumber,
+              claimVerdict = job.stage1.claimVerdict,
+              scopeDisposition = ReviewScopeDisposition.IN_SCOPE,
+              recordedAt = recordedAt,
+              rejectionReason = "unparseable adjudication output",
+            ),
           ),
         )
     val diagnostics =
       worker.citationDiagnostics.map { diagnostic ->
         diagnostic.withFindingRef(job.finding.fNumber)
       }
-    return AdjudicationFindingOutcome(
-      verdict =
-        ReviewSpecAdjudicationAdmission.admit(
-          job.finding,
-          job.stage1,
-          job.projection,
-          worker,
-          recordedAt,
-        ),
-      citationDiagnostics = diagnostics,
+    return AdjudicationLaunchStepResult.Finding(
+      AdjudicationFindingOutcome(
+        verdict =
+          ReviewSpecAdjudicationAdmission.admit(
+            job.finding,
+            job.stage1,
+            job.projection,
+            worker,
+            recordedAt,
+          ),
+        citationDiagnostics = diagnostics,
+      ),
     )
   }
 

@@ -2,9 +2,8 @@ package skillbill.goalrunner.assessment
 
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
-import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
-import skillbill.goalrunner.assessment.model.GoalAssessmentFixValidation
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentRegressionState
 import skillbill.goalrunner.assessment.model.GoalAssessmentScenarioVerdict
@@ -14,11 +13,25 @@ import skillbill.workflow.model.repair.FocusedRepairStrategy
 import skillbill.workflow.model.repair.RepairTargetProgress
 
 object GoalAssessmentLoopRules {
+  private val REASON_WHITESPACE = Regex("""\s+""")
+
+  fun unavailable(
+    record: GoalAssessmentRecord,
+    reason: String,
+  ): GoalAssessmentRecord =
+    record.copy(
+      exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE,
+      openFindingRefs = openFindings(record).map { it.findingRef },
+      unavailableReason =
+        reason.trim().replace(REASON_WHITESPACE, " ")
+          .take(GoalAssessmentRecordShape.MAX_UNAVAILABLE_REASON_LENGTH).trimEnd(),
+    )
+
   fun openFindings(record: GoalAssessmentRecord): List<GoalAssessmentFinding> =
     record.rounds.flatMap { it.findings }.filter { it.state == GoalAssessmentFindingState.OPEN }
 
   fun pendingRefs(record: GoalAssessmentRecord): List<String> =
-    openFindings(record).map { it.findingRef } +
+    openFindings(record).filter { it.kind == GoalAssessmentFindingKind.DEFECT }.map { it.findingRef } +
       record.rounds.flatMap { it.scenarios }.associateBy { it.scenarioRef }.values
         .filter { it.verdict == GoalAssessmentScenarioVerdict.BROKEN }.map { it.scenarioRef } +
       record.rounds.flatMap { it.regressions }.associateBy { it.regressionRef }.values
@@ -30,23 +43,7 @@ object GoalAssessmentLoopRules {
         RepairTargetProgress(
           ref,
           record.rounds.count {
-            it.round >= record.budgetStartRound &&
-              it.targetRef == ref &&
-              (
-                it.fix?.let { fix ->
-                  (
-                    fix.status == GoalAssessmentFixStatus.NO_CHANGE &&
-                      fix.validation == GoalAssessmentFixValidation.NOT_RUN &&
-                      fix.commitSha == null &&
-                      fix.changedFiles.isEmpty()
-                  ) ||
-                    (
-                      fix.status == GoalAssessmentFixStatus.COMPLETED &&
-                        fix.validation == GoalAssessmentFixValidation.PASSED &&
-                        fix.commitSha != null
-                    )
-                } == true
-              )
+            it.round >= record.budgetStartRound && it.targetRef == ref && it.fix != null
           },
         )
       }
@@ -56,7 +53,8 @@ object GoalAssessmentLoopRules {
   fun publicationBlockReason(record: GoalAssessmentRecord): String? =
     when {
       record.exitReason != GoalAssessmentExitReason.CONVERGED ->
-        "Goal assessment did not accept the goal: ${record.exitReason?.wireValue ?: "unfinished"}."
+        "Goal assessment did not accept the goal: ${record.exitReason?.wireValue ?: "unfinished"}." +
+          record.unavailableReason?.let { " Reason: ${it.trimEnd('.')}." }.orEmpty()
       pendingRefs(record).isNotEmpty() -> "Goal assessment has unresolved items: ${pendingRefs(record).joinToString()}."
       record.rounds.lastOrNull()?.fix != null -> "The last assessment repair still needs independent verification."
       else -> null

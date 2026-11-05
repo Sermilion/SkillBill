@@ -2,6 +2,7 @@ package skillbill.mcp.shared
 
 import me.tatarka.inject.annotations.Component
 import skillbill.application.learning.LearningService
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.service.ReviewService
 import skillbill.application.system.SystemService
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
@@ -21,6 +22,7 @@ internal abstract class McpComponent(
   @Component val runtimeComponent: RuntimeComponent,
 ) {
   abstract val learningService: LearningService
+  abstract val diffCommentService: DiffCommentService
   abstract val lifecycleTelemetryService: LifecycleTelemetryService
   abstract val telemetryService: TelemetryService
   abstract val reviewService: ReviewService

@@ -1,3 +1,13 @@
+## [2026-11-05] Classify direct review launches on stderr before generic exit messages
+Context: Application review runners call AgentRunLauncher without DefaultPhaseRunner PROVIDER_LIMIT classification.
+Decision: reviewLaunchProviderLimitPauseReason runs FeatureTaskRuntimeProviderLimitDetector on non-zero exits before agent exited with status or PROCESS_FAILURE copy.
+Reason: Usage-limit stderr would otherwise surface as repairable review failures despite sharing the same detector as feature-task slots.
+
+## [2026-11-05] No OperationOutcome.Paused or OperationStepResult.Paused
+Context: Provider-limit pauses must not consume repair attempts, but the bundle forbids new pause outcome types outside feature-task slot settlement.
+Decision: Operations keep OperationOutcome.Blocked and OperationStepResult.Refused while the subtask-1 classifier distinguishes provider-limit pause copy from other blocked reasons.
+Reason: One marker-bearing reason string aligns CLI, verify loops, and projections without widening operation result enums.
+
 ## [2026-11-03] Classify unsafe branches as report-only before repair
 Context: Subtask 1 treated every branch as report-only. Subtask 2 must repair some branches without pushing to the default branch, a protected branch, or a branch the caller cannot push.
 Decision: Classify REPORT_ONLY in that order of reasons, with null protection or push data counting as report-only. MAINTAINER_CAN_MODIFY is never used for a branch target. A REPORT_ONLY failure names the reason and does not repair.
@@ -457,3 +467,8 @@ Reason: QA already keeps its agent-writable directory outside `.git/` for the sa
 Alternatives considered: Asking operators to allow edits under `.git/`, rejected because allow rules do not lift the sensitive-file guard. A directory beside the checkout, rejected for the reasons above.
 
 Revisit when: Ownership written under the old `.git/skill-bill/standalone-monitor/` location matters. A retained worktree there no longer blocks a new monitor of that PR; remove it with `git worktree remove` once its work is saved.
+
+## [2026-11-04] Build comment-enabled review strategies with the registry runner
+Context: Review strategies that post diff comments must use the same `PhaseRunner` instance held by registry registrations.
+Decision: Provide review strategies through a factory and invoke it with the registry's runner.
+Reason: This preserves shared runner identity without adding a new scope or engine collaborator bag.

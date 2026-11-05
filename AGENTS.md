@@ -13,7 +13,7 @@ Non-negotiable contracts:
 - `agent-addons/<slug>/` contains only user-owned `agent-addon.yaml` and `content.md`.
 - Generated support pointers, provider-specific native-agent outputs, and install staging artifacts are not committed.
 - Discovery, install, routing, and validation stay dynamic and manifest-driven.
-- Missing manifests, wrong contract versions, missing content, and missing required sections fail loudly with typed errors.
+- Missing manifests, content or required sections, and wrong contract versions fail loudly with typed errors.
 - Every fallback, degradation, or swallowed failure emits a record; see `docs/observability-policy.md`.
 
 ## Internal Skills
@@ -78,13 +78,13 @@ Code review: pack root + conforming manifest/`content.md`, manifest-registered p
 
 ## Writing And Comments
 
-Write direct, active prose; drop filler, stale phrases, praise, and repetition, but preserve names, numbers, and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
+Write direct, active prose; drop filler, stale wording, praise and repetition; preserve names, numbers and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
 
 ## Testing
 
 Write few, high-value tests; name the realistic bug each would catch before authoring. Assert observable boundaries, not implementation structure. `skill-bill operation unit-test-value-check` is the review gate.
 
-No timing-based tests. A test must not pass or fail depending on wall-clock time or thread scheduling. That rules out real sleeps (`Thread.sleep`, shell `sleep N`) racing a timeout, idle window or poll interval, and assertions on elapsed duration or poll counts. It also rules out real-time deadline polling loops, latch or join awaits whose expiry decides the result, and real `delay` outside `runTest` virtual time. CI runs on a loaded self-hosted runner where these flake, and a CI failure is never fixed by widening sleeps or deadlines. Inject the clock and the scheduler (fake `Clock`, `runTest` virtual time, explicit latches signalled by the code under test) so the test controls every transition. If a behavior can only be checked with real time, leave it untested rather than add a flaky test.
+No timing-based tests. Tests must not depend on wall-clock time or thread scheduling. Ban real sleeps (`Thread.sleep`, shell `sleep N`) racing timeouts, idle windows or poll intervals; elapsed-time or poll-count assertions; real-time deadline polling; latch or join timeouts; and real `delay` outside `runTest`. CI's loaded self-hosted runner makes these flaky, so do not widen sleeps or deadlines. Inject a clock and scheduler (fake `Clock`, `runTest` virtual time or code-signalled latches) to control every transition. Leave real-time-only behavior untested.
 
 ## Comments
 

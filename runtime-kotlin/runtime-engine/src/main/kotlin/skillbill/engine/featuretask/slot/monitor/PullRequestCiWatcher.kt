@@ -20,7 +20,7 @@ internal class PullRequestCiWatcher(
   private val now: () -> Instant = Instant::now,
   private val sleep: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
   private val pollInterval: Duration = DEFAULT_POLL_INTERVAL,
-  private val startTimeout: Duration = DEFAULT_START_TIMEOUT,
+  private val noChecksGrace: Duration = DEFAULT_NO_CHECKS_GRACE,
   private val progressInterval: Duration = DEFAULT_PROGRESS_INTERVAL,
   private val refreshGrace: Duration = DEFAULT_REFRESH_GRACE,
 ) {
@@ -37,6 +37,7 @@ internal class PullRequestCiWatcher(
     var ciStarted = false
     var inconclusiveReported = false
     var progress = CiProgress()
+    val emptyGrace = CheckRegistrationGrace(noChecksGrace)
 
     fun reportInconclusive(reason: String) {
       if (!inconclusiveReported) {
@@ -52,12 +53,13 @@ internal class PullRequestCiWatcher(
       ciStarted = ciStarted || poll.started
       val settled = poll.outcome
       if (settled != null) return settled
-      val awaitingStart = !poll.unknown && poll.startTimeoutEligible && !ciStarted
-      if (
-        awaitingStart &&
-        Duration.between(startedAt, now()) >= startTimeout
-      ) {
-        return PullRequestCiOutcome.Blocked(startTimeoutReason())
+      if (poll.started) emptyGrace.clear()
+      val emptyIdentity = poll.emptyIdentity
+      if (!ciStarted && emptyIdentity != null && emptyGrace.ready(emptyIdentity, now())) {
+        if (sameCurrentIdentity(repoRoot, branch, emptyIdentity, onInconclusive)) {
+          return PullRequestCiOutcome.NoChecksReported
+        }
+        emptyGrace.clear()
       }
       sleep(pollInterval)
     }
@@ -74,8 +76,7 @@ internal class PullRequestCiWatcher(
   private data class CiPoll(
     val outcome: PullRequestCiOutcome? = null,
     val started: Boolean = false,
-    val unknown: Boolean = false,
-    val startTimeoutEligible: Boolean = false,
+    val emptyIdentity: PullRequestIdentity.Found? = null,
   )
 
   private fun observePoll(
@@ -92,7 +93,7 @@ internal class PullRequestCiWatcher(
         checksLookupFailure(request, checks.reason, onReadFailure)
       PullRequestChecks.NoChecks -> {
         onChecks(found.url, emptyList())
-        CiPoll(startTimeoutEligible = true)
+        CiPoll(emptyIdentity = found)
       }
       is PullRequestChecks.Reported -> {
         onChecks(found.url, checks.checks)
@@ -108,7 +109,7 @@ internal class PullRequestCiWatcher(
               onReadFailure,
             )
           checks.checks.isNotEmpty() -> refreshedPending(request, found, onInconclusive, onReadFailure)
-          else -> CiPoll(startTimeoutEligible = true)
+          else -> CiPoll(emptyIdentity = found)
         }
       }
     }
@@ -144,9 +145,9 @@ internal class PullRequestCiWatcher(
     when (val latest = lookupIdentity(request.repoRoot, request.branch, onReadFailure)) {
       is PullRequestIdentity.Merged -> CiPoll(PullRequestCiOutcome.Merged)
       PullRequestIdentity.Absent -> CiPoll(PullRequestCiOutcome.NoPullRequest)
-      is PullRequestIdentity.Unavailable -> CiPoll(unknown = true)
+      is PullRequestIdentity.Unavailable -> CiPoll()
       is PullRequestIdentity.Found ->
-        if (latest.conflicting) CiPoll(PullRequestCiOutcome.Conflicted) else CiPoll(unknown = true)
+        if (latest.conflicting) CiPoll(PullRequestCiOutcome.Conflicted) else CiPoll()
     }
 
   private fun checksLookupFailure(
@@ -169,7 +170,7 @@ internal class PullRequestCiWatcher(
   ): CiPoll =
     when (val latest = lookupIdentity(request.repoRoot, request.branch, onReadFailure)) {
       is PullRequestIdentity.Merged -> CiPoll(PullRequestCiOutcome.Merged)
-      is PullRequestIdentity.Unavailable -> CiPoll(unknown = true)
+      is PullRequestIdentity.Unavailable -> CiPoll()
       PullRequestIdentity.Absent -> CiPoll(PullRequestCiOutcome.NoPullRequest)
       is PullRequestIdentity.Found ->
         when {
@@ -181,6 +182,16 @@ internal class PullRequestCiWatcher(
           else -> CiPoll(started = true)
         }
     }
+
+  private fun sameCurrentIdentity(
+    repoRoot: Path,
+    branch: String,
+    observed: PullRequestIdentity.Found,
+    onReadFailure: (String) -> Unit,
+  ): Boolean {
+    val latest = lookupIdentity(repoRoot, branch, onReadFailure) as? PullRequestIdentity.Found ?: return false
+    return !latest.conflicting && latest.number == observed.number && latest.headSha == observed.headSha
+  }
 
   private fun currentIdentity(
     repoRoot: Path,
@@ -215,7 +226,7 @@ internal class PullRequestCiWatcher(
   ): CiPoll =
     when (val latest = lookupIdentity(request.repoRoot, request.branch, onReadFailure)) {
       is PullRequestIdentity.Merged -> CiPoll(PullRequestCiOutcome.Merged)
-      is PullRequestIdentity.Unavailable -> CiPoll(unknown = true)
+      is PullRequestIdentity.Unavailable -> CiPoll()
       PullRequestIdentity.Absent -> CiPoll(PullRequestCiOutcome.NoPullRequest)
       is PullRequestIdentity.Found ->
         if (latest.conflicting) {
@@ -278,11 +289,9 @@ internal class PullRequestCiWatcher(
       ""
     }
 
-  private fun startTimeoutReason(): String = "CI did not start within ${startTimeout.toMinutes()} minutes."
-
   private companion object {
     val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(30)
-    val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
+    val DEFAULT_NO_CHECKS_GRACE: Duration = Duration.ofMinutes(2)
     val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofSeconds(30)
     val DEFAULT_REFRESH_GRACE: Duration = Duration.ofMinutes(10)
     const val MAX_PROGRESS_CHECKS: Int = 8

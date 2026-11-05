@@ -15,6 +15,7 @@ import skillbill.infrastructure.sqlite.review.accounting.loadReviewAccounting
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
 import skillbill.infrastructure.sqlite.review.accounting.upsertReviewAccounting
 import skillbill.infrastructure.sqlite.review.core.rejectedFindingOutcomeTypes
+import skillbill.infrastructure.sqlite.review.diffcomment.SqliteDiffCommentStore
 import skillbill.infrastructure.sqlite.review.stage.ReviewRuntime
 import skillbill.infrastructure.sqlite.review.stage.SQLiteReviewFindingActions
 import skillbill.infrastructure.sqlite.review.stats.ReviewFinishedTelemetryUpdateRequest
@@ -65,6 +66,7 @@ import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
+import skillbill.ports.review.diffcomment.DiffCommentStore
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewRepositoryStatsSnapshot
 import skillbill.ports.review.repository.ReviewFindingActionRepository
@@ -117,6 +119,7 @@ internal class SQLiteUnitOfWork(
   override val blockIncidentRecoveries: BlockIncidentRecoveryRepository =
     SqliteBlockIncidentRecoveryRepository(connection)
   override val productReports: ProductReportRepository = SqliteProductReportRepository(connection)
+  override val diffComments: DiffCommentStore = SqliteDiffCommentStore(connection)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)
   override val lifecycleTelemetry: LifecycleTelemetryRepository =

@@ -25,6 +25,7 @@ import skillbill.review.attribution.GENERIC_REVIEW_SKILL_NAME
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 /** The multi-agent review the delegated mode runs; production wires `ParallelCodeReviewRunner.run`. */
 public interface VerifyDelegatedReviewer {
@@ -122,6 +123,9 @@ internal class VerifyCodeReviewStep(
       delegated
         ?: settled.output?.let { output -> InlineReviewResultDecoder.decode(agentId, output) }
         ?: return VerifyCodeReviewOutcome.Failed("code review produced no runner output")
+    providerLimitPauseCopy(reviewed)?.let { copy ->
+      return VerifyCodeReviewOutcome.Refused(OperationOutcome.Blocked(copy))
+    }
     if (!reviewed.lane1.success) {
       return VerifyCodeReviewOutcome.Failed(reviewed.lane1.failureReason ?: "code review lane failed")
     }
@@ -154,6 +158,16 @@ internal class VerifyCodeReviewStep(
     agentId: String,
     result: ParallelCodeReviewResult,
   ): AgentRunLaunchFacts {
+    providerLimitPauseCopy(result)?.let { pause ->
+      return AgentRunLaunchFacts(
+        agent = SupportedAgent.fromWire(agentId),
+        termination = AgentRunTermination.Exited(1),
+        stdout = "",
+        stderr = pause,
+        stdoutByteSize = 0,
+        stdoutSha256 = "",
+      )
+    }
     val stdout =
       if (result.lane1.success) {
         result.mergeResult.formattedOutput.ifBlank { "Review completed." }
@@ -169,6 +183,14 @@ internal class VerifyCodeReviewStep(
       stdoutSha256 = "",
     )
   }
+
+  private fun providerLimitPauseCopy(reviewed: ParallelCodeReviewResult): String? =
+    listOfNotNull(
+      reviewed.lane1.failureReason,
+      reviewed.integration?.failureReason,
+    )
+      .plus(reviewed.analysisStageFailures.map { failure -> failure.detail })
+      .firstOrNull(FeatureTaskRuntimeProviderLimitPause::isProviderLimitPauseReason)
 
   private companion object {
     val BLOCKING_SEVERITIES = setOf(ParallelReviewSeverity.BLOCKER, ParallelReviewSeverity.MAJOR)

@@ -29,6 +29,41 @@ Reason: Destination lookups need the destination identity. An absent worker leas
 Context: A test can pass while the production regression it should guard remains. The previous focused-repair decision left test-value notes as report-only.
 Decision: Review the committed goal test scope read-only and independently verify defect and test-value candidates at every severity. Confirmed candidates use the existing focused repair budget and receive same-reference verification after repair; refuted candidates receive no repair authority. Missing or incomplete evidence makes assessment unavailable.
 Reason: A report-only finding can leave a confirmed regression unresolved. Independent verification grants repair authority only to confirmed cases, and post-fix verification prevents a repair from claiming convergence while the regression remains.
+## [2026-11-05] PR-writer provider limit uses a goalrunner-internal pause outcome
+Context: GoalPullRequestPort stays Opened, Existing, or Failed only; a pause is not a failed open.
+Decision: GoalPullRequestOpenOutcome carries ProviderPaused for classified writer blocks; commitAndPublish maps it to pauseForProviderLimit at pr without warnPullRequestWriter or port fallback.
+Reason: Preserves the port contract while stopping publication before commit or PR on usage-limit stderr.
+
+## [2026-11-05] Classify monitor Blocked in GoalRunnerFinalization.completeMonitoredGoal
+Context: DefaultGoalRunnerCiMonitor is a pass-through of PhaseRunResult and AC-002 names finalization as the monitor pause site.
+Decision: Map classified monitor Blocked to pauseForProviderLimit in completeMonitoredGoal; do not edit DefaultGoalRunnerCiMonitor.
+Reason: Keeps monitor reporting unchanged while finalization owns goal stop reason, lastResumableStep, and skipping markBlocked.
+
+## [2026-11-05] Pause nested goal-finish validate inside DefaultGoalRunnerQaGate
+Context: GoalRunnerPostChangeValidation is shared with assessment-fix validation; changing its Blocked mapping would affect assessment or leave assessment-fix validation failing generically.
+Decision: Classify provider-limit blocks in DefaultGoalRunnerQaGate validateAfterQa and resumeValidation only. Leave GoalRunnerPostChangeValidation.kt untouched for this subtask.
+Reason: Goal-finish validate runs as the nested VALIDATION launch inside the QA gate, not through the assessment-fix post-change path.
+
+## [2026-11-05] Split gate stub and fixture tests for assessment pause
+Context: Goal test obligation needs pauseNow control state; gate tests need real PhaseRunEntry classification.
+Decision: GoalRunnerTest asserts finalization with a gate returning ProviderPaused; GoalAssessmentProviderLimitPauseTest scripts launches through the gate fixture.
+Reason: One test cannot both stub the gate and exercise slot-built blocked reasons without hiding the SKILL-451 regression.
+
+## [2026-11-05] Publication assessment pause persists through GoalRunnerPauseBoundary
+Context: Finalization needed manifest pauseNow plus detekt constructor limits on GoalRunnerFinalization.
+Decision: Add GoalRunnerPauseBoundary.pauseNow with injected Clock and overwriteExistingReason=true; finalization delegates there instead of calling the store directly.
+Reason: Keeps pause persistence consistent with other goal pause paths while holding finalization at eleven constructor parameters.
+
+## [2026-11-05] Provider pause skips FAILED assessor and fix rows
+Context: A FAILED run row makes isRecorded skip the agent on resume; a FAILED fix increments repair budget.
+Decision: On provider pause, assessor and verifier launches return before record(); fix pause returns sealed outcomes without save(FAILED).
+Reason: Resume must retry the same agent without consuming repair budget or marking assessment unavailable.
+
+## [2026-11-05] Assessment pause uses classifier only, not goalrunner detection
+Context: Provider-limit markers already land in PhaseRunResult.Blocked.reason from the feature-task slot after subtask 1.
+Decision: Goalrunner branches call FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason after runForGoal; no duplicate regex or detector in assessment code.
+Reason: One detection surface keeps pause copy and classification aligned with child phase and IDE behavior.
+Alternatives considered: Local stderr parsing in GoalAssessmentRoundRun.
 
 ## [2026-11-03] Occupying lookup skips completed and abandoned parents
 Context: skill-bill goal and desktop preflight treated a completed or cancelled key as occupying, including when isActiveGoalRuntime stayed true for an abandoned manifest.
@@ -126,7 +161,6 @@ Context: Goal assessment stopped after three global rounds and allowed finalizat
 Decision: `FocusedRepairStrategy` owns target selection, repair-stage routing and the three unsuccessful outcome allowance. Acceptance audit and goal assessment both consume it. Their aggregates keep their own evidence and identity checks. Assessment discovers once, plans and repairs one material item at a time, verifies every attempt, and blocks before QA or publication when an item exhausts its allowance. Material minor defects receive verification too. Test-value notes remain report-only. Explicit assessment resume resets the active allowance without deleting rounds.
 
 Compatibility: Assessment record version 0.2 adds selected targets, repair plans and the budget boundary, and removes the global round cap. The existing acceptance-repair contract-version quarantine class also covers goal assessment now that both use focused repair. Runtime execution preserves the rejected 0.1 record as diagnostic evidence before fresh discovery. Ordinary status reads do not regenerate records.
-Superseded by: Verify test-value findings before focused repair (2026-11-04)
 
 ## [2026-10-29] Let an operator mark a whole goal complete
 Context: A goal whose work landed outside the runtime had no way out. Ordinary out-of-band accept is disabled, and a hard reset of runtime-completed subtasks cannot be restored because they carry no acceptance.

@@ -26,6 +26,7 @@ import skillbill.review.model.ReviewStageBoundary
 import skillbill.review.model.ReviewStageDegradationReason
 import skillbill.review.model.ReviewStageReached
 import skillbill.review.model.ReviewVerificationNonSuccess
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.time.Clock
 
 @Inject
@@ -301,6 +302,8 @@ class ParallelCodeReviewRunnerVerificationStages(
   ): List<ReviewFindingVerdict> {
     if (reviewRunId == null) return outcome.verdicts
     if (outcome.skipReason == ReviewSpecAdjudicationRunner.SPEC_CONTEXT_NONE) return emptyList()
+    val paused =
+      outcome.skipReason?.let(FeatureTaskRuntimeProviderLimitPause::isProviderLimitPauseReason) == true
     if (outcome.verdicts.isNotEmpty()) {
       runtimeOwnedPersistence.requiredWrite(
         seam = "ParallelCodeReviewRunner.persistAdjudication",
@@ -309,7 +312,9 @@ class ParallelCodeReviewRunnerVerificationStages(
         unitOfWork.reviews.recordFindingVerdicts(reviewRunId, outcome.verdicts)
       }
     }
-    recordAdjudicationBoundary(reviewRunId)
+    if (!paused) {
+      recordAdjudicationBoundary(reviewRunId)
+    }
     return outcome.verdicts
   }
 }

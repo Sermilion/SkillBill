@@ -5,6 +5,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.cli.agentaddon.AgentAddonCommand
 import skillbill.cli.codereview.CodeReviewCommand
 import skillbill.cli.config.ConfigCommand
+import skillbill.cli.diffcomment.DiffCommentCommand
 import skillbill.cli.featuretask.FeatureTaskCommands
 import skillbill.cli.featuretask.FeatureTaskRuntimeDeprecatedCommand
 import skillbill.cli.goal.core.GoalRunCommand
@@ -97,6 +98,7 @@ class CliMiscCommands(
   workCommands: WorkTopLevelCommands,
   agentAddonCommand: AgentAddonCommand,
   qaCommand: QaCommand,
+  diffCommentCommand: DiffCommentCommand,
 ) {
   val commands: List<CliktCommand> =
     listOf(
@@ -108,6 +110,7 @@ class CliMiscCommands(
       workCommands.command,
       agentAddonCommand,
       qaCommand,
+      diffCommentCommand,
     )
 }
 

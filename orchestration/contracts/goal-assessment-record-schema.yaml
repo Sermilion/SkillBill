@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, issue_key, rounds, exit_reason, open_finding_refs, budget_start_round]
 properties:
-  contract_version: { const: '0.3' }
+  contract_version: { const: '0.2' }
   issue_key: { type: string, pattern: '\S' }
   budget_start_round: { type: integer, minimum: 1 }
   rounds:
@@ -29,7 +29,7 @@ properties:
             additionalProperties: false
             required: [role, subtask_id, status]
             properties:
-              role: { enum: [subtask, cross_subtask, verifier, test_value_review] }
+              role: { enum: [subtask, cross_subtask, verifier] }
               subtask_id: { type: [integer, 'null'], minimum: 1 }
               status: { enum: [completed, failed, malformed] }
         findings:
@@ -104,17 +104,20 @@ properties:
     oneOf:
       - { type: 'null' }
       - { enum: [converged, round_cap, persistent_finding, assessment_unavailable, skipped_no_changes] }
+  unavailable_reason: { type: string, pattern: '\S', maxLength: 1000 }
   open_finding_refs:
     type: array
     uniqueItems: true
     items: { type: string, pattern: '^GA-[0-9]{3}$' }
 x-coherence-checks:
+  - id: unavailable-reason-exit
+    description: An unavailable reason appears only on an assessment_unavailable exit; the codec owns this check.
   - id: unique-finding-refs
     description: Finding refs are unique across every round of the record; the codec owns this check.
   - id: ordered-rounds
     description: Round numbers start at 1 and increase by exactly 1; the codec owns this check.
   - id: unique-run-identity
-    description: A role plus subtask id pair appears at most once within a round; only subtask runs carry a subtask id and test-value review carries null; the codec owns this check.
+    description: A role plus subtask id pair appears at most once within a round, and only subtask runs carry a subtask id; the codec owns this check.
   - id: resolvable-open-refs
     description: Every open finding ref names a recorded finding whose state is open; the codec owns this check.
   - id: guarded-ref-by-kind

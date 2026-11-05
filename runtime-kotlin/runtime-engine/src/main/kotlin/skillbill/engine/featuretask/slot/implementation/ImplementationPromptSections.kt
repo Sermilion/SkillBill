@@ -11,6 +11,12 @@ internal object ImplementationPromptSections {
   const val IMPLEMENT_READONLY_REPAIR_SENTENCE: String =
     "Repair evidence is read-only repository facts: do not run builds or tests here."
 
+  const val IGNORED_FILES_DIRECTIVE: String =
+    "The commit step commits only what `git status` lists. When a file the spec needs in the commit is hidden " +
+      "by an ignore rule, such as `.gitignore`, `.git/info/exclude` or a global excludes file, stage it with " +
+      "`git add -f -- <path>` and name it in your prose. Never force-add build output or any file the spec " +
+      "does not need, and leave the ignore rules unchanged unless the spec says otherwise."
+
   const val NO_CHANGE_CLAIM_DIRECTIVE: String =
     "When the repository already satisfies the owned spec and needs no change, leave the diff empty and " +
       "pass a claim object as the `no_change` argument of feature_task_phase_complete, settling with status " +
@@ -30,6 +36,7 @@ internal object ImplementationPromptSections {
       "and tests and full validation belong to validate; only the safe scoped authoring commands admitted " +
       "above may run. " +
       IMPLEMENT_READONLY_REPAIR_SENTENCE + " " +
+      IGNORED_FILES_DIRECTIVE + " " +
       NO_CHANGE_CLAIM_DIRECTIVE
 
   const val SIMPLIFY_DIRECTIVE: String =
@@ -89,7 +96,8 @@ internal object ImplementationPromptSections {
       "changed and where, the tests you added or updated, and anything left unresolved. Do not pass a " +
       "`no_change` claim; a separate read-only check decides whether ${turn.criterionId} is satisfied. " +
       "Compilation and build proof belong to build, and tests and full validation belong to validate. " +
-      IMPLEMENT_READONLY_REPAIR_SENTENCE
+      IMPLEMENT_READONLY_REPAIR_SENTENCE + " " +
+      IGNORED_FILES_DIRECTIVE
   }
 
   private fun checkDirective(turn: FeatureTaskRuntimeImplementationTurn): String =

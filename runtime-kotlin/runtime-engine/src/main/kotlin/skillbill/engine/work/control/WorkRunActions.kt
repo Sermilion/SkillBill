@@ -188,12 +188,7 @@ public class WorkRunActions(
       launchLabel(canceled, phase),
       agent?.takeIf { it in SupportedAgent.supportedIds },
       SupportedAgent.supportedIds,
-      when {
-        completed -> null
-        live -> "This run still has a running owner."
-        !supported -> "This older entry has no complete launch details."
-        else -> null
-      },
+      "This older entry has no complete launch details.".takeIf { !completed && !live && !supported },
     )
   }
 

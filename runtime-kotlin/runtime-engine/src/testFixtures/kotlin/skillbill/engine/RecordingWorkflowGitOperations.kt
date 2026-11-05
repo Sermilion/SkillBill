@@ -424,12 +424,6 @@ class RecordingWorkflowGitOperations(
     revision: String,
   ): WorkflowGitOperationResult = repositoryFingerprint(repoRoot)
 
-  override fun reviewablePathsAtRevision(
-    repoRoot: Path,
-    revision: String,
-    candidates: List<String>,
-  ): WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(candidates)
-
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,

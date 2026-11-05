@@ -10,6 +10,8 @@ internal object DatabaseSchema {
       "schema_migrations",
       "review_runs",
       "review_finding_actions",
+      "diff_comment_threads",
+      "diff_comments",
       "review_run_lanes",
       "review_run_finding_lanes",
       "findings",
@@ -53,6 +55,9 @@ internal object DatabaseSchema {
     setOf(
       "idx_feedback_events_run",
       "review_finding_actions_run",
+      "idx_diff_comment_threads_branch",
+      "idx_diff_comment_threads_source_ref",
+      "idx_diff_comments_thread_position",
       "idx_learnings_scope",
       "idx_telemetry_outbox_pending",
       "idx_feature_task_workflows_updated",

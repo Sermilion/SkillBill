@@ -6,7 +6,6 @@ enum class GoalAssessmentRole(val wireValue: String) {
   SUBTASK("subtask"),
   CROSS_SUBTASK("cross_subtask"),
   VERIFIER("verifier"),
-  TEST_VALUE_REVIEW("test_value_review"),
 }
 
 enum class GoalAssessmentRunStatus(val wireValue: String) {
@@ -130,6 +129,7 @@ data class GoalAssessmentRecord(
   val exitReason: GoalAssessmentExitReason? = null,
   val openFindingRefs: List<String> = emptyList(),
   val budgetStartRound: Int = 1,
+  val unavailableReason: String? = null,
 )
 
 data class GoalAssessmentRecordIssue(val fieldPath: String, val reason: String)

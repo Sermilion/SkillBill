@@ -2,6 +2,7 @@ package skillbill.di.operation
 
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.config.ConfigResolutionService
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.service.ReviewService
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
@@ -41,13 +42,14 @@ internal interface RuntimeOperationProvides {
     }
 
   @Provides
-  fun prReviewFixOperation(
+  fun RuntimeDiagnostics.prReviewFixOperation(
     reviewThreads: PullRequestReviewThreadOperations,
+    diffComments: DiffCommentService,
     gitOperations: WorkflowGitOperations,
     phaseRunEntry: PhaseRunEntry,
     configResolution: ConfigResolutionService,
   ): PrReviewFixOperation =
-    PrReviewFixOperation(reviewThreads, gitOperations, phaseRunEntry::run) {
+    PrReviewFixOperation(reviewThreads, diffComments, gitOperations, this, phaseRunEntry::run) {
       FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix())
     }
 

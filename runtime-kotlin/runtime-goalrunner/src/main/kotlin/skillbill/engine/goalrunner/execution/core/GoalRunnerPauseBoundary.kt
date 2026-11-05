@@ -12,6 +12,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import java.time.Clock
 
 @Inject
 public class GoalRunnerProgressReader(
@@ -48,7 +49,20 @@ public class GoalRunnerProgressReader(
 @Inject
 public class GoalRunnerPauseBoundary(
   private val manifestStore: GoalRunnerManifestStore,
+  private val clock: Clock,
 ) {
+  internal fun pauseNow(
+    parentWorkflowId: String,
+    reason: String,
+  ) {
+    manifestStore.pauseNow(
+      parentWorkflowId,
+      reason,
+      clock.instant().toString(),
+      overwriteExistingReason = true,
+    )
+  }
+
   internal fun pauseBeforeLaunch(
     state: GoalRunnerManifestState,
     knownControl: GoalRunnerControlState? = null,

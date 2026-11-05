@@ -207,14 +207,14 @@ internal class PackBuildGateCycle(
       )
     val settled = attemptOnce(run, repairRun, iteration)
     val completed = settled?.completedOutput
+    val paused = settled?.pausedReason
     if (settled != null && completed == null) stoppedAttempt = settled
     return when {
       completed != null -> ValidationGateAgentRepairResult.Completed(completed)
+      paused != null -> ValidationGateAgentRepairResult.Paused(paused)
       settled != null ->
         ValidationGateAgentRepairResult.Blocked(
-          settled.blockedReason
-            ?: settled.pausedReason
-            ?: "Validation repair attempt persistence.session.blocked.",
+          settled.blockedReason ?: "Validation repair attempt persistence.session.blocked.",
           failureCode = settled.failureCode,
         )
       else -> ValidationGateAgentRepairResult.Completed(repairSegmentOutput(run, iteration))

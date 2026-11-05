@@ -159,7 +159,7 @@ jobs:
           cp -R "$app_dir/." "$stage_dir/"
           cp LICENSE "$stage_dir/LICENSE"
           archive="skill-bill-desktop-${RELEASE_VERSION}-${HOST_TOKEN}.tar.gz"
-          tar -czf "$archive" -C "$stage_dir" .
+          COPYFILE_DISABLE=1 tar -czf "$archive" -C "$stage_dir" .
           if command -v sha256sum >/dev/null 2>&1; then
             digest="$(sha256sum "$archive" | awk '{print $1}')"
           else

@@ -20,6 +20,7 @@ import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.archive.RecordingGoalArchiveSnapshotPort
 import skillbill.engine.goalrunner.assessment.GoalAssessmentRoundResult
+import skillbill.engine.goalrunner.assessment.GoalAssessmentStageResult
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.launch.GoalExecutionRootResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -97,10 +98,12 @@ internal object NoopGoalRunnerAssessmentGate : GoalRunnerAssessmentGate {
   override fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): GoalAssessmentRecord =
-    GoalAssessmentRecord(
-      state.manifest.issueKey,
-      exitReason = GoalAssessmentExitReason.CONVERGED,
+  ): GoalAssessmentStageResult =
+    GoalAssessmentStageResult.Completed(
+      GoalAssessmentRecord(
+        state.manifest.issueKey,
+        exitReason = GoalAssessmentExitReason.CONVERGED,
+      ),
     )
 
   override fun skipNoChanges(state: GoalRunnerManifestState) = Unit

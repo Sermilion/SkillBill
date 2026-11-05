@@ -22,7 +22,6 @@ internal data class GoalAssessorReport(
   val scenarios: List<GoalAssessmentScenarioResult>,
   val regressions: List<GoalAssessmentRegressionResult>,
   val rejectedLines: List<String>,
-  val projectionCount: Int,
 )
 
 internal data class GoalVerifierVerdict(
@@ -48,110 +47,32 @@ internal object GoalAssessmentLineParser {
     val scenarios = mutableListOf<GoalAssessmentScenarioResult>()
     val regressions = mutableListOf<GoalAssessmentRegressionResult>()
     val rejected = mutableListOf<String>()
-    val lines = text.lineSequence().map(String::trim).toList()
-    val completion = lines.mapNotNull(PROJECTION_COMPLETE::matchEntire)
-    if (completion.size != 1) {
-      return GoalAssessmentParse.Malformed("the projection completion marker is missing or repeated.")
-    }
-    val declaredCount =
-      completion.single().groupValues[1].toIntOrNull()
-        ?: return GoalAssessmentParse.Malformed("the projection count is invalid.")
     var valid = 0
-    var noneCount = 0
-    var verifierLines = 0
     recordLines(text).forEach { line ->
-      if (VERIFY.matches(line) || VERIFY_NONE.matches(line)) {
-        verifierLines++
-        return@forEach
-      }
       val parsed =
         findingOf(line)?.let(findings::add) ?: scenarioOf(line)?.let(scenarios::add)
-          ?: regressionOf(line)?.let(regressions::add) ?: FINDING_NONE.matches(line).takeIf { it }?.also {
-          noneCount++
-        }
+          ?: regressionOf(line)?.let(regressions::add) ?: FINDING_NONE.matches(line).takeIf { it }
       if (parsed == null) rejected += line.take(MAX_REJECTED_LINE) else valid++
     }
-    val projectionCount = findings.size + scenarios.size + regressions.size
-    return assessorResult(
-      GoalAssessorReport(findings, scenarios, regressions, rejected, projectionCount),
-      declaredCount,
-      valid,
-      noneCount,
-      verifierLines,
-    )
-  }
-
-  private fun assessorResult(
-    report: GoalAssessorReport,
-    declaredCount: Int,
-    valid: Int,
-    noneCount: Int,
-    verifierLines: Int,
-  ): GoalAssessmentParse<GoalAssessorReport> {
-    val saysNone = noneCount > 0
-    return when {
-      report.rejectedLines.isNotEmpty() -> GoalAssessmentParse.Malformed("the projection contains malformed records.")
-      noneCount > 1 -> GoalAssessmentParse.Malformed("Finding: none was repeated.")
-      report.findings.any { it.failureScenario.isBlank() } ->
-        GoalAssessmentParse.Malformed("a finding has no failure scenario.")
-      report.scenarios.any { it.evidence.isBlank() } || report.regressions.any { it.evidence.isBlank() } ->
-        GoalAssessmentParse.Malformed("a scenario or regression has no evidence.")
-      saysNone && report.findings.isNotEmpty() ->
-        GoalAssessmentParse.Malformed(
-          "Finding: none was combined with findings.",
-        )
-      valid == 0 -> GoalAssessmentParse.Malformed("the output held no line in the assessor grammar.")
-      declaredCount !in report.projectionCount..report.projectionCount + verifierLines ->
-        GoalAssessmentParse.Malformed("the projection count does not match its records.")
-      !saysNone && report.findings.isEmpty() ->
-        GoalAssessmentParse.Malformed("an empty finding projection must declare Finding: none.")
-      else ->
-        GoalAssessmentParse.Parsed(report)
+    return if (valid == 0) {
+      GoalAssessmentParse.Malformed("the output held no line in the assessor grammar.")
+    } else {
+      GoalAssessmentParse.Parsed(GoalAssessorReport(findings, scenarios, regressions, rejected))
     }
   }
 
   fun parseVerifier(text: String): GoalAssessmentParse<GoalVerifierReport> {
     val verdicts = mutableListOf<GoalVerifierVerdict>()
     val rejected = mutableListOf<String>()
-    val lines = text.lineSequence().map(String::trim).toList()
-    val completion = lines.mapNotNull(VERIFICATION_COMPLETE::matchEntire)
-    if (completion.size != 1) {
-      return GoalAssessmentParse.Malformed("the verification completion marker is missing or repeated.")
-    }
-    val declaredCount =
-      completion.single().groupValues[1].toIntOrNull()
-        ?: return GoalAssessmentParse.Malformed("the verification count is invalid.")
     var valid = 0
-    var noneCount = 0
     recordLines(text).forEach { line ->
-      val parsed =
-        verdictOf(line)?.let(verdicts::add) ?: VERIFY_NONE.matches(line).takeIf { it }?.also {
-          noneCount++
-        }
+      val parsed = verdictOf(line)?.let(verdicts::add) ?: VERIFY_NONE.matches(line).takeIf { it }
       if (parsed == null) rejected += line.take(MAX_REJECTED_LINE) else valid++
     }
-    return verifierResult(verdicts, rejected, declaredCount, valid, noneCount)
-  }
-
-  private fun verifierResult(
-    verdicts: List<GoalVerifierVerdict>,
-    rejected: List<String>,
-    declaredCount: Int,
-    valid: Int,
-    noneCount: Int,
-  ): GoalAssessmentParse<GoalVerifierReport> {
-    val saysNone = noneCount > 0
-    return when {
-      rejected.isNotEmpty() -> GoalAssessmentParse.Malformed("the verification contains malformed records.")
-      noneCount > 1 || saysNone && verdicts.isNotEmpty() ->
-        GoalAssessmentParse.Malformed("Verify: none was repeated or combined with verdicts.")
-      verdicts.any { it.evidence.isBlank() } -> GoalAssessmentParse.Malformed("a verdict has no evidence.")
-      valid == 0 -> GoalAssessmentParse.Malformed("the output held no line in the verifier grammar.")
-      verdicts.size != declaredCount ->
-        GoalAssessmentParse.Malformed("the verification count does not match its verdicts.")
-      verdicts.map { it.findingRef }.distinct().size != verdicts.size ->
-        GoalAssessmentParse.Malformed("the verification repeats a candidate verdict.")
-      else -> GoalAssessmentParse.Parsed(GoalVerifierReport(verdicts, rejected))
+    return if (valid == 0) {
+      GoalAssessmentParse.Malformed("the output held no line in the verifier grammar.")
+    } else {
+      GoalAssessmentParse.Parsed(GoalVerifierReport(verdicts, rejected))
     }
   }
 
@@ -192,8 +113,7 @@ internal object GoalAssessmentLineParser {
 
   private fun sourceLineOf(location: String): Pair<String, Int>? {
     val lineNumber = location.substringAfterLast(':').toIntOrNull()?.takeIf { it >= 1 } ?: return null
-    val path = location.substringBeforeLast(':').removePrefix("./").takeIf(String::isNotBlank) ?: return null
-    return path to lineNumber
+    return location.substringBeforeLast(':').removePrefix("./") to lineNumber
   }
 
   private fun scenarioOf(line: String): GoalAssessmentScenarioResult? =
@@ -225,8 +145,6 @@ internal object GoalAssessmentLineParser {
 
   private const val MAX_REJECTED_LINE = 160
   private val RECORD_KEYWORD = Regex("""^(Finding|Test value|Scenario|Regression|Verify)\b""", RegexOption.IGNORE_CASE)
-  private val PROJECTION_COMPLETE = Regex("""^Projection complete:\s*(\d+)\s*$""", RegexOption.IGNORE_CASE)
-  private val VERIFICATION_COMPLETE = Regex("""^Verification complete:\s*(\d+)\s*$""", RegexOption.IGNORE_CASE)
   private val FINDING =
     Regex("""^Finding:\s*(blocker|major|minor)\s+(\S+?:\d+)\s+scenario\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val FINDING_NONE = Regex("""^Finding:\s*none\.?$""", RegexOption.IGNORE_CASE)

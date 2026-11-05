@@ -43,6 +43,8 @@ import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
+import skillbill.ports.review.diffcomment.DiffCommentStore
+import skillbill.ports.review.diffcomment.UnavailableDiffCommentStore
 import java.time.Instant
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
@@ -117,6 +119,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val blockIncidents: BlockIncidentRepository = InMemoryBlockIncidentRepository()
   open override val blockIncidentRecoveries: BlockIncidentRecoveryRepository = InMemoryBlockIncidentRecoveryRepository()
   open override val productReports: ProductReportRepository = InMemoryProductReportRepository()
+  open override val diffComments: DiffCommentStore = UnavailableDiffCommentStore
 
   override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
 

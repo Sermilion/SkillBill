@@ -40,7 +40,6 @@ public class DefaultGoalRunnerAssessmentGate(
       activityStampWriter,
       GoalAssessmentProgress(outcomeStore, clock, diagnostics),
       diagnostics,
-      gitOperations,
     )
   private val loop =
     GoalAssessmentLoop(services, GoalAssessmentFixStep(services, gitOperations, validation), this::runRound)
@@ -48,29 +47,28 @@ public class DefaultGoalRunnerAssessmentGate(
   override fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-  ): GoalAssessmentRecord =
+  ): GoalAssessmentStageResult =
     catchingNonCancellation { loop.run(state, request) }.getOrElse { failure ->
-      warnContained("the assessment stage could not complete", failure)
-      persistUnavailable(state)
+      val reason = warnContained("the assessment stage could not complete", failure)
+      GoalAssessmentStageResult.Completed(persistUnavailable(state, reason))
     }
 
-  private fun persistUnavailable(state: GoalRunnerManifestState): GoalAssessmentRecord {
-    val fallback = emptyRecord(state, GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
-    return catchingNonCancellation {
-      val read = outcomeStore.readGoalAssessmentRecord(state.parentWorkflowId)
-      val base = (read as? GoalAssessmentRecordRead.Recorded)?.record ?: fallback
-      val exited =
-        base.copy(
-          exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE,
-          openFindingRefs = GoalAssessmentLoopRules.openFindings(base).map { it.findingRef },
-        )
-      services.persist(state, exited)
-      exited
-    }.getOrElse { failure ->
-      warnContained("the unavailable exit could not be recorded", failure)
-      fallback
-    }
+  private fun persistUnavailable(
+    state: GoalRunnerManifestState,
+    reason: String,
+  ): GoalAssessmentRecord {
+    val exited = GoalAssessmentLoopRules.unavailable(savedOrEmpty(state), reason)
+    services.persist(state, exited)
+    return exited
   }
+
+  private fun savedOrEmpty(state: GoalRunnerManifestState): GoalAssessmentRecord =
+    catchingNonCancellation {
+      (outcomeStore.readGoalAssessmentRecord(state.parentWorkflowId) as? GoalAssessmentRecordRead.Recorded)?.record
+    }.getOrElse { failure ->
+      warnContained("the saved assessment record could not be read", failure)
+      null
+    } ?: emptyRecord(state, null)
 
   override fun skipNoChanges(state: GoalRunnerManifestState) {
     catchingNonCancellation { loop.skipNoChanges(state) }.onFailure { failure ->
@@ -81,9 +79,11 @@ public class DefaultGoalRunnerAssessmentGate(
   private fun warnContained(
     what: String,
     failure: Throwable,
-  ) {
+  ): String {
     val contained = containableFailure(failure)
-    warn("$what: ${contained.javaClass.simpleName}: ${contained.message}", contained)
+    val reason = "$what: ${contained.javaClass.simpleName}: ${contained.message}"
+    warn(reason, contained)
+    return reason
   }
 
   override fun runRound(
@@ -92,11 +92,8 @@ public class DefaultGoalRunnerAssessmentGate(
     round: Int,
   ): GoalAssessmentRoundResult =
     catchingNonCancellation { assess(state, request, round) }.getOrElse { failure ->
-      val contained = containableFailure(failure)
-      val reason = "assessment could not complete: ${contained.javaClass.simpleName}: ${contained.message}"
-      warn(reason, contained)
-      val record = emptyRecord(state, GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
-      GoalAssessmentRoundResult.Unavailable(record, reason)
+      val reason = warnContained("assessment could not complete", failure)
+      GoalAssessmentRoundResult.Unavailable(GoalAssessmentLoopRules.unavailable(savedOrEmpty(state), reason), reason)
     }
 
   private fun assess(

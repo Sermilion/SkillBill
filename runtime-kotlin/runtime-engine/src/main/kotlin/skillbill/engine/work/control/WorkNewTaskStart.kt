@@ -266,8 +266,17 @@ public class WorkNewTaskStart(
     checkout: StandaloneCheckout,
   ): NewTaskStartResult {
     val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
+    val splitPrReviewMode =
+      if (run.verb == "operation" && run.holder.id == "pr-review-fix") {
+        PR_REVIEW_FIX_MODE_TARGET.matchEntire(launchTarget.orEmpty())
+      } else {
+        null
+      }
+    val argvTarget =
+      splitPrReviewMode?.groupValues?.getOrNull(2)?.trim()?.takeIf(String::isNotBlank)
+        ?: launchTarget.takeUnless { splitPrReviewMode != null }
     val branch = checkout.branch?.trim()?.takeIf(String::isNotBlank)
-    standaloneLaunchRefusal(repoRoot, launchTarget, branch, agentId)?.let { return it }
+    standaloneLaunchRefusal(repoRoot, argvTarget, branch, agentId)?.let { return it }
     val workspace =
       when (val resolved = branch?.let { branchCheckout(repoRoot, it, run.holder) }) {
         null -> StandaloneWorkspace(checkout.checkoutRoot ?: repoRoot, held = false)
@@ -278,7 +287,19 @@ public class WorkNewTaskStart(
     val ownership =
       listOfNotNull("$identity:${run.holder.id}:standalone", launchTarget, branch?.let { "branch:$it" })
         .joinToString(":")
-    val args = listOfNotNull(run.verb, run.holder.id, launchTarget, "--agent", agentId)
+    val args =
+      buildList {
+        add(run.verb)
+        add(run.holder.id)
+        if (splitPrReviewMode != null) {
+          add("mode:${splitPrReviewMode.groupValues[1]}")
+          argvTarget?.let(::add)
+        } else {
+          launchTarget?.let(::add)
+        }
+        add("--agent")
+        add(agentId)
+      }
     val result = launchRuntimeCommand(workspace.root, ownership, args)
     if (result is NewTaskStartResult.Refused && workspace.held) releaseAfterRefusal(workspace.root, run.holder)
     return result
@@ -514,3 +535,6 @@ public class WorkNewTaskStart(
     const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
   }
 }
+
+private val PR_REVIEW_FIX_MODE_TARGET =
+  Regex("""mode:(local|remote)(?:\s+(.+))?""", RegexOption.DOT_MATCHES_ALL)

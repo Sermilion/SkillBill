@@ -292,6 +292,7 @@ data class GoalRunnerAssessmentResult(
   val fixRan: Boolean,
   val openFindingRefs: List<String>,
   val findings: List<GoalRunnerAssessmentFinding>,
+  val unavailableReason: String? = null,
 )
 
 data class GoalRunnerAssessmentFinding(

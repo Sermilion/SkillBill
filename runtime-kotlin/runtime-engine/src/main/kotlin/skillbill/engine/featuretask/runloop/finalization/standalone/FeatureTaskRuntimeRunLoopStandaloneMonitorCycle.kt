@@ -57,11 +57,11 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
         )
       is PullRequestCiOutcome.Passed ->
         complete(run, iteration, passedOutput(run, target, outcome))
-      PullRequestCiOutcome.NoCiConfigured ->
+      PullRequestCiOutcome.NoChecksReported ->
         complete(
           run,
           iteration,
-          monitorOutput(run, "No CI checks configured.", "No CI checks were reported for ${target.targetKey}."),
+          monitorOutput(run, "No CI checks reported.", "No CI checks were reported for ${target.targetKey}."),
         )
       PullRequestCiOutcome.NoPullRequest -> block(run, iteration, "Pull request ${target.url} was not found.")
       is PullRequestCiOutcome.Failed -> failed(run, iteration, operations, ledger, outcome)

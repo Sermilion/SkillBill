@@ -78,6 +78,13 @@ class GhPullRequestChecksLookupTest {
   }
 
   @Test
+  fun `a failed command with empty json is unavailable`() {
+    val lookup = GhPullRequestChecksLookup { _, _ -> GhCommandResult(exitCode = 4, stdout = "[]") }
+
+    assertEquals(PullRequestChecks.Unavailable("[]"), lookup.lookup(repoRoot, 42))
+  }
+
+  @Test
   fun `the no checks reported message is read as no checks`() {
     val lookup =
       GhPullRequestChecksLookup { _, _ ->

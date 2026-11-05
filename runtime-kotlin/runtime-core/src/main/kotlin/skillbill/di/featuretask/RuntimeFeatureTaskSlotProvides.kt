@@ -1,6 +1,7 @@
 package skillbill.di.featuretask
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.engine.featuretask.phaserun.LegacySpecReplanSource
@@ -85,14 +86,28 @@ internal interface RuntimeFeatureTaskSlotProvides {
     )
 
   @Provides
+  fun reviewPhaseStrategies(
+    reviewRunner: ParallelCodeReviewRunner,
+    comments: DiffCommentService,
+  ): (PhaseRunner) -> ReviewPhaseStrategies =
+    { runner ->
+      val inlineRubricResolver = ParallelReviewInlineRubricResolver(reviewRunner)
+      ReviewPhaseStrategies(
+        InlineReviewStrategy(runner, inlineRubricResolver, comments),
+        InlineStandaloneReviewStrategy(runner, inlineRubricResolver, comments),
+        DelegatedStandaloneReviewStrategy(runner, reviewRunner, comments),
+      )
+    }
+
+  @Provides
   fun phaseStrategyRegistry(
     runner: PhaseRunner,
-    reviewRunner: ParallelCodeReviewRunner,
+    review: (PhaseRunner) -> ReviewPhaseStrategies,
     planning: PlanningPhaseStrategies,
     pullRequest: PullRequestPhaseStrategies,
     qa: QaStrategy,
   ): PhaseStrategyRegistry {
-    val inlineRubricResolver = ParallelReviewInlineRubricResolver(reviewRunner)
+    val reviewStrategies = review(runner)
     return PhaseStrategyRegistry(
       listOf(
         planning.intake,
@@ -100,9 +115,9 @@ internal interface RuntimeFeatureTaskSlotProvides {
         planning.fanOut,
         ImplementThenSimplifyStrategy(),
         AcceptanceAuditStrategy(),
-        InlineReviewStrategy(runner, inlineRubricResolver),
-        InlineStandaloneReviewStrategy(runner, inlineRubricResolver),
-        DelegatedStandaloneReviewStrategy(runner, reviewRunner),
+        reviewStrategies.inline,
+        reviewStrategies.inlineStandalone,
+        reviewStrategies.delegatedStandalone,
         PackBuildStrategy(),
         AgentValidateStrategy(),
         BoundaryHistoryStrategy(),

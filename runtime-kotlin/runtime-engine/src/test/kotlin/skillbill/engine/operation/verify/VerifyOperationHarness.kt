@@ -40,7 +40,7 @@ import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationStepRunner
-import skillbill.engine.operation.unittestvalue.UnitTestValueCheckReview
+import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.TestWorkBoardReadModelProjector
@@ -492,7 +492,7 @@ internal class VerifyScriptedRunner : PhaseRunner {
           "## Key technical constraints\nNone.\n",
         VerifyPromptSections.FEATURE_FLAG_AUDIT_STEP to "SKIPPED: no flag in spec or diff.\n",
         VerifyPromptSections.CODE_REVIEW_STEP to VerifyOperationHarness.REVIEW_REGISTER,
-        UnitTestValueCheckReview.REVIEW_STEP to "GreeterTest.kt: no assertions.\n",
+        UnitTestValueCheckPromptRules.REVIEW_STEP to "GreeterTest.kt: no assertions.\n",
         VerifyPromptSections.COMPLETENESS_AUDIT_STEP to "[PASS] 1. Greets by name.\n",
         VerifyPromptSections.QA_STEP to "QA receipt written.\n",
         VerifyPromptSections.VERDICT_STEP to "--- VERDICT ---\nAPPROVE\n",

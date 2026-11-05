@@ -69,6 +69,7 @@ class QualityConventionPlugin : Plugin<Project> {
     }
     tasks.withType(Test::class.java).configureEach {
       jvmArgumentProviders += ManifestArguments(files(manifests))
+      isolateJvmTempDir()
     }
     afterEvaluate { describeProject(manifestTask.get()) }
   }

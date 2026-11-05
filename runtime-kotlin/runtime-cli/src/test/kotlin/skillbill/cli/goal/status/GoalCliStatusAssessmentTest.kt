@@ -57,6 +57,20 @@ class GoalCliStatusAssessmentTest {
     assertFalse(goalStatusText("SKILL-442", projection(null)).contains("goal_assessment"))
   }
 
+  @Test
+  fun `goal status names why assessment was unavailable`() {
+    val unavailable =
+      assessment().copy(
+        exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE,
+        unavailableReason = "the parent spec could not be read",
+      )
+
+    assertTrue(
+      goalStatusText("SKILL-442", projection(unavailable))
+        .contains("goal_assessment_unavailable_reason: the\\sparent\\sspec\\scould\\snot\\sbe\\sread\n"),
+    )
+  }
+
   private fun assessment() =
     GoalRunnerAssessmentResult(
       state = GoalRunnerAssessmentState.COMPLETED,

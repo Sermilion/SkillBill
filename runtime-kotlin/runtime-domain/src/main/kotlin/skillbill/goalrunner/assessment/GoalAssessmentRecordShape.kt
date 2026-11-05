@@ -1,6 +1,7 @@
 package skillbill.goalrunner.assessment
 
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
@@ -13,6 +14,8 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSever
 import skillbill.contracts.workflow.featuretask.GoalAssessmentRecordPayloadKeys as Keys
 
 object GoalAssessmentRecordShape {
+  const val MAX_UNAVAILABLE_REASON_LENGTH = 1000
+
   fun issues(record: GoalAssessmentRecord): List<GoalAssessmentRecordIssue> =
     buildList {
       if (record.issueKey.isBlank()) add(GoalAssessmentRecordIssue(Keys.ISSUE_KEY, "must not be blank."))
@@ -22,7 +25,24 @@ object GoalAssessmentRecordShape {
       record.rounds.forEachIndexed { index, round -> addAll(roundIssues("${Keys.ROUNDS}[$index]", index + 1, round)) }
       addAll(duplicateFindingRefIssues(record))
       addAll(openRefIssues(record))
+      addAll(unavailableReasonIssues(record))
     }
+
+  private fun unavailableReasonIssues(record: GoalAssessmentRecord): List<GoalAssessmentRecordIssue> {
+    val reason = record.unavailableReason ?: return emptyList()
+    return when {
+      record.exitReason != GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE ->
+        listOf(GoalAssessmentRecordIssue(Keys.UNAVAILABLE_REASON, "must accompany an assessment_unavailable exit."))
+      reason.isBlank() || reason.length > MAX_UNAVAILABLE_REASON_LENGTH ->
+        listOf(
+          GoalAssessmentRecordIssue(
+            Keys.UNAVAILABLE_REASON,
+            "must be nonblank and at most $MAX_UNAVAILABLE_REASON_LENGTH characters.",
+          ),
+        )
+      else -> emptyList()
+    }
+  }
 
   private fun roundIssues(
     path: String,
@@ -70,9 +90,6 @@ object GoalAssessmentRecordShape {
         val subtaskRun = run.role == GoalAssessmentRole.SUBTASK
         if (subtaskRun != (run.subtaskId != null) || (run.subtaskId ?: 1) < 1) {
           add(GoalAssessmentRecordIssue("$runPath.${Keys.SUBTASK_ID}", "must be a positive id for subtask runs only."))
-        }
-        if (run.role == GoalAssessmentRole.TEST_VALUE_REVIEW && round.round != 1) {
-          add(GoalAssessmentRecordIssue("$runPath.${Keys.ROLE}", "test-value review identity belongs to round 1 only."))
         }
       }
       if (round.assessorRuns.map { it.role to it.subtaskId }.let { it.distinct().size != it.size }) {
@@ -125,22 +142,16 @@ object GoalAssessmentRecordShape {
       if ((finding.subtaskId ?: 1) < 1) issue(Keys.SUBTASK_ID, "must be a positive subtask id or null.")
       if (finding.originRound !in 1..roundNumber) issue(Keys.ORIGIN_ROUND, "must be a recorded round up to this one.")
       if (finding.fixRoundsSurvived < 0) issue(Keys.FIX_ROUNDS_SURVIVED, "must not be negative.")
-      if (finding.verification == GoalAssessmentVerification.NOT_REQUIRED) {
-        issue(Keys.VERIFICATION, "must be independently verified for every finding kind.")
+      val needsVerdict = finding.kind == GoalAssessmentFindingKind.DEFECT
+      if (needsVerdict == (finding.verification == GoalAssessmentVerification.NOT_REQUIRED)) {
+        issue(Keys.VERIFICATION, "must be not_required exactly for test-value findings.")
       }
       val refuted = finding.verification == GoalAssessmentVerification.REFUTED
-      val settledByVerifier =
-        finding.state == GoalAssessmentFindingState.REFUTED || finding.state == GoalAssessmentFindingState.FIXED
-      val invalidRefutedState =
-        refuted && finding.state !in setOf(GoalAssessmentFindingState.REFUTED, GoalAssessmentFindingState.FIXED)
-      if (settledByVerifier && !refuted || invalidRefutedState) {
-        issue(Keys.STATE, "a refuted finding must be refuted or fixed after repair verification.")
+      if (refuted != (finding.state == GoalAssessmentFindingState.REFUTED)) {
+        issue(Keys.STATE, "must be refuted exactly when verification is refuted.")
       }
-      if (
-        finding.state != GoalAssessmentFindingState.OPEN &&
-        finding.disposition != GoalAssessmentDisposition.PR_ONLY
-      ) {
-        issue(Keys.DISPOSITION, "must be pr_only for a settled finding.")
+      if (refuted && finding.disposition != GoalAssessmentDisposition.PR_ONLY) {
+        issue(Keys.DISPOSITION, "must be pr_only for a refuted finding.")
       }
     }
 

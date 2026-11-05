@@ -74,8 +74,10 @@ operator's current request selects a standalone phase or operation.
 | `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
-| `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill [<pr>] operation:pr-review-fix [mode:local\|remote] [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated] [qa:on\|off]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] [qa:on\|off] --agent <currently-executing-agent>` | required |
+
+For `operation:pr-review-fix`, local mode is the default; `push:` and `replies:` require `mode:remote`.
 
 `phase:plan` is a durable, resumable plan: it seeds the parent spec, opens a
 plan workflow, stops after the verified spec bundle, and prints the bundle
@@ -93,9 +95,10 @@ and points to `operation:verify`, because `verify` is an operation. If
 it. For `operation:unit-test-value-check`, forward a scope the caller gives (a test
 file, commit sha, or ref) verbatim as `scope:<value>`; without one, omit `scope:`
 and the runtime reviews the current staged and unstaged changes. For
-`operation:pr-review-fix`, forward a PR the caller gives first, before any
-token, as `#<number>` or its URL; without one, the runtime uses the current
-branch's PR. For `operation:update-check`, forward `--include-prereleases` and
+`operation:pr-review-fix`, forward any `mode:` token verbatim. Local is the
+default: omit the PR and the runtime fixes the current branch's open local diff
+comments. With `mode:remote`, forward a PR first as `#<number>` or its URL;
+without one, the runtime uses the current branch's PR. For `operation:update-check`, forward `--include-prereleases` and
 `--format json` verbatim when the caller gives them; without them, omit them.
 
 `operation:<name>` translates to `skill-bill operation <name>`, forwarding
@@ -103,9 +106,11 @@ branch's PR. For `operation:update-check`, forward `--include-prereleases` and
 `target:`, and `qa:` tokens verbatim and any other text as operator
 instructions. The runtime rejects an unknown operation name, a missing bump, a
 missing guard intake, a `push:` or `replies:` token outside
-`operation:pr-review-fix`, or a `spec:`, `target:`, `mode:`, or `qa:` token
-outside `operation:verify`, and a duplicate, conflicting, or unknown `qa:`
-value; relay its usage error. For `operation:verify`, forward the intake
+`operation:pr-review-fix` or with `mode:local`, or a `spec:`, `target:`, or `qa:` token outside `operation:verify`, or a
+`mode:` token outside `operation:verify` and `operation:pr-review-fix`, and a
+duplicate, conflicting, or unknown `qa:` value; relay its usage error. The rule for
+`mode:` or `target:` outside `phase:review` and `operation:verify` has one
+exception: `operation:pr-review-fix` accepts `mode:local|remote`. For `operation:verify`, forward the intake
 verbatim: a Linear issue key or URL, the requirements as raw text, or a
 `spec:<path>` token. If it has no intake, stop and ask for it. Forward
 `target:`, `mode:`, and `qa:` verbatim; without `target:`, the runtime verifies
@@ -147,8 +152,12 @@ Stop without running any CLI command when:
   parallel review capability.
 - the caller passes `phase:` together with `operation:`: report a usage error.
 - a token reaches a form that does not accept it (`code-review:`, `qa:`, or
-  `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`
-  and `operation:verify`):
+  `agent-addon:`):
+  report a usage error naming the token and the form that accepts it. Never drop
+  the token or fold it into the intake.
+- a `mode:` token appears outside `phase:review`, `operation:verify`, and
+  `operation:pr-review-fix`, or a `target:` token appears outside `phase:review`
+  and `operation:verify`:
   report a usage error naming the token and the form that accepts it. Never drop
   the token or fold it into the intake.
 
@@ -537,16 +546,22 @@ Never pass `confirm:` without an operator answer. This covers `operation:release
 proposal's stabilization checklist is part of the proposal the operator answers,
 so never answer it yourself.
 
-For `operation:pr-review-fix` the proposal is a per-thread recommendation matrix
-with threads labelled `T1`, `T2`, and so on. Show it and ask the operator once
+For `operation:pr-review-fix`, local mode (the default) proposes a per-thread
+recommendation matrix over open local threads on the current branch, including
+user- and agent-authored threads and flagging outdated ones. Remote mode proposes
+over PR threads. Each proposal labels threads `T1`, `T2`, and so on. Show it and ask the operator once
 which threads to fix and with which option. Map the answer to exactly one of
 `select:all-recommended`, `select:fix-all-unresolved`, or
 `select:<thread>=<option>,...` (for example `select:T1=1,T3=2`), and re-run the
-operation with the same `<pr>`, `push:`, and `replies:` tokens plus
+operation with the same `mode:`, `<pr>`, `push:`, and `replies:` tokens plus
 `confirm:<token>` and that `select:`. If the answer is ambiguous, ask again; do
 not infer a scope. Never pass `confirm:` or `select:` without an operator answer.
 The runtime owns the thread options and refuses a selection it does not
-recognise; relay that usage error and ask again.
+recognise; relay that usage error and ask again. Local execution asks each agent
+step to start its reply with `outcome: fixed|refuted|skipped|failed`; fixed resolves
+the thread, refuted declines it, and skipped or failed leaves it unchanged. After
+validation passes, local mode commits the fixes and never pushes. It refuses
+protected branches and dirty worktrees.
 
 For `operation:verify` the proposal is the extracted acceptance criteria and the
 QA selection (`QA: on` or `QA: off`). Show both and ask the operator once to

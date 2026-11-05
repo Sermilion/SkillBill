@@ -11,6 +11,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 internal fun sameTree(
   before: WorkflowGitOperationResult,
@@ -80,9 +81,22 @@ internal fun unresolvedGateOutcomeReason(
     "this quality execution and accept new cycles."
 }
 
+internal fun goalQaProviderLimitPause(result: PhaseRunResult): GoalQaGateResult.Paused? {
+  val blocked = result as? PhaseRunResult.Blocked ?: return null
+  if (!FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(blocked.reason)) return null
+  val stepId =
+    if (blocked.stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) {
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX
+    } else {
+      blocked.stepId
+    }
+  return GoalQaGateResult.Paused(blocked.reason, stepId)
+}
+
 internal fun buildAfterQaFixWarning(result: PhaseRunResult): String? {
   val blocked = result as? PhaseRunResult.Blocked ?: return null
-  if (blocked.stepId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) return null
+  val providerLimit = FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(blocked.reason)
+  if (providerLimit || blocked.stepId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) return null
   if (blocked.reason.startsWith(FeatureTaskRuntimeBuildGateCoordinator.GATE_COMMAND_NOT_STARTED_PREFIX)) {
     return "The build gate did not run after qa_fix, so QA did not re-test the fix. ${blocked.reason}"
   }

@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.diffcomment.DiffCommentService
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
@@ -36,6 +38,7 @@ import kotlin.coroutines.cancellation.CancellationException
 internal class CodeReviewStep(
   private val runner: PhaseRunner,
   private val reviewPass: CodeReviewPass,
+  private val comments: DiffCommentService? = null,
 ) : PhaseStepHooks<PhaseReviewStepBinding> {
   fun run(
     requestedRun: PhaseRun,
@@ -169,9 +172,40 @@ internal class CodeReviewStep(
     failedLaneReason(reviewed.result)?.let { reason ->
       return blockStep(state, pass.iteration, reason, FeatureTaskRuntimeFailureDisposition.RETRYABLE)
     }
+    postReviewThreads(run, context, reviewed)
     val dispositions = blockerDispositions(run, state, reviewed.result, pass)
     val settled = pass.copy(cycle = pass.cycle.copy(blockerDispositions = dispositions))
     return settle(run, context, state, reviewed.copy(pass = settled))
+  }
+
+  private fun postReviewThreads(
+    run: PhaseRun,
+    context: PhaseReviewExecutionContext,
+    reviewed: ReviewedPass,
+  ) {
+    val service = comments ?: return
+    val pass = reviewed.pass
+    val result =
+      catchingNonCancellation {
+        service.recordReviewFindings(
+          run.request.repoRoot,
+          "review:${run.request.workflowId}:pass-${pass.cycle.passNumber}",
+          run.resolvedAgent.resolvedAgentId,
+          reviewed.result.mergeResult.findings,
+        )
+      }
+    val failure = result.exceptionOrNull()
+    val counts = result.getOrNull()
+    if (failure != null || counts?.failed?.let { it > 0 } == true) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        context.diagnostics,
+        "Feature-task-runtime could not post review diff comments for issue ${run.request.issueKey}, " +
+          "workflow ${run.request.workflowId}, review run ${pass.reviewRunId}, pass ${pass.cycle.passNumber}; " +
+          "operation post review diff comments; written=${counts?.written ?: 0}, reused=${counts?.reused ?: 0}, " +
+          "failed=${counts?.failed ?: 0}, first_failure=${counts?.firstFailureReason ?: failure?.message ?: "none"}.",
+        failure,
+      )
+    }
   }
 
   private fun launch(

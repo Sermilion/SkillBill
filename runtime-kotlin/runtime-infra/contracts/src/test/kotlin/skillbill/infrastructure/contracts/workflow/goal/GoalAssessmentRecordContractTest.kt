@@ -5,6 +5,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidGoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingKind
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
@@ -54,6 +55,23 @@ class GoalAssessmentRecordContractTest {
   }
 
   @Test
+  fun `an unavailable reason round trips and is only accepted on an unavailable exit`() {
+    val record =
+      record().copy(exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE, unavailableReason = "no merge base")
+
+    val wire = record.asGoalAssessmentRecordWireMap()
+
+    assertTrue(violations(wire).isEmpty())
+    assertEquals(record, wire.toGoalAssessmentRecord("test"))
+    assertFailsWith<SkillBillRuntimeException> {
+      artifact(
+        record().asGoalAssessmentRecordWireMap(),
+        Keys.UNAVAILABLE_REASON to "no merge base",
+      ).toGoalAssessmentRecord("test")
+    }
+  }
+
+  @Test
   fun `a payload that breaks the schema or its coherence is rejected by the codec`() {
     val valid = record().asGoalAssessmentRecordWireMap()
     val secondRoundReusingRef =
@@ -97,11 +115,7 @@ class GoalAssessmentRecordContractTest {
             round = 1,
             headSha = "a".repeat(HEAD_SHA_LENGTH),
             scopeFiles = emptyList(),
-            assessorRuns =
-              listOf(
-                GoalAssessmentRun(GoalAssessmentRole.TEST_VALUE_REVIEW, null, GoalAssessmentRunStatus.COMPLETED),
-                GoalAssessmentRun(GoalAssessmentRole.SUBTASK, 1, GoalAssessmentRunStatus.COMPLETED),
-              ),
+            assessorRuns = listOf(GoalAssessmentRun(GoalAssessmentRole.SUBTASK, 1, GoalAssessmentRunStatus.COMPLETED)),
             findings =
               listOf(
                 GoalAssessmentFinding(
@@ -120,22 +134,6 @@ class GoalAssessmentRecordContractTest {
                   disposition = GoalAssessmentDisposition.PR_ONLY,
                   state = GoalAssessmentFindingState.OPEN,
                 ),
-                GoalAssessmentFinding(
-                  findingRef = "GA-002",
-                  kind = GoalAssessmentFindingKind.TEST_VALUE,
-                  severity = FeatureTaskRuntimeReviewSeverity.MINOR,
-                  path = "src/MainTest.kt",
-                  line = 18,
-                  failureScenario = "the regression test still passes when the handler drops the event",
-                  guardedRef = "src/Main.kt:44",
-                  subtaskId = null,
-                  originRound = 1,
-                  verification = GoalAssessmentVerification.UNVERIFIED,
-                  verificationEvidence = "",
-                  fixRoundsSurvived = 0,
-                  disposition = GoalAssessmentDisposition.PR_ONLY,
-                  state = GoalAssessmentFindingState.OPEN,
-                ),
               ),
             scenarios = emptyList(),
             regressions = emptyList(),
@@ -143,7 +141,7 @@ class GoalAssessmentRecordContractTest {
           ),
         ),
       exitReason = null,
-      openFindingRefs = listOf("GA-001", "GA-002"),
+      openFindingRefs = listOf("GA-001"),
     )
 
   private companion object {
