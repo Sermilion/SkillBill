@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan run: what the operator sees while planning runs</title>
+<!-- Design reference only. Colors, type and spacing come from the Linear study tokens, which match SkillBillColors. Every scenario is sample data. Phase ids, the wave cap of 5 and the [subtask N] output prefix match the runtime as of 2026-11-05. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../linear-study/ds/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg-frame); color: var(--fg); font: 400 var(--t-base)/1.45 var(--font-sans); display: flex; flex-direction: column; }
+  button, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+  svg { display: block; flex: none; }
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .ico.sm { width: 12px; height: 12px; }
+  :focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+
+  /* Review chrome: not part of the design */
+  .chrome { flex: none; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); border-bottom: 1px dashed var(--border-strong); }
+  .designs { display: flex; gap: 2px; padding: 2px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .designs button { height: 26px; padding: 0 var(--sp-3); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted); font-size: var(--t-sm); }
+  .designs button:hover { color: var(--fg); }
+  .designs button[aria-pressed="true"] { background: var(--bg-overlay); color: var(--fg); }
+  .scenario { display: flex; align-items: center; gap: var(--sp-2); color: var(--fg-muted); font-size: var(--t-sm); }
+  .scenario select { height: 30px; padding: 0 var(--sp-2); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); }
+
+  .stage { flex: 1; min-height: 0; display: flex; gap: var(--sp-6); padding: var(--sp-3) var(--sp-4) var(--sp-4); overflow: auto; }
+  .column { flex: none; width: 600px; display: flex; flex-direction: column; gap: 6px; min-height: 680px; }
+  .column-label { flex: none; font-size: var(--t-xs); font-weight: 500; color: var(--fg-faint); }
+  .notes { flex: 1 1 360px; min-width: 320px; max-width: 500px; overflow: auto; padding: 18px var(--sp-1) 0; font-size: var(--t-sm); color: var(--fg-muted); }
+  .notes h2 { margin: 0 0 var(--sp-2); font-size: var(--t-sm); font-weight: 500; color: var(--fg); }
+  .notes section + section { margin-top: var(--sp-5); }
+  .notes ul { margin: 0; padding: 0 0 0 var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+  .notes p { margin: 0 0 var(--sp-2); }
+  .notes code { font: 400 var(--t-xs) var(--font-mono); color: var(--fg-2); }
+  .source { display: grid; grid-template-columns: 130px 1fr; gap: 8px var(--sp-3); margin: 0; }
+  .source dt { color: var(--fg-2); }
+  .source dd { margin: 0; }
+  .tag { display: inline-block; padding: 0 5px; margin-right: 4px; border-radius: var(--r-xs); font-size: var(--t-2xs); line-height: 16px; background: var(--bg-active); color: var(--fg-muted); }
+  .tag.new { background: var(--accent-tint); color: var(--accent-text); }
+
+  /* Details pane, as it stands in the app */
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); overflow: hidden; }
+  .head { flex: none; height: var(--header-h); display: flex; align-items: center; padding: 0 var(--sp-2) 0 var(--sp-4); }
+  .head h1 { margin: 0; font-size: var(--t-base); font-weight: 500; flex: 1; }
+  .iconbtn { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; background: transparent; border: 0; border-radius: var(--r-sm); color: var(--fg-muted); }
+  .iconbtn:hover { background: var(--bg-active); color: var(--fg); }
+  .scroll { flex: 1; min-height: 0; overflow: auto; padding: var(--sp-1) var(--sp-4) var(--sp-6); }
+
+  .title { margin-bottom: var(--sp-4); }
+  .title .key { font: 400 var(--t-xs) var(--font-mono); color: var(--fg-faint); }
+  .title h2 { margin: 2px 0 6px; font-size: var(--t-md); font-weight: 500; }
+  .badges { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--t-xs); color: var(--fg-muted); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: var(--r-xs); background: var(--bg-active); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .tone-active { color: var(--st-active); }
+  .tone-planning { color: var(--st-planning); }
+  .tone-blocked { color: var(--st-blocked); }
+  .tone-failed { color: var(--st-failed); }
+  .tone-done { color: var(--st-done); }
+  .tone-faint { color: var(--fg-faint); }
+
+  /* Stage strip: replaces the three phase pills */
+  .stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; margin-bottom: var(--sp-4); }
+  .stage-cell { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .stage-cell + .stage-cell { border-left: 1px solid var(--border-subtle); }
+  .stage-cell .top { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 500; color: var(--fg-faint); }
+  .stage-cell .bottom { display: flex; align-items: baseline; gap: 6px; font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-faint); }
+  .stage-cell .bottom .time { margin-left: auto; font-family: var(--font-sans); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
+  .stage-cell.done .top { color: var(--fg-2); }
+  .stage-cell.done .top .ico { color: var(--st-done); }
+  .stage-cell.now { background: rgba(63, 185, 80, 0.06); }
+  .stage-cell.now .top { color: var(--st-active); }
+  .stage-cell.now .time { color: var(--fg); }
+  .stage-cell.stuck { background: rgba(226, 112, 60, 0.07); }
+  .stage-cell.stuck .top { color: var(--st-blocked); }
+  .ring { width: 11px; height: 11px; border-radius: 50%; border: 1.5px dashed var(--fg-faint); flex: none; }
+  .spin { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid rgba(63, 185, 80, 0.25); border-top-color: var(--st-active); animation: spin 0.9s linear infinite; flex: none; }
+  .spin.stuck { border-color: rgba(226, 112, 60, 0.25); border-top-color: var(--st-blocked); animation-duration: 2.4s; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Live status */
+  .sentence { margin: 0 0 6px; font-size: var(--t-md); line-height: 1.45; color: var(--fg); }
+  .pulse { display: flex; align-items: center; flex-wrap: wrap; gap: 4px var(--sp-2); margin: 0 0 var(--sp-5); font-size: var(--t-sm); color: var(--fg-faint); }
+  .pulse .beat { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); }
+  .pulse .beat .dot { animation: beat 1.6s ease-in-out infinite; color: var(--st-active); }
+  .pulse .beat.stuck { color: var(--st-blocked); }
+  .pulse .beat.stuck .dot { animation: none; color: var(--st-blocked); }
+  @keyframes beat { 50% { opacity: 0.3; } }
+
+  /* Groups and rows */
+  .group { margin-bottom: var(--sp-5); }
+  .group-label { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; font-size: var(--t-xs); font-weight: 500; color: var(--fg-muted); }
+  .group-label .n { color: var(--fg-faint); font-variant-numeric: tabular-nums; font-weight: 400; }
+  .group-label .aside { margin-left: auto; font-weight: 400; color: var(--fg-faint); }
+  .box { border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+  .item + .item { border-top: 1px solid var(--border-subtle); }
+  .row { width: 100%; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 9px var(--sp-3); background: transparent; border: 0; text-align: left; color: inherit; }
+  button.row:hover { background: var(--bg-hover); }
+  button.row:focus-visible { outline-offset: -2px; }
+  .row .glyph { padding-top: 3px; display: grid; place-items: start center; }
+  .row-title { font-weight: 500; color: var(--fg-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-title .ref { font: 400 var(--t-sm) var(--font-mono); color: var(--fg-faint); margin-right: 6px; }
+  .row.queued .row-title { color: var(--fg-muted); font-weight: 400; }
+  .row-state { font-size: var(--t-xs); white-space: nowrap; padding-top: 1px; display: inline-flex; align-items: center; gap: 6px; color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+  .row-line { grid-column: 2 / 4; display: flex; gap: var(--sp-2); min-width: 0; font-size: var(--t-xs); color: var(--fg-faint); }
+  .row-line .out { font: 400 var(--t-2xs)/18px var(--font-mono); color: var(--fg-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+  .row-line .why { color: var(--st-blocked); }
+  .row.writing { background: rgba(63, 185, 80, 0.03); }
+  .row.blocked { background: rgba(226, 112, 60, 0.05); }
+
+  .hint { padding: 14px var(--sp-3); font-size: var(--t-sm); color: var(--fg-faint); display: flex; flex-direction: column; gap: 8px; }
+  .ghost { height: 10px; border-radius: var(--r-xs); background: var(--bg-active); }
+
+  /* Output tail */
+  .tail { padding: 8px var(--sp-3) 10px; background: var(--bg-inset); font: 400 var(--t-2xs)/1.75 var(--font-mono); color: var(--fg-muted); }
+  .tail div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tail .t { color: var(--fg-faint); margin-right: 8px; }
+  .tail div:last-child { color: var(--fg-2); }
+
+  .chip { height: 24px; display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--sp-2); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: var(--t-xs); color: var(--fg-2); }
+  .chip:hover { background: var(--bg-overlay); border-color: var(--border-strong); color: var(--fg); }
+  .chip .ico { color: var(--fg-faint); }
+  .chip.file { font-family: var(--font-mono); font-size: var(--t-2xs); }
+  .chip.pending { color: var(--fg-faint); border-style: dashed; background: transparent; }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* Folds */
+  .fold { width: 100%; display: grid; grid-template-columns: 16px auto minmax(0, 1fr) 14px; align-items: center; gap: var(--sp-2); padding: 9px var(--sp-3); background: transparent; border: 0; text-align: left; }
+  .fold:hover { background: var(--bg-hover); }
+  .fold .label { font-weight: 500; color: var(--fg-2); white-space: nowrap; }
+  .fold .preview { color: var(--fg-faint); font-size: var(--t-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .fold .ico.chev { color: var(--fg-faint); transition: transform var(--dur-fast) var(--ease); }
+  .fold[aria-expanded="true"] .ico.chev { transform: rotate(90deg); }
+  .fold[aria-expanded="true"] .preview { visibility: hidden; }
+  .fold-body { padding: 0 var(--sp-3) var(--sp-3) 36px; font-size: var(--t-sm); color: var(--fg-2); }
+  .fold-body p { margin: 0 0 var(--sp-2); }
+  .act { display: grid; grid-template-columns: 52px 1fr; gap: 4px var(--sp-2); font-size: var(--t-sm); }
+  .act .t { color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+
+  /* Blocked */
+  .callout { border: 1px solid rgba(226, 112, 60, 0.4); background: rgba(226, 112, 60, 0.06); border-radius: var(--r-md); padding: 10px var(--sp-3); margin-bottom: var(--sp-5); font-size: var(--t-sm); color: var(--fg-2); }
+  .callout b { display: flex; align-items: center; gap: 6px; font-weight: 500; color: var(--st-blocked); margin-bottom: 4px; }
+  .callout .actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* Run actions */
+  .runbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
+  .runbar-note { margin-top: 6px; font-size: var(--t-xs); color: var(--fg-faint); }
+  .kbd { font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-faint); margin-left: 2px; }
+  .btn { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 var(--sp-3); border-radius: var(--r-sm); font-size: var(--t-sm); border: 1px solid var(--border); background: var(--bg-raised); color: var(--fg-2); }
+  .btn:hover:not(:disabled) { background: var(--bg-overlay); color: var(--fg); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 500; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-fg); }
+  .btn.danger { color: var(--st-failed); }
+  .btn.danger:hover:not(:disabled) { color: var(--st-failed); background: rgba(240, 85, 91, 0.08); }
+  .btn:disabled { opacity: 0.45; }
+
+  /* Today: the current layout, for comparison */
+  .metrics { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: var(--sp-4); }
+  .metric { padding: 10px var(--sp-3); }
+  .metric + .metric { border-left: 1px solid var(--border-subtle); }
+  .metric .k { font-size: var(--t-xs); color: var(--fg-faint); }
+  .metric .v { font-size: var(--t-md); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .metric .v.mono { font: 500 14px var(--font-mono); }
+  .metric .n { font-size: var(--t-xs); color: var(--fg-faint); }
+  .pipe { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: var(--sp-5); }
+  .step { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--r-xs); font: 400 var(--t-2xs) var(--font-mono); color: var(--fg-faint); }
+  .step.done { color: var(--fg-2); }
+  .step.done .ico { color: var(--st-done); }
+  .step.now { color: var(--st-active); border-color: rgba(63, 185, 80, 0.5); background: rgba(63, 185, 80, 0.08); }
+  .pipe i { width: 6px; height: 1px; background: var(--border-strong); }
+  .sec-title { margin: 0 0 6px; font-size: var(--t-sm); font-weight: 500; color: var(--fg); }
+  .tree { display: flex; align-items: center; gap: 8px; padding: 7px var(--sp-3); font-size: var(--t-sm); color: var(--fg-2); }
+  .tree .ico { color: var(--fg-faint); }
+
+  .toast { position: fixed; right: var(--sp-5); bottom: var(--sp-5); max-width: 420px; padding: var(--sp-2) var(--sp-3); background: var(--bg-overlay); border: 1px solid var(--border-strong); border-radius: var(--r-md); box-shadow: var(--shadow-pop); font-size: var(--t-sm); color: var(--fg-2); overflow-wrap: anywhere; opacity: 0; pointer-events: none; transition: opacity var(--dur) var(--ease); }
+  .toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="chrome">
+  <div class="designs" role="group" aria-label="Design">
+    <button type="button" data-view="new" aria-pressed="true">Redesign</button>
+    <button type="button" data-view="today" aria-pressed="false">Today</button>
+  </div>
+  <label class="scenario">Scenario
+    <select id="scenario"></select>
+  </label>
+</div>
+<div class="stage">
+  <div class="column">
+    <div class="column-label" id="source"></div>
+    <div class="pane">
+      <div class="head">
+        <h1>Details</h1>
+        <button type="button" class="iconbtn" aria-label="Close details"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="scroll" id="pane"></div>
+    </div>
+  </div>
+  <aside class="notes" id="notes"></aside>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const PATHS = {
+  chev: '<path d="M9 6l6 6-6 6"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  text: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
+  doc: '<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+  term: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10l3 2-3 2"/><path d="M13 15h4"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+  play: '<path d="M7 5l12 7-12 7z"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  open: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+};
+const icon = (name, cls = '') => `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name]}</svg>`;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+const BUNDLE = 'specs/DEMO-7-live-plan-progress/';
+const STAGES = [
+  { id: 'preplan', label: 'Reading the repo' },
+  { id: 'plan', label: 'Splitting the work' },
+  { id: 'plan_subtasks', label: 'Writing subtask specs' },
+];
+const SUBTASKS = [
+  { id: 1, name: 'Project the planning snapshot for standalone plan runs', deps: [] },
+  { id: 2, name: 'Expose the decomposition manifest once plan settles', deps: [] },
+  { id: 3, name: 'Keep the latest output line per planning unit', deps: [] },
+  { id: 4, name: 'Map planning stages and units into the desktop model', deps: [1, 2, 3] },
+  { id: 5, name: 'Render the stage strip and live status line', deps: [4] },
+  { id: 6, name: 'Render the subtask list with per-unit states', deps: [4] },
+  { id: 7, name: 'Open saved specs and implement from the list', deps: [6] },
+];
+const specPath = (id) => `${BUNDLE}spec_subtask_${id}_${SUBTASKS[id - 1].name.toLowerCase().split(' ').slice(0, 3).join('-')}.md`;
+const BRIEFING = 'Show what a plan run is doing while it runs. Today the detail screen only moves the preplan, plan and plan_subtasks pills for 15 to 20 minutes.';
+
+/* states: q queued, w writing, s saved, b blocked */
+const units = (states, extra = {}) => SUBTASKS.map((t, i) => ({ ...t, state: states[i], ...(extra[t.id] || {}) }));
+
+const SCENARIOS = [
+  {
+    id: 'preplan', label: '2 min in: reading the repo',
+    stage: 0, times: [128, null, null], elapsed: 128, running: true,
+    sentence: 'Reading the repository and the intake before it splits the work.',
+    beat: { text: 'Last output 4s ago' },
+    tail: [
+      ['14:03:51', 'Read desktop/feature/detail/.../DetailScreen.kt'],
+      ['14:03:58', 'Read runtime-engine/.../PlanFanOutStrategy.kt'],
+      ['14:04:02', 'Grep "planningProgress" in desktop/core'],
+      ['14:04:06', 'Read runtime-domain/.../GoalPlanningStatusSnapshot.kt'],
+    ],
+    subtasks: null, files: [],
+    todayStep: 'preplan',
+    why: 'The first minutes have no artifacts yet, so the agent\'s own output is the only proof of life. The last four lines answer "is it doing anything" without opening a log.',
+  },
+  {
+    id: 'plan', label: '7 min in: splitting the work',
+    stage: 1, times: [184, 236, null], elapsed: 420, running: true,
+    sentence: 'Splitting the work into subtasks. The list appears here once the decomposition is saved.',
+    beat: { text: 'Last output 11s ago' },
+    tail: [
+      ['14:08:30', 'Draft: 7 subtasks, 3 independent'],
+      ['14:08:41', 'Check: subtask 4 needs 1, 2 and 3'],
+      ['14:08:55', 'Write specs/DEMO-7-live-plan-progress/spec.md'],
+      ['14:09:09', 'Check acceptance criteria against the intake'],
+    ],
+    subtasks: null, files: ['spec.md'],
+    todayStep: 'plan',
+    why: 'The parent spec.md often lands before the manifest. It opens as soon as it exists, so the operator can start reading the plan while the subtask split finishes.',
+  },
+  {
+    id: 'wave', label: '11 min in: first wave writing',
+    stage: 2, times: [184, 352, 162], elapsed: 698, running: true,
+    sentence: 'Writing specs for subtasks 3 to 5. 2 of 7 saved.',
+    beat: { text: 'Last output 2s ago' },
+    subtasks: units(['s', 's', 'w', 'w', 'w', 'q', 'q'], {
+      1: { time: '1m 48s' }, 2: { time: '2m 21s' },
+      3: { time: 162, out: 'Write acceptance criteria for the [subtask N] line buffer' },
+      4: { time: 162, out: 'Read core/data/.../RuntimeWorkMapper.kt' },
+      5: { time: 162, out: 'Draft: stage strip replaces the pipeline pills' },
+    }),
+    wave: 'Wave 1 of 2 · 5 at a time',
+    files: ['decomposition-manifest.yaml', 'spec.md', 1, 2],
+    todayStep: 'plan_subtasks',
+    why: 'This is where most of the 15 to 20 minutes go. Each subtask gets a row as soon as the manifest is saved, and its state changes in place: queued, writing, saved. Saved rows open their spec.',
+  },
+  {
+    id: 'stalled', label: 'One subtask stopped producing output',
+    stage: 2, times: [184, 352, 540], elapsed: 1076, running: true, stuck: true,
+    sentence: 'Writing specs for subtasks 4 and 5. 3 of 7 saved.',
+    beat: { text: 'No output for 7m 20s', stuck: true },
+    subtasks: units(['s', 's', 's', 'w', 'w', 'q', 'q'], {
+      1: { time: '1m 48s' }, 2: { time: '2m 21s' }, 3: { time: '3m 05s' },
+      4: { time: '9m 00s', out: 'Read core/data/.../RuntimeWorkMapper.kt', stuck: '7m 20s' },
+      5: { time: '9m 00s', out: 'Draft: stage strip replaces the pipeline pills', stuck: '7m 20s' },
+    }),
+    wave: 'Wave 1 of 2 · 5 at a time',
+    files: ['decomposition-manifest.yaml', 'spec.md', 1, 2, 3],
+    todayStep: 'plan_subtasks',
+    why: 'The runtime already sets `stalledSince`. The redesign turns it into the heartbeat line and colors the rows that went quiet, so a hung agent is visible before the operator wonders why it has been 18 minutes.',
+  },
+  {
+    id: 'blocked', label: 'A subtask is blocked',
+    stage: 2, times: [184, 352, 380], elapsed: 916, running: false, blocked: true,
+    sentence: 'Planning stopped at subtask 4. 4 of 7 saved, 2 not started.',
+    beat: null,
+    callout: {
+      title: 'Subtask 4 needs your decision',
+      text: 'The spec writer could not settle the order. Subtasks 2 and 4 both rewrite the planning fields in `RuntimeWorkMapper`, and the manifest says 4 depends only on 1, 2 and 3.',
+    },
+    subtasks: units(['s', 's', 's', 'b', 's', 'q', 'q'], {
+      1: { time: '1m 48s' }, 2: { time: '2m 21s' }, 3: { time: '3m 05s' }, 5: { time: '2m 40s' },
+      4: { time: '4m 31s', why: 'Overlaps subtask 2 on RuntimeWorkMapper planning fields' },
+    }),
+    wave: 'Wave 1 of 2 · wave 2 waits',
+    files: ['decomposition-manifest.yaml', 'spec.md', 1, 2, 3, 5],
+    todayStep: 'plan_subtasks',
+    why: 'The blocked reason exists in the planning snapshot. It goes on the row and in a callout at the top, which reuses the operator decision block the screen already has.',
+  },
+  {
+    id: 'done', label: 'Finished: plan ready',
+    stage: 3, times: [184, 352, 532], elapsed: 1068, running: false,
+    sentence: 'Plan ready. 7 subtasks, all specs saved.',
+    beat: null,
+    subtasks: units(['s', 's', 's', 's', 's', 's', 's'], {
+      1: { time: '1m 48s' }, 2: { time: '2m 21s' }, 3: { time: '3m 05s' }, 4: { time: '3m 40s' }, 5: { time: '2m 40s' }, 6: { time: '2m 10s' }, 7: { time: '1m 52s' },
+    }),
+    files: ['decomposition-manifest.yaml', 'spec.md', 1, 2, 3, 4, 5, 6, 7],
+    todayStep: null,
+    why: 'The finished screen is the running screen with every row saved. Nothing jumps or reflows when the run ends, and Implement in the header turns on.',
+  },
+];
+
+const state = { view: 'new', scenario: SCENARIOS[2], open: new Set(), tick: 0 };
+
+function clock(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
+}
+function fileName(path) { return path.slice(path.lastIndexOf('/') + 1); }
+function filePath(f) { return typeof f === 'number' ? specPath(f) : BUNDLE + f; }
+/* A clock that ticks in place, so the pane never re-renders under the pointer. */
+function tick(base, s, prefix = '') {
+  return s.running ? `<span data-live="${base}" data-prefix="${esc(prefix)}">${esc(prefix)}${clock(base + state.tick)}</span>` : esc(prefix) + clock(base);
+}
+
+function titleBlock(s) {
+  let badge;
+  if (s.blocked) badge = '<span class="badge tone-blocked"><span class="dot"></span>Blocked</span>';
+  else if (s.stage === 3) badge = '<span class="badge tone-done"><span class="dot"></span>Plan ready</span>';
+  else badge = '<span class="badge tone-planning"><span class="dot"></span>Planning</span>';
+  return `<div class="title">
+    <div class="key">DEMO-7 · plan</div>
+    <h2>Live plan progress on the detail screen</h2>
+    <div class="badges">${badge}<span>Opus 5.5 · high effort</span></div>
+    ${runBar(s)}
+  </div>`;
+}
+
+function stageStrip(s) {
+  const cells = STAGES.map((st, i) => {
+    const done = i < s.stage;
+    const now = i === s.stage;
+    const stuck = now && (s.stuck || s.blocked);
+    let glyph = '<span class="ring"></span>';
+    if (done) glyph = icon('check');
+    else if (now && s.blocked) glyph = `<span class="tone-blocked">${icon('warn', 'sm')}</span>`;
+    else if (now) glyph = `<span class="spin ${s.stuck ? 'stuck' : ''}"></span>`;
+    const t = s.times[i];
+    const time = t == null ? '' : now ? tick(t, s) : clock(t);
+    return `<div class="stage-cell ${done ? 'done' : ''} ${now && !stuck ? 'now' : ''} ${stuck ? 'stuck' : ''}">
+      <div class="top">${glyph}${esc(st.label)}</div>
+      <div class="bottom">${esc(st.id)}<span class="time">${time}</span></div>
+    </div>`;
+  }).join('');
+  return `<div class="stages">${cells}</div>`;
+}
+
+function pulse(s) {
+  const parts = [];
+  if (s.beat) parts.push(`<span class="beat ${s.beat.stuck ? 'stuck' : ''}"><span class="dot"></span>${esc(s.beat.text)}</span>`);
+  parts.push(`<span>${tick(s.elapsed, s, s.stage === 3 ? 'Total ' : 'Elapsed ')}</span>`);
+  if (s.stage === 3) parts.push('<span>·</span><span>finished 14:19</span>');
+  return `<div class="pulse">${parts.join('')}</div>`;
+}
+
+function subtaskRow(t, s) {
+  const saved = t.state === 's';
+  const writing = t.state === 'w';
+  const blocked = t.state === 'b';
+  let glyph = '<span class="ring"></span>';
+  let stateText = s.blocked ? 'Not started' : 'Queued';
+  if (saved) { glyph = `<span class="tone-done">${icon('check', 'sm')}</span>`; stateText = t.time; }
+  if (writing) { glyph = `<span class="spin ${t.stuck ? 'stuck' : ''}"></span>`; stateText = t.stuck ? `<span class="tone-blocked">quiet ${t.stuck}</span>` : tick(t.time, s, 'Writing · '); }
+  if (blocked) { glyph = `<span class="tone-blocked">${icon('warn', 'sm')}</span>`; stateText = '<span class="tone-blocked">Blocked</span>'; }
+  const deps = t.deps.length ? `<span>after ${t.deps.join(', ')}</span>` : '<span>no dependencies</span>';
+  let line = deps;
+  if (writing && t.out) line = `<span class="out">[subtask ${t.id}] ${esc(t.out)}</span>`;
+  if (blocked) line = `<span class="why">${esc(t.why)}</span>`;
+  const cls = `row ${saved ? '' : writing ? 'writing' : blocked ? 'blocked' : 'queued'}`;
+  const inner = `<span class="glyph">${glyph}</span>
+    <span class="row-title"><span class="ref">${t.id}</span>${esc(t.name)}</span>
+    <span class="row-state">${stateText}${saved ? icon('open', 'sm') : ''}</span>
+    <span class="row-line">${line}</span>`;
+  return saved
+    ? `<div class="item"><button type="button" class="${cls}" data-act="file" data-arg="${esc(specPath(t.id))}" title="Open ${esc(fileName(specPath(t.id)))}">${inner}</button></div>`
+    : `<div class="item"><div class="${cls}">${inner}</div></div>`;
+}
+
+function subtaskGroup(s) {
+  if (!s.subtasks) {
+    return `<div class="group"><h3 class="group-label">Subtasks</h3><div class="box"><div class="hint">
+      <span>Subtasks appear here when the work is split.</span>
+      <div class="ghost" style="width:72%"></div><div class="ghost" style="width:58%"></div><div class="ghost" style="width:66%"></div>
+    </div></div></div>`;
+  }
+  const saved = s.subtasks.filter((t) => t.state === 's').length;
+  return `<div class="group"><h3 class="group-label">Subtasks<span class="n">${saved}/${s.subtasks.length} saved</span>${s.wave && s.stage < 3 ? `<span class="aside">${esc(s.wave)}</span>` : ''}</h3>
+    <div class="box">${s.subtasks.map((t) => subtaskRow(t, s)).join('')}</div></div>`;
+}
+
+function outputGroup(s) {
+  if (!s.tail) return '';
+  return `<div class="group"><h3 class="group-label">Agent output<span class="aside">latest 4 lines</span></h3>
+    <div class="box"><div class="tail">${s.tail.map(([t, line]) => `<div><span class="t">${t}</span>${esc(line)}</div>`).join('')}</div></div></div>`;
+}
+
+function filesGroup(s) {
+  const expected = s.stage < 2 ? ['decomposition-manifest.yaml', 'spec.md'] : [];
+  const known = new Set(s.files);
+  const chips = [
+    ...s.files.map((f) => `<button type="button" class="chip file" data-act="file" data-arg="${esc(filePath(f))}" title="${esc(filePath(f))}">${icon(String(f).endsWith('.yaml') ? 'file' : 'text', 'sm')}${esc(fileName(filePath(f)))}</button>`),
+    ...expected.filter((f) => !known.has(f)).map((f) => `<span class="chip file pending">${icon('file', 'sm')}${esc(f)}</span>`),
+  ];
+  return `<div class="group"><h3 class="group-label">Spec bundle<span class="n">${s.files.length} ${s.files.length === 1 ? 'file' : 'files'}</span></h3><div class="files">${chips.join('')}</div></div>`;
+}
+
+function fold(key, glyph, label, preview, inner) {
+  const openNow = state.open.has(key);
+  return `<div class="item"><button type="button" class="fold" aria-expanded="${openNow}" data-act="toggle" data-arg="${key}">
+    <span style="color:var(--fg-faint)">${icon(glyph)}</span><span class="label">${esc(label)}</span><span class="preview">${esc(preview)}</span>${icon('chev', 'chev')}
+  </button>${openNow ? `<div class="fold-body">${inner}</div>` : ''}</div>`;
+}
+
+function activityInner(s) {
+  const rows = [['14:01:43', 'Plan run started']];
+  if (s.stage >= 1) rows.push(['14:04:47', 'preplan finished in 3m 04s']);
+  if (s.stage >= 2) rows.push(['14:10:39', 'plan finished: 7 subtasks, manifest saved'], ['14:10:40', 'Wave 1 started: subtasks 1 to 5']);
+  if (s.id === 'done') rows.push(['14:14:12', 'Wave 2 started: subtasks 6 and 7']);
+  if (s.id === 'stalled') rows.push(['14:12:20', 'No output from subtasks 4 and 5']);
+  if (s.blocked) rows.push(['14:16:58', 'Subtask 4 blocked']);
+  if (s.stage === 3) rows.push(['14:19:31', 'plan_subtasks finished: 7 specs saved']);
+  return `<div class="act">${rows.map(([t, e]) => `<span class="t">${t.slice(0, 5)}</span><span>${esc(e)}</span>`).join('')}</div>`;
+}
+
+/* The header's run-actions row, as RunActions lays it out for a standalone plan: Resume and Agent only when the run is not active,
+   Implement always, Cancel until the run ends. Pause is goal-only. */
+function runBar(s) {
+  const ready = s.stage === 3;
+  const buttons = [];
+  if (s.blocked) {
+    buttons.push(`<button type="button" class="btn" data-act="toast" data-arg="Resumes the plan run">${icon('play', 'sm')}Resume<span class="kbd">R</span></button>`);
+    buttons.push('<button type="button" class="btn" data-act="toast" data-arg="Opens the agent menu">Agent: claude</button>');
+  }
+  buttons.push(`<button type="button" class="btn ${ready ? 'primary' : ''}" ${ready ? '' : 'disabled'} data-act="toast" data-arg="Starts the goal from this plan">${icon('play', 'sm')}Implement</button>`);
+  if (!ready) buttons.push(`<button type="button" class="btn danger" data-act="toast" data-arg="Cancels the plan run">${icon('x', 'sm')}Cancel</button>`);
+  const note = state.view === 'new' && !ready ? 'Implement turns on when every spec is saved' : '';
+  return `<div class="runbar">${buttons.join('')}</div>${note ? `<div class="runbar-note">${esc(note)}</div>` : ''}`;
+}
+
+function redesign(s) {
+  const parts = [titleBlock(s), stageStrip(s), `<p class="sentence">${esc(s.sentence)}</p>`, pulse(s)];
+  if (s.callout) {
+    parts.push(`<div class="callout"><b>${icon('warn', 'sm')}${esc(s.callout.title)}</b>${inline(s.callout.text)}
+      <div class="actions"><button type="button" class="btn" data-act="toast" data-arg="Reruns the spec writer for subtask 4">Retry subtask 4</button><button type="button" class="btn" data-act="toast" data-arg="Opens the incident with recovery options">Open incident</button></div></div>`);
+  }
+  parts.push(outputGroup(s));
+  parts.push(subtaskGroup(s));
+  parts.push(filesGroup(s));
+  const folds = [
+    fold('briefing', 'doc', 'Briefing', BRIEFING, `<p>${esc(BRIEFING)}</p>`),
+    s.tail ? '' : fold('output', 'term', 'Agent output', 'Full log, all subtasks interleaved', '<p style="color:var(--fg-faint)">Opens the attributed log. Each line keeps its [subtask N] prefix, with a filter per subtask.</p>'),
+    fold('activity', 'list', 'Activity', s.stage === 3 ? '7 events' : 'Stage changes and waves', activityInner(s)),
+  ];
+  parts.push(`<div class="group"><div class="box">${folds.join('')}</div></div>`);
+  return parts.join('');
+}
+
+function today(s) {
+  const done = s.stage === 3;
+  const nowIndex = done ? 3 : s.stage;
+  const pipe = STAGES.map((st, i) => `<span class="step ${i < nowIndex ? 'done' : ''} ${i === nowIndex ? 'now' : ''}">${i < nowIndex ? icon('check', 'sm') : ''}${st.id}</span>`).join('<i></i>');
+  const metrics = done
+    ? `<div class="metric"><div class="k">Step</div><div class="v">Idle</div></div><div class="metric"><div class="k">Total run time</div><div class="v">${clock(s.elapsed)}</div><div class="n">finished 5 Nov 14:19</div></div>`
+    : `<div class="metric"><div class="k">Step</div><div class="v mono">${s.todayStep}</div></div><div class="metric"><div class="k">Elapsed</div><div class="v">${tick(s.elapsed, s)}</div><div class="n">${s.running ? 'active' : 'stopped'}</div></div>`;
+  const parts = [titleBlock(s), `<div class="metrics">${metrics}</div>`, `<div class="pipe">${pipe}</div>`];
+  if (s.blocked) parts.push('<div class="callout"><b>' + icon('warn', 'sm') + 'Operator decision</b>Subtask 4 is blocked.</div>');
+  parts.push(`<div class="group"><div class="box">${fold('briefing', 'doc', 'plan briefing', BRIEFING, `<p>${esc(BRIEFING)}</p>`)}</div></div>`);
+  if (done) {
+    parts.push(`<h3 class="sec-title">Spec bundle</h3><div class="box" style="margin-bottom:var(--sp-5)">${s.files.map((f) => `<div class="item"><div class="tree">${icon(String(f).endsWith('.yaml') ? 'file' : 'text')}${esc(fileName(filePath(f)))}</div></div>`).join('')}</div>`);
+  }
+  parts.push(`<h3 class="sec-title">Activity</h3><div class="box" style="margin-bottom:var(--sp-5)"><div class="fold-body" style="padding:10px var(--sp-3)"><div class="act"><span class="t">14:01</span><span>plan started</span>${done ? '<span class="t">14:19</span><span>plan finished</span>' : ''}</div></div></div>`);
+  return parts.join('');
+}
+
+const SOURCES = [
+  ['Stage strip', 'exists', 'The pipeline already reports `preplan`, `plan` and `plan_subtasks` as the current step.'],
+  ['Time per stage', 'new', 'Needs a start and finish per step on the detail read. Total elapsed already comes from `activeDurationMs`.'],
+  ['Heartbeat', 'partly', '`stalledSince` exists on the work item. "Last output 4s ago" needs the time of the latest output line.'],
+  ['Agent output tail', 'new', 'The runtime writes the agent stream through `AgentRunOutputSink`. The detail read needs the last few lines.'],
+  ['Subtask list mid-run', 'new', 'The manifest is on disk once `plan` settles, but the desktop only gets subtasks from `PlanRunReport` after the run ends.'],
+  ['Per-subtask state', 'goal only', '`GoalPlanningStatusSnapshot` has planned and total counts, the current wave ids and the blocked reason. Standalone plan runs seem to get `planning = null`.'],
+  ['Latest line per subtask', 'new', 'Fan-out units already prefix their output with `[subtask N]` in `UnitAttributedOutputSink`. Keep the last line per prefix.'],
+  ['Spec files as they save', 'new', '`bundleFiles` arrives only with the finished report.'],
+  ['Run actions', 'exists', 'Same header row as every detail screen. `planImplementationEnabled` already gates Implement. The redesign only adds the line saying when it turns on.'],
+];
+
+function notes(s) {
+  const tag = (kind) => `<span class="tag ${kind === 'exists' ? '' : 'new'}">${kind}</span>`;
+  if (state.view === 'today') {
+    return `<section><h2>Today</h2><p>For 15 to 20 minutes the only thing that changes is which pill is green, plus the elapsed clock. The step name repeats the pill. Nothing says how many subtasks there are, which one is being written, or whether the agent is still producing output.</p><p>Implement sits in the header the whole time but stays disabled with no reason given. The spec bundle only appears when the run ends.</p></section>`;
+  }
+  return `<section><h2>Why this layout</h2><p>${inline(s.why)}</p></section>
+    <section><h2>Order of the screen</h2><ul>
+      <li>Run actions in the header, as on every other detail screen.</li>
+      <li>Stage strip with plain names. The phase ids stay underneath because operators search logs by them.</li>
+      <li>One sentence and a heartbeat. They answer "what now" and "is it alive".</li>
+      <li>Agent output tail, only before the subtask list exists.</li>
+      <li>Subtasks with live state, then the spec bundle filling in.</li>
+      <li>Briefing, full output and activity folded away.</li>
+    </ul></section>
+    <section><h2>Where the data comes from</h2><dl class="source">${SOURCES.map(([k, kind, v]) => `<dt>${esc(k)}</dt><dd>${tag(kind)}${inline(v)}</dd>`).join('')}</dl></section>
+    <section><h2>Open questions</h2><ul>
+      <li>Should a goal's planning stage reuse the same subtask list? It has the same blind spot apart from "2/5 plans saved".</li>
+      <li>Is "Retry subtask 4" a real recovery action, or does a blocked unit always go through the incident?</li>
+    </ul></section>`;
+}
+
+function render() {
+  const s = state.scenario;
+  document.getElementById('pane').innerHTML = state.view === 'new' ? redesign(s) : today(s);
+  document.getElementById('notes').innerHTML = notes(s);
+  document.getElementById('source').textContent = (state.view === 'new' ? 'Redesign' : 'Today') + ' · sample data';
+  document.querySelectorAll('.designs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === state.view)));
+}
+
+let toastTimer;
+function toast(text) {
+  const el = document.getElementById('toast');
+  el.textContent = text;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
+}
+
+const select = document.getElementById('scenario');
+select.innerHTML = SCENARIOS.map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('');
+select.value = state.scenario.id;
+select.addEventListener('change', () => { state.scenario = SCENARIOS.find((s) => s.id === select.value); state.tick = 0; state.open.clear(); render(); });
+document.querySelectorAll('.designs button').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.view; render(); }));
+document.getElementById('pane').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.disabled) return;
+  const { act, arg } = el.dataset;
+  if (act === 'toggle') { state.open.has(arg) ? state.open.delete(arg) : state.open.add(arg); render(); }
+  if (act === 'file') toast('Opens ' + arg + ' in its default app');
+  if (act === 'toast') toast(arg);
+});
+setInterval(() => {
+  if (!state.scenario.running) return;
+  state.tick += 1;
+  document.querySelectorAll('[data-live]').forEach((el) => { el.textContent = el.dataset.prefix + clock(Number(el.dataset.live) + state.tick); });
+}, 1000);
+render();
+</script>
+</body>
+</html>
