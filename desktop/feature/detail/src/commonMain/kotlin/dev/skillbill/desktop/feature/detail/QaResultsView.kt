@@ -92,7 +92,8 @@ internal fun goalQaInput(qa: GoalQaResult, running: Boolean): QaResultsInput {
       QaResultsFinding(finding.id, finding.title, finding.fixed, finding.observed, finding.expected, finding.steps, finding.evidencePaths, evidenceDirectory)
     },
     details = qa.details,
-    fallbackInvocationDirectory = reportPath?.let(::parentDirectory),
+    fallbackInvocationDirectory = qa.details?.invocationDirectory
+      ?: qa.details?.reportPath?.takeIf { it.isNotBlank() }?.let(::parentDirectory),
     fallbackReportPath = reportPath,
   )
 }

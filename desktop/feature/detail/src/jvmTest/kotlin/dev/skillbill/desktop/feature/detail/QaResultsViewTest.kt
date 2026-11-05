@@ -308,6 +308,19 @@ class QaResultsViewTest {
   }
 
   @Test
+  fun `a finding without a report path does not inherit another finding's directory`() {
+    val view = goalQa(
+      listOf(
+        carriedFinding("QA-1", fixed = false),
+        GoalQaFinding("QA-2", "QA-2 current", false, listOf("$qaB/current.log")),
+      ),
+      QaRunDetails(reportPath = "$qaB/report.md"),
+    )
+
+    assertEquals(listOf(qaA, qaB), view.open.map { it.evidenceDirectory })
+  }
+
+  @Test
   fun `passed and not tested rows use the details directory`() {
     val assertionsWithEvidence = listOf(
       QaRunAssertion(Passed, "Passed one", "ok", listOf("$qaB/p.log")),
