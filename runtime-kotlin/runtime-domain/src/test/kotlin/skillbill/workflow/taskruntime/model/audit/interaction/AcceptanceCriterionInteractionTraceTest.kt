@@ -199,6 +199,37 @@ class AcceptanceCriterionInteractionTraceTest {
   }
 
   @Test
+  fun `bound reports use per decision references instead of copying the report`() {
+    val targets = (1..6).map { AcceptanceCriterionInteractionTarget("IS-%03d".format(it), listOf("AC-001")) }
+    val rechecks = listOf("AC-001", "AC-002", "AC-003")
+    val report =
+      "Source evidence. ".repeat(2000) + "\n" +
+        targets.joinToString("\n") { "Interaction ${it.scenarioRef}: holds" } + "\n" +
+        rechecks.joinToString("\n") { "Recheck $it: holds" }
+    val outputRef = "wftr-test:audit:8:29"
+
+    val parsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(report, targets, rechecks, outputRef),
+      )
+
+    assertEquals(targets.map { "$outputRef#interaction:${it.scenarioRef}" }, parsed.entries.map { it.traceRef })
+    assertEquals(rechecks.map { "$outputRef#recheck:$it" }, parsed.rechecks.map { it.evidenceRef })
+    val cited =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(
+          "Interaction IS-001: broken owner AC-001 trace src/Flow.kt:10\n" +
+            "Recheck AC-001: regressed evidence src/Store.kt:20",
+          listOf(scenario),
+          listOf("AC-001"),
+          outputRef,
+        ),
+      )
+    assertEquals("src/Flow.kt:10", cited.entries.single().traceRef)
+    assertEquals("src/Store.kt:20", cited.rechecks.single().evidenceRef)
+  }
+
+  @Test
   fun `a broken owner reopens its criterion and a later hold repairs the scenario`() {
     val accepted = acceptedState()
     val stamped = accepted.requireInteractionTrace(emptyList())
