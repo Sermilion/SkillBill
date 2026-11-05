@@ -33,19 +33,41 @@ object NativeTrayHost {
     val currentFailure = rememberUpdatedState(onFailure)
     val currentDismiss = rememberUpdatedState(onDismiss)
     DisposableEffect(Unit) {
+      val active = java.util.concurrent.atomic.AtomicBoolean(true)
       MacStatusItemBridge.install(
-        { currentPrimary.value() },
-        { currentMenuAction.value(it) },
-        { currentAvailable.value() },
-        { currentFailure.value() },
-        { currentDismiss.value() },
+        { if (active.get()) currentPrimary.value() },
+        { if (active.get()) currentMenuAction.value(it) },
+        { if (active.get()) currentAvailable.value() },
+        { if (active.get()) currentFailure.value() },
+        { if (active.get()) currentDismiss.value() },
       )
-      onDispose { MacStatusItemBridge.dispose() }
+      onDispose {
+        active.set(false)
+        try {
+          MacStatusItemBridge.dispose()
+        } finally {
+          currentFailure.value()
+        }
+      }
     }
     SideEffect {
-      MacStatusItemBridge.update(kind, running,
-        goals.take(8).map { "${it.issueKey ?: it.stepLabel}: ${it.summary.take(50)}" },
-        phases.take(8).map { "${it.control.phaseId ?: it.stepLabel} · ${it.outcomeLabel()}: ${it.summary.take(50)}" })
+      try {
+        MacStatusItemBridge.update(kind, running,
+          goals.take(8).map { "${it.issueKey ?: it.stepLabel}: ${it.summary.take(50)}" },
+          phases.take(8).map { "${it.control.phaseId ?: it.stepLabel} · ${it.outcomeLabel()}: ${it.summary.take(50)}" })
+      } catch (_: Exception) {
+        try {
+          MacStatusItemBridge.dispose()
+        } finally {
+          currentFailure.value()
+        }
+      } catch (_: LinkageError) {
+        try {
+          MacStatusItemBridge.dispose()
+        } finally {
+          currentFailure.value()
+        }
+      }
     }
   }
 }

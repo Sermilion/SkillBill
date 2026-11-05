@@ -12,7 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
@@ -32,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
-import dev.nucleusframework.composenativetray.tray.api.NativeTray
 import dev.skillbill.desktop.app.display.DesktopUiScale
 import dev.skillbill.desktop.app.display.DesktopUiScaleProvider
 import dev.skillbill.desktop.app.host.HostIntent
@@ -51,6 +49,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.TrayIcon
+import java.awt.image.BufferedImage
+import java.nio.file.Path
+import javax.imageio.ImageIO
 import java.awt.SystemTray
 import java.awt.event.WindowEvent
 import java.awt.event.WindowFocusListener
@@ -82,7 +84,6 @@ fun ApplicationScope.TrayHost(
   val iconFiles = remember { TrayIconFiles { currentDesktopTempRoot().resolve("tray-icons") } }
   DisposableEffect(iconFiles) { onDispose { iconFiles.close() } }
   var iconPaths by remember { mutableStateOf<TrayIconPaths?>(null) }
-  var iconFailed by remember { mutableStateOf(false) }
   LaunchedEffect(available.probeComplete, available.available) {
     if (available.probeComplete && !available.available) {
       visible = false
@@ -108,13 +109,10 @@ fun ApplicationScope.TrayHost(
     if (mac) return@LaunchedEffect
     fun fail() {
       TrayDiagnostics.record("tray_icon_failed")
-      iconFailed = true
       availability.unavailable()
     }
     try {
       iconPaths = withContext(Dispatchers.IO) { renderTrayIcon(iconFiles, status, running, overlay, reducedMotion) }
-      iconFailed = false
-      if (SystemTray.isSupported()) availability.available()
     } catch (failure: CancellationException) {
       throw failure
     } catch (_: Exception) {
@@ -125,7 +123,6 @@ fun ApplicationScope.TrayHost(
   }
   if (!available.probeComplete || available.available) if (mac) NativeTrayHost.MacStatusItem(status, running, goals, phases,
     onPrimary = { scope.launch(Dispatchers.Main) {
-      availability.available()
       if (!mainVisible) {
         intents.send(HostIntent.ShowMain)
       } else {
@@ -138,7 +135,6 @@ fun ApplicationScope.TrayHost(
       }
     } },
     onMenuAction = { action -> scope.launch(Dispatchers.Main) {
-      availability.available()
       when {
         action in 0..7 -> goals.getOrNull(action)?.let { intents.send(HostIntent.OpenDetail(it)) }
         action in 1000..1007 -> phases.getOrNull(action - 1000)?.let { intents.send(HostIntent.OpenDetail(it)) }
@@ -152,11 +148,9 @@ fun ApplicationScope.TrayHost(
     onFailure = availability::unavailable,
     onDismiss = { scope.launch(Dispatchers.Main) { visible = false } },
   ) else {
-    SideEffect {
-      if (SystemTray.isSupported() && !iconFailed) availability.available() else availability.unavailable()
-    }
     iconPaths?.let { paths -> IconFileTray(
       paths,
+      availability,
       tooltip = if (linux) state.trayHover() else when {
         state.problem != null -> "Skill Bill could not refresh the board · ${state.problem?.summary()}"
         state.stale -> "Skill Bill is showing stale work data"
@@ -166,7 +160,6 @@ fun ApplicationScope.TrayHost(
         else -> "Skill Bill is idle"
       },
       primaryAction = {
-        availability.available()
         if (!mainVisible) intents.send(HostIntent.ShowMain)
         else if (visible) visible = false
         else if (!opening) {
@@ -243,16 +236,54 @@ fun ApplicationScope.TrayHost(
   }
 }
 
-/** Calls [NativeTray] directly because the path-based `Tray` overload copies every icon it receives to `/tmp`. */
 @Composable
-private fun IconFileTray(paths: TrayIconPaths, tooltip: String, primaryAction: () -> Unit) {
-  val tray = remember { NativeTray() }
+private fun IconFileTray(paths: TrayIconPaths, availability: TrayAvailability, tooltip: String, primaryAction: () -> Unit) {
   val currentAction by rememberUpdatedState(primaryAction)
+  val icon = remember { TrayIcon(readTrayImage(paths.png), tooltip) }
   LaunchedEffect(paths, tooltip) {
-    tray.update(paths.png, paths.ico, tooltip, { currentAction() }, null)
+    try {
+      icon.image = withContext(Dispatchers.IO) { readTrayImage(paths.png) }
+      icon.toolTip = tooltip
+    } catch (failure: CancellationException) {
+      throw failure
+    } catch (_: Exception) {
+      availability.unavailable()
+      TrayDiagnostics.record("tray_icon_failed")
+    } catch (_: LinkageError) {
+      availability.unavailable()
+      TrayDiagnostics.record("tray_icon_failed")
+    }
   }
-  DisposableEffect(tray) { onDispose { tray.dispose() } }
+  DisposableEffect(icon) {
+    val active = java.util.concurrent.atomic.AtomicBoolean(true)
+    val listener = java.awt.event.ActionListener { if (active.get()) currentAction() }
+    icon.addActionListener(listener)
+    try {
+      SystemTray.getSystemTray().add(icon)
+      availability.available()
+    } catch (_: Exception) {
+      active.set(false)
+      availability.unavailable()
+      TrayDiagnostics.record("tray_install_failed")
+    } catch (_: LinkageError) {
+      active.set(false)
+      availability.unavailable()
+      TrayDiagnostics.record("tray_install_failed")
+    }
+    onDispose {
+      active.set(false)
+      icon.removeActionListener(listener)
+      try {
+        SystemTray.getSystemTray().remove(icon)
+      } finally {
+        availability.unavailable()
+      }
+    }
+  }
 }
+
+private fun readTrayImage(path: String): BufferedImage =
+  ImageIO.read(Path.of(path).toFile()) ?: error("Tray icon could not be decoded")
 
 private fun ReadProblem.summary(): String = when (this) {
   is ReadProblem.Runtime -> message

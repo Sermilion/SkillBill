@@ -11,6 +11,8 @@ object MacStatusItemBridge {
   @Volatile private var loaded = false
 
   fun install(onPrimary: () -> Unit, onMenuAction: (Int) -> Unit, onAvailable: () -> Unit, onFailure: () -> Unit, onDismiss: () -> Unit) {
+    loaded = false
+    statusItemAnchor = null
     primaryAction = onPrimary
     menuAction = onMenuAction
     dismissAction = onDismiss
@@ -22,11 +24,27 @@ object MacStatusItemBridge {
       path.toFile().deleteOnExit()
       System.load(path.toAbsolutePath().toString())
       loaded = nativeInstall()
-      if (loaded) onAvailable() else { nativeDispose(); onFailure() }
+      if (loaded) onAvailable() else {
+        try {
+          nativeDispose()
+        } finally {
+          onFailure()
+        }
+      }
     } catch (_: Exception) {
-      onFailure()
+      try {
+        nativeDispose()
+      } finally {
+        loaded = false
+        onFailure()
+      }
     } catch (_: LinkageError) {
-      onFailure()
+      try {
+        nativeDispose()
+      } finally {
+        loaded = false
+        onFailure()
+      }
     }
   }
 
@@ -41,11 +59,15 @@ object MacStatusItemBridge {
   }
 
   fun dispose() {
-    if (loaded) nativeDispose()
-    loaded = false
-    primaryAction = null
-    menuAction = null
-    dismissAction = null
+    try {
+      if (loaded) nativeDispose()
+    } finally {
+      loaded = false
+      primaryAction = null
+      menuAction = null
+      dismissAction = null
+      statusItemAnchor = null
+    }
   }
 
   data class StatusItemAnchor(
