@@ -265,6 +265,7 @@ class NewTaskDraftStartTest {
     }
 
     controls.newTaskOutcome = NewTaskStartOutcome.Started("verify", NewTaskKind.Verify)
+    draft.baseBranch = "origin/rel"
     val verify = ChatSuggestedAction(
       "Run operation:verify",
       "Verify the branch.",
@@ -277,8 +278,10 @@ class NewTaskDraftStartTest {
     with(controls.newTaskRequests.last()) {
       assertEquals(NewTaskKind.Verify, kind)
       assertEquals("check the review on this branch", target)
+      assertEquals("origin/rel", baseBranch)
       assertEquals("feat/fp-5175", branch)
     }
+    assertEquals(null, controls.newTaskRequests.first().baseBranch)
     assertEquals(null, controls.newTaskRequests.first().branch)
   }
 

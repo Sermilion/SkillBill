@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.ui.diff
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -28,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.core.animateFloatAsState
@@ -38,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -47,6 +50,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -67,12 +73,13 @@ private val LINE_HEIGHT = 20.dp
 private val TEXT_START = 12.dp
 private const val FONT_SIZE = 12f
 private const val LINE_HEIGHT_SP = 20f
-private const val TAB = "        "
+internal const val TAB = "        "
 private const val HUNK_LABEL_GAP_CHARS = 2
 
 /** A longer line, such as a minified bundle, is cut: layout cannot measure a row millions of pixels wide. */
-private const val MAX_LINE_CHARS = 5_000
+internal const val MAX_LINE_CHARS = 5_000
 private const val CUT_MARKER_CHARS = 32
+private const val MATCH_ALPHA = 0.22f
 
 /**
  * Gives [content] a width that fits [longestChars] characters of diff text, or the viewport when that is wider, and scrolls
@@ -104,11 +111,11 @@ class DiffLineSlots(
 
 class DiffLineAffordance(val onAdd: (DiffLine) -> Unit, val onHover: (DiffLine, Boolean) -> Unit)
 
-fun LazyListScope.diffRows(diff: FileDiff, key: String, slots: DiffLineSlots = DiffLineSlots.None, affordance: DiffLineAffordance? = null) {
+fun LazyListScope.diffRows(diff: FileDiff, key: String, slots: DiffLineSlots = DiffLineSlots.None, affordance: DiffLineAffordance? = null, highlight: DiffWordHighlight? = null) {
   diff.hunks.forEachIndexed { h, hunk ->
     item(key = "$key:h$h", contentType = "hunk") { HunkHeaderRow(hunk) }
     hunk.lines.forEachIndexed { i, line ->
-      item(key = "$key:l$h:$i", contentType = "line") { DiffLineRow(line, affordance) }
+      item(key = "$key:l$h:$i", contentType = "line") { DiffLineRow(line, affordance, key, DiffLineAddress(h, i), highlight) }
       val threadIds = slots.keys[DiffLineAddress(h, i)].orEmpty()
       items(threadIds, key = { "thread:$it" }, contentType = { "thread" }, itemContent = slots.content)
     }
@@ -169,19 +176,14 @@ private fun HunkHeaderRow(hunk: DiffHunk) {
 }
 
 @Composable
-private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?) {
+private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?, key: String, address: DiffLineAddress, highlight: DiffWordHighlight?) {
   val colors = SkillBillTheme.colors
   val background = when (line.kind) {
     DiffLineKind.Added -> Modifier.background(colors.diffAddedBg)
     DiffLineKind.Removed -> Modifier.background(colors.diffRemovedBg)
     DiffLineKind.Context, DiffLineKind.NoNewlineMarker -> Modifier
   }
-  val prefix = when (line.kind) {
-    DiffLineKind.Added -> "+"
-    DiffLineKind.Removed -> "−"
-    DiffLineKind.Context -> " "
-    DiffLineKind.NoNewlineMarker -> ""
-  }
+  val prefix = diffLinePrefix(line.kind)
   val textColor = when (line.kind) {
     DiffLineKind.Added, DiffLineKind.Removed -> colors.fg
     DiffLineKind.Context -> colors.fg2
@@ -199,14 +201,46 @@ private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?) {
     onDispose { onHover?.invoke(line, false) }
   }
   val density = LocalDensity.current
-  Box(Modifier.fillMaxWidth().height(LINE_HEIGHT).then(background).gutterRules().then(if (affordance != null) Modifier.hoverable(interaction) else Modifier)) {
+  val selection = highlight?.selection?.takeIf { it.fileKey == key }
+  val word = selection?.word
+  val matches = remember(line, word) { word?.let { wordMatchRanges(line, it) }.orEmpty() }
+  val strongStart = selection?.takeIf { it.address == address }?.start
+  val strong = colors.accentRing
+  val soft = colors.accent.copy(alpha = MATCH_ALPHA)
+  val text = remember(line, matches, strongStart, strong, soft) {
+    buildAnnotatedString {
+      append(prefix + displayText(line))
+      matches.forEach { range -> addStyle(SpanStyle(background = if (range.first == strongStart) strong else soft), range.first, range.last + 1) }
+    }
+  }
+  val textLayout = remember { mutableStateOf<TextLayoutResult?>(null) }
+  val currentTap by rememberUpdatedState<(Offset) -> Unit>({ position ->
+    val textStart = with(density) { (GUTTER_WIDTH * 2 + TEXT_START).toPx() }
+    when {
+      position.x < with(density) { (GUTTER_WIDTH * 2).toPx() } -> Unit
+      position.x < textStart -> highlight?.clear()
+      else -> {
+        val index = textLayout.value?.charUnder(position.x - textStart)
+        when (val hit = index?.let { wordHitAt(line, it) } ?: DiffWordHit.Blank) {
+          is DiffWordHit.Word -> highlight?.toggle(DiffWordSelection(key, hit.text, address, hit.start))
+          DiffWordHit.Ignored -> Unit
+          DiffWordHit.Blank -> highlight?.clear()
+        }
+      }
+    }
+  })
+  Box(
+    Modifier.fillMaxWidth().height(LINE_HEIGHT).then(background).gutterRules().then(if (affordance != null) Modifier.hoverable(interaction) else Modifier)
+      .then(if (highlight != null) Modifier.pointerInput(Unit) { detectTapGestures(onTap = { currentTap(it) }) } else Modifier),
+  ) {
     androidx.compose.foundation.layout.Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
     GutterCell(line.oldNumber, GUTTER_WIDTH, gutter)
     GutterCell(line.newNumber, GUTTER_WIDTH, gutter)
     BasicText(
-      prefix + remember(line) { displayText(line) },
+      text,
       Modifier.padding(start = TEXT_START),
       style = changesMono(FONT_SIZE, FontWeight.Normal, textColor, LINE_HEIGHT_SP),
+      onTextLayout = { textLayout.value = it },
       maxLines = 1,
       softWrap = false,
     )
@@ -223,6 +257,14 @@ private fun DiffLineRow(line: DiffLine, affordance: DiffLineAffordance?) {
       ) { BasicText("+", style = changesMono(13f, FontWeight.SemiBold, SkillBillTheme.colors.accentFg)) }
     }
   }
+}
+
+private fun TextLayoutResult.charUnder(x: Float): Int? {
+  val length = layoutInput.text.length
+  if (length == 0) return null
+  val caret = getOffsetForPosition(Offset(x, size.height / 2f))
+  val index = if (caret == length || getBoundingBox(caret).left > x) caret - 1 else caret
+  return index.takeUnless { it < 0 || x >= getBoundingBox(it).right }
 }
 
 @Composable

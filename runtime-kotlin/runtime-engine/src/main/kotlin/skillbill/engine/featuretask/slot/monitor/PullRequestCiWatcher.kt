@@ -33,8 +33,8 @@ internal class PullRequestCiWatcher(
   ): PullRequestCiOutcome {
     val startedAt = now()
     val refresh = expectedHead.refreshAfter?.let { CheckRefresh(it, startedAt + refreshGrace) }
-    val request = WatchRequest(repoRoot, branch, refresh)
-    var ciStarted = false
+    val request = WatchRequest(repoRoot, branch, refresh, expectedHead.sha)
+    val seenChecks = mutableSetOf<Pair<Int, String?>>()
     var inconclusiveReported = false
     var progress = CiProgress()
     val emptyGrace = CheckRegistrationGrace(noChecksGrace)
@@ -49,33 +49,54 @@ internal class PullRequestCiWatcher(
       progress = reportRunning(url, checks, checksSettled(checks), onCiRunning, progress)
     }
     while (true) {
-      val poll = observePoll(request, reportChecks, ::reportInconclusive, onInconclusive)
-      ciStarted = ciStarted || poll.started
+      val poll = observePoll(request, reportChecks, ::reportInconclusive, onInconclusive, seenChecks)
       val settled = poll.outcome
       if (settled != null) return settled
-      if (poll.started) emptyGrace.clear()
-      val emptyIdentity = poll.emptyIdentity
-      if (!ciStarted && emptyIdentity != null && emptyGrace.ready(emptyIdentity, now())) {
-        if (sameCurrentIdentity(repoRoot, branch, emptyIdentity, onInconclusive)) {
-          return PullRequestCiOutcome.NoChecksReported
-        }
-        emptyGrace.clear()
+      if (confirmEmpty(poll.emptyIdentity, request, seenChecks, emptyGrace, onInconclusive)) {
+        return PullRequestCiOutcome.NoChecksReported
       }
       sleep(pollInterval)
     }
+  }
+
+  private fun confirmEmpty(
+    identity: PullRequestIdentity.Found?,
+    request: WatchRequest,
+    seenChecks: Set<Pair<Int, String?>>,
+    grace: CheckRegistrationGrace,
+    onInconclusive: (String) -> Unit,
+  ): Boolean {
+    val mismatch = identity != null && request.expectedHead?.let { it.isNotBlank() && it != identity.headSha } == true
+    val reason =
+      when {
+        identity == null -> null
+        identity.headSha.isNullOrBlank() -> "Empty CI checks have no pull request head to attribute them to."
+        mismatch -> "Empty CI checks do not match the published pull request head."
+        else -> null
+      }
+    if (reason != null) onInconclusive(reason)
+    if (identity == null || reason != null || (identity.number to identity.headSha) in seenChecks) {
+      grace.clear()
+      return false
+    }
+    if (!grace.ready(identity, now())) return false
+    val confirmed =
+      sameCurrentIdentity(request.repoRoot, request.branch, identity, onInconclusive, request.expectedHead)
+    if (!confirmed) grace.clear()
+    return confirmed
   }
 
   private data class WatchRequest(
     val repoRoot: Path,
     val branch: String,
     val refresh: CheckRefresh?,
+    val expectedHead: String?,
   )
 
   private data class CheckRefresh(val after: Instant, val graceEndsAt: Instant)
 
   private data class CiPoll(
     val outcome: PullRequestCiOutcome? = null,
-    val started: Boolean = false,
     val emptyIdentity: PullRequestIdentity.Found? = null,
   )
 
@@ -84,6 +105,7 @@ internal class PullRequestCiWatcher(
     onChecks: (String, List<PullRequestCheck>) -> Unit,
     onInconclusive: (String) -> Unit,
     onReadFailure: (String) -> Unit,
+    seenChecks: MutableSet<Pair<Int, String?>>,
   ): CiPoll {
     val identity = currentIdentity(request.repoRoot, request.branch, onReadFailure)
     val found = identity as? PullRequestIdentity.Found ?: return identityPoll(request, identity, onReadFailure)
@@ -97,9 +119,10 @@ internal class PullRequestCiWatcher(
       }
       is PullRequestChecks.Reported -> {
         onChecks(found.url, checks.checks)
+        if (checks.checks.isNotEmpty()) seenChecks += (found.number to found.headSha)
         val failingChecks = checks.checks.filter { it.bucket == CheckBucket.FAIL }
         when {
-          failingChecks.isNotEmpty() && !refreshed(request.refresh, checks.checks) -> CiPoll(started = true)
+          failingChecks.isNotEmpty() && !refreshed(request.refresh, checks.checks) -> CiPoll()
           failingChecks.isNotEmpty() || checksSettled(checks.checks) ->
             refreshedTerminal(
               request,
@@ -179,7 +202,7 @@ internal class PullRequestCiWatcher(
             onInconclusive("Pull request identity changed during check observation.")
             CiPoll()
           }
-          else -> CiPoll(started = true)
+          else -> CiPoll()
         }
     }
 
@@ -188,9 +211,14 @@ internal class PullRequestCiWatcher(
     branch: String,
     observed: PullRequestIdentity.Found,
     onReadFailure: (String) -> Unit,
+    expectedHead: String?,
   ): Boolean {
     val latest = lookupIdentity(repoRoot, branch, onReadFailure) as? PullRequestIdentity.Found ?: return false
-    return !latest.conflicting && latest.number == observed.number && latest.headSha == observed.headSha
+    return !latest.conflicting &&
+      latest.number == observed.number &&
+      latest.headSha == observed.headSha &&
+      !latest.headSha.isNullOrBlank() &&
+      (expectedHead.isNullOrBlank() || latest.headSha == expectedHead)
   }
 
   private fun currentIdentity(

@@ -1,3 +1,29 @@
+## [2026-11-05] Keep the word highlight in its own holder and read it in the row
+Context: Highlighting must work when canAuthor is false, and a click should not recompose the whole diff stream.
+Decision: ChangesScreen owns a dedicated DiffWordHighlight instead of adding a field to DiffAuthoringInput. DiffLineRow reads the selection itself, and FileDiffStream never reads it during composition.
+Reason: DiffAuthoringInput is about authoring, which highlighting does not depend on. Reading the selection only in rows means a click recomposes rows and not the LazyColumn content.
+
+## [2026-11-05] Identify the clicked occurrence by line address and start offset
+Context: Identical diff lines compare equal, and a refresh can move the selected word.
+Decision: The strong style applies only to the range whose start matches the selection, on the row whose DiffLineAddress matches. If a refresh moved the word, no range is strong and the matches still show.
+Reason: DiffLine equality cannot tell two identical lines apart.
+
+## [2026-11-05] Do not match or click words at the diff line cut
+Context: Lines over 5,000 tab-expanded characters render cut and followed by a marker.
+Decision: Word finding scans only the text before the cut and reads the next character to judge the right boundary. A word crossing the cut is neither clickable nor a match, a word ending exactly at 5,000 is whole, and the marker is never searched.
+Reason: Marking hidden or partly hidden text would highlight words the operator cannot see in full.
+
+## [2026-11-05] Clear a word highlight the operator can no longer see
+Context: Esc now clears an active selection before it closes the panel, so a selection that is off screen for good would swallow an Esc.
+Decision: FileDiffStream clears the holder on dispose, which the scope and filter key triggers, and when the selected file leaves the list. A refresh that keeps the file needs no handling, because rows recompute their matches.
+Reason: Without this, Esc would appear to do nothing after a scope change, a filter change or a dropped file.
+
+## [2026-11-05] Mark other word matches with accent at 0.22 alpha
+Context: accentTint at alpha 0.12 is fainter than the 0.15 diff row backgrounds.
+Decision: Unclicked matches use accent at 0.22 alpha and the clicked occurrence uses accentRing. No theme field is added.
+Reason: Matches have to stay visible over added and removed rows, and the clicked occurrence has to stay stronger.
+Revisit when: Matches prove hard to see over diffAddedBg or diffRemovedBg. The spec names 0.22 as a starting value.
+
 ## [2026-11-04] Place diff comment threads at layout time
 Context: A thread can anchor to a line, file separator, or General block depending on its path, side, line, outdated state, and scope.
 Decision: `ThreadPlacement` runs while `FileDiffStream` renders from the current thread list; `LoadedDiff` remains hunks only.

@@ -50,6 +50,7 @@ import dev.skillbill.desktop.core.ui.changes.CommitStrip
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 import dev.skillbill.desktop.core.ui.changes.hairlineTop
+import dev.skillbill.desktop.core.ui.diff.DiffWordHighlight
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 
 @Composable
@@ -60,6 +61,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
   val pickerSearch = remember { FocusRequester() }
   var filterFocused by remember { mutableStateOf(false) }
   val authoring = remember { DiffAuthoringInput() }
+  val wordHighlight = remember { DiffWordHighlight() }
   var focusedReplyId by remember { mutableStateOf<String?>(null) }
   var filterFocusRequests by remember { mutableIntStateOf(0) }
   // The request waits a frame so the `/` typed after its key-down does not land in the filter.
@@ -87,6 +89,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
           current.editing != null -> { viewModel.onAction(ChangesWindowAction.CancelEdit); focusManager.clearFocus(); authoring.commentTextFocused = false }
           current.composer != null -> { viewModel.onAction(ChangesWindowAction.CancelComposer); focusManager.clearFocus(); authoring.commentTextFocused = false }
           textFocused -> focusManager.clearFocus()
+          wordHighlight.selection != null -> wordHighlight.clear()
           else -> currentOnClose()
         }
         return@handler true
@@ -155,7 +158,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
           val listWidth = minOf(FILE_LIST_WIDTH, maxWidth * FILE_LIST_MAX_SHARE)
           Row(Modifier.fillMaxSize()) {
             FileListPane(state, onAction, Modifier.width(listWidth).fillMaxHeight())
-            DiffPane(state, onAction, Modifier.weight(1f).fillMaxHeight(), authoring, onReplyFocusChanged = { id, focused ->
+            DiffPane(state, onAction, Modifier.weight(1f).fillMaxHeight(), authoring, wordHighlight, onReplyFocusChanged = { id, focused ->
               if (focused) focusedReplyId = id else if (focusedReplyId == id) focusedReplyId = null
             })
           }

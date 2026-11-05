@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
 import dev.skillbill.desktop.core.ui.navigation.NewTaskRoute
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.navigation.NavigationEntryToken
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -20,7 +21,7 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
  * One back-stack entry. New task, Work, History and Detail are made under the open session, so a new session gives every one of them a new
  * content key and clears the old entries' ViewModels; Settings is made under none and survives a switch.
  */
-data class RouteEntry(val route: AppRoute, val sessionId: Long?) {
+data class RouteEntry(val route: AppRoute, val sessionId: Long?, val entryToken: NavigationEntryToken = NavigationEntryToken()) {
   val contentKey: String get() = "${route.entryKey}#$sessionId"
 }
 
@@ -51,6 +52,9 @@ class WindowNavigator(private val session: DatabaseSessionController, private va
       is SettingsRoute -> if (top.route is SettingsRoute) backStack[backStack.lastIndex] = entry else backStack += entry
     }
   }
+
+  override fun isCurrentEntry(entryToken: NavigationEntryToken, sessionId: Long): Boolean =
+    top.entryToken === entryToken && top.sessionId == sessionId && top.route is WorkRoute
 
   /** Leaves the top entry; the root never leaves. */
   fun pop(): Boolean {

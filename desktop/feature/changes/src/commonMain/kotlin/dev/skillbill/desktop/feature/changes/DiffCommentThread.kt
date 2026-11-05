@@ -50,6 +50,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -209,6 +210,7 @@ internal fun DiffCommentThread(
                   else false
                 },
               textStyle = changesSans(11.5f, FontWeight.Normal, colors.fg),
+              cursorBrush = SolidColor(colors.fg),
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
               ActionText("Send", colors.accentText, ui.busy) { onAction(ChangesWindowAction.SendReply(thread.id)) }

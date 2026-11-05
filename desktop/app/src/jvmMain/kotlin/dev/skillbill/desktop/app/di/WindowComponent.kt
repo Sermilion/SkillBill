@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.navigation.WorkImportRequests
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
@@ -57,6 +58,7 @@ interface WindowComponent {
   val details: WorkDetailRepository
   val controls: WorkControlRepository
   val session: DatabaseSessionController
+  val workImportRequests: WorkImportRequests
   val entries: Set<FeatureEntry>
 
   @Provides

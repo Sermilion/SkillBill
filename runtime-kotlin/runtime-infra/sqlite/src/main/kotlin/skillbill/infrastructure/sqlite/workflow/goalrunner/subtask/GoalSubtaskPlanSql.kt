@@ -9,9 +9,11 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.isSha256
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.normalizedIdentityFailure
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.optionalRepairEvidence
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.rejectLegacy
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.repairEvidenceJsonValue
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requireColumn
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requireNonNegativeInt
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requirePositiveInt
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.tableHasColumn
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
@@ -20,6 +22,7 @@ import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
+import skillbill.text.sha256HexUtf8
 import java.sql.Connection
 import java.sql.ResultSet
 
@@ -73,6 +76,21 @@ internal class GoalSubtaskPlanSql(
     }
   }
 
+  fun listAllSubtaskPlansForExport(parentGoalWorkflowId: String): List<GoalSubtaskPlanCheckpoint> {
+    return connection.prepareStatement(
+      "SELECT * FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? ORDER BY manifest_order, subtask_id",
+    ).use { statement ->
+      statement.bindAll(parentGoalWorkflowId)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) {
+            add(rows.toExportPlan(parentGoalWorkflowId))
+          }
+        }
+      }
+    }
+  }
+
   private fun readOrderedPlan(
     rows: ResultSet,
     expectedIdentity: GoalPlanningIdentity,
@@ -114,6 +132,60 @@ internal class GoalSubtaskPlanSql(
       it.bindAll(parentGoalWorkflowId)
       it.executeUpdate()
     }
+
+  fun insertOrReplace(checkpoint: GoalSubtaskPlanCheckpoint) {
+    requireHydratedSubtaskPlan(checkpoint)
+    if (sha256HexUtf8(checkpoint.planPayload) != checkpoint.payloadSha256) {
+      throw invalidGoalPlanningPreparationSchemaError(
+        "${checkpoint.identity.parentGoalWorkflowId}#${checkpoint.subtaskId}",
+        "payload_sha256",
+        "payload_sha256 does not match the exact UTF-8 payload bytes",
+      )
+    }
+    val repairJson = repairEvidenceJsonValue(checkpoint.repairEvidence)
+    val hasRepairColumn = connection.tableHasColumn("goal_subtask_plans", "repair_evidence_json")
+    val repairClause = if (hasRepairColumn) ", repair_evidence_json" else ""
+    val repairPlaceholder = if (hasRepairColumn) ", ?" else ""
+    val createdAt = checkpoint.createdAt.takeIf(String::isNotBlank)
+    connection.prepareStatement(
+      """
+      INSERT OR REPLACE INTO goal_subtask_plans (
+        parent_goal_workflow_id, normalized_issue_key, repository_identity, subtask_id, manifest_order,
+        governed_sub_spec_path, sub_spec_hash, preparation_status, contract_version, parent_spec_hash,
+        decomposition_manifest_hash, planning_contract_id, planning_contract_version,
+        phase_output_contract_id, phase_output_contract_version, payload_sha256, plan_payload_json, created_at$repairClause
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP)$repairPlaceholder)
+      """.trimIndent(),
+    ).use { statement ->
+      var index = 1
+      statement.setString(index++, checkpoint.identity.parentGoalWorkflowId)
+      statement.setString(index++, checkpoint.identity.normalizedIssueKey)
+      statement.setString(index++, checkpoint.identity.repositoryIdentity)
+      statement.setInt(index++, checkpoint.subtaskId)
+      statement.setInt(index++, checkpoint.manifestOrder)
+      statement.setString(index++, checkpoint.governedSubSpecPath)
+      statement.setString(index++, checkpoint.subSpecHash)
+      statement.setString(index++, checkpoint.preparationStatus.wireValue)
+      statement.setString(index++, checkpoint.contractVersion)
+      statement.setString(index++, checkpoint.provenance.parentSpecHash)
+      statement.setString(index++, checkpoint.provenance.decompositionManifestHash)
+      statement.setString(index++, checkpoint.provenance.planningContractId)
+      statement.setString(index++, checkpoint.provenance.planningContractVersion)
+      statement.setString(index++, checkpoint.provenance.phaseOutputContractId)
+      statement.setString(index++, checkpoint.provenance.phaseOutputContractVersion)
+      statement.setString(index++, checkpoint.payloadSha256)
+      statement.setString(index++, checkpoint.planPayload)
+      statement.setString(index++, createdAt)
+      if (hasRepairColumn) {
+        if (repairJson == null) {
+          statement.setObject(index++, null)
+        } else {
+          statement.setString(index++, repairJson)
+        }
+      }
+      statement.executeUpdate()
+    }
+  }
 }
 
 private fun uniqueDescriptorsBySubtaskId(
@@ -152,6 +224,40 @@ private fun requireHydratedSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
   if (failure != null) {
     throw invalidGoalPlanningPreparationSchemaError(label, failure.first, failure.second)
   }
+}
+
+private fun ResultSet.toExportPlan(parentGoalWorkflowId: String): GoalSubtaskPlanCheckpoint {
+  val subtaskId = requirePositiveInt(this, parentGoalWorkflowId, "subtask_id")
+  val label = "$parentGoalWorkflowId#$subtaskId"
+  val identity =
+    GoalPlanningIdentity(
+      requireColumn(this, label, "parent_goal_workflow_id"),
+      requireColumn(this, label, "normalized_issue_key"),
+      requireColumn(this, label, "repository_identity"),
+    )
+  val status = decodeState(label, requireColumn(this, label, "preparation_status"))
+  return GoalSubtaskPlanCheckpoint(
+    identity = identity,
+    subtaskId = subtaskId,
+    manifestOrder = requireNonNegativeInt(this, label, "manifest_order"),
+    governedSubSpecPath = requireColumn(this, label, "governed_sub_spec_path"),
+    subSpecHash = requireColumn(this, label, "sub_spec_hash"),
+    preparationStatus = status,
+    provenance =
+      GoalPlanningContractProvenance(
+        requireColumn(this, label, "parent_spec_hash"),
+        requireColumn(this, label, "decomposition_manifest_hash"),
+        requireColumn(this, label, "planning_contract_id"),
+        requireColumn(this, label, "planning_contract_version"),
+        requireColumn(this, label, "phase_output_contract_id"),
+        requireColumn(this, label, "phase_output_contract_version"),
+      ),
+    payloadSha256 = requireColumn(this, label, "payload_sha256"),
+    planPayload = requireColumn(this, label, "plan_payload_json"),
+    repairEvidence = optionalRepairEvidence(this, label, "repair_evidence_json"),
+    createdAt = getString("created_at").orEmpty(),
+    contractVersion = requireColumn(this, label, "contract_version"),
+  )
 }
 
 private fun ResultSet.toPlan(

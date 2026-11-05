@@ -224,6 +224,17 @@ class AuthoringRenderOutputTest {
       ceremony_lines: []
       """.trimIndent() + "\n",
     )
+    Files.writeString(
+      classesDir.resolve("unrelated.yaml"),
+      """
+      class: unrelated
+      contract_version: "1.8"
+      matchers:
+        - exact: unrelated
+      pointers: []
+      ceremony_lines: []
+      """.trimIndent() + "\n",
+    )
     Files.createDirectories(repoRoot.resolve("shared"))
     Files.writeString(repoRoot.resolve("shared/z.md"), "# z")
     Files.writeString(repoRoot.resolve("shared/a.md"), "# a")

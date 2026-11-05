@@ -558,8 +558,8 @@ class CliGoalExecutionOptionsTest {
   }
 
   @Test
-  fun `goal imports checked-in decomposition manifest but refuses ambiguous historical quality`() {
-    val fixture = goalFixture(subtaskCount = 1)
+  fun `goal imports decomposition manifest recording progress but refuses ambiguous historical quality`() {
+    val fixture = goalFixture(subtaskCount = 1).also(GoalCliFixture::markFirstSubtaskStarted)
     val recoveredDb = fixture.tempDir.resolve("recovered.db")
     val launcher = GoalFixtureAgentRunLauncher(fixture, dbPath = recoveredDb)
 
@@ -579,6 +579,18 @@ class CliGoalExecutionOptionsTest {
         }
       }
     }
+  }
+
+  @Test
+  fun `goal that plans an unlaunched project-store manifest in its own run is not refused at final quality`() {
+    val fixture = goalFixture(subtaskCount = 1)
+    val emptyDb = fixture.tempDir.resolve("relaunch.db")
+    val launcher = GoalFixtureAgentRunLauncher(fixture, dbPath = emptyDb)
+
+    val result = CliRuntime.run(fixture.goalCommand(dbPath = emptyDb), fixture.context(launcher = launcher))
+
+    assertEquals(0, result.exitCode, result.stdout)
+    assertFalse(result.stdout.contains("ambiguous historical quality state"), result.stdout)
   }
 
   @Test

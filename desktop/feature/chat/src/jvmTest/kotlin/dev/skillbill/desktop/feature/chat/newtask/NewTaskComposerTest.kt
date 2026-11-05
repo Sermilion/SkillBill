@@ -1,22 +1,32 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -25,6 +35,8 @@ import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
+import dev.skillbill.desktop.core.domain.model.RepositoryBranch
+import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
@@ -51,6 +63,102 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalTestApi::class)
 class NewTaskComposerTest {
+  @Test
+  fun `the open picker replaces the base branch input with a filter`() = runComposeUiTest {
+    val draft = testNewTaskDraft().apply { repository = NewTaskRepository("/work/app", "app") }
+    val read = RepositoryBranches("/work/app", "main", emptyList(), emptyList())
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(
+            NewTaskUiState(repositoryPickerOpen = true, branchRead = BranchReadState.Loaded("/work/app", read)),
+            draft,
+          ) {}
+        }
+      }
+    }
+    waitForIdle()
+
+    onNodeWithText("Base branch").assertExists()
+    onAllNodes(hasSetTextAction()).assertCountEquals(2)
+  }
+
+  @Test
+  fun `the default row reflects the restored branch without changing the draft`() = runComposeUiTest {
+    val repository = NewTaskRepository("/work/app", "app")
+    val draft = testNewTaskDraft().apply {
+      this.repository = repository
+      baseBranch = "main"
+    }
+    val branches = RepositoryBranches(
+      repository.root,
+      "main",
+      listOf(RepositoryBranch("feature/local", Instant.fromEpochMilliseconds(1))),
+      listOf(RepositoryBranch("origin/feature/remote", Instant.fromEpochMilliseconds(3))),
+    )
+    var state by mutableStateOf(NewTaskUiState(
+      repositories = listOf(repository),
+      repositoryPickerOpen = true,
+      branchRead = BranchReadState.Loaded(repository.root, branches),
+    ))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(state, draft) {}
+        }
+      }
+    }
+    waitForIdle()
+
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("main", draft.baseBranch)
+    onNodeWithContentDescription("feature/local", substring = true, useUnmergedTree = true).assert(notSelected())
+    onNodeWithContentDescription("origin/feature/remote", substring = true, useUnmergedTree = true).assert(notSelected())
+
+    onNodeWithContentDescription("Filter branches").performTextInput("mai")
+    waitForIdle()
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("main", draft.baseBranch)
+
+    onNodeWithContentDescription("Filter branches").performTextReplacement("")
+    waitForIdle()
+    runOnIdle { draft.baseBranch = "feature/local" }
+    waitForIdle()
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assert(notSelected())
+    onNodeWithContentDescription("feature/local", substring = true, useUnmergedTree = true).assertIsSelected()
+    assertEquals("feature/local", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "origin/feature/remote" }
+    waitForIdle()
+    onNodeWithContentDescription("origin/feature/remote", substring = true, useUnmergedTree = true).assertIsSelected()
+    assertEquals("origin/feature/remote", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "" }
+    waitForIdle()
+    onNodeWithContentDescription("main, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "main" }
+    waitForIdle()
+    runOnIdle {
+      draft.repository = NewTaskRepository("/work/other", "other")
+      state = state.copy(repositories = state.repositories + draft.repository!!)
+    }
+    waitForIdle()
+    onNodeWithContentDescription("default branch, default", useUnmergedTree = true).assert(notSelected())
+    assertEquals("main", draft.baseBranch)
+
+    runOnIdle { state = state.copy(branchRead = BranchReadState.Failed("/work/other", "unavailable")) }
+    waitForIdle()
+    onNodeWithContentDescription("default branch, default", useUnmergedTree = true).assert(notSelected())
+    assertEquals("main", draft.baseBranch)
+
+    runOnIdle { draft.baseBranch = "" }
+    waitForIdle()
+    onNodeWithContentDescription("default branch, default", useUnmergedTree = true).assertIsSelected()
+    assertEquals("", draft.baseBranch)
+  }
+
   @Test
   fun `opening focuses the input and clearing focus releases the single-key shortcuts`() = runComposeUiTest {
     val input = ShellInput()
@@ -122,7 +230,7 @@ class NewTaskComposerTest {
   }
 
   @Test
-  fun `repository and agent chips stay clickable after the first reply`() = runComposeUiTest {
+  fun `the repository pill turns static once a chat starts and the agent chip stays clickable after the first reply`() = runComposeUiTest {
     val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
     val events = Channel<ChatEvent>(Channel.UNLIMITED)
     chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
@@ -152,17 +260,21 @@ class NewTaskComposerTest {
       }
     }
 
+    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
+    assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
+
     runOnIdle { draft.send() }
     waitForIdle()
-    onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled()
+    onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertDoesNotExist()
     onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
 
     events.trySend(ChatEvent.Completed)
     waitUntil { draft.chat.value?.thread?.busy?.value == false }
     waitForIdle()
 
-    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
-    assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
+    onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertDoesNotExist()
     onNode(hasClickLabel("Change agent")).assertIsEnabled().performClick()
     onNodeWithText("codex").assertExists()
   }
@@ -220,7 +332,7 @@ class NewTaskComposerTest {
   }
 
   @Test
-  fun `disabled repository and agent chips expose why and stay off while busy starting or missing repository`() = runTest {
+  fun `the repository pill is static with a chat and disabled while starting and the agent chip stays off`() = runTest {
     val repository = NewTaskRepository(
       createTempDirectory("new-task-repo").also { it.toFile().deleteOnExit() }.toString(),
       "repo",
@@ -265,13 +377,6 @@ class NewTaskComposerTest {
           }
         }
       }
-      fun assertChipsDisabled(why: String) {
-        onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled()
-          .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, why))
-        onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
-          .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, why))
-      }
-
       val busyChat = FakeExecutionChatRepository()
       val busyEvents = Channel<ChatEvent>(Channel.UNLIMITED)
       busyChat.events = { busyEvents.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
@@ -288,7 +393,9 @@ class NewTaskComposerTest {
       compose(busyDraft)
       runOnIdle { busyDraft.send() }
       waitForIdle()
-      assertChipsDisabled("Wait for the current reply to finish")
+      onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+      onNode(hasClickLabel("Change agent")).assertIsNotEnabled()
+        .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Wait for the current reply to finish"))
       busyEvents.trySend(ChatEvent.Completed)
       waitForIdle()
 
@@ -312,12 +419,12 @@ class NewTaskComposerTest {
         text = "Add a button"
       }
       compose(startDraft)
-      runOnIdle { startDraft.send() }
-      waitForIdle()
-      runOnIdle { startDraft.start(NewTaskKind.GoalRun) }
+      runOnIdle { startDraft.start(NewTaskKind.Review) }
       waitForIdle()
       try {
-        assertChipsDisabled("Wait for the start to finish")
+        val startingWhy = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Wait for the start to finish")
+        onNode(hasClickLabel("Change repository or base branch")).assertIsNotEnabled().assert(startingWhy)
+        onNode(hasClickLabel("Change agent")).assertIsNotEnabled().assert(startingWhy)
       } finally {
         startGate.complete(NewTaskStartOutcome.Refused("done"))
         waitForIdle()
@@ -325,7 +432,10 @@ class NewTaskComposerTest {
 
       compose(missingDraft)
       waitForIdle()
-      assertChipsDisabled("This draft's repository is missing")
+      onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
+      val missingWhy = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "This draft's repository is missing")
+      onAllNodes(missingWhy).assertCountEquals(2)
+      onNode(missingWhy and hasText("removed")).assertExists()
     }
   }
 
@@ -379,6 +489,113 @@ class NewTaskComposerTest {
     instant = instant + 700.milliseconds
     onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
     assertEquals(2, actions.count { it == NewTaskAction.SendNow })
+  }
+
+  @Test
+  fun `a long branch shrinks before the repository name and the chevron stays`() = runComposeUiTest {
+    val draft = testNewTaskDraft().apply {
+      repository = NewTaskRepository("/work/repository", "repository")
+      baseBranch = "short"
+    }
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(NewTaskUiState(), draft) {}
+        }
+      }
+    }
+    fun repositoryWidth() = onNodeWithText("repository", useUnmergedTree = true).fetchSemanticsNode().size.width
+    val shortBranchWidth = repositoryWidth()
+
+    runOnIdle { draft.baseBranch = "b".repeat(200) }
+    waitForIdle()
+
+    assertEquals(shortBranchWidth, repositoryWidth())
+    assertTrue(onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).fetchSemanticsNode().size.width > 0)
+  }
+
+  @Test
+  fun `with no repository the pill offers the choice and opens the picker`() = runComposeUiTest {
+    val draft = testNewTaskDraft()
+    var state by mutableStateOf(NewTaskUiState())
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(state, draft) { if (it == NewTaskAction.OpenRepositoryPicker) state = state.copy(repositoryPickerOpen = true) }
+        }
+      }
+    }
+
+    onNodeWithText("Choose repository", useUnmergedTree = true).assertExists()
+    onNodeWithText(" / ", useUnmergedTree = true).assertDoesNotExist()
+    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled().performClick()
+    waitForIdle()
+
+    onNodeWithText("Add repository", useUnmergedTree = true).assertExists()
+    onNodeWithText("Repository path", useUnmergedTree = true).assertDoesNotExist()
+  }
+
+  @Test
+  fun `the repository filter appears only above seven rows`() = runComposeUiTest {
+    var state by mutableStateOf(openPicker(7))
+    setPicker { state }
+
+    onNodeWithText("Filter repositories", useUnmergedTree = true).assertDoesNotExist()
+
+    runOnIdle { state = openPicker(8) }
+    waitForIdle()
+    onNodeWithText("Filter repositories", useUnmergedTree = true).assertExists()
+  }
+
+  @Test
+  fun `the repository filter ignores case and outer spaces and reports no match`() = runComposeUiTest {
+    val state = openPicker(8)
+    setPicker { state }
+
+    onNodeWithContentDescription("Filter repositories").performTextInput(" REPO1 ")
+    waitForIdle()
+    onNodeWithText("repo1", useUnmergedTree = true).assertExists()
+    onNodeWithText("repo0", useUnmergedTree = true).assertDoesNotExist()
+
+    onNodeWithContentDescription("Filter repositories").performTextReplacement("zzz")
+    waitForIdle()
+    onNodeWithText("No repository matches \"zzz\"", useUnmergedTree = true).assertExists()
+  }
+
+  @Test
+  fun `two repositories with one name show their parent folders`() = runComposeUiTest {
+    val state = NewTaskUiState(
+      repositories = listOf(NewTaskRepository("/work/a/app", "app"), NewTaskRepository("/other/b/app", "app"), NewTaskRepository("/work/c/tool", "tool")),
+      repositoryPickerOpen = true,
+    )
+    setPicker { state }
+
+    onNodeWithText("a", useUnmergedTree = true).assertExists()
+    onNodeWithText("b", useUnmergedTree = true).assertExists()
+    onNodeWithText("c", useUnmergedTree = true).assertDoesNotExist()
+    onNodeWithContentDescription("app, a").assertExists()
+    onNodeWithContentDescription("app, b").assertExists()
+  }
+
+  private fun openPicker(rows: Int) = NewTaskUiState(
+    repositories = List(rows) { NewTaskRepository("/work/repo$it", "repo$it") },
+    repositoryPickerOpen = true,
+  )
+
+  private fun ComposeUiTest.setPicker(state: () -> NewTaskUiState) {
+    val draft = testNewTaskDraft()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskComposer(state(), draft) {}
+        }
+      }
+    }
+    waitForIdle()
+  }
+
+  private fun notSelected() = SemanticsMatcher("not selected") {
+    it.config.getOrNull(SemanticsProperties.Selected) != true
   }
 
   private fun hasClickLabel(label: String) = SemanticsMatcher("click $label") {

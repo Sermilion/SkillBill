@@ -328,7 +328,12 @@ Required workflow artifacts for the pilot:
 - `pr_result` — PR url/title or terminal failure note
 - `monitor` (no named artifact) — settles the CI verdict for the PR the run
   created with a prose value. The runtime watches the PR checks and settles as
-  passed, no-CI-configured, or failing. Failed checks route to
+  passed, no checks reported, or failing. A no-check result requires two
+  successful empty observations at least two minutes apart and a fresh lookup
+  confirming the same nonconflicting PR and nonblank head. Failed reads cannot
+  confirm it, changed heads restart the window, and checks that appear during the
+  window follow normal monitoring. Conditional or delayed checks may appear
+  after completion, so inspect the PR again when they matter. Failed checks route to
   `monitor_fix` on that poll, even while other checks are pending. A merge
   conflict routes to the same repair on that poll, even when no checks are
   reported. Passing requires every check to pass, be skipped, or be cancelled

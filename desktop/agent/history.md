@@ -1,3 +1,12 @@
+## [2026-11-04] SKILL-474: export and import goal archives
+Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/feature/specs, desktop/feature/work, runtime-goalrunner
+- Specs and Work offer export and global import with native file selection. Live export opens a pause-first dialog before file selection.
+- WorkControlRepository delegates archive operations to the runtime. Import confirmation names the issue, branch and commit; the runtime checks the inspected archive fingerprint before restore.
+- Archives do not include worktrees or unpublished git objects. Import does not check out a branch.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
+
 ## [2026-11-04] SKILL-478 spec bundle favorites
 Areas: desktop/app/shell, desktop/core/domain, desktop/core/datastore, desktop/core/testing, desktop/feature/specs
 - FavoriteSpecKey identifies a bundle by project ID and spec-relative path. DataStore persists spec favorites separately from run favorites with versioned, length-prefixed keys. Database session changes do not define spec identity.

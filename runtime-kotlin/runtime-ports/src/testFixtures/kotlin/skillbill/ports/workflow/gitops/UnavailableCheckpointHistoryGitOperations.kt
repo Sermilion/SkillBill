@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.gitops
 
+import skillbill.ports.workflow.gitops.history.CheckpointHistoryGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path

@@ -10,6 +10,7 @@ import skillbill.goalrunner.model.parseExecutionLeaseInstant
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import java.time.Instant
+import skillbill.contracts.goalrunner.GoalRunnerControlPayloadKeys as SharedGoalRunnerControlPayloadKeys
 
 internal fun GoalRunnerReviewPolicy.toArtifactMap(): Map<String, Any?> =
   buildMap {
@@ -52,7 +53,7 @@ internal fun GoalRunnerExecutionLease.toArtifactMap(source: Map<*, *>? = null): 
 
 internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = null): Map<String, Any?> =
   mapOf(
-    "stop_after_subtask_id" to stopAfterSubtaskId,
+    SharedGoalRunnerControlPayloadKeys.STOP_AFTER_SUBTASK_ID to stopAfterSubtaskId,
     "pause_requested" to pauseRequested,
     "pause_consumed" to pauseConsumed,
     "paused" to paused,
@@ -66,7 +67,7 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
     "current_subtask_id" to currentSubtaskId,
     "subtask_active_duration_ms" to subtaskActiveDurationMs,
     "subtask_active_duration_as_of" to subtaskActiveDurationAsOf,
-    "validation_quality_retries_by_subtask" to
+    SharedGoalRunnerControlPayloadKeys.VALIDATION_QUALITY_RETRIES_BY_SUBTASK to
       validationQualityRetriesBySubtask.entries.associate { (k, v) -> k.toString() to v },
     "pending_re_attempt_cause_by_subtask" to
       pendingReAttemptCauseBySubtask.entries.associate { (k, v) -> k.toString() to v },
@@ -83,6 +84,9 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
       executionWorktreeRetentionReason?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON to it },
       executionWorktreeRetentionDetail?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL to it },
       launchWarning?.let { GoalRunnerControlPayloadKeys.LAUNCH_WARNING to it },
+      archiveImportFingerprint?.let { GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_FINGERPRINT to it },
+      GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_SPECS_PENDING.takeIf { archiveImportFingerprint != null }
+        ?.let { it to archiveImportSpecsPending },
     )
 
 private fun leaseTimestamp(

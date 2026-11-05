@@ -1,3 +1,39 @@
+## [2026-11-04] Keep archive admission and inspection in the runtime
+Context: Desktop needs to refuse live export before file selection and show archive identity before import confirmation.
+Decision: Delegate preflight and inspection through WorkControlRepository. Recheck export admission and bind import to the inspected fingerprint and selected database observation.
+Reason: The runtime owns liveness and restore rules. The fingerprint prevents confirmation of one archive from authorizing a changed archive.
+
+## [2026-11-05] Make the New Task repository pill static once a chat starts
+Context: SKILL-467 allowed repository and agent changes after the first message. SKILL-482 requires a static repository pill once a chat starts.
+Decision: The repository pill has no click or chevron and its popup does not compose after chat starts. The agent chip retains its rebind behavior.
+Reason: The new requirement applies only to the repository chip. With its popup unavailable, repository and base-branch changes have no remaining trigger in the chat.
+
+## [2026-11-05] Read New Task branches through a runtime port
+Context: The picker needs local and remote refs and the default branch for the selected repository.
+Decision: RepositoryBranchesPort uses a runtime Git adapter and the existing gitDefaultBranch read. Desktop reaches it through core/data.
+Reason: Desktop has no Git code, and the pinned default must match the branch resolved for a blank base branch at runtime.
+
+## [2026-11-05] Keep FileKit compatible with the installed runtime
+Context: FileKit requests newer shared libraries, and its desktop transport requires JDK modules outside the image list.
+Decision: Constrain shared serialization and JNA artifacts to runtime catalog versions, add jdk.net and jdk.security.auth, and use filekit-dialogs without its Compose artifact.
+Reason: The packaged app excludes shared libraries supplied by the installed runtime. The Compose artifact would pull a different Compose version.
+
+## [2026-11-05] Keep the repository picker open through folder selection
+Context: A native folder dialog can dismiss the popup, and projectFor accepts folders outside a Git repository.
+Decision: Ignore dismissal while the chooser is open, validate the folder through the branch read before project lookup, and retain errors and selection in the picker.
+Reason: The operator needs to see errors and retry, and project lookup needs a validated repository root.
+
+## [2026-11-05] Keep the highlighted branch by value across rereads
+Context: A branch read can finish after the operator moves the highlight and change row order.
+Decision: PickerHighlight stores the row key and resolves its index against visible rows.
+Reason: An index alone could select a different branch when Enter follows a reread.
+
+## [2026-11-05] Pass remote branch names through unchanged
+Context: A remote-only branch may require its origin/ prefix for checkout, while later merge and PR paths can prepend origin/.
+Decision: The picker passes the displayed remote name as the base branch, matching the previous typed input.
+Reason: Stripping the prefix can make checkout fail. Run and merge handling do not yet share a branch representation.
+Revisit when: Remote base branches share a representation across checkout and merge paths.
+
 ## [2026-11-05] Pass app-owned icon files to NativeTray
 Context: Compose tray icon renderers and the path-based Tray API create temporary files outside the desktop temp authority.
 Decision: Render PNG and ICO files under the desktop temp root and pass their paths directly to NativeTray. Retain the current and previous icon for each tray instance and render outside the availability gate.
@@ -64,6 +100,7 @@ Context: After Send, the repository and agent chips still showed a hand cursor b
 Decision: The chips stay enabled until a turn is running, a start is in flight, or the draft's repository is gone. Choosing a different repository, base branch or agent ends the current agent process and opens a new session on that binding, keeping the transcript. A chip that cannot be used does not show a hand cursor.
 Reason: The earlier lock existed because the agent process runs in that checkout, not because the operator should lose the controls. Rebinding starts a new process in the new checkout or agent instead of swallowing the click. Start goal run already reads the draft's current repository and agent.
 Supersedes: SKILL-459 subtask 3 locking the chips whenever a chat exists, and its non-goal "Changing the repository or agent inside a chat. Discard first."
+Superseded by: Make the New Task repository pill static once a chat starts (2026-11-05), for the repository chip only. The agent chip decision stands.
 
 ## [2026-11-02] Reset the window to New task instead of Work
 Context: New task is the default route when the app opens.

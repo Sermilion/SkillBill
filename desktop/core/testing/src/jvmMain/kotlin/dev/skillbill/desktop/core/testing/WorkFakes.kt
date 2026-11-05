@@ -11,6 +11,10 @@ import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.LoadMoreOutcome
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
+import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
+import dev.skillbill.desktop.core.domain.model.ExportOutcome
+import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
+import dev.skillbill.desktop.core.domain.model.ImportOutcome
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
@@ -20,6 +24,7 @@ import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
+import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailResolution
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +60,21 @@ class FakeWorkBoardRepository(initial: BoardState = BoardState.Loading) : WorkBo
   }
 }
 
+class FakeArchiveFileChooser : ArchiveFileChooser {
+  var nextSave: String? = null
+  var nextOpen: String? = null
+  val saveNames = mutableListOf<String>()
+  var openRequests = 0
+  override fun saveArchive(suggestedName: String, onChosen: (String?) -> Unit) {
+    saveNames += suggestedName
+    onChosen(nextSave)
+  }
+  override fun openArchive(onChosen: (String?) -> Unit) {
+    openRequests++
+    onChosen(nextOpen)
+  }
+}
+
 /** Returns the configured [runOptions] per id from [prefetch] and records each prefetched id. */
 class FakeWorkDetailRepository(var runOptions: Map<String, RunOptions> = emptyMap()) : WorkDetailRepository {
   val prefetched = mutableListOf<String>()
@@ -84,6 +104,15 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
   val calls = mutableListOf<ControlCall>()
   val newTaskRequests = mutableListOf<NewTaskStart>()
   var newTaskOutcome: NewTaskStartOutcome = NewTaskStartOutcome.Refused("unused")
+  var exportPreflightOutcome: ExportPreflightOutcome = ExportPreflightOutcome.Refused("unused")
+  var archiveInspectOutcome: ArchiveInspectOutcome = ArchiveInspectOutcome.Refused("unused")
+  var exportOutcome: ExportOutcome = ExportOutcome.Refused("unused")
+  var importOutcome: ImportOutcome = ImportOutcome.Refused("unused")
+  val preflightRequests = mutableListOf<Pair<String, String?>>()
+  val exportRequests = mutableListOf<Triple<String, String?, String>>()
+  val inspectRequests = mutableListOf<String>()
+  val importRequests = mutableListOf<String>()
+  val importDetails = mutableListOf<Triple<String, String?, String>>()
 
   override suspend fun pauseAfterSubtask(item: WorkItem) = record(ControlCall("pauseAfterSubtask", item))
 
@@ -109,6 +138,27 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
     notFaked("recordOperatorDecision")
 
   override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome = notFaked("purge")
+
+  override suspend fun preflightExport(issueKey: String, repoRoot: String?): ExportPreflightOutcome {
+    preflightRequests += issueKey to repoRoot
+    return exportPreflightOutcome
+  }
+
+  override suspend fun export(issueKey: String, repoRoot: String?, outputPath: String): ExportOutcome {
+    exportRequests += Triple(issueKey, repoRoot, outputPath)
+    return exportOutcome
+  }
+
+  override suspend fun inspectArchive(archivePath: String, repoRoot: String?): ArchiveInspectOutcome {
+    inspectRequests += archivePath
+    return archiveInspectOutcome
+  }
+
+  override suspend fun import(archivePath: String, repoRoot: String?, fingerprint: String): ImportOutcome {
+    importRequests += archivePath
+    importDetails += Triple(archivePath, repoRoot, fingerprint)
+    return importOutcome
+  }
 
   private fun record(call: ControlCall): ControlOutcome {
     calls += call

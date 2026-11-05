@@ -9,7 +9,6 @@ import skillbill.infrastructure.workflow.git.scoped.GIT_NUL
 import skillbill.infrastructure.workflow.git.scoped.GitScopedStagingOperations
 import skillbill.infrastructure.workflow.git.standard.GitStandardWorkflowGitOperations
 import skillbill.infrastructure.workflow.process.runGitCommand
-import skillbill.ports.workflow.gitops.CheckpointHistoryGitOperations
 import skillbill.ports.workflow.gitops.GoalSubtaskReviewGitOperations
 import skillbill.ports.workflow.gitops.RepositoryFingerprintGitOperations
 import skillbill.ports.workflow.gitops.RepositoryOwnedPathsGitOperations
@@ -17,10 +16,11 @@ import skillbill.ports.workflow.gitops.RuntimePhaseFileManifestGitOperations
 import skillbill.ports.workflow.gitops.ScopedStagingGitOperations
 import skillbill.ports.workflow.gitops.SuppressionEvidenceGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitBranchOperations
-import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitReleaseTagOperations
 import skillbill.ports.workflow.gitops.WorkflowGitRemoteOperations
+import skillbill.ports.workflow.gitops.history.CheckpointHistoryGitOperations
+import skillbill.ports.workflow.gitops.history.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.worktree.WorkflowGitWorktreeOperations

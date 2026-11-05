@@ -35,6 +35,7 @@ internal fun WorkRowMenu(
     item.reason?.let { reason -> add(entry("Copy reason", LucideIcons.copy) { onCopyReason(reason) }) }
     if (item.kind == WorkKind.Goal) {
       add(SbMenuEntry.Separator)
+      add(entry("Export work", LucideIcons.file) { onAction(WorkAction.RequestExport(item)) })
       add(
         entry(if (item.pauseRequested) "Pause requested" else "Pause after subtask", LucideIcons.pause, "P", enabled = state.canPauseAfterSubtask(item)) {
           onAction(WorkAction.PauseAfterSubtask(item))

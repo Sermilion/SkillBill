@@ -34,6 +34,15 @@ data class SpecsUiState(
   val rowMenuPath: String? = null,
   val deleteTarget: SpecDeleteTarget? = null,
   val deleting: Boolean = false,
+  val importDialog: ImportConfirmation? = null,
+)
+
+data class ImportConfirmation(
+  val archivePath: String,
+  val fingerprint: String,
+  val issueKey: String,
+  val featureBranch: String,
+  val commitSha: String,
 )
 
 data class SpecToolbarState(
@@ -45,6 +54,7 @@ data class SpecToolbarState(
   val agentMenuOpen: Boolean = false,
   val confirmingCancel: Boolean = false,
   val purgeDialogOpen: Boolean = false,
+  val exportLiveDialogOpen: Boolean = false,
   val inFlight: Boolean = false,
   val reserved: Boolean = false,
   val favorite: Boolean = false,
@@ -79,6 +89,11 @@ sealed interface SpecsAction {
   data object RequestPurge : SpecsAction
   data object KeepRunHistory : SpecsAction
   data object ConfirmPurge : SpecsAction
+  data object RequestExport : SpecsAction
+  data object DismissExportLive : SpecsAction
+  data object RequestImport : SpecsAction
+  data object DismissImport : SpecsAction
+  data object ConfirmImport : SpecsAction
   data class OpenRowMenu(val path: String) : SpecsAction
   data object DismissRowMenu : SpecsAction
   data class RequestDelete(val path: String) : SpecsAction

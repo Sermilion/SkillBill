@@ -34,7 +34,7 @@ class CodeReviewSlotBoundaryArchitectureTest {
 
       internal class Synthetic(
         private val writer: skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence,
-        private val git: skillbill.ports.workflow.gitops.CheckpointHistoryGitOperations,
+        private val git: skillbill.ports.workflow.gitops.history.CheckpointHistoryGitOperations,
       )
       """.trimIndent()
 
@@ -45,7 +45,7 @@ class CodeReviewSlotBoundaryArchitectureTest {
         "Synthetic.kt imports skillbill.engine.featuretask.phase.record.*",
         "Synthetic.kt imports skillbill.ports.goalrunner.runner.*",
         "Synthetic.kt references skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence",
-        "Synthetic.kt references skillbill.ports.workflow.gitops.CheckpointHistoryGitOperations",
+        "Synthetic.kt references skillbill.ports.workflow.gitops.history.CheckpointHistoryGitOperations",
       ),
       codeReviewSlotViolations("Synthetic.kt", source),
     )
@@ -95,7 +95,7 @@ class CodeReviewSlotBoundaryArchitectureTest {
         "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
         "skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder",
         "skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence",
-        "skillbill.ports.workflow.gitops.CheckpointHistoryGitOperations",
+        "skillbill.ports.workflow.gitops.history.CheckpointHistoryGitOperations",
       )
     val FORBIDDEN_PACKAGE_PREFIXES =
       setOf(

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -20,6 +21,8 @@ import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.LocalEntryKey
+import dev.skillbill.desktop.core.ui.navigation.LocalEntryToken
+import dev.skillbill.desktop.core.ui.navigation.WorkImportRequests
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 
 /**
@@ -27,12 +30,20 @@ import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
  * there is one; each route renders through the first feature entry that claims it.
  */
 @Composable
-fun AppNavHost(navigator: WindowNavigator, entries: Set<FeatureEntry>, problem: ShellProblem?, problemPanel: @Composable (ShellProblem) -> Unit) {
+fun AppNavHost(
+  navigator: WindowNavigator,
+  entries: Set<FeatureEntry>,
+  workImportRequests: WorkImportRequests,
+  problem: ShellProblem?,
+  problemPanel: @Composable (ShellProblem) -> Unit,
+) {
   val none = ContentTransform(targetContentEnter = EnterTransition.None, initialContentExit = ExitTransition.None)
   // NavDisplay keeps each entry's content for as long as the back stack is unchanged, so the content reads these through state.
   val currentProblem by rememberUpdatedState(problem)
   val currentProblemPanel by rememberUpdatedState(problemPanel)
   val currentSettingsRoute by rememberUpdatedState(navigator.top.route as? SettingsRoute)
+  val topEntryToken = navigator.top.entryToken
+  SideEffect { workImportRequests.retainFor(topEntryToken) }
   NavDisplay(
     backStack = navigator.backStack,
     modifier = Modifier.fillMaxSize(),
@@ -45,7 +56,7 @@ fun AppNavHost(navigator: WindowNavigator, entries: Set<FeatureEntry>, problem: 
     popTransitionSpec = { none },
     entryProvider = { entry ->
       NavEntry(entry, contentKey = entry.contentKey) { current ->
-        CompositionLocalProvider(LocalEntryKey provides current.contentKey) {
+        CompositionLocalProvider(LocalEntryKey provides current.contentKey, LocalEntryToken provides current.entryToken) {
           val shown = currentProblem
           val route = if (current.route is SettingsRoute) currentSettingsRoute ?: current.route else current.route
           if (shown != null && route !is SettingsRoute) currentProblemPanel(shown) else RouteContent(route, entries)
