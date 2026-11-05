@@ -118,6 +118,24 @@ class FeatureTaskQaOutcomeRecordsTest {
     assertEquals("/qa/run", details?.invocationDirectory)
   }
 
+  @Test
+  fun `a carried finding keeps its evidence and report path, and a re-reported one replaces both`() {
+    val old =
+      finding("QA-1", FeatureTaskQaFindingStatus.NOT_FIXED)
+        .copy(evidencePaths = listOf("/qa/a/x.log"), reportPath = "/qa/a/report.md")
+    val reported = old.copy(evidencePaths = listOf("/qa/b/y.log"), reportPath = "/qa/b/report.md")
+
+    listOf(false, true).forEach { retestsFindings ->
+      val carried = FeatureTaskQaOutcomeRecords.mergedFindings(listOf(old), retestsFindings, emptyList()).single()
+      assertEquals(old.evidencePaths, carried.evidencePaths)
+      assertEquals(old.reportPath, carried.reportPath)
+    }
+    val replaced =
+      FeatureTaskQaOutcomeRecords.mergedFindings(listOf(old), retestsFindings = true, listOf(reported)).single()
+    assertEquals(reported.evidencePaths, replaced.evidencePaths)
+    assertEquals(reported.reportPath, replaced.reportPath)
+  }
+
   private fun passedRequest(): FeatureTaskRuntimePhaseStateRequest =
     settledRequest(
       mapOf(

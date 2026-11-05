@@ -56,7 +56,7 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
     if (view.open.isNotEmpty()) {
       item(key = "$key-open-label") { QaGroupLabel("Needs you", view.open.size) }
       view.open.forEachIndexed { index, row ->
-        item(key = qaFindingRowKey(row.id)) { QaFindingItem(row, index, view.open.size, view, state, "$base:f:${row.id}", onAction) }
+        item(key = qaFindingRowKey(row.id)) { QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction) }
       }
     }
     if (view.left.isNotEmpty()) {
@@ -68,7 +68,7 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
     if (view.notTested.isNotEmpty()) {
       item(key = "$key-gap-label") { QaGroupLabel("Not tested", view.notTested.size) }
       view.notTested.forEachIndexed { index, row ->
-        item(key = "$key-gap-$index") { QaGapItem(row, index, view.notTested.size, view, state, "$base:g:$index", onAction) }
+        item(key = "$key-gap-$index") { QaGapItem(row, index, view.notTested.size, state, "$base:g:$index", onAction) }
       }
     }
     val folds = qaFolds(view, base, state, onAction)
@@ -92,8 +92,8 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
 }
 
 private fun qaFolds(view: QaResultsView, base: String, state: SectionCollapse, onAction: (DetailAction) -> Unit): List<@Composable () -> Unit> = buildList<@Composable () -> Unit> {
-  view.fixed?.let { fold -> add { QaListFoldItem(fold, view, state, "$base:fixed", onAction) } }
-  view.passed?.let { fold -> add { QaListFoldItem(fold, view, state, "$base:passed", onAction) } }
+  view.fixed?.let { fold -> add { QaListFoldItem(fold, state, "$base:fixed", onAction) } }
+  view.passed?.let { fold -> add { QaListFoldItem(fold, state, "$base:passed", onAction) } }
   view.runDetails?.let { details ->
     add {
       val colors = SkillBillTheme.colors
@@ -202,7 +202,7 @@ private fun QaField(label: String, text: String) {
   }
 }
 
-/** Evidence opens against the invocation directory, so without one no chip draws, as in [QaCaseCard]. */
+/** Evidence opens against the row's own invocation directory, so without one no chip draws, as in [QaCaseCard]. */
 @Composable
 private fun QaEvidenceChips(paths: List<String>, directory: String?, onAction: (DetailAction) -> Unit, extra: @Composable () -> Unit = {}) {
   FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -212,9 +212,9 @@ private fun QaEvidenceChips(paths: List<String>, directory: String?, onAction: (
 }
 
 @Composable
-private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, view: QaResultsView, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit) {
+private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
-  val hasEvidence = view.invocationDirectory != null && row.evidencePaths.isNotEmpty()
+  val hasEvidence = row.evidenceDirectory != null && row.evidencePaths.isNotEmpty()
   val expandable = row.expected != null || row.steps != null || hasEvidence
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
@@ -225,7 +225,7 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, view: QaRes
         row.expected?.let { QaField("Expected", it) }
         row.steps?.let { QaField("Steps", it) }
         if (hasEvidence || row.copySteps != null) {
-          QaEvidenceChips(row.evidencePaths, view.invocationDirectory, onAction) {
+          QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction) {
             row.copySteps?.let { steps -> QaChip("Copy steps", LucideIcons.copy) { onAction(DetailAction.Copy(steps)) } }
           }
         }
@@ -235,15 +235,15 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, view: QaRes
 }
 
 @Composable
-private fun QaGapItem(row: QaDetailRow, index: Int, count: Int, view: QaResultsView, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit) {
+private fun QaGapItem(row: QaDetailRow, index: Int, count: Int, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
-  val expandable = view.invocationDirectory != null && row.evidencePaths.isNotEmpty()
+  val expandable = row.evidenceDirectory != null && row.evidencePaths.isNotEmpty()
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
     if (index > 0) QaRowRule()
     QaItemHead(LucideIcons.info, colors.stBlocked, null, row.title, null, row.detail.takeIf { it.isNotBlank() }, open.takeIf { expandable }) { state.toggle(part, default = true) }
     if (open) {
-      Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) { QaEvidenceChips(row.evidencePaths, view.invocationDirectory, onAction) }
+      Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) { QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction) }
     }
   }
 }
@@ -280,7 +280,7 @@ private fun QaFoldHead(label: String, preview: String, glyph: ImageVector, glyph
 }
 
 @Composable
-private fun QaListFoldItem(fold: QaListFold, view: QaResultsView, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit) {
+private fun QaListFoldItem(fold: QaListFold, state: SectionCollapse, part: String, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   val open = !state.isCollapsed(part, default = true)
   QaFoldHead("${fold.label} · ${fold.rows.size}", fold.preview, LucideIcons.check, colors.stDone, open) { state.toggle(part, default = true) }
@@ -291,7 +291,7 @@ private fun QaListFoldItem(fold: QaListFold, view: QaResultsView, state: Section
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
           BasicText(rememberRuntimeText(row.title), style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg2))
           if (row.detail.isNotBlank()) BasicText(rememberRuntimeText(row.detail), style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
-          if (view.invocationDirectory != null && row.evidencePaths.isNotEmpty()) QaEvidenceChips(row.evidencePaths, view.invocationDirectory, onAction)
+          if (row.evidenceDirectory != null && row.evidencePaths.isNotEmpty()) QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction)
         }
       }
     }

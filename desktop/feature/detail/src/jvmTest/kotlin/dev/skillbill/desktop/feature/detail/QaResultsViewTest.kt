@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.domain.model.QaRunRetainedResource
 import dev.skillbill.desktop.core.domain.model.QaRunTemporaryEdit
 import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.isFileUnderDirectory
 import dev.skillbill.desktop.core.testing.workItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -83,7 +84,7 @@ class QaResultsViewTest {
     assertEquals("Title 1, Title 2, Title 3", view.fixed?.preview)
     val untitled = qaResultsView(input(QaVerdict.Passed, findings = listOf(QaResultsFinding("QA-9", " ", fixed = true, observed = "it broke"))))
     assertEquals("QA-9", untitled.fixed?.preview)
-    assertEquals(QaDetailRow("QA-9", "It broke"), untitled.fixed?.rows?.single())
+    assertEquals(QaDetailRow("QA-9", "It broke", evidenceDirectory = null), untitled.fixed?.rows?.single())
     assertTrue(view.open.isEmpty())
   }
 
@@ -152,7 +153,7 @@ class QaResultsViewTest {
     )
     val view = qaResultsView(goalQaInput(qa, running = false))
     assertHead(view, "Needs your review", QaResultsTone.Failed, "QA could not fix 1 problem.")
-    assertEquals("/srv/run", view.invocationDirectory)
+    assertEquals("/srv/run", view.open.single().evidenceDirectory)
     assertEquals("/srv/run/report.md", view.reportPath)
     assertEquals("First prose line second line", view.report?.firstParagraph)
     assertEquals("No tagged checks in this run", view.report?.preview)
@@ -207,12 +208,80 @@ class QaResultsViewTest {
     assertFalse(view.sentence.contains("could not fix"))
     val enriched = assertNotNull(view.open.firstOrNull { it.id == "QA-3" })
     assertEquals("do", enriched.copySteps)
-    assertEquals("/srv/run-1", view.invocationDirectory)
+    assertEquals("/srv/run-1", enriched.evidenceDirectory)
   }
 
   @Test
   fun `duplicate finding ids collapse because rows key on the id`() {
     val view = qaResultsView(input(QaVerdict.Findings, findings = listOf(QaResultsFinding("QA-1", "a"), QaResultsFinding("QA-1", "b"))))
     assertEquals(1, view.open.size)
+  }
+
+  private val qaA = "/srv/qa-A"
+  private val qaB = "/srv/qa-B"
+
+  private fun carriedFinding(id: String, fixed: Boolean, directory: String = qaA) =
+    GoalQaFinding(id, "$id title $directory/note.txt", fixed, listOf("$directory/$id.log"), "$directory/report.md", "seen $directory/out.log")
+
+  private fun goalQa(findings: List<GoalQaFinding>, details: QaRunDetails?, outcome: String = "findings") =
+    qaResultsView(goalQaInput(GoalQaResult(outcome, null, 1, epoch, findings, report, null, details), running = false))
+
+  private fun assertOpens(path: String, directory: String?) {
+    assertEquals(qaA, directory)
+    assertTrue(isFileUnderDirectory(path, assertNotNull(directory)))
+  }
+
+  @Test
+  fun `a finding fixed in a later invocation opens evidence against its own report directory`() {
+    val view = goalQa(listOf(carriedFinding("QA-1", fixed = true)), QaRunDetails(invocationDirectory = qaB, reportPath = "$qaB/report.md"), "passed")
+    val row = assertNotNull(view.fixed).rows.single()
+    assertOpens(row.evidencePaths.single(), row.evidenceDirectory)
+    assertFalse(row.title.contains(qaA))
+    assertFalse(row.detail.contains(qaA))
+    assertFalse(assertNotNull(view.fixed).preview.contains(qaA))
+  }
+
+  @Test
+  fun `an open finding carried past a later report opens evidence against its own report directory`() {
+    val view = goalQa(listOf(carriedFinding("QA-1", fixed = false)), QaRunDetails(invocationDirectory = qaB))
+    val row = view.open.single()
+    assertOpens(row.evidencePaths.single(), row.evidenceDirectory)
+    assertFalse(row.title.contains(qaA))
+    assertFalse(assertNotNull(row.observed).contains(qaA))
+  }
+
+  @Test
+  fun `a carried finding keeps its directory when the latest visit wrote no report`() {
+    val view = goalQa(listOf(carriedFinding("QA-1", fixed = false, qaB), carriedFinding("QA-2", fixed = false)), QaRunDetails())
+    assertEquals(listOf(qaB, qaA), view.open.map { it.evidenceDirectory })
+  }
+
+  @Test
+  fun `findings from different invocations in one run each get their own directory`() {
+    val view = goalQa(listOf(carriedFinding("QA-1", fixed = false), carriedFinding("QA-2", fixed = false, qaB)), QaRunDetails(invocationDirectory = qaB))
+    assertEquals(listOf(qaA, qaB), view.open.map { it.evidenceDirectory })
+  }
+
+  @Test
+  fun `a finding with no report path falls back to the details directory`() {
+    val view = goalQa(listOf(GoalQaFinding("QA-1", "t", false, listOf("$qaB/x.log"))), QaRunDetails(invocationDirectory = qaB))
+    assertEquals(qaB, view.open.single().evidenceDirectory)
+  }
+
+  @Test
+  fun `passed and not tested rows use the details directory`() {
+    val assertionsWithEvidence = listOf(
+      QaRunAssertion(Passed, "Passed one", "ok", listOf("$qaB/p.log")),
+      QaRunAssertion(NotExercised, "Skipped one", "no", listOf("$qaB/n.log")),
+    )
+    val view = goalQa(listOf(carriedFinding("QA-1", fixed = true)), QaRunDetails(invocationDirectory = qaB, assertions = assertionsWithEvidence), "passed")
+    assertEquals(qaB, assertNotNull(view.passed).rows.single().evidenceDirectory)
+    assertEquals(qaB, view.notTested.single().evidenceDirectory)
+  }
+
+  @Test
+  fun `a partial coverage row has no evidence directory`() {
+    val view = goalQa(emptyList(), QaRunDetails(invocationDirectory = qaB, coverage = listOf(QaRunCoverage("web", "incomplete"))), "passed")
+    assertNull(view.notTested.single().evidenceDirectory)
   }
 }

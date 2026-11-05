@@ -21,6 +21,7 @@ internal data class QaResultsFinding(
   val expected: String? = null,
   val steps: String? = null,
   val evidencePaths: List<String> = emptyList(),
+  val evidenceDirectory: String? = null,
 )
 
 internal data class QaResultsInput(
@@ -46,11 +47,12 @@ internal data class QaFindingRow(
   val expected: String?,
   val steps: String?,
   val copySteps: String?,
+  val evidenceDirectory: String?,
   val evidencePaths: List<String>,
 )
 
 /** A Not tested row, or one row of a list fold. */
-internal data class QaDetailRow(val title: String, val detail: String, val evidencePaths: List<String> = emptyList())
+internal data class QaDetailRow(val title: String, val detail: String, val evidenceDirectory: String?, val evidencePaths: List<String> = emptyList())
 
 internal data class QaLeftRow(val title: String, val detail: String, val copyLabel: String, val copyText: String?)
 
@@ -71,7 +73,6 @@ internal data class QaResultsView(
   val runDetails: String?,
   val report: QaReportFold?,
   val targets: String?,
-  val invocationDirectory: String?,
   val reportPath: String?,
 )
 
@@ -86,7 +87,10 @@ internal fun goalQaInput(qa: GoalQaResult, running: Boolean): QaResultsInput {
     reason = qa.reason,
     failureKind = qa.failureKind,
     reportText = qa.reportText,
-    findings = qa.findings.map { QaResultsFinding(it.id, it.title, it.fixed, it.observed, it.expected, it.steps, it.evidencePaths) },
+    findings = qa.findings.map { finding ->
+      val evidenceDirectory = finding.reportPath?.takeIf { it.isNotBlank() }?.let(::parentDirectory)
+      QaResultsFinding(finding.id, finding.title, finding.fixed, finding.observed, finding.expected, finding.steps, finding.evidencePaths, evidenceDirectory)
+    },
     details = qa.details,
     fallbackInvocationDirectory = reportPath?.let(::parentDirectory),
     fallbackReportPath = reportPath,
@@ -146,10 +150,14 @@ internal fun qaResultsView(input: QaResultsInput): QaResultsView {
   val leftEdits = details?.temporaryEdits.orEmpty().filter { it.notRestored }
   val retained = details?.retainedResources.orEmpty()
   val fixedFold = fixed.takeIf { it.isNotEmpty() }?.let { rows ->
-    listFold("Fixed by QA", rows.map { QaDetailRow(if (it.title.isBlank()) it.id else "${it.id} ${it.title}", capitalized(it.observed.orEmpty()), it.evidencePaths) }, rows.map { it.title.ifBlank { it.id } }, directory)
+    listFold(
+      "Fixed by QA",
+      rows.map { QaDetailRow(if (it.title.isBlank()) it.id else "${it.id} ${it.title}", capitalized(it.observed.orEmpty()), it.evidenceDirectory ?: directory, it.evidencePaths) },
+      rows.map { shortenPaths(it.title.ifBlank { it.id }, it.evidenceDirectory ?: directory) },
+    )
   }
   val passedFold = passed.takeIf { it.isNotEmpty() }?.let { rows ->
-    listFold("Passed", rows.map { QaDetailRow(it.title, it.detail, it.evidencePaths) }, rows.map { it.title }, directory)
+    listFold("Passed", rows.map { QaDetailRow(it.title, it.detail, directory, it.evidencePaths) }, rows.map { shortenPaths(it.title, directory) })
   }
   val notTested = notTestedRows(assertions, details?.coverage.orEmpty(), open.size, directory)
   val counts = QaCounts(open.size, fixed.size, notTested.size, passed.size, retained.size + leftEdits.size, assertions.isNotEmpty())
@@ -172,7 +180,6 @@ internal fun qaResultsView(input: QaResultsInput): QaResultsView {
     runDetails = runDetails(input)?.let { shortenPaths(it, directory) },
     report = reportFold(input, counts.tagged, directory),
     targets = targetsLine(details?.coverage.orEmpty()),
-    invocationDirectory = directory,
     reportPath = (details?.reportPath ?: input.fallbackReportPath)?.takeIf { it.isNotBlank() },
   )
 }
@@ -261,7 +268,8 @@ private fun leftPhrase(kind: String, count: Int): String = when {
   else -> "$count processes running"
 }
 
-private fun findingRow(finding: QaResultsFinding, fixLoop: Boolean, directory: String?): QaFindingRow {
+private fun findingRow(finding: QaResultsFinding, fixLoop: Boolean, runDirectory: String?): QaFindingRow {
+  val directory = finding.evidenceDirectory ?: runDirectory
   fun shown(text: String?) = text?.takeIf { it.isNotBlank() }?.let { shortenPaths(it, directory) }
   return QaFindingRow(
     id = finding.id,
@@ -271,16 +279,17 @@ private fun findingRow(finding: QaResultsFinding, fixLoop: Boolean, directory: S
     expected = shown(finding.expected),
     steps = shown(finding.steps),
     copySteps = finding.steps?.takeIf { it.isNotBlank() }?.replace("`", ""),
+    evidenceDirectory = directory,
     evidencePaths = finding.evidencePaths,
   )
 }
 
 private fun notTestedRows(assertions: List<QaRunAssertion>, coverage: List<QaRunCoverage>, open: Int, directory: String?): List<QaDetailRow> {
   fun row(assertion: QaRunAssertion) =
-    QaDetailRow(shortenPaths(assertion.title, directory), shortenPaths(assertion.detail, directory), assertion.evidencePaths)
+    QaDetailRow(shortenPaths(assertion.title, directory), shortenPaths(assertion.detail, directory), directory, assertion.evidencePaths)
   val notExercised = assertions.filter { it.outcome == QaAssertionOutcome.NotExercised }.map(::row)
   val partial = if (notExercised.isNotEmpty()) emptyList() else coverage.filter { it.isPartial }.map { line ->
-    QaDetailRow("${capitalized(humanized(line.kind))}, ${line.reason?.let(::shortReason) ?: humanized(line.verdict)}", "")
+    QaDetailRow("${capitalized(humanized(line.kind))}, ${line.reason?.let(::shortReason) ?: humanized(line.verdict)}", "", null)
   }
   val failed = if (open > 0) emptyList() else assertions.filter { it.outcome == QaAssertionOutcome.Failed }.map(::row)
   return notExercised + partial + failed
@@ -305,10 +314,10 @@ private fun leftRows(resources: List<QaRunRetainedResource>, edits: List<QaRunTe
   }
 }
 
-private fun listFold(label: String, rows: List<QaDetailRow>, titles: List<String>, directory: String?) = QaListFold(
+private fun listFold(label: String, rows: List<QaDetailRow>, shortTitles: List<String>) = QaListFold(
   label,
-  shortenPaths(titles.joinToString(", "), directory),
-  rows.map { QaDetailRow(shortenPaths(it.title, directory), shortenPaths(it.detail, directory), it.evidencePaths) },
+  shortTitles.joinToString(", "),
+  rows.map { it.copy(title = shortenPaths(it.title, it.evidenceDirectory), detail = shortenPaths(it.detail, it.evidenceDirectory)) },
 )
 
 private fun runDetails(input: QaResultsInput): String? = listOfNotNull(

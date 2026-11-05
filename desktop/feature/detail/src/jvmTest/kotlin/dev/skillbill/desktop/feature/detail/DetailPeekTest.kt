@@ -192,6 +192,40 @@ class DetailPeekTest {
   }
 
   @Test
+  fun `evidence from an earlier qa invocation opens against that invocation's directory`() = runComposeUiTest {
+    val qaA = "/home/me/.skill-bill/qa-A"
+    val qaB = "/home/me/.skill-bill/qa-B"
+    val detail = emptyDetail.copy(
+      goalFinishPipeline = listOf("qa"),
+      goalQa = GoalQaResult(
+        "findings", null, 1, epoch,
+        listOf(
+          GoalQaFinding("QA-1", "Fixed problem", true, listOf("$qaA/fixed.log"), "$qaA/report.md"),
+          GoalQaFinding("QA-2", "Carried problem", false, listOf("$qaA/carried.log"), "$qaA/report.md"),
+        ),
+        "Verdict: findings_open", null,
+        QaRunDetails(reportPath = "$qaB/report.md", invocationDirectory = qaB),
+      ),
+    )
+    val actions = mutableListOf<DetailAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailsPane(
+          DetailUiState(workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch, subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish)),
+          remember { mutableStateOf(AssessmentOrder.Default) },
+        ) { actions += it }
+      }
+    }
+    onNodeWithText("QA").performClick()
+    onNodeWithText("Carried problem").performClick()
+    onNodeWithContentDescription("Open evidence carried.log").performClick()
+    runOnIdle { assertTrue(DetailAction.OpenQaEvidence("$qaA/carried.log", qaA) in actions) }
+    onNodeWithText("Fixed by QA · 1").performScrollTo().performClick()
+    onNodeWithContentDescription("Open evidence fixed.log").performScrollTo().performClick()
+    runOnIdle { assertTrue(DetailAction.OpenQaEvidence("$qaA/fixed.log", qaA) in actions) }
+  }
+
+  @Test
   fun `a settled standalone run puts results above the strip and the finding link reaches its row`() = runComposeUiTest {
     val steps = (1..40).map { QaChecklistStep("Step $it", QaStepState.Passed) } + QaChecklistStep("Failing step", QaStepState.Failed, findingId = "QA-2")
     val run = ExecutionInstance(
