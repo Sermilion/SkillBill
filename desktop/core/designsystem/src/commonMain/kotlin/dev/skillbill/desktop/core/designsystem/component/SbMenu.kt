@@ -8,9 +8,11 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -19,9 +21,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -43,7 +45,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 private val MENU_EDGE_BLEED = 4.dp
 
 sealed interface SbMenuEntry {
-  data class Item(val label: String, val onClick: () -> Unit, val icon: ImageVector? = null, val lead: (@Composable () -> Unit)? = null, val endText: String? = null, val checked: Boolean = false, val shortcut: String? = null, val danger: Boolean = false, val enabled: Boolean = true, val mono: Boolean = false) : SbMenuEntry
+  data class Item(val label: String, val onClick: () -> Unit, val icon: ImageVector? = null, val lead: (@Composable () -> Unit)? = null, val endText: String? = null, val checked: Boolean = false, val shortcut: String? = null, val danger: Boolean = false, val enabled: Boolean = true, val mono: Boolean = false, val reason: String? = null, val detail: String? = null) : SbMenuEntry
   data class Head(val text: String) : SbMenuEntry
   data object Separator : SbMenuEntry
 }
@@ -58,23 +60,33 @@ fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false) {
   val fg = when { item.danger -> colors.stFailed; active -> colors.fg; else -> colors.fg2 }
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   Row(
-    Modifier.fillMaxWidth().height(30.dp).background(if (active) colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, shape)
-      .alpha(if (item.enabled) 1f else .4f).hoverable(interaction).clickable(interaction, null, enabled = item.enabled, onClick = item.onClick).handCursor(item.enabled)
+    Modifier.fillMaxWidth().heightIn(min = 30.dp).background(if (active) colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, shape)
+      .hoverable(interaction).clickable(interaction, null, enabled = item.enabled, onClick = item.onClick).handCursor(item.enabled)
       .sbFocusRing(interaction, shape)
-      .semantics { role = Role.Button; contentDescription = listOfNotNull(item.label, item.endText).joinToString(", "); if (!item.enabled) disabled(); if (item.checked) selected = true }
+      .semantics { role = Role.Button; contentDescription = listOfNotNull(item.label, item.reason, item.detail, item.endText).joinToString(", "); if (!item.enabled) disabled(); if (item.checked) selected = true }
       .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     // `.sb-menu-item .sb-icon` stays fg-muted on hover.
     CompositionLocalProvider(LocalContentColor provides (if (item.danger) colors.stFailed else colors.fgMuted)) {
-      when { item.lead != null -> item.lead.invoke(); item.icon != null -> SbIcon(item.icon, SbIconSize.Md) }
+      CompositionLocalProvider(LocalContentColor provides (if (item.enabled) LocalContentColor.current else LocalContentColor.current.copy(alpha = .4f))) {
+        when { item.lead != null -> item.lead.invoke(); item.icon != null -> SbIcon(item.icon, SbIconSize.Md) }
+      }
     }
     // `<span class="mono">` labels switch family only and keep the item's 13px size.
-    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg, lineHeight = 1.em, fontFamily = if (item.mono) SkillBillTheme.type.mono.fontFamily else SkillBillTheme.type.tBase.fontFamily), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(Modifier.weight(1f).padding(vertical = if (item.reason != null || item.detail != null) 5.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      BasicText(item.label, style = SkillBillTheme.type.tBase.copy(color = if (item.enabled) fg else fg.copy(alpha = .4f), lineHeight = 1.em, fontFamily = if (item.mono) SkillBillTheme.type.mono.fontFamily else SkillBillTheme.type.tBase.fontFamily), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      item.reason?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted, lineHeight = 1.2.em)) }
+      item.detail?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint, lineHeight = 1.2.em, fontFamily = SkillBillTheme.type.mono.fontFamily), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    }
     if (item.endText != null || item.checked || item.shortcut != null) {
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        item.endText?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1, softWrap = false) }
-        if (item.checked) CompositionLocalProvider(LocalContentColor provides (if (item.danger) colors.stFailed else colors.fgMuted)) { SbIcon(LucideIcons.check, SbIconSize.Sm) }
-        item.shortcut?.let { Kbd(it) }
+        item.endText?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint.copy(alpha = if (item.enabled) 1f else .4f), lineHeight = 1.em), maxLines = 1, softWrap = false) }
+        if (item.checked) {
+          CompositionLocalProvider(LocalContentColor provides (if (item.danger) colors.stFailed else colors.fgMuted)) {
+            SbIcon(LucideIcons.check, SbIconSize.Sm, modifier = Modifier.graphicsLayer { alpha = if (item.enabled) 1f else .4f })
+          }
+        }
+        item.shortcut?.let { Box(Modifier.graphicsLayer { alpha = if (item.enabled) 1f else .4f }) { Kbd(it) } }
       }
     }
   }

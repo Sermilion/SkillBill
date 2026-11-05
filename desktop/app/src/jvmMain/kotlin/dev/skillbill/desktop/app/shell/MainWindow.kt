@@ -117,8 +117,15 @@ fun ApplicationScope.MainWindow(
         window.panes.specsOpen,
         window.input.specsTreeFocused,
         window.input.subtaskListFocused,
+        window.input.specsBarFocused,
+        window.input.layerOpen || window.menu.open,
+        window.input.editOpen,
+        window.specsPane.state.value.selectedPath != null,
       )
-      if (listNavigation)
+      if (listNavigation && press?.key == ShellKey.Escape) {
+        window.specsPane.onAction(dev.skillbill.desktop.feature.specs.SpecsAction.Deselect)
+        true
+      } else if (listNavigation)
         false
       else press?.let(keyboard::onKey) ?: false
     },
@@ -168,13 +175,22 @@ internal fun specsPaneOwnsNavigationKey(
   specsOpen: Boolean,
   specsTreeFocused: Boolean,
   subtaskListFocused: Boolean,
+  specsBarFocused: Boolean = false,
+  layerOpen: Boolean = false,
+  editOpen: Boolean = false,
+  hasSelection: Boolean = false,
 ): Boolean {
-  val navigationKey = when (press?.key) {
-    ShellKey.Up, ShellKey.Down, ShellKey.Enter -> true
-    else -> false
+  val noModifiers = press?.let { !it.ctrl && !it.meta && !it.alt } == true
+  val unmodified = press?.let { noModifiers && !it.shift } == true
+  val specsFocused = specsOpen && (specsTreeFocused || specsBarFocused)
+  if (specsFocused && noModifiers && !layerOpen && !editOpen) {
+    if (specsTreeFocused && press?.key == ShellKey.Escape) return hasSelection
+    if (specsTreeFocused && unmodified && press?.key in setOf(ShellKey.Up, ShellKey.Down, ShellKey.Enter)) return true
+    val char = (press?.key as? ShellKey.Char)?.char?.lowercaseChar()
+    if (unmodified && char != null && char in setOf('j', 'k', 'r', 'p', 'a', 'f')) return true
+    if (noModifiers && char == '/') return true
   }
-  val unmodified = press?.let { !it.ctrl && !it.meta && !it.shift && !it.alt } == true
-  return navigationKey && unmodified && (specsOpen && specsTreeFocused || subtaskListFocused)
+  return subtaskListFocused && unmodified && press?.key in setOf(ShellKey.Up, ShellKey.Down, ShellKey.Enter)
 }
 
 @Composable

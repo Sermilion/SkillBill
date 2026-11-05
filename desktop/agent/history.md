@@ -1,3 +1,13 @@
+## [2026-11-05] SKILL-503 Specs panel selection bar
+Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/core/designsystem, desktop/feature/specs, runtime-kotlin/runtime-engine
+- A docked selection bar and panel header replace the old toolbar. File selection keeps its row highlight while its parent bundle owns controls, favorites and reservations.
+- SpecsMenuModel supplies ordered actions and disabled reasons to menus and the command palette. Keyboard navigation and shortcuts operate on the same bundle target. reusable
+- Runtime canDelete verdicts and launch reservations guard deletion; SpecBrowserService remains authoritative. Export enters the existing runtime preflight.
+- Shared confirmation dialogs focus the keep action. SbMenu supports disabled reasons and monospace detail; spec popover keyboard handling is opt-in. reusable
+- A pending start waits for an agent choice and remains bound to the selected bundle and current start verdict.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-04] SKILL-474: export and import goal archives
 Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/feature/specs, desktop/feature/work, runtime-goalrunner
 - Specs and Work offer export and global import with native file selection. Live export opens a pause-first dialog before file selection.

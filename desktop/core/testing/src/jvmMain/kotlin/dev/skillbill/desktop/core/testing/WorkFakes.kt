@@ -25,6 +25,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.ArchiveFileChooser
+import dev.skillbill.desktop.core.domain.repository.DesktopClipboard
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailResolution
 import kotlinx.coroutines.flow.Flow
@@ -73,6 +74,11 @@ class FakeArchiveFileChooser : ArchiveFileChooser {
     openRequests++
     onChosen(nextOpen)
   }
+}
+
+class FakeDesktopClipboard : DesktopClipboard {
+  val copied = mutableListOf<String>()
+  override fun copy(text: String) { copied += text }
 }
 
 /** Returns the configured [runOptions] per id from [prefetch] and records each prefetched id. */
