@@ -38,7 +38,10 @@ data class DetailUiState(
   val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
   val selectedQaRun: String? = null,
   val activity: ActivityResult = ActivityResult.Loading,
+  val verifyCriteriaFilter: VerifyCriteriaFilter = VerifyCriteriaFilter.All,
 )
+
+enum class VerifyCriteriaFilter { All, Gaps, Met }
 
 /**
  * The open item's changes; the section only shows once the detail has loaded. A goal carries its [subtasks] for the strip; any other
@@ -95,6 +98,8 @@ data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?
 data class QaCaseKey(val invocationId: String, val caseId: String)
 
 sealed interface DetailAction {
+  data class OpenNewerVerifyRun(val workflowId: String) : DetailAction
+  data class SetVerifyCriteriaFilter(val filter: VerifyCriteriaFilter) : DetailAction
   data object ToggleFavorite : DetailAction
   data class ToggleQaCase(val key: QaCaseKey) : DetailAction
   data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction

@@ -241,6 +241,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     currentSubtaskId = goal?.currentSubtaskId,
     goalWorktree = goalWorktree?.let { GoalWorktree(it.path, it.state.toWorktreeDomain(), it.retentionReason, it.retentionDetail) },
     launchWarning = goal?.launchWarning,
+    verifyRun = verifyRun?.toDomain(),
   )
 }
 
@@ -447,7 +448,7 @@ internal fun GoalRunnerQaResult.toDomain() = GoalQaResult(
   details?.toDomain(),
 )
 
-private fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
+internal fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
   reportPath, invocationDirectory, skipReason,
   assertions.map { assertion ->
     val outcome = when (assertion.outcome) {

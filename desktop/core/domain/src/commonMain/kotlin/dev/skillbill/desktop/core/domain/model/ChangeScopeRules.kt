@@ -102,7 +102,10 @@ fun normalizeCommits(target: ChangeScopeTarget, shas: List<String>): ChangeScope
 fun resolveScope(target: ChangeScopeTarget, scope: ChangeScope): ScopeRead {
   if (scope.kind !in availableScopes(target)) return ScopeRead.Unavailable("scope not available")
   return when (scope) {
-    ChangeScope.All -> ScopeRead.Baseline(target.allBaseline)
+    ChangeScope.All -> when (val baseline = target.allBaseline) {
+      is ChangeBaseline.CommittedRevisionRange -> ScopeRead.Committed(baseline.fromSha, baseline.toSha)
+      else -> ScopeRead.Baseline(baseline)
+    }
     ChangeScope.Uncommitted -> ScopeRead.Uncommitted
     ChangeScope.Operator -> ScopeRead.PerCommit(target.timeline!!.commits.filter(ScopeCommit::operator))
     is ChangeScope.Subtasks -> resolveSubtasks(target, scope)

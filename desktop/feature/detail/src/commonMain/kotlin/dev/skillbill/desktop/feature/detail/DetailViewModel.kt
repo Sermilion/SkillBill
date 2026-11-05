@@ -28,6 +28,7 @@ import dev.skillbill.desktop.core.domain.repository.WorkChangesRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.repository.WorkDetailResolution
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
@@ -234,6 +235,8 @@ class DetailViewModel(
       DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
       DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
       is DetailAction.OpenChangesWindow -> openChangesWindow(action.scope)
+      is DetailAction.SetVerifyCriteriaFilter -> mutableState.update { it.copy(verifyCriteriaFilter = action.filter) }
+      is DetailAction.OpenNewerVerifyRun -> openNewerVerifyRun(action.workflowId)
       is DetailAction.ReviewFindings -> {
         val header = state.value.header
         val detail = loadedDetail() ?: return
@@ -243,6 +246,16 @@ class DetailViewModel(
   }
 
   private fun loadedDetail() = (state.value.sections as? SectionsUi.Loaded)?.detail
+
+  private fun openNewerVerifyRun(id: String) {
+    viewModelScope.launch {
+      when (val resolution = detail.resolve(id)) {
+        is WorkDetailResolution.Resolved -> effectChannel.send(DetailEffect.OpenItem(resolution.item))
+        WorkDetailResolution.Missing -> toasts.show(ToastMessage(ToastTone.Problem, "The newer verify run is no longer in the database."))
+        is WorkDetailResolution.Failed -> toasts.show(ToastMessage(ToastTone.Problem, "Couldn't open the newer verify run. Try again."))
+      }
+    }
+  }
 
   private fun toggleQaCase(key: QaCaseKey) {
     val open = qaCaseIsOpen(state.value.header, loadedDetail() ?: return, key, state.value.qaCaseOverrides) ?: return
@@ -448,7 +461,11 @@ class DetailViewModel(
 
   /** Standalone reviews have no Changes window. Subtask scopes open only for a subtask the latest list can select. */
   private fun openChangesWindow(scope: ChangeScope) {
-    if (!state.value.header.showsChanges) return
+    val current = state.value
+    val verifyRun = loadedDetail()?.verifyRun
+    if (verifyRun != null) {
+      if (scope != ChangeScope.All || verifyRun.changedFiles.isEmpty() || verifyRunState(verifyRun) == VerifyRunState.Parked) return
+    } else if (!current.header.showsChanges) return
     if (scope is ChangeScope.Subtasks) {
       val listed = state.value.changes.subtasks as? SubtaskScopesState.Listed ?: return
       if (scope.from !in selectableSubtaskIds(listed.subtasks)) return
