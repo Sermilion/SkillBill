@@ -13,6 +13,10 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.DetectedAgent
@@ -44,6 +48,79 @@ import kotlin.time.Instant
 @OptIn(ExperimentalTestApi::class)
 class NewTaskHomeTest {
   private val host = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {})
+
+  @Test
+  fun `recent chats show drafts from each repository and route resume and discard`() = runComposeUiTest {
+    val chats = FakeExecutionChatRepository()
+    val app = savedDraft(chats, "app", "/work/app", Instant.fromEpochSeconds(0), "Build app\nsecond line")
+    val lib = savedDraft(chats, "lib", "/work/lib", Instant.fromEpochSeconds(3_600), "Update library")
+    chats.saved[app.sessionId] = app
+    chats.saved[lib.sessionId] = lib
+    val draft = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val actions = mutableListOf<NewTaskAction>()
+    draft.refreshSaved()
+    val fixedHost = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = {}, onShowAllWork = {})
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), draft, fixedHost) { actions += it } }
+      }
+    }
+    waitForIdle()
+
+    onNodeWithText("Recent chats").assertExists()
+    onNodeWithText("Build app").assertExists()
+    onNodeWithText("Update library").assertExists()
+    onNodeWithText("app").assertExists()
+    onNodeWithText("lib").assertExists()
+    onNodeWithText("2h ago").assertExists()
+    onNodeWithText("Build app").performClick()
+    waitForIdle()
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(app)), actions)
+
+    actions.clear()
+    onAllNodesWithText("Discard")[0].performClick()
+    waitForIdle()
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.DiscardDraft(lib)), actions)
+  }
+
+  @Test
+  fun `show all appears only when drafts are hidden`() = runComposeUiTest {
+    val chats = FakeExecutionChatRepository()
+    val drafts = (0..NEW_TASK_HISTORY_ROWS).map { index ->
+      savedDraft(chats, "draft-$index", "/work/repo-$index", Instant.fromEpochSeconds(index.toLong()), "Draft $index")
+    }
+    drafts.forEach { chats.saved[it.sessionId] = it }
+    val draft = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val actions = mutableListOf<NewTaskAction>()
+    draft.refreshSaved()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), draft, host) { actions += it } }
+      }
+    }
+    waitForIdle()
+
+    onAllNodesWithText("Discard").assertCountEquals(NEW_TASK_HISTORY_ROWS)
+    onNodeWithText("Draft 0").assertDoesNotExist()
+    onNodeWithText("Show all").performClick()
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.ShowAllDrafts), actions)
+
+    chats.saved.remove(drafts.last().sessionId)
+    draft.refreshSaved()
+    waitForIdle()
+    onNodeWithText("Show all").assertDoesNotExist()
+  }
+
+  private fun savedDraft(chats: FakeExecutionChatRepository, sessionId: String, root: String, updatedAt: Instant, title: String) =
+    ChatHistoryEntry(
+      sessionId,
+      null,
+      requireNotNull(chats.agent),
+      updatedAt,
+      title,
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, title)),
+      ChatNewTaskContext(root, "main"),
+    )
 
   @Test
   fun `an empty board shows the examples and readiness without needs you or chips`() = runComposeUiTest {

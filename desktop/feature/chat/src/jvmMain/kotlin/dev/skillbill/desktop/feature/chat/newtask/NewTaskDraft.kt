@@ -265,6 +265,16 @@ class NewTaskDraft(
     leave(current) { chats.deleteSavedChat(current.sessionId) }
   }
 
+  /** Deletes [entry] and refreshes the saved list, routing the open chat through [discard]. */
+  internal fun discardSaved(entry: ChatHistoryEntry) {
+    if (closing) return
+    if (chatState.value?.sessionId == entry.sessionId) return discard()
+    scope.launch {
+      chats.deleteSavedChat(entry.sessionId)
+      refreshSaved()
+    }
+  }
+
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
   internal suspend fun close(): Boolean {
     if (closing) return false

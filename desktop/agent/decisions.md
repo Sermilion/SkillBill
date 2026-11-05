@@ -341,3 +341,8 @@ Reason: SwingPanel otherwise paints above Compose content regardless of composab
 Context: Review publishing needs a short success message tied to the comment bar and diff context.
 Decision: Render the review toast in the Changes diff pane and expire it after 2.6 seconds through the view-model coroutine delay.
 Reason: The application toast stack has a fixed 5-second lifetime and appears outside the review context.
+
+## [2026-11-05] List New task chats from every repository on the home
+Context: The home showed one Continue row for the selected repository's newest draft.
+Decision: The home lists up to 6 saved New Task drafts from every repository with resume and discard per row. "Show all" opens the /resume picker when more drafts exist. `refreshSaved` and the picker read every repository's drafts, and the list stays a plain capped column with no nested scroll.
+Reason: Drafts in other repositories stayed hidden until the operator switched repository.
