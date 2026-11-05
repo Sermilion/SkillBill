@@ -1,3 +1,23 @@
+## [2026-11-05] Treat partly tagged assertions as untagged
+Context: QA reports can contain a mixture of tagged and untagged assertions, and old rows lack structured details.
+Decision: Any untagged assertion bullet clears the assertion list and adds a warning. Null `qa_details` identifies a legacy row without backfill.
+Reason: Partial counts would misstate the checks, while null distinguishes records made before the structured format.
+
+## [2026-11-05] Keep goal finding fields with the merged finding
+Context: A later report can omit a finding that the goal now marks fixed. The existing `OBSERVED` payload key holds the title.
+Decision: Store observed text, expected text and steps in `findings_summary` under separate keys. Standalone details carry their own findings.
+Reason: Merging carries earlier finding fields forward, and retaining the existing key meaning preserves stored titles.
+
+## [2026-11-05] Record retained resources before QA settlement
+Context: Goal QA receives retained resources after `withExecution` returns, and a run can stop before settlement or start another iteration.
+Decision: Record and union retained resources immediately after execution, then preserve them in attempted and settled writes.
+Reason: Resources from an earlier iteration remain left behind until cleaned up, even if a later iteration replaces the report.
+
+## [2026-11-05] Keep report format warnings outside coverage warnings
+Context: Untagged assertions and failed assertions without findings produce report warnings, while verification reads coverage warnings.
+Decision: Add these format warnings to general warnings only.
+Reason: Report formatting must not change coverage verification or the settled QA verdict.
+
 ## [2026-11-05] Treat repeated empty check observations as an operational completion result
 Context: A PR can report no checks even though checks may register later. A failed lookup does not establish an empty result, and indefinite waiting prevents goals without reported checks from completing.
 Decision: Accept two successful empty observations at least two minutes apart for the same PR and nonblank head, followed by fresh matching identity confirmation, as `NoChecksReported`. Keep the existing outcome token and scope prior-check evidence to the PR identity. Goal monitoring requires a supplied published SHA to match.

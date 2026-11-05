@@ -849,14 +849,19 @@ public class GoalRunnerStatusProjectionAssembler(
           Instant.parse(it.recordedAt),
           it.findings.map { finding ->
             GoalRunnerQaFinding(
-              finding.id,
-              finding.title,
-              finding.evidencePath,
-              finding.status == FeatureTaskQaFindingStatus.FIXED,
+              id = finding.id,
+              title = finding.title,
+              fixed = finding.status == FeatureTaskQaFindingStatus.FIXED,
+              evidencePaths = finding.evidencePaths,
+              reportPath = finding.reportPath,
+              observed = finding.observed,
+              expected = finding.expected,
+              steps = finding.steps,
             )
           },
           it.reportText,
           it.failureKind?.wireValue,
+          it.details,
         )
       }
     }.getOrElse { error ->

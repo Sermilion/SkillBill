@@ -74,7 +74,7 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
                 MissingResult("Goal assessment", "No assessment result is available for this run.")
               }
             } else {
-              if (detail.goalQa != null) sections.goalQaSection(detail) else sections.item(key = "qa-unavailable") {
+              if (detail.goalQa != null) sections.goalQaSection(detail, item.running, onAction) else sections.item(key = "qa-unavailable") {
                 MissingResult("Goal QA", "No QA result is available for this run.")
               }
             }

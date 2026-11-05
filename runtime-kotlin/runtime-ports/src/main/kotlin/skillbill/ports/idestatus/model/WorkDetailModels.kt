@@ -10,6 +10,7 @@ import skillbill.ports.work.model.WorkStoreObservation
 import skillbill.review.model.ReviewFindingAction
 import skillbill.review.model.ReviewFindingStatus
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import java.time.Instant
 
 enum class WorkDetailProblemCode(val wireValue: String) {
@@ -129,6 +130,7 @@ data class WorkExecutionInstance(
   val reviewReport: StandaloneReviewReport? = null,
   val qaChecklist: StandaloneQaChecklist? = null,
   val qaFindings: List<WorkQaFinding> = emptyList(),
+  val qaDetails: QaRunDetails? = null,
 )
 
 data class StandaloneReviewReport(

@@ -21,6 +21,7 @@ import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
+import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Files.createTempDirectory
@@ -30,6 +31,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -146,6 +148,10 @@ class QaStandalonePhaseRunTest {
     assertNull(result.qaReportText)
     assertTrue(result.targetReport.first().startsWith("Warning:"), result.targetReport.toString())
     assertContains(result.targetReport.first(), "agent timed out")
+    val details = assertNotNull(result.qaDetails)
+    assertNotNull(details.reportPath)
+    assertNotNull(details.invocationDirectory)
+    assertEquals(emptyList(), details.assertions)
   }
 
   @Test
@@ -188,6 +194,7 @@ class QaStandalonePhaseRunTest {
 
     assertEquals(StandaloneQaOutcome.SKIPPED, result.qaOutcome)
     assertContains(result.targetReport, "Verdict: skipped: unsupported_target")
+    assertEquals("unsupported_target", result.qaDetails?.skipReason)
     assertTrue(
       result.targetReport.any { it.contains("no installed pack declares qa_capability for kotlin") },
       result.targetReport.toString(),
@@ -234,6 +241,21 @@ class QaStandalonePhaseRunTest {
 
     assertEquals(StandaloneQaOutcome.FINDINGS, result.qaOutcome)
     assertEquals(text, result.qaReportText)
+  }
+
+  @Test
+  fun `retained resources, finding fields and absolute paths reach the completed details`() {
+    val leaseSet = RecordingQaLeases(listOf(QaLeaseReleaseOutcome.Failed("device-1", "adb offline")))
+
+    val result =
+      assertIs<PhaseRunResult.Completed>(runQa(leaseSet = leaseSet) { androidReport(QaVerdict.FINDINGS_OPEN) })
+
+    val details = requireNotNull(result.qaDetails)
+    val qa = requireNotNull(launched.single())
+    assertEquals(listOf(QaRunRetainedResource("device_lease", "device-1")), details.retainedResources)
+    assertEquals("the home screen stays blank.", details.findings.single().observed)
+    assertEquals(qa.workspace.reportPath.toAbsolutePath().normalize().toString(), details.reportPath)
+    assertEquals(qa.workspace.directory.toAbsolutePath().normalize().toString(), details.invocationDirectory)
   }
 
   private fun androidReport(verdict: QaVerdict): String =

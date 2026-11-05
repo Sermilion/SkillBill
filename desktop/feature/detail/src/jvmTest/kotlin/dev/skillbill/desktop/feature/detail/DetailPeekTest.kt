@@ -2,8 +2,10 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -23,6 +25,16 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
+import dev.skillbill.desktop.core.domain.model.ExecutionInstance
+import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
+import dev.skillbill.desktop.core.domain.model.QaChecklist
+import dev.skillbill.desktop.core.domain.model.QaChecklistCase
+import dev.skillbill.desktop.core.domain.model.QaChecklistFinding
+import dev.skillbill.desktop.core.domain.model.QaChecklistStep
+import dev.skillbill.desktop.core.domain.model.QaRunAssertion
+import dev.skillbill.desktop.core.domain.model.QaRunDetails
+import dev.skillbill.desktop.core.domain.model.QaStepState
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
@@ -78,7 +90,7 @@ class DetailPeekTest {
           GoalAssessmentFinding("GA-2", "major", "View.kt", 20, "A completed run loses its findings", GoalAssessmentVerification.Confirmed, GoalAssessmentFindingState.Open, ""),
         ),
       ),
-      goalQa = GoalQaResult("findings", null, 0, epoch, listOf(GoalQaFinding("QA-1", "The drawer covers its close button", null, false)), "Verdict: skipped\n\n## Coverage\n\n- No supported target\n- No application exercised", "unsupported_target"),
+      goalQa = GoalQaResult("findings", null, 0, epoch, listOf(GoalQaFinding("QA-1", "The drawer covers its close button", false)), "Verdict: skipped\n\n## Coverage\n\n- No supported target\n- No application exercised", "unsupported_target", null),
     )
     val state = mutableStateOf(DetailUiState(
       workItem("goal"), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch,
@@ -116,6 +128,8 @@ class DetailPeekTest {
     onNodeWithText("Priority").performClick()
     onNodeWithText("Priority").assertIsSelected()
     onNodeWithText("QA").performClick()
+    onNodeWithText("Coverage").assertDoesNotExist()
+    onNodeWithText("Full report").performClick()
     onNodeWithText("Coverage").assertExists()
     onNodeWithText("## Coverage").assertDoesNotExist()
     onNodeWithText("Assessment").performClick()
@@ -129,5 +143,110 @@ class DetailPeekTest {
     onNodeWithText("Build the view 1").performScrollTo().performClick()
     onNodeWithText("Goal assessment").assertDoesNotExist()
     onNodeWithContentDescription("Close details").assertExists()
+  }
+
+  private val invocationDirectory = "/home/me/.skill-bill/qa-4f7e0edf"
+
+  @Test
+  fun `goal qa shows what needs the reader first with no full paths`() = runComposeUiTest {
+    val dir = invocationDirectory
+    val detail = emptyDetail.copy(
+      goalFinishPipeline = listOf("qa"),
+      goalQa = GoalQaResult(
+        "attempted", null, 1, epoch,
+        listOf(GoalQaFinding("QA-1", "Benchmark times out", false, listOf("$dir/benchmark.log"), "$dir/report.md", "it exited under $dir/tmp", "It finishes", "Run `gradle`")),
+        "Verdict: findings_open\n\n## Coverage\n\nLog at $dir/benchmark.log", null,
+        QaRunDetails(
+          reportPath = "$dir/report.md", invocationDirectory = dir,
+          assertions = listOf(
+            QaRunAssertion(QaAssertionOutcome.NotExercised, "Live app", "No window"),
+            QaRunAssertion(QaAssertionOutcome.NotExercised, "Native tray", "Not exercised"),
+            QaRunAssertion(QaAssertionOutcome.Passed, "UI tests", "Passed"),
+          ),
+        ),
+      ),
+    )
+    val actions = mutableListOf<DetailAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailsPane(
+          DetailUiState(workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch, subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish)),
+          remember { mutableStateOf(AssessmentOrder.Default) },
+        ) { actions += it }
+      }
+    }
+    onNodeWithText("QA").performClick()
+    onNodeWithText("Needs your review").assertIsDisplayed()
+    onNodeWithText("QA-1").assertIsDisplayed()
+    onNodeWithText("Live app").assertIsDisplayed()
+    onNodeWithText("Native tray").assertIsDisplayed()
+    onNodeWithText("Coverage").assertDoesNotExist()
+    onAllNodes(hasText(dir, substring = true)).assertCountEquals(0)
+
+    onNodeWithText("Benchmark times out").performClick()
+    onNodeWithContentDescription("Open evidence benchmark.log").performClick()
+    runOnIdle { assertTrue(DetailAction.OpenQaEvidence("$dir/benchmark.log", dir) in actions) }
+    onNodeWithText("Full report").performScrollTo().performClick()
+    onNodeWithText("Coverage").assertExists()
+    onAllNodes(hasText(dir, substring = true)).assertCountEquals(0)
+  }
+
+  @Test
+  fun `evidence from an earlier qa invocation opens against that invocation's directory`() = runComposeUiTest {
+    val qaA = "/home/me/.skill-bill/qa-A"
+    val qaB = "/home/me/.skill-bill/qa-B"
+    val detail = emptyDetail.copy(
+      goalFinishPipeline = listOf("qa"),
+      goalQa = GoalQaResult(
+        "findings", null, 1, epoch,
+        listOf(
+          GoalQaFinding("QA-1", "Fixed problem", true, listOf("$qaA/fixed.log"), "$qaA/report.md"),
+          GoalQaFinding("QA-2", "Carried problem", false, listOf("$qaA/carried.log"), "$qaA/report.md"),
+        ),
+        "Verdict: findings_open", null,
+        QaRunDetails(reportPath = "$qaB/report.md", invocationDirectory = qaB),
+      ),
+    )
+    val actions = mutableListOf<DetailAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailsPane(
+          DetailUiState(workItem("goal", finishedAt = epoch), SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch, subtaskChoice = SubtaskChoice(SubtaskKey.GoalFinish)),
+          remember { mutableStateOf(AssessmentOrder.Default) },
+        ) { actions += it }
+      }
+    }
+    onNodeWithText("QA").performClick()
+    onNodeWithText("Carried problem").performClick()
+    onNodeWithContentDescription("Open evidence carried.log").performClick()
+    runOnIdle { assertTrue(DetailAction.OpenQaEvidence("$qaA/carried.log", qaA) in actions) }
+    onNodeWithText("Fixed by QA · 1").performScrollTo().performClick()
+    onNodeWithContentDescription("Open evidence fixed.log").performScrollTo().performClick()
+    runOnIdle { assertTrue(DetailAction.OpenQaEvidence("$qaA/fixed.log", qaA) in actions) }
+  }
+
+  @Test
+  fun `a settled standalone run puts results above the strip and the finding link reaches its row`() = runComposeUiTest {
+    val steps = (1..40).map { QaChecklistStep("Step $it", QaStepState.Passed) } + QaChecklistStep("Failing step", QaStepState.Failed, findingId = "QA-2")
+    val run = ExecutionInstance(
+      "run-1", "run-1", "canceled", epoch, epoch, epoch, null, null, null, null, null, null,
+      QaChecklist(cases = listOf(QaChecklistCase("C1", "Case", steps)), findings = listOf(QaChecklistFinding("QA-2", "Row title"))),
+    )
+    val base = workItem("QA", kind = WorkKind.Phase)
+    val item = base.copy(control = base.control.copy(phaseId = "qa", invocationId = "run-1"))
+    val detail = emptyDetail.copy(executionHistory = listOf(run))
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+        }
+      }
+    }
+    assertTrue(onNodeWithText("QA results").fetchSemanticsNode().boundsInRoot.top < onNodeWithText("Now testing").fetchSemanticsNode().boundsInRoot.top)
+    onNodeWithText("Finding QA-2").performScrollTo()
+    onNodeWithText("QA-2").assertDoesNotExist()
+    onNodeWithText("Finding QA-2").performClick()
+    waitForIdle()
+    onNodeWithText("QA-2").assertIsDisplayed()
   }
 }

@@ -5,6 +5,14 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.data.session.SessionSelection
 import dev.skillbill.desktop.core.data.session.SessionSelectionHolder
+import dev.skillbill.desktop.core.domain.model.GoalQaFinding
+import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
+import dev.skillbill.desktop.core.domain.model.QaRunAssertion
+import dev.skillbill.desktop.core.domain.model.QaRunCoverage
+import dev.skillbill.desktop.core.domain.model.QaRunDetails
+import dev.skillbill.desktop.core.domain.model.QaRunFinding
+import dev.skillbill.desktop.core.domain.model.QaRunRetainedResource
+import dev.skillbill.desktop.core.domain.model.QaRunTemporaryEdit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -15,11 +23,20 @@ import skillbill.di.core.RuntimeContext
 import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.create
+import skillbill.goalrunner.model.GoalRunnerQaFinding
+import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.model.EnvironmentContext
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome as RuntimeQaAssertionOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunAssertion as RuntimeQaRunAssertion
+import skillbill.workflow.taskruntime.model.qa.QaRunCoverage as RuntimeQaRunCoverage
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails as RuntimeQaRunDetails
+import skillbill.workflow.taskruntime.model.qa.QaRunFinding as RuntimeQaRunFinding
+import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource as RuntimeQaRunRetainedResource
+import skillbill.workflow.taskruntime.model.qa.QaRunTemporaryEdit as RuntimeQaRunTemporaryEdit
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -27,6 +44,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class RuntimeDetailReadsTest {
   @Test
@@ -68,6 +86,7 @@ class RuntimeDetailReadsTest {
               leaseGeneration = registered.leaseGeneration, lifecycleState = "completed", currentStep = "review",
               currentActivity = null, updatedAt = now.plusSeconds(1), finishedAt = now.plusSeconds(1), terminalResult = "completed",
               qaOutcome = StandaloneQaOutcome.FINDINGS, qaReportText = "Verdict: findings_open\n\n### QA-1 Card field stays empty\nField shows 4444.\n",
+              qaDetails = RuntimeQaRunDetails(skipReason = "docker_unavailable", retainedResources = listOf(RuntimeQaRunRetainedResource("process", "42"))),
             ),
           )
         }
@@ -85,6 +104,7 @@ class RuntimeDetailReadsTest {
         assertEquals(Path.of(checklist.invocationDirectory).normalize(), Path.of(mappedChecklist.invocationDirectory).normalize())
         assertEquals(Path.of(checklist.reportPath).normalize(), Path.of(mappedChecklist.reportPath).normalize())
         assertEquals(listOf("QA-1"), execution.qaFindings.map { it.id })
+        assertEquals(QaRunDetails(skipReason = "docker_unavailable", retainedResources = listOf(QaRunRetainedResource("process", "42"))), execution.qaDetails)
         assertIs<DetailRead.Gone>(detailReads.first("missing-favorite-id"))
       } finally {
         sessionJob.cancel()
@@ -92,6 +112,34 @@ class RuntimeDetailReadsTest {
         Files.walk(root).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
       }
     }
+  }
+
+  @Test
+  fun `goal qa keeps every evidence path and all details`() {
+    val finding = GoalRunnerQaFinding("QA-1", "Title", false, listOf("a.log", "b.png"), "/run/report.md", "seen", "wanted", "do")
+    val details = RuntimeQaRunDetails(
+      "/run/report.md", "/run", "docker_unavailable",
+      listOf(RuntimeQaRunAssertion(RuntimeQaAssertionOutcome.NOT_EXERCISED, "Live", "No window", listOf("c.log"))),
+      listOf(RuntimeQaRunCoverage("backend", "skipped", "docker_unavailable", "none")),
+      listOf(RuntimeQaRunRetainedResource("process", "42")),
+      listOf(RuntimeQaRunTemporaryEdit("x.txt", "set", true)),
+      listOf(RuntimeQaRunFinding("QA-1", "Title", "seen", "wanted", "do", listOf("a.log"))),
+    )
+    val mapped = GoalRunnerQaResult("attempted", null, 0, Instant.EPOCH, listOf(finding), "report", null, details).toDomain()
+
+    assertEquals(GoalQaFinding("QA-1", "Title", false, listOf("a.log", "b.png"), "/run/report.md", "seen", "wanted", "do"), mapped.findings.single())
+    assertEquals(
+      QaRunDetails(
+        "/run/report.md", "/run", "docker_unavailable",
+        listOf(QaRunAssertion(QaAssertionOutcome.NotExercised, "Live", "No window", listOf("c.log"))),
+        listOf(QaRunCoverage("backend", "skipped", "docker_unavailable", "none")),
+        listOf(QaRunRetainedResource("process", "42")),
+        listOf(QaRunTemporaryEdit("x.txt", "set", true)),
+        listOf(QaRunFinding("QA-1", "Title", "seen", "wanted", "do", listOf("a.log"))),
+      ),
+      mapped.details,
+    )
+    assertNull(GoalRunnerQaResult("attempted", null, 0, Instant.EPOCH).toDomain().details)
   }
 
   private object NoopDiagnostics : Diagnostics {

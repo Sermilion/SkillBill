@@ -15,6 +15,13 @@ import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
+import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
+import dev.skillbill.desktop.core.domain.model.QaRunAssertion
+import dev.skillbill.desktop.core.domain.model.QaRunCoverage
+import dev.skillbill.desktop.core.domain.model.QaRunDetails
+import dev.skillbill.desktop.core.domain.model.QaRunFinding
+import dev.skillbill.desktop.core.domain.model.QaRunRetainedResource
+import dev.skillbill.desktop.core.domain.model.QaRunTemporaryEdit
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentEvidence
@@ -68,6 +75,7 @@ import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState as RuntimeAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as RuntimeAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerAssessmentState
+import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
@@ -88,6 +96,8 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryE
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryUnavailableReason
 import java.nio.file.Path
+import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome as RuntimeQaAssertionOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails as RuntimeQaRunDetails
 import java.time.Instant as JavaInstant
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
@@ -193,12 +203,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
       )
     },
     phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { it.toDomain() },
-    goalQa = goal?.goalQaResult?.let { qa ->
-      GoalQaResult(
-        qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
-        qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePath, it.fixed) }, qa.reportText, qa.failureKind,
-      )
-    },
+    goalQa = goal?.goalQaResult?.toDomain(),
     goalAssessment = goal?.goalAssessmentResult?.let { assessment ->
       GoalAssessmentResult(
         assessment.state.toDomain(), assessment.round, assessment.exitReason?.wireValue, assessment.fixRan,
@@ -224,6 +229,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         it.finishedAt?.toKotlinInstant(), it.result, it.restoration?.toDomain(), it.qaOutcome?.toDomain(), it.qaReportText,
         it.planReport?.toDomain(), it.reviewReport?.toDomain(),
         it.qaChecklist?.toDomain(), it.qaFindings.map { finding -> QaChecklistFinding(finding.id, finding.title, null) },
+        it.qaDetails?.toDomain(),
       )
     },
     incident = incident?.toDomain(),
@@ -432,3 +438,27 @@ private fun BlockIncidentRecoveryUnavailableReason.toDomain(): IncidentRecoveryU
   BlockIncidentRecoveryUnavailableReason.OPERATOR_DECISION -> IncidentRecoveryUnavailableReason.OperatorDecision
   BlockIncidentRecoveryUnavailableReason.QUALITY_GATE -> IncidentRecoveryUnavailableReason.QualityGate
 }
+
+internal fun GoalRunnerQaResult.toDomain() = GoalQaResult(
+  outcome, reason, qaFixAttempts, recordedAt.toKotlinInstant(),
+  findings.map { GoalQaFinding(it.id, it.title, it.fixed, it.evidencePaths, it.reportPath, it.observed, it.expected, it.steps) },
+  reportText,
+  failureKind,
+  details?.toDomain(),
+)
+
+private fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
+  reportPath, invocationDirectory, skipReason,
+  assertions.map { assertion ->
+    val outcome = when (assertion.outcome) {
+      RuntimeQaAssertionOutcome.PASSED -> QaAssertionOutcome.Passed
+      RuntimeQaAssertionOutcome.FAILED -> QaAssertionOutcome.Failed
+      RuntimeQaAssertionOutcome.NOT_EXERCISED -> QaAssertionOutcome.NotExercised
+    }
+    QaRunAssertion(outcome, assertion.title, assertion.detail, assertion.evidencePaths)
+  },
+  coverage.map { QaRunCoverage(it.kind, it.verdict, it.reason, it.backend) },
+  retainedResources.map { QaRunRetainedResource(it.kind, it.identity) },
+  temporaryEdits.map { QaRunTemporaryEdit(it.path, it.detail, it.notRestored) },
+  findings.map { QaRunFinding(it.id, it.title, it.observed, it.expected, it.steps, it.evidencePaths) },
+)

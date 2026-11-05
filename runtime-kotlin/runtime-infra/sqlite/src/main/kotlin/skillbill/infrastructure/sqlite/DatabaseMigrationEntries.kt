@@ -30,6 +30,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktr
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaOutcomes
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaDetails
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaFailureKind
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
@@ -972,4 +973,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 101,
       name = "record-diff-comments",
       operation = ::recordDiffComments,
+    ) +
+    DatabaseMigration(
+      version = 102,
+      name = "record-qa-details",
+      operation = ::recordQaDetails,
     )

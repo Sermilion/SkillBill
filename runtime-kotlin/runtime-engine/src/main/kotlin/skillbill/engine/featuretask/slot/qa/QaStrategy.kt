@@ -338,6 +338,7 @@ private class QaPreparedRun(
     if (recordsGoalOutcome) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
     val result =
       execution.withExecution(run.request.repoRoot, policy) { qa -> execute(run.copy(qaExecution = qa)) }
+    outcomes.recordRetainedResources(run.request.qaOutcomeWorkflowId, result.retainedResources)
     if (recordsGoalOutcome) {
       val completed = result.value as? PhaseOutcome.Completed
       if (completed != null) {
@@ -393,6 +394,8 @@ private class QaPreparedRun(
         qaReportRef(produced),
         legacyFindings,
         FeatureTaskQaFailureKind.fromWire(produced[QaPhaseOutputKeys.FAILURE_KIND] as? String),
+        produced[QaPhaseOutputKeys.EVIDENCE_PREFIX] as? String,
+        produced[QaPhaseOutputKeys.REASON] as? String,
       ),
     )
   }

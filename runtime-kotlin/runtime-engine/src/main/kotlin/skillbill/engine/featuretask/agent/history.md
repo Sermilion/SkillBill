@@ -1,3 +1,12 @@
+## [2026-11-05] SKILL-504 structured QA results
+Areas: runtime-engine featuretask QA and work history; runtime-domain QA and goalrunner; runtime-ports; runtime-infra/sqlite; runtime-goalrunner; runtime-contracts; desktop/core/data
+- QA reports parse tagged assertions, finding fields and temporary edits. A partly tagged assertion list yields no counts and a warning.
+- Migration 102 adds nullable `qa_details` to goal and standalone QA records. Finding fields persist across goal retests, and retained resources survive attempted and settled rewrites.
+- Goal status and standalone execution expose report paths, coverage, assertions, resources, edits and finding evidence. `QaRunDetails` and its goal and standalone mapping are reusable.
+- Legacy rows have null details and are not backfilled. A desktop reader must support schema 102 before opening a migrated database.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-05] TWS-1 complete goals without CI
 Areas: runtime-engine featuretask monitor and goalrunner finalization; runtime command guidance; workflow playbook; skill-bill source
 - Goal and standalone PR monitors accept two successful empty check observations at least two minutes apart for the same PR and nonblank head, followed by fresh identity confirmation. Goal monitoring also matches a supplied published SHA.

@@ -14,10 +14,12 @@ import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.QaReport
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.report.QaReports
+import skillbill.engine.featuretask.qa.report.QaRunDetailsMapping
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 @Inject
@@ -47,7 +49,7 @@ public class QaStandalonePhaseRun(
       execution.withExecution(request.repoRoot, QaPolicy.STANDALONE, invocationId) { qa ->
         when (val target = qa.target) {
           is QaExecutionTarget.Skipped ->
-            QaStandaloneSettlement.Recorded(QaAttempt(QaReports.skipped(target.reason, target.detail), emptyList()))
+            QaStandaloneSettlement.Recorded(attemptOf(qa, QaReports.skipped(target.reason, target.detail), emptyList()))
           is QaExecutionTarget.Supported -> {
             seedChecklist(request, qa, target)
             when (val result = launch(request.copy(qaExecution = qa))) {
@@ -55,10 +57,10 @@ public class QaStandalonePhaseRun(
                 if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)) {
                   QaStandaloneSettlement.ProviderLimitPause(result)
                 } else {
-                  QaStandaloneSettlement.Recorded(QaAttempt(stopped(result.reason), result.completedStepIds))
+                  QaStandaloneSettlement.Recorded(attemptOf(qa, stopped(result.reason), result.completedStepIds))
                 }
               is PhaseRunResult.Completed ->
-                QaStandaloneSettlement.Recorded(QaAttempt(settlement.settle(qa), result.completedStepIds))
+                QaStandaloneSettlement.Recorded(attemptOf(qa, settlement.settle(qa), result.completedStepIds))
             }
           }
         }
@@ -79,6 +81,13 @@ public class QaStandalonePhaseRun(
           targetReport = report.targetReport(),
           qaOutcome = report.qaOutcome(),
           qaReportText = report.text,
+          qaDetails =
+            QaRunDetailsMapping.standalone(
+              attempt.report,
+              attempt.directory,
+              attempt.reportPath,
+              settled.retainedResources,
+            ),
         )
       }
     }
@@ -118,12 +127,27 @@ public class QaStandalonePhaseRun(
       targetReport = listOf("Warning: $warning") + report.targetReport(),
       qaOutcome = StandaloneQaOutcome.SKIPPED,
       qaReportText = report.text,
+      qaDetails = QaRunDetails(skipReason = QaSkipReason.ISOLATION_UNAVAILABLE.wireValue),
     )
   }
+
+  private fun attemptOf(
+    qa: QaExecutionContext,
+    report: QaReport,
+    completedStepIds: List<String>,
+  ): QaAttempt =
+    QaAttempt(
+      report,
+      completedStepIds,
+      qa.workspace.directory.toAbsolutePath().normalize().toString(),
+      qa.workspace.reportPath.toAbsolutePath().normalize().toString(),
+    )
 
   private data class QaAttempt(
     val report: QaReport,
     val completedStepIds: List<String>,
+    val directory: String,
+    val reportPath: String,
   )
 
   private sealed interface QaStandaloneSettlement {

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeQaDetails
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -18,6 +19,7 @@ import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaChecklistWriteResult
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.monitor.model.MonitorRetentionReason
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Clock
@@ -26,6 +28,7 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class StandalonePhaseStatusStoreTest {
   @Test
@@ -67,23 +70,8 @@ class StandalonePhaseStatusStoreTest {
 
   @Test
   fun `a malformed or unknown version checklist reads as null with a diagnostic and the row still returns`() {
-    val warnings = mutableListOf<String>()
-    val diagnostics =
-      object : RuntimeDiagnostics {
-        override fun warning(
-          message: String,
-          error: Throwable?,
-        ) {
-          warnings += message
-        }
-
-        override fun error(
-          message: String,
-          error: Throwable?,
-        ) = Unit
-
-        override fun info(message: String) = Unit
-      }
+    val diagnostics = RecordingChecklistDiagnostics()
+    val warnings = diagnostics.warnings
     val database = checklistDatabase(diagnostics)
     database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
 
@@ -104,6 +92,34 @@ class StandalonePhaseStatusStoreTest {
     }
   }
 
+  @Test
+  fun `stored QA details round trip, and an unknown outcome reads as null with a warning`() {
+    val diagnostics = RecordingChecklistDiagnostics()
+    val warnings = diagnostics.warnings
+    val database = checklistDatabase(diagnostics)
+    database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
+    val details = QaRunDetails(reportPath = "/qa/report.md", skipReason = "empty_scope")
+
+    fun storeDetails(json: String) =
+      DriverManager.getConnection("jdbc:sqlite:${database.resolveDbPath()}").use { connection ->
+        connection.prepareStatement("UPDATE standalone_phase_status SET qa_details = ?").use { statement ->
+          statement.setString(1, json)
+          statement.executeUpdate()
+        }
+      }
+
+    storeDetails(encodeQaDetails(details))
+    assertEquals(details, database.read { it.standalonePhaseStatuses.readByInvocation("qa-run") }?.qaDetails)
+
+    storeDetails("{\"assertions\":[{\"outcome\":\"bogus\",\"title\":\"t\",\"detail\":\"\"}]}")
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("qa-run") }
+
+    assertEquals("qa-run", record?.invocationId)
+    assertEquals(null, record?.qaDetails)
+    val warning = warnings.single { "seam=qa_details kind=unreadable invocation=qa-run" in it }
+    assertTrue("bogus" in warning, warning)
+  }
+
   private fun checklistDatabase(diagnostics: RuntimeDiagnostics = NoopChecklistDiagnostics) =
     sqliteDatabaseSessionFactory(
       userHome = Files.createTempDirectory("standalone-checklist"),
@@ -118,6 +134,24 @@ class StandalonePhaseStatusStoreTest {
       currentStep = "qa", startedAt = Instant.EPOCH, leaseOwner = "owner", leaseGeneration = 1,
       leaseExpiresAt = Instant.EPOCH.plusSeconds(3600),
     )
+
+  private class RecordingChecklistDiagnostics : RuntimeDiagnostics {
+    val warnings = mutableListOf<String>()
+
+    override fun warning(
+      message: String,
+      error: Throwable?,
+    ) {
+      warnings += message
+    }
+
+    override fun error(
+      message: String,
+      error: Throwable?,
+    ) = Unit
+
+    override fun info(message: String) = Unit
+  }
 
   private object NoopChecklistDiagnostics : RuntimeDiagnostics {
     override fun warning(
@@ -530,6 +564,44 @@ class StandalonePhaseStatusStoreTest {
 
     assertEquals(null, record?.qaReportText)
     assertEquals(StandaloneQaOutcome.FINDINGS, record?.qaOutcome)
+  }
+
+  @Test
+  fun `a QA update stores its details and a later update without details keeps them`() {
+    val directory = Files.createTempDirectory("standalone-qa-details")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-20T14:46:26Z")
+    val details = QaRunDetails(reportPath = "/qa/report.md", skipReason = "empty_scope")
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        monitorRegistration("qa", started, started.plusSeconds(3600)).copy(phaseId = "qa"),
+      )
+    }
+    val progress =
+      qaSettle(started, reportText = null).copy(
+        lifecycleState = "active",
+        finishedAt = null,
+        terminalResult = null,
+        qaOutcome = null,
+        qaDetails = details,
+      )
+
+    assertEquals(
+      StandalonePhaseStatusUpdateResult.ACCEPTED,
+      database.transaction { it.standalonePhaseStatuses.update(progress) },
+    )
+    assertEquals(details, database.read { it.standalonePhaseStatuses.readByInvocation("run-qa") }?.qaDetails)
+
+    val reportText = "Verdict: findings_open\n"
+    assertEquals(
+      StandalonePhaseStatusUpdateResult.ACCEPTED,
+      database.transaction {
+        it.standalonePhaseStatuses.update(qaSettle(started, reportText).copy(expectedRevision = "2"))
+      },
+    )
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-qa") }
+    assertEquals(details, record?.qaDetails)
+    assertEquals(reportText, record?.qaReportText)
   }
 
   private fun qaSettle(

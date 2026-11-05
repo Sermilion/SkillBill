@@ -207,10 +207,20 @@ data class GoalQaResult(
   val findings: List<GoalQaFinding>,
   val reportText: String?,
   val failureKind: String?,
+  val details: QaRunDetails?,
 )
 
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
-data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
+data class GoalQaFinding(
+  val id: String,
+  val title: String,
+  val fixed: Boolean,
+  val evidencePaths: List<String> = emptyList(),
+  val reportPath: String? = null,
+  val observed: String? = null,
+  val expected: String? = null,
+  val steps: String? = null,
+)
 
 enum class GoalAssessmentState { Pending, Running, Blocked, Completed, Skipped }
 
@@ -262,6 +272,7 @@ data class ExecutionInstance(
   val reviewReport: ReviewReport? = null,
   val qaChecklist: QaChecklist? = null,
   val qaFindings: List<QaChecklistFinding> = emptyList(),
+  val qaDetails: QaRunDetails? = null,
 )
 
 /**

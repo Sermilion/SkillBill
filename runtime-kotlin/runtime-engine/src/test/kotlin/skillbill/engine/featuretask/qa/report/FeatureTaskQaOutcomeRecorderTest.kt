@@ -7,6 +7,7 @@ import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
@@ -94,6 +95,26 @@ class FeatureTaskQaOutcomeRecorderTest {
     assertEquals(StandaloneQaOutcome.ATTEMPTED, attempted?.outcome)
     assertNull(attempted?.failureKind)
     assertNull(attempted?.reason)
+  }
+
+  @Test
+  fun `retained resources create a row, union by identity, and survive a later settle`() {
+    val recorder = recorder()
+    val process = QaRetainedResource("process", "48213")
+    val volume = QaRetainedResource("volume", "qa-data")
+
+    recorder.recordRetainedResources("wfl-goal", emptyList())
+    assertNull(recorder.find("wfl-goal"))
+
+    recorder.recordRetainedResources("wfl-goal", listOf(process))
+    recorder.recordAttempted("wfl-goal")
+    recorder.recordRetainedResources("wfl-goal", listOf(process, volume))
+    recorder.recordSettled("wfl-goal", QaVerdict.INCOMPLETE, "stopped", 0, QaSettledRun("tree"))
+
+    assertEquals(
+      listOf(QaRunRetainedResource("process", "48213"), QaRunRetainedResource("volume", "qa-data")),
+      recorder.find("wfl-goal")?.details?.retainedResources,
+    )
   }
 
   private fun database() = phaseRunDatabase(home, clock)

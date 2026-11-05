@@ -1,3 +1,12 @@
+## [2026-11-05] SKILL-504 QA results view
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data; runtime QA results projection
+- Goal and standalone QA share a results section with an app-derived verdict, open findings, retained resources, untested work, folds and target coverage. Live standalone results retain the finding navigation target.
+- Reusable `qaResultsView` projects recorded details into rows and verdicts. Evidence chips use file names, report text shortens supported paths, and fold state is scoped to the run.
+- Untagged and legacy reports show no check counts. Settled standalone result text remains available in Run details when no report exists.
+- Evidence chips require an invocation directory. Path shortening covers the supported roots and stops at whitespace; checklist-only findings may lack observed, expected and steps fields.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-02] SKILL-457 QA live checklist in desktop detail
 Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, desktop/core/designsystem, runtime-engine, runtime-ports
 - Standalone QA detail shows recorded targets, plan, step progress, findings, activity and report, with a pager for earlier runs. Runs without a plan show no invented cases or steps.

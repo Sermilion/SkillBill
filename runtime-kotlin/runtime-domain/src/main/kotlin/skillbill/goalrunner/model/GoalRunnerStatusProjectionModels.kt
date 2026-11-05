@@ -15,6 +15,7 @@ import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSeverity
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
@@ -268,13 +269,18 @@ data class GoalRunnerQaResult(
   val findings: List<GoalRunnerQaFinding> = emptyList(),
   val reportText: String? = null,
   val failureKind: String? = null,
+  val details: QaRunDetails? = null,
 )
 
 data class GoalRunnerQaFinding(
   val id: String,
   val title: String,
-  val evidencePath: String?,
   val fixed: Boolean,
+  val evidencePaths: List<String> = emptyList(),
+  val reportPath: String? = null,
+  val observed: String? = null,
+  val expected: String? = null,
+  val steps: String? = null,
 )
 
 enum class GoalRunnerAssessmentState(val wireValue: String) {
