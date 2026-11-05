@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -79,6 +80,7 @@ internal fun CommentComposer(
           } else false
         },
       textStyle = changesSans(11.5f, FontWeight.Normal, colors.fg),
+      cursorBrush = SolidColor(colors.fg),
       decorationBox = { inner ->
         if (text.isEmpty() && placeholder.isNotEmpty()) BasicText(placeholder, style = changesSans(11.5f, FontWeight.Normal, colors.fgMuted))
         inner()

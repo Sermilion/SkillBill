@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.changes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +37,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -57,9 +59,10 @@ import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.hairlineBottom
+import dev.skillbill.desktop.core.ui.diff.DiffWordHighlight
 
 @Composable
-internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, modifier: Modifier = Modifier, authoring: DiffAuthoringInput, onReplyFocusChanged: (String, Boolean) -> Unit) {
+internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, modifier: Modifier = Modifier, authoring: DiffAuthoringInput, wordHighlight: DiffWordHighlight, onReplyFocusChanged: (String, Boolean) -> Unit) {
   val colors = SkillBillTheme.colors
   var lastToast by remember { mutableStateOf("") }
   var reviewBarHeight by remember { mutableIntStateOf(0) }
@@ -108,19 +111,22 @@ internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowActio
             canAuthor = state.canAuthor,
             onCommentFocusChanged = { authoring.commentTextFocused = it },
             bottomPadding = reviewPadding,
+            wordHighlight = wordHighlight,
             modifier = Modifier.fillMaxSize(),
           )
         }
       }
       androidx.compose.animation.AnimatedVisibility(state.pendingCount > 0, Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp, vertical = 18.dp), enter = slideInVertically(toastInSpec()) { it } + fadeIn(toastInSpec()), exit = slideOutVertically(toastInSpec()) { it } + fadeOut(toastInSpec())) {
-        PendingReviewBar(state.pendingCount, state.review, onAction, Modifier.onSizeChanged { reviewBarHeight = it.height })
+        PendingReviewBar(state.pendingCount, state.review, onAction, Modifier.onSizeChanged { reviewBarHeight = it.height }.absorbTaps())
       }
       androidx.compose.animation.AnimatedVisibility(state.reviewToast != null, Modifier.align(Alignment.BottomEnd).padding(18.dp), enter = slideInVertically(toastInSpec()) { it } + fadeIn(toastInSpec()), exit = slideOutVertically(toastInSpec()) { it } + fadeOut(toastInSpec())) {
-        ReviewToast(lastToast)
+        ReviewToast(lastToast, Modifier.absorbTaps())
       }
     }
   }
 }
+
+private fun Modifier.absorbTaps(): Modifier = pointerInput(Unit) { detectTapGestures { } }
 
 @Composable
 private fun DiffTitle(file: ChangedFile, showCounts: Boolean, canOpen: Boolean, canComment: Boolean, onComment: () -> Unit, onOpen: () -> Unit) {
