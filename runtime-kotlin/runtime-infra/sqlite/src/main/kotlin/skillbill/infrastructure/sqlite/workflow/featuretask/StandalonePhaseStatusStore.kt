@@ -26,6 +26,10 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaDetai
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readReviewRunId
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.StandaloneValidationCheckStore
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.VALIDATION_OUTCOME_ASSIGNMENT
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readLiveChecks
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readValidationOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.writeStandaloneQaChecklist
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
@@ -34,15 +38,21 @@ import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
+import skillbill.infrastructure.sqlite.idestatus.readPlanActivity
+import skillbill.infrastructure.sqlite.idestatus.writePlanActivity
+import skillbill.infrastructure.sqlite.workflow.featuretask.validation.StandaloneValidationBranchReads
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
+import skillbill.ports.idestatus.StandaloneValidationBranchRepository
+import skillbill.ports.idestatus.StandaloneValidationCheckRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneEligibleSlice
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
+import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -57,6 +67,7 @@ import java.sql.ResultSet
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.format.DateTimeParseException
 import java.util.UUID
 
 internal class StandalonePhaseStatusStore(
@@ -64,7 +75,9 @@ internal class StandalonePhaseStatusStore(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val transactionActive: Boolean,
-) : StandalonePhaseStatusRepository {
+) : StandalonePhaseStatusRepository,
+  StandaloneValidationCheckRepository by StandaloneValidationCheckStore(connection, diagnostics, transactionActive),
+  StandaloneValidationBranchRepository by StandaloneValidationBranchReads(connection) {
   override fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       registerInTransaction(request)
@@ -327,6 +340,8 @@ internal class StandalonePhaseStatusStore(
   ) {
     if (executionId.isBlank()) return
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
+      connection.appendStandaloneOutputLines(executionId, snapshot.pendingLines)
+      connection.writePlanActivity(executionId, snapshot.pendingActivity)
       val tail = snapshot.tail.takeLast(OUTPUT_TAIL_LINES).map { it.take(MAX_OUTPUT_LINE_CHARS) }
       val attributed =
         snapshot.latestAttributedLines.entries.toList().takeLast(MAX_ATTRIBUTED_SUBTASKS)
@@ -360,6 +375,12 @@ internal class StandalonePhaseStatusStore(
     }
   }
 
+  override fun readOutputLines(
+    executionId: String,
+    beforeSequence: Long?,
+    limit: Int,
+  ): List<StandalonePhaseOutputLine> = connection.readStandaloneOutputLines(executionId, beforeSequence, limit)
+
   override fun readOutput(executionId: String): StandalonePhaseOutputSnapshot? =
     connection.prepareStatement(
       "SELECT tail_json, latest_line_at, attributed_json, attributed_at_json " +
@@ -390,6 +411,7 @@ internal class StandalonePhaseStatusStore(
           latestLineAt = parsePersistedInstantOrNull(rows.getString("latest_line_at").orEmpty()),
           latestAttributedLines = attributed,
           latestAttributedLineAt = attributedAt,
+          activities = connection.readPlanActivity(executionId),
         )
       }
     }
@@ -469,7 +491,7 @@ internal class StandalonePhaseStatusStore(
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
           terminal_result = ?, accepted_result = ?,
           $MONITOR_CLEANUP_ASSIGNMENTS, $QA_OUTCOME_ASSIGNMENT, $QA_REPORT_TEXT_ASSIGNMENT, $QA_DETAILS_ASSIGNMENT,
-          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT
+          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT, $VALIDATION_OUTCOME_ASSIGNMENT
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -493,6 +515,7 @@ internal class StandalonePhaseStatusStore(
               request.qaDetails?.let(::encodeQaDetails),
               request.planReport.columnValue(),
               request.reviewRunId,
+              request.validationOutcome?.wireValue,
               request.executionId,
               request.expectedRevision,
               request.leaseOwner,
@@ -837,6 +860,8 @@ internal class StandalonePhaseStatusStore(
       reviewRunId = readReviewRunId(),
       qaChecklist = readQaChecklist(getString("invocation_id"), diagnostics),
       qaDetails = readQaDetailsOrWarn(getString("invocation_id"), diagnostics),
+      liveChecks = readLiveChecks("standalone-status"),
+      validationOutcome = readValidationOutcome("standalone-status"),
     )
   }
 
@@ -987,4 +1012,58 @@ private fun StandalonePhaseExecutionAnchor?.anchorBindings(): List<Any> =
     emptyList()
   } else {
     listOf(runSequence.length, runSequence.length, runSequence, runSequence.length, runSequence, invocationId)
+  }
+
+private fun Connection.appendStandaloneOutputLines(
+  executionId: String,
+  lines: List<StandalonePhaseOutputLine>,
+) {
+  if (lines.isEmpty()) return
+  prepareStatement(
+    "INSERT INTO standalone_phase_output_lines(entry_id, execution_id, line_text, observed_at, subtask_id, is_raw) " +
+      "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(entry_id) DO NOTHING",
+  ).use { statement ->
+    lines.forEach { line ->
+      statement.bindAll(line.id, executionId, line.text, line.at.toString(), line.subtaskId, if (line.isRaw) 1 else 0)
+      statement.addBatch()
+    }
+    statement.executeBatch()
+  }
+}
+
+private fun Connection.readStandaloneOutputLines(
+  executionId: String,
+  beforeSequence: Long?,
+  limit: Int,
+): List<StandalonePhaseOutputLine> =
+  prepareStatement(
+    "SELECT sequence, entry_id, line_text, observed_at, subtask_id, is_raw FROM standalone_phase_output_lines " +
+      "WHERE execution_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?",
+  ).use { statement ->
+    statement.bindAll(executionId, beforeSequence ?: Long.MAX_VALUE, limit)
+    statement.executeQuery().use { rows ->
+      buildList {
+        while (rows.next()) {
+          add(
+            StandalonePhaseOutputLine(
+              id = rows.getString("entry_id"),
+              text = rows.getString("line_text"),
+              at =
+                try {
+                  Instant.parse(rows.getString("observed_at"))
+                } catch (error: DateTimeParseException) {
+                  throw invalidIdeStatusSchemaError(
+                    executionId,
+                    "observed_at",
+                    "Invalid output timestamp: ${error.message}",
+                  )
+                },
+              subtaskId = rows.getInt("subtask_id").takeUnless { rows.wasNull() },
+              sequence = rows.getLong("sequence"),
+              isRaw = rows.getInt("is_raw") != 0,
+            ),
+          )
+        }
+      }
+    }
   }

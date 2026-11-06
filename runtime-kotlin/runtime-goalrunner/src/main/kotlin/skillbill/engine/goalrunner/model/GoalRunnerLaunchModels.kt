@@ -17,6 +17,7 @@ public data class GoalRunnerLaunchReconciliation(
   public val reconciled: GoalRunnerReconciledOutcome,
   public val launchOutcome: AgentRunLaunchOutcome,
   public val diagnostics: GoalRunnerLaunchDiagnostics? = null,
+  public val childFailureOutput: String? = null,
 )
 
 public data class GoalRunnerLaunchDiagnostics(

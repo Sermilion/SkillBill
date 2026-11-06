@@ -39,6 +39,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStand
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneReviewRunId
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.recordValidationCheckEvents
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -988,4 +989,19 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 104,
       name = "record-standalone-plan-attributed-output-times",
       operation = { connection -> StandalonePhaseStatusMigration.addAttributedOutputTimes(connection) },
+    ) +
+    DatabaseMigration(
+      version = 105,
+      name = "record-validation-check-events",
+      operation = ::recordValidationCheckEvents,
+    ) +
+    DatabaseMigration(
+      version = 106,
+      name = "record-standalone-plan-output-history",
+      operation = { connection -> StandalonePhaseStatusMigration.createOutputHistory(connection) },
+    ) +
+    DatabaseMigration(
+      version = 107,
+      name = "record-structured-plan-activity",
+      operation = { connection -> StandalonePhaseStatusMigration.createStructuredActivity(connection) },
     )

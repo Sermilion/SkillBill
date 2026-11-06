@@ -17,6 +17,7 @@ data class AppSettings(
   val trayLastTab: TrayTab,
   val favoriteWork: Set<FavoriteWorkKey> = emptySet(),
   val favoriteSpecs: Set<FavoriteSpecKey> = emptySet(),
+  val newTaskChatLayout: NewTaskChatLayout = NewTaskChatLayout.DEFAULT,
 ) {
   companion object {
     const val TERMINAL_HEIGHT_DEFAULT_DP = 200
@@ -37,6 +38,7 @@ data class AppSettings(
       trayLastTab = TrayTab.DEFAULT,
       favoriteWork = emptySet(),
       favoriteSpecs = emptySet(),
+      newTaskChatLayout = NewTaskChatLayout.DEFAULT,
     )
   }
 }
@@ -60,6 +62,17 @@ enum class HistoryWindow(val wireValue: String) {
 
   companion object {
     val DEFAULT = Day
+  }
+}
+
+/** How the New task screen shows the chats the user has open. */
+enum class NewTaskChatLayout(val wireValue: String) {
+  Tabs("tabs"),
+  SideList("side_list"),
+  ;
+
+  companion object {
+    val DEFAULT = Tabs
   }
 }
 

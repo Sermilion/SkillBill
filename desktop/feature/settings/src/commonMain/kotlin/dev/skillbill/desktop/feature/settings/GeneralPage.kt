@@ -34,6 +34,7 @@ import dev.skillbill.desktop.core.designsystem.settings.SettingsGroup
 import dev.skillbill.desktop.core.designsystem.settings.SettingsHeader
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 
 @Composable
@@ -69,6 +70,16 @@ fun GeneralPage(state: SettingsUiState, sessionState: DatabaseSessionState, onAc
     title = "Claude account",
     rows = listOf {
       ClaudeDirectoryRow(state, sessionState, onAction)
+    },
+  )
+  SettingsGroup(
+    title = "New task",
+    rows = listOf {
+      SettingRow(label = "Open chats", description = "Show the chats you have open as tabs above the chat, or as a list beside it.", control = {
+        Segmented(NewTaskChatLayout.entries.map { SegmentedOption(it, it.label(), enabled = state.ready) }, state.settings.newTaskChatLayout, onSelect = {
+          onAction(SettingsAction.NewTaskChatLayoutChosen(it))
+        })
+      })
     },
   )
   SettingsGroup(
@@ -153,6 +164,11 @@ private fun HistoryWindow.label() = when (this) {
   HistoryWindow.SixHours -> "6h"
   HistoryWindow.Day -> "24h"
   HistoryWindow.Week -> "7d"
+}
+
+private fun NewTaskChatLayout.label() = when (this) {
+  NewTaskChatLayout.Tabs -> "Tabs"
+  NewTaskChatLayout.SideList -> "Side list"
 }
 
 private fun PathError.message() = when (this) {

@@ -10,6 +10,9 @@ import skillbill.application.telemetry.validation.qualityCheckResults
 import skillbill.application.telemetry.validation.qualityCheckScopeTypes
 import skillbill.contracts.review.DiffCommentPayloadKeys
 import skillbill.mcp.core.McpToolRegistry
+import skillbill.mcp.featuretask.ValidationCheckPayloadKeys
+import skillbill.ports.idestatus.model.ValidationCheckEvent
+import skillbill.ports.idestatus.model.ValidationCheckOutcome
 import skillbill.review.diffcomment.model.DiffCommentOutcome
 import skillbill.review.diffcomment.model.DiffCommentSide
 import skillbill.review.diffcomment.model.DiffCommentThreadState
@@ -127,6 +130,14 @@ class McpTelemetrySchemaEnumParityTest {
     assertEquals(
       DiffCommentThreadState.entries.filter { it != DiffCommentThreadState.PENDING }.map { it.wireValue },
       enumOnBranch(defs, "diffCommentSetStateEvent", DiffCommentPayloadKeys.STATE),
+    )
+    assertEquals(
+      ValidationCheckEvent.entries.map { it.wireValue },
+      enumOnBranch(defs, "validationCheckEvent", ValidationCheckPayloadKeys.EVENT),
+    )
+    assertEquals(
+      ValidationCheckOutcome.entries.map { it.wireValue },
+      enumOnBranch(defs, "validationCheckEvent", ValidationCheckPayloadKeys.OUTCOME),
     )
 
     val knownTools = McpToolRegistry.tools.map { it.name }.toSet()

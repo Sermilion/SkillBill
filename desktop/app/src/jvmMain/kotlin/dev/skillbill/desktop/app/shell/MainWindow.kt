@@ -204,6 +204,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val favorites by window.favorites.entries.collectAsState()
   val specFavorites by window.favorites.specEntries.collectAsState()
   val newTaskDraft by window.chat.newTaskDraftOpen.collectAsState()
+  val newTaskOpenChats by window.chat.newTaskOpenChats.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
   val chatShown = panes.chatOpen && topRoute !is SettingsRoute
@@ -226,6 +227,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         terminalOpen = panes.terminalOpen,
         chatOpen = panes.chatOpen,
         newTaskDraft = newTaskDraft,
+        newTaskOpenChats = newTaskOpenChats,
         contributions = window.entries.flatMap { it.sidebarItems },
         onNavigate = navigate,
         onOpenCommandMenu = window.menu::toggle,

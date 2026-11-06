@@ -37,6 +37,7 @@ data class DetailUiState(
   val focusSubtaskList: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
   val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
+  val validationCheckOverrides: Map<ValidationCheckKey, Boolean> = emptyMap(),
   val selectedQaRun: String? = null,
   val activity: ActivityResult = ActivityResult.Loading,
   val verifyCriteriaFilter: VerifyCriteriaFilter = VerifyCriteriaFilter.All,
@@ -100,6 +101,7 @@ sealed interface ListLoad {
 data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?, val next: WorkItem?)
 
 data class QaCaseKey(val invocationId: String, val caseId: String)
+data class ValidationCheckKey(val invocationId: String, val checkId: String)
 
 sealed interface DetailAction {
   data class OpenNewerVerifyRun(val workflowId: String) : DetailAction
@@ -115,10 +117,13 @@ sealed interface DetailAction {
   data object VerifyAgain : DetailAction
   data object ToggleFavorite : DetailAction
   data class ToggleQaCase(val key: QaCaseKey) : DetailAction
+  data class ToggleValidationCheck(val key: ValidationCheckKey) : DetailAction
   data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction
   data class SelectQaRun(val invocationId: String?) : DetailAction
   data class OpenQaReport(val path: String) : DetailAction
   data class OpenQaEvidence(val path: String, val invocationDirectory: String) : DetailAction
+  /** Opens .skill-bill/phases/qa.md without writing it. */
+  data object OpenQaPhaseInstructions : DetailAction
   data class ReviewFindings(val action: ReviewFindingsAction) : DetailAction
   data class LoadMore(val list: DetailList) : DetailAction
   data object Next : DetailAction

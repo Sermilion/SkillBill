@@ -78,8 +78,8 @@ public class StandalonePhaseStatusPublisherFactory(
       clock,
       diagnostics,
       blockIncidentCapture,
-      outputScheduler.takeIf { launch.scope == IdeStatusLaunchScope.STANDALONE },
-      capturePlanOutput = launch.scope == IdeStatusLaunchScope.STANDALONE,
+      outputScheduler,
+      capturePlanOutput = true,
     )
   }
 

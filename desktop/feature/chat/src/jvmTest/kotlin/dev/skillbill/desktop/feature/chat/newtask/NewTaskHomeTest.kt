@@ -1,13 +1,18 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
@@ -36,11 +41,14 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -56,13 +64,14 @@ class NewTaskHomeTest {
     val lib = savedDraft(chats, "lib", "/work/lib", Instant.fromEpochSeconds(3_600), "Update library")
     chats.saved[app.sessionId] = app
     chats.saved[lib.sessionId] = lib
-    val draft = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val draft = open.selected.value
     val actions = mutableListOf<NewTaskAction>()
     draft.refreshSaved()
     val fixedHost = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = {}, onShowAllWork = {})
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), draft, fixedHost) { actions += it } }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, fixedHost) { actions += it } }
       }
     }
     waitForIdle()
@@ -90,12 +99,13 @@ class NewTaskHomeTest {
       savedDraft(chats, "draft-$index", "/work/repo-$index", Instant.fromEpochSeconds(index.toLong()), "Draft $index")
     }
     drafts.forEach { chats.saved[it.sessionId] = it }
-    val draft = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val draft = open.selected.value
     val actions = mutableListOf<NewTaskAction>()
     draft.refreshSaved()
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), draft, host) { actions += it } }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) { actions += it } }
       }
     }
     waitForIdle()
@@ -109,6 +119,66 @@ class NewTaskHomeTest {
     draft.refreshSaved()
     waitForIdle()
     onNodeWithText("Show all").assertDoesNotExist()
+  }
+
+  // A badge on a saved chat that is not open, or none on the one that is.
+  @Test
+  fun `recent chats mark only the saved chat that is open in a tab`() = runComposeUiTest {
+    val chats = FakeExecutionChatRepository()
+    val app = savedDraft(chats, "app", "/work/app", Instant.fromEpochSeconds(0), "Build app")
+    val lib = savedDraft(chats, "lib", "/work/lib", Instant.fromEpochSeconds(3_600), "Update library")
+    chats.saved[app.sessionId] = app
+    chats.saved[lib.sessionId] = lib
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    open.resume(app)
+    open.newChat()
+    open.refreshSaved()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) {} }
+      }
+    }
+    waitForIdle()
+
+    onNodeWithText("Update library").assertExists()
+    onAllNodesWithText("open").assertCountEquals(1)
+  }
+
+  // A shortcut the screen ignores or routes to the wrong chat, or a close of a replying chat with no confirmation.
+  @Test
+  fun `chat shortcuts add, select, cycle and close chats`() = runComposeUiTest {
+    val chats = FakeExecutionChatRepository()
+    chats.events = { flow { awaitCancellation() } }
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    open.chatDispatcher = Dispatchers.Unconfined
+    val first = open.selected.value
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) {} }
+      }
+    }
+    val field = onNode(hasSetTextAction())
+
+    field.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.T) } }
+    runOnIdle { assertEquals(2, open.open.value.size) }
+    field.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.One) } }
+    runOnIdle { assertSame(first, open.selected.value) }
+    onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Two) } }
+    runOnIdle { assertSame(open.open.value[1], open.selected.value) }
+    onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Tab) } }
+    runOnIdle { assertSame(first, open.selected.value) }
+
+    runOnIdle {
+      first.repository = NewTaskRepository(".", "repo")
+      first.agentId = requireNotNull(chats.agent).agentId
+      first.selectedAgent = chats.agent
+      first.text = "build export"
+      first.send()
+    }
+    onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.W) } }
+    onNodeWithText("Keep open").assertExists()
+    onNodeWithText("Stop and close").assertExists()
+    runOnIdle { assertEquals(2, open.open.value.size) }
   }
 
   private fun savedDraft(chats: FakeExecutionChatRepository, sessionId: String, root: String, updatedAt: Instant, title: String) =
@@ -125,10 +195,11 @@ class NewTaskHomeTest {
   @Test
   fun `an empty board shows the examples and readiness without needs you or chips`() = runComposeUiTest {
     val state = NewTaskUiState(home = newTaskHome(loadedBoard()), detectedAgents = DetectedAgentsRead.Success(listOf(DetectedAgent("claude", "/bin/claude"), DetectedAgent("claude", "/opt/claude"))))
-    val draft = testNewTaskDraft().apply { repository = NewTaskRepository("/work/app", "app") }
+    val chats = unconfinedNewTaskChats()
+    val draft = chats.selected.value.apply { repository = NewTaskRepository("/work/app", "app") }
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, draft, host) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, chats, host) {} }
       }
     }
 
@@ -143,7 +214,7 @@ class NewTaskHomeTest {
     val state = NewTaskUiState(home = newTaskHome(BoardState.Loading))
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, testNewTaskDraft(), host) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, unconfinedNewTaskChats(), host) {} }
       }
     }
 
@@ -182,7 +253,7 @@ class NewTaskHomeTest {
     val twoHoursLater = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = { opened += it }, onShowAllWork = { showedAllWork = true })
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = newTaskHome(board)), testNewTaskDraft(), twoHoursLater) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = newTaskHome(board)), unconfinedNewTaskChats(), twoHoursLater) {} }
       }
     }
 
@@ -209,7 +280,7 @@ class NewTaskHomeTest {
     assertEquals(NewTaskHome.Returning(emptyList(), running = 2, finished = 0), home)
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = home), testNewTaskDraft(), host) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(home = home), unconfinedNewTaskChats(), host) {} }
       }
     }
 
@@ -222,10 +293,11 @@ class NewTaskHomeTest {
   fun `chips stay disabled until a repository and an agent are selected`() = runComposeUiTest {
     val startable = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {}, onStart = { _, _, _ -> })
     val state = NewTaskUiState(home = newTaskHome(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(workItem("SKILL-1"))))))
-    val draft = testNewTaskDraft()
+    val chats = unconfinedNewTaskChats()
+    val draft = chats.selected.value
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, draft, startable) {} }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, chats, startable) {} }
       }
     }
 
@@ -261,7 +333,8 @@ class NewTaskHomeTest {
       events = { flowOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.Completed) }
     }
     val controls = FakeWorkControlRepository().apply { newTaskOutcome = NewTaskStartOutcome.NeedsKey(listOf("APP")) }
-    val draft = NewTaskDraft(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System).apply {
+    val open = NewTaskChats(chats, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val draft = open.selected.value.apply {
       chatDispatcher = Dispatchers.Unconfined
       repository = NewTaskRepository("/work/app", "app")
       agentId = "claude"
@@ -282,7 +355,7 @@ class NewTaskHomeTest {
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          NewTaskScreen(NewTaskUiState(), draft, startable) {}
+          NewTaskScreen(NewTaskUiState(), open, startable) {}
         }
       }
     }
@@ -297,11 +370,12 @@ class NewTaskHomeTest {
   @Test
   fun `pressing an example fills the input and previews its route`() = runComposeUiTest {
     val fill = "Add CSV export to the history screen. Done when a user can download the rows they see."
-    val draft = testNewTaskDraft()
+    val chats = unconfinedNewTaskChats()
+    val draft = chats.selected.value
     setContent {
       SkillBillTheme(reducedMotion = true) {
         CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-          NewTaskScreen(NewTaskUiState(home = newTaskHome(loadedBoard())), draft, host) { action ->
+          NewTaskScreen(NewTaskUiState(home = newTaskHome(loadedBoard())), chats, host) { action ->
             if (action is NewTaskAction.TextChanged) draft.text = action.text
           }
         }

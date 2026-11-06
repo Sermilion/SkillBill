@@ -114,6 +114,7 @@ internal fun recordLaunchObservabilityAndLedger(
     action = context.selection.decision.action.name.lowercase(),
     progress = progress,
     launchOutcome = launchOutcome,
+    childFailureOutput = context.launchReconciliation.childFailureOutput,
   )
   ledger.recordLedgerEntry(
     if (context.selection.decision.action == GoalRunnerSubtaskAction.RESUME) {

@@ -8,6 +8,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import kotlinx.coroutines.flow.Flow
@@ -60,6 +61,15 @@ class FakeExecutionChatRepository(
 
   override fun end(sessionId: String) {
     ended += sessionId
+  }
+
+  /** Every `moveSessions` call as (fromRoot, toRoot); [moveResult] answers it. */
+  val moveCalls: MutableList<Pair<String, String>> = Collections.synchronizedList(mutableListOf())
+  var moveResult: suspend (String, String) -> SessionMoveResult = { _, _ -> SessionMoveResult(0, 0, 0) }
+
+  override suspend fun moveSessions(fromRoot: String, toRoot: String): SessionMoveResult {
+    moveCalls += fromRoot to toRoot
+    return moveResult(fromRoot, toRoot)
   }
 
   /** Saved chats by session id, as the store keeps them. */

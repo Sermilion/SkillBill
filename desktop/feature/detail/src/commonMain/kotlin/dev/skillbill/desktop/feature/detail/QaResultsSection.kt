@@ -71,6 +71,13 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
         item(key = "$key-gap-$index") { QaGapItem(row, index, view.notTested.size, state, "$base:g:$index", onAction, view.evidenceMode) }
       }
     }
+    if (view.unblock.isNotEmpty()) {
+      item(key = "$key-unblock-label") { QaGroupLabel("Unblock", view.unblock.size) }
+      view.unblock.forEachIndexed { index, entry ->
+        item(key = "$key-unblock-$index") { QaUnblockItem(entry, index, view.unblock.size, onAction, view.evidenceMode) }
+      }
+      item(key = "$key-unblock-open") { QaUnblockOpen(onAction) }
+    }
     val folds = qaFolds(view, base, state, onAction)
     if (folds.isNotEmpty()) {
       item(key = "$key-folds-gap") { Spacer(Modifier.height(16.dp)) }
@@ -121,6 +128,11 @@ internal fun QaResultsContent(
     if (view.notTested.isNotEmpty()) {
       QaGroupLabel("Not tested", view.notTested.size)
       view.notTested.forEachIndexed { index, row -> QaGapItem(row, index, view.notTested.size, state, "$base:g:$index", onAction, view.evidenceMode) }
+    }
+    if (view.unblock.isNotEmpty()) {
+      QaGroupLabel("Unblock", view.unblock.size)
+      view.unblock.forEachIndexed { index, entry -> QaUnblockItem(entry, index, view.unblock.size, onAction, view.evidenceMode) }
+      QaUnblockOpen(onAction)
     }
     val folds = qaFolds(view, base, state, onAction)
     if (folds.isNotEmpty()) {
@@ -177,6 +189,34 @@ private fun QaGroupLabel(label: String, count: Int) {
 @Composable
 private fun QaRowRule() {
   Box(Modifier.fillMaxWidth().height(1.dp).background(SkillBillTheme.colors.borderSubtle))
+}
+
+@Composable
+private fun QaUnblockItem(entry: QaUnblockEntry, index: Int, count: Int, onAction: (DetailAction) -> Unit, mode: QaEvidenceMode) {
+  Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
+    if (index > 0) QaRowRule()
+    QaItemHead(LucideIcons.warn, SkillBillTheme.colors.stBlocked, null, entry.capability, null, entry.target?.let { "Target: $it" }, null) {}
+    if (entry.remedy != null || entry.tried != null || entry.evidencePaths.isNotEmpty() || entry.snippet != null) {
+      Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        entry.remedy?.let { QaField("Remedy", it) }
+        entry.tried?.let { QaField("Tried", it) }
+        if (entry.evidencePaths.isNotEmpty() || entry.snippet != null) {
+          QaEvidenceChips(entry.evidencePaths, entry.evidenceDirectory, onAction, mode) {
+            entry.snippet?.let { snippet -> QaChip("Copy for qa.md", LucideIcons.copy) { onAction(DetailAction.Copy(snippet)) } }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun QaUnblockOpen(onAction: (DetailAction) -> Unit) {
+  Row(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) {
+    QaChip("Open qa.md", LucideIcons.external, description = "Open .skill-bill/phases/qa.md") {
+      onAction(DetailAction.OpenQaPhaseInstructions)
+    }
+  }
 }
 
 /** The click, focus and hover a row or fold head takes; [open] null means nothing expands, so there is no click at all. */

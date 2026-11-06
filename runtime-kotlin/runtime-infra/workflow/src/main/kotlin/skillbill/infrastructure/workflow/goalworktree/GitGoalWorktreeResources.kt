@@ -20,6 +20,7 @@ import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.time.model.RuntimeWaitResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
@@ -88,6 +89,11 @@ class GitGoalWorktreeResources(
       ?.firstOrNull { field -> field.startsWith(WORKTREE_FIELD_PREFIX) }
       ?.let { field -> Path.of(field.removePrefix(WORKTREE_FIELD_PREFIX)) }
   }
+
+  override fun checkoutGoalBranch(
+    primaryRoot: Path,
+    branch: String,
+  ): GoalBranchCheckout = checkoutGoalBranchAt(primaryRoot, branch)
 
   override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? {
     val path = request.worktreePath

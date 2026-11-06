@@ -99,6 +99,7 @@ public class WorkflowGoalRunnerBlockWrites(
         failureCode = request.failureCode,
         failureDisposition = request.failureDisposition,
         recoveryCommand = request.recoveryCommand,
+        failurePhaseEvidence = request.failurePhaseEvidence,
       ),
       workflowStates,
       blockIncidents,
@@ -116,7 +117,11 @@ public class WorkflowGoalRunnerBlockWrites(
     val candidate = blockCandidate(write, workflowStates)
     val existingOwnerToken = blockIncidents.findByAlias(candidate.alias)?.occurrence?.occurrenceToken
     val blockIdentity =
-      candidate.identity(existingOwnerToken).let { identity ->
+      candidate.identity(existingOwnerToken).let { candidateIdentity ->
+        val identity =
+          candidateIdentity.copy(
+            failurePhaseEvidence = write.failurePhaseEvidence ?: candidateIdentity.failurePhaseEvidence,
+          )
         if (identity.incidentToken == candidate.retainedIdentity?.incidentToken) {
           identity
         } else {
@@ -220,13 +225,15 @@ public class WorkflowGoalRunnerBlockWrites(
       when {
         write.family != WorkflowFamily.TASK_RUNTIME -> null
         acceptedCause != null -> acceptedCause.blockedStepId
+        blockIdentity.failurePhaseEvidence != null -> blockIdentity.failurePhaseEvidence?.phaseId
         else -> blockIdentity.stepId
       }
+    val incidentAttempt = blockIdentity.attempt.takeIf { phaseId == blockIdentity.stepId }
     return BlockIncidentObservation(
       workflowId = write.record.workflowId,
       parentWorkflowId = parentWorkflowId,
       phaseId = phaseId,
-      attempt = blockIdentity.attempt,
+      attempt = incidentAttempt,
       reason = write.blockedReason,
       alias = blockIdentity.alias,
       linkOccurrenceToken = blockIdentity.incidentToken,
@@ -247,7 +254,7 @@ public class WorkflowGoalRunnerBlockWrites(
         acceptedUnavailableFields(
           write,
           phaseId,
-          blockIdentity.attempt,
+          incidentAttempt,
           parentWorkflowId,
           blockIdentity.failureCode,
         ),
@@ -324,6 +331,7 @@ public class WorkflowGoalRunnerBlockWrites(
         sourceAlias = referenceSourceAlias ?: referenceAlias?.takeIf { it != canonical },
         failureFacts = referencedIdentity?.failureFacts,
         blockCause = reference.blockCause,
+        failurePhaseEvidence = referencedIdentity?.failurePhaseEvidence ?: write.failurePhaseEvidence,
       )
     val currentAttemptCount = write.record.steps.firstOrNull { it.stepId == reference.blockedStepId }?.attemptCount
     persistBlock(
@@ -343,6 +351,7 @@ public class WorkflowGoalRunnerBlockWrites(
       reference,
       blockIdentity.sourceAlias,
       acceptedCause,
+      blockIdentity.failurePhaseEvidence,
     )
   }
 

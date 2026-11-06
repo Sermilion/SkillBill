@@ -14,7 +14,7 @@ import kotlin.time.Instant
 internal const val LISTED_SESSIONS = 25
 internal const val RESUMED_LINES = 10
 
-private const val CODEX_SCAN_LIMIT = 400
+internal const val CODEX_SCAN_LIMIT = 400
 private const val CODEX_TITLE_LINES = 60
 private const val TITLE_TAIL_BYTES = 65_536L
 private const val LINE_LIMIT = 4_000
@@ -170,7 +170,7 @@ private fun tail(file: File): String = RandomAccessFile(file, "r").use { access 
   String(bytes, Charsets.UTF_8)
 }
 
-private fun newestFirst(directory: File): Sequence<File> = sequence {
+internal fun newestFirst(directory: File): Sequence<File> = sequence {
   val children = directory.listFiles().orEmpty().sortedByDescending(File::getName)
   for (child in children) {
     if (child.isDirectory) yieldAll(newestFirst(child)) else if (child.name.endsWith(".jsonl")) yield(child)

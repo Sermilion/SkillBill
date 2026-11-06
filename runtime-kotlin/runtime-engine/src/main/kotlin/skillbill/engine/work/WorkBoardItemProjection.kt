@@ -39,6 +39,7 @@ import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
+import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
@@ -222,11 +223,17 @@ public class WorkBoardItemProjection(
         control.executionWorktreeRetentionReason != null -> GoalWorktreeState.RETAINED
         else -> GoalWorktreeState.ACTIVE
       }
+    val outcome =
+      control.executionMainCheckoutOutcome?.let { wire ->
+        GoalMainCheckoutOutcome.entries.firstOrNull { it.wireValue == wire }
+      }
     return GoalWorktreeView(
       path,
       state,
       control.executionWorktreeRetentionReason,
       control.executionWorktreeRetentionDetail,
+      outcome,
+      control.executionMainCheckoutDetail.takeIf { outcome != null },
     )
   }
 

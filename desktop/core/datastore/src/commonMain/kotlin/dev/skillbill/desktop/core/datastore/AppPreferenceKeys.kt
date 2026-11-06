@@ -14,6 +14,7 @@ internal object AppPreferenceKeys {
   val DATABASE_PATH = stringPreferencesKey("database_path")
   val CLAUDE_CONFIG_DIR = stringPreferencesKey("claude_config_dir")
   val HISTORY_RETENTION = stringPreferencesKey("history_retention")
+  val NEW_TASK_CHAT_LAYOUT = stringPreferencesKey("new_task_chat_layout")
   val START_AT_LOGIN = booleanPreferencesKey("start_at_login")
   val TERMINAL_HEIGHT_DP = intPreferencesKey("terminal_height_dp")
   val CHAT_WIDTH_DP = intPreferencesKey("chat_width_dp")

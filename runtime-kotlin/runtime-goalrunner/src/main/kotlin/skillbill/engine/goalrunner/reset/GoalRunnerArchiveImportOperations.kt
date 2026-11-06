@@ -771,6 +771,8 @@ public class GoalRunnerArchiveImportOperations(
       executionWorktreeRemovedAt = null,
       executionWorktreeRetentionReason = null,
       executionWorktreeRetentionDetail = null,
+      executionMainCheckoutOutcome = null,
+      executionMainCheckoutDetail = null,
     )
 
   private fun archivedControlSettingsMatch(

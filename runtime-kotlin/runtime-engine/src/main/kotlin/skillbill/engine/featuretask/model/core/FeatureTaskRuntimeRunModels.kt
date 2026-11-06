@@ -62,6 +62,7 @@ public data class FeatureTaskRuntimeRunRequest(
   override val goalHistoryWriterInput: GoalHistoryWriterInput? = null
   override val goalQualityAutomaticRecovery: Boolean = false
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null
+  override val validationCheckInvocationId: String? = null
 
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }

@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.TrayTab
@@ -51,6 +52,8 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
     change { it.copy(claudeConfigDir = directory?.trim()?.ifEmpty { null }) }
 
   override suspend fun setHistoryWindow(window: HistoryWindow) = change { it.copy(historyWindow = window) }
+
+  override suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout) = change { it.copy(newTaskChatLayout = layout) }
 
   override suspend fun setNotification(kind: NotificationKind, enabled: Boolean) =
     change { it.copy(notifications = it.notifications + (kind to enabled)) }
