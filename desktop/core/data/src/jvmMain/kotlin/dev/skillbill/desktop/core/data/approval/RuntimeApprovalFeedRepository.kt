@@ -28,13 +28,13 @@ class RuntimeApprovalFeedRepository(
   private val sessions: DatabaseSessionManager,
   private val diagnostics: Diagnostics,
 ) : ApprovalFeedRepository {
-  override fun observe(repositoryRoot: String): Flow<ApprovalFeed> = sessions.sessionFlow(
+  override fun observe(repositoryRoot: String, retainedKeys: Flow<Set<ApprovalCardKey>>): Flow<ApprovalFeed> = sessions.sessionFlow(
     opening = ApprovalFeed.Unavailable("The database session is opening, so no approval card can be answered."),
     failed = {
       diagnostics.record("approval.feed_unavailable")
       ApprovalFeed.Unavailable("The database is unavailable, so no approval card can be answered.")
     },
-  ) { it.approvals.observe(repositoryRoot) }
+  ) { it.approvals.observe(repositoryRoot, retainedKeys) }
 
   override suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean): ApprovalDecisionOutcome =
     current()?.approvals?.decide(key, optionId, alwaysAllow) ?: ApprovalDecisionOutcome.NotLive

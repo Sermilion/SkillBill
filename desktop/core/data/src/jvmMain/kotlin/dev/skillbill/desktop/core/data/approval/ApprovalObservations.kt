@@ -14,7 +14,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -25,6 +24,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.approval.ApprovalOperatorService
 import skillbill.di.core.RuntimeComponent
 import skillbill.ports.approval.model.ApprovalDecisionResult
+import skillbill.ports.approval.model.ApprovalRequestIdentity
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
 import java.time.Instant
@@ -62,7 +62,7 @@ class ApprovalObservations(
    * The pending requests of the repository enclosing [repositoryRoot], re-read on database commits and registration
    * changes. Collecting makes the operator consumer live; [ApprovalFeed.Observing.live] is false whenever it is not.
    */
-  fun observe(repositoryRoot: String): Flow<ApprovalFeed> = flow {
+  fun observe(repositoryRoot: String, retainedKeys: Flow<Set<ApprovalCardKey>>): Flow<ApprovalFeed> = flow {
     val identity = try {
       onDatabase { service.repositoryIdentity(Path.of(repositoryRoot)) }
     } catch (failure: CancellationException) {
@@ -74,13 +74,26 @@ class ApprovalObservations(
     }
     // Terminal requests registered before this collector started are history, not this surface's cards.
     val observedFrom = Instant.ofEpochMilli(clock.now().toEpochMilliseconds())
+    val retainedIdentities = linkedSetOf<ApprovalRequestIdentity>()
     val entry = onDatabase { leases.acquire(identity) }
     if (entry == null) {
       emit(ApprovalFeed.Unavailable(SESSION_CLOSED_REASON))
       return@flow
     }
     try {
-      emitAll(merge(signals.snapshots.map { }, epoch.map { }).conflate().map { read(entry, observedFrom) })
+      emitAll(
+        merge(
+          signals.snapshots.map { emptySet() },
+          epoch.map { emptySet() },
+          retainedKeys,
+        ).map { keys ->
+          keys.asSequence()
+            .filter { it.repositoryIdentity == identity }
+            .map(ApprovalCardKey::toIdentity)
+            .forEach(retainedIdentities::add)
+          read(entry, observedFrom, retainedIdentities)
+        },
+      )
     } finally {
       withContext(NonCancellable) { onDatabase { leases.release(entry) } }
     }
@@ -128,9 +141,15 @@ class ApprovalObservations(
     ApprovalRevokeOutcome.Failed("The rule could not be revoked, so it is still active.")
   }
 
-  private suspend fun read(entry: ApprovalConsumerLeases.Entry, observedFrom: Instant): ApprovalFeed = try {
-    val cards = onDatabase { service.views(entry.repositoryIdentity, observedFrom) }
-    ApprovalFeed.Observing(leases.isLive(entry), cards.map { it.toCard() })
+  private suspend fun read(
+    entry: ApprovalConsumerLeases.Entry,
+    observedFrom: Instant,
+    retainedIdentities: MutableSet<ApprovalRequestIdentity>,
+  ): ApprovalFeed = try {
+    val cards = onDatabase { service.views(entry.repositoryIdentity, observedFrom, retainedIdentities.toSet()) }
+    val mapped = cards.map { it.toCard() }
+    mapped.asSequence().map { it.key.toIdentity() }.forEach(retainedIdentities::add)
+    ApprovalFeed.Observing(leases.isLive(entry), mapped)
   } catch (failure: CancellationException) {
     throw failure
   } catch (_: Exception) {

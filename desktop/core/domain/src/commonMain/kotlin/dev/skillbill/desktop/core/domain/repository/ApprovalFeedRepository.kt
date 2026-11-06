@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
  * registers its consumer while a collector exists and releases it, cancelling outstanding requests, when the last one leaves.
  */
 interface ApprovalFeedRepository {
-  fun observe(repositoryRoot: String): Flow<ApprovalFeed>
+  fun observe(repositoryRoot: String, retainedKeys: Flow<Set<ApprovalCardKey>>): Flow<ApprovalFeed>
 
   suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean): ApprovalDecisionOutcome
 

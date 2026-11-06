@@ -32,6 +32,7 @@ class ApprovalOperatorService(
   fun views(
     repositoryIdentity: String,
     observedFrom: Instant,
+    retainedIdentities: Set<ApprovalRequestIdentity> = emptySet(),
   ): List<ApprovalOperatorView> {
     val now = clock.instant()
     return database.read { unit ->
@@ -46,6 +47,9 @@ class ApprovalOperatorService(
       store.pending(repositoryIdentity, null).forEach { stored ->
         byIdentity.putIfAbsent(stored.record.identity(), stored)
       }
+      retainedIdentities.asSequence()
+        .filter { it.repositoryIdentity == repositoryIdentity }
+        .forEach { identity -> store.find(identity)?.let { byIdentity[identity] = it } }
       byIdentity.values.map { stored -> stored.toOperatorView(store, now) }
     }
   }

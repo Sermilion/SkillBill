@@ -11,6 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 internal const val APPROVAL_NOT_LIVE_NOTE =
   "This window does not hold the operator registration for this repository, so nothing was sent."
@@ -22,7 +23,8 @@ internal const val APPROVAL_NOT_LIVE_NOTE =
 internal object UnavailableApprovalFeed : ApprovalFeedRepository {
   private const val REASON = "No approval feed is connected, so no approval card can be answered."
 
-  override fun observe(repositoryRoot: String): Flow<ApprovalFeed> = flowOf(ApprovalFeed.Unavailable(REASON))
+  override fun observe(repositoryRoot: String, retainedKeys: Flow<Set<ApprovalCardKey>>): Flow<ApprovalFeed> =
+    flowOf(ApprovalFeed.Unavailable(REASON))
 
   override suspend fun decide(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean): ApprovalDecisionOutcome =
     ApprovalDecisionOutcome.NotLive
@@ -53,7 +55,10 @@ internal class ChatApprovals(private val repository: ApprovalFeedRepository) {
     changed: suspend () -> Unit,
   ) {
     try {
-      repository.observe(repositoryRoot()).collect { feed ->
+      val retainedKeys = thread.transcript.map { messages ->
+        messages.mapNotNull { (it as? ChatMessage.Approval)?.card?.key }.toSet()
+      }
+      repository.observe(repositoryRoot(), retainedKeys).collect { feed ->
         when (feed) {
           is ApprovalFeed.Unavailable -> live.value = false
           is ApprovalFeed.Observing -> {
