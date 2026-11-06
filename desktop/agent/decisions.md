@@ -1,3 +1,15 @@
+## [2026-11-06] Keep New Task chat ownership independent of layout
+Context: The Open chats setting switches live between Tabs and Side list while chats may be replying or hold unsent text.
+Decision: Window-scoped NewTaskChats owns open drafts and selection outside the screen view model. Both layouts read the same OpenChatItem projection; shortcuts and busy-close confirmation stay outside the layout branch.
+Reason: A presentation change must preserve drafts, sessions, order and selection. Keeping ownership in the window also preserves the existing navigation and database-session lifetime contract.
+Revisit when: Transcript scroll must survive layout changes. The current spec permits it to reset.
+
+## [2026-11-06] Keep the open New Task chat set in memory
+Context: Saved New Task drafts already return through Recent chats and the resume picker, and restoring the open set after restart is out of scope.
+Decision: Persist saved conversations through the existing chat store, but keep open-chat membership and order in window memory only.
+Reason: Saved drafts provide recovery. Persisting the open set would add another store for those chats beyond the requested scope.
+Revisit when: Operators need their open tabs restored after restart.
+
 ## [2026-11-06] Refresh observed standalone plans on a bounded pulse
 Context: Plan output snapshots have no change revision, so database signals alone do not guarantee a full detail refresh when output changes.
 Decision: Refresh full detail every two seconds while an observed standalone plan is active or blocked. Stop when a full read reports it idle or the observer closes.
