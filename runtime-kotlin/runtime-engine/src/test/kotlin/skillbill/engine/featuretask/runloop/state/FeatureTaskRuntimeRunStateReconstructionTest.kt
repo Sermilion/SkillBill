@@ -211,16 +211,18 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
               ),
           ),
         transitions = transitions,
-        durableInitialLedger =
-          listOf(
-            FeatureTaskRuntimePhaseLedgerEntry(
-              action = FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
-              sequenceNumber = 1,
-              timestamp = "2026-01-01T00:00:00Z",
-              phaseId = output.phaseId,
-              attemptCount = 1,
-              loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
-              edgeIteration = 2,
+        initialAttemptHistory =
+          PhaseAttemptHistory(
+            listOf(
+              FeatureTaskRuntimePhaseLedgerEntry(
+                action = FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
+                sequenceNumber = 1,
+                timestamp = "2026-01-01T00:00:00Z",
+                phaseId = output.phaseId,
+                attemptCount = 1,
+                loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
+                edgeIteration = 2,
+              ),
             ),
           ),
         resumeRulesFn = RESUME_RULES,
@@ -284,7 +286,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunState(
         initialRecords = recorder.loadPhaseRecords(workflowId).orEmpty(),
         transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
-        durableInitialLedger = recorder.loadPhaseLedger(workflowId).orEmpty(),
+        initialAttemptHistory = PhaseAttemptHistory(recorder.loadPhaseLedger(workflowId).orEmpty()),
         resumeRulesFn = RESUME_RULES,
       )
 

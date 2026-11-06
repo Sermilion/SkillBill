@@ -25,6 +25,7 @@ import skillbill.engine.goalrunner.execution.support.pullRequestFacts
 import skillbill.engine.goalrunner.execution.support.pullRequestRequestOf
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
+import skillbill.engine.goalrunner.history.goalHistoryFingerprint
 import skillbill.engine.goalrunner.model.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
@@ -75,7 +76,6 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.nio.file.Path
-import java.security.MessageDigest
 
 @Inject
 public class GoalRunnerFinalization(
@@ -468,45 +468,6 @@ public class GoalRunnerFinalization(
     val ordered = outcomeStore.goalHistoryWriterEntries(parentId, expectedSelection)
     val repairContext = outcomeStore.goalFinalRepairContext(parentId) ?: return null
     return GoalHistoryWriterInput(parentId, ordered, repairContext)
-  }
-
-  private fun goalHistoryFingerprint(
-    input: GoalHistoryWriterInput,
-    preWriterTree: String,
-  ): String {
-    val values =
-      buildList {
-        add(input.parentWorkflowId)
-        input.entries.forEach { entry ->
-          add(entry.subtaskId.toString())
-          add(entry.childWorkflowId)
-          add(entry.definitionId)
-          add(entry.legacyDisposition.orEmpty())
-          entry.draft?.let { draft ->
-            add(draft.disposition.wireValue)
-            add(draft.boundary.orEmpty())
-            add(draft.history.orEmpty())
-            add(draft.decisions.orEmpty())
-            add(draft.skipReason.orEmpty())
-          }
-        }
-        input.repairContext.outputs.forEach { output ->
-          add(output.phaseId)
-          add(output.invocationId)
-          add(output.occurrence.toString())
-          add(output.output)
-        }
-        add(input.repairContext.warning.orEmpty())
-        add(preWriterTree)
-      }
-    val digest = MessageDigest.getInstance("SHA-256")
-    values.forEach { value ->
-      val bytes = value.toByteArray(Charsets.UTF_8)
-      digest.update(bytes.size.toString().toByteArray(Charsets.UTF_8))
-      digest.update(byteArrayOf(0))
-      digest.update(bytes)
-    }
-    return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
   }
 
   private fun writeHistoryStopped(

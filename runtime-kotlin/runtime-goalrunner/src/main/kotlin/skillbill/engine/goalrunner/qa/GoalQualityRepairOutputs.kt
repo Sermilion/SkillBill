@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.qa
 
+import skillbill.engine.featuretask.phaserun.PhaseRunCompletedOutput
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -53,13 +54,12 @@ internal class GoalQualityRepairOutputs(private val outcomeStore: GoalRunnerWork
   ) {
     val validationRepairs =
       if (definition == SkeletonDefinition.VALIDATION) {
-        outcomeStore.goalQualityExecution(state.parentWorkflowId)
-          ?.execution
-          ?.progress
-          ?.validation
-          ?.validationGateProgress
-          ?.acceptedRepairOutputs
-          .orEmpty()
+        outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution?.let { execution ->
+          execution.validationOccurrences.flatMap { archived ->
+            archived.progress.validationGateProgress?.acceptedRepairOutputs.orEmpty()
+          } +
+            execution.progress?.validation?.validationGateProgress?.acceptedRepairOutputs.orEmpty()
+        }.orEmpty()
       } else {
         emptyList()
       }
@@ -81,14 +81,24 @@ internal class GoalQualityRepairOutputs(private val outcomeStore: GoalRunnerWork
         )
       }
     }
-    result.identifiedCompletedOutputs
-      .filter {
-        definition == SkeletonDefinition.VALIDATION ||
-          it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX
+    val retainedOutputs =
+      if (definition == SkeletonDefinition.VALIDATION) {
+        outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution?.let { execution ->
+          execution.validationOccurrences.flatMap { it.progress.acceptedOutputs } +
+            execution.progress?.validation?.acceptedOutputs.orEmpty()
+        }.orEmpty()
+      } else {
+        emptyList()
       }
-      .filterNot {
-        validationRepairs.isNotEmpty() &&
-          it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
+    (
+      retainedOutputs.map { output ->
+        PhaseRunCompletedOutput(output.phaseId, output.occurrence, output.output)
+      } + result.identifiedCompletedOutputs
+    )
+      .filter {
+        definition == SkeletonDefinition.VALIDATION &&
+          it.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE ||
+          it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX
       }
       .forEach { output ->
         if (!outcomeStore.recordGoalFinalRepairOutput(

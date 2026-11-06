@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -27,6 +28,10 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
+import java.nio.file.Path
+import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
@@ -135,6 +140,23 @@ public class PhaseRunPlanResolver(
     }
   }
 
+  internal fun requiresQualitySourceEvidence(plan: ResolvedPhaseExecutionPlan): Boolean =
+    plan.selectedStepIds.any { step ->
+      when (val operation = strategies.qualityGateOperation(plan, step)) {
+        is PhaseQualityGateOperation.PackGate -> operation.commandFamily == ValidationGateCommandFamily.VALIDATION
+        PhaseQualityGateOperation.AgentValidation -> true
+        else -> false
+      }
+    }
+
+  public fun acceptedValidationSourceIsCurrent(request: GoalQualityValidationSourceRequest): Boolean =
+    acceptedValidationSourceIsCurrent(request, strategies, gitOperations)
+
+  public fun hasAcceptedValidationBoundary(
+    progress: GoalQualityPhaseProgress,
+    plan: ResolvedPhaseExecutionPlan,
+  ): Boolean = hasAcceptedValidationBoundary(progress, plan.selectedStepIds)
+
   private fun replayableReadOnlyStep(
     progress: GoalQualityPhaseProgress,
     record: FeatureTaskRuntimePhaseRecord,
@@ -241,10 +263,10 @@ public class PhaseRunPlanResolver(
         "skill-bill goal fresh-quality <issue-key> --reason \"<why>\".",
     )
 
-  internal fun invalidQualityPlan(): Nothing =
+  internal fun invalidQualityPlan(detail: String? = null): Nothing =
     throw SkillBillRuntimeException(
       WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-      "The admitted goal-quality execution plan is unsupported or corrupt.",
+      "The admitted goal-quality execution plan is unsupported or corrupt." + (detail?.let { " $it" } ?: ""),
     )
 
   internal fun resolveExecutionPlan(
@@ -289,3 +311,275 @@ public class PhaseRunPlanResolver(
       ?.takeIf { branch -> branch.isNotBlank() && branch != "HEAD" }
       ?.let(::FeatureTaskRuntimeResolvedBranch)
 }
+
+internal fun acceptedValidationSourceIsCurrent(
+  request: GoalQualityValidationSourceRequest,
+  strategies: PhaseStrategyLookup,
+  gitOperations: WorkflowGitOperations,
+): Boolean {
+  val progress = request.progress
+  val observations = progress.acceptedSourceObservations
+  if (observations.isEmpty()) {
+    return request.legacyContentFingerprint == request.currentContentFingerprint &&
+      legacyGateSourceIsCurrent(request, strategies, gitOperations)
+  }
+  if (observations.last().contentFingerprint != request.currentContentFingerprint ||
+    observations.any { !observationMatchesProgress(it, request) }
+  ) {
+    return false
+  }
+  val warningStep = progress.terminalBlockedStep ?: retainedBlockedBoundary(progress)
+  return if (warningStep != null) {
+    warningSourceIsCurrent(request, warningStep, strategies, gitOperations)
+  } else {
+    completedSourceIsCurrent(request, strategies, gitOperations)
+  }
+}
+
+private fun observationMatchesProgress(
+  observation: GoalQualityAcceptedSourceObservation,
+  request: GoalQualityValidationSourceRequest,
+): Boolean {
+  val progress = request.progress
+  val record = progress.phaseRecords[observation.phaseId]
+  val event = record?.let { terminalEvent(progress, it) }
+  val identityMatches =
+    observation.validationOccurrence == request.validationOccurrence &&
+      observation.progressRevision <= progress.revision && record?.attemptCount == observation.attempt &&
+      event?.sequenceNumber == observation.completionSequenceNumber
+  val outputMatches =
+    observation.acceptedOutputFingerprint?.let { fingerprint ->
+      progress.acceptedOutputs.any { output ->
+        output.phaseId == observation.phaseId && output.occurrence == observation.attempt &&
+          sha256(output.output) == fingerprint
+      }
+    } != false
+  return identityMatches && outputMatches
+}
+
+private fun terminalEvent(
+  progress: GoalQualityPhaseProgress,
+  record: FeatureTaskRuntimePhaseRecord,
+): FeatureTaskRuntimePhaseLedgerEntry? =
+  when (record.status) {
+    WorkflowStepStatus.BLOCKED -> progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount)
+    WorkflowStepStatus.COMPLETED ->
+      progress.phaseLedger.filter {
+        it.phaseId == record.phaseId && it.attemptCount == record.attemptCount &&
+          it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+      }.maxByOrNull { it.sequenceNumber }
+    else -> null
+  }
+
+private fun retainedBlockedBoundary(progress: GoalQualityPhaseProgress): String? =
+  progress.acceptedSourceObservations.lastOrNull()?.let { observation ->
+    progress.phaseRecords[observation.phaseId]?.takeIf { record ->
+      record.status == WorkflowStepStatus.BLOCKED && record.attemptCount == observation.attempt &&
+        progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount)?.sequenceNumber ==
+        observation.completionSequenceNumber
+    }?.phaseId
+  }
+
+private fun warningSourceIsCurrent(
+  request: GoalQualityValidationSourceRequest,
+  warningStep: String,
+  strategies: PhaseStrategyLookup,
+  gitOperations: WorkflowGitOperations,
+): Boolean {
+  val progress = request.progress
+  val observation = progress.acceptedSourceObservations.last()
+  val record = progress.phaseRecords[warningStep] ?: return false
+  val matchesObservation = observation.phaseId == warningStep && record.attemptCount == observation.attempt
+  val matchesBoundary =
+    record.status == WorkflowStepStatus.BLOCKED &&
+      progress.acceptedBlockedValidationEvent(warningStep, observation.attempt)?.sequenceNumber ==
+      observation.completionSequenceNumber
+  if (!matchesObservation || !matchesBoundary) return false
+  val operation = strategies.qualityGateOperation(request.plan, warningStep)
+  return if (operation is PhaseQualityGateOperation.PackGate) {
+    gateKeyMatches(request, record, operation.commandFamily) &&
+      warningGateSourceIsCurrent(progress.validationGateProgress, request.repoRoot, gitOperations)
+  } else {
+    operation == PhaseQualityGateOperation.AgentValidation
+  }
+}
+
+private fun completedSourceIsCurrent(
+  request: GoalQualityValidationSourceRequest,
+  strategies: PhaseStrategyLookup,
+  gitOperations: WorkflowGitOperations,
+): Boolean {
+  val progress = request.progress
+  val completedRecords = progress.phaseRecords.values.filter { it.status == WorkflowStepStatus.COMPLETED }
+  if (completedRecords.isEmpty() || completedRecords.any { !completedRecordIsCurrent(it, request) }) return false
+  val observation = progress.acceptedSourceObservations.last()
+  val record = progress.phaseRecords[observation.phaseId] ?: return false
+  if (record.attemptCount != observation.attempt || record.status != WorkflowStepStatus.COMPLETED) return false
+  val operation = strategies.qualityGateOperation(request.plan, observation.phaseId)
+  return if (operation is PhaseQualityGateOperation.PackGate) {
+    gateKeyMatches(request, record, operation.commandFamily) &&
+      completedGateSourceIsCurrent(progress.validationGateProgress, request.repoRoot, gitOperations)
+  } else {
+    progress.acceptedEnvelopes.any { it.phaseId == observation.phaseId && it.attempt == observation.attempt } ||
+      progress.acceptedOutputs.any { it.phaseId == observation.phaseId && it.occurrence == observation.attempt }
+  }
+}
+
+private fun completedRecordIsCurrent(
+  record: FeatureTaskRuntimePhaseRecord,
+  request: GoalQualityValidationSourceRequest,
+): Boolean {
+  val progress = request.progress
+  val observation =
+    progress.acceptedSourceObservations.singleOrNull {
+      it.phaseId == record.phaseId && it.attempt == record.attemptCount
+    } ?: return false
+  return observation.contentFingerprint == request.currentContentFingerprint &&
+    terminalEvent(progress, record)?.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+}
+
+private fun gateKeyMatches(
+  request: GoalQualityValidationSourceRequest,
+  record: FeatureTaskRuntimePhaseRecord,
+  family: ValidationGateCommandFamily,
+): Boolean =
+  request.progress.validationGateProgressKey ==
+    packBuildGateProgressKey(
+      request.outcomeNamespace,
+      request.plan.definitionId,
+      record.phaseId,
+      record.attemptCount,
+      family,
+    )
+
+private fun warningGateSourceIsCurrent(
+  gate: FeatureTaskRuntimeValidationGateProgress?,
+  repoRoot: Path,
+  gitOperations: WorkflowGitOperations,
+): Boolean {
+  if (gate == null || gate.pendingExternalOperation != null || gate.pendingExternalCheckpoint != null) return false
+  if (gate.terminalOutcome == "paused") return false
+  val knownRefusal =
+    gate.terminalOutcome == "blocked" &&
+      (gate.terminalFailureCode != null || gate.terminalFailureDisposition != null)
+  return when {
+    knownRefusal -> true
+    gate.terminalOutcome != null -> false
+    else ->
+      gateRunSourceIsCurrent(gate, repoRoot, gitOperations) &&
+        gate.gateRuns.last().outcome != ValidationGateRunOutcome.PASSED
+  }
+}
+
+private fun completedGateSourceIsCurrent(
+  gate: FeatureTaskRuntimeValidationGateProgress?,
+  repoRoot: Path,
+  gitOperations: WorkflowGitOperations,
+): Boolean =
+  gate != null && gate.terminalOutcome == null &&
+    gateRunSourceIsCurrent(gate, repoRoot, gitOperations) &&
+    gate.gateRuns.last().let { it.outcome == ValidationGateRunOutcome.PASSED && it.exitCode == 0 }
+
+private fun gateRunSourceIsCurrent(
+  gate: FeatureTaskRuntimeValidationGateProgress,
+  repoRoot: Path,
+  gitOperations: WorkflowGitOperations,
+): Boolean {
+  val run = gate.gateRuns.lastOrNull() ?: return false
+  val checkpoint = gitOperations.repositoryFingerprint(repoRoot)
+  val sourceMatches =
+    checkpoint is WorkflowGitOperationResult.Ok && checkpoint.value.isNotBlank() &&
+      run.repositoryCheckpoint == checkpoint.value
+  val verifiedCommand = !run.legacyUnverified && !run.command.isNullOrBlank() && run.exitCode != null
+  return sourceMatches && verifiedCommand
+}
+
+internal fun hasAcceptedValidationBoundary(
+  progress: GoalQualityPhaseProgress,
+  selected: Collection<String>,
+): Boolean {
+  if (selected.isEmpty() || progress.phaseRecords.keys.any { it !in selected }) return false
+  val blocked = progress.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
+  return if (blocked != null && acceptedBlockedBoundary(progress, selected, blocked)) {
+    true
+  } else {
+    progress.phaseRecords.keys == selected.toSet() &&
+      selected.all { phase ->
+        completedPhaseHasEvent(progress, phase)
+      }
+  }
+}
+
+private fun acceptedBlockedBoundary(
+  progress: GoalQualityPhaseProgress,
+  selected: Collection<String>,
+  record: FeatureTaskRuntimePhaseRecord,
+): Boolean {
+  val index = selected.indexOf(record.phaseId)
+  val shapeMatches =
+    index >= 0 && progress.phaseRecords.keys == selected.take(index + 1).toSet() &&
+      selected.drop(index + 1).none { it in progress.phaseRecords }
+  val statusesMatch =
+    progress.phaseRecords.values.all {
+      val blockedMatch = it.phaseId == record.phaseId && it.status == WorkflowStepStatus.BLOCKED
+      it.status == WorkflowStepStatus.COMPLETED || blockedMatch
+    }
+  val evidenceMatches =
+    selected.take(index).all { completedPhaseHasEvent(progress, it) } &&
+      progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount) != null
+  return shapeMatches && statusesMatch && evidenceMatches
+}
+
+private fun completedPhaseHasEvent(
+  progress: GoalQualityPhaseProgress,
+  phase: String,
+): Boolean {
+  val record = progress.phaseRecords[phase] ?: return false
+  return record.status == WorkflowStepStatus.COMPLETED &&
+    terminalEvent(progress, record)?.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+}
+
+private fun legacyGateSourceIsCurrent(
+  request: GoalQualityValidationSourceRequest,
+  strategies: PhaseStrategyLookup,
+  gitOperations: WorkflowGitOperations,
+): Boolean {
+  val progress = request.progress
+  val records =
+    progress.phaseRecords.values.filter {
+      it.status in setOf(WorkflowStepStatus.COMPLETED, WorkflowStepStatus.BLOCKED)
+    }
+  val record = records.singleOrNull() ?: return false
+  val operation =
+    strategies.qualityGateOperation(request.plan, record.phaseId) as? PhaseQualityGateOperation.PackGate
+      ?: return false
+  val action =
+    if (record.status == WorkflowStepStatus.BLOCKED) {
+      FeatureTaskRuntimePhaseLedgerAction.BLOCKED
+    } else {
+      FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+    }
+  if (terminalEvent(progress, record)?.action != action || !gateKeyMatches(request, record, operation.commandFamily)) {
+    return false
+  }
+  return if (record.status == WorkflowStepStatus.BLOCKED) {
+    warningGateSourceIsCurrent(progress.validationGateProgress, request.repoRoot, gitOperations)
+  } else {
+    progress.acceptedEnvelopes.any { it.phaseId == record.phaseId && it.attempt == record.attemptCount } &&
+      completedGateSourceIsCurrent(progress.validationGateProgress, request.repoRoot, gitOperations)
+  }
+}
+
+private fun sha256(value: String): String =
+  MessageDigest.getInstance("SHA-256")
+    .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+public data class GoalQualityValidationSourceRequest(
+  val progress: GoalQualityPhaseProgress,
+  val plan: ResolvedPhaseExecutionPlan,
+  val outcomeNamespace: String,
+  val repoRoot: Path,
+  val currentContentFingerprint: String,
+  val legacyContentFingerprint: String? = null,
+  val validationOccurrence: Int = 0,
+)

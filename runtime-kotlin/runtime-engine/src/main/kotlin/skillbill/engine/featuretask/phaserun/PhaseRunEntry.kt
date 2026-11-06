@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
@@ -19,6 +20,7 @@ import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.isCooperativeCancellation
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
@@ -29,11 +31,13 @@ import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseRunHarness
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
@@ -158,7 +162,7 @@ public class PhaseRunEntry(
     val progressAvailable = request.goalQualityPhaseProgress != null && request.persistGoalQualityPhaseProgress != null
     val latestAvailable = request.latestGoalQualityPhaseProgress != null && acceptedExecutionPlan.isNotBlank()
     if (!progressAvailable || !latestAvailable) {
-      plans.invalidQualityPlan()
+      plans.invalidQualityPlan("Phase-run evidence rejected at 166.")
     }
     val retained = request.goalQualityPhaseProgress
     val plan =
@@ -167,13 +171,17 @@ public class PhaseRunEntry(
         request.definitionId,
         requireNotNull(request.acceptedGoalQualityAgentId),
       )
+    if (plans.requiresQualitySourceEvidence(plan) &&
+      request.terminalGoalQualityContentFingerprint == null
+    ) {
+      plans.invalidQualityPlan("Phase-run evidence rejected at 178.")
+    }
     retained.let {
       plans.validateNestedProgressKeys(it)
       plans.validateRetainedRunningPhases(it, plan, "$parentWorkflowId:$invocationId")
     }
     reconcileGoalRepairOutputs(request, invocationId, retained)
-    if (retained.terminalCompleted == true) return completedQualityResult(invocationId, retained)
-    if (retained.terminalBlockedStep != null) return blockedQualityResult(invocationId, retained)
+    retainedValidationResult(request, parentWorkflowId, invocationId, plan, retained)?.let { return it }
     val result =
       runInternal(
         request.copy(acceptedGoalQualityPlanText = acceptedExecutionPlan),
@@ -182,8 +190,66 @@ public class PhaseRunEntry(
         expectedBranch,
       )
     reconcileGoalRepairOutputs(request, invocationId, request.goalQualityPhaseProgress)
-    val sink = request.persistGoalQualityPhaseProgress
-    val latest = request.latestGoalQualityPhaseProgress.invoke()
+    persistQualityTerminal(request, invocationId, result)
+    return result
+  }
+
+  private fun retainedValidationResult(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    invocationId: String,
+    plan: ResolvedPhaseExecutionPlan,
+    retained: GoalQualityPhaseProgress,
+  ): PhaseRunResult? {
+    if (retained.terminalCompleted) {
+      if (request.terminalGoalQualityContentFingerprint != null) {
+        requireCurrentValidationBoundary(request, parentWorkflowId, invocationId, plan, retained)
+      }
+      return completedQualityResult(invocationId, retained)
+    }
+    if (retained.terminalBlockedStep != null) {
+      if (request.terminalGoalQualityContentFingerprint != null) {
+        requireCurrentValidationBoundary(request, parentWorkflowId, invocationId, plan, retained)
+      }
+      return blockedQualityResult(invocationId, retained)
+    }
+    val acceptedBoundary = plans.hasAcceptedValidationBoundary(retained, plan)
+    if (request.terminalGoalQualityContentFingerprint != null && acceptedBoundary) {
+      val blocked = retained.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
+      if (blocked != null) {
+        val sourceFingerprint =
+          requireCurrentValidationBoundary(
+            request,
+            parentWorkflowId,
+            invocationId,
+            plan,
+            retained,
+          )
+        val reason =
+          blocked.blockedReason?.takeIf(
+            String::isNotBlank,
+          ) ?: plans.invalidQualityPlan("Retained validation block has no reason.")
+        val terminal = retained.copy(terminalBlockedStep = blocked.phaseId, terminalBlockedReason = reason)
+        if (!requireNotNull(request.persistGoalQualityPhaseProgress)(terminal, sourceFingerprint)) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+            "Could not persist recovered validation block for '$invocationId'.",
+          )
+        }
+        return blockedQualityResult(invocationId, terminal)
+      }
+    }
+    return null
+  }
+
+  private fun persistQualityTerminal(
+    request: PhaseRunRequest,
+    invocationId: String,
+    result: PhaseRunResult,
+  ) {
+    val sink = requireNotNull(request.persistGoalQualityPhaseProgress)
+    val latest = requireNotNull(request.latestGoalQualityPhaseProgress).invoke()
+    if (result is PhaseRunResult.Blocked && latest.phaseRecords[result.stepId] == null) return
     val terminal =
       when (result) {
         is PhaseRunResult.Completed -> latest.copy(terminalCompleted = true)
@@ -197,13 +263,52 @@ public class PhaseRunEntry(
             )
           }
       }
-    if (terminal != null && !sink(terminal)) {
+    val terminalFingerprint =
+      terminal?.takeIf { request.terminalGoalQualityContentFingerprint != null }
+        ?.let { terminalValidationFingerprint(request, latest, result) }
+    if (terminal != null && !sink(terminal, terminalFingerprint)) {
       throw SkillBillRuntimeException(
         WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
         "Could not persist terminal '${request.definitionId}' progress for '$invocationId'.",
       )
     }
-    return result
+  }
+
+  private fun terminalValidationFingerprint(
+    request: PhaseRunRequest,
+    latest: GoalQualityPhaseProgress,
+    result: PhaseRunResult,
+  ): String {
+    val phaseId =
+      when (result) {
+        is PhaseRunResult.Completed ->
+          result.completedStepIds.lastOrNull() ?: plans.invalidQualityPlan(
+            "Completed validation has no completed step.",
+          )
+        is PhaseRunResult.Blocked -> result.stepId
+      }
+    val attempt =
+      latest.phaseRecords[phaseId]?.attemptCount ?: plans.invalidQualityPlan(
+        "Missing phase record for $phaseId: ${(result as? PhaseRunResult.Blocked)?.reason}",
+      )
+    val event =
+      when (result) {
+        is PhaseRunResult.Completed ->
+          latest.phaseLedger.filter {
+            it.phaseId == phaseId && it.attemptCount == attempt &&
+              it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+          }.maxByOrNull { it.sequenceNumber }
+        is PhaseRunResult.Blocked -> latest.acceptedBlockedValidationEvent(phaseId, attempt)
+      } ?: plans.invalidQualityPlan("Validation has no accepted terminal ledger event.")
+    return latest.acceptedSourceObservations.singleOrNull {
+      it.phaseId == phaseId && it.attempt == attempt &&
+        it.completionSequenceNumber == event.sequenceNumber &&
+        it.validationOccurrence == request.goalQualityValidationOccurrence
+    }?.contentFingerprint ?: plans.invalidQualityPlan(
+      "Missing source observation for $phaseId#$attempt " +
+        "event ${event.sequenceNumber}, occurrence ${request.goalQualityValidationOccurrence}: " +
+        "${latest.acceptedSourceObservations}.",
+    )
   }
 
   private fun reconcileGoalRepairOutputs(
@@ -215,6 +320,52 @@ public class PhaseRunEntry(
     progress?.acceptedOutputs?.forEach { output ->
       sink(output.phaseId, invocationId, output.occurrence, output.output)
     }
+  }
+
+  private fun requireCurrentValidationBoundary(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    invocationId: String,
+    plan: ResolvedPhaseExecutionPlan,
+    progress: GoalQualityPhaseProgress,
+  ): String {
+    val currentFingerprint =
+      request.terminalGoalQualityContentFingerprint?.invoke() ?: plans.invalidQualityPlan(
+        "Retained validation has no terminal source observer.",
+      )
+    val repoRoot = request.repoRoot
+    if (!plans.acceptedValidationSourceIsCurrent(
+        GoalQualityValidationSourceRequest(
+          progress,
+          plan,
+          "$parentWorkflowId:$invocationId",
+          repoRoot,
+          currentFingerprint,
+          validationOccurrence = request.goalQualityValidationOccurrence,
+        ),
+      )
+    ) {
+      plans.invalidQualityPlan("Retained validation source evidence is stale or inconsistent.")
+    }
+    val terminalRecord =
+      progress.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
+        ?: plan.selectedStepIds.lastOrNull()?.let(progress.phaseRecords::get)
+        ?: plans.invalidQualityPlan("Retained validation has no terminal phase record.")
+    val event =
+      if (terminalRecord.status == WorkflowStepStatus.BLOCKED) {
+        progress.acceptedBlockedValidationEvent(terminalRecord.phaseId, terminalRecord.attemptCount)
+      } else {
+        progress.phaseLedger.filter {
+          it.phaseId == terminalRecord.phaseId && it.attemptCount == terminalRecord.attemptCount &&
+            it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+        }.maxByOrNull { it.sequenceNumber }
+      } ?: plans.invalidQualityPlan("Retained validation has no accepted terminal event.")
+    return progress.acceptedSourceObservations.singleOrNull {
+      it.phaseId == terminalRecord.phaseId && it.attempt == terminalRecord.attemptCount &&
+        it.completionSequenceNumber == event.sequenceNumber &&
+        it.validationOccurrence == request.goalQualityValidationOccurrence &&
+        it.contentFingerprint == currentFingerprint
+    }?.contentFingerprint ?: plans.invalidQualityPlan("Retained validation has no matching source observation.")
   }
 
   private fun completedQualityResult(
@@ -436,7 +587,7 @@ public class PhaseRunEntry(
       FeatureTaskRuntimeRunState(
         initialRecords = request.goalQualityPhaseProgress?.phaseRecords.orEmpty(),
         transitions = executionPlan.phaseTraversal(),
-        durableInitialLedger = request.goalQualityPhaseProgress?.phaseLedger.orEmpty(),
+        initialAttemptHistory = qualityAttemptHistory(request),
         initialQaRepairState = request.goalQualityPhaseProgress?.qaRepairState,
         stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
         resumeRulesFn = strategies.resumeRules(executionPlan),
@@ -490,6 +641,19 @@ public class PhaseRunEntry(
       request.goalQualityPhaseProgress,
       request.persistGoalQualityPhaseProgress,
       workflowId,
+      qualitySourceObservation =
+        if (request.terminalGoalQualityContentFingerprint != null && request.goalQualityPhaseProgress != null) {
+          { phaseId, attempt ->
+            GoalQualityAcceptedSourceObservation(
+              phaseId,
+              attempt,
+              request.terminalGoalQualityContentFingerprint.invoke(),
+              validationOccurrence = request.goalQualityValidationOccurrence,
+            )
+          }
+        } else {
+          null
+        },
     )
 
   private fun resultOf(
@@ -567,3 +731,9 @@ public class PhaseRunEntry(
 private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
 
 private const val INVOCATION_ID_PREFIX = "phr-"
+
+private fun qualityAttemptHistory(request: PhaseRunRequest): PhaseAttemptHistory =
+  PhaseAttemptHistory(
+    request.goalQualityPhaseProgress?.phaseLedger.orEmpty(),
+    request.goalQualityPhaseProgress?.attemptHighWaterMarks.orEmpty(),
+  )

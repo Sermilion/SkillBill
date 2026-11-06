@@ -39,6 +39,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
+import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
@@ -965,6 +967,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     baselineContentFingerprint: String,
     governingInputs: GoalQualityExecutionInputs,
     executionPlans: GoalQualityExecutionPlans,
+    validationSourceProof: GoalQualityValidationSourceProof?,
   ): GoalQualityExecutionRecord = error("EmptyOutcomeStore does not persist goal quality execution.")
 
   override fun transitionGoalQualityExecution(
@@ -981,13 +984,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     acceptedPlan: String,
   ): GoalQualityPhaseProgress = error("EmptyOutcomeStore does not persist goal quality phase progress.")
 
-  override fun persistGoalQualityPhaseProgress(
-    parentWorkflowId: String,
-    invocationId: String,
-    definitionId: String,
-    acceptedPlan: String,
-    progress: GoalQualityPhaseProgress,
-  ): Boolean = false
+  override fun persistGoalQualityPhaseProgress(write: GoalQualityPhaseProgressWrite): Boolean = false
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
 

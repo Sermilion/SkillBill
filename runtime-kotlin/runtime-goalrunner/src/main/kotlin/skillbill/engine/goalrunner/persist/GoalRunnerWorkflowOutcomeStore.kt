@@ -13,6 +13,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.persist.quality.GoalQualityPhaseProgressWrite
+import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -292,6 +294,7 @@ public interface GoalRunnerQualityExecutionStore {
     baselineContentFingerprint: String,
     governingInputs: GoalQualityExecutionInputs,
     executionPlans: GoalQualityExecutionPlans,
+    validationSourceProof: GoalQualityValidationSourceProof? = null,
   ): GoalQualityExecutionRecord
 
   public fun transitionGoalQualityExecution(
@@ -308,11 +311,5 @@ public interface GoalRunnerQualityExecutionStore {
     acceptedPlan: String,
   ): GoalQualityPhaseProgress
 
-  public fun persistGoalQualityPhaseProgress(
-    parentWorkflowId: String,
-    invocationId: String,
-    definitionId: String,
-    acceptedPlan: String,
-    progress: GoalQualityPhaseProgress,
-  ): Boolean
+  public fun persistGoalQualityPhaseProgress(write: GoalQualityPhaseProgressWrite): Boolean
 }

@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -181,7 +182,7 @@ class MonitorRepairResumeAccountingTest {
     return FeatureTaskRuntimeRunState(
       initialRecords = records,
       transitions = supported.plan.traversal,
-      durableInitialLedger = ledger,
+      initialAttemptHistory = PhaseAttemptHistory(ledger),
       initialRetainedOutputs = history.outputs,
       initialMonitorRepairFailures = history.failedRepairs,
       resumeRulesFn = harness.strategies.resumeRules(supported.plan),

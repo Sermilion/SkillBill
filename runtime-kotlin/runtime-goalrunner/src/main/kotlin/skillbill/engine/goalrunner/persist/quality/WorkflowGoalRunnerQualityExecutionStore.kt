@@ -5,12 +5,14 @@ import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowIdF
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_FINALIZATION_HISTORY_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.model.history.GoalFinalizationHistoryPayloadKeys
 import skillbill.engine.goalrunner.persist.GoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.persist.saveRunnerArtifactPatch
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.model.quality.GoalQualityAdoptionEvidence
 import skillbill.goalrunner.model.quality.GoalQualityExecution
 import skillbill.goalrunner.model.quality.GoalQualityExecutionAdmission
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
@@ -130,15 +132,32 @@ public class WorkflowGoalRunnerQualityExecutionStore
       baselineContentFingerprint: String,
       governingInputs: GoalQualityExecutionInputs,
       executionPlans: GoalQualityExecutionPlans,
+      validationSourceProof: GoalQualityValidationSourceProof?,
     ): GoalQualityExecutionRecord =
       withQualityPersistence {
         database.transaction { unitOfWork ->
           val parent = parent(unitOfWork, parentWorkflowId)
           val family = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION
-          val record =
-            family.value(parent.artifacts)?.let(::decode)
-              ?: GoalQualityExecutionRecord(readiness = CLEAN_UNSTARTED)
+          val storedPayload = family.value(parent.artifacts)
+          var record = storedPayload?.let(::decode) ?: GoalQualityExecutionRecord(readiness = CLEAN_UNSTARTED)
           validateParentIdentity(record, parentWorkflowId)
+          val sourceVersion =
+            JsonCodec.anyToStringAnyMap(storedPayload)?.get(GoalQualityExecutionPayloadKeys.CONTRACT_VERSION) as? String
+          val originalPayload = JsonCodec.anyToStringAnyMap(storedPayload)
+          val legacyVersion = sourceVersion != null && sourceVersion != GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
+          val proofMatchesStored = matchesRetainedProof(validationSourceProof, sourceVersion, record)
+          val sourceProofCurrent = proofMatchesStored && validationSourceProof?.sourceIsCurrent == true
+          if (legacyVersion) {
+            record =
+              adoptLegacyExecution(
+                record,
+                requireNotNull(sourceVersion),
+                requireNotNull(originalPayload),
+                validationSourceProof,
+                proofMatchesStored,
+              )
+            persist(unitOfWork, parent, record)
+          }
           if (record.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY) {
             invalid(
               "This parent has ambiguous historical quality state. An operator must " +
@@ -147,22 +166,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
                 "authoritative original evidence.",
             )
           }
-          record.execution?.takeIf { it.status != GoalQualityExecutionStatus.RETIRED }?.let { active ->
-            val expectedFingerprints =
-              selectionFingerprint(
-                unitOfWork,
-                parent,
-              ) to governingInputFingerprint(governingInputs)
-            val expectedInputs = governingInputs to executionPlans
-            if ((active.selectionFingerprint to active.governingInputFingerprint) != expectedFingerprints ||
-              (active.governingInputs to active.executionPlans) != expectedInputs
-            ) {
-              invalid(
-                "The admitted goal quality execution inputs or accepted plans changed; " +
-                  "a new invocation requires an explicit reset.",
-              )
-            }
-          }
+          validateRetainedAdmission(record, selectionFingerprint(unitOfWork, parent), governingInputs, executionPlans)
           val admitted =
             record.admit(
               GoalQualityExecutionAdmission(
@@ -175,11 +179,28 @@ public class WorkflowGoalRunnerQualityExecutionStore
                 executionPlans,
               ),
             )
-          if (admitted != record) {
-            persist(unitOfWork, parent, admitted)
+          var reconciled = admitted
+          val active = admitted.execution
+          val staleValidation =
+            active?.let {
+              it.status != GoalQualityExecutionStatus.RETIRED && requiresValidationReentry(it, proofMatchesStored)
+            } == true && !sourceProofCurrent
+          if (active != null && staleValidation) {
+            if (hasUnknownValidationOperation(active)) {
+              invalid(
+                "Final validation has an unresolved external operation; " +
+                  "inspect its retained evidence before retry.",
+              )
+            }
+            reconciled = admitted.startNewValidationOccurrence()
+          }
+          if (reconciled != record) {
+            persist(unitOfWork, parent, reconciled)
+          }
+          if (admitted.execution?.invocationId != record.execution?.invocationId) {
             ensureNewInvocationRepairContext(unitOfWork, parent(unitOfWork, parentWorkflowId))
           }
-          admitted
+          reconciled
         }
       }
 
@@ -204,14 +225,15 @@ public class WorkflowGoalRunnerQualityExecutionStore
         }
       }
 
-    override fun persistGoalQualityPhaseProgress(
-      parentWorkflowId: String,
-      invocationId: String,
-      definitionId: String,
-      acceptedPlan: String,
-      progress: GoalQualityPhaseProgress,
-    ): Boolean =
+    override fun persistGoalQualityPhaseProgress(write: GoalQualityPhaseProgressWrite): Boolean =
       withQualityPersistence {
+        val parentWorkflowId = write.parentWorkflowId
+        val invocationId = write.invocationId
+        val definitionId = write.definitionId
+        val acceptedPlan = write.acceptedPlan
+        val progress = write.progress
+        val finalValidationContentFingerprint = write.finalValidationContentFingerprint
+
         validatePhaseProgress(progress)
         database.transaction { unitOfWork ->
           val parent = parent(unitOfWork, parentWorkflowId)
@@ -226,7 +248,8 @@ public class WorkflowGoalRunnerQualityExecutionStore
             return@transaction false
           }
           val existing = progressFor(requireNotNull(execution.progress), definitionId)
-          if (existing == progress) return@transaction true
+          if (!validProgressSourceWrite(write, execution)) return@transaction false
+          if (existing == progress) return@transaction matchesExistingProgressSource(write, execution)
           if (existing.terminalCompleted || existing.terminalBlockedStep != null) return@transaction false
           val updatedProgress = nextPhaseProgress(existing, progress) ?: return@transaction false
           val updated =
@@ -234,6 +257,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
               current,
               definitionId,
               updatedProgress,
+              finalValidationContentFingerprint,
             )
           persist(unitOfWork, parent, updated)
           true
@@ -251,25 +275,20 @@ public class WorkflowGoalRunnerQualityExecutionStore
             terminalBlockedStep = existing.terminalBlockedStep,
             terminalBlockedReason = existing.terminalBlockedReason,
             terminalCompleted = existing.terminalCompleted,
+            acceptedSourceObservations = existing.acceptedSourceObservations,
           ) == existing
         if (progress.revision != existing.revision || !sameAcceptedState) return null
         existing.copy(
           terminalBlockedStep = progress.terminalBlockedStep,
           terminalBlockedReason = progress.terminalBlockedReason,
           terminalCompleted = progress.terminalCompleted,
+          acceptedSourceObservations = progress.acceptedSourceObservations,
           revision = existing.revision + 1,
         )
       } else {
         if (progress.revision != existing.revision + 1) return null
         progress
       }
-    }
-
-    private fun governingInputFingerprint(inputs: GoalQualityExecutionInputs): String {
-      val json = JsonCodec.mapToJsonString(inputs.toPersistenceWire())
-      return MessageDigest.getInstance("SHA-256")
-        .digest(json.toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
     }
 
     private fun selectedPlan(
@@ -303,6 +322,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
       record: GoalQualityExecutionRecord,
       definitionId: String,
       progress: GoalQualityPhaseProgress,
+      finalValidationContentFingerprint: String?,
     ): GoalQualityExecutionRecord {
       val execution = record.execution ?: invalid("Admitted quality execution is absent.")
       val current = execution.progress ?: invalid("Admitted quality execution phase progress is absent.")
@@ -312,33 +332,14 @@ public class WorkflowGoalRunnerQualityExecutionStore
           SkeletonDefinition.VALIDATION.id -> current.copy(validation = progress)
           else -> invalid("Unsupported goal-quality phase '$definitionId'.")
         }
-      return record.copy(execution = execution.copy(progress = updated))
-    }
-
-    private fun validatePhaseProgress(progress: GoalQualityPhaseProgress) {
-      val invalidRecords = progress.phaseRecords.any { (phase, record) -> phase != record.phaseId }
-      val invalidLedger =
-        progress.phaseLedger.map { it.sequenceNumber }.distinct().size != progress.phaseLedger.size ||
-          progress.phaseLedger.zipWithNext().any { (left, right) -> right.sequenceNumber <= left.sequenceNumber }
-      val invalidOutputs =
-        progress.acceptedOutputs.any { it.phaseId.isBlank() || it.occurrence < 1 } ||
-          progress.acceptedOutputs.map { it.phaseId to it.occurrence }.distinct().size != progress.acceptedOutputs.size
-      val invalidEnvelopes =
-        progress.acceptedEnvelopes.any {
-          it.phaseId.isBlank() || it.attempt < 1 || !it.envelope.isObject
-        } ||
-          progress.acceptedEnvelopes.map { it.phaseId to it.attempt }.distinct().size != progress.acceptedEnvelopes.size
-      if (listOf(
-          invalidRecords,
-          invalidLedger,
-          invalidOutputs,
-          invalidEnvelopes,
-          invalidGateKeys(progress),
-          invalidTerminalProgress(progress),
-        ).any { it }
-      ) {
-        invalid("Goal-quality phase progress has conflicting identities or terminal state.")
-      }
+      return record.copy(
+        execution =
+          execution.copy(
+            progress = updated,
+            finalValidationContentFingerprint =
+              finalValidationContentFingerprint ?: execution.finalValidationContentFingerprint,
+          ),
+      )
     }
 
     internal fun retireActiveExecution(
@@ -487,6 +488,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
     private fun decode(value: Any?): GoalQualityExecutionRecord {
       val map = JsonCodec.anyToStringAnyMap(value) ?: invalid("Stored goal quality execution is not an object.")
       validate(map)
+      val sourceVersion = map[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] as String
       val decoded = GoalQualityExecutionRecord.fromPersistenceWire(map)
       val missingRetainedExecution = decoded.execution?.executionPlans == null || decoded.execution?.progress == null
       val record =
@@ -495,12 +497,16 @@ public class WorkflowGoalRunnerQualityExecutionStore
           missingRetainedExecution
         ) {
           decoded.copy(
-            contractVersion = GOAL_QUALITY_EXECUTION_CONTRACT_VERSION,
             readiness = GoalQualityReadiness.HISTORICAL_AMBIGUITY,
             execution = null,
+            adoptionEvidence =
+              decoded.adoptionEvidence ?: GoalQualityAdoptionEvidence(
+                sourceVersion,
+                JsonCodec.mapToJsonString(map),
+              ),
           )
         } else {
-          decoded.copy(contractVersion = GOAL_QUALITY_EXECUTION_CONTRACT_VERSION)
+          decoded
         }
       if ((record.readiness == GoalQualityReadiness.ADMITTED) != (record.execution != null)) {
         invalid("Stored goal quality readiness and admitted execution disagree.")
@@ -508,12 +514,30 @@ public class WorkflowGoalRunnerQualityExecutionStore
       if (record.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY && record.execution != null) {
         invalid("Historical ambiguity cannot carry a synthesized execution.")
       }
+      validateAdoptionArchive(record)
       record.execution?.let { execution ->
         validateExecutionInputs(execution)
         validateExecutionIdentity(execution)
-        validateExecutionDisposition(execution)
+        validateExecutionDisposition(execution, sourceVersion == GOAL_QUALITY_EXECUTION_CONTRACT_VERSION)
       }
       return record
+    }
+
+    private fun validateAdoptionArchive(record: GoalQualityExecutionRecord) {
+      record.adoptionEvidence?.let { evidence ->
+        val originalObject =
+          JsonCodec.parseObjectOrNull(evidence.originalPayloadJson)
+            ?: invalid("Stored goal quality adoption evidence is not valid JSON.")
+        val original =
+          JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(originalObject))
+            ?: invalid("Stored goal quality adoption evidence is not an object.")
+        if (original[GoalQualityExecutionPayloadKeys.CONTRACT_VERSION] != evidence.sourceContractVersion ||
+          original.containsKey(GoalQualityExecutionPayloadKeys.ADOPTION_EVIDENCE)
+        ) {
+          invalid("Stored goal quality adoption evidence has a conflicting source version or nested archive.")
+        }
+        validate(original)
+      }
     }
 
     private fun validateExecutionInputs(execution: GoalQualityExecution) {
@@ -545,75 +569,6 @@ public class WorkflowGoalRunnerQualityExecutionStore
       }
     }
 
-    private fun validateExecutionIdentity(execution: GoalQualityExecution) {
-      val blankRequired =
-        listOf(
-          execution.parentWorkflowId,
-          execution.invocationId,
-          execution.baselineContentFingerprint,
-        ).any(String::isBlank)
-      val blankOptional =
-        listOfNotNull(
-          execution.warning,
-          execution.selectionFingerprint,
-          execution.settledContentFingerprint,
-          execution.postQaContentFingerprint,
-          execution.qaTestedTreeIdentity,
-        ).any(String::isBlank)
-      val missingFingerprint =
-        execution.status != GoalQualityExecutionStatus.RETIRED &&
-          execution.governingInputFingerprint.isNullOrBlank()
-      if (blankRequired || blankOptional || missingFingerprint) {
-        invalid("Stored goal quality execution has a blank identity, baseline, or warning.")
-      }
-      if (execution.status != GoalQualityExecutionStatus.RETIRED &&
-        (execution.executionPlans == null || execution.progress == null)
-      ) {
-        invalid("An admitted quality execution has no accepted plans or phase progress.")
-      }
-    }
-
-    private fun validateExecutionDisposition(execution: GoalQualityExecution) {
-      val hasFingerprint = execution.settledContentFingerprint != null
-      val hasWarning = execution.warning != null
-      val noValidation = execution.validation == GoalQualityValidationDisposition.NOT_REQUIRED
-      val passedValidation = noValidation || execution.validation == GoalQualityValidationDisposition.COMPLETED
-      val warnedValidation =
-        noValidation ||
-          execution.validation == GoalQualityValidationDisposition.DELIBERATELY_WARNED
-      val valid =
-        when (execution.status) {
-          GoalQualityExecutionStatus.SETTLED_PASSED -> passedValidation && !hasWarning && hasFingerprint
-          GoalQualityExecutionStatus.SETTLED_SKIPPED -> noValidation && !hasWarning && hasFingerprint
-          GoalQualityExecutionStatus.SETTLED_WARNED -> hasWarning && hasFingerprint && warnedValidation
-          else -> {
-            validatePendingDisposition(execution)
-            true
-          }
-        }
-      if (!valid) invalid("A settled quality execution has an invalid validation, warning or fingerprint.")
-    }
-
-    private fun validatePendingDisposition(execution: GoalQualityExecution) {
-      val validation = execution.validation
-      val noValidation = validation == GoalQualityValidationDisposition.NOT_REQUIRED
-      val decisionPending = validation == GoalQualityValidationDisposition.DECISION_PENDING
-      val validationRequired = validation == GoalQualityValidationDisposition.REQUIRED_PENDING
-      val running = validation == GoalQualityValidationDisposition.RUNNING
-      val completed = validation == GoalQualityValidationDisposition.COMPLETED
-      val warned = validation == GoalQualityValidationDisposition.DELIBERATELY_WARNED
-      val valid =
-        when (execution.status) {
-          GoalQualityExecutionStatus.QA_PENDING -> decisionPending
-          GoalQualityExecutionStatus.VALIDATION_DECISION_PENDING -> decisionPending || noValidation
-          GoalQualityExecutionStatus.REQUIRED_VALIDATION_PENDING -> validationRequired
-          GoalQualityExecutionStatus.VALIDATION_RUNNING -> running
-          GoalQualityExecutionStatus.VALIDATION_COMPLETED_PENDING_SETTLEMENT -> completed || warned
-          else -> true
-        }
-      if (!valid) invalid("A pending quality execution has an invalid validation disposition.")
-    }
-
     private fun validateParentIdentity(
       record: GoalQualityExecutionRecord,
       parentWorkflowId: String,
@@ -639,6 +594,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
       val sameIdentity = sameExecutionIdentity(prior, candidate)
       val validObservation = validQaObservation(prior, candidate) && validSettledFingerprint(prior, candidate)
       return sameRecord && allowedStatus && sameIdentity && validObservation &&
+        validFinalValidationObservation(prior, candidate) &&
         validCandidateDisposition(prior, candidate)
     }
 
@@ -676,25 +632,6 @@ public class WorkflowGoalRunnerQualityExecutionStore
       }
     }
 
-    private fun validTerminalDisposition(candidate: GoalQualityExecution): Boolean =
-      when (candidate.status) {
-        GoalQualityExecutionStatus.SETTLED_PASSED ->
-          candidate.validation in
-            setOf(
-              GoalQualityValidationDisposition.NOT_REQUIRED,
-              GoalQualityValidationDisposition.COMPLETED,
-            ) && candidate.warning == null
-        GoalQualityExecutionStatus.SETTLED_SKIPPED ->
-          candidate.validation == GoalQualityValidationDisposition.NOT_REQUIRED && candidate.warning == null
-        GoalQualityExecutionStatus.SETTLED_WARNED ->
-          candidate.validation in
-            setOf(
-              GoalQualityValidationDisposition.NOT_REQUIRED,
-              GoalQualityValidationDisposition.DELIBERATELY_WARNED,
-            ) && candidate.warning != null
-        else -> false
-      }
-
     private fun sameExecutionIdentity(
       prior: GoalQualityExecution,
       candidate: GoalQualityExecution,
@@ -704,6 +641,7 @@ public class WorkflowGoalRunnerQualityExecutionStore
         validation = candidate.validation,
         warning = candidate.warning,
         settledContentFingerprint = candidate.settledContentFingerprint,
+        finalValidationContentFingerprint = candidate.finalValidationContentFingerprint,
         postQaContentFingerprint = candidate.postQaContentFingerprint,
         qaTestedTreeIdentity = candidate.qaTestedTreeIdentity,
         skipReason = candidate.skipReason,
@@ -740,6 +678,29 @@ public class WorkflowGoalRunnerQualityExecutionStore
           )
       return terminal == (candidate.settledContentFingerprint != null) &&
         (terminal || candidate.settledContentFingerprint == prior.settledContentFingerprint)
+    }
+
+    private fun validFinalValidationObservation(
+      prior: GoalQualityExecution,
+      candidate: GoalQualityExecution,
+    ): Boolean {
+      val terminalValidation =
+        candidate.status in
+          setOf(
+            GoalQualityExecutionStatus.VALIDATION_COMPLETED_PENDING_SETTLEMENT,
+            GoalQualityExecutionStatus.SETTLED_PASSED,
+            GoalQualityExecutionStatus.SETTLED_SKIPPED,
+            GoalQualityExecutionStatus.SETTLED_WARNED,
+          )
+      return if (terminalValidation) {
+        !candidate.finalValidationContentFingerprint.isNullOrBlank() &&
+          (
+            prior.finalValidationContentFingerprint == null ||
+              prior.finalValidationContentFingerprint == candidate.finalValidationContentFingerprint
+          )
+      } else {
+        candidate.finalValidationContentFingerprint == prior.finalValidationContentFingerprint
+      }
     }
 
     private fun sameOuterSnapshot(
@@ -879,25 +840,6 @@ public class WorkflowGoalRunnerQualityExecutionStore
       }
   }
 
-private fun invalidGateKeys(progress: GoalQualityPhaseProgress): Boolean {
-  val build =
-    (progress.buildGateProgress == null) != (progress.buildGateProgressKey == null) ||
-      progress.buildGateProgressKey?.isBlank() == true
-  val validation =
-    (progress.validationGateProgress == null) != (progress.validationGateProgressKey == null) ||
-      progress.validationGateProgressKey?.isBlank() == true
-  return build || validation
-}
-
-private fun invalidTerminalProgress(progress: GoalQualityPhaseProgress): Boolean {
-  val invalidIdentity =
-    progress.revision < 0 || progress.terminalBlockedStep?.isBlank() == true ||
-      progress.terminalBlockedReason?.isBlank() == true
-  val hasBlock = progress.terminalBlockedStep != null || progress.terminalBlockedReason != null
-  val incompleteBlock = (progress.terminalBlockedStep == null) != (progress.terminalBlockedReason == null)
-  return invalidIdentity || if (progress.terminalCompleted) hasBlock else incompleteBlock
-}
-
 private fun allowedNextStatuses(status: GoalQualityExecutionStatus): Set<GoalQualityExecutionStatus> =
   when (status) {
     GoalQualityExecutionStatus.QA_PENDING ->
@@ -927,6 +869,7 @@ private fun allowedNextStatuses(status: GoalQualityExecutionStatus): Set<GoalQua
     GoalQualityExecutionStatus.VALIDATION_COMPLETED_PENDING_SETTLEMENT ->
       setOf(
         GoalQualityExecutionStatus.SETTLED_PASSED,
+        GoalQualityExecutionStatus.SETTLED_SKIPPED,
         GoalQualityExecutionStatus.SETTLED_WARNED,
       )
     GoalQualityExecutionStatus.SETTLED_PASSED,

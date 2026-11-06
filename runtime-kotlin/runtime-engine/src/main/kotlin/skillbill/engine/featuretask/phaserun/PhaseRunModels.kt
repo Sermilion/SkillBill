@@ -58,7 +58,9 @@ public data class PhaseRunRequest(
   public val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
   internal val acceptedGoalRepairOutput: ((String, String, Int, String) -> Unit)? = null,
   public val goalQualityPhaseProgress: GoalQualityPhaseProgress? = null,
-  public val persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress) -> Boolean)? = null,
+  public val persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress, String?) -> Boolean)? = null,
+  public val terminalGoalQualityContentFingerprint: (() -> String)? = null,
+  public val goalQualityValidationOccurrence: Int = 0,
   internal val latestGoalQualityPhaseProgress: (() -> GoalQualityPhaseProgress)? = null,
   internal val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null,
   internal val goalQualityInvocationId: String? = null,
@@ -169,6 +171,8 @@ public data class InMemoryPhaseRunFacts(
   override val phaseInstructions: PhaseInstructions? = request.instructions
   override val qaExecution: QaExecutionContext? = request.qaExecution
   override val goalHistoryWriterInput: GoalHistoryWriterInput? = request.goalHistoryWriterInput
+  override val goalQualityPhaseProgress: GoalQualityPhaseProgress? = request.goalQualityPhaseProgress
+  override val goalQualityValidationOccurrence: Int = request.goalQualityValidationOccurrence
   override val goalQualityAutomaticRecovery: Boolean = request.goalQualityPhaseProgress != null
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = request.acceptedGoalQualityExecutionPlan
   override val qaOutcomeWorkflowId: String = request.goalQualityInvocationId?.let { "$workflowId:$it" } ?: workflowId

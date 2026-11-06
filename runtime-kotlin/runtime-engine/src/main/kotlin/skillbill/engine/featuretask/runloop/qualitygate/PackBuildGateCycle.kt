@@ -104,6 +104,25 @@ internal class PackBuildGateCycle(
             ?.validationDepth ?: ValidationDepth.DEFAULT,
       commandFamily = commandFamily,
       preserveConsumedRepairTurns = run.request.goalQualityAutomaticRecovery,
+      newValidationOccurrence =
+        commandFamily == ValidationGateCommandFamily.VALIDATION &&
+          run.request.goalQualityValidationOccurrence > 0,
+      carriedRepairTurns =
+        if (commandFamily == ValidationGateCommandFamily.VALIDATION &&
+          run.request.goalQualityValidationOccurrence > 0
+        ) {
+          run.request.goalQualityPhaseProgress?.carriedValidationRepairsUsed ?: 0
+        } else {
+          0
+        },
+      carriedRepairOutputs =
+        if (commandFamily == ValidationGateCommandFamily.VALIDATION &&
+          run.request.goalQualityValidationOccurrence > 0
+        ) {
+          run.request.goalQualityPhaseProgress?.carriedValidationRepairOutputs.orEmpty()
+        } else {
+          emptyList()
+        },
       progressKey =
         if (!run.request.goalQualityAutomaticRecovery) {
           run.request.workflowId

@@ -285,7 +285,7 @@ class GoalQaRepairLoopTest {
 
     val result = fixture.gate.run(fixture.state, fixture.request)
 
-    assertEquals(listOf("qa"), fixture.launchedPhases())
+    assertEquals(listOf("qa", "validate"), fixture.launchedPhases())
     assertContains(assertIs<GoalQaGateResult.Warned>(result).reason, "QA agent wrote no report.md")
     val outcome = assertNotNull(fixture.storedOutcome())
     assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
@@ -443,7 +443,7 @@ class GoalQaRepairLoopTest {
           config.harnessGitOperations,
           database,
           clock,
-          harness.runLoopEntry.delegateTo(TestFeatureTaskRuntimeRunLoopEntry()),
+          harness.runLoopEntry.delegateTo(TestFeatureTaskRuntimeRunLoopEntry(gitOperations = git)),
         )
       gate =
         DefaultGoalRunnerQaGate(
@@ -467,8 +467,7 @@ class GoalQaRepairLoopTest {
                 ),
               )
           },
-          clock,
-          testActivityStampWriter(),
+          GoalQualityPhaseRequests(progress, git, clock, testActivityStampWriter()),
           outcomes,
           QaCapabilityResolver(git) { listOf(pack) },
           testProjectStore,

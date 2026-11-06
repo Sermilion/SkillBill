@@ -10,22 +10,30 @@ import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.phaserun.plans
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.runner.defaultPhaseOutput
+import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
+import skillbill.engine.goalrunner.history.goalHistoryFingerprint
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
 import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
 import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -60,6 +68,58 @@ class DefaultGoalRunnerQaGateTest {
   private val clock = Clock.systemUTC()
 
   @Test
+  fun `accepted history writer contents keep validation proof current at admission`() {
+    var admittedProof: GoalQualityValidationSourceProof? = null
+    val outcomes =
+      object : QaGateOutcomeStore() {
+        override fun admitGoalQualityExecution(
+          parentWorkflowId: String,
+          baselineContentFingerprint: String,
+          governingInputs: GoalQualityExecutionInputs,
+          executionPlans: GoalQualityExecutionPlans,
+          validationSourceProof: GoalQualityValidationSourceProof?,
+        ): GoalQualityExecutionRecord {
+          admittedProof = validationSourceProof
+          return super.admitGoalQualityExecution(
+            parentWorkflowId,
+            baselineContentFingerprint,
+            governingInputs,
+            executionPlans,
+            validationSourceProof,
+          )
+        }
+      }
+    val git = RecordingWorkflowGitOperations().apply { repositoryFingerprintValue = TREE_IDENTITY }
+    val gate = gate(git, outcomes)
+    val state = state()
+    val first = gate.run(state, request())
+    val accepted = assertNotNull(outcomes.goalQualityExecution(state.parentWorkflowId)?.execution)
+    val beforeWriter = assertNotNull(accepted.finalValidationContentFingerprint)
+    val afterWriter = "3".repeat(64)
+    val writerInput =
+      GoalHistoryWriterInput(
+        state.parentWorkflowId,
+        outcomes.goalHistoryWriterEntries(
+          state.parentWorkflowId,
+          state.manifest.subtasks.map { it.id to it.workflowId },
+        ),
+        assertNotNull(outcomes.goalFinalRepairContext(state.parentWorkflowId)),
+      )
+    assertTrue(
+      outcomes.saveGoalHistoryCompletion(
+        state.parentWorkflowId,
+        accepted.invocationId,
+        GoalHistoryCompletion(goalHistoryFingerprint(writerInput, beforeWriter), beforeWriter, afterWriter, "written"),
+      ),
+    )
+    git.repositoryFingerprintValue = afterWriter
+
+    assertEquals(first, gate.run(state, request()))
+    assertTrue(assertNotNull(admittedProof).sourceIsCurrent)
+    assertEquals(accepted, outcomes.goalQualityExecution(state.parentWorkflowId)?.execution)
+  }
+
+  @Test
   fun `resuming settled quality keeps admitted inputs across launch changes`() {
     val admissions = mutableListOf<GoalQualityExecutionInputs>()
     val outcomes =
@@ -69,6 +129,7 @@ class DefaultGoalRunnerQaGateTest {
           baselineContentFingerprint: String,
           governingInputs: GoalQualityExecutionInputs,
           executionPlans: GoalQualityExecutionPlans,
+          validationSourceProof: GoalQualityValidationSourceProof?,
         ): GoalQualityExecutionRecord {
           admissions += governingInputs
           return super.admitGoalQualityExecution(
@@ -76,6 +137,7 @@ class DefaultGoalRunnerQaGateTest {
             baselineContentFingerprint,
             governingInputs,
             executionPlans,
+            validationSourceProof,
           )
         }
       }
@@ -119,13 +181,18 @@ class DefaultGoalRunnerQaGateTest {
   }
 
   @Test
-  fun `a pack without QA omits the goal QA run before reading acceptance criteria`() {
+  fun `a pack without QA omits the goal QA run and completes final validation`() {
     val git = RecordingWorkflowGitOperations().apply { trackedPathsValue = listOf("runtime-kotlin/src/Application.kt") }
+    val outcomes = QaGateOutcomeStore()
     val result =
-      gate(git, QaGateOutcomeStore(), listOf(kotlinPackWithoutGate())).run(state(), request())
+      gate(git, outcomes, listOf(kotlinPackWithoutGate())).run(state(), request())
 
     assertEquals(GoalQaGateResult.Skipped(GoalQaSkipReason.UNSUPPORTED_TARGET), result)
     assertNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent:test-quality") })
+    val execution = assertNotNull(outcomes.goalQualityExecution("goal-parent")?.execution)
+    assertEquals(GoalQualityExecutionStatus.SETTLED_SKIPPED, execution.status)
+    assertEquals(GoalQualityValidationDisposition.COMPLETED, execution.validation)
+    assertNotNull(execution.finalValidationContentFingerprint)
   }
 
   @Test
@@ -138,14 +205,21 @@ class DefaultGoalRunnerQaGateTest {
       gate(RecordingWorkflowGitOperations(), outcomes, diagnostics = diagnostics).run(state(), request())
 
     val reason = "QA could not complete because of a runtime defect: IllegalStateException: boom"
-    val warning = diagnostics.warnings.single()
+    val warning = diagnostics.warnings.first()
     assertEquals("goal_qa_gate: $reason", warning.first)
     assertEquals("boom", warning.second?.message)
+    assertEquals(
+      listOf("goal_qa_gate: $reason", "goal_qa_gate: could not recover the QA outcome"),
+      diagnostics.warnings.map { it.first },
+    )
     assertEquals(GoalQaGateResult.Warned(reason), result)
     val recorded =
-      assertNotNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent") })
+      assertNotNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent:test-quality") })
     assertEquals(StandaloneQaOutcome.INCOMPLETE, recorded.outcome)
     assertEquals(reason, recorded.reason)
+    val execution = assertNotNull(outcomes.goalQualityExecution("goal-parent")?.execution)
+    assertEquals(GoalQualityValidationDisposition.COMPLETED, execution.validation)
+    assertNotNull(execution.finalValidationContentFingerprint)
     assertEquals(FeatureTaskQaFailureKind.DEFECT, recorded.failureKind)
   }
 
@@ -261,10 +335,17 @@ class DefaultGoalRunnerQaGateTest {
     diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
     invariants: FeatureTaskRuntimeRunInvariantsRead? = null,
   ): DefaultGoalRunnerQaGate {
+    git.currentBranchValue = "feat/SKILL-431-goal"
+    git.repositoryFingerprintValue = git.repositoryFingerprintValue ?: TREE_IDENTITY
     val database = phaseRunDatabase(home, clock)
     val strategies =
       testPhaseStrategies(
-        launcher = GoalRunnerSubtaskLauncher { error("The QA skip rules must not launch an agent.") },
+        launcher =
+          GoalRunnerSubtaskLauncher { launch ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(launch.skillRunRequest.promptOverride))
+            assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE, phaseId)
+            facts(defaultPhaseOutput(launch))
+          },
         gitOperations = git,
       )
     val phaseEntry =
@@ -280,10 +361,16 @@ class DefaultGoalRunnerQaGateTest {
       outcomes,
       git,
       object : FeatureTaskRuntimeRunInvariantsSource {
-        override fun read(specPath: Path) = invariants ?: error("Skipped goal QA must not read the parent spec.")
+        override fun read(specPath: Path) =
+          invariants ?: FeatureTaskRuntimeRunInvariantsRead.Read(
+            FeatureTaskRuntimeRunInvariants(
+              specReference = "SKILL-431",
+              acceptanceCriteria = listOf("The goal completes its requested quality checks."),
+              mandatesAndOverrides = emptyList(),
+            ),
+          )
       },
-      clock,
-      testActivityStampWriter(),
+      GoalQualityPhaseRequests(outcomes, git, clock, testActivityStampWriter()),
       FeatureTaskQaOutcomeRecorder(database, clock),
       QaCapabilityResolver(git) { manifests },
       testProjectStore,

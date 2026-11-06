@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.history.GoalHistoryWriterInput
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -60,6 +61,8 @@ public data class FeatureTaskRuntimeRunRequest(
   override val monitorExecution: MonitorExecutionContext? = null
   override val qaExecution: QaExecutionContext? = null
   override val goalHistoryWriterInput: GoalHistoryWriterInput? = null
+  override val goalQualityPhaseProgress: GoalQualityPhaseProgress? = null
+  override val goalQualityValidationOccurrence: Int = 0
   override val goalQualityAutomaticRecovery: Boolean = false
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null
   override val validationCheckInvocationId: String? = null

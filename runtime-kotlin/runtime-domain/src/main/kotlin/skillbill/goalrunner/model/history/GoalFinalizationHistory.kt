@@ -14,6 +14,24 @@ data class GoalFinalRepairContext(
   val warning: String? = null,
 )
 
+fun accumulateGoalFinalRepairWarnings(vararg warnings: String?): String? =
+  accumulateGoalFinalRepairWarnings(warnings.asList())
+
+fun accumulateGoalFinalRepairWarnings(warnings: Iterable<String?>): String? {
+  var accumulated: String? = null
+  warnings.filterNotNull().filter(String::isNotBlank).forEach { warning ->
+    val current = accumulated
+    accumulated =
+      when {
+        current == null -> warning
+        current.contains(warning) -> current
+        warning.contains(current) -> warning
+        else -> "$current $warning"
+      }
+  }
+  return accumulated
+}
+
 data class GoalHistoryCompletion(
   val inputFingerprint: String,
   val preWriterContentFingerprint: String,

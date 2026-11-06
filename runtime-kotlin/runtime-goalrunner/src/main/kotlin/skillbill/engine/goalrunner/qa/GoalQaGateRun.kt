@@ -19,10 +19,18 @@ import java.time.Clock
 internal sealed class ValidationAfterQaStep {
   data class Paused(val pause: GoalQaGateResult.Paused) : ValidationAfterQaStep()
 
+  data class Settled(val result: GoalQaGateResult) : ValidationAfterQaStep()
+
   data class Advance(
     val warnings: List<String>,
     val quality: GoalQualityExecutionRecord,
   ) : ValidationAfterQaStep()
+}
+
+internal sealed class ValidationPhaseAttempt {
+  data class Completed(val result: PhaseRunResult) : ValidationPhaseAttempt()
+
+  data class Contained(val result: GoalQaGateResult) : ValidationPhaseAttempt()
 }
 
 internal data class GoalQaRun(

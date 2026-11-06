@@ -1,13 +1,17 @@
 package skillbill.goalrunner.model.quality
 
 import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
+import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairOutput
 import java.security.MessageDigest
 
 enum class GoalQualityReadiness {
@@ -111,11 +115,39 @@ data class GoalQualityAcceptedEnvelope(
   val envelope: FeatureTaskRuntimeWorkflowArtifactMap,
 )
 
+data class GoalQualityAcceptedSourceObservation(
+  val phaseId: String,
+  val attempt: Int,
+  val contentFingerprint: String,
+  val completionSequenceNumber: Int = 0,
+  val progressRevision: Long = 0,
+  val validationOccurrence: Int = 0,
+  val acceptedOutputFingerprint: String? = null,
+)
+
+data class GoalQualityValidationOccurrence(
+  val occurrence: Int,
+  val status: GoalQualityExecutionStatus,
+  val validation: GoalQualityValidationDisposition,
+  val finalValidationContentFingerprint: String?,
+  val progress: GoalQualityPhaseProgress,
+)
+
+data class GoalQualityAdoptionEvidence(
+  val sourceContractVersion: String,
+  val originalPayloadJson: String,
+)
+
 data class GoalQualityPhaseProgress(
   val phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord> = emptyMap(),
   val phaseLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
   val acceptedOutputs: List<GoalQualityAcceptedOutput> = emptyList(),
   val acceptedEnvelopes: List<GoalQualityAcceptedEnvelope> = emptyList(),
+  val acceptedSourceObservations: List<GoalQualityAcceptedSourceObservation> = emptyList(),
+  val attemptHighWaterMarks: Map<String, Int> = emptyMap(),
+  val ledgerSequenceHighWaterMark: Int = 0,
+  val carriedValidationRepairsUsed: Int = 0,
+  val carriedValidationRepairOutputs: List<FeatureTaskRuntimeValidationGateRepairOutput> = emptyList(),
   val qaRepairState: QaRepairState? = null,
   val buildGateProgress: FeatureTaskRuntimeValidationGateProgress? = null,
   val buildGateProgressKey: String? = null,
@@ -127,7 +159,35 @@ data class GoalQualityPhaseProgress(
   val terminalBlockedReason: String? = null,
   val terminalCompleted: Boolean = false,
   val revision: Long = 0,
-)
+) {
+  fun acceptedBlockedValidationEvent(
+    phaseId: String,
+    attempt: Int,
+  ): FeatureTaskRuntimePhaseLedgerEntry? {
+    val latestPhaseEvent =
+      phaseLedger.filter { it.phaseId == phaseId }.maxByOrNull { it.sequenceNumber }
+        ?: return null
+    return latestPhaseEvent.takeIf {
+      it.attemptCount == attempt && it.action == FeatureTaskRuntimePhaseLedgerAction.BLOCKED
+    }
+  }
+
+  fun hasAcceptedValidationBoundary(): Boolean =
+    phaseRecords.isNotEmpty() &&
+      (
+        phaseRecords.values.all { it.status == WorkflowStepStatus.COMPLETED } ||
+          phaseRecords.values.count { it.status == WorkflowStepStatus.BLOCKED } == 1 &&
+          phaseRecords.values.all { it.status in setOf(WorkflowStepStatus.COMPLETED, WorkflowStepStatus.BLOCKED) } &&
+          phaseRecords.values.filter { it.status == WorkflowStepStatus.BLOCKED }.all { blocked ->
+            acceptedBlockedValidationEvent(blocked.phaseId, blocked.attemptCount) != null
+          }
+      ) &&
+      phaseRecords.values.filter { it.status == WorkflowStepStatus.COMPLETED }.all { completed ->
+        phaseLedger.filter { it.phaseId == completed.phaseId }.maxByOrNull { it.sequenceNumber }?.let {
+          it.attemptCount == completed.attemptCount && it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+        } == true
+      }
+}
 
 data class GoalQualityExecutionProgress(
   val qa: GoalQualityPhaseProgress = GoalQualityPhaseProgress(),
@@ -147,15 +207,19 @@ data class GoalQualityExecution(
   val validation: GoalQualityValidationDisposition,
   val warning: String? = null,
   val settledContentFingerprint: String? = null,
+  val finalValidationContentFingerprint: String? = null,
   val postQaContentFingerprint: String? = null,
   val qaTestedTreeIdentity: String? = null,
   val skipReason: String? = null,
+  val validationOccurrences: List<GoalQualityValidationOccurrence> = emptyList(),
+  val validationOccurrence: Int = 0,
 )
 
 data class GoalQualityExecutionRecord(
   val contractVersion: String = GOAL_QUALITY_EXECUTION_CONTRACT_VERSION,
   val readiness: GoalQualityReadiness,
   val execution: GoalQualityExecution? = null,
+  val adoptionEvidence: GoalQualityAdoptionEvidence? = null,
 ) {
   companion object
 
@@ -194,11 +258,86 @@ data class GoalQualityExecutionRecord(
     return copy(execution = current.copy(status = GoalQualityExecutionStatus.RETIRED))
   }
 
+  fun startNewValidationOccurrence(): GoalQualityExecutionRecord {
+    val current = requireNotNull(execution)
+    check(
+      current.status in
+        setOf(
+          GoalQualityExecutionStatus.VALIDATION_RUNNING,
+          GoalQualityExecutionStatus.VALIDATION_COMPLETED_PENDING_SETTLEMENT,
+          GoalQualityExecutionStatus.SETTLED_PASSED,
+          GoalQualityExecutionStatus.SETTLED_SKIPPED,
+          GoalQualityExecutionStatus.SETTLED_WARNED,
+        ),
+    )
+    val oldProgress = requireNotNull(current.progress).validation
+    check(
+      current.status != GoalQualityExecutionStatus.VALIDATION_RUNNING ||
+        oldProgress.hasAcceptedValidationBoundary(),
+    )
+    val attemptHighWaterMarks = validationAttemptHighWaterMarks(oldProgress)
+    val archived =
+      GoalQualityValidationOccurrence(
+        occurrence = current.validationOccurrence,
+        status = current.status,
+        validation = current.validation,
+        finalValidationContentFingerprint = current.finalValidationContentFingerprint,
+        progress = oldProgress,
+      )
+    val freshProgress =
+      GoalQualityPhaseProgress(
+        revision = oldProgress.revision + 1,
+        attemptHighWaterMarks = attemptHighWaterMarks,
+        ledgerSequenceHighWaterMark =
+          maxOf(
+            oldProgress.ledgerSequenceHighWaterMark,
+            oldProgress.phaseLedger.maxOfOrNull { it.sequenceNumber } ?: 0,
+          ),
+        carriedValidationRepairsUsed =
+          oldProgress.validationGateProgress?.repairsUsed
+            ?: oldProgress.carriedValidationRepairsUsed,
+        carriedValidationRepairOutputs =
+          oldProgress.validationGateProgress?.acceptedRepairOutputs
+            ?: oldProgress.carriedValidationRepairOutputs,
+      )
+    return copy(
+      execution =
+        current.copy(
+          status = GoalQualityExecutionStatus.REQUIRED_VALIDATION_PENDING,
+          validation = GoalQualityValidationDisposition.REQUIRED_PENDING,
+          settledContentFingerprint = null,
+          finalValidationContentFingerprint = null,
+          progress = requireNotNull(current.progress).copy(validation = freshProgress),
+          validationOccurrences = current.validationOccurrences + archived,
+          validationOccurrence = current.validationOccurrence + 1,
+        ),
+    )
+  }
+
+  private fun validationAttemptHighWaterMarks(oldProgress: GoalQualityPhaseProgress): Map<String, Int> {
+    val attemptHighWaterMarks = oldProgress.attemptHighWaterMarks.toMutableMap()
+    oldProgress.phaseRecords.forEach { (phase, record) ->
+      attemptHighWaterMarks[phase] = maxOf(attemptHighWaterMarks[phase] ?: 0, record.attemptCount)
+    }
+    oldProgress.phaseLedger.groupBy { it.phaseId }.forEach { (phase, entries) ->
+      attemptHighWaterMarks[phase] = maxOf(attemptHighWaterMarks[phase] ?: 0, entries.maxOf { it.attemptCount })
+    }
+    oldProgress.acceptedOutputs.groupBy { it.phaseId }.forEach { (phase, outputs) ->
+      attemptHighWaterMarks[phase] = maxOf(attemptHighWaterMarks[phase] ?: 0, outputs.maxOf { it.occurrence })
+    }
+    oldProgress.acceptedEnvelopes.groupBy { it.phaseId }.forEach { (phase, envelopes) ->
+      attemptHighWaterMarks[phase] = maxOf(attemptHighWaterMarks[phase] ?: 0, envelopes.maxOf { it.attempt })
+    }
+    oldProgress.acceptedSourceObservations.groupBy { it.phaseId }.forEach { (phase, observations) ->
+      attemptHighWaterMarks[phase] = maxOf(attemptHighWaterMarks[phase] ?: 0, observations.maxOf { it.attempt })
+    }
+    return attemptHighWaterMarks
+  }
+
   fun acceptQa(
     postQaContentFingerprint: String,
     qaTestedTreeIdentity: String?,
     warning: String?,
-    validationRequired: Boolean,
     skipReason: String? = null,
   ): GoalQualityExecutionRecord {
     val current = checkExecution(GoalQualityExecutionStatus.QA_PENDING)
@@ -209,18 +348,8 @@ data class GoalQualityExecutionRecord(
     return copy(
       execution =
         current.copy(
-          status =
-            if (validationRequired) {
-              GoalQualityExecutionStatus.REQUIRED_VALIDATION_PENDING
-            } else {
-              GoalQualityExecutionStatus.VALIDATION_DECISION_PENDING
-            },
-          validation =
-            if (validationRequired) {
-              GoalQualityValidationDisposition.REQUIRED_PENDING
-            } else {
-              GoalQualityValidationDisposition.NOT_REQUIRED
-            },
+          status = GoalQualityExecutionStatus.REQUIRED_VALIDATION_PENDING,
+          validation = GoalQualityValidationDisposition.REQUIRED_PENDING,
           warning = warning,
           postQaContentFingerprint = postQaContentFingerprint,
           qaTestedTreeIdentity = qaTestedTreeIdentity,
@@ -241,9 +370,29 @@ data class GoalQualityExecutionRecord(
     )
   }
 
+  fun requireFinalValidation(): GoalQualityExecutionRecord {
+    val current = checkExecution(GoalQualityExecutionStatus.VALIDATION_DECISION_PENDING)
+    check(
+      current.validation in
+        setOf(
+          GoalQualityValidationDisposition.DECISION_PENDING,
+          GoalQualityValidationDisposition.NOT_REQUIRED,
+        ),
+    )
+    return copy(
+      execution =
+        current.copy(
+          status = GoalQualityExecutionStatus.REQUIRED_VALIDATION_PENDING,
+          validation = GoalQualityValidationDisposition.REQUIRED_PENDING,
+          finalValidationContentFingerprint = null,
+        ),
+    )
+  }
+
   fun completeValidation(): GoalQualityExecutionRecord {
     val current = checkExecution(GoalQualityExecutionStatus.VALIDATION_RUNNING)
     check(current.validation == GoalQualityValidationDisposition.RUNNING)
+    require(!current.finalValidationContentFingerprint.isNullOrBlank())
     return copy(
       execution =
         current.copy(
@@ -253,7 +402,10 @@ data class GoalQualityExecutionRecord(
     )
   }
 
-  fun warnValidation(warning: String): GoalQualityExecutionRecord {
+  fun warnValidation(
+    warning: String,
+    observedContentFingerprint: String? = null,
+  ): GoalQualityExecutionRecord {
     val current = requireNotNull(execution)
     check(
       current.status in
@@ -263,12 +415,15 @@ data class GoalQualityExecutionRecord(
           GoalQualityExecutionStatus.VALIDATION_RUNNING,
         ),
     )
+    val fingerprint = observedContentFingerprint ?: current.finalValidationContentFingerprint
+    require(!fingerprint.isNullOrBlank())
     return copy(
       execution =
         current.copy(
           status = GoalQualityExecutionStatus.VALIDATION_COMPLETED_PENDING_SETTLEMENT,
           validation = GoalQualityValidationDisposition.DELIBERATELY_WARNED,
-          warning = listOfNotNull(current.warning, warning).distinct().joinToString(" "),
+          warning = accumulateGoalFinalRepairWarnings(current.warning, warning),
+          finalValidationContentFingerprint = fingerprint,
         ),
     )
   }
@@ -290,19 +445,12 @@ data class GoalQualityExecutionRecord(
     check(
       current.validation in
         setOf(
-          GoalQualityValidationDisposition.NOT_REQUIRED,
           GoalQualityValidationDisposition.COMPLETED,
           GoalQualityValidationDisposition.DELIBERATELY_WARNED,
         ),
     )
-    val validation =
-      if (status == GoalQualityExecutionStatus.SETTLED_WARNED &&
-        current.validation != GoalQualityValidationDisposition.NOT_REQUIRED
-      ) {
-        GoalQualityValidationDisposition.DELIBERATELY_WARNED
-      } else {
-        current.validation
-      }
+    require(!current.finalValidationContentFingerprint.isNullOrBlank())
+    val validation = current.validation
     require(settledContentFingerprint.isNotBlank())
     when (status) {
       GoalQualityExecutionStatus.SETTLED_PASSED -> {
@@ -310,21 +458,20 @@ data class GoalQualityExecutionRecord(
         require(
           validation in
             setOf(
-              GoalQualityValidationDisposition.NOT_REQUIRED,
               GoalQualityValidationDisposition.COMPLETED,
             ),
         )
       }
       GoalQualityExecutionStatus.SETTLED_SKIPPED -> {
         require(warning == null)
-        require(validation == GoalQualityValidationDisposition.NOT_REQUIRED)
+        require(validation == GoalQualityValidationDisposition.COMPLETED)
       }
       GoalQualityExecutionStatus.SETTLED_WARNED -> {
         require(!warning.isNullOrBlank())
         require(
           validation in
             setOf(
-              GoalQualityValidationDisposition.NOT_REQUIRED,
+              GoalQualityValidationDisposition.COMPLETED,
               GoalQualityValidationDisposition.DELIBERATELY_WARNED,
             ),
         )

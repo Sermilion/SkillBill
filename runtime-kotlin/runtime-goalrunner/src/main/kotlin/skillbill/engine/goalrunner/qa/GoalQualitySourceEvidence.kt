@@ -1,0 +1,287 @@
+package skillbill.engine.goalrunner.qa
+
+import skillbill.engine.featuretask.phaserun.GoalQualityValidationSourceRequest
+import skillbill.engine.featuretask.phaserun.PhaseRunPlanResolver
+import skillbill.engine.goal.GoalRunnerManifestState
+import skillbill.engine.goalrunner.execution.support.goalRunnerRepositoryContentIdentity
+import skillbill.engine.goalrunner.history.goalHistoryFingerprint
+import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.quality.GoalQualityValidationSourceProof
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.model.history.GoalFinalRepairContext
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
+import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
+import skillbill.goalrunner.model.quality.GoalQualityAcceptedSourceObservation
+import skillbill.goalrunner.model.quality.GoalQualityExecution
+import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
+import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
+import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Path
+import java.security.MessageDigest
+
+internal fun acceptedValidationSourceProof(
+  phasePlans: PhaseRunPlanResolver,
+  record: GoalQualityExecutionRecord,
+  plan: ResolvedPhaseExecutionPlan,
+  currentFingerprint: String,
+  acceptedWriterContents: Boolean,
+): GoalQualityValidationSourceProof? {
+  val execution = record.execution ?: return null
+  if (execution.governingInputs == null || execution.progress == null) return null
+  val progress = requireNotNull(execution.progress).validation
+  if (!phasePlans.hasAcceptedValidationBoundary(progress, plan)) return null
+  return proofForAcceptedBoundary(phasePlans, record, plan, currentFingerprint, acceptedWriterContents)
+}
+
+private fun proofForAcceptedBoundary(
+  phasePlans: PhaseRunPlanResolver,
+  record: GoalQualityExecutionRecord,
+  plan: ResolvedPhaseExecutionPlan,
+  currentFingerprint: String,
+  acceptedWriterContents: Boolean,
+): GoalQualityValidationSourceProof? {
+  val execution = requireNotNull(record.execution)
+  val inputs = requireNotNull(execution.governingInputs)
+  val progress = requireNotNull(execution.progress).validation
+  val legacyContentFingerprint =
+    execution.takeIf {
+      record.contractVersion in setOf("0.4", "0.5") && record.adoptionEvidence == null
+    }?.settledContentFingerprint
+  val terminalRecord =
+    progress.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
+      ?: plan.selectedStepIds.lastOrNull()?.let(progress.phaseRecords::get)
+      ?: return null
+  val event = terminalQualityEvent(progress, terminalRecord) ?: return null
+  val observation =
+    progress.acceptedSourceObservations.singleOrNull {
+      it.phaseId == terminalRecord.phaseId && it.attempt == terminalRecord.attemptCount &&
+        it.completionSequenceNumber == event.sequenceNumber &&
+        it.validationOccurrence == execution.validationOccurrence
+    }
+  val observedContent =
+    observation?.contentFingerprint ?: execution.finalValidationContentFingerprint ?: legacyContentFingerprint
+  val sourceRequest =
+    GoalQualityValidationSourceRequest(
+      progress,
+      plan,
+      "${execution.parentWorkflowId}:${execution.invocationId}",
+      Path.of(inputs.repoRoot),
+      currentFingerprint,
+      legacyContentFingerprint,
+      execution.validationOccurrence,
+    )
+  val sourceIsCurrent =
+    acceptedWriterContents ||
+      execution.validation != GoalQualityValidationDisposition.NOT_REQUIRED &&
+      observedContent == currentFingerprint && phasePlans.acceptedValidationSourceIsCurrent(sourceRequest)
+  return GoalQualityValidationSourceProof(
+    sourceContractVersion = record.contractVersion,
+    parentWorkflowId = execution.parentWorkflowId,
+    invocationId = execution.invocationId,
+    acceptedPlanFingerprint = requireNotNull(execution.executionPlans).fingerprint,
+    validationOccurrence = execution.validationOccurrence,
+    executionStatus = execution.status,
+    progressRevision = progress.revision,
+    phaseId = terminalRecord.phaseId,
+    attempt = terminalRecord.attemptCount,
+    ledgerSequenceNumber = event.sequenceNumber,
+    contentFingerprint = observedContent,
+    sourceIsCurrent = sourceIsCurrent,
+    acceptedOutputFingerprint = observation?.acceptedOutputFingerprint,
+  )
+}
+
+internal fun historyWriterOwnsCurrentContents(
+  outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  phasePlans: PhaseRunPlanResolver,
+  state: GoalRunnerManifestState,
+  execution: GoalQualityExecution,
+  currentFingerprint: String,
+): Boolean {
+  val completion = outcomeStore.goalHistoryCompletion(state.parentWorkflowId) ?: return false
+  val repairContext = outcomeStore.goalFinalRepairContext(state.parentWorkflowId) ?: return false
+  val writerInput =
+    GoalHistoryWriterInput(
+      state.parentWorkflowId,
+      outcomeStore.goalHistoryWriterEntries(
+        state.parentWorkflowId,
+        state.manifest.subtasks.map { it.id to it.workflowId },
+      ),
+      repairContext,
+    )
+  if (completion.inputFingerprint != goalHistoryFingerprint(writerInput, completion.preWriterContentFingerprint) ||
+    completion.preWriterContentFingerprint != execution.finalValidationContentFingerprint ||
+    completion.postWriterContentFingerprint != currentFingerprint
+  ) {
+    return false
+  }
+  return historyWriterValidationMatches(phasePlans, execution, completion.preWriterContentFingerprint)
+}
+
+private fun historyWriterValidationMatches(
+  phasePlans: PhaseRunPlanResolver,
+  execution: GoalQualityExecution,
+  preWriterContentFingerprint: String,
+): Boolean {
+  if (execution.governingInputs == null || execution.executionPlans == null) return false
+  val inputs = requireNotNull(execution.governingInputs)
+  val plans = requireNotNull(execution.executionPlans)
+  val plan =
+    phasePlans.validateGoalQualityExecutionPlan(
+      plans.validation,
+      SkeletonDefinition.VALIDATION.id,
+      inputs.effectiveAgentId,
+    )
+  val progress = execution.progress?.validation ?: return false
+  val observation = progress.acceptedSourceObservations.lastOrNull()
+  if (observation == null) return false
+  val currentObservation =
+    observation.contentFingerprint == preWriterContentFingerprint &&
+      observation.validationOccurrence == execution.validationOccurrence &&
+      observation.progressRevision <= progress.revision
+  return phasePlans.hasAcceptedValidationBoundary(progress, plan) && currentObservation &&
+    historyWriterTerminalMatches(progress, plan, observation)
+}
+
+private fun historyWriterTerminalMatches(
+  progress: GoalQualityPhaseProgress,
+  plan: ResolvedPhaseExecutionPlan,
+  observation: GoalQualityAcceptedSourceObservation,
+): Boolean {
+  val terminalRecord =
+    progress.phaseRecords.values.singleOrNull { it.status == WorkflowStepStatus.BLOCKED }
+      ?: plan.selectedStepIds.lastOrNull()?.let(progress.phaseRecords::get)
+      ?: return false
+  val terminalEvent =
+    progress.phaseLedger.filter { it.phaseId == terminalRecord.phaseId }
+      .maxByOrNull { it.sequenceNumber }
+  return observation.phaseId == terminalRecord.phaseId && observation.attempt == terminalRecord.attemptCount &&
+    terminalEvent?.sequenceNumber == observation.completionSequenceNumber &&
+    observation.acceptedOutputFingerprint?.let { fingerprint ->
+      progress.acceptedOutputs.any {
+        it.phaseId == observation.phaseId && it.occurrence == observation.attempt &&
+          MessageDigest.getInstance("SHA-256").digest(it.output.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) } == fingerprint
+      }
+    } != false
+}
+
+internal fun persistWarningAggregate(
+  outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  state: GoalRunnerManifestState,
+  invocationId: String,
+  vararg additions: String?,
+): String? {
+  fun currentFacts(): Pair<GoalFinalRepairContext, GoalQualityExecution> {
+    val context = outcomeStore.goalFinalRepairContext(state.parentWorkflowId) ?: GoalFinalRepairContext(emptyList())
+    val execution = outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution
+    if (execution == null || execution.invocationId != invocationId ||
+      execution.status == GoalQualityExecutionStatus.RETIRED
+    ) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+        "Final quality warning belongs to a different or retired invocation.",
+      )
+    }
+    return context to execution
+  }
+
+  val (context, execution) = currentFacts()
+  val candidate = accumulateGoalFinalRepairWarnings(context.warning, execution.warning, *additions)
+  if (!outcomeStore.recordGoalFinalRepairWarning(state.parentWorkflowId, invocationId, candidate)) {
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+      "Could not persist final quality warning for '${state.parentWorkflowId}'.",
+    )
+  }
+  val (persistedContext, persistedExecution) = currentFacts()
+  val reconciled =
+    accumulateGoalFinalRepairWarnings(
+      persistedContext.warning,
+      persistedExecution.warning,
+      *additions,
+    )
+  if (reconciled != persistedContext.warning &&
+    !outcomeStore.recordGoalFinalRepairWarning(state.parentWorkflowId, invocationId, reconciled)
+  ) {
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+      "Could not persist reconciled final quality warning for '${state.parentWorkflowId}'.",
+    )
+  }
+  val (finalContext, finalExecution) = currentFacts()
+  return accumulateGoalFinalRepairWarnings(finalContext.warning, finalExecution.warning, *additions)
+}
+
+internal fun currentContentFingerprint(
+  gitOperations: WorkflowGitOperations,
+  state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
+): String =
+  (goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot) as? WorkflowGitOperationResult.Ok)
+    ?.value
+    ?.takeIf(String::isNotBlank)
+    ?: throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "Could not record settled repository contents for '${state.parentWorkflowId}'.",
+    )
+
+internal fun codeChangedAfterQa(
+  outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  gitOperations: WorkflowGitOperations,
+  state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
+  execution: GoalQualityExecution? = outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution,
+): String? {
+  val tested =
+    if (execution != null) {
+      execution.qaTestedTreeIdentity?.takeIf(String::isNotBlank) ?: return null
+    } else {
+      outcomeStore.recordedGoalQaOutcome(qaOutcomeWorkflowId(state, null))
+        ?.takeIf { it.outcome != StandaloneQaOutcome.SKIPPED }
+        ?.testedTreeIdentity?.takeIf(String::isNotBlank) ?: return null
+    }
+  val current = gitOperations.repositoryTreeIdentity(request.repoRoot)
+  if (current is WorkflowGitOperationResult.Ok && current.value.trim() == tested) return null
+  return "validate changed code after QA settled; QA does not re-run, so the published change differs from the " +
+    "tree QA tested ($tested)."
+}
+
+internal fun requireCurrentValidationEvidence(
+  gitOperations: WorkflowGitOperations,
+  state: GoalRunnerManifestState,
+  request: GoalRunnerRunRequest,
+  execution: GoalQualityExecution,
+) {
+  if (execution.finalValidationContentFingerprint != currentContentFingerprint(gitOperations, state, request)) {
+    throw SkillBillRuntimeException(
+      WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      "Final validation for '${execution.invocationId}' does not prove current repository contents.",
+    )
+  }
+}
+
+private fun terminalQualityEvent(
+  progress: GoalQualityPhaseProgress,
+  record: FeatureTaskRuntimePhaseRecord,
+): FeatureTaskRuntimePhaseLedgerEntry? =
+  if (record.status == WorkflowStepStatus.BLOCKED) {
+    progress.acceptedBlockedValidationEvent(record.phaseId, record.attemptCount)
+  } else {
+    progress.phaseLedger.filter {
+      it.phaseId == record.phaseId && it.attemptCount == record.attemptCount &&
+        it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
+    }.maxByOrNull { it.sequenceNumber }
+  }

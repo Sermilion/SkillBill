@@ -97,7 +97,7 @@ fun phaseRunEntry(
   gitOperations: WorkflowGitOperations,
   database: DatabaseSessionFactory,
   clock: Clock,
-  runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
+  runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(gitOperations = gitOperations),
 ): PhaseRunEntry = PhaseRunEntryFixture(strategies, gitOperations, database, clock, runLoopEntry).entry()
 
 data class PhaseRunEntryFixture(
@@ -105,7 +105,7 @@ data class PhaseRunEntryFixture(
   val gitOperations: WorkflowGitOperations,
   val database: DatabaseSessionFactory,
   val clock: Clock,
-  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(gitOperations = gitOperations),
   val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer = refusingMonitorPreparer(),
   val qaManifests: List<PlatformManifest> = emptyList(),
   val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,

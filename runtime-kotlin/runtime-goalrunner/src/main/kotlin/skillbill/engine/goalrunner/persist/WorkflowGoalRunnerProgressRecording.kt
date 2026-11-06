@@ -50,6 +50,8 @@ import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalFinalizationHistoryRecord
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
+import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
+import skillbill.goalrunner.model.quality.GoalQualityExecution
 import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.toPersistenceWire
@@ -363,7 +365,7 @@ public class WorkflowGoalRunnerProgressRecording(
   ): Boolean =
     withFinalHistoryPersistence {
       if (output.invocationId != expectedInvocationId) return@withFinalHistoryPersistence false
-      updateGoalFinalizationHistory(parentWorkflowId, expectedInvocationId) { prior ->
+      updateGoalFinalizationHistory(parentWorkflowId, expectedInvocationId) { prior, _ ->
         val context = prior.repairContext ?: GoalFinalRepairContext(emptyList())
         val sameIdentity =
           context.outputs.firstOrNull {
@@ -390,12 +392,13 @@ public class WorkflowGoalRunnerProgressRecording(
     warning: String?,
   ): Boolean =
     withFinalHistoryPersistence {
-      updateGoalFinalizationHistory(parentWorkflowId, expectedInvocationId) { prior ->
+      updateGoalFinalizationHistory(parentWorkflowId, expectedInvocationId) { prior, quality ->
         val context = prior.repairContext ?: GoalFinalRepairContext(emptyList())
-        if (prior.repairContext != null && context.warning == warning) {
+        val mergedWarning = accumulateGoalFinalRepairWarnings(context.warning, quality.warning, warning)
+        if (prior.repairContext != null && context.warning == mergedWarning) {
           prior
         } else {
-          prior.copy(repairContext = context.copy(warning = warning), completion = null)
+          prior.copy(repairContext = context.copy(warning = mergedWarning), completion = null)
         }
       }
     }
@@ -414,7 +417,7 @@ public class WorkflowGoalRunnerProgressRecording(
       updateGoalFinalizationHistory(
         parentWorkflowId,
         expectedInvocationId,
-      ) { prior -> prior.copy(completion = completion) }
+      ) { prior, _ -> prior.copy(completion = completion) }
     }
 
   internal fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion? =
@@ -438,7 +441,7 @@ public class WorkflowGoalRunnerProgressRecording(
   private fun updateGoalFinalizationHistory(
     parentWorkflowId: String,
     expectedInvocationId: String,
-    transform: (GoalFinalizationHistoryRecord) -> GoalFinalizationHistoryRecord,
+    transform: (GoalFinalizationHistoryRecord, GoalQualityExecution) -> GoalFinalizationHistoryRecord,
   ): Boolean =
     database.transaction { unitOfWork ->
       val parent = draftParent(unitOfWork, parentWorkflowId)
@@ -461,7 +464,7 @@ public class WorkflowGoalRunnerProgressRecording(
       }
       val raw = DurableWorkflowArtifactFamily.GOAL_FINALIZATION_HISTORY.value(parent.artifacts)
       val prior = decodeGoalFinalizationHistory(raw)
-      val updated = transform(prior)
+      val updated = transform(prior, quality)
       val payload = updated.toPersistenceWire()
       validateGoalFinalizationHistory(payload)
       engine.saveRunnerArtifactPatch(
