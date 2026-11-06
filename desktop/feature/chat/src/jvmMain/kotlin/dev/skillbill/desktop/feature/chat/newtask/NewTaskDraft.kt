@@ -359,6 +359,7 @@ class NewTaskDraft internal constructor(
       missing,
       replay,
       chatDispatcher,
+      ::refreshSaved,
     ).also {
       clearChatFeedback()
       chatState.value = it

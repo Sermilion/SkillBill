@@ -55,6 +55,7 @@ internal class NewTaskChat(
   val repositoryMissing: Boolean = false,
   replay: NewTaskReplay? = null,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+  private val onSaved: () -> Unit = {},
 ) {
   @Volatile
   var sessionId: String = initialSessionId
@@ -300,7 +301,7 @@ internal class NewTaskChat(
   }
 
   private suspend fun save(): Boolean {
-    return saveLock.withLock {
+    val saved = saveLock.withLock {
       val lines = snapshotLines()
       val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
       chat.saveNewTaskDraft(
@@ -315,5 +316,7 @@ internal class NewTaskChat(
         ),
       )
     }
+    if (saved) onSaved()
+    return saved
   }
 }

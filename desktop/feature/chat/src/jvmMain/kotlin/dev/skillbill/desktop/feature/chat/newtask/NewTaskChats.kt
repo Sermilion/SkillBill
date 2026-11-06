@@ -44,8 +44,10 @@ internal class NewTaskSavedChats(private val chats: ExecutionChatRepository, pri
   val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
 
   fun refresh() {
-    savedRead?.cancel()
-    savedRead = scope.launch { savedState.value = chats.savedNewTaskDrafts() }
+    scope.launch {
+      savedRead?.cancel()
+      savedRead = launch { savedState.value = chats.savedNewTaskDrafts() }
+    }
   }
 }
 
