@@ -16,11 +16,14 @@ import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import java.io.File
 import java.util.UUID
@@ -33,8 +36,24 @@ internal const val ACT_PREFIX =
     "do not resume, relaunch or continue it yourself. Wait for every command you start to finish before you end this turn."
 
 internal const val ALREADY_RUNNING_NOTICE = "The execution is already running again; the app did not relaunch it."
-internal const val REMOVED_WORKTREE_CHAT_NOTICE = "This goal's worktree was removed, so its earlier agent sessions cannot continue. New turns run in"
+internal const val REMOVED_WORKTREE_CHAT_NOTICE = "This goal's worktree was removed. New turns run in"
+internal const val SESSIONS_MOVED_SENTENCE = "Earlier Claude and Codex chats were moved there and can be resumed; Cursor and Junie chats start fresh."
+internal const val NOTHING_TO_MOVE_SENTENCE = "Cursor and Junie chats start fresh."
+internal const val MOVE_FAILED_SENTENCE = "Some earlier chats could not be moved and start fresh."
 internal const val MAIN_CHECKOUT_NOT_SWITCHED_NOTICE = "The main checkout was not switched to the goal branch"
+
+/** Agents whose sessions the move carries to the repository root; every other agent's chat restarts there. */
+private val CONTINUABLE_AGENTS = setOf("claude", "codex")
+
+/** The removed-worktree notice; a null [result] means the move threw. */
+internal fun removedWorktreeNotice(root: String, result: SessionMoveResult?): String {
+  val sentence = when {
+    result == null || result.failed > 0 -> MOVE_FAILED_SENTENCE
+    result.claudeMoved + result.codexMoved > 0 -> SESSIONS_MOVED_SENTENCE
+    else -> NOTHING_TO_MOVE_SENTENCE
+  }
+  return "$REMOVED_WORKTREE_CHAT_NOTICE $root. $sentence"
+}
 
 /** The one mode rule: a running or active execution is only read; anything else may be acted on. */
 internal fun modeFor(header: WorkItem): ChatPermissionMode =
@@ -66,7 +85,7 @@ internal class ChatTurns(
   suspend fun freshRead(item: WorkItem): DetailState? = details.observe(item).firstOrNull { it.sections !is DetailSections.Pending }
 
   /** Turns [state] into a read, or null after marking the session gone. Every read refreshes the session's header and mode. */
-  fun accept(session: ChatSession, state: DetailState?): ExecutionRead? {
+  suspend fun accept(session: ChatSession, state: DetailState?): ExecutionRead? {
     val sections = state?.sections
     if (sections is DetailSections.Gone) {
       markGone(session)
@@ -81,8 +100,8 @@ internal class ChatTurns(
     return ExecutionRead(header, null, null)
   }
 
-  /** Posts the removed-worktree notice, then ends the agent session when the started root is not the one the next turn runs in. */
-  fun followRoot(session: ChatSession) {
+  /** Follows a removed worktree, then ends the agent session when the started root is not the one the next turn runs in. */
+  suspend fun followRoot(session: ChatSession) {
     followWorktree(session)
     if (session.item.goalWorktree != null && session.started && session.startedRoot != session.item.workingRoot()) {
       chat.end(session.sessionId)
@@ -90,12 +109,33 @@ internal class ChatTurns(
     }
   }
 
-  fun followWorktree(session: ChatSession) {
-    if (worktreeGone(session.item) && !session.worktreeRemovedNoticed) {
-      session.worktreeRemovedNoticed = true
-      session.append(ChatMessage.Notice("$REMOVED_WORKTREE_CHAT_NOTICE ${session.item.repositoryRoot}."))
-    }
+  /**
+   * Once per session, when the worktree is gone: ends the agent process, moves the goal's Claude and Codex sessions to the repository
+   * root and posts the notice. A started Claude or Codex session whose move had no failure keeps its id and resumes in the root.
+   */
+  suspend fun followWorktree(session: ChatSession) {
+    if (worktreeGone(session.item) && !session.worktreeRemovedNoticed) moveSessions(session)
     followMainCheckout(session)
+  }
+
+  private suspend fun moveSessions(session: ChatSession) {
+    session.worktreeMoveLock.withLock {
+      val worktree = session.item.goalWorktree
+      if (worktree != null && !session.worktreeRemovedNoticed) {
+        val root = session.item.repositoryRoot
+        chat.end(session.sessionId)
+        val result = try {
+          chat.moveSessions(worktree.path, root)
+        } catch (cancelled: CancellationException) {
+          throw cancelled
+        } catch (_: Exception) {
+          null
+        }
+        session.worktreeRemovedNoticed = true
+        if (session.agentState.value?.agentId in CONTINUABLE_AGENTS && session.started && result?.failed == 0) session.startedRoot = root
+        session.append(ChatMessage.Notice(removedWorktreeNotice(root, result)))
+      }
+    }
   }
 
   /** The worktree is removed, or the runtime still lists it but its directory is gone. */

@@ -491,6 +491,8 @@ class ChatWorkspace(
   fun showResumable(id: String) {
     val session = sessions[id] ?: return
     scope.launch(session.job) {
+      // A removed worktree's sessions move first, so the listing at the repository root includes them.
+      if (session.turnJob == null) turns.followWorktree(session)
       session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.workingRoot(), session.sessionId)
     }
   }
@@ -515,6 +517,7 @@ class ChatWorkspace(
     session.stoppableState.value = false
     launchTurn(session) {
       running?.cancelAndJoin()
+      turns.followWorktree(session)
       val lines = chat.openSavedChat(entry)
       endAgent(session)
       session.resumeFrom(entry.sessionId, session.item.workingRoot())
@@ -685,8 +688,8 @@ class ChatWorkspace(
             turns.markGone(it)
           } else if (state.sections !is DetailSections.Pending) {
             it.item = state.header
-            // A refresh during a streaming turn only posts the notice; the next accept moves the session.
-            if (it.turnJob == null) turns.followRoot(it) else turns.followWorktree(it)
+            // A refresh during a streaming turn leaves the live process alone; the next accept follows the removed worktree.
+            if (it.turnJob == null) turns.followRoot(it)
             val title = state.header.issueKey ?: state.header.title
             tabState.update { s -> s.copy(tabs = s.tabs.map { t -> if (t.executionId == it.item.id) t.copy(title = title) else t }) }
             it.modeState.value = modeFor(state.header)

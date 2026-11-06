@@ -22,6 +22,7 @@ import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
@@ -91,9 +92,9 @@ class ChatWorkspaceTest {
   /** A real directory standing in for a goal worktree; `toRealPath` avoids the macOS `/var` symlink. */
   private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
 
-  private fun TestScope.workspace(draft: NewTaskDraft = testNewTaskDraft()): ChatWorkspace {
+  private fun TestScope.workspace(draft: NewTaskDraft = testNewTaskDraft(), repository: FakeExecutionChatRepository = chat): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chat, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, draft)
+    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, draft)
   }
 
   @Test
@@ -210,7 +211,7 @@ class ChatWorkspaceTest {
   }
 
   @Test
-  fun `removed worktree ends the old agent session and starts the next turn at the primary root`() = runTest {
+  fun `removed worktree moves the sessions and a started claude session resumes at the primary root`() = runTest {
     val worktree = worktreeDir()
     val active = workItem("SKILL-468").copy(
       repositoryRoot = "/repo",
@@ -232,11 +233,70 @@ class ChatWorkspaceTest {
     runCurrent()
 
     assertEquals(listOf(firstSessionId), chat.ended)
+    assertEquals(listOf(worktree to "/repo"), chat.moveCalls)
     assertEquals("/repo", (chat.requests.last().scope as ChatScope.Execution).repositoryRoot)
-    assertTrue(chat.requests.last().firstTurn)
+    assertFalse(chat.requests.last().firstTurn)
+    assertEquals(firstSessionId, chat.requests.last().sessionId)
     assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
-      it.text == "$REMOVED_WORKTREE_CHAT_NOTICE /repo."
+      it.text == removedWorktreeNotice("/repo", SessionMoveResult(0, 0, 0))
     })
+    workspace.closeAll()
+  }
+
+  // Resuming a Claude session whose file stayed in the worktree's project directory would find no session in the repository root.
+  @Test
+  fun `a failed or throwing session move restarts a started claude session with a new id and says so`() = runTest {
+    for (outcome in listOf<suspend (String, String) -> SessionMoveResult>({ _, _ -> SessionMoveResult(0, 0, 1) }, { _, _ -> error("disk") })) {
+      val repository = FakeExecutionChatRepository().apply { moveResult = outcome }
+      val active = workItem("SKILL-512").copy(
+        repositoryRoot = "/repo",
+        goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
+      )
+      val detail = MutableStateFlow(loaded(active))
+      details.details = mapOf(active.id to detail)
+      val workspace = workspace(repository = repository)
+      workspace.open(active)
+      runCurrent()
+      val session = workspace.session(active.id)!!
+      val firstSessionId = session.sessionId
+
+      detail.value = loaded(active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed)))
+      runCurrent()
+      workspace.send(active.id, "continue")
+      runCurrent()
+
+      assertEquals("/repo", (repository.requests.last().scope as ChatScope.Execution).repositoryRoot)
+      assertTrue(repository.requests.last().firstTurn)
+      assertTrue(repository.requests.last().sessionId != firstSessionId)
+      assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text == "$REMOVED_WORKTREE_CHAT_NOTICE /repo. $MOVE_FAILED_SENTENCE" })
+      workspace.closeAll()
+    }
+  }
+
+  // Cursor chats are not moved, so a Cursor session still ends and restarts under a new id in the repository root.
+  @Test
+  fun `removed worktree restarts a cursor session with a new id at the primary root`() = runTest {
+    val cursor = FakeExecutionChatRepository(ChatAgent("cursor", null, null), setOf("cursor"))
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
+    )
+    val detail = MutableStateFlow(loaded(active))
+    details.details = mapOf(active.id to detail)
+    val workspace = workspace(repository = cursor)
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+    val firstSessionId = session.sessionId
+
+    detail.value = loaded(active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed)))
+    runCurrent()
+    workspace.send(active.id, "continue")
+    runCurrent()
+
+    assertEquals("/repo", (cursor.requests.last().scope as ChatScope.Execution).repositoryRoot)
+    assertTrue(cursor.requests.last().firstTurn)
+    assertTrue(cursor.requests.last().sessionId != firstSessionId)
     workspace.closeAll()
   }
 
@@ -262,7 +322,7 @@ class ChatWorkspaceTest {
 
     assertEquals(listOf(firstSessionId), chat.ended)
     assertEquals("/repo", (chat.requests.last().scope as ChatScope.Execution).repositoryRoot)
-    assertTrue(chat.requests.last().firstTurn)
+    assertFalse(chat.requests.last().firstTurn)
     assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text.startsWith(REMOVED_WORKTREE_CHAT_NOTICE) })
     workspace.closeAll()
   }
@@ -293,7 +353,7 @@ class ChatWorkspaceTest {
 
     val notices = session.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
     assertEquals(
-      listOf("$REMOVED_WORKTREE_CHAT_NOTICE /repo.", "$MAIN_CHECKOUT_NOT_SWITCHED_NOTICE: rebase in progress."),
+      listOf(removedWorktreeNotice("/repo", SessionMoveResult(0, 0, 0)), "$MAIN_CHECKOUT_NOT_SWITCHED_NOTICE: rebase in progress."),
       notices.filter { it.startsWith(REMOVED_WORKTREE_CHAT_NOTICE) || it.startsWith(MAIN_CHECKOUT_NOT_SWITCHED_NOTICE) },
     )
     workspace.closeAll()
@@ -329,7 +389,7 @@ class ChatWorkspaceTest {
     val notices = session.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
     val expected = "$MAIN_CHECKOUT_NOT_SWITCHED_NOTICE: app/build.gradle."
     assertEquals(1, notices.count { it == expected })
-    val removedNotice = notices.indexOf("$REMOVED_WORKTREE_CHAT_NOTICE /repo.")
+    val removedNotice = notices.indexOf(removedWorktreeNotice("/repo", SessionMoveResult(0, 0, 0)))
     assertTrue(removedNotice >= 0, "the removed-worktree notice is missing: $notices")
     assertTrue(removedNotice < notices.indexOf(expected))
     workspace.closeAll()
