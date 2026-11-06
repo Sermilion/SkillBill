@@ -57,6 +57,11 @@ class PlanFanOutWaveTest {
     object : PhaseRunFanOut {
       override fun pendingUnits() = error("The wave already has its units")
 
+      override fun recordWave(
+        capacity: Int,
+        unitIds: List<Int>,
+      ): Boolean = true
+
       override fun pauseBefore(unitId: Int): PhaseOutcome? = null
 
       override fun <B : PhaseAcceptedStepExecution> unitState(

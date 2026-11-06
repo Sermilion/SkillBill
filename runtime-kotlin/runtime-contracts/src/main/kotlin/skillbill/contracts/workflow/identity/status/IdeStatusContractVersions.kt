@@ -12,7 +12,7 @@ import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 const val IDE_STATUS_CONTRACT_VERSION: String = "0.6"
 const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
-const val WORK_DETAIL_CONTRACT_VERSION: String = "1.5"
+const val WORK_DETAIL_CONTRACT_VERSION: String = "1.7"
 
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
@@ -99,6 +99,9 @@ object WorkDetailPayloadKeys {
   const val BLOCKED_COUNT = "blocked_count"
   const val PLAN_OUTPUT_TAIL = "plan_output_tail"
   const val PLAN_OUTPUT_UPDATED_AT = "plan_output_updated_at"
+  const val PLANNING_WAVE_NUMBER = "planning_wave_number"
+  const val PLANNING_WAVE_CAPACITY = "planning_wave_capacity"
+  const val PLANNING_WAVE_HISTORY_COMPLETE = "planning_wave_history_complete"
   const val PLAN_SUBTASK_LATEST_LINES = "plan_subtask_latest_lines"
   const val STANDALONE_PLAN_PROGRESS = "standalone_plan_progress"
   const val FEATURE_NAME = DecompositionManifestPayloadKeys.FEATURE_NAME
@@ -120,6 +123,7 @@ object WorkDetailPayloadKeys {
   const val FIRST_STARTED_AT = WorkflowTimestampPayloadKeys.FIRST_STARTED_AT
   const val BRIEFING_TEXT = BlockIncidentReportKeys.BRIEFING_TEXT
   const val LATEST_OUTPUT = "latest_output"
+  const val LATEST_OUTPUT_AT = "latest_output_at"
 }
 
 const val GOAL_PLANNING_WAVE_CAP: Int = 5

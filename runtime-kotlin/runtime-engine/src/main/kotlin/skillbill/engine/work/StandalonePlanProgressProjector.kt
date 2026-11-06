@@ -21,7 +21,10 @@ import skillbill.ports.idestatus.model.StandalonePlanUnit
 import skillbill.ports.idestatus.model.StandalonePlanUnitState
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.decodePlanFanOutHistoryFromArtifact
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
@@ -76,18 +79,11 @@ public class StandalonePlanProgressProjector(
         blockedReason,
       )
     val projectedPlanState = projectActiveWave(planState, manifestUnits.map { it.id }, records, blockedId)
+    val waveHistory = waveHistory(workflow?.artifacts?.toMap())
+    val wave = waveHistory?.waves?.lastOrNull()
     val stages = stages(records, briefingTexts)
     val units = units(manifestUnits, records, output)
-    val stall =
-      ExecutionProgressStall.detect(
-        if (phase.finishedAt == null && phase.lifecycleState == IdeStatusLifecycleState.ACTIVE.wireValue) {
-          ExecutionLiveness.LIVE
-        } else {
-          ExecutionLiveness.IDLE
-        },
-        output.latestLineAt,
-        observedAt,
-      )?.lastProgressAt
+    val stall = stall(phase, output, observedAt)
     return StandalonePlanProgress(
       report,
       stages,
@@ -99,8 +95,39 @@ public class StandalonePlanProgressProjector(
       blockedReason,
       units,
       stall,
+      wave?.ordinal,
+      wave?.capacity,
+      waveHistory?.complete == true,
     )
   }
+
+  private fun waveHistory(artifacts: Map<String, Any?>?): FeatureTaskRuntimePlanFanOutHistory? =
+    artifacts
+      ?.let(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY::value)
+      ?.let { raw ->
+        decodePlanFanOutHistoryFromArtifact(raw)
+      }
+
+  private fun stall(
+    phase: StandalonePhaseStatusRecord,
+    output: StandalonePhaseOutputSnapshot,
+    observedAt: Instant,
+  ): Instant? =
+    ExecutionProgressStall.detect(
+      if (
+        phase.finishedAt == null &&
+        (
+          phase.lifecycleState == IdeStatusLifecycleState.ACTIVE.wireValue ||
+            phase.lifecycleState == IdeStatusLifecycleState.BLOCKED.wireValue
+        )
+      ) {
+        ExecutionLiveness.LIVE
+      } else {
+        ExecutionLiveness.IDLE
+      },
+      output.latestLineAt,
+      observedAt,
+    )?.lastProgressAt
 
   private fun projectActiveWave(
     planState: GoalPlanningStatusSnapshot,
@@ -137,7 +164,13 @@ public class StandalonePlanProgressProjector(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
     ).map { id ->
       records[id].let { record ->
-        StandalonePlanStage(id, record?.firstStartedAt, record?.finishedAt, briefingTexts[id])
+        StandalonePlanStage(
+          id,
+          record?.firstStartedAt,
+          record?.finishedAt,
+          briefingTexts[id],
+          record?.status?.wireValue,
+        )
       }
     }
   }
@@ -155,10 +188,11 @@ public class StandalonePlanProgressProjector(
         subtask.specPath,
         subtask.dependsOn,
         standalonePlanUnitState(record),
-        record?.firstStartedAt,
+        record?.startedAt,
         record?.finishedAt,
         record?.blockedReason,
         output.latestAttributedLines[subtask.id],
+        output.latestAttributedLineAt[subtask.id],
       )
     }
   }

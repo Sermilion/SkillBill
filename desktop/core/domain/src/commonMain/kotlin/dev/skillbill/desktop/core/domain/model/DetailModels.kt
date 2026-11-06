@@ -98,6 +98,10 @@ data class Detail(
   val currentSubtaskId: Int? = null,
   val goalWorktree: GoalWorktree? = null,
   val launchWarning: String? = null,
+  val planOutputTail: List<String> = emptyList(),
+  val planOutputUpdatedAt: Instant? = null,
+  val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
+  val standalonePlan: StandalonePlanProgress? = null,
 )
 
 data class WorkSubtask(
@@ -304,6 +308,43 @@ data class PlanRunReport(
 )
 
 data class PlannedSubtask(val id: Int, val name: String, val specPath: String, val dependsOn: List<Int>)
+
+data class StandalonePlanProgress(
+  val report: PlanRunReport?,
+  val stages: List<StandalonePlanStage>,
+  val plannedSubtaskCount: Int,
+  val totalSubtaskCount: Int,
+  val currentPlanningSubtaskId: Int?,
+  val planningWaveSubtaskIds: List<Int>,
+  val planningWaveCapacity: Int?,
+  val blockedSubtaskId: Int?,
+  val blockedReason: String?,
+  val units: List<StandalonePlanUnit>,
+  val stalledSince: Instant?,
+  val planningWaveNumber: Int? = null,
+  val planningWaveHistoryComplete: Boolean = false,
+)
+
+data class StandalonePlanStage(
+  val phaseId: String,
+  val firstStartedAt: Instant?,
+  val finishedAt: Instant?,
+  val briefingText: String?,
+  val status: String? = null,
+)
+
+data class StandalonePlanUnit(
+  val subtaskId: Int,
+  val name: String,
+  val specPath: String,
+  val dependsOn: List<Int>,
+  val state: String,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val blockedReason: String?,
+  val latestOutput: String?,
+  val latestOutputAt: Instant? = null,
+)
 
 enum class IncidentProgress {
   InvestigationPending, Investigating, DiagnosisComplete, DiagnosisPartial, DiagnosisFailed,

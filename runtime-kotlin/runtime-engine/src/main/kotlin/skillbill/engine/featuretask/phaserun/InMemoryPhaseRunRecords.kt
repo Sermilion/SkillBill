@@ -34,6 +34,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePaus
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
@@ -450,8 +451,24 @@ private class InMemoryPhasePlanRecords(
   private val phaseRecords: MutableMap<String, FeatureTaskRuntimePhaseRecord>,
 ) : PhasePlanRecords {
   private val planBundles = mutableMapOf<String, FeatureTaskRuntimePlanBundle>()
+  private val waveHistory = mutableMapOf<String, FeatureTaskRuntimePlanFanOutHistory>()
 
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? = planBundles[workflowId]
+
+  override fun loadPlanFanOutHistory(workflowId: String): FeatureTaskRuntimePlanFanOutHistory? = waveHistory[workflowId]
+
+  override fun recordPlanFanOutWave(
+    workflowId: String,
+    stepId: String,
+    attempt: Int,
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean {
+    waveHistory[workflowId] =
+      (waveHistory[workflowId] ?: FeatureTaskRuntimePlanFanOutHistory(emptyList()))
+        .record(attempt, capacity, unitIds)
+    return true
+  }
 
   override fun recordPlanBundle(
     workflowId: String,
@@ -470,6 +487,15 @@ private class InMemoryPhasePlanRecords(
       phaseRecords[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtaskId)] = record.detached()
     }
     return recordPlanBundle(workflowId, bundle)
+  }
+
+  override fun replacePlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean {
+    waveHistory[workflowId] = FeatureTaskRuntimePlanFanOutHistory(emptyList())
+    return recordPlanBundleWithUnits(workflowId, bundle, unitRecords)
   }
 
   override fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? = null

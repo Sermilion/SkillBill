@@ -2496,6 +2496,7 @@ private val expectedMigrationDefinitions =
     101 to "record-diff-comments",
     102 to "record-qa-details",
     103 to "record-standalone-plan-output",
+    104 to "record-standalone-plan-attributed-output-times",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

@@ -383,12 +383,16 @@ public class StandalonePhaseStatusEventSink(
     val boundedLine = line.take(MAX_OUTPUT_LINE_CHARS)
     val tail = (outputSnapshot.tail + boundedLine).takeLast(OUTPUT_TAIL_LINES)
     val attributed = LinkedHashMap(outputSnapshot.latestAttributedLines)
+    val attributedAt = LinkedHashMap(outputSnapshot.latestAttributedLineAt)
     SUBTASK_ATTRIBUTION.find(line)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it > 0 }?.let { unitId ->
       attributed.remove(unitId)
       attributed[unitId] = boundedLine
+      attributedAt.remove(unitId)
+      attributedAt[unitId] = completedAt
       while (attributed.size > MAX_ATTRIBUTED_SUBTASKS) attributed.remove(attributed.keys.first())
+      attributedAt.keys.retainAll(attributed.keys)
     }
-    outputSnapshot = StandalonePhaseOutputSnapshot(tail, completedAt, attributed)
+    outputSnapshot = StandalonePhaseOutputSnapshot(tail, completedAt, attributed, attributedAt)
     outputDirty = true
     catchingNonCancellation {
       ensureRegistered(null)
@@ -406,16 +410,23 @@ public class StandalonePhaseStatusEventSink(
     if (persisted != null) {
       val tail = (persisted.tail + outputSnapshot.tail).takeLast(OUTPUT_TAIL_LINES)
       val attributed = LinkedHashMap(persisted.latestAttributedLines)
+      val attributedAt = LinkedHashMap(persisted.latestAttributedLineAt)
       outputSnapshot.latestAttributedLines.forEach { (unitId, line) ->
         attributed.remove(unitId)
         attributed[unitId] = line
+        outputSnapshot.latestAttributedLineAt[unitId]?.let { at ->
+          attributedAt.remove(unitId)
+          attributedAt[unitId] = at
+        }
       }
       while (attributed.size > MAX_ATTRIBUTED_SUBTASKS) attributed.remove(attributed.keys.first())
+      attributedAt.keys.retainAll(attributed.keys)
       outputSnapshot =
         StandalonePhaseOutputSnapshot(
           tail,
           outputSnapshot.latestLineAt ?: persisted.latestLineAt,
           attributed,
+          attributedAt,
         )
     }
     snapshotLoaded = true

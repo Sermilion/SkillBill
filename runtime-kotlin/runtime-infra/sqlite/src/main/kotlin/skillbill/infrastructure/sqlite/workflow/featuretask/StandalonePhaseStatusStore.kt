@@ -332,22 +332,29 @@ internal class StandalonePhaseStatusStore(
         snapshot.latestAttributedLines.entries.toList().takeLast(MAX_ATTRIBUTED_SUBTASKS)
           .associateTo(linkedMapOf()) { it.key to it.value.take(MAX_OUTPUT_LINE_CHARS) }
       val attributedJson = JsonCodec.valueToJsonString(attributed.mapKeys { it.key.toString() })
+      val attributedAt =
+        snapshot.latestAttributedLineAt.filterKeys { it in attributed }.mapValues { it.value.toString() }
+      val attributedAtJson = JsonCodec.valueToJsonString(attributedAt.mapKeys { it.key.toString() })
       val tailJson = JsonCodec.valueToJsonString(tail)
       check(tailJson.length <= MAX_OUTPUT_TAIL_JSON_CHARS) { "Standalone output tail exceeds its SQLite record bound." }
       check(attributedJson.length <= MAX_OUTPUT_ATTRIBUTED_JSON_CHARS) {
         "Standalone output attribution exceeds its SQLite record bound."
       }
+      check(attributedAtJson.length <= MAX_OUTPUT_ATTRIBUTED_JSON_CHARS) {
+        "Standalone output attribution times exceed their SQLite record bound."
+      }
       connection.prepareStatement(
         """
-        INSERT INTO standalone_phase_output(execution_id, tail_json, latest_line_at, attributed_json)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO standalone_phase_output(execution_id, tail_json, latest_line_at, attributed_json, attributed_at_json)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(execution_id) DO UPDATE SET
           tail_json = excluded.tail_json,
           latest_line_at = excluded.latest_line_at,
-          attributed_json = excluded.attributed_json
+          attributed_json = excluded.attributed_json,
+          attributed_at_json = excluded.attributed_at_json
         """.trimIndent(),
       ).use { statement ->
-        statement.bindAll(executionId, tailJson, snapshot.latestLineAt?.toString(), attributedJson)
+        statement.bindAll(executionId, tailJson, snapshot.latestLineAt?.toString(), attributedJson, attributedAtJson)
         check(statement.executeUpdate() == 1) { "Standalone output snapshot was not written." }
       }
     }
@@ -355,7 +362,8 @@ internal class StandalonePhaseStatusStore(
 
   override fun readOutput(executionId: String): StandalonePhaseOutputSnapshot? =
     connection.prepareStatement(
-      "SELECT tail_json, latest_line_at, attributed_json FROM standalone_phase_output WHERE execution_id = ?",
+      "SELECT tail_json, latest_line_at, attributed_json, attributed_at_json " +
+        "FROM standalone_phase_output WHERE execution_id = ?",
     ).use { statement ->
       statement.bindAll(executionId)
       statement.executeQuery().use { rows ->
@@ -370,10 +378,18 @@ internal class StandalonePhaseStatusStore(
               val line = value as? String ?: return@mapNotNull null
               id.takeIf { it > 0 }?.let { it to line.take(MAX_OUTPUT_LINE_CHARS) }
             }?.takeLast(MAX_ATTRIBUTED_SUBTASKS)?.toMap(linkedMapOf()).orEmpty()
+        val attributedAt =
+          (rows.getString("attributed_at_json")?.let { JsonCodec.parseValue(it) } as? Map<*, *>)
+            ?.entries?.mapNotNull { (key, value) ->
+              val id = (key as? String)?.toIntOrNull() ?: return@mapNotNull null
+              val at = (value as? String)?.let(::parsePersistedInstantOrNull) ?: return@mapNotNull null
+              id.takeIf { it > 0 && it in attributed }?.let { it to at }
+            }?.toMap(linkedMapOf()).orEmpty()
         StandalonePhaseOutputSnapshot(
           tail = tail,
           latestLineAt = parsePersistedInstantOrNull(rows.getString("latest_line_at").orEmpty()),
           latestAttributedLines = attributed,
+          latestAttributedLineAt = attributedAt,
         )
       }
     }

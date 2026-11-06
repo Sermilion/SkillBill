@@ -25,6 +25,23 @@ internal object StandalonePhaseStatusMigration {
     }
   }
 
+  fun addAttributedOutputTimes(connection: Connection) {
+    val exists =
+      connection.prepareStatement(
+        "SELECT 1 FROM pragma_table_info('standalone_phase_output') WHERE name = ?",
+      ).use { statement ->
+        statement.setString(1, "attributed_at_json")
+        statement.executeQuery().use { it.next() }
+      }
+    if (exists) return
+    connection.createStatement().use { statement ->
+      statement.execute(
+        "ALTER TABLE standalone_phase_output ADD COLUMN attributed_at_json TEXT " +
+          "CHECK (attributed_at_json IS NULL OR length(attributed_at_json) <= 32768)",
+      )
+    }
+  }
+
   private fun createSchema(connection: Connection) {
     createExecutionRegistry(connection)
     createStandalonePhaseStatus(connection)

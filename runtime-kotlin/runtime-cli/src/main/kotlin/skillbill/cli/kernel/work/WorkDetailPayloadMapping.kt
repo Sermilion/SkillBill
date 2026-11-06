@@ -113,6 +113,7 @@ private fun standalonePlanProgressWireMap(progress: StandalonePlanProgress): Map
       progress.stages.map { stage ->
         linkedMapOf(
           WorkDetailPayloadKeys.PHASE_ID to stage.phaseId,
+          WorkDetailPayloadKeys.STATUS to stage.status,
           WorkDetailPayloadKeys.FIRST_STARTED_AT to stage.firstStartedAt?.toString(),
           WorkBoardPayloadKeys.FINISHED_AT to stage.finishedAt?.toString(),
           WorkDetailPayloadKeys.BRIEFING_TEXT to stage.briefingText,
@@ -122,6 +123,9 @@ private fun standalonePlanProgressWireMap(progress: StandalonePlanProgress): Map
     WorkDetailPayloadKeys.TOTAL_SUBTASK_COUNT to progress.totalSubtaskCount,
     WorkDetailPayloadKeys.CURRENT_PLANNING_SUBTASK_ID to progress.currentPlanningSubtaskId,
     WorkDetailPayloadKeys.PLANNING_WAVE_SUBTASK_IDS to progress.planningWaveSubtaskIds,
+    WorkDetailPayloadKeys.PLANNING_WAVE_NUMBER to progress.planningWaveNumber,
+    WorkDetailPayloadKeys.PLANNING_WAVE_CAPACITY to progress.planningWaveCapacity,
+    WorkDetailPayloadKeys.PLANNING_WAVE_HISTORY_COMPLETE to progress.planningWaveHistoryComplete,
     WorkDetailPayloadKeys.BLOCKED_SUBTASK_ID to progress.blockedSubtaskId,
     WorkDetailPayloadKeys.BLOCKED_REASON to progress.blockedReason,
     WorkDetailPayloadKeys.PLAN_UNITS to progress.units.map(::standalonePlanUnitWireMap),
@@ -139,6 +143,7 @@ private fun standalonePlanUnitWireMap(unit: StandalonePlanUnit): Map<String, Any
     WorkBoardPayloadKeys.FINISHED_AT to unit.finishedAt?.toString(),
     WorkDetailPayloadKeys.BLOCKED_REASON to unit.blockedReason,
     WorkDetailPayloadKeys.LATEST_OUTPUT to unit.latestOutput,
+    WorkDetailPayloadKeys.LATEST_OUTPUT_AT to unit.latestOutputAt?.toString(),
   )
 
 private fun phaseWireMap(phase: WorkDetailPhase): Map<String, Any?> =

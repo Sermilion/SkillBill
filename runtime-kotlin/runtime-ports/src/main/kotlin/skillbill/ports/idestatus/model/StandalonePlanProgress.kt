@@ -13,6 +13,9 @@ data class StandalonePlanProgress(
   val blockedReason: String?,
   val units: List<StandalonePlanUnit>,
   val stalledSince: Instant?,
+  val planningWaveNumber: Int? = null,
+  val planningWaveCapacity: Int? = null,
+  val planningWaveHistoryComplete: Boolean = false,
 )
 
 data class StandalonePlanStage(
@@ -20,6 +23,7 @@ data class StandalonePlanStage(
   val firstStartedAt: Instant?,
   val finishedAt: Instant?,
   val briefingText: String?,
+  val status: String? = null,
 )
 
 enum class StandalonePlanUnitState(val wireValue: String) {
@@ -39,4 +43,5 @@ data class StandalonePlanUnit(
   val finishedAt: Instant?,
   val blockedReason: String?,
   val latestOutput: String?,
+  val latestOutputAt: Instant? = null,
 )

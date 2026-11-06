@@ -145,8 +145,12 @@ public class PlanFanOutStrategy private constructor(
       val nextWaveFirstId = waves.getOrNull(index + 1)?.first()
       val stopped =
         fanOut.pauseBefore(wave.first())
-          ?: runPlanFanOutWave(fanOutPort, planFanOutCap, fanOut, wave) {
-            runUnit(run, fanOut, it, outputSink, captureStreamOutput)
+          ?: if (!fanOut.recordWave(planFanOutCap, wave)) {
+            PhaseOutcome.blocked("Planning subtask wave ${index + 1} could not be recorded before dispatch.")
+          } else {
+            runPlanFanOutWave(fanOutPort, planFanOutCap, fanOut, wave) {
+              runUnit(run, fanOut, it, outputSink, captureStreamOutput)
+            }
           }
           ?: nextWaveFirstId?.let(fanOut::pauseBefore)
       if (stopped != null) return stopped

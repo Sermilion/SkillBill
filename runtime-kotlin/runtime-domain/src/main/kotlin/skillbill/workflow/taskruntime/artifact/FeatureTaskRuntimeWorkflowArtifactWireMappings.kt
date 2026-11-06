@@ -1,9 +1,12 @@
 package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -34,6 +37,17 @@ fun FeatureTaskRuntimePlanBundle.asWorkflowArtifactEntry(): FeatureTaskRuntimeWo
 
 fun decodePlanBundleFromArtifact(raw: Any?): FeatureTaskRuntimePlanBundle? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimePlanBundle::fromArtifactMap)
+
+fun FeatureTaskRuntimePlanFanOutHistory.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
+
+fun decodePlanFanOutHistoryFromArtifact(raw: Any): FeatureTaskRuntimePlanFanOutHistory =
+  FeatureTaskRuntimePlanFanOutHistory.fromArtifactMap(
+    JsonCodec.anyToStringAnyMap(raw) ?: throw SkillBillRuntimeException(
+      FeatureTaskRuntimeFailureCode.INVALID_PLAN_FAN_OUT_HISTORY_SCHEMA,
+      "Plan fan-out history artifact must be an object.",
+    ),
+  )
 
 fun FeatureTaskRuntimeImplementationAttempt.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())

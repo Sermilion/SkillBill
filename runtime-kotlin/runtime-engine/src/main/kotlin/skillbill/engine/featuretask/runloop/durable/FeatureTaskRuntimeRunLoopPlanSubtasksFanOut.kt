@@ -49,6 +49,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -87,6 +88,16 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
         .filterNot { snapshots.unitComplete(facts.repoRoot, it, unitRecords[unitRecordId(it.id)]) }
         .map { it.id },
     )
+  }
+
+  override fun recordWave(
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean {
+    val phase = parent.records.loadPhaseRecords(facts.workflowId)?.get(stepId)
+    val attempt =
+      if (phase?.status == WorkflowStepStatus.RUNNING) phase.attemptCount else (phase?.attemptCount ?: 0) + 1
+    return parent.records.recordPlanFanOutWave(facts.workflowId, stepId, attempt, capacity, unitIds)
   }
 
   override fun pauseBefore(unitId: Int): PhaseOutcome? = null

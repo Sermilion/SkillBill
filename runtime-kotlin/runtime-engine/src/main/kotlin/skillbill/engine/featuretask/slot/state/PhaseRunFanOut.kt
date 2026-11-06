@@ -11,6 +11,12 @@ public interface PhaseRunFanOut {
   /** The units the step still has to run, or the outcome that stops it before any unit runs. */
   public fun pendingUnits(): PhaseFanOutUnits
 
+  /** Persists the scheduler-selected batch before dispatch, or false when its durable write was rejected. */
+  public fun recordWave(
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean
+
   /** The outcome that pauses the step before unit [unitId] runs, or null when the step continues. */
   public fun pauseBefore(unitId: Int): PhaseOutcome?
 
