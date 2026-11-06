@@ -59,7 +59,7 @@ internal fun RunActions(
         }
       }
       view.implement?.let { button ->
-        ActionButton(button, LucideIcons.play, variant = SbButtonVariant.Primary) { onAction(ControlsAction.ImplementPlan) }
+        ActionButton(button, LucideIcons.play, variant = if (button.enabled) SbButtonVariant.Primary else SbButtonVariant.Secondary) { onAction(ControlsAction.ImplementPlan) }
       }
       view.cancel?.let { ActionButton(it, LucideIcons.x, variant = SbButtonVariant.Danger) { onAction(ControlsAction.Cancel) } }
       view.recover?.let { ActionButton(it, LucideIcons.refresh, modifier = Modifier.focusRequester(recoverFocus)) { onAction(ControlsAction.Recover) } }

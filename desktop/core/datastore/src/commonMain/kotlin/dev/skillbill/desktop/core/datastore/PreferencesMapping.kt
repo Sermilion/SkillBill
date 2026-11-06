@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.datastore
 import androidx.datastore.preferences.core.Preferences
 import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.TrayTab
 import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
@@ -17,6 +18,9 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
   val storedHeight = this[AppPreferenceKeys.TERMINAL_HEIGHT_DP]
   val height = storedHeight?.coerceIn(AppSettings.TERMINAL_HEIGHT_MIN_DP, AppSettings.TERMINAL_HEIGHT_MAX_DP)
   if (height != storedHeight) onUnsupported("${AppPreferenceKeys.TERMINAL_HEIGHT_DP.name}=$storedHeight")
+  val storedChatWidth = this[AppPreferenceKeys.CHAT_WIDTH_DP]
+  val chatWidth = storedChatWidth?.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP)
+  if (chatWidth != storedChatWidth) onUnsupported("${AppPreferenceKeys.CHAT_WIDTH_DP.name}=$storedChatWidth")
   val favoriteWork = this[AppPreferenceKeys.FAVORITE_WORK].orEmpty().mapNotNull { encoded ->
     FavoriteWorkKeyEncoding.decode(encoded).also { if (it == null) onUnsupported("${AppPreferenceKeys.FAVORITE_WORK.name}=$encoded") }
   }.toSet()
@@ -32,9 +36,13 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
     notifications = NotificationKind.entries.associateWith { this[AppPreferenceKeys.notificationKey(it)] ?: it.defaultEnabled },
     startAtLogin = this[AppPreferenceKeys.START_AT_LOGIN] ?: false,
     terminalHeightDp = height ?: AppSettings.TERMINAL_HEIGHT_DEFAULT_DP,
+    chatWidthDp = chatWidth ?: AppSettings.CHAT_WIDTH_DEFAULT_DP,
     trayLastTab = decode(AppPreferenceKeys.TRAY_LAST_TAB, TrayTab.DEFAULT) { raw -> TrayTab.entries.firstOrNull { it.wireValue == raw } },
     favoriteWork = favoriteWork,
     favoriteSpecs = favoriteSpecs,
+    newTaskChatLayout = decode(AppPreferenceKeys.NEW_TASK_CHAT_LAYOUT, NewTaskChatLayout.DEFAULT) { raw ->
+      NewTaskChatLayout.entries.firstOrNull { it.wireValue == raw }
+    },
   )
 }
 

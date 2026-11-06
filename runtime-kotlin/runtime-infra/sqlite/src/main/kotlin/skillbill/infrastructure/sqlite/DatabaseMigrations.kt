@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.databaseIncompatible
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
 import skillbill.infrastructure.sqlite.core.migration.MigrationLedger
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
@@ -21,8 +22,10 @@ internal object DatabaseMigrations {
     diagnostics: RuntimeDiagnostics,
     migrationSet: List<DatabaseMigration> = migrations,
   ) {
+    val currentVersion = requireSupportedVersion(connection, migrationSet)
     val ledger = MigrationLedger.readState(connection)
-    if (!ledger.hasPendingWork(migrationSet)) return
+    val latestVersion = migrationSet.maxOfOrNull { it.version } ?: 0
+    if (!ledger.hasPendingWork(migrationSet) && currentVersion == latestVersion) return
     val dbPath = connection.databasePath()
 
     connection.inDatabaseTransaction(
@@ -33,6 +36,7 @@ internal object DatabaseMigrations {
         diagnostics = diagnostics,
       ),
     ) {
+      requireSupportedVersion(this, migrationSet)
       MigrationLedger.ensureNameKeyed(this)
       val appliedNames = MigrationLedger.appliedNames(this)
       val pending = migrationSet.filterNot { migration -> migration.name in appliedNames }
@@ -51,6 +55,29 @@ internal object DatabaseMigrations {
         createStatement().use { statement -> statement.execute("PRAGMA user_version = $highestVersion") }
       }
     }
+    diagnostics.info(
+      "seam=database_schema_readiness record_kind=migration value_expected=$latestVersion " +
+        "value_used=$latestVersion cause=pending_or_renumbered_migrations previous_version=$currentVersion",
+    )
+  }
+
+  fun requireSupportedVersion(
+    connection: Connection,
+    migrationSet: List<DatabaseMigration> = migrations,
+  ): Int {
+    val latestVersion = migrationSet.maxOfOrNull { it.version } ?: 0
+    val currentVersion =
+      connection.createStatement().use { statement ->
+        statement.executeQuery("PRAGMA user_version").use { rows ->
+          check(rows.next()) { "PRAGMA user_version returned no row" }
+          rows.getInt(1)
+        }
+      }
+    val ledger = MigrationLedger.readState(connection)
+    if (currentVersion > latestVersion || ledger.appliedVersions.values.any { it > latestVersion }) {
+      throw databaseIncompatible(connection.databasePath().toString(), DatabaseAccessOperation.OPEN)
+    }
+    return currentVersion
   }
 
   private fun refreshDesktopSignalGeneration(connection: Connection) {

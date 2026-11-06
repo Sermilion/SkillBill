@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +57,27 @@ class SettingsViewModelTest {
       assertEquals(0, repository.pathWrites)
       assertEquals(PathError.OnlySpaces, model.state.value.pathError)
       assertTrue(effects.none { it is SettingsEffect.ShowToast })
+    } finally {
+      ownedModel?.viewModelScope?.cancel()
+      Dispatchers.resetMain()
+    }
+  }
+
+  @Test
+  fun chosenChatLayoutReachesRepositoryAndState() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    var ownedModel: SettingsViewModel? = null
+    try {
+      val repository = CountingSettingsRepository()
+      val model = viewModel(repository)
+      ownedModel = model
+      advanceUntilIdle()
+
+      model.onAction(SettingsAction.NewTaskChatLayoutChosen(NewTaskChatLayout.SideList))
+      advanceUntilIdle()
+
+      assertEquals(NewTaskChatLayout.SideList, repository.settingsState.newTaskChatLayout)
+      assertEquals(NewTaskChatLayout.SideList, model.state.value.settings.newTaskChatLayout)
     } finally {
       ownedModel?.viewModelScope?.cancel()
       Dispatchers.resetMain()

@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.data.session.SessionSelection
 import dev.skillbill.desktop.core.data.session.SessionSelectionHolder
+import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.QaAssertionOutcome
 import dev.skillbill.desktop.core.domain.model.QaRunAssertion
@@ -27,9 +28,14 @@ import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.model.EnvironmentContext
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
+import skillbill.ports.idestatus.model.StandaloneNarrowWriteResult
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneValidationOutcome
+import skillbill.ports.idestatus.model.LiveChecksWriteMode
+import skillbill.ports.idestatus.model.ValidationCheckEvent
+import skillbill.ports.idestatus.model.ValidationCheckEventRecord
 import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome as RuntimeQaAssertionOutcome
 import skillbill.workflow.taskruntime.model.qa.QaRunAssertion as RuntimeQaRunAssertion
 import skillbill.workflow.taskruntime.model.qa.QaRunCoverage as RuntimeQaRunCoverage
@@ -48,6 +54,173 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class RuntimeDetailReadsTest {
+  @Test
+  fun `validation detail includes only validation runs from its branch and maps current activity`() {
+    runBlocking {
+      val root = Files.createTempDirectory("runtime-validation-branch-runs")
+      val sessionJob = SupervisorJob()
+      val database = root.resolve("work.db")
+      val runtime = RuntimeComponent::class.create(
+        RuntimeContext(
+          EnvironmentContext(database.toString(), environment = mapOf("SKILL_BILL_TEST" to "1"), userHome = root, repositoryRoot = root),
+          TransportContext(), WorkflowOpsContext(), OptionalCallbacks(),
+        ),
+      )
+      try {
+        val now = Instant.parse("2026-01-01T00:00:00Z")
+        val repositoryIdentity = runtime.repositoryEnclosingRootPort.repositoryIdentity(root)
+        runtime.databaseSession.transaction { unit ->
+          listOf(
+            "validation-a1" to "branch-a",
+            "validation-a2" to "branch-a",
+            "validation-b1" to "branch-b",
+            "review-a1" to "branch-a",
+          ).mapIndexed { index, (invocation, branch) ->
+            unit.standalonePhaseStatuses.register(
+              StandalonePhaseStatusRegistration(
+                repositoryIdentity, branch, "SKILL-508", null, invocation,
+                if (invocation.startsWith("review")) "review" else "validation",
+                "$invocation-execution", "active", "validation", now.plusSeconds(index.toLong()),
+                "$invocation-owner", 1, Instant.parse("9999-01-01T00:00:00Z"), launchAgentId = "agent-$invocation",
+              ),
+            )
+          }
+        }
+        runtime.databaseSession.transaction { unit ->
+          assertEquals(
+            StandaloneNarrowWriteResult.WRITTEN,
+            unit.standalonePhaseStatuses.writeCurrentActivity("validation-a2", "Reading reports"),
+          )
+          assertEquals(StandaloneNarrowWriteResult.WRITTEN, unit.standalonePhaseStatuses.writeLiveChecks("validation-a2", LiveChecksWriteMode.AVAILABLE))
+          unit.standalonePhaseStatuses.appendValidationCheckEvent(
+            ValidationCheckEventRecord(
+              "validation-a2", 1, "compile", ValidationCheckEvent.PLANNED, "Compile", "./gradlew check", ".", null, null, null, 0, now,
+            ),
+          )
+          unit.standalonePhaseStatuses.appendValidationCheckEvent(
+            ValidationCheckEventRecord(
+              "review-a1", 1, "compile", ValidationCheckEvent.PLANNED, "Compile", "./gradlew check", ".", null, null, null, 0, now,
+            ),
+          )
+          val record = requireNotNull(unit.standalonePhaseStatuses.readByInvocation("validation-a2"))
+          unit.standalonePhaseStatuses.update(
+            StandalonePhaseStatusUpdate(
+              executionId = record.executionId,
+              expectedRevision = record.statusRevision,
+              leaseOwner = record.leaseOwner,
+              leaseGeneration = record.leaseGeneration,
+              lifecycleState = record.lifecycleState,
+              currentStep = record.currentStep,
+              currentActivity = record.currentActivity,
+              updatedAt = now.plusSeconds(1),
+              validationOutcome = StandaloneValidationOutcome.PASSED,
+            ),
+          )
+        }
+        val holder = SessionSelectionHolder().apply {
+          choose(SessionSelection(1, database.toString(), null, kotlinx.coroutines.CoroutineScope(sessionJob + Dispatchers.IO)))
+        }
+        val reads = RuntimeReads(runtime, holder, DatabaseDispatcher(), DiagnosticsSwitch(false), NoopDiagnostics)
+        val detailReads = RuntimeDetailReads(reads, runtime, NoopDiagnostics, holder.selection.id)
+        val loaded = assertIs<DetailRead.Loaded>(detailReads.first("validation-a2"))
+        assertEquals(listOf("validation-a2", "validation-a1"), loaded.sections.detail.validationBranchRuns.map { it.invocationId })
+        assertEquals("Reading reports", loaded.sections.detail.currentActivity)
+        val current = loaded.sections.detail.executionHistory.first { it.invocationId == "validation-a2" }
+        assertEquals("validation-a2", loaded.sections.detail.selectedExecution?.invocationId)
+        assertEquals(1, loaded.sections.detail.executionHistory.count { it.invocationId == "validation-a2" })
+        assertEquals(true, current.liveChecks)
+        assertEquals(dev.skillbill.desktop.core.domain.model.ValidationOutcome.Passed, current.validationOutcome)
+        assertEquals("compile", current.validationChecks.single().checkId)
+        assertEquals(false, loaded.sections.detail.executionHistory.first { it.invocationId == "validation-a1" }.liveChecks)
+        val review = assertIs<DetailRead.Loaded>(detailReads.first("review-a1"))
+        assertEquals(emptyList(), review.sections.detail.executionHistory.first { it.invocationId == "review-a1" }.validationChecks)
+      } finally {
+        sessionJob.cancel()
+        runtime.databaseReadConnections.release()
+        Files.walk(root).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+      }
+    }
+  }
+
+  @Test
+  fun `older selected validation keeps saved checks beyond history page through paging and refresh`() {
+    runBlocking {
+      val root = Files.createTempDirectory("runtime-selected-validation")
+      val sessionJob = SupervisorJob()
+      val database = root.resolve("work.db")
+      val runtime = RuntimeComponent::class.create(
+        RuntimeContext(
+          EnvironmentContext(database.toString(), environment = mapOf("SKILL_BILL_TEST" to "1"), userHome = root, repositoryRoot = root),
+          TransportContext(), WorkflowOpsContext(), OptionalCallbacks(),
+        ),
+      )
+      try {
+        val now = Instant.parse("2026-01-01T00:00:00Z")
+        val repositoryIdentity = runtime.repositoryEnclosingRootPort.repositoryIdentity(root)
+        val invocations = runtime.databaseSession.transaction { unit ->
+          (0 until 22).map { index ->
+            val invocation = "validation-$index"
+            unit.standalonePhaseStatuses.register(
+              StandalonePhaseStatusRegistration(
+                repositoryIdentity, "main", "SKILL-508", null, invocation, "validation", "$invocation-execution",
+                "active", "validation", now.plusSeconds(index.toLong()), "$invocation-owner", 1,
+                Instant.parse("9999-01-01T00:00:00Z"),
+              ),
+            )
+          }
+        }
+        val selected = invocations.first()
+        runtime.databaseSession.transaction { unit ->
+          unit.standalonePhaseStatuses.writeLiveChecks(selected.invocationId, LiveChecksWriteMode.AVAILABLE)
+          unit.standalonePhaseStatuses.appendValidationCheckEvent(
+            ValidationCheckEventRecord(
+              selected.invocationId, 1, "compile", ValidationCheckEvent.PLANNED, "Compile", "./gradlew check", ".",
+              null, null, null, 0, now,
+            ),
+          )
+          val record = requireNotNull(unit.standalonePhaseStatuses.readByInvocation(selected.invocationId))
+          unit.standalonePhaseStatuses.update(
+            StandalonePhaseStatusUpdate(
+              executionId = record.executionId, expectedRevision = record.statusRevision,
+              leaseOwner = record.leaseOwner, leaseGeneration = record.leaseGeneration,
+              lifecycleState = record.lifecycleState, currentStep = record.currentStep, currentActivity = record.currentActivity,
+              updatedAt = now.plusSeconds(1), validationOutcome = StandaloneValidationOutcome.PASSED,
+            ),
+          )
+        }
+        val holder = SessionSelectionHolder().apply {
+          choose(SessionSelection(1, database.toString(), null, kotlinx.coroutines.CoroutineScope(sessionJob + Dispatchers.IO)))
+        }
+        val reads = RuntimeReads(runtime, holder, DatabaseDispatcher(), DiagnosticsSwitch(false), NoopDiagnostics)
+        val detailReads = RuntimeDetailReads(reads, runtime, NoopDiagnostics, holder.selection.id)
+        val first = assertIs<DetailRead.Loaded>(detailReads.first(selected.invocationId)).sections
+        val selectedExecution = requireNotNull(first.detail.selectedExecution)
+
+        assertEquals(selected.invocationId, selectedExecution.invocationId)
+        assertEquals(true, selectedExecution.liveChecks)
+        assertEquals(dev.skillbill.desktop.core.domain.model.ValidationOutcome.Passed, selectedExecution.validationOutcome)
+        assertEquals("compile", selectedExecution.validationChecks.single().checkId)
+        assertEquals(20, first.detail.executionHistory.size)
+        assertEquals(false, first.detail.executionHistory.any { it.invocationId == selected.invocationId })
+        val cursor = requireNotNull(first.listCursors[DetailList.Executions])
+
+        val nextPage = assertIs<DetailRead.Loaded>(detailReads.list(selected.invocationId, DetailList.Executions, cursor)).sections
+        assertEquals(selected.invocationId, nextPage.detail.selectedExecution?.invocationId)
+        assertEquals(selected.invocationId, nextPage.detail.executionHistory.last().invocationId)
+
+        val refreshed = assertIs<DetailRead.Loaded>(detailReads.refresh(selected.invocationId, mapOf(DetailList.Executions to 21))).sections
+        assertEquals(selected.invocationId, refreshed.detail.selectedExecution?.invocationId)
+        assertEquals("compile", refreshed.detail.selectedExecution?.validationChecks?.single()?.checkId)
+        assertEquals(21, refreshed.detail.executionHistory.size)
+        assertNotNull(refreshed.listCursors[DetailList.Executions])
+      } finally {
+        sessionJob.cancel()
+        runtime.databaseReadConnections.release()
+        Files.walk(root).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+      }
+    }
+  }
+
   @Test
   fun `detail read returns runtime run options for the loaded item`() {
     runBlocking {

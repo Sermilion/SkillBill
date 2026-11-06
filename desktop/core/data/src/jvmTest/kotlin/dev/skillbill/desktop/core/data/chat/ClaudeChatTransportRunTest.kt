@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
+import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
@@ -108,6 +109,29 @@ class ClaudeChatTransportRunTest {
 
     transport.end("session-1")
     claude.stopped.await()
+  }
+
+  // A live process keeps the directory it started in; reusing it after the goal's worktree moved sent the turn to a dead path.
+  @Test
+  fun `a turn in another directory stops the live process and resumes the session in a new one there`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+    val first = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    claude.print(replay(uuid), """{"type":"result","is_error":false,"result":""}""")
+    first.await()
+
+    val moved = chatRequest(firstTurn = false)
+    val second = async { transport.run(moved.copy(scope = (moved.scope as ChatScope.Execution).copy(repositoryRoot = "/work/main"))).toList() }
+    claude.stopped.await()
+    val (secondUuid, _) = claude.nextMessage()
+    claude.print(replay(secondUuid), """{"type":"result","is_error":false,"result":""}""")
+    assertEquals(listOf<ChatEvent>(ChatEvent.Completed), second.await())
+
+    assertEquals(listOf("/work/skill-bill", "/work/main"), claude.opened.map { it.workingDirectory })
+    assertTrue("--resume" in claude.opened[1].argv)
+
+    transport.end("session-1")
   }
 
   // Closing a tab or `/clear` cancels the turn; the agent and its commands must not keep running unseen.

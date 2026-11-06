@@ -3,8 +3,6 @@ package dev.skillbill.desktop.feature.chat.newtask
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import dev.skillbill.desktop.core.designsystem.component.ToastAction
-import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -17,7 +15,6 @@ import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
-import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
@@ -28,16 +25,11 @@ import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import me.tatarka.inject.annotations.Inject
-import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.util.UUID
 import kotlin.time.Clock
@@ -53,33 +45,22 @@ data class NewTaskOffer(
 )
 
 private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
-private const val DISCARD_UNDO_WINDOW_MS = 5_000L
-
-private sealed interface PendingDiscard {
-  class Undoable(val job: Job) : PendingDiscard
-  data object Deleting : PendingDiscard
-}
-
 private fun NewTaskKind.startName(): String =
   NewTaskActionKind.entries.firstOrNull { it.toNewTaskKind() == this }?.wire ?: name.lowercase()
 
-/** What the operator set up on New task, with its chat. It lives with the window, so navigation and session switches keep it. */
-@Inject
-@SingleIn(WindowScope::class)
-class NewTaskDraft(
+/** One open New task chat: what the operator set up for it, with its conversation. [NewTaskChats] owns the open set for the window. */
+class NewTaskDraft internal constructor(
   private val chats: ExecutionChatRepository,
   private val workControls: WorkControlRepository,
   private val databaseSession: DatabaseSessionController,
   private val toasts: ToastQueue,
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
+  private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
 ) {
   private val scope = windowScope.scope
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
-  private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private val offerState = MutableStateFlow(NewTaskOffer())
-  private var savedRead: Job? = null
-  private val pendingDiscards = mutableMapOf<String, PendingDiscard>()
   private var closing = false
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
@@ -97,7 +78,7 @@ class NewTaskDraft(
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
-  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
+  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
   internal fun canSend(): Boolean = canAdmitTurn(text)
 
@@ -244,6 +225,7 @@ class NewTaskDraft(
               } else {
                 toasts.show(ToastMessage(ToastTone.Confirmation, message))
               }
+              observeRunFailure(current, kind, outcome)
             } else {
               reportStandalone(current, kind, outcome)
             }
@@ -269,35 +251,22 @@ class NewTaskDraft(
     }
   }
 
-  /** Ends the chat and deletes its saved draft; the selections and any typed text stay. */
-  internal fun discard() {
-    if (closing) return
-    val current = chatState.value ?: return
+  /** Ends the chat and deletes its saved draft; the selections and any typed text stay. False when there was no chat to discard. */
+  internal fun discard(): Boolean {
+    if (closing) return false
+    val current = chatState.value ?: return false
     leave(current) { chats.deleteSavedChat(current.sessionId) }
+    return true
   }
 
   /** Discards [entry], allowing undo unless it is the open chat. */
   internal fun discardSaved(entry: ChatHistoryEntry) {
     if (closing) return
-    if (chatState.value?.sessionId == entry.sessionId) return discard()
-    if (entry.sessionId in pendingDiscards) return
-    val job = scope.launch(start = CoroutineStart.LAZY) {
-      delay(DISCARD_UNDO_WINDOW_MS)
-      pendingDiscards[entry.sessionId] = PendingDiscard.Deleting
-      try {
-        chats.deleteSavedChat(entry.sessionId)
-      } finally {
-        pendingDiscards.remove(entry.sessionId)
-        refreshSaved()
-      }
+    if (chatState.value?.sessionId == entry.sessionId) {
+      discard()
+      return
     }
-    pendingDiscards[entry.sessionId] = PendingDiscard.Undoable(job)
-    savedState.value = savedState.value.filterNot { it.sessionId == entry.sessionId }
-    job.start()
-    toasts.show(ToastData(
-      title = "Discarded ${chatTitle(entry.title).title}",
-      actions = listOf(ToastAction("Undo") { undoDiscard(entry.sessionId) }),
-    ))
+    savedChats.discardSaved(entry)
   }
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
@@ -315,8 +284,6 @@ class NewTaskDraft(
     }
   }
 
-  internal fun launch(block: suspend () -> Unit) = scope.launch { block() }
-
   /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
   internal fun rebindChat() {
     val current = chatState.value ?: return
@@ -327,9 +294,14 @@ class NewTaskDraft(
     if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
     val lines = current.thread.transcript.value
     val previousId = current.sessionId
+    val replay = (current.pendingReplay?.takeIf { !current.started }
+      ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
+      .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
     current.end()
-    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent)
-    next.thread.replaceTranscript(lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}."))
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay)
+    val switched = "Switched to ${chipText(agent)} in ${repo.name}."
+    val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
+    next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
     scope.launch {
       current.job.join()
       chats.deleteSavedChat(previousId)
@@ -340,10 +312,9 @@ class NewTaskDraft(
     }
   }
 
-  /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
-  internal suspend fun resume(entry: ChatHistoryEntry): Boolean {
+  /** Opens [entry] in this empty draft on its agent session, or with only Discard offered when its repository no longer exists. */
+  internal fun resume(entry: ChatHistoryEntry): Boolean {
     val context = entry.newTask ?: return false
-    if (!close()) return false
     repository = NewTaskRepository(context.repositoryRoot, File(context.repositoryRoot).name)
     baseBranch = context.baseBranch.orEmpty()
     agentId = entry.agent.agentId
@@ -365,15 +336,7 @@ class NewTaskDraft(
   }
 
   internal fun refreshSaved() {
-    savedRead?.cancel()
-    savedRead = scope.launch { savedState.value = chats.savedNewTaskDrafts().filterNot { it.sessionId in pendingDiscards } }
-  }
-
-  private fun undoDiscard(sessionId: String) {
-    val pending = pendingDiscards[sessionId] as? PendingDiscard.Undoable ?: return
-    pendingDiscards.remove(sessionId)
-    pending.job.cancel()
-    refreshSaved()
+    savedChats.refresh()
   }
 
   internal fun dispose() {
@@ -390,6 +353,7 @@ class NewTaskDraft(
     started: Boolean = false,
     pendingTurnLineIndex: Int? = null,
     missing: Boolean = false,
+    replay: NewTaskReplay? = null,
   ): NewTaskChat =
     NewTaskChat(
       chats,
@@ -403,7 +367,9 @@ class NewTaskDraft(
       started,
       pendingTurnLineIndex,
       missing,
+      replay,
       chatDispatcher,
+      ::refreshSaved,
     ).also {
       clearChatFeedback()
       chatState.value = it
@@ -447,9 +413,16 @@ class NewTaskDraft(
     } else {
       toasts.show(ToastMessage(ToastTone.Confirmation, "Started $name"))
     }
+    observeRunFailure(current, kind, outcome)
+  }
+
+  private fun observeRunFailure(current: NewTaskChat?, kind: NewTaskKind, outcome: NewTaskStartOutcome.Started) {
     val awaitFailure = outcome.awaitFailure ?: return
+    val startedMessage = offerState.value.started
     scope.launch {
       val reason = awaitFailure() ?: return@launch
+      if (ownsChat(current) && offerState.value.started == startedMessage) offerState.value = offerState.value.copy(started = null)
+      val name = if (kind in GOAL_KINDS) "${kind.startName()} ${outcome.issueKey}" else kind.startName()
       showStartProblem(current, kind, "$name stopped. $reason")
     }
   }

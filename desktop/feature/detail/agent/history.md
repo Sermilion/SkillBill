@@ -1,3 +1,23 @@
+## [2026-11-06] SKILL-510 desktop QA Unblock card
+Areas: desktop/feature/detail; desktop/core/domain; desktop/core/data; runtime-engine work/verify; runtime-ports idestatus models; design/qa-results
+- MEDIUM feature. Goal, standalone and Verify QA results show capability remedies, attempted setup and evidence after untested work and before result folds. Entries appear for incomplete or skipped runs, or recorded untested work.
+- The reusable desktop Unblock parser respects Markdown fences, preserves snippet bodies for copying and shortens displayed tried/remedy paths.
+- Copy for qa.md copies the snippet verbatim. Open qa.md uses the repository-contained default-app opener for `.skill-bill/phases/qa.md`; failure shows a toast, and the app never creates or edits the file.
+- Verify carries the selected saved QA report through runtime ports and desktop models, including skipped runs without parsed QA details. QA_REPORT selection and QA_RECEIPT compatibility remain unchanged.
+- Verify evidence stays names-only while both qa.md actions remain available. Unblock parsing stays in the desktop view, with no report persistence changes.
+- The static QA results mock includes display and app_startup_gate remedies and both actions. The operator must create a missing qa.md file before opening it.
+Feature flag: N/A
+Acceptance criteria: 4/4 subtask criteria implemented; 5/5 parent criteria implemented across runtime and desktop
+
+## [2026-11-06] SKILL-508 validation page with live checks
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, runtime-engine, runtime-ports, runtime-infra
+- Standalone validation detail shows an outcome card, foldable report parts, flagged links and runs on the same branch while retaining activity and run controls.
+- Report shaping and invocation-scoped fold state support expanding and scrolling to flagged parts. reusable
+- Available live checks show progress, outcomes and expandable attempts for the current invocation. Unavailable and older runs retain the report-only layout.
+- Peer runs require matching repository and non-null branch correlation; detached HEAD and missing correlation yield no peers. Other phase layouts and the CLI detail schema remain unchanged.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-06] SKILL-506 Verify run detail and actions
 Areas: desktop/feature/detail, desktop/feature/changes, desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/datastore, desktop/core/ui
 - A Verify document displays run state, outcome, criteria filters, expandable receipts and inline QA. It opens a superseding run and the recorded revision range.

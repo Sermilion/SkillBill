@@ -137,6 +137,7 @@ internal fun DetailSections.Loaded.withList(list: DetailList, page: Detail, curs
       phaseResults = results,
     )
     DetailList.Executions -> detail.copy(executionHistory = merge(detail.executionHistory, page.executionHistory))
+    DetailList.PlanOutput -> detail.copy(planOutputLines = merge(detail.planOutputLines, page.planOutputLines).distinctBy { it.id }.sortedByDescending { it.sequence })
     DetailList.Dependencies -> detail.copy(dependencies = merge(detail.dependencies, page.dependencies))
   }
   return copy(
@@ -152,5 +153,6 @@ internal fun Detail.size(list: DetailList): Int = when (list) {
   DetailList.Phases -> phases.size
   DetailList.Validation -> validation.size
   DetailList.Executions -> executionHistory.size
+  DetailList.PlanOutput -> planOutputLines.size
   DetailList.Dependencies -> dependencies.size
 }

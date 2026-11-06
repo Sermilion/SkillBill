@@ -39,6 +39,8 @@ class ChatSystemPromptTest {
     assertTrue("local spec inventory, including completed and archived bundles, and existing runs" in prompt)
     assertTrue("Wait for the operator to send that complete key in chat or say they will type it on the start card" in prompt)
     assertTrue("whose instruction is exactly the bare key" in prompt)
+    assertTrue("Offer this key action only in a reply that proposes a new key" in prompt)
+    assertTrue("Never offer it for a key that already has a run or spec bundle" in prompt)
     assertTrue("do not ask them to type the key again on the card" in prompt)
     assertFalse("The operator will type the issue key on the start card." in prompt)
     assertTrue("Never silently mint or use a suggested key before acceptance" in prompt)

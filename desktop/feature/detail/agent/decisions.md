@@ -1,3 +1,28 @@
+## [2026-11-06] Preserve the selected Verify QA report for Unblock
+Context: Verify QA must show the selected saved report's Unblock instructions, including skipped runs without parsed QA details.
+Decision: Carry raw report text through the existing Verify projection and desktop models. Retain QA_REPORT selection with QA_RECEIPT compatibility and parse Unblock only in the desktop view.
+Reason: The operator's scope amendment requires that saved report and unchanged snippet text. A final verdict, reconstructed findings or a repository file cannot supply that report's instructions.
+
+## [2026-11-06] Keep QA setup instructions operator-owned
+Context: Unblock snippets target `.skill-bill/phases/qa.md`, which the runtime reads into later QA prompts.
+Decision: Copy snippets verbatim and open the repository file through `openFileUnder` in the default application. Report opening failure without creating or editing the file.
+Reason: The requested workflow has the operator create the file and paste chosen setup instructions before the next run. Opening must target the repository copy and bypass editor environment variables.
+
+## [2026-11-06] Scope live validation checks to the current invocation
+Context: Resumed validation runs can retain earlier execution records, and some runs do not provide live checks.
+Decision: Project checks for the current standalone validation invocation and show them only when its availability flag is set.
+Reason: Earlier events would misrepresent the current run. The flag records availability without tying the UI to an agent name.
+
+## [2026-11-06] Combine plan progress with live tool activity
+Context: The plan-run design explains progress and saved specs; plan-activity exposes what the agent is doing within those stages.
+Decision: Keep the stage strip, subtasks, bundle and Implement gate together. Put a Now card and an expanded, internally scrolling activity feed above the subtasks. Filters and phase folds belong to each run; scrolling away from the latest row pauses Follow. Transcript opens the captured provider lines. Notes and consecutive completed reads expand in place.
+Reason: Operators can inspect current work without losing the plan outcome. Only provider events become tool rows; non-streaming runs retain recorded phases and saved-file evidence. Existing runs cannot gain historical tool events retroactively.
+
+## [2026-11-06] Show quiet plan writers independently of run liveness
+Context: The plan-run design highlights a writer after several minutes without output, even when another writer still refreshes the run heartbeat.
+Decision: The standalone plan document highlights five minutes of observed output silence per writer and at the current stage. A restarted writer ignores output older than its start. Stopped runs show frozen durations and no live heartbeat. Existing incident controls own recovery.
+Reason: Output silence is useful operator feedback without changing the runtime's execution ownership or its twenty-minute stalled classification.
+
 ## [2026-11-06] Show Verify QA evidence as names only
 Context: Verify QA results reuse the desktop QA results view, but Verify has no invocation directory for resolving evidence files.
 Decision: Render evidence names without file-opening actions for Verify QA.

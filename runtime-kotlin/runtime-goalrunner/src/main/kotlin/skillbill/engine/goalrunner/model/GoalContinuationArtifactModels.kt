@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.model
 
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.FailurePhaseEvidence
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.goalrunner.model.GoalRunnerStopReason
@@ -49,6 +50,7 @@ public data class GoalRunnerBlockRequest(
   public val failureCode: String? = null,
   public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
   public val recoveryCommand: String? = null,
+  internal val failurePhaseEvidence: FailurePhaseEvidence? = null,
 )
 
 internal data class GoalRunnerBlockWrite(
@@ -67,6 +69,7 @@ internal data class GoalRunnerBlockWrite(
   public val failureCode: String? = null,
   public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
   public val recoveryCommand: String? = null,
+  internal val failurePhaseEvidence: FailurePhaseEvidence? = null,
 )
 
 internal data class GoalRunnerBlockWriteResult(

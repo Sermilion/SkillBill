@@ -8,6 +8,12 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -59,6 +65,7 @@ class PlanActionsTest {
       DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
     } }
 
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("1. Detail view"))
     onNodeWithText("1. Detail view").performClick()
 
     runOnIdle { assertEquals(listOf<DetailAction>(DetailAction.OpenSpecFile("/specs/OAC-86/spec_subtask_1.md")), actions) }
@@ -83,9 +90,9 @@ class PlanActionsTest {
       }
     } }
 
-    onNodeWithText("Planning stopped at subtask 1").assertExists()
+    onNodeWithText("Planning stopped at subtask 1", substring = true).assertExists()
     onNodeWithText("The subtask spec could not be reconciled").assertExists()
-    onNodeWithText("No output for ", substring = true).assertExists()
+    onNodeWithText("No output for ", substring = true).assertDoesNotExist()
     onNodeWithText("Retry").assertDoesNotExist()
     onNodeWithText(
       "Subtask 1 finished with no code changes and is waiting for your decision.",
@@ -104,6 +111,26 @@ class PlanActionsTest {
     val plan = completedPlan(report).let { it.copy(units = it.units.map { unit -> unit.copy(state = "queued") }) }
 
     assertFalse(planImplementationEnabled(item, emptyDetail.copy(executionHistory = listOf(run), standalonePlan = plan)))
+  }
+
+  @Test
+  fun `a goal's own plan step shows its live stages without offering Implement`() = runComposeUiTest {
+    val report = completedReport()
+    val base = workItem("plan-invocation", kind = WorkKind.Goal)
+    val item = base.copy(issueKey = "OAC-86", standaloneExecution = true, running = false, lifecycle = Lifecycle.Terminal,
+      finishedAt = epoch, control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    val detail = emptyDetail.copy(executionHistory = listOf(planExecution(report)), standalonePlan = completedPlan(report))
+    val state = DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch)
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(state, DetailScreenHost(false, "Ctrl I", {})) {}
+    } }
+
+    onAllNodesWithText("Reading the repo").assertCountEquals(2)
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("1. Detail view"))
+    onNodeWithText("1. Detail view").assertExists()
+    onNodeWithText("Implement").assertDoesNotExist()
+    onNodeWithText("Implement turns on when every spec is saved").assertDoesNotExist()
+    runOnIdle { assertFalse(planImplementationEnabled(item, detail)) }
   }
 
   @Test

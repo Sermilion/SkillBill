@@ -21,6 +21,8 @@ import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.error.featuretask.UnknownPhaseStepError
+import skillbill.ports.agentrun.activity.model.AgentRunActivity
+import skillbill.ports.agentrun.model.AgentRunActivityOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
@@ -196,9 +198,24 @@ public class PlanFanOutStrategy private constructor(
   private class UnitAttributedOutputSink(
     private val fanOutPort: BoundedWorkFanOutPort,
     private val delegate: AgentRunOutputSink,
-    unitId: Int,
+    private val unitId: Int,
     private val boundPendingLines: Boolean,
-  ) : AgentRunOutputSink {
+  ) : AgentRunActivityOutputSink {
+    override val capturesActivity: Boolean = (delegate as? AgentRunActivityOutputSink)?.capturesActivity == true
+
+    override fun activity(event: AgentRunActivity) =
+      fanOutPort.runExclusively {
+        checkNotNull(delegate as? AgentRunActivityOutputSink).activity(event.copy(subtaskId = unitId))
+      }
+
+    override fun raw(
+      stream: AgentRunOutputStream,
+      text: String,
+      subtaskId: Int?,
+    ) = fanOutPort.runExclusively {
+      checkNotNull(delegate as? AgentRunActivityOutputSink).raw(stream, text, unitId)
+    }
+
     private val attribution = "[subtask $unitId] "
     private val pending = mutableMapOf<AgentRunOutputStream, StringBuilder>()
 

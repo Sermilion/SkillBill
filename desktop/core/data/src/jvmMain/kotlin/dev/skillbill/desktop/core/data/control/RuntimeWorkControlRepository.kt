@@ -215,6 +215,12 @@ class RuntimeWorkControlRepository(
     val session = request.expectedDatabaseSessionId?.let(sessions::currentComponent)
       ?: return NewTaskStartOutcome.Refused("The database changed. Try again.")
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
+    val readiness = callInSession(session, "control_new_task_schema", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
+      runtime.databaseSchema.migrateExistingDatabase()
+      Outcome.Success(Unit)
+    }
+    if (readiness is Outcome.Failure) return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.")
+      else NewTaskStartOutcome.Failed(readiness.error)
     when (request.kind) {
       NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor ->
         return startStandaloneTask(request, session)
@@ -302,7 +308,11 @@ class RuntimeWorkControlRepository(
                     NewTaskStartOutcome.Refused("${prepared.key} is already in use. Choose another key.")
                   }
                   is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
-                  NewTaskStartResult.Started, is NewTaskStartResult.Running -> NewTaskStartOutcome.Started(prepared.key, request.kind)
+                  is NewTaskStartResult.Running -> {
+                    launches.releaseOnExit(handle, started.failure)
+                    NewTaskStartOutcome.Started(prepared.key, request.kind) { started.failure.await() }
+                  }
+                  NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, request.kind)
                 }
               }
             }.let { it to keyWasTaken }

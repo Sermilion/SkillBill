@@ -18,7 +18,7 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
-import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.unconfinedNewTaskChats
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -70,7 +70,7 @@ class ChatStopTest {
     controlRepo: WorkControlRepository = controls,
   ): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chatRepo, details, controlRepo, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft())
+    return ChatWorkspace(chatRepo, details, controlRepo, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats())
   }
 
   private fun hangingAfterOpening() {

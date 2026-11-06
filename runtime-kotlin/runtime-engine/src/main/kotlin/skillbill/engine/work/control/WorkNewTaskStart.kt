@@ -194,23 +194,7 @@ public class WorkNewTaskStart(
         args = listOf("phase", "plan", prepared.intake, "--agent", agentId)
       }
     }
-    return database.transaction { unit ->
-      when (
-        val launched =
-          launcher.start(
-            WorkRunLaunchRequest(
-              repoRoot,
-              unit.dbPath,
-              ownership,
-              WorkRunLaunchKind.RuntimeCommand(args),
-              emptyMap(),
-            ),
-          )
-      ) {
-        is WorkRunLaunchResult.Refused -> NewTaskStartResult.Refused(launched.reason)
-        is WorkRunLaunchResult.Started -> NewTaskStartResult.Started
-      }
-    }
+    return launchRuntimeCommand(repoRoot, ownership, args)
   }
 
   private fun startRefusal(

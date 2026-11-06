@@ -9,6 +9,7 @@ import dev.skillbill.desktop.app.shell.ShellBoardState
 import dev.skillbill.desktop.app.shell.FavoritesSidebarState
 import dev.skillbill.desktop.core.common.AppDispatchers
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
+import dev.skillbill.desktop.feature.chat.ChatPaneWidth
 import dev.skillbill.desktop.feature.specs.SpecsPaneModel
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
@@ -52,6 +53,7 @@ interface WindowComponent {
   val terminal: TerminalTriggers
   val specsPane: SpecsPaneModel
   val chat: ChatCommands
+  val chatPaneWidth: ChatPaneWidth
   val board: ShellBoardState
   val favorites: FavoritesSidebarState
   val boardRepository: WorkBoardRepository

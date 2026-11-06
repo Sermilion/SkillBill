@@ -28,6 +28,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.StoppedLedgerContextValues
 import skillbill.engine.goalrunner.status.completed
+import skillbill.engine.goalrunner.status.failurePhaseEvidence
 import skillbill.engine.goalrunner.status.isRecoverableValidationBlock
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.supervisionEvent
@@ -405,6 +406,7 @@ public class GoalRunnerIterationOutcome(
           blockedReason = reconciled.blockedReason.withStopDiagnostics(knownWorkflowId, progress, reconciled.liveness),
           lastResumableStep = reconciled.lastResumableStep,
           failureExitCode = failureExitCode,
+          failurePhaseEvidence = failurePhaseEvidence(reconciled.reason, knownWorkflowId, reconciled.liveness),
           historicalBlockReference =
             reconciled.acceptedBlockReference?.takeIf {
               it.sourceWorkflowId == knownWorkflowId && it.blockedStepId == reconciled.lastResumableStep

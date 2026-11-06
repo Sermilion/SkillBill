@@ -320,7 +320,7 @@ public class GoalRunner(
       closeGoalTelemetrySegment(telemetryEmitter, state, finalReport, loopResult.attempted)
       recordGoalCompletion(state.parentWorkflowId, finalReport)
       if (finalReport is GoalRunnerRunReport.Completed || finalReport is GoalRunnerRunReport.CompletedNoChange) {
-        completionRecorder.settleWorktree(state.parentWorkflowId)
+        completionRecorder.settleWorktree(state)
       }
       emitCompletedGoalEvent(effectiveRequest, finalReport)
       finalReport.withParentWorkflowId(state.parentWorkflowId)

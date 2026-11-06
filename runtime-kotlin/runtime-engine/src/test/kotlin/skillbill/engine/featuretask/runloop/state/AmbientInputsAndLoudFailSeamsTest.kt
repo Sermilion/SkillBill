@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.runloop.state
 
 import skillbill.engine.featuretask.runner.PLAN_OUTPUT
 import skillbill.engine.featuretask.runner.PREPLAN_OUTPUT
+import skillbill.engine.featuretask.runner.SIMPLIFY_OUTPUT
 import skillbill.engine.featuretask.runner.VALID_REVIEW_OUTPUT
 import skillbill.engine.featuretask.runner.auditRemainingAcOutput
 import skillbill.engine.featuretask.runner.settledAuditSatisfiedRecord
@@ -32,6 +33,21 @@ import kotlin.test.assertTrue
 private val RESUME_RULES = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)::resumeRules
 
 class AmbientInputsAndLoudFailSeamsTest {
+  @Test
+  fun `resume after completed simplify starts audit before audit repair`() {
+    val simplify = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY
+    val state =
+      FeatureTaskRuntimeRunState(
+        initialRecords = mapOf(simplify to completedRecord(simplify, SIMPLIFY_OUTPUT)),
+        transitions = SkeletonDefinition.GOAL_CHILD.declaration(),
+        resumeRulesFn = RESUME_RULES,
+      )
+
+    val start = state.explicitResumeStart(simplify)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, start.phaseId)
+    assertTrue(start.reopen)
+  }
+
   @Test
   fun `explicit resume preserves every finished phase and continues from the furthest later phase`() {
     val completed =

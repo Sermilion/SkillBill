@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, observed_at, item, page_size, next_cursor]
 properties:
-  contract_version: {type: string, const: "1.7"}
+  contract_version: {type: string, const: "1.9"}
   page_size: {type: integer, minimum: 1, maximum: 100}
   next_cursor: {type: [string, "null"], minLength: 1}
   observed_at: {type: string, format: date-time}
@@ -68,6 +68,39 @@ $defs:
             finished_at: {type: [string, "null"], format: date-time}
             result: {type: [string, "null"]}
       step_pipeline: {type: array, items: {type: string}}
+      plan_activity:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, phase_id, kind, text, at, updated_at, agent_id, path, status, duration_ms, exit_code, subtask_id]
+          properties:
+            id: {type: string, minLength: 1}
+            phase_id: {type: string, minLength: 1}
+            kind: {enum: [read, write, search, command, mcp, note, tool, stream, error]}
+            text: {type: string, maxLength: 8192}
+            at: {type: string, format: date-time}
+            updated_at: {type: string, format: date-time}
+            agent_id: {type: string}
+            path: {type: [string, "null"]}
+            status: {enum: [started, completed, failed]}
+            duration_ms: {type: [integer, "null"], minimum: 0}
+            exit_code: {type: [integer, "null"]}
+            subtask_id: {type: [integer, "null"], minimum: 1}
+      plan_output_lines:
+        type: array
+        maxItems: 100
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, text, at, subtask_id, sequence, raw]
+          properties:
+            id: {type: string, minLength: 1}
+            text: {type: string, maxLength: 65536}
+            at: {type: string, format: date-time}
+            subtask_id: {type: [integer, "null"], minimum: 1}
+            sequence: {type: integer, minimum: 1}
+            raw: {type: boolean}
       plan_output_tail: {type: array, maxItems: 4, items: {type: string, maxLength: 160}}
       plan_output_updated_at: {type: [string, "null"], format: date-time}
       plan_subtask_latest_lines:
@@ -222,6 +255,16 @@ $defs:
       planning_wave_number: {type: [integer, "null"], minimum: 1}
       planning_wave_capacity: {type: [integer, "null"], minimum: 1}
       planning_wave_history_complete: {type: boolean}
+      waves:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [number, subtask_ids, started_at]
+          properties:
+            number: {type: [integer, "null"], minimum: 1}
+            subtask_ids: {type: array, items: {type: integer, minimum: 1}}
+            started_at: {type: [string, "null"], format: date-time}
       blocked_subtask_id: {type: [integer, "null"], minimum: 1}
       blocked_reason: {type: [string, "null"]}
       units:

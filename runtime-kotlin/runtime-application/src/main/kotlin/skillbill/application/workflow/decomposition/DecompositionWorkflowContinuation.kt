@@ -258,6 +258,8 @@ class DecompositionWorkflowContinuation(
           executionWorktreeRemovedAt = null,
           executionWorktreeRetentionReason = null,
           executionWorktreeRetentionDetail = null,
+          executionMainCheckoutOutcome = null,
+          executionMainCheckoutDetail = null,
         ),
       )
     }

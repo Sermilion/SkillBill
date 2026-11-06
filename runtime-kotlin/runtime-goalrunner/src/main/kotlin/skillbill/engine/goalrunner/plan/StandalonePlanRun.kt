@@ -103,35 +103,39 @@ public class StandalonePlanRun(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
         launch = StandalonePlanLaunch(replan.agentId, IdeStatusLaunchScope.GOAL).forPhase(issueKey),
       )
-    return catchingNonCancellation {
-      if (!reopening.reopenWithRebasedBundle(replan)) {
-        return@catchingNonCancellation refused(
+    return try {
+      catchingNonCancellation {
+        if (!reopening.reopenWithRebasedBundle(replan)) {
+          return@catchingNonCancellation refused(
+            publisher,
+            "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
+            planWorkflowId,
+          )
+        }
+        val found =
+          planLookup.lookupSelected(
+            issueKey,
+            goalRepositoryIdentityCandidates(repoRoot, repositories),
+            planWorkflowId,
+          )
+        if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
+          return@catchingNonCancellation refused(
+            publisher,
+            "Plan workflow '$planWorkflowId' for $issueKey could not be resumed after reopening `plan_subtasks`.",
+            planWorkflowId,
+          )
+        }
+        resume(
+          found.candidate,
+          null,
+          repoRoot,
+          { specPath -> withPublisher(inputFor(specPath).copy(inheritRecordedPlanningTimeout = true), publisher) },
           publisher,
-          "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
-          planWorkflowId,
         )
-      }
-      val found =
-        planLookup.lookupSelected(
-          issueKey,
-          goalRepositoryIdentityCandidates(repoRoot, repositories),
-          planWorkflowId,
-        )
-      if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
-        return@catchingNonCancellation refused(
-          publisher,
-          "Plan workflow '$planWorkflowId' for $issueKey could not be resumed after reopening `plan_subtasks`.",
-          planWorkflowId,
-        )
-      }
-      resume(
-        found.candidate,
-        null,
-        repoRoot,
-        { specPath -> withPublisher(inputFor(specPath).copy(inheritRecordedPlanningTimeout = true), publisher) },
-        publisher,
-      )
-    }.onFailure(publisher::settleFailure).getOrThrow()
+      }.onFailure(publisher::settleFailure).getOrThrow()
+    } finally {
+      publisher.closeOutputCapture()
+    }
   }
 
   private fun withLivePlanReport(
@@ -185,7 +189,7 @@ public class StandalonePlanRun(
         }
       }.onFailure(publisher::settleFailure).getOrThrow()
     } finally {
-      if (launch.scope == IdeStatusLaunchScope.STANDALONE) publisher.closeOutputCapture()
+      publisher.closeOutputCapture()
     }
   }
 

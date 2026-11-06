@@ -107,6 +107,12 @@ public interface FeatureTaskRuntimeRunFacts {
   public val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan?
 
   public val qaOutcomeWorkflowId: String get() = workflowId
+
+  /**
+   * The standalone validation invocation whose agent launches may report live checks; null for every other run,
+   * including goal, goal-child and goal-quality validation.
+   */
+  public val validationCheckInvocationId: String?
 }
 
 public data class PhaseInstructions(

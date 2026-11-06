@@ -46,7 +46,7 @@ import kotlin.time.Instant
 
 internal val COMPOSER_MAX_WIDTH = 728.dp
 
-private const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
+internal const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
 internal const val PICKERS_DISABLED_STARTING = "Wait for the start to finish"
 internal const val PICKERS_DISABLED_MISSING_REPO = "This draft's repository is missing"
 private val REPOSITORY_PICKER_WIDTH = 620.dp
@@ -113,7 +113,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RepositoryPicker(state, draft, chat, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
+        RepositoryPicker(state, draft, chat, busy, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
       }
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -142,14 +142,14 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
 }
 
 @Composable
-private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: NewTaskChat?, starting: Boolean, composerFocus: FocusRequester, now: () -> Instant, modifier: Modifier, onAction: (NewTaskAction) -> Unit) {
+private fun RepositoryPicker(state: NewTaskUiState, draft: NewTaskDraft, chat: NewTaskChat?, busy: Boolean, starting: Boolean, composerFocus: FocusRequester, now: () -> Instant, modifier: Modifier, onAction: (NewTaskAction) -> Unit) {
   val pillFocus = remember { FocusRequester() }
   val repositoryFilterFocus = remember { FocusRequester() }
   val branchFilterFocus = remember { FocusRequester() }
   var closeFocus by remember { mutableStateOf(pillFocus) }
   val close = { onAction(NewTaskAction.CloseRepositoryPicker) }
   val repository = draft.repository
-  val mode = repositoryPillMode(chat, starting, repository)
+  val mode = repositoryPillMode(chat, busy, starting, repository)
   Box(modifier) {
     NewTaskRepositoryPill(
       mode,

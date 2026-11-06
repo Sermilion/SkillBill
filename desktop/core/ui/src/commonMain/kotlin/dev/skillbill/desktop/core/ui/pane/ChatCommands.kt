@@ -15,8 +15,11 @@ interface ChatCommands {
   /** The execution id whose chat the pane shows, or null when the pane is hidden or has no tab. */
   val shownChatId: StateFlow<String?>
 
-  /** True while a new-task chat exists. */
+  /** True while any open New task chat has a conversation. */
   val newTaskDraftOpen: StateFlow<Boolean>
+
+  /** How many New task chats are open, counting empty ones. */
+  val newTaskOpenChats: StateFlow<Int>
 
   /** Hides the pane when it shows [item]'s chat, or any chat when [item] is null; otherwise opens [item]'s chat, or only shows the pane. */
   fun toggleChat(item: WorkItem?)

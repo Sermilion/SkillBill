@@ -92,7 +92,29 @@ class DetailViewModelTest {
     source: WorkItem = item,
     workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
     toastQueue: ToastQueue = ToastQueue(),
-  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings)
+    specs: SpecRepository = NoSpecs,
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings)
+
+  @Test
+  fun `opening qa instructions targets the repository file and reports a missing file`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val specs = RecordingSpecs()
+    val viewModel = viewModel(specs = specs)
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    runCurrent()
+    details.flow.emit(DetailState(item, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    runCurrent()
+
+    viewModel.onAction(DetailAction.OpenQaPhaseInstructions)
+    runCurrent()
+
+    assertEquals(listOf("/work/skill-bill/.skill-bill/phases/qa.md" to "/work/skill-bill"), specs.openedFiles)
+    assertEquals(
+      DetailEffect.ShowToast(dev.skillbill.desktop.core.ui.feedback.ToastMessage(ToastTone.Problem, "Couldn't open .skill-bill/phases/qa.md. Create it in the repository, then paste the snippet.")),
+      effects.single(),
+    )
+  }
 
   @Test
   fun `favorite membership follows confirmed settings and a failed write leaves it unchanged`() = runTest {
@@ -336,7 +358,7 @@ class DetailViewModelTest {
     val execution = dev.skillbill.desktop.core.domain.model.ExecutionInstance(
       "run-1", "run-1", "active", epoch, epoch, null, null, null, null, null, null, null, checklist,
     )
-    val read = DetailState(source, DetailSections.Loaded(emptyDetail.copy(executionHistory = listOf(execution)), null, emptyMap(), emptySet(), stale = false))
+    val read = DetailState(source, DetailSections.Loaded(emptyDetail.copy(selectedExecution = execution), null, emptyMap(), emptySet(), stale = false))
     val viewModel = viewModel(source = source)
     val effects = mutableListOf<DetailEffect>()
     backgroundScope.launch { viewModel.effects.collect { effects += it } }
@@ -354,6 +376,34 @@ class DetailViewModelTest {
     assertEquals(false, viewModel.state.value.qaCaseOverrides[key])
     assertEquals("run-1", viewModel.state.value.selectedQaRun)
     assertEquals(listOf(ToastTone.Problem), effects.filterIsInstance<DetailEffect.ShowToast>().map { it.message.tone })
+  }
+
+  @Test
+  fun `validation check toggle resolves selected execution outside history page`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val source = item.copy(kind = WorkKind.Phase, control = item.control.copy(invocationId = "older-run"))
+    val check = dev.skillbill.desktop.core.domain.model.ValidationCheck(
+      "compile", "Compile", "./gradlew check", ".", listOf(
+        dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt(1, epoch, epoch, dev.skillbill.desktop.core.domain.model.ValidationCheckResult.Failed, 1, null),
+        dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt(2, epoch, epoch, dev.skillbill.desktop.core.domain.model.ValidationCheckResult.Passed, 0, null),
+      ),
+    )
+    val execution = dev.skillbill.desktop.core.domain.model.ExecutionInstance(
+      "older-run", "older-run", "completed", epoch, epoch, epoch, null, null, null, null, null,
+      liveChecks = true, validationChecks = listOf(check),
+    )
+    val viewModel = viewModel(source = source)
+    advanceUntilIdle()
+    details.flow.emit(DetailState(
+      source,
+      DetailSections.Loaded(emptyDetail.copy(selectedExecution = execution), null, emptyMap(), emptySet(), stale = false),
+    ))
+    advanceUntilIdle()
+
+    val key = ValidationCheckKey("older-run", "compile")
+    viewModel.onAction(DetailAction.ToggleValidationCheck(key))
+
+    assertEquals(true, viewModel.state.value.validationCheckOverrides[key])
   }
 
   @Test
@@ -441,6 +491,15 @@ class DetailViewModelTest {
     override suspend fun openFileUnder(path: String, directory: String) = OpenOutcome.NotOpened
     override suspend fun revealFolder(path: String) = OpenOutcome.Opened
     override suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome = error("unused")
+  }
+
+  private class RecordingSpecs : SpecRepository by NoSpecs {
+    val openedFiles = mutableListOf<Pair<String, String>>()
+
+    override suspend fun openFileUnder(path: String, directory: String): OpenOutcome {
+      openedFiles += path to directory
+      return OpenOutcome.NotOpened
+    }
   }
 
   private object NoWebPages : RepositoryWebPages {

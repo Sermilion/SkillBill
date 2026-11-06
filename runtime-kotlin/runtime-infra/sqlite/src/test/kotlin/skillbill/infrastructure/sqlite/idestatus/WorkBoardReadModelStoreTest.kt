@@ -5,6 +5,7 @@ import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
@@ -16,6 +17,7 @@ import java.nio.file.Files
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class WorkBoardReadModelStoreTest {
@@ -85,5 +87,58 @@ class WorkBoardReadModelStoreTest {
       WorkBoardReadModelPayloadCodec.decode(payload, metadata)?.item?.goalWorktree,
     )
     assertNull(WorkBoardReadModelPayloadCodec.decode(payload.replace("\"title\":\"plan SKILL-452\",", ""), metadata))
+  }
+
+  @Test
+  fun `a removed worktree keeps its main checkout outcome and a row without the keys still decodes`() {
+    val at = Instant.parse("2026-10-28T10:00:00Z")
+
+    fun rowWith(worktree: GoalWorktreeView) =
+      WorkBoardReadModelRow(
+        "goal-1",
+        WorkBoardItem(
+          IdeStatusSnapshot(
+            repositoryIdentity = "repo",
+            lifecycleState = IdeStatusLifecycleState.BLOCKED,
+            currentStep = IdeStatusStep("plan", "plan"),
+            updatedAt = at,
+            freshness = IdeStatusFreshness.FRESH,
+            summary = "The goal finished.",
+            title = "goal SKILL-512",
+          ),
+          repositoryRoot = "/repo",
+          goalWorktree = worktree,
+        ),
+        at,
+        "goal",
+        null,
+        at,
+        null,
+      )
+    val metadata = WorkBoardRowMetadata("goal-1", at, "goal", null, at, null)
+    val outcome =
+      GoalWorktreeView(
+        "/goal",
+        GoalWorktreeState.REMOVED,
+        mainCheckoutOutcome = GoalMainCheckoutOutcome.SKIPPED_UNCOMMITTED_CHANGES,
+        mainCheckoutDetail = "app/build.gradle",
+      )
+
+    assertEquals(
+      outcome,
+      WorkBoardReadModelPayloadCodec.decode(WorkBoardReadModelPayloadCodec.encode(rowWith(outcome)), metadata)
+        ?.item
+        ?.goalWorktree,
+    )
+
+    val legacy =
+      WorkBoardReadModelPayloadCodec.encode(rowWith(GoalWorktreeView("/goal", GoalWorktreeState.REMOVED)))
+        .replace(",\"main_checkout_outcome\":null", "")
+        .replace(",\"main_checkout_detail\":null", "")
+    assertFalse(legacy.contains("main_checkout"), legacy)
+    assertEquals(
+      GoalWorktreeView("/goal", GoalWorktreeState.REMOVED),
+      WorkBoardReadModelPayloadCodec.decode(legacy, metadata)?.item?.goalWorktree,
+    )
   }
 }

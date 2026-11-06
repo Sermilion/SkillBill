@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.TrayTab
@@ -130,6 +131,9 @@ class DataStoreAppSettingsRepository(
 
   override suspend fun setHistoryWindow(window: HistoryWindow) = edit { it[AppPreferenceKeys.HISTORY_RETENTION] = window.wireValue }
 
+  override suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout) =
+    edit { it[AppPreferenceKeys.NEW_TASK_CHAT_LAYOUT] = layout.wireValue }
+
   override suspend fun setNotification(kind: NotificationKind, enabled: Boolean) =
     edit { it[AppPreferenceKeys.notificationKey(kind)] = enabled }
 
@@ -137,6 +141,10 @@ class DataStoreAppSettingsRepository(
 
   override suspend fun setTerminalHeightDp(heightDp: Int) = edit {
     it[AppPreferenceKeys.TERMINAL_HEIGHT_DP] = heightDp.coerceIn(AppSettings.TERMINAL_HEIGHT_MIN_DP, AppSettings.TERMINAL_HEIGHT_MAX_DP)
+  }
+
+  override suspend fun setChatWidthDp(widthDp: Int) = edit {
+    it[AppPreferenceKeys.CHAT_WIDTH_DP] = widthDp.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP)
   }
 
   override suspend fun setTrayLastTab(tab: TrayTab) = edit { it[AppPreferenceKeys.TRAY_LAST_TAB] = tab.wireValue }

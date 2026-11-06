@@ -127,6 +127,7 @@ oneOf:
   - $ref: "#/$defs/telemetryRemoteStatsEvent"
   - $ref: "#/$defs/triageFindingsEvent"
   - $ref: "#/$defs/updateCheckEvent"
+  - $ref: "#/$defs/validationCheckEvent"
 
 $defs:
   # ---------------------------------------------------------------------
@@ -680,6 +681,57 @@ $defs:
       verdict:
         type: string
         minLength: 1
+
+  validationCheckEvent:
+    type: object
+    additionalProperties: false
+    required:
+      - event_name
+      - contract_version
+      - event
+      - check_id
+      - name
+      - command
+      - working_dir
+    properties:
+      event_name:
+        const: validation_check
+      contract_version:
+        const: "1.13.0"
+      event:
+        type: string
+        enum:
+          - planned
+          - started
+          - finished
+      check_id:
+        type: string
+        minLength: 1
+        maxLength: 64
+        pattern: "^[a-z0-9][a-z0-9._-]{0,63}$"
+      name:
+        type: string
+        minLength: 1
+        maxLength: 120
+      command:
+        type: string
+        minLength: 1
+        maxLength: 1000
+      working_dir:
+        type: string
+        minLength: 1
+        maxLength: 300
+      outcome:
+        type: string
+        enum:
+          - passed
+          - failed
+          - blocked
+          - skipped
+      exit_code:
+        type: integer
+      note:
+        type: string
 
   updateCheckEvent:
     type: object

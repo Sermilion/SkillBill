@@ -129,15 +129,15 @@ class NewTaskInboxLayoutTest {
     density = Density(1.5f),
   ) {
     val repository = FakeExecutionChatRepository().apply { chats.forEach { saved[it.sessionId] = it } }
-    val draft = NewTaskDraft(
+    val open = NewTaskChats(
       repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(),
       WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System,
-    ).apply { this.repository = NewTaskRepository("/work/SkillBill", "SkillBill") }
+    ).apply { selected.value.repository = NewTaskRepository("/work/SkillBill", "SkillBill") }
     setContent {
       SkillBillTheme(reducedMotion = true) {
         Box(Modifier.background(SkillBillTheme.colors.bgPanel)) {
           CompositionLocalProvider(LocalShellInput provides ShellInput()) {
-            NewTaskScreen(NewTaskUiState(home = home), draft, NewTaskScreenHost({ now }, {}, {})) {}
+            NewTaskScreen(NewTaskUiState(home = home), open, NewTaskScreenHost({ now }, {}, {})) {}
           }
         }
       }

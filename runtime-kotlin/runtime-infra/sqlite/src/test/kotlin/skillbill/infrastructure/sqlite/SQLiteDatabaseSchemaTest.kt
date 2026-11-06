@@ -55,6 +55,34 @@ class SQLiteDatabaseSchemaTest {
   }
 
   @Test
+  fun `a stale schema stamp is repaired when the migration ledger is already complete`() {
+    establishTemporarySchemaReadiness("skillbill-schema-stale-stamp").use { fixture ->
+      fixture.connection.createStatement().use { statement ->
+        statement.execute("PRAGMA user_version = ${DesktopReadSchema.VERSION - 1}")
+        statement.executeUpdate(
+          "INSERT INTO feature_task_workflows (workflow_id, mode, contract_version) " +
+            "VALUES ('wftr-preserved', 'prose', '1.0')",
+        )
+      }
+      val schema = schemaFor(fixture.tempDir, fixture.dbPath)
+
+      assertTrue(schema.hasPendingMigrations())
+      schema.migrateExistingDatabase()
+
+      assertFalse(schema.hasPendingMigrations())
+      DatabaseRuntime.openExistingReadDbAt(fixture.dbPath, SqliteTestDiagnostics).use { database ->
+        database.connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT workflow_id FROM feature_task_workflows").use { rows ->
+            assertTrue(rows.next())
+            assertEquals("wftr-preserved", rows.getString(1))
+            assertFalse(rows.next())
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   fun `upgrade refuses a newer database without downgrading its version or ledger`() {
     establishTemporarySchemaReadiness("skillbill-schema-newer").use { fixture ->
       val newerVersion = DesktopReadSchema.VERSION + 1
