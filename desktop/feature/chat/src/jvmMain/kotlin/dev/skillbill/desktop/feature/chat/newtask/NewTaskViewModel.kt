@@ -129,13 +129,14 @@ class NewTaskViewModel(
     when (action) {
       is NewTaskAction.TextChanged -> target.text = action.text
       is NewTaskAction.ChooseBaseBranch -> {
+        if (!canChangeContext(target)) return
         pathCheck?.cancel()
         target.baseBranch = action.branch
+        target.rebindChat()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
       NewTaskAction.RetryBranches -> target.repository?.root?.let { readBranches(target, it) }
       is NewTaskAction.ChooseRepository -> {
-        pathCheck?.cancel()
         selectRepository(target, action.repository)
       }
       is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
@@ -145,6 +146,7 @@ class NewTaskViewModel(
         readAgent(target) { resolveAgent(target, action.agentId) }
       }
       NewTaskAction.OpenRepositoryPicker -> {
+        if (!canChangeContext(target)) return
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
         readBranches(target)
       }
@@ -282,8 +284,11 @@ class NewTaskViewModel(
   }
 
   private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository, listed: RepositoryBranches? = null) {
+    if (!canChangeContext(target)) return
+    pathCheck?.cancel()
     if (repository.root != target.repository?.root) target.baseBranch = ""
     target.repository = repository
+    target.rebindChat()
     if (!isSelected(target)) return
     mutableState.update { it.copy(repositoryError = null, repositoryPicks = it.repositoryPicks + 1) }
     if (listed != null) {
@@ -295,7 +300,7 @@ class NewTaskViewModel(
   }
 
   private fun addRepository(target: NewTaskDraft) {
-    if (mutableState.value.choosingFolder) return
+    if (!canChangeContext(target) || mutableState.value.choosingFolder) return
     pathCheck?.cancel()
     mutableState.update { it.copy(choosingFolder = true) }
     // UNDISPATCHED enters the try at once, so a cancel before the first dispatch cannot leave the flag set.
@@ -314,12 +319,13 @@ class NewTaskViewModel(
   }
 
   private fun submitPath(target: NewTaskDraft, path: String) {
-    if (path.isBlank()) return
+    if (!canChangeContext(target) || path.isBlank()) return
     pathCheck?.cancel()
     pathCheck = viewModelScope.launch { checkPath(target, path) }
   }
 
   private suspend fun checkPath(target: NewTaskDraft, path: String) {
+    if (!canChangeContext(target)) return
     when (val read = branches.branches(path)) {
       is RepositoryBranchesRead.NotARepository -> showRepositoryError(target, "$path is not a git repository.")
       is RepositoryBranchesRead.Unavailable -> showRepositoryError(target, "Could not read $path: ${readProblemText(read.problem)}")
@@ -328,9 +334,11 @@ class NewTaskViewModel(
   }
 
   private suspend fun addListedRepository(target: NewTaskDraft, listed: RepositoryBranches) {
+    if (!canChangeContext(target)) return
     when (val project = specs.projectFor(listed.repositoryRoot)) {
       is Outcome.Failure -> showRepositoryError(target, readProblemText(project.error))
       is Outcome.Success -> {
+        if (!canChangeContext(target)) return
         val repository = NewTaskRepository(project.value.repoRoot ?: listed.repositoryRoot, project.value.displayName)
         val known = mutableState.value.repositories + target.addedRepositories
         if (known.none { it.root == repository.root }) target.addedRepositories += repository
@@ -341,5 +349,10 @@ class NewTaskViewModel(
 
   private fun showRepositoryError(target: NewTaskDraft, message: String) {
     if (isSelected(target)) mutableState.update { it.copy(repositoryError = message) }
+  }
+
+  private fun canChangeContext(target: NewTaskDraft): Boolean {
+    val current = target.chat.value
+    return current?.repositoryMissing != true && current?.thread?.busy?.value != true && !target.offer.value.starting
   }
 }

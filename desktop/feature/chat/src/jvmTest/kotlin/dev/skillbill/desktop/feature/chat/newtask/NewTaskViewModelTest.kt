@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -436,6 +437,52 @@ class NewTaskViewModelTest {
     assertEquals("", draft.baseBranch)
     assertTrue(model.state.value.repositoryPickerOpen)
     model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `repository and branch picker changes after a reply rebind and replay the chat`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chatRepo = FakeExecutionChatRepository().apply { events = { flowOf(ChatEvent.TextDelta("answer"), ChatEvent.Completed) } }
+    val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val repository = NewTaskRepository(createTempDirectory("new-task-repo").toString(), "repo")
+    val draft = chats.selected.value.apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      this.repository = repository
+      agentId = "claude"
+      selectedAgent = chatRepo.agent
+      text = "add export"
+    }
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
+    runCurrent()
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    val initialChat = checkNotNull(draft.chat.value)
+    assertEquals("answer", (initialChat.thread.transcript.value.last() as ChatMessage.Agent).text)
+    assertEquals(false, initialChat.thread.busy.value)
+    val firstSession = chatRepo.requests.single().sessionId
+    val otherRepository = NewTaskRepository(createTempDirectory("other-new-task-repo").toString(), "other")
+
+    model.onAction(NewTaskAction.ChooseRepository(otherRepository))
+    model.onAction(NewTaskAction.ChooseBaseBranch("origin/release"))
+    runCurrent()
+
+    val rebound = checkNotNull(draft.chat.value)
+    assertNotEquals(firstSession, rebound.sessionId)
+    assertEquals(otherRepository.root, rebound.repositoryRoot)
+    assertEquals("origin/release", rebound.baseBranch)
+    assertEquals("add export", (rebound.thread.transcript.value.first() as ChatMessage.Operator).text)
+    assertTrue(rebound.thread.transcript.value.any { it is ChatMessage.Notice && it.text.contains("earlier conversation") })
+    draft.text = "continue"
+    model.onAction(NewTaskAction.Send)
+    runCurrent()
+    val next = chatRepo.requests.last()
+    assertEquals(rebound.sessionId, next.sessionId)
+    assertEquals(dev.skillbill.desktop.core.domain.model.ChatScope.NewTask(otherRepository.root, "origin/release"), next.scope)
+    assertTrue(next.prompt.contains("Earlier in this chat"))
+    assertTrue(next.prompt.contains("The repository changed from ${repository.root} to ${otherRepository.root}"))
+    assertTrue(next.prompt.contains("The base branch changed"))
+    model.viewModelScope.cancel()
+    draft.close()
   }
 
   @Test
