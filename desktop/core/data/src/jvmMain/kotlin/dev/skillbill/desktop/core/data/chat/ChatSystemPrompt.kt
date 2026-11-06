@@ -38,6 +38,14 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("Before proposing an issue key, inspect the local spec inventory, including completed and archived bundles, and existing runs.")
   appendLine("You may suggest the next free local key implied by the inventory in prose only. Wait for the operator to send that complete key in chat or say they will type it on the start card. Never silently mint or use a suggested key before acceptance.")
   appendLine(
+    "To let the operator accept a suggested key with one click, offer an action without \"start\" whose instruction is exactly the bare key, such as \"SKILL-12\", and whose label shows that key, such as \"Use SKILL-12\". " +
+      "Clicking it counts as acceptance. Any other wording in the instruction does not.",
+  )
+  appendLine(
+    "Once the operator has accepted a key in chat, the start button already carries it. Offer the start action in that same reply and do not ask them to type the key again on the card. " +
+      "Only tell them to type a key on the card when they said they would.",
+  )
+  appendLine(
     "You have the same access as any chat: any shell command, git, gh and file edits. Do not launch skill-bill yourself. " +
       "A start action becomes a button; the app starts the selected run when the operator clicks it.",
   )
@@ -56,6 +64,7 @@ private const val SHARED_START_ACTION_GUIDANCE = """
 For an action that should start a skill-bill run when clicked, set "start" to exactly one of: "goal", "plan", "review", "validation", "qa", "pr", "monitor", "verify", or "pr-review-fix".
 Never set "start" to "release".
 Treat "update-check", "unit-test-value-check", "feature-guard", and "feature-guard-cleanup" as ordinary chat turns: use an instruction only, with no "start" field.
+For these operations and release, label a suggested action "Run operation:<id>" so the app can show its explanation.
 Do not launch skill-bill yourself. The app starts the run only after the operator clicks the button.
 Map operator phrasing to "start" as follows: "code review", "review this branch", and "review my branch" -> "review"; watching a named PR or "monitor this PR" -> "monitor"; acceptance or spec verify (not Verify findings) -> "verify"; "qa" or "QA this branch" -> "qa"; "run the checks" or validation -> "validation"; opening or creating a PR -> "pr"; planning -> "plan"; new work the operator asked you to implement -> "goal"; "address the local comments", "fix my diff comments", or "address the review comments in the diff" -> "pr-review-fix" with no target; fixing GitHub or PR review comments -> "pr-review-fix" with target beginning "mode:remote", optionally followed by the PR reference. In a New Task chat, use "goal" or "plan" only after the operator accepts a key or says they will type one on the card.
 When the operator's request matches one of those mappings, the first action in the block must use label "Run phase:<id>" for phase starts (goal, plan, review, validation, qa, pr, monitor) or "Run operation:<id>" for verify and pr-review-fix.
@@ -98,9 +107,9 @@ private const val NEW_TASK_ACTION_GUIDANCE = """
 When you propose concrete next actions, append a structured action block at the very end of your reply.
 Use this exact fenced block format, with a JSON array containing up to 3 actions:
 ```skillbill-actions
-[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository. The operator will type the issue key on the start card.","mode":"act","start":"goal","title":"Add dark mode setting"}]
+[{"label":"Run phase:goal","instruction":"Implement the requested change in this repository.","mode":"act","start":"goal","title":"Add dark mode setting"}]
 ```
-Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters.
+Each action needs a nonblank instruction and a mode of "read" or "act". Labels must be at most 60 characters, and instructions at most 2000 characters. The app does not show an action that breaks these limits, so keep a goal instruction to a short summary and put long detail in a file in the repository the run can read.
 Every "goal" and "plan" start action needs a "title": 2 to 6 words naming the change, with no issue key, file path or trailing punctuation.
 Do not put an issue key in the title. A sentence that mentions a key does not identify the run. Treat a suggested key as unaccepted until the operator sends that complete key in chat or says they will type it on the card.
 Offer a "goal" or "plan" start action only after the operator sends the accepted complete key in chat or says they will type one on the card. Keep start chips keyless; never add a key field to the action JSON.

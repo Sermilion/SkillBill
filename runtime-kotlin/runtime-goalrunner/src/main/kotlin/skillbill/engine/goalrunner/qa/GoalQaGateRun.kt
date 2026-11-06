@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.qa
 
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goal.GoalRunnerManifestState
@@ -58,3 +59,13 @@ internal fun Clock.goalQaProgressDraft(
     outcome = outcome,
     agentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
   )
+
+internal fun resumeModelAssignment(
+  inputs: GoalQualityExecutionInputs,
+  request: GoalRunnerRunRequest,
+): FeatureTaskRuntimeModelAssignment =
+  if ((request.configuredAgentOverrideId ?: request.invokedAgentId) == inputs.effectiveAgentId) {
+    FeatureTaskRuntimeModelAssignment(inputs.modelDirectives, inputs.modelMatrix)
+  } else {
+    request.modelAssignment
+  }

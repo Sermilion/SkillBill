@@ -102,7 +102,9 @@ internal object McpToolRegistry {
       ),
       McpTool(
         name = "feature_task_phase_complete",
-        description = "Complete a prose feature-task phase via durable settlement.",
+        description =
+          "Store a prose feature-task result for runtime validation. An ok response confirms receipt, " +
+            "not phase or workflow completion.",
         handler = ::featureTaskPhaseComplete,
       ),
       McpTool(

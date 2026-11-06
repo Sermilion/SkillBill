@@ -52,11 +52,14 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.status.statusKind
 import dev.skillbill.desktop.feature.chat.savedAgo
+import java.io.File
 import kotlin.time.Instant
 
 private val CHIP_SHAPE = RoundedCornerShape(13.dp)
 private val TITLE_MAX_WIDTH = 240.dp
 private val SECTION_SPACING = 8.dp
+
+internal const val NEW_TASK_HISTORY_ROWS = 6
 
 private data class ExampleTask(val label: String, val kind: String, val fill: String)
 
@@ -73,17 +76,40 @@ private val START_CHIPS = listOf(
   "Open a PR" to "pr",
 )
 
-/** Reopens the selected repository's latest saved draft, named by its first line. */
+/** Lists recent saved drafts with resume, discard and picker actions. */
 @Composable
-internal fun ContinueRow(entry: ChatHistoryEntry, now: Instant, onClick: () -> Unit) {
+internal fun RecentChatsSection(
+  saved: List<ChatHistoryEntry>,
+  now: Instant,
+  onResume: (ChatHistoryEntry) -> Unit,
+  onDiscard: (ChatHistoryEntry) -> Unit,
+  onShowAll: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
+    SectionLabel("Recent chats")
+    saved.take(NEW_TASK_HISTORY_ROWS).forEach { entry ->
+      key(entry.sessionId) {
+        RecentChatRow(entry, now, { onResume(entry) }, { onDiscard(entry) })
+      }
+    }
+    if (saved.size > NEW_TASK_HISTORY_ROWS) {
+      SbButton("Show all", onShowAll, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+    }
+  }
+}
+
+@Composable
+private fun RecentChatRow(entry: ChatHistoryEntry, now: Instant, onClick: () -> Unit, onDiscard: () -> Unit) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
-    SectionLabel("Continue")
-    HomeRow(onClick, Modifier.height(SkillBillSize.row)) {
-      BasicText(rememberRuntimeText(entry.title.lineSequence().first()), Modifier.weight(1f), style = type.tBase.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
-      BasicText(savedAgo(entry.updatedAt, now), style = type.tSm.copy(color = colors.fgFaint), maxLines = 1)
+  HomeRow(onClick, Modifier.height(SkillBillSize.row)) {
+    BasicText(rememberRuntimeText(entry.title.lineSequence().first()), Modifier.weight(1f), style = type.tBase.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    entry.newTask?.let {
+      BasicText(File(it.repositoryRoot).name, Modifier.weight(0.5f, fill = false), style = type.tSm.copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+    BasicText(savedAgo(entry.updatedAt, now), style = type.tSm.copy(color = colors.fgFaint), maxLines = 1)
+    SbButton("Discard", onDiscard, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
   }
 }
 

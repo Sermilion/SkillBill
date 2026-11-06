@@ -58,8 +58,8 @@ interface ExecutionChatRepository {
     return true
   }
 
-  /** The saved new-task drafts of [repositoryRoot], newest first. */
-  suspend fun savedNewTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry>
+  /** Every repository's saved new-task drafts, newest first, at most [limit] when one is given. */
+  suspend fun savedNewTaskDrafts(limit: Int? = null): List<ChatHistoryEntry>
 
   /** Deletes the saved chat of [sessionId] with its resume state. */
   suspend fun deleteSavedChat(sessionId: String)

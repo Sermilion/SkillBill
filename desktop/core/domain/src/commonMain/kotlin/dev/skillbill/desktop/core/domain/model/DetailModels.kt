@@ -102,6 +102,7 @@ data class Detail(
   val planOutputUpdatedAt: Instant? = null,
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
   val standalonePlan: StandalonePlanProgress? = null,
+  val verifyRun: VerifyRunDetails? = null,
 )
 
 data class WorkSubtask(

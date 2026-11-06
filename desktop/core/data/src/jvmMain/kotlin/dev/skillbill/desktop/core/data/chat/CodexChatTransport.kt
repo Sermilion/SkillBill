@@ -60,8 +60,8 @@ internal fun codexArguments(request: ChatTurnRequest, thread: String?): List<Str
 }
 
 /**
- * Decodes `codex exec --json` lines. `error` lines can be retries the turn recovers from, so only `turn.failed` or an exit
- * without `turn.completed` fails the turn, with the last error as its detail.
+ * Decodes `codex exec --json` lines. `error` lines and `error` items (such as config warnings) can be notices the turn
+ * recovers from, so only `turn.failed` or an exit without `turn.completed` fails the turn, with the last error as its detail.
  */
 internal class CodexStreamDecoder(private val onThread: (String) -> Unit) : ChatLineDecoder {
   private var lastError: String? = null
@@ -95,6 +95,10 @@ internal class CodexStreamDecoder(private val onThread: (String) -> Unit) : Chat
     listOf(exitFailure(code, lastError ?: stderrTail))
 
   private fun completed(item: JsonObject): List<ChatEvent> {
+    if (item.string("type") == "error") {
+      lastError = item.string("message") ?: lastError
+      return emptyList()
+    }
     if (item.string("type") == "agent_message") {
       val text = item.string("text")?.takeIf { it.isNotBlank() } ?: return emptyList()
       val separated = if (wroteText) "\n\n$text" else text
@@ -111,7 +115,7 @@ internal class CodexStreamDecoder(private val onThread: (String) -> Unit) : Chat
   private fun toolCall(item: JsonObject): ChatToolCall? {
     val id = item.string("id") ?: return null
     return when (val type = item.string("type")) {
-      null, "agent_message", "reasoning", "todo_list" -> null
+      null, "agent_message", "reasoning", "todo_list", "error" -> null
       "command_execution" -> item.string("command").orEmpty().let { ChatToolCall(id, "shell", it, it) }
       "file_change" -> {
         val changes = (item["changes"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }

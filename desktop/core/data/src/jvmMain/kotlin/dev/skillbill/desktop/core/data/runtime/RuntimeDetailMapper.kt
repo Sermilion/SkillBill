@@ -249,6 +249,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     planOutputUpdatedAt = planOutputUpdatedAt?.toKotlinInstant(),
     planSubtaskLatestLines = planSubtaskLatestLines,
     standalonePlan = standalonePlanProgress?.toDomain(),
+    verifyRun = verifyRun?.toDomain(),
   )
 }
 
@@ -486,7 +487,7 @@ internal fun GoalRunnerQaResult.toDomain() = GoalQaResult(
   details?.toDomain(),
 )
 
-private fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
+internal fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
   reportPath, invocationDirectory, skipReason,
   assertions.map { assertion ->
     val outcome = when (assertion.outcome) {

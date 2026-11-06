@@ -130,9 +130,20 @@ public class PhaseRunPlanResolver(
             ),
           )
         }
-        else -> if (!envelopeAccepted) unknownQualityStep(record)
+        else -> if (!envelopeAccepted && !replayableReadOnlyStep(progress, record, plan)) unknownQualityStep(record)
       }
     }
+  }
+
+  private fun replayableReadOnlyStep(
+    progress: GoalQualityPhaseProgress,
+    record: FeatureTaskRuntimePhaseRecord,
+    plan: ResolvedPhaseExecutionPlan,
+  ): Boolean {
+    val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId) ?: return false
+    if (policy.mutating || policy.fileMutating) return false
+    validateAttemptStarts(progress.phaseLedger, record)
+    return !hasTerminalAction(progress.phaseLedger, record)
   }
 
   internal fun validateRunningGate(

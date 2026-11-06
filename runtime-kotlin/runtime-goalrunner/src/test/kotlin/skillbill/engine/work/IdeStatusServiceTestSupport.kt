@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.baseBranch
@@ -598,6 +599,7 @@ internal class TrackingDatabase(
   internal val goalPage: WorkGoalSubtaskPage? = null,
   internal val goalPages: ((afterSubtaskId: Int?, limit: Int) -> WorkGoalSubtaskPage?)? = null,
   internal val qaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository(),
+  internal val telemetry: LifecycleTelemetryRepository = RecordingLifecycleTelemetryRepository(),
 ) : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection() =
     DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
@@ -698,8 +700,7 @@ internal class TrackingDatabase(
         get() = error("Not exercised by IdeStatusServiceTest.")
       override val reviews: ReviewRepository
         get() = error("Not exercised by IdeStatusServiceTest.")
-      override val lifecycleTelemetry: LifecycleTelemetryRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
+      override val lifecycleTelemetry: LifecycleTelemetryRepository = telemetry
       override val telemetryReconciliation: TelemetryReconciliationRepository
         get() = error("Not exercised by IdeStatusServiceTest.")
       override val telemetryOutbox: TelemetryOutboxRepository

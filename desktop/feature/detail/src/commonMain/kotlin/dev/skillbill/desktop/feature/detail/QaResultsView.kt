@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
 internal enum class QaResultsTone { Failed, Blocked, Done, Faint }
+internal enum class QaEvidenceMode { Invocation, VerifyNamesOnly }
 
 internal data class QaResultsFinding(
   val id: String,
@@ -37,6 +38,7 @@ internal data class QaResultsInput(
   val details: QaRunDetails? = null,
   val fallbackInvocationDirectory: String? = null,
   val fallbackReportPath: String? = null,
+  val evidenceMode: QaEvidenceMode = QaEvidenceMode.Invocation,
 )
 
 internal data class QaFindingRow(
@@ -74,6 +76,7 @@ internal data class QaResultsView(
   val report: QaReportFold?,
   val targets: String?,
   val reportPath: String?,
+  val evidenceMode: QaEvidenceMode,
 )
 
 internal fun goalQaInput(qa: GoalQaResult, running: Boolean): QaResultsInput {
@@ -182,6 +185,7 @@ internal fun qaResultsView(input: QaResultsInput): QaResultsView {
     report = reportFold(input, counts.tagged, directory),
     targets = targetsLine(details?.coverage.orEmpty()),
     reportPath = (details?.reportPath ?: input.fallbackReportPath)?.takeIf { it.isNotBlank() },
+    evidenceMode = input.evidenceMode,
   )
 }
 

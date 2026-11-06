@@ -87,7 +87,11 @@ class PlanActionsTest {
     onNodeWithText("The subtask spec could not be reconciled").assertExists()
     onNodeWithText("No output for ", substring = true).assertExists()
     onNodeWithText("Retry").assertDoesNotExist()
-    onNodeWithText("Decide subtask 1").assertExists()
+    onNodeWithText(
+      "Subtask 1 finished with no code changes and is waiting for your decision.",
+      substring = true,
+    ).assertExists()
+    onNodeWithText("skill-bill goal operator-decision OAC-86 --subtask 1", substring = true).assertExists()
   }
 
   @Test

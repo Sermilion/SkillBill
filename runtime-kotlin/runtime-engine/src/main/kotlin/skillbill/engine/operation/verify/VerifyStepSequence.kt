@@ -258,9 +258,18 @@ internal class VerifyStepSequence(
     val verdict = if (qaOverride) APPROVE_WITH_FIXES else stated
     val warning = QA_APPROVE_WARNING.takeIf { qaOverride }
     val findings = reportLines(section.lines()) + listOfNotNull(warning)
+    val summary =
+      report
+        .substringAfter(SUMMARY_HEADING, "")
+        .lineSequence()
+        .takeWhile { !it.trimStart().startsWith(DELIMITER_PREFIX) }
+        .joinToString("\n")
+        .trim()
+    val receipt = VerifyWorkflow.receipt(verdict, findings)
+    val stored = if (summary.isBlank()) receipt else receipt + (VerifyWorkflow.SUMMARY to summary)
     return VerifyStepDone.Settled(
       WorkflowStepStatus.COMPLETED,
-      mapOf(VerifyWorkflow.VERDICT_RESULT to VerifyWorkflow.receipt(verdict, findings)),
+      mapOf(VerifyWorkflow.VERDICT_RESULT to stored),
       warning?.let { "${report.trimEnd()}\n\n$it" } ?: report,
     )
   }
@@ -414,6 +423,8 @@ internal class VerifyStepSequence(
       "Warning: the verdict said APPROVE while the QA report has open findings; recorded APPROVE WITH FIXES so " +
         "the QA findings stay in the consolidated findings."
     const val VERDICT_HEADING = "--- VERDICT ---"
+    const val SUMMARY_HEADING = "--- SUMMARY ---"
+    const val DELIMITER_PREFIX = "--- "
     const val NO_HISTORY = "none"
     const val COMPLETED_STATUS = "completed"
     const val ABANDONED_AT_REVIEW = "abandoned_at_review"

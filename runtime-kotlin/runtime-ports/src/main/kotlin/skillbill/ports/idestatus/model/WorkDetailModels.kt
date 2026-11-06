@@ -91,6 +91,7 @@ data class WorkDetailItem(
   val planOutputUpdatedAt: Instant? = null,
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
   val standalonePlanProgress: StandalonePlanProgress? = null,
+  val verifyRun: VerifyRunDetails? = null,
 )
 
 data class WorkDetailRuntimeStatus(

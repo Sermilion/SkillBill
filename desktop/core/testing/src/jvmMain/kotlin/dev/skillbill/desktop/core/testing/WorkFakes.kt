@@ -3,13 +3,11 @@ package dev.skillbill.desktop.core.testing
 import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
-import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.LoadMoreOutcome
-import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
@@ -139,9 +137,6 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
     notFaked("recoveryPreview")
 
   override suspend fun recover(item: WorkItem, preview: RecoveryPreview): RecoveryOutcome = notFaked("recover")
-
-  override suspend fun recordOperatorDecision(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome =
-    notFaked("recordOperatorDecision")
 
   override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome = notFaked("purge")
 

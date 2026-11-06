@@ -93,7 +93,7 @@ class ChatReplyStreamTest {
       ),
       actions,
     )
-    assertTrue(diagnostics.categories.isEmpty())
+    assertEquals(listOf("chat.action_invalid"), diagnostics.categories)
   }
 
   @Test
@@ -108,7 +108,7 @@ class ChatReplyStreamTest {
       ),
     )
     assertTrue(stream.accept(ChatEvent.Completed).none { it is ChatEvent.SuggestedActions })
-    assertTrue(diagnostics.categories.isEmpty())
+    assertEquals(listOf("chat.action_invalid"), diagnostics.categories)
   }
 
   @Test
@@ -119,13 +119,48 @@ class ChatReplyStreamTest {
       listOf(ChatEvent.TextDelta("Answer\n")),
       stream.accept(ChatEvent.TextDelta("Answer\n```skillbill-actions\n[{\"label\":\"Go ahead\"}]\n```")),
     )
-    assertEquals(listOf(ChatEvent.Completed), stream.accept(ChatEvent.Completed))
-    assertEquals(listOf("chat.actions_invalid"), diagnostics.categories)
+    val completed = stream.accept(ChatEvent.Completed)
+    assertTrue(completed.none { it is ChatEvent.SuggestedActions })
+    assertEquals(ChatEvent.Completed, completed.last())
+    assertTrue("\"Go ahead\" has no instruction" in completed.filterIsInstance<ChatEvent.TextDelta>().single().text)
+    assertEquals(listOf("chat.action_invalid"), diagnostics.categories)
+
+    val malformedDiagnostics = RecordingDiagnostics()
+    val malformed = ChatReplyStream(malformedDiagnostics)
+    malformed.accept(ChatEvent.TextDelta("Answer\n```skillbill-actions\n[{\"label\":\n```"))
+    val malformedEvents = malformed.accept(ChatEvent.Completed)
+    assertTrue(malformedEvents.none { it is ChatEvent.SuggestedActions })
+    assertTrue("could not be read" in malformedEvents.filterIsInstance<ChatEvent.TextDelta>().single().text)
+    assertEquals(listOf("chat.actions_invalid"), malformedDiagnostics.categories)
 
     val failed = ChatReplyStream(RecordingDiagnostics())
     failed.accept(ChatEvent.TextDelta("Answer\n```skillbill-actions\n[]\n```"))
     val error = ChatEvent.Failed(ChatFailure.ProcessFailed, "failed")
     assertEquals(listOf(error), failed.accept(error))
+  }
+
+  @Test
+  fun `an instruction over the limit drops only that action and tells the operator why`() {
+    val diagnostics = RecordingDiagnostics()
+    val stream = ChatReplyStream(diagnostics)
+    val long = "x".repeat(2031)
+    stream.accept(
+      ChatEvent.TextDelta(
+        "Ready.\n```skillbill-actions\n" +
+          """[{"label":"Run phase:goal","instruction":"$long","mode":"act","start":"goal","title":"Redesign validation page"},""" +
+          """{"label":"Use SKILL-12","instruction":"SKILL-12","mode":"read"}]""" +
+          "\n```",
+      ),
+    )
+    val events = stream.accept(ChatEvent.Completed)
+    val notice = events.filterIsInstance<ChatEvent.TextDelta>().single().text
+    assertTrue("\"Run phase:goal\" has an instruction of 2031 characters, over the 2000 limit" in notice)
+    assertEquals(
+      listOf(ChatSuggestedAction("Use SKILL-12", "SKILL-12", ChatPermissionMode.ReadOnly)),
+      events.filterIsInstance<ChatEvent.SuggestedActions>().single().actions,
+    )
+    assertEquals(ChatEvent.Completed, events.last())
+    assertEquals(listOf("chat.action_invalid"), diagnostics.categories)
   }
 
   @Test

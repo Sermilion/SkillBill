@@ -112,6 +112,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val qaView = if (qaRow && loaded != null) qaChecklistView(item, loaded.detail, state.selectedQaRun, state.qaCaseOverrides) else null
   val keys = remember { LazyKeyIndex() }
   val scrollToFinding = rememberQaFindingScroller(listState, collapse, keys)
+  val scrollToVerifySection = rememberVerifySectionScroller(listState, collapse, keys, loaded?.detail?.verifyRun?.workflowId)
   val peekState = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -166,7 +167,13 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         ) {
           val sections = DetailSections(this, collapse, listState, assessmentOrder, keys)
           sections.item(key = "header") {
-            DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null) {
+            val verifyRun = loaded?.detail?.verifyRun
+            if (verifyRun != null) VerifyHeader(verifyRun, onAction) {
+              if (state.sections != SectionsUi.Gone) {
+                val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
+                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+              }
+            } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
                 RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
@@ -180,7 +187,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, onAction, qaView, scrollToFinding)
+          sections.document(state, view, onAction, qaView, scrollToFinding, scrollToVerifySection)
         }
       }
       DetailPeek(
@@ -213,9 +220,7 @@ internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView,
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val incident = detail?.incident
   val decision: @Composable () -> Unit = {
-    view.decision?.let {
-      OperatorDecisionBlock(it, view.recordEnabled, view.usable && state.controls.inFlight == null, state.controls.inFlight == InFlightControl.Decision, onAction)
-    }
+    view.decision?.let { OperatorDecisionNotice(it) { text -> onAction(DetailAction.Copy(text)) } }
   }
   val sectionCollapse = collapse
   if (incident != null) item(key = "incident") {
@@ -227,7 +232,7 @@ internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView,
 }
 
 /** Detail sections with Activity last; placeholders hold their place until the first read lands. */
-private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit) {
+private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, onScrollToVerifySection: (String) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -243,6 +248,10 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       }
       if (item.isStandalonePlan()) {
         planDocument(item, detail, state, view, onAction)
+        return
+      }
+      detail.verifyRun?.let { run ->
+        verifyDocument(state, run, onAction, onScrollToVerifySection)
         return
       }
       // HANDOFF 9.2 order: the incident (item 7) comes before the metrics (item 8).

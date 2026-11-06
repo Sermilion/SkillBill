@@ -32,4 +32,12 @@ internal class LifecycleTelemetryFeatureVerifySessionAdapter(
       emitFeatureVerifyFinished(connection, runtimeVersion, record.sessionId, level, diagnostics)
     }
   }
+
+  override fun featureVerifyStaleReason(sessionId: String): String? {
+    if (sessionId.isBlank()) return null
+    return connection.prepareStatement("SELECT stale_reason FROM feature_verify_sessions WHERE session_id = ?").use {
+      it.setString(1, sessionId)
+      it.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
+    }
+  }
 }

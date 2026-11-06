@@ -30,7 +30,7 @@ internal fun newTaskStartArgumentIdentity(raw: String?): String? {
 }
 
 internal fun newTaskOperatorIdentity(messages: List<ChatMessage>): String? {
-  val operators = messages.filterIsInstance<ChatMessage.Operator>().filter { it.action == null }
+  val operators = messages.filterIsInstance<ChatMessage.Operator>().filter { it.action == null || acceptsKeyChip(it) }
   for ((index, message) in operators.withIndex()) {
     val text = message.text.trim()
     if (NEW_TASK_COMPLETE_KEY.matches(text)) return text
@@ -44,6 +44,15 @@ internal fun newTaskOperatorIdentity(messages: List<ChatMessage>): String? {
     if (identity != null) return identity
   }
   return null
+}
+
+private fun acceptsKeyChip(message: ChatMessage.Operator): Boolean {
+  val action = message.action ?: return false
+  val key = action.instruction.trim()
+  return action.start == null &&
+    NEW_TASK_COMPLETE_KEY.matches(key) &&
+    message.text.trim() == key &&
+    action.label.split(Regex("\\s+")).any { it.equals(key, ignoreCase = true) }
 }
 
 internal fun newTaskReuseRequested(

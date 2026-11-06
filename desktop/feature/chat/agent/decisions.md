@@ -1,3 +1,13 @@
+## [2026-11-06] Scope the New Task resume palette to the picked repository
+Context: The home lists drafts across repositories, while the resume palette identifies a single repository with its scope chip.
+Decision: New Task passes only drafts for the picked repository to the palette, or none if no repository is picked. The home list remains cross-repository; its Show all opens the scoped palette.
+Reason: A cross-repository result under a single repository label could switch repositories without warning. The home list still offers drafts from other repositories.
+
+## [2026-11-06] Count a bare-key chip click as key acceptance
+Context: The prompt offers a "Use SKILL-n" chip, but newTaskOperatorIdentity skipped every operator message sent from a suggested action, so clicking it did nothing and the operator had to type the key.
+Decision: A chip message counts as identity only when the action has no start, its instruction is exactly one complete key, and its label contains that key as a whitespace token. Every other chip message stays excluded, as before.
+Reason: A click on a chip whose label shows the key is the operator accepting it. Requiring the key on the label stops a model-written chip from binding a key the operator never saw, so the 2026-11-04 rule against agent-suggested keys still holds.
+
 ## [2026-11-04] Bind only desktop-resolved identity on desktop Goal/Plan start
 Context: Desktop already resolved identity from the offer field or dedicated operator tokens. Re-running admission on composed chat requirements would bind an in-sentence key or an agent-suggested key that leaked into the transcript.
 Decision: Desktop prepare uses identity policy RESOLVED_DESKTOP_IDENTITY and binds only keyChoice. REQUIREMENTS_FIRST remains the default for other callers.

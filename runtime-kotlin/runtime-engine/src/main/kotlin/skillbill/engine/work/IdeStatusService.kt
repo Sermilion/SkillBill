@@ -40,6 +40,7 @@ import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
 import skillbill.engine.work.pagination.workDetailPagedResult
+import skillbill.engine.work.verify.VerifyRunDetailsProjection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -382,13 +383,7 @@ public class IdeStatusService(
       (goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId())
         ?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
     val history = detailExecutionHistory(candidate, context, request, position)
-    val moreLists =
-      detailContinuationLists(
-        history.size > request.pageSize,
-        (goalRead?.page?.remainingCount ?: 0) > goalSubtaskPageLimit(request.pageSize, completedOnly = false),
-        (validationRead?.page?.remainingCount ?: 0) > request.pageSize,
-        runtimeRead?.hasMore == true && request.includesDetailList(WorkDetailList.PHASES),
-      )
+    val moreLists = detailMoreLists(history.size > request.pageSize, goalRead, validationRead, runtimeRead, request)
     val planOutput = standalonePlanOutput(standalone, context.unitOfWork)
     val detailItem =
       WorkDetailItem(
@@ -429,6 +424,7 @@ public class IdeStatusService(
         planOutputUpdatedAt = planOutput.latestLineAt,
         planSubtaskLatestLines = planOutput.latestAttributedLines,
         standalonePlanProgress = detailPlanProgress(standalone, context, position, planOutput),
+        verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
       )
     val nextAnchors =
       detailNextAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
@@ -626,6 +622,20 @@ public class IdeStatusService(
       if (moreValidation) add(WorkDetailList.VALIDATION)
       if (morePhases) add(WorkDetailList.PHASES)
     }
+
+  private fun detailMoreLists(
+    moreExecutions: Boolean,
+    goalRead: GoalPageRead?,
+    validationRead: GoalPageRead?,
+    runtimeRead: RuntimePhasePageRead?,
+    request: WorkDetailRequest,
+  ): Set<WorkDetailList> =
+    detailContinuationLists(
+      moreExecutions,
+      (goalRead?.page?.remainingCount ?: 0) > goalSubtaskPageLimit(request.pageSize, completedOnly = false),
+      (validationRead?.page?.remainingCount ?: 0) > request.pageSize,
+      runtimeRead?.hasMore == true && request.includesDetailList(WorkDetailList.PHASES),
+    )
 
   private fun detailRuntimeStatus(
     workflowId: String,

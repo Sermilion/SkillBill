@@ -20,12 +20,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.SbMenu
-import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
-import dev.skillbill.desktop.core.designsystem.component.SbPopover
-import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatAgent
-import dev.skillbill.desktop.core.ui.input.ShellLayer
 import java.io.File
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -38,8 +33,6 @@ internal val CHAT_COMMANDS = linkedMapOf(
   RESUME_COMMAND to "Resume an agent session in this worktree",
   CLEAR_COMMAND to "Start a new conversation with the current execution state",
 )
-
-private const val LABEL_LENGTH = 60
 
 /** The length of the draft's leading token while it spells a chat command or the start of one, else null. */
 internal fun commandTokenLength(draft: String): Int? {
@@ -76,30 +69,8 @@ internal fun savedAgo(savedAt: Instant, now: Instant): String {
   }
 }
 
-/** The session's title on one line, cut to fit a menu row. */
-internal fun resumeLabel(entry: ChatHistoryEntry): String {
-  val title = entry.title.lineSequence().joinToString(" ").trim().ifEmpty { "${entry.agent.agentId} session" }
-  return if (title.length > LABEL_LENGTH) title.take(LABEL_LENGTH - 1).trimEnd() + "…" else title
-}
-
 /** The profile directory's name without its dot, such as `codex-api`, or the agent id when it runs as the app is configured. */
 internal fun agentName(agent: ChatAgent): String = agent.profile?.let { File(it).name.removePrefix(".") } ?: agent.agentId
-
-/** The `/resume` picker: one row per saved chat of this execution, newest first. */
-@Composable
-internal fun ResumePicker(choices: List<ChatHistoryEntry>, now: Instant, onResume: (ChatHistoryEntry) -> Unit, onDismiss: () -> Unit) {
-  ShellLayer(onDismiss)
-  SbPopover(expanded = true, onDismissRequest = onDismiss, width = 340.dp) {
-    val entries = if (choices.isEmpty()) {
-      listOf(SbMenuEntry.Item("No sessions in this worktree yet", {}, enabled = false))
-    } else {
-      choices.map { entry ->
-        SbMenuEntry.Item(resumeLabel(entry), { onResume(entry) }, endText = "${agentName(entry.agent)} · ${savedAgo(entry.updatedAt, now)}")
-      }
-    }
-    SbMenu(listOf(SbMenuEntry.Head("Resume a chat")) + entries)
-  }
-}
 
 /** Shown while the draft is a prefix of [command]; clicking it runs the command. */
 @Composable

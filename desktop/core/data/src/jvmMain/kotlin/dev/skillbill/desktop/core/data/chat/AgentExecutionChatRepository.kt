@@ -71,8 +71,8 @@ class AgentExecutionChatRepository(
 
   override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean = withContext(Dispatchers.IO) { store.saveChat(entry) }
 
-  override suspend fun savedNewTaskDrafts(repositoryRoot: String): List<ChatHistoryEntry> =
-    withContext(Dispatchers.IO) { store.newTaskDrafts(repositoryRoot) }
+  override suspend fun savedNewTaskDrafts(limit: Int?): List<ChatHistoryEntry> =
+    withContext(Dispatchers.IO) { store.newTaskDrafts(limit) }
 
   override suspend fun deleteSavedChat(sessionId: String) = withContext(Dispatchers.IO) { store.delete(sessionId) }
 }

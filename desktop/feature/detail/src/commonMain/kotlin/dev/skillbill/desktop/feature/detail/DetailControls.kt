@@ -3,8 +3,6 @@ package dev.skillbill.desktop.feature.detail
 import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
-import dev.skillbill.desktop.core.domain.model.DecisionOutcome
-import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
@@ -28,10 +26,6 @@ import kotlinx.coroutines.withContext
 
 private const val STALE_PREVIEW = "The incident changed. Refresh it and review a new recovery preview."
 private const val RECOVERY_FINISHED = "Recovery request finished. Incident details were refreshed."
-private const val DECISION_RECORDED_TITLE = "Decision recorded"
-private const val DECISION_RECORDED_BODY = "Resume the goal to apply it."
-private const val INSTRUCTIONS_REQUIRED = "Instructions are required for Retry fix."
-private const val NO_DECISION_WAITING = "No current subtask is waiting for a decision. Refresh the detail."
 
 /**
  * The detail's run controls, recovery and operator decision. One call runs at a time and none changes a row; the new state arrives
@@ -85,11 +79,6 @@ internal class DetailControls(
       ControlsAction.ApplyRecovery -> applyRecovery(ui, view)
       ControlsAction.DismissRecovery ->
         update { if (it.inFlight == InFlightControl.Recover) it else it.copy(recoveryDialog = null) }
-      is ControlsAction.ChooseDecision ->
-        editDecision(ui, view) { it.copy(decision = action.decision, fieldError = null, inlineProblem = null) }
-      is ControlsAction.EditInstructions ->
-        editDecision(ui, view) { it.copy(instructions = action.text, fieldError = null, inlineProblem = null) }
-      ControlsAction.RecordDecision -> recordDecision(ui, view)
     }
   }
 
@@ -198,38 +187,6 @@ internal class DetailControls(
         is RecoveryOutcome.Refused -> problem(outcome.summary)
         is RecoveryOutcome.Failed -> problem(readProblemText(outcome.problem))
       }
-    }
-  }
-
-  private fun editDecision(ui: DetailUiState, view: RunActionsView, change: (DecisionDraft) -> DecisionDraft): Boolean {
-    val draft = view.decision ?: return false
-    if (draft.recorded != null || !view.usable || mutableState.value.inFlight != null) return false
-    return update { it.copy(decision = change(decisionDraft(ui.copy(controls = it)))) }
-  }
-
-  /** Records the decision for the goal's next resume; the app never resumes it. A blank Retry fix never reaches the runtime. */
-  private fun recordDecision(ui: DetailUiState, view: RunActionsView): Boolean {
-    val draft = view.decision ?: return false
-    if (draft.decision == OperatorDecision.RETRY_FIX && draft.instructions.isBlank()) return false
-    if (draft.recorded != null || mutableState.value.inFlight != null) return false
-    if (!view.usable) {
-      if (view.refreshNeeded) problem(REFRESH_BEFORE_CONTROLS)
-      return view.refreshNeeded
-    }
-    val item = ui.header
-    val instructions = draft.instructions.takeIf { draft.decision == OperatorDecision.RETRY_FIX }
-    return call(InFlightControl.Decision) {
-      val settled = when (val outcome = controls.recordOperatorDecision(item, draft.decision, instructions)) {
-        is DecisionOutcome.Recorded -> {
-          toasts.show(ToastData(DECISION_RECORDED_TITLE, DECISION_RECORDED_BODY))
-          draft.copy(recorded = outcome, fieldError = null, inlineProblem = null)
-        }
-        DecisionOutcome.InstructionsRequired -> draft.copy(fieldError = INSTRUCTIONS_REQUIRED)
-        DecisionOutcome.Unavailable -> draft.copy(inlineProblem = NO_DECISION_WAITING)
-        is DecisionOutcome.Refused -> draft.copy(inlineProblem = outcome.reason)
-        is DecisionOutcome.Failed -> draft.copy(inlineProblem = readProblemText(outcome.problem))
-      }
-      mutableState.update { it.copy(decision = settled) }
     }
   }
 

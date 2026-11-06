@@ -284,7 +284,8 @@ The tools may be deferred in this session: load them first with ToolSearch
   one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
 Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
-"ok", end your response with a short prose recap and nothing structured. Use the prose
+"ok", the result has been stored for runtime validation; this does not confirm that the phase
+or workflow has completed. End with a short recap of the submitted result and nothing structured. Use the prose
 fallback below only if both tools stay unavailable after loading them.
 
 ## Value content
