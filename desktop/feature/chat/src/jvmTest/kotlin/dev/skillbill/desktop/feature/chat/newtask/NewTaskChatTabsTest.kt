@@ -5,9 +5,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -24,6 +28,7 @@ import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.TestScope
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -49,7 +54,9 @@ class NewTaskChatTabsTest {
       }
       waitForIdle()
 
-      onNodeWithContentDescription("All 20 open chats").assertExists()
+      val chevron = onNodeWithContentDescription("All 20 open chats").getBoundsInRoot()
+      assertEquals(392f, chevron.right.value, 0.5f)
+      assertTrue(onNodeWithContentDescription("New chat").getBoundsInRoot().right < chevron.left)
       onNodeWithContentDescription("New chat").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
       onNodeWithContentDescription("New chat").performKeyInput {
         pressKey(Key.Tab)
@@ -85,6 +92,11 @@ class NewTaskChatTabsTest {
       }
       waitForIdle()
       onNodeWithContentDescription("All 3 open chats").assertDoesNotExist()
+      val lastTab = onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))[2].getBoundsInRoot()
+      val plus = onNodeWithContentDescription("New chat").getBoundsInRoot()
+      assertEquals(lastTab.right.value + 2f, plus.left.value, 0.5f, "New chat sits one gap after the last tab")
+      // Three 196dp tabs after the 8dp padding end at 600dp, so "+" spans 602..626dp; a weight(1f) tab row would push it to the strip's right edge.
+      assertTrue(plus.right.value < 700f, "New chat must not be pushed to the far right")
     } finally {
       scope.backgroundScope.cancel()
       scope.cancel()
