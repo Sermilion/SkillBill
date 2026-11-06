@@ -57,6 +57,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -78,8 +80,16 @@ class ChatWorkspaceTest {
     override fun now() = epoch
   }
 
+  private val tempDirs = mutableListOf<Path>()
+
   @AfterTest
-  fun tearDown() = Dispatchers.resetMain()
+  fun tearDown() {
+    Dispatchers.resetMain()
+    tempDirs.forEach { it.toFile().deleteRecursively() }
+  }
+
+  /** A real directory standing in for a goal worktree; `toRealPath` avoids the macOS `/var` symlink. */
+  private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
 
   private fun TestScope.workspace(draft: NewTaskDraft = testNewTaskDraft()): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
@@ -201,9 +211,10 @@ class ChatWorkspaceTest {
 
   @Test
   fun `removed worktree ends the old agent session and starts the next turn at the primary root`() = runTest {
+    val worktree = worktreeDir()
     val active = workItem("SKILL-468").copy(
       repositoryRoot = "/repo",
-      goalWorktree = GoalWorktree("/repo/.skill-bill/worktrees/SKILL-468", GoalWorktreeState.Active, null, null),
+      goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null),
     )
     val detail = MutableStateFlow(loaded(active))
     details.details = mapOf(active.id to detail)
@@ -212,7 +223,7 @@ class ChatWorkspaceTest {
     runCurrent()
     val session = workspace.session(active.id)!!
     val firstSessionId = session.sessionId
-    assertEquals("/repo/.skill-bill/worktrees/SKILL-468", (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
+    assertEquals(worktree, (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
 
     val removed = active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed))
     detail.value = loaded(removed)
@@ -229,11 +240,38 @@ class ChatWorkspaceTest {
     workspace.closeAll()
   }
 
+  // The runtime row can still say Active after the worktree directory is deleted; the next turn must not run in the dead path.
+  @Test
+  fun `a deleted worktree directory under an Active row sends the next turn to the repository root`() = runTest {
+    val worktree = worktreeDir()
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null),
+    )
+    details.details = mapOf(active.id to MutableStateFlow(loaded(active)))
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+    val firstSessionId = session.sessionId
+    assertEquals(worktree, (chat.requests.single().scope as ChatScope.Execution).repositoryRoot)
+
+    Path.of(worktree).toFile().deleteRecursively()
+    workspace.send(active.id, "continue")
+    runCurrent()
+
+    assertEquals(listOf(firstSessionId), chat.ended)
+    assertEquals("/repo", (chat.requests.last().scope as ChatScope.Execution).repositoryRoot)
+    assertTrue(chat.requests.last().firstTurn)
+    assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count { it.text.startsWith(REMOVED_WORKTREE_CHAT_NOTICE) })
+    workspace.closeAll()
+  }
+
   @Test
   fun `a removal and a failed main checkout in one refresh announce the removal first`() = runTest {
     val active = workItem("SKILL-512").copy(
       repositoryRoot = "/repo",
-      goalWorktree = GoalWorktree("/repo/.skill-bill/worktrees/SKILL-512", GoalWorktreeState.Active, null, null),
+      goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
     )
     val detail = MutableStateFlow(loaded(active))
     details.details = mapOf(active.id to detail)
@@ -265,7 +303,7 @@ class ChatWorkspaceTest {
   fun `a main checkout outcome delivered after the removal notice is announced once`() = runTest {
     val active = workItem("SKILL-512").copy(
       repositoryRoot = "/repo",
-      goalWorktree = GoalWorktree("/repo/.skill-bill/worktrees/SKILL-512", GoalWorktreeState.Active, null, null),
+      goalWorktree = GoalWorktree(worktreeDir(), GoalWorktreeState.Active, null, null),
     )
     val detail = MutableStateFlow(loaded(active))
     details.details = mapOf(active.id to detail)
@@ -1100,10 +1138,11 @@ class ChatWorkspaceTest {
 
   @Test
   fun `start action on stopped execution runs in the goal worktree and names the main repository`() = runTest {
+    val worktree = worktreeDir()
     val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(
       running = false,
       repositoryRoot = "/work/repo",
-      goalWorktree = GoalWorktree("/work/goals/SKILL-1/checkout", GoalWorktreeState.Active, null, null),
+      goalWorktree = GoalWorktree(worktree, GoalWorktreeState.Active, null, null),
     )
     details.details = mapOf(item.id to flowOf(loaded(item)))
     controls.newTaskOutcome = NewTaskStartOutcome.Started("verify", NewTaskKind.Verify)
@@ -1133,7 +1172,7 @@ class ChatWorkspaceTest {
     assertEquals(1, controls.newTaskRequests.size)
     with(controls.newTaskRequests.single()) {
       assertEquals("/work/repo", repoRoot)
-      assertEquals("/work/goals/SKILL-1/checkout", checkoutRoot)
+      assertEquals(worktree, checkoutRoot)
       assertEquals(NewTaskKind.Verify, kind)
       assertEquals("SKILL-1", target)
       assertEquals("feat/fp-5175", branch)

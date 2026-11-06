@@ -34,6 +34,9 @@ import skillbill.ports.work.model.WorkStoreObservation
 import kotlin.time.toKotlinInstant
 import kotlin.time.Instant
 import skillbill.ports.idestatus.model.WorkLiveSection as RuntimeLiveSection
+import java.nio.file.Files
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
 import java.time.Instant as JavaInstant
 
 /** The verdicts a board row and a detail item both carry beside their snapshot. */
@@ -148,16 +151,7 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     qaVerdict = execution?.qaOutcome?.toDomain(),
     workflowQaOutcome = workflowQaOutcome?.toDomain(),
     standaloneExecution = execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE,
-    goalWorktree = verdicts.goalWorktree?.let {
-      GoalWorktree(
-        it.path,
-        it.state.toDomain(),
-        it.retentionReason,
-        it.retentionDetail,
-        it.mainCheckoutOutcome?.toDomain(),
-        it.mainCheckoutDetail,
-      )
-    },
+    goalWorktree = verdicts.goalWorktree?.toDomainWorktree(),
   )
 }
 
@@ -167,11 +161,22 @@ internal fun GoalMainCheckoutOutcome.toDomain(): MainCheckoutOutcome = when (thi
   GoalMainCheckoutOutcome.FAILED -> MainCheckoutOutcome.Failed
 }
 
-private fun RuntimeGoalWorktreeState.toDomain(): GoalWorktreeState = when (this) {
-  RuntimeGoalWorktreeState.ACTIVE -> GoalWorktreeState.Active
-  RuntimeGoalWorktreeState.RETAINED -> GoalWorktreeState.Retained
-  RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
+/** A worktree the runtime still reports as `ACTIVE` or `RETAINED` but whose directory is gone counts as removed. */
+internal fun GoalWorktreeView.toDomainWorktree(): GoalWorktree {
+  val mapped = when (state) {
+    RuntimeGoalWorktreeState.ACTIVE -> if (directoryExists(path)) GoalWorktreeState.Active else GoalWorktreeState.Removed
+    RuntimeGoalWorktreeState.RETAINED -> if (directoryExists(path)) GoalWorktreeState.Retained else GoalWorktreeState.Removed
+    RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
+  }
+  return GoalWorktree(path, mapped, retentionReason, retentionDetail, mainCheckoutOutcome?.toDomain(), mainCheckoutDetail)
 }
+
+private fun directoryExists(path: String): Boolean =
+  path.isNotBlank() && try {
+    Files.isDirectory(Path.of(path))
+  } catch (_: InvalidPathException) {
+    false
+  }
 
 private fun WorkBoardCompletionSource.toDomain(): CompletionSource = when (this) {
   WorkBoardCompletionSource.STANDALONE_FINISHED_AT -> CompletionSource.StandaloneFinishedAt

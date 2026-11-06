@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import skillbill.di.core.RuntimeComponent
 import skillbill.ports.editor.FileEditorLauncherPort
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workchanges.WorkChangesPort
 import skillbill.ports.workchanges.model.WorkChangeListResult
 import skillbill.ports.workchanges.model.WorkFileDiffResult
@@ -50,6 +51,7 @@ class ChangeObservations internal constructor(
   private val launcher: FileEditorLauncherPort = runtime.fileEditorLauncherPort,
   private val io: CoroutineDispatcher = Dispatchers.IO,
   private val workingTree: WorkingTreeReads = WorkingTreeReads(),
+  private val branches: CheckedOutBranchSource = runtime.checkedOutBranchSource,
 ) {
   /** Reads once when idle; while [running], reads again [CHANGE_REFRESH_INTERVAL] after each read ends. */
   fun observe(baseline: ChangeBaseline?, running: Boolean, gitReads: Mutex): Flow<ChangesState> {
@@ -123,16 +125,21 @@ class ChangeObservations internal constructor(
 
   /** Strips `VISUAL` and `EDITOR` so the launcher falls through to the system opener; a deleted file is never launched. */
   suspend fun open(baseline: ChangeBaseline, file: ChangedFile): OpenOutcome {
-    if (baseline is ChangeBaseline.CommittedBranchRange || baseline is ChangeBaseline.CommittedRevisionRange) return OpenOutcome.NotOpened
+    if (baseline is ChangeBaseline.CommittedRevisionRange) return OpenOutcome.NotOpened
     if (file.status == ChangeStatus.Deleted) return OpenOutcome.NotOpened
     val opened = withContext(io) {
-      val target = try {
-        Path.of(baseline.worktreeRoot).resolve(file.path)
+      try {
+        val root = Path.of(baseline.worktreeRoot)
+        // A committed range names the repository root of a removed worktree, so its files are the goal's only while that root is on the goal branch.
+        // A branch mismatch is an expected outcome, so it neither launches nor records a failure.
+        if (baseline is ChangeBaseline.CommittedBranchRange && branches.checkedOutBranch(root) != baseline.headBranch) {
+          return@withContext null
+        }
+        launcher.open(root.resolve(file.path), environment - EDITOR_VARIABLES)
       } catch (_: InvalidPathException) {
-        null
+        false
       }
-      target != null && launcher.open(target, environment - EDITOR_VARIABLES)
-    }
+    } ?: return OpenOutcome.NotOpened
     if (!opened) diagnostics.record(OPEN_FAILED)
     return if (opened) OpenOutcome.Opened else OpenOutcome.NotOpened
   }

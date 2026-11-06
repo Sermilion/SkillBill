@@ -59,6 +59,8 @@ class ClaudeChatTransport(
     )
     val uuid = UUID.randomUUID().toString()
     val sink = Channel<ChatEvent>(Channel.UNLIMITED)
+    // A live process keeps the directory it started in, so a turn in another directory needs a new process.
+    sessions[request.sessionId]?.takeIf { it.workingDirectory != command.workingDirectory }?.let { stop(request.sessionId, it) }
     awaitStopped(request.sessionId)
     val session = registered(request.sessionId, command, uuid, sink)
     session.send(uuid, claudeMessage(request), request.images)
@@ -93,7 +95,7 @@ class ClaudeChatTransport(
   }
 
   private fun open(sessionId: String, command: ChatCommand): ClaudeLiveSession {
-    val session = ClaudeLiveSession(diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
+    val session = ClaudeLiveSession(command.workingDirectory, diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
     session.job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
       try {
         launcher.open(command, session.input).collect(session::accept)

@@ -22,7 +22,6 @@ import dev.skillbill.desktop.core.domain.model.QaRunDetails
 import dev.skillbill.desktop.core.domain.model.QaRunFinding
 import dev.skillbill.desktop.core.domain.model.QaRunRetainedResource
 import dev.skillbill.desktop.core.domain.model.QaRunTemporaryEdit
-import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentEvidence
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisiteDetail
@@ -69,7 +68,6 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import skillbill.ports.idestatus.model.WorkChangeBaseline
-import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import dev.skillbill.desktop.core.domain.model.WorkPhase
 import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
@@ -243,16 +241,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     changeBaseline = changeBaseline?.toDomain(),
     degradedGoalStatusSource = GOAL_STATUS_READ_SOURCE.takeIf { goal == null && !goalManifest?.subtasks.isNullOrEmpty() },
     currentSubtaskId = goal?.currentSubtaskId,
-    goalWorktree = goalWorktree?.let {
-      GoalWorktree(
-        it.path,
-        it.state.toWorktreeDomain(),
-        it.retentionReason,
-        it.retentionDetail,
-        it.mainCheckoutOutcome?.toDomain(),
-        it.mainCheckoutDetail,
-      )
-    },
+    goalWorktree = goalWorktree?.toDomainWorktree(),
     launchWarning = goal?.launchWarning,
     planOutputTail = planOutputTail,
     planOutputUpdatedAt = planOutputUpdatedAt?.toKotlinInstant(),
@@ -260,12 +249,6 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     standalonePlan = standalonePlanProgress?.toDomain(),
     verifyRun = verifyRun?.toDomain(),
   )
-}
-
-private fun RuntimeGoalWorktreeState.toWorktreeDomain(): GoalWorktreeState = when (this) {
-  RuntimeGoalWorktreeState.ACTIVE -> GoalWorktreeState.Active
-  RuntimeGoalWorktreeState.RETAINED -> GoalWorktreeState.Retained
-  RuntimeGoalWorktreeState.REMOVED -> GoalWorktreeState.Removed
 }
 
 private fun StandaloneQaChecklist.toDomain(): QaChecklist = QaChecklist(
