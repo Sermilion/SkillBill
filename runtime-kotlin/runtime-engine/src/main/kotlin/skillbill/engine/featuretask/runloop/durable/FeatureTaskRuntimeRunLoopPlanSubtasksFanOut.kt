@@ -150,7 +150,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     val settled =
       try {
         val bundle =
-          parent.records.loadPlanBundle(facts.workflowId) ?: return PhaseOutcome.blocked(MISSING_BUNDLE_REASON)
+          parent.records.loadPlanBundle(facts.workflowId) ?: return blockUnit(unitId, MISSING_BUNDLE_REASON)
         stagedUnit(storeSubSpec(bundle, unitId))?.let { staged ->
           PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)
         }
@@ -185,7 +185,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
       parent.records.loadPhaseRecords(facts.workflowId)?.get(unitRecordId(unitId))
         ?: unitStates[unitId]?.records?.loadPhaseRecords(facts.workflowId)?.get(stepId)
     val blocked =
-      current?.let { PlanUnitRecords.blocked(it, reason) }
+      current?.let { PlanUnitRecords.blocked(it.copy(phaseId = unitRecordId(unitId)), reason) }
         ?: PlanUnitRecords.blocked(
           unit,
           PlanUnitAttempt(
@@ -268,6 +268,17 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   }
 }
 
+internal fun persistPlanSubtaskProgress(
+  records: PhaseRunRecords,
+  workflowId: String,
+  subtaskId: Int,
+  record: FeatureTaskRuntimePhaseRecord,
+): Boolean {
+  if (record.status == WorkflowStepStatus.COMPLETED) return true
+  val bundle = records.loadPlanBundle(workflowId) ?: return false
+  return records.recordPlanBundleWithUnits(workflowId, bundle, mapOf(subtaskId to record))
+}
+
 internal fun planSubtaskLaunchContext(
   bundle: FeatureTaskRuntimePlanBundle?,
   unitId: Int,
@@ -334,13 +345,7 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override val records: PhaseRunRecords =
     InMemoryPhaseRunRecords(parent.clock, null, phaseRecordSink = { record ->
       synchronized(parent.records) {
-        val bundle = parent.records.loadPlanBundle(facts.workflowId)
-        bundle != null &&
-          parent.records.recordPlanBundleWithUnits(
-            facts.workflowId,
-            bundle,
-            mapOf(unit.subtaskId to record),
-          )
+        persistPlanSubtaskProgress(parent.records, facts.workflowId, unit.subtaskId, record)
       }
     })
   override val specSource: SpecSource get() = parent.specSource
