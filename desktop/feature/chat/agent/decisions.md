@@ -1,3 +1,8 @@
+## [2026-11-06] Scope the New Task resume palette to the picked repository
+Context: The home lists drafts across repositories, while the resume palette identifies a single repository with its scope chip.
+Decision: New Task passes only drafts for the picked repository to the palette, or none if no repository is picked. The home list remains cross-repository; its Show all opens the scoped palette.
+Reason: A cross-repository result under a single repository label could switch repositories without warning. The home list still offers drafts from other repositories.
+
 ## [2026-11-06] Count a bare-key chip click as key acceptance
 Context: The prompt offers a "Use SKILL-n" chip, but newTaskOperatorIdentity skipped every operator message sent from a suggested action, so clicking it did nothing and the operator had to type the key.
 Decision: A chip message counts as identity only when the action has no start, its instruction is exactly one complete key, and its label contains that key as a whitespace token. Every other chip message stays excluded, as before.
