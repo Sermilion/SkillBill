@@ -81,6 +81,7 @@ internal object DatabaseRuntime {
       DriverManager.getConnection("jdbc:sqlite:${path.toAbsolutePath().normalize()}").use { connection ->
         connection.closingOnFailure(diagnostics) {
           asTypedFailure(path, DatabaseAccessOperation.OPEN) {
+            DatabaseMigrations.requireSupportedVersion(connection)
             configureConnection(connection, enableWal = true)
             DatabaseSchema.createBaseSchema(connection)
             DatabaseMigrations.apply(connection, diagnostics)
@@ -229,7 +230,7 @@ internal object DatabaseRuntime {
         if (ledgerVersion > latestVersion || desktopIdentityInstalled && !hasDesktopReadIdentity(connection)) {
           throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
         }
-        ledger.hasPendingWork(migrations)
+        ledger.hasPendingWork(migrations) || version != latestVersion
       }
     }
 

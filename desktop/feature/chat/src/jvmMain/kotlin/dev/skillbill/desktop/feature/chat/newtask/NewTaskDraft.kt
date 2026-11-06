@@ -226,6 +226,7 @@ class NewTaskDraft internal constructor(
               } else {
                 toasts.show(ToastMessage(ToastTone.Confirmation, message))
               }
+              observeRunFailure(current, kind, outcome)
             } else {
               reportStandalone(current, kind, outcome)
             }
@@ -403,9 +404,16 @@ class NewTaskDraft internal constructor(
     } else {
       toasts.show(ToastMessage(ToastTone.Confirmation, "Started $name"))
     }
+    observeRunFailure(current, kind, outcome)
+  }
+
+  private fun observeRunFailure(current: NewTaskChat?, kind: NewTaskKind, outcome: NewTaskStartOutcome.Started) {
     val awaitFailure = outcome.awaitFailure ?: return
+    val startedMessage = offerState.value.started
     scope.launch {
       val reason = awaitFailure() ?: return@launch
+      if (ownsChat(current) && offerState.value.started == startedMessage) offerState.value = offerState.value.copy(started = null)
+      val name = if (kind in GOAL_KINDS) "${kind.startName()} ${outcome.issueKey}" else kind.startName()
       showStartProblem(current, kind, "$name stopped. $reason")
     }
   }
