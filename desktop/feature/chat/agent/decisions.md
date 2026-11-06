@@ -10,8 +10,9 @@ Reason: Card-local handling keeps composer digits as text and prevents row contr
 
 ## [2026-11-06] Let each saved-chat discard own its undo window
 Context: Home-list discard must hide a chat immediately and allow five seconds to undo. Several chats can be discarded before their windows expire.
-Decision: NewTaskDraft tracks Undoable and Deleting states per session. Each job starts deletion after five seconds; Undo cancels only Undoable. Refreshes exclude both states, and window close does not flush timers.
+Decision: The window's shared NewTaskSavedChats tracks Undoable and Deleting states per session. Each job starts deletion after five seconds; Undo cancels only Undoable. Refreshes exclude both states, and window close does not flush timers.
 Reason: Independent jobs preserve each chat's undo window. Keeping Deleting prevents refresh from restoring a row during suspended deletion and prevents expired Undo from cancelling deletion. Cancellation before deletion preserves the saved draft as the intended safe outcome.
+
 ## [2026-11-06] Bind New Task async results to their originating draft
 Context: Operators can select another open chat while agent resolution, a branch read or a repository path check is suspended.
 Decision: Capture the target draft once per action and write results only into it. Update shared composer UI only while that draft is selected; selection refreshes agent and branches and closes both pickers.

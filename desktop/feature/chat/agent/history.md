@@ -5,9 +5,11 @@ Areas: desktop/feature/chat newtask, desktop/core/designsystem
 - InboxItem, inboxItems, chatTitle, chatRepoLabel and shortAgo separate derivation from Compose. Titles use plain text with path fallback and image-name suffixes; repository badges compare normalized roots. reusable
 - Returning homes show all saved drafts. Pending and first-run homes cap drafts at six and offer Show all through the existing repository-scoped resume palette. Drafts in the card remain cross-repository.
 - All, Needs you and Chats filters use blocked-run and full saved-chat counts. The focused card owns bounded selection, Up/Down, Enter, Delete and digits 1 through 9, skipping date headers and leaving composer input alone.
-- Each saved-chat discard hides its row immediately and owns a five-second Undo window. Pending and deleting sessions stay excluded during refresh; expired Undo cannot cancel deletion.
+- NewTaskSavedChats shares the saved list and pending discards across window drafts. Each discard hides its row immediately and owns a five-second Undo window; refresh excludes pending and deleting sessions, and expired Undo cannot cancel deletion. reusable
 - InboxSection retains one shared ticker to refresh both short times and date groups. The work-summary link and keyboard hints sit below the card. An idle step line has no caption node; typed-request captions remain.
 - Limits: filter selection does not persist, open-chat discard has no Undo, and window close does not flush pending discard timers. Cancelling a timer before deletion preserves the draft. No persistence or shared contract changes.
+- Verification limits: native macOS and Windows targets remain unverified; QA covered an earlier tree than the final source.
+Feature size: MEDIUM
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
 
