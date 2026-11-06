@@ -3,7 +3,6 @@ package skillbill.infrastructure.workflow.validation
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
-import skillbill.infrastructure.host.jvm.AgentGradleMemoryLimits
 import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
@@ -40,7 +39,6 @@ class FileSystemValidationGateRunner(
     val baselineEnvironment = LinkedHashMap(JdkHostPlatformPort.resolveEnvironment())
     return scratchSpace.withScratch { directory ->
       baselineEnvironment.putAll(scratchSpace.environment(directory, baselineEnvironment))
-      baselineEnvironment.putAll(AgentGradleMemoryLimits.environment(baselineEnvironment))
       run(request, baselineEnvironment, gateJvmResolver.resolve(baselineEnvironment))
     }
   }
