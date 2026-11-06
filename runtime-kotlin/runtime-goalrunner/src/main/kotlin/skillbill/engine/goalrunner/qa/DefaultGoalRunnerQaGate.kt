@@ -7,7 +7,6 @@ import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.containableFailure
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -886,14 +885,15 @@ public class DefaultGoalRunnerQaGate(
     return PhaseRunRequest(
       definitionId = definition.id,
       repoRoot = Path.of(inputs.repoRoot),
-      invokedAgentId = inputs.effectiveAgentId,
+      invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+      acceptedGoalQualityAgentId = qualityExecution?.governingInputs?.effectiveAgentId,
       intake = inputs.issueKey,
       timeout = inputs.timeoutMillis?.milliseconds,
       agentAddonSelection =
         HydratedAgentAddonSelection(
           inputs.addons.map { HydratedAgentAddonSelectionEntry(it.persisted, it.description, it.content) },
         ),
-      modelAssignment = FeatureTaskRuntimeModelAssignment(inputs.modelDirectives, inputs.modelMatrix),
+      modelAssignment = resumeModelAssignment(inputs, request),
       qaSelection = inputs.qaSelection,
       acceptanceCriteria = inputs.acceptanceCriteria,
       eventSink = FeatureTaskRuntimeRunEventSink { event -> record(state, request, event) },
