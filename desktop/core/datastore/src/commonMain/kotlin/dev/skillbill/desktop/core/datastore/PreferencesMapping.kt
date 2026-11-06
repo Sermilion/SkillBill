@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.datastore
 import androidx.datastore.preferences.core.Preferences
 import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.TrayTab
 import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
@@ -35,6 +36,9 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
     trayLastTab = decode(AppPreferenceKeys.TRAY_LAST_TAB, TrayTab.DEFAULT) { raw -> TrayTab.entries.firstOrNull { it.wireValue == raw } },
     favoriteWork = favoriteWork,
     favoriteSpecs = favoriteSpecs,
+    newTaskChatLayout = decode(AppPreferenceKeys.NEW_TASK_CHAT_LAYOUT, NewTaskChatLayout.DEFAULT) { raw ->
+      NewTaskChatLayout.entries.firstOrNull { it.wireValue == raw }
+    },
   )
 }
 

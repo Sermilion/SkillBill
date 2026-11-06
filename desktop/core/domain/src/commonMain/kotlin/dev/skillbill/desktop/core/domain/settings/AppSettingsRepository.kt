@@ -33,6 +33,8 @@ interface AppSettingsRepository {
 
   suspend fun setTrayLastTab(tab: TrayTab): Outcome<Unit, SettingsRejection>
 
+  suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout): Outcome<Unit, SettingsRejection>
+
   suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
 
   suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean): Outcome<Unit, SettingsRejection>

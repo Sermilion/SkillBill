@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.settings
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 
@@ -37,6 +38,7 @@ sealed interface SettingsAction {
   data object SavePath : SettingsAction
   data class ClaudeDirectoryChosen(val directory: String) : SettingsAction
   data class RetentionChosen(val window: HistoryWindow) : SettingsAction
+  data class NewTaskChatLayoutChosen(val layout: NewTaskChatLayout) : SettingsAction
   data class NotificationToggled(val kind: NotificationKind, val enabled: Boolean) : SettingsAction
   data class StartAtLoginChanged(val enabled: Boolean) : SettingsAction
 }

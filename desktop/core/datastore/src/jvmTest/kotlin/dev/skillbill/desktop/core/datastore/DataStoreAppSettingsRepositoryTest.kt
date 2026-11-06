@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.CriterionMark
 import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
@@ -111,5 +112,16 @@ class DataStoreAppSettingsRepositoryTest {
     assertEquals(mapOf(key to CriterionMark.SpecQuestion), (repository.criterionMarks.first() as Outcome.Success).value)
     assertEquals(Outcome.Success(Unit), repository.setCriterionMark(key, null))
     assertEquals(emptyMap(), (repository.criterionMarks.first() as Outcome.Success).value)
+  }
+
+  @Test
+  fun `an unknown chat layout reads as Tabs and a written layout reads back`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "chat-layout.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    store.edit { it[AppPreferenceKeys.NEW_TASK_CHAT_LAYOUT] = "grid" }
+
+    assertEquals(NewTaskChatLayout.Tabs, repository.settings.first().newTaskChatLayout)
+    assertEquals(Outcome.Success(Unit), repository.setNewTaskChatLayout(NewTaskChatLayout.SideList))
+    assertEquals(NewTaskChatLayout.SideList, repository.settings.first().newTaskChatLayout)
   }
 }
