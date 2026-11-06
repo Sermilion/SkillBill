@@ -3562,3 +3562,26 @@ The decomposition lock stays under `<state>/locks`. Run temp roots differ, but t
 ## [2026-11-06] validation_check resolves its run from the server environment
 
 The `validation_check` MCP tool reads its run identity from `SKILL_BILL_VALIDATION_INVOCATION_ID` in the server process environment and never from tool arguments. An agent therefore cannot address another run's row, and a user-global server without the variable neither lists the tool nor records anything; a call returns `no_run_identity`. The recorder writes `current_activity` and inserts `validation_check_events` rows through narrow writes that leave `status_revision`, `updated_at` and the lease columns unchanged. `StandalonePhaseStatusEventSink` compare-and-sets on the revision it holds in memory, so a bumped revision would make its next persist stale.
+
+## [2026-11-07] Bound desktop QA cleanup to verified checkout outputs
+
+SKILL-514 originally rejected every fixture destination beneath the operator's `.skill-bill`.
+Runtime-owned goal checkouts and agent scratch directories live beneath that directory, so the
+fixture task could not run in its own goal checkout. The operator accepted a scoped change to
+AC-003 and AC-004 for execution `wftr-20261106-195351-1g7i`.
+
+The fixture writer permits one descendant location, the exact verified-checkout
+`runtime-kotlin/runtime-core/build/desktop-fixture/home`. It checks the entire deleted home,
+verifies Git worktree registration and module layout, rejects redirected or linked paths, and fails when
+operator-home identity or filesystem resolution is unavailable. Safe temporary homes outside
+operator state remain supported when they are outside the verified checkout and cannot contain it.
+Only the fixed fixture home is permitted within the checkout. Desktop staging and seeding check their fixed checkout-owned
+output paths and reject linked inputs before deletion or copying. An approved output slot still
+refuses cleanup when it contains current operator state.
+
+This changes the product safety contract. It adds no architecture baseline, suppression or
+mechanical guard exemption. A1 and A2 keep fixture policy in test fixtures and desktop build logic;
+A7 preserves loud refusal; A8 keeps the fixture environment explicit. G3 retains destructive-path
+rejection evidence, and G7 and P7 require this recorded contract correction. The checks assume
+exclusive use of the QA output directories during a task; they do not claim to defeat concurrent
+malicious replacement of ancestor directories.

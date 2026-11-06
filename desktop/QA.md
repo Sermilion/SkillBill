@@ -10,6 +10,15 @@ cd desktop && ./gradlew :app:runFromSource
 
 The first launch is slow because it builds `runtime-kotlin`.
 
+## Seeded data
+
+Every `runFromSource` launch regenerates the fixture through the runtime's own migrations with
+`:runtime-core:writeDesktopFixtureDb`, then copies it into the scratch home. It contains goals,
+task-runtime workflows with phases, verify runs, standalone phases and spec bundles using `QAFIX`
+issue keys. The generated database stays under `build/` and is never committed. Active standalone
+rows and live goal leases belong to the generator process, so they can appear stale, interrupted or
+paused after that process exits. Running and pause-requested goal bundles then read as paused.
+
 ## Scratch layout
 
 All state lives under `desktop/app/build/source-run/`:
@@ -38,7 +47,11 @@ And these environment variables, which replace any value exported in your shell:
 - `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `CURSOR_CONFIG_DIR` point at `home/.claude`, `home/.codex` and `home/.cursor`.
 - `TERM=dumb`, set only when `TERM` is unset or blank, so the app does not import your login shell's environment over the `SKILL_BILL_*` values
 
-Do not point the app at `~/.skill-bill`.
+Do not point the app at the operator's state database. Goal checkouts may live beneath
+`~/.skill-bill`; QA writes only the verified checkout's fixed fixture and source-run build outputs.
+The tasks refuse redirected paths or linked entries before deleting or copying data. Keep these
+QA output directories exclusive to the task while it runs. A missing fixture preserves the previous
+scratch home and stops the launch.
 
 ## Agents
 

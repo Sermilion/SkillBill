@@ -24,11 +24,11 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 internal const val FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION: String = "0.1"
-internal const val FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION: String = "0.3"
+internal const val FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION: String = "0.4"
 internal const val MINIMUM_OWNER_TOKEN_LENGTH: Int = 16
 
 private val terminalWorkflowStatusSqlValues: String =
-  WorkflowStatus.terminalStatuses
+  (WorkflowStatus.terminalStatuses + WorkflowStatus.TIMED_OUT)
     .joinToString(", ") { status -> "'${status.wireValue}'" }
 private const val SQLITE_TIMESTAMP_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 private val sqliteInsertionTimestampFormatter: DateTimeFormatter =
@@ -292,7 +292,7 @@ private fun PreparedStatement.bindWorkflowRow(
   parameters.text(insertionTimestamp)
   parameters.text(insertionTimestamp)
   parameters.text(insertionTimestamp)
-  parameters.boolean(WorkflowStatus.fromWire(row.workflowStatus)?.isTerminal == true)
+  parameters.boolean(isPersistedTerminalWorkflowStatus(row.workflowStatus))
   parameters.text(row.finishedAt)
   parameters.bind()
 }
@@ -322,7 +322,7 @@ private fun PreparedStatement.bindFeatureTaskWorkflowRow(
   parameters.text(insertionTimestamp)
   parameters.text(insertionTimestamp)
   parameters.text(insertionTimestamp)
-  parameters.boolean(WorkflowStatus.fromWire(row.workflowStatus)?.isTerminal == true)
+  parameters.boolean(isPersistedTerminalWorkflowStatus(row.workflowStatus))
   parameters.text(row.finishedAt)
   parameters.text(request.mode.wireValue)
   parameters.text(request.implementationSkill)
@@ -336,6 +336,9 @@ private fun persistableWorkflowStateContractVersion(stored: String): String =
   } else {
     stored
   }
+
+private fun isPersistedTerminalWorkflowStatus(status: String): Boolean =
+  WorkflowStatus.fromWire(status)?.let { it.isTerminal || it == WorkflowStatus.TIMED_OUT } == true
 
 private fun nextStateEnteredAtSql(tableName: String): String =
   """

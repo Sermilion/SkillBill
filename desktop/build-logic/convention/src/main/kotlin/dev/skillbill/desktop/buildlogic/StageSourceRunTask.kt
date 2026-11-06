@@ -24,6 +24,9 @@ abstract class StageSourceRunTask : DefaultTask() {
   abstract val appResources: DirectoryProperty
 
   @get:Internal
+  abstract val checkoutRoot: DirectoryProperty
+
+  @get:Internal
   abstract val outputRoot: DirectoryProperty
 
   init {
@@ -33,6 +36,7 @@ abstract class StageSourceRunTask : DefaultTask() {
   @TaskAction
   fun stage() {
     SourceRunStaging.stage(
+      checkoutRoot.get().asFile,
       runtimeInstall.get().asFile,
       appResources.get().asFile,
       outputRoot.get().asFile,
@@ -45,11 +49,12 @@ internal object SourceRunStaging {
   private const val RECORD = "build-identity.properties"
   private const val RUN_ID_KEY = "install_run_id="
 
-  fun stage(runtimeInstall: File, appResources: File, outputRoot: File, runId: String) {
+  fun stage(checkoutRoot: File, runtimeInstall: File, appResources: File, outputRoot: File, runId: String) {
+    SourceRunPreparation.validateStaging(checkoutRoot, outputRoot, runtimeInstall, appResources)
     requireFile(runtimeInstall.resolve(RECORD))
     requireFile(appResources.resolve(RECORD))
-    val runtimeTarget = outputRoot.resolve("runtime").also(::recreate).resolve("runtime-cli")
-    val resourcesTarget = outputRoot.resolve("app-resources").also(::recreate)
+    val runtimeTarget = outputRoot.resolve("runtime").also(SourceRunPreparation::recreate).resolve("runtime-cli")
+    val resourcesTarget = outputRoot.resolve("app-resources").also(SourceRunPreparation::recreate)
     runtimeInstall.copyRecursively(runtimeTarget)
     appResources.copyRecursively(resourcesTarget)
     val lib = runtimeTarget.resolve("lib")
@@ -62,13 +67,6 @@ internal object SourceRunStaging {
 
   private fun requireFile(file: File) {
     if (!file.isFile) throw GradleException("Missing build identity record: ${file.absolutePath}")
-  }
-
-  private fun recreate(directory: File) {
-    if (!directory.deleteRecursively()) throw GradleException("Could not delete staging directory: ${directory.absolutePath}")
-    if (!directory.mkdirs() && !directory.isDirectory) {
-      throw GradleException("Could not create staging directory: ${directory.absolutePath}")
-    }
   }
 
   // Splitting on "\n" keeps every other line, including any "\r", byte-identical.

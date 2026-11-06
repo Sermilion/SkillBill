@@ -34,6 +34,9 @@ tasks.named<ProcessResources>("processResources") {
 }
 
 dependencies {
+  testFixturesImplementation(testFixtures(project(":runtime-application")))
+  testFixturesImplementation(project(":runtime-infra:host"))
+  testFixturesImplementation(project(":runtime-infra:workflow"))
   testImplementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:${libs.versions.kotlin.get()}")
   api(project(":runtime-application"))
   api(project(":runtime-ports"))
@@ -61,4 +64,20 @@ dependencies {
   testImplementation(libs.junit.jupiter)
   testImplementation(libs.kotlin.test)
   testImplementation(libs.jackson.dataformat.yaml)
+}
+
+tasks.register<JavaExec>("writeDesktopFixtureDb") {
+  group = "application"
+  description = "Writes a fresh desktop QA fixture database and spec bundle tree under build/."
+  val fixtureHome = layout.buildDirectory.dir("desktop-fixture/home")
+  val checkoutPath = rootDir.parentFile.absolutePath
+  classpath = sourceSets.named("testFixtures").get().runtimeClasspath
+  mainClass.set("skillbill.di.core.DesktopFixtureDbMainKt")
+  outputs.dir(fixtureHome)
+  outputs.upToDateWhen { false }
+  doFirst {
+    val homePath = fixtureHome.get().asFile.absolutePath
+    setArgs(listOf(homePath, checkoutPath))
+    setJvmArgs(listOf("-Duser.home=$homePath"))
+  }
 }

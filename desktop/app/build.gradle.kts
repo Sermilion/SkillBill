@@ -164,6 +164,7 @@ afterEvaluate {
 
   val stageSourceRun = tasks.register<dev.skillbill.desktop.buildlogic.StageSourceRunTask>("stageSourceRun") {
     dependsOn(gradle.includedBuild("runtime-kotlin").task(":runtime-cli:installDist"), prepareAppResources)
+    checkoutRoot.set(rootDir.parentFile)
     runtimeInstall.set(rootDir.parentFile.resolve("runtime-kotlin/runtime-cli/build/install/runtime-cli"))
     appResources.fileProvider(prepareAppResources.map { it.outputs.files.singleFile })
     outputRoot.set(sourceRunRoot)
@@ -173,7 +174,7 @@ afterEvaluate {
     // Opt-in QA launch: not wired into check, build or assemble.
     group = "application"
     description = "Runs the desktop app against a runtime built from this checkout, with all state under build/source-run."
-    dependsOn(stageSourceRun)
+    dependsOn(stageSourceRun, gradle.includedBuild("runtime-kotlin").task(":runtime-core:writeDesktopFixtureDb"))
     val run = composeRun.get()
     mainClass.set(run.mainClass)
     classpath = run.classpath
@@ -198,7 +199,9 @@ afterEvaluate {
       "CURSOR_CONFIG_DIR" to home.resolve(".cursor"),
     ).forEach { (name, directory) -> environment(name, directory.absolutePath) }
     doFirst {
-      if (!home.deleteRecursively()) throw GradleException("Could not delete scratch home: ${home.absolutePath}")
+      val fixtureState =
+        rootDir.parentFile.resolve("runtime-kotlin/runtime-core/build/desktop-fixture/home/.skill-bill")
+      dev.skillbill.desktop.buildlogic.SourceRunPreparation.seed(rootDir.parentFile, root, fixtureState)
       listOf(home, state, home.resolve("preferences"), home.resolve("tmp")).forEach { directory ->
         if (!directory.mkdirs() && !directory.isDirectory) {
           throw GradleException("Could not create scratch directory: ${directory.absolutePath}")
