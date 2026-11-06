@@ -13,6 +13,16 @@ Context: Resumed validation runs can retain earlier execution records, and some 
 Decision: Project checks for the current standalone validation invocation and show them only when its availability flag is set.
 Reason: Earlier events would misrepresent the current run. The flag records availability without tying the UI to an agent name.
 
+## [2026-11-06] Combine plan progress with live tool activity
+Context: The plan-run design explains progress and saved specs; plan-activity exposes what the agent is doing within those stages.
+Decision: Keep the stage strip, subtasks, bundle and Implement gate together. Put a Now card and an expanded, internally scrolling activity feed above the subtasks. Filters and phase folds belong to each run; scrolling away from the latest row pauses Follow. Transcript opens the captured provider lines. Notes and consecutive completed reads expand in place.
+Reason: Operators can inspect current work without losing the plan outcome. Only provider events become tool rows; non-streaming runs retain recorded phases and saved-file evidence. Existing runs cannot gain historical tool events retroactively.
+
+## [2026-11-06] Show quiet plan writers independently of run liveness
+Context: The plan-run design highlights a writer after several minutes without output, even when another writer still refreshes the run heartbeat.
+Decision: The standalone plan document highlights five minutes of observed output silence per writer and at the current stage. A restarted writer ignores output older than its start. Stopped runs show frozen durations and no live heartbeat. Existing incident controls own recovery.
+Reason: Output silence is useful operator feedback without changing the runtime's execution ownership or its twenty-minute stalled classification.
+
 ## [2026-11-06] Show Verify QA evidence as names only
 Context: Verify QA results reuse the desktop QA results view, but Verify has no invocation directory for resolving evidence files.
 Decision: Render evidence names without file-opening actions for Verify QA.

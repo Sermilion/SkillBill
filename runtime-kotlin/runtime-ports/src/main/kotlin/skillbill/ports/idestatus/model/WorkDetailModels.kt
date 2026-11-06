@@ -20,7 +20,7 @@ enum class WorkDetailProblemCode(val wireValue: String) {
   INVALID_REPOSITORY_IDENTITY("invalid_repository_identity"),
 }
 
-enum class WorkDetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES }
+enum class WorkDetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES, PLAN_OUTPUT }
 
 data class WorkDetailRequest(
   val id: String,
@@ -90,6 +90,8 @@ data class WorkDetailItem(
   val goalWorktree: GoalWorktreeView? = null,
   val validationBranchRuns: List<WorkValidationBranchRun> = emptyList(),
   val selectedValidationResult: String? = null,
+  val planActivity: List<StandalonePlanActivity> = emptyList(),
+  val planOutputLines: List<StandalonePhaseOutputLine> = emptyList(),
   val planOutputTail: List<String> = emptyList(),
   val planOutputUpdatedAt: Instant? = null,
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),

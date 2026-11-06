@@ -17,6 +17,7 @@ data class StandalonePlanProgress(
   val planningWaveCapacity: Int? = null,
   val planningWaveHistoryComplete: Boolean = false,
   val blockedSubtaskIds: List<Int> = emptyList(),
+  val waves: List<StandalonePlanWave> = emptyList(),
 )
 
 data class StandalonePlanStage(
@@ -46,3 +47,5 @@ data class StandalonePlanUnit(
   val latestOutput: String?,
   val latestOutputAt: Instant? = null,
 )
+
+data class StandalonePlanWave(val number: Int?, val subtaskIds: List<Int>, val startedAt: Instant?)

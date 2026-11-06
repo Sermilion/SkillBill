@@ -3,7 +3,7 @@ package dev.skillbill.desktop.core.domain.model
 import kotlin.time.Instant
 
 /** The detail lists that page on their own, one to one with the runtime's lists. */
-enum class DetailList { Subtasks, Phases, Validation, Executions, Dependencies }
+enum class DetailList { Subtasks, Phases, Validation, Executions, Dependencies, PlanOutput }
 
 /** What the runtime allows for running one item again; the app renders it and decides nothing. */
 data class RunOptions(
@@ -102,6 +102,8 @@ data class Detail(
   val validationBranchRuns: List<ValidationBranchRun> = emptyList(),
   val selectedValidationResult: String? = null,
   val selectedExecution: ExecutionInstance? = null,
+  val planActivity: List<PlanAgentActivity> = emptyList(),
+  val planOutputLines: List<PlanOutputLine> = emptyList(),
   val planOutputTail: List<String> = emptyList(),
   val planOutputUpdatedAt: Instant? = null,
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
@@ -365,6 +367,7 @@ data class StandalonePlanProgress(
   val planningWaveNumber: Int? = null,
   val planningWaveHistoryComplete: Boolean = false,
   val blockedSubtaskIds: List<Int> = emptyList(),
+  val waves: List<PlanWave> = emptyList(),
 )
 
 data class StandalonePlanStage(
@@ -454,3 +457,10 @@ data class Incident(
   val observedAt: Instant,
   val settledAt: Instant?,
 )
+
+data class PlanOutputLine(val id: String, val text: String, val at: Instant, val subtaskId: Int?, val sequence: Long, val isRaw: Boolean = false)
+data class PlanWave(val number: Int?, val subtaskIds: List<Int>, val startedAt: Instant?)
+
+data class PlanAgentActivity(val id: String, val phaseId: String, val kind: String, val text: String,
+  val at: Instant, val updatedAt: Instant, val agentId: String, val path: String?, val state: String,
+  val durationMs: Long?, val exitCode: Int?, val subtaskId: Int?)

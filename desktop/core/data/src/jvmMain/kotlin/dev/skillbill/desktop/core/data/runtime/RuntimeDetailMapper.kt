@@ -10,6 +10,9 @@ import dev.skillbill.desktop.core.domain.model.ValidationCheck
 import dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt
 import dev.skillbill.desktop.core.domain.model.ValidationCheckResult
 import dev.skillbill.desktop.core.domain.model.ValidationOutcome
+import dev.skillbill.desktop.core.domain.model.PlanAgentActivity
+import dev.skillbill.desktop.core.domain.model.PlanOutputLine
+import dev.skillbill.desktop.core.domain.model.PlanWave
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -151,6 +154,7 @@ internal fun WorkDetailList.toDomain(): DetailList = when (this) {
   WorkDetailList.PHASES -> DetailList.Phases
   WorkDetailList.VALIDATION -> DetailList.Validation
   WorkDetailList.EXECUTIONS -> DetailList.Executions
+  WorkDetailList.PLAN_OUTPUT -> DetailList.PlanOutput
   WorkDetailList.DEPENDENCIES -> DetailList.Dependencies
 }
 
@@ -159,6 +163,7 @@ internal fun DetailList.toRuntime(): WorkDetailList = when (this) {
   DetailList.Phases -> WorkDetailList.PHASES
   DetailList.Validation -> WorkDetailList.VALIDATION
   DetailList.Executions -> WorkDetailList.EXECUTIONS
+  DetailList.PlanOutput -> WorkDetailList.PLAN_OUTPUT
   DetailList.Dependencies -> WorkDetailList.DEPENDENCIES
 }
 
@@ -263,6 +268,11 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     currentSubtaskId = goal?.currentSubtaskId,
     goalWorktree = goalWorktree?.toDomainWorktree(),
     launchWarning = goal?.launchWarning,
+    planActivity = planActivity.map { record ->
+      val event = record.event
+      PlanAgentActivity(event.id, record.phaseId, event.kind.wireValue, event.text, record.at.toKotlinInstant(), record.updatedAt.toKotlinInstant(), event.agentId, event.path, event.state.wireValue, event.durationMs, event.exitCode, event.subtaskId)
+    },
+    planOutputLines = planOutputLines.map { PlanOutputLine(it.id, it.text, it.at.toKotlinInstant(), it.subtaskId, it.sequence, it.isRaw) },
     planOutputTail = planOutputTail,
     planOutputUpdatedAt = planOutputUpdatedAt?.toKotlinInstant(),
     planSubtaskLatestLines = planSubtaskLatestLines,
@@ -431,6 +441,7 @@ private fun RuntimeStandalonePlanProgress.toDomain(): DesktopStandalonePlanProgr
   planningWaveNumber,
   planningWaveHistoryComplete,
   blockedSubtaskIds,
+  waves.map { PlanWave(it.number, it.subtaskIds, it.startedAt?.toKotlinInstant()) },
 )
 
 private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {

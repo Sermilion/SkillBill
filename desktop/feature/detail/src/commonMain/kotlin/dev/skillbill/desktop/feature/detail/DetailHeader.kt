@@ -41,6 +41,7 @@ internal fun DetailHeader(
   onOpenBranch: () -> Unit,
   qa: QaHeaderFacts? = null,
   validation: Boolean = false,
+  planReady: Boolean = false,
   actions: (@Composable () -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
@@ -51,11 +52,15 @@ internal fun DetailHeader(
       else -> item.title
     },
     eyebrow = {
-      SbLabel(lifecycleLabel(item.lifecycle), SbLabelStyle.Tint(lifecycleColor(item.lifecycle)))
+      SbLabel(if (planReady) "Plan ready" else if (item.isStandalonePlan() && item.running) "Planning" else lifecycleLabel(item.lifecycle), SbLabelStyle.Tint(lifecycleColor(item.lifecycle)))
       if (item.stalledSince != null) SbLabel("Stalled", SbLabelStyle.Tint(colors.stBlocked))
       IdTag(rowKey(item))
       if (item.kind != WorkKind.Goal && qa == null) item.issueKey?.let { IdTag(it) }
       SbLabel(kindWord(item.kind), SbLabelStyle.Plain)
+      if (item.isStandalonePlan()) {
+        val execution = listOfNotNull(item.model ?: item.agentId, item.effort?.let { "$it effort" }).joinToString(" · ")
+        if (execution.isNotBlank()) BasicText(execution, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
+      }
       // Freshness only means something while the run can still change; a completed item drops the pill.
       if (item.lifecycle != Lifecycle.Terminal) {
         val fresh = item.fresh && !sectionsStale

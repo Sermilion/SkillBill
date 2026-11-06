@@ -32,6 +32,7 @@ import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneNarrowWriteResult
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
+import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -136,6 +137,12 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
       ) {
         error("Standalone phase status repository is unavailable in this fixture.")
       }
+
+      override fun readOutputLines(
+        executionId: String,
+        beforeSequence: Long?,
+        limit: Int,
+      ): List<StandalonePhaseOutputLine> = emptyList()
 
       override fun readOutput(executionId: String): StandalonePhaseOutputSnapshot? = null
     }

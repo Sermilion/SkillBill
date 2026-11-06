@@ -33,6 +33,16 @@ Context: Standalone validation detail needs peer runs without mixing repositorie
 Decision: Read at most 50 validation runs with the same repository identity and non-null branch correlation. Return no peers for HEAD or missing correlation.
 Reason: A detached or unknown branch cannot identify a stable set of peer runs. The bound limits the detail read.
 
+## [2026-11-06] Capture structured planning activity beside the transcript
+Context: Readable output discards provider tool identities, completions and file metadata needed by the plan-activity design.
+Decision: Planning output sinks accept typed provider activity and raw lines. Claude, Codex and Cursor decoders correlate start and completion within each launch; unit sinks carry subtask identity. Migration 107 stores updatable events and distinguishes raw transcript lines. Keep the latest 128 events and one stream-provenance marker per phase. Work-detail 1.9 exposes these records. Plain text remains transcript content, without inferred tool actions.
+Reason: Stable identities let completions update their original rows, while per-launch identities avoid collisions between parallel writers. Model-only activity types remain independent of agent-run lifecycle ports to preserve package direction. Raw history and activity share execution ownership and snapshot transactions.
+
+## [2026-11-06] Page standalone planning output separately from its live tail
+Context: The plan detail's folded output needs earlier attributed lines; the four-line snapshot cannot supply them.
+Decision: Migration 106 adds execution-owned output history. Snapshot writes append stable entry identities in the same transaction, and work-detail 1.8 pages history by sequence. Deleting the owning execution removes its history. The desktop loads more only inside the expanded output view. Captured lines retain up to 8192 characters; at most 1000 unpersisted lines wait in memory, with a diagnostic if persistence failures exhaust that buffer. Existing runs retain their snapshots without fabricated history.
+Reason: Paging preserves the full recorded sequence without rewriting or loading an entire log on each heartbeat. Stable entry identities prevent duplicate rows when a write is retried.
+
 ## [2026-11-06] Key standalone plan output by execution
 Context: A detached standalone plan and a separate detail reader need the same output after process exit. An issue key can identify multiple executions.
 Decision: Store bounded output snapshots under the standalone execution ID in SQLite. The status publisher owns capture and flushes pending output at settlement and close; the status row owns output cleanup.

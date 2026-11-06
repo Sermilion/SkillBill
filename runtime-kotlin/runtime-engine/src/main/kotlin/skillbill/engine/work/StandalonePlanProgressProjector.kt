@@ -19,6 +19,7 @@ import skillbill.ports.idestatus.model.StandalonePlanStage
 import skillbill.ports.idestatus.model.StandalonePlanSubtask
 import skillbill.ports.idestatus.model.StandalonePlanUnit
 import skillbill.ports.idestatus.model.StandalonePlanUnitState
+import skillbill.ports.idestatus.model.StandalonePlanWave
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -101,8 +102,24 @@ public class StandalonePlanProgressProjector(
       wave?.capacity,
       waveHistory?.complete == true,
       blockedIds,
+      waves(waveHistory, units),
     )
   }
+
+  private fun waves(
+    waveHistory: FeatureTaskRuntimePlanFanOutHistory?,
+    units: List<StandalonePlanUnit>,
+  ): List<StandalonePlanWave> =
+    waveHistory?.waves.orEmpty().mapIndexed { index, recorded ->
+      val overwritten = waveHistory?.waves.orEmpty().drop(index + 1).flatMap { it.unitIds }.toSet()
+      val startedAt =
+        if (recorded.unitIds.any { it in overwritten }) {
+          null
+        } else {
+          units.filter { it.subtaskId in recorded.unitIds }.mapNotNull { it.startedAt }.minOrNull()
+        }
+      StandalonePlanWave(recorded.ordinal, recorded.unitIds, startedAt)
+    }
 
   private fun waveHistory(artifacts: Map<String, Any?>?): FeatureTaskRuntimePlanFanOutHistory? =
     artifacts

@@ -994,4 +994,14 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 105,
       name = "record-validation-check-events",
       operation = ::recordValidationCheckEvents,
+    ) +
+    DatabaseMigration(
+      version = 106,
+      name = "record-standalone-plan-output-history",
+      operation = { connection -> StandalonePhaseStatusMigration.createOutputHistory(connection) },
+    ) +
+    DatabaseMigration(
+      version = 107,
+      name = "record-structured-plan-activity",
+      operation = { connection -> StandalonePhaseStatusMigration.createStructuredActivity(connection) },
     )

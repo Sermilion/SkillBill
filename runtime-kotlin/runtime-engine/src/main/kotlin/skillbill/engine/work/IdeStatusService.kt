@@ -48,13 +48,13 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
-import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePlanProgress
@@ -408,13 +408,6 @@ public class IdeStatusService(
         dependencies = dependencies?.entries.orEmpty(),
         freshnessDeadline = snapshot.updatedAt.plus(IdeStatusFreshnessClassifier.FRESH_WINDOW).plusNanos(1),
         observation = context.unitOfWork.workList.observation(),
-        liveSection = workLiveSection(snapshot, completion.first),
-        controlEligible = workControlEligible(snapshot),
-        pauseEligible = workPauseEligible(snapshot),
-        running = workRunning(snapshot, completion.first),
-        requiresAttention = workRequiresAttention(snapshot),
-        displayGroup = workDisplayGroup(snapshot, completion.first),
-        displayPriority = workDisplayPriority(snapshot, completion.first),
         exactPauseReason = projection.exactPauseReason,
         databaseFileObservation = context.unitOfWork.databaseFileObservation,
         controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
@@ -422,15 +415,82 @@ public class IdeStatusService(
         incidentHistory = incidentSet.incidentHistory,
         changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, goalWorktree, context),
         goalWorktree = goalWorktree,
-        planOutputTail = planOutput.tail,
-        planOutputUpdatedAt = planOutput.latestLineAt,
-        planSubtaskLatestLines = planOutput.latestAttributedLines,
         standalonePlanProgress = detailPlanProgress(standalone, context, position, planOutput),
         verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
-      ).withValidationBranchRuns(standalone, context.unitOfWork)
+      ).withDerivedStatus().withPlanOutput(planOutput).withValidationBranchRuns(standalone, context.unitOfWork)
     val nextAnchors =
-      detailNextAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
-    return ProjectedDetailItem(detailItem, nextAnchors)
+      detailNextAnchors(
+        history.take(request.pageSize),
+        goalRead,
+        validationRead,
+        dependencies,
+        runtimeRead,
+      )
+    return withPlanOutputPage(
+      ProjectedDetailItem(detailItem, nextAnchors),
+      standalone,
+      context.unitOfWork,
+      request,
+      position,
+    )
+  }
+
+  private fun withPlanOutputPage(
+    projection: ProjectedDetailItem,
+    standalone: StandalonePhaseStatusRecord?,
+    unitOfWork: UnitOfWork,
+    request: WorkDetailRequest,
+    position: WorkDetailPagePosition,
+  ): ProjectedDetailItem {
+    val item = projection.item
+    val lines = detailOutputLines(standalone, unitOfWork, request, position)
+    val more = if (lines.size > request.pageSize) setOf(WorkDetailList.PLAN_OUTPUT) else emptySet()
+    val page = lines.take(request.pageSize)
+    val anchor =
+      page.lastOrNull()?.let {
+        mapOf(WorkDetailList.PLAN_OUTPUT to WorkDetailAnchor.Output(it.sequence))
+      }.orEmpty()
+    return ProjectedDetailItem(
+      item.copy(planOutputLines = page, moreLists = item.moreLists + more, hasMore = item.hasMore || more.isNotEmpty()),
+      projection.nextAnchors + anchor,
+    )
+  }
+
+  private fun WorkDetailItem.withPlanOutput(output: StandalonePhaseOutputSnapshot): WorkDetailItem =
+    copy(
+      planActivity = output.activities,
+      planOutputTail = output.tail,
+      planOutputUpdatedAt = output.latestLineAt,
+      planSubtaskLatestLines = output.latestAttributedLines,
+    )
+
+  private fun WorkDetailItem.withDerivedStatus(): WorkDetailItem =
+    copy(
+      liveSection = workLiveSection(snapshot, finishedAt),
+      controlEligible = workControlEligible(snapshot),
+      pauseEligible = workPauseEligible(snapshot),
+      running = workRunning(snapshot, finishedAt),
+      requiresAttention = workRequiresAttention(snapshot),
+      displayGroup = workDisplayGroup(snapshot, finishedAt),
+      displayPriority = workDisplayPriority(snapshot, finishedAt),
+    )
+
+  private fun detailOutputLines(
+    standalone: StandalonePhaseStatusRecord?,
+    unitOfWork: UnitOfWork,
+    request: WorkDetailRequest,
+    position: WorkDetailPagePosition,
+  ): List<StandalonePhaseOutputLine> {
+    if (standalone?.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN ||
+      !request.includesDetailList(WorkDetailList.PLAN_OUTPUT)
+    ) {
+      return emptyList()
+    }
+    return unitOfWork.standalonePhaseStatuses.readOutputLines(
+      standalone.executionId,
+      (position.anchor as? WorkDetailAnchor.Output)?.beforeSequence,
+      request.pageSize + 1,
+    )
   }
 
   private fun detailPlanProgress(
@@ -440,10 +500,7 @@ public class IdeStatusService(
     planOutput: StandalonePhaseOutputSnapshot,
   ): StandalonePlanProgress? {
     return standalone
-      ?.takeIf {
-        it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN &&
-          it.launchScope == IdeStatusLaunchScope.STANDALONE
-      }
+      ?.takeIf { it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN }
       ?.let {
         projector.standalonePlanProgressProjector.project(
           it,

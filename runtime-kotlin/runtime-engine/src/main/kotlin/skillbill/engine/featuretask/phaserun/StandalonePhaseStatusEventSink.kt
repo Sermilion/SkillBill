@@ -8,6 +8,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.validation.check.readValidationOutcome
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.boundedIdeStatusActivity
+import skillbill.ports.agentrun.activity.model.AgentRunActivity
+import skillbill.ports.agentrun.activity.model.AgentRunActivityKind
+import skillbill.ports.agentrun.activity.model.AgentRunActivityState
+import skillbill.ports.agentrun.model.AgentRunActivityOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.db.DatabaseSessionFactory
@@ -15,11 +19,13 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.idestatus.StandaloneOutputCaptureScheduler
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
+import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandalonePlanActivity
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneValidationOutcome
@@ -38,6 +44,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.LinkedHashMap
+import java.util.UUID
 
 public class StandalonePhaseStatusEventSink(
   private val database: DatabaseSessionFactory,
@@ -64,6 +71,7 @@ public class StandalonePhaseStatusEventSink(
   private var reviewRunId: String? = null
   private var validationOutcome: StandaloneValidationOutcome? = null
   private val outputLock = Any()
+  private val truncatedOutputStreams = mutableSetOf<AgentRunOutputStream>()
   private val outputBuffers = mutableMapOf<AgentRunOutputStream, StringBuilder>()
   private var outputSnapshot = StandalonePhaseOutputSnapshot()
   private var snapshotLoaded = false
@@ -71,19 +79,106 @@ public class StandalonePhaseStatusEventSink(
   private var outputClosed = false
   private var scheduledOutputWrite: AutoCloseable? = null
   private var outputScheduleGeneration = 0L
+  private val activityStarts = linkedMapOf<String, Instant>()
 
   public val outputSink: AgentRunOutputSink =
-    AgentRunOutputSink { stream, text ->
-      synchronized(outputLock) {
-        if (outputClosed) return@synchronized
-        val buffer = outputBuffers.getOrPut(stream) { StringBuilder() }
-        text.forEach { character ->
-          if (character == '\n') {
-            appendOutputLine(buffer.toString().trimEnd('\r'), clock.instant())
-            buffer.setLength(0)
-          } else if (buffer.length < MAX_OUTPUT_LINE_CHARS) {
-            buffer.append(character)
+    object : AgentRunActivityOutputSink {
+      override val capturesActivity: Boolean = capturePlanOutput
+
+      override fun write(
+        stream: AgentRunOutputStream,
+        text: String,
+      ) {
+        synchronized(outputLock) {
+          if (outputClosed) return@synchronized
+          val buffer = outputBuffers.getOrPut(stream) { StringBuilder() }
+          text.forEach { character ->
+            if (character == '\n') {
+              appendOutputLine(buffer.toString().trimEnd('\r'), clock.instant())
+              buffer.setLength(0)
+              truncatedOutputStreams.remove(stream)
+            } else if (buffer.length < MAX_LOG_LINE_CHARS) {
+              buffer.append(character)
+            } else if (truncatedOutputStreams.add(stream)) {
+              RuntimeDiagnosticsBestEffortWarning.record(
+                diagnostics,
+                "Standalone output history line exceeded $MAX_LOG_LINE_CHARS characters; suffix omitted",
+              )
+            }
           }
+        }
+      }
+
+      override fun activity(event: AgentRunActivity) {
+        synchronized(outputLock) {
+          if (outputClosed) return
+          val now = clock.instant()
+          val start = activityStarts[event.id] ?: now
+          if (event.state == AgentRunActivityState.STARTED) {
+            if (activityStarts.size >= MAX_PENDING_ACTIVITY) {
+              RuntimeDiagnosticsBestEffortWarning.record(
+                diagnostics,
+                "Plan activity start buffer full; oldest start time omitted",
+              )
+              activityStarts.remove(activityStarts.keys.first())
+            }
+            activityStarts.putIfAbsent(event.id, now)
+          } else {
+            activityStarts.remove(event.id)
+          }
+          val duration = event.durationMs ?: if (start != now) Duration.between(start, now).toMillis() else null
+          val phase = currentStep.substringBefore(':')
+          val id = if (event.kind == AgentRunActivityKind.STREAM) "$phase:stream" else event.id
+          val record =
+            StandalonePlanActivity(
+              phase,
+              start,
+              now,
+              event.copy(id = id, durationMs = duration?.coerceAtLeast(0)),
+            )
+          val pending = outputSnapshot.pendingActivity.filterNot { it.event.id == record.event.id } + record
+          if (pending.size > MAX_PENDING_ACTIVITY) {
+            RuntimeDiagnosticsBestEffortWarning.record(
+              diagnostics,
+              "Plan activity buffer full; oldest pending event omitted",
+            )
+          }
+          outputSnapshot = outputSnapshot.copy(pendingActivity = pending.takeLast(MAX_PENDING_ACTIVITY))
+          outputDirty = true
+          scheduleOutputWrite()
+        }
+      }
+
+      override fun raw(
+        stream: AgentRunOutputStream,
+        text: String,
+        subtaskId: Int?,
+      ) {
+        synchronized(outputLock) {
+          if (outputClosed) return
+          val now = clock.instant()
+          val line =
+            StandalonePhaseOutputLine(
+              UUID.randomUUID().toString(),
+              text.take(MAX_RAW_LINE_CHARS),
+              now,
+              subtaskId,
+              isRaw = true,
+            )
+          val pending = outputSnapshot.pendingLines + line
+          if (pending.size > MAX_PENDING_OUTPUT_LINES) {
+            RuntimeDiagnosticsBestEffortWarning.record(
+              diagnostics,
+              "Raw transcript buffer full; oldest pending line omitted",
+            )
+          }
+          outputSnapshot =
+            outputSnapshot.copy(
+              pendingLines = pending.takeLast(MAX_PENDING_OUTPUT_LINES),
+              latestLineAt = now,
+            )
+          outputDirty = true
+          scheduleOutputWrite()
         }
       }
     }
@@ -412,7 +507,24 @@ public class StandalonePhaseStatusEventSink(
       while (attributed.size > MAX_ATTRIBUTED_SUBTASKS) attributed.remove(attributed.keys.first())
       attributedAt.keys.retainAll(attributed.keys)
     }
-    outputSnapshot = StandalonePhaseOutputSnapshot(tail, completedAt, attributed, attributedAt)
+    val unitId = SUBTASK_ATTRIBUTION.find(line)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it > 0 }
+    val entry =
+      StandalonePhaseOutputLine(UUID.randomUUID().toString(), line.take(MAX_LOG_LINE_CHARS), completedAt, unitId)
+    if (outputSnapshot.pendingLines.size == MAX_PENDING_OUTPUT_LINES) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Standalone output history buffer full; oldest unpersisted line dropped",
+      )
+    }
+    val pending = (outputSnapshot.pendingLines + entry).takeLast(MAX_PENDING_OUTPUT_LINES)
+    outputSnapshot =
+      outputSnapshot.copy(
+        tail = tail,
+        latestLineAt = completedAt,
+        latestAttributedLines = attributed,
+        latestAttributedLineAt = attributedAt,
+        pendingLines = pending,
+      )
     outputDirty = true
     catchingNonCancellation {
       ensureRegistered(null)
@@ -447,6 +559,8 @@ public class StandalonePhaseStatusEventSink(
           outputSnapshot.latestLineAt ?: persisted.latestLineAt,
           attributed,
           attributedAt,
+          outputSnapshot.pendingLines,
+          pendingActivity = outputSnapshot.pendingActivity,
         )
     }
     snapshotLoaded = true
@@ -487,6 +601,7 @@ public class StandalonePhaseStatusEventSink(
       loadOutputSnapshot()
       val executionId = requireNotNull(registered).executionId
       database.transaction { unit -> unit.standalonePhaseStatuses.writeOutputSnapshot(executionId, outputSnapshot) }
+      outputSnapshot = outputSnapshot.copy(pendingLines = emptyList(), pendingActivity = emptyList())
       outputDirty = false
     }.onFailure { error ->
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone plan output persistence failed", error)
@@ -555,8 +670,12 @@ public class StandalonePhaseStatusEventSink(
   }
 
   private companion object {
+    const val MAX_PENDING_ACTIVITY = 512
+    const val MAX_RAW_LINE_CHARS = 65536
     const val OUTPUT_TAIL_LINES = 4
     const val MAX_OUTPUT_LINE_CHARS = 160
+    const val MAX_LOG_LINE_CHARS = 8192
+    const val MAX_PENDING_OUTPUT_LINES = 1000
     const val MAX_ATTRIBUTED_SUBTASKS = 32
     val OUTPUT_WRITE_DELAY: Duration = Duration.ofMillis(250)
     val SUBTASK_ATTRIBUTION = Regex("^\\[subtask ([1-9][0-9]*)] ")
