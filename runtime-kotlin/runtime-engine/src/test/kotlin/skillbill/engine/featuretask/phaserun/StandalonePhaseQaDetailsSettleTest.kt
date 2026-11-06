@@ -19,14 +19,14 @@ class StandalonePhaseQaDetailsSettleTest {
     val clock = Clock.fixed(Instant.parse("2026-11-05T01:00:00Z"), ZoneOffset.UTC)
     val database = phaseRunDatabase(home, clock)
     val capture = BlockIncidentCapture(database, clock, InMemoryBlockIncidentSpool(), NoopRuntimeDiagnostics)
-    val base = testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics)
     val publisher =
       StandalonePhaseStatusPublisherFactory(
         database,
-        base.registrations,
+        testStandalonePhaseRegistration(clock, NoopRuntimeDiagnostics),
         clock,
         NoopRuntimeDiagnostics,
         capture,
+        null,
       ).forPhase(home, "qa", INVOCATION)
     val details =
       QaRunDetails(

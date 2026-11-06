@@ -1,3 +1,7 @@
+## [2026-11-06] Derive standalone plan settlement from phase records
+Context: Planning seeds subtask spec files before units finish. Goal planning also requires a details hash for its progress calculation.
+Decision: Standalone detail treats a completed unit with a nonblank output artifact as saved and filters seeded spec paths by those units. Goal planning retains its settlement rule.
+Reason: File existence does not prove a unit settled. The goal helper's extra hash requirement would hide standalone units that meet the saved contract.
 ## [2026-11-06] Project Verify details in the runtime
 Context: Work detail needs saved Verify receipts, QA results and session staleness, including for older runs that lack artifacts.
 Decision: Build a read-only, Verify-only projection from the stored snapshot and session telemetry. Keep raw findings with parsed fields and leave missing data null or empty.

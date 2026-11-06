@@ -1,3 +1,8 @@
+## [2026-11-06] Key standalone plan output by execution
+Context: A detached standalone plan and a separate detail reader need the same output after process exit. An issue key can identify multiple executions.
+Decision: Store bounded output snapshots under the standalone execution ID in SQLite. The status publisher owns capture and flushes pending output at settlement and close; the status row owns output cleanup.
+Reason: Both processes can resolve the same execution without conflating runs. Bounded snapshots limit retention, and status-linked cleanup avoids orphaned rows.
+
 ## [2026-11-05] Set JVM temp roots at launch
 Context: The JDK snapshots java.io.tmpdir before main, so setting it in the CLI or MCP entry point does not redirect default-root JDK temp calls.
 Decision: Start scripts pass run scratch as a JVM option. JAVA_TOOL_OPTIONS and Linux wrappers name the shared state scratch root; test workers receive run scratch through their task configuration.

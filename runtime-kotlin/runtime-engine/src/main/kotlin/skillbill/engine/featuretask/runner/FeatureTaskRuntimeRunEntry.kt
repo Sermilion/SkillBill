@@ -30,6 +30,7 @@ import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.error.shellcontent.invalidInteractionScenarioCatalog
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
@@ -80,14 +81,20 @@ public class FeatureTaskRuntimeRunEntry(
   public fun run(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
+    afterStepSettlement: (() -> Unit)? = null,
   ): FeatureTaskRuntimeRunReport =
     blockIncidentReconciler.guardEntry({ it is FeatureTaskRuntimeRunReport.Blocked }) {
-      runAfterReconciliation(input, onOpenFailure)
+      runAfterReconciliation(input, onOpenFailure, outputSink, captureStreamOutput, afterStepSettlement)
     }
 
   private fun runAfterReconciliation(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+    afterStepSettlement: (() -> Unit)?,
   ): FeatureTaskRuntimeRunReport {
     val request = planningResumeInput(input)
     val goalContinuation = request.goalContinuation
@@ -132,10 +139,21 @@ public class FeatureTaskRuntimeRunEntry(
       if (PhaseSlot.INTAKE in definition.slots && !intakeCompleted(workflowId)) {
         val invariants = intakePassInvariants(request, specPath, admittedExecution)
         val intakeReport =
-          runner.run(runRequest(request, workflowId, admittedExecution, invariants).copy(stopAfterIntake = true))
+          runner.run(
+            runRequest(request, workflowId, admittedExecution, invariants).copy(stopAfterIntake = true),
+            outputSink = outputSink,
+            captureStreamOutput = captureStreamOutput,
+            afterStepSettlement = afterStepSettlement,
+          )
         if (!intakeCompleted(workflowId)) return@runOwned intakeReport
       }
-      runWithRepairState(request, specPath, admittedExecution, acquiredWorker)
+      runWithRepairState(
+        request,
+        acquiredWorker,
+        outputSink,
+        captureStreamOutput,
+        afterStepSettlement,
+      )
     }
   }
 
@@ -151,10 +169,13 @@ public class FeatureTaskRuntimeRunEntry(
 
   private fun runWithRepairState(
     request: FeatureTaskRuntimeRunInput,
-    specPath: Path,
-    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
     acquiredWorker: AcquiredFeatureTaskRuntimeWorker,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+    afterStepSettlement: (() -> Unit)?,
   ): FeatureTaskRuntimeRunReport {
+    val specPath = Path.of(request.specPath)
+    val admittedExecution = acquiredWorker.admittedExecution
     val sourceRead = runInvariantsSource.read(specPath)
     val sourceInvariants = sourceRead.requireInvariants()
     val repairState =
@@ -177,6 +198,9 @@ public class FeatureTaskRuntimeRunEntry(
         ),
       ).copy(acceptanceCriterionRepair = repairState),
       acquiredWorker,
+      outputSink,
+      captureStreamOutput,
+      afterStepSettlement,
     )
   }
 

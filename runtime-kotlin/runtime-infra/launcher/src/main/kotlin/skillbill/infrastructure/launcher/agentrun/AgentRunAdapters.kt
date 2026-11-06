@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.error.core.catchingNonCancellation
+import skillbill.infrastructure.launcher.agentrun.display.ReadableAgentOutputSink
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessEnvironmentFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessProbeFields
@@ -51,7 +52,19 @@ internal class ProcessAgentRunAdapter(
         is LauncherResolution.Resolved -> built.copy(command = resolution.command)
         is LauncherResolution.Missing -> return unavailableLauncherFacts(request, built, resolution.message)
       }
-    val result = processRunner.run(processRequest(command, request))
+    val displaySink =
+      if (request.captureDisplayOutput) {
+        ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics)
+      } else {
+        null
+      }
+    val streamRequest = displaySink?.let { request.copy(outputSink = it) } ?: request
+    val result =
+      try {
+        processRunner.run(processRequest(command, streamRequest))
+      } finally {
+        displaySink?.finish()
+      }
     result.spawnDenied?.let { denied -> return AgentRunLaunchDenied(agent, denied.pauseReason) }
     return launchFacts(request, command, result)
   }
@@ -156,7 +169,13 @@ internal class ProcessAgentRunAdapter(
         workingDirectory = command.workingDirectory,
         stdinText = command.stdinText,
         outputSink = request.outputSink,
-        continuation = commandBuilder.continuation(command, diagnostics),
+        flushOutputStreamOnEnd = request.captureDisplayOutput,
+        continuation =
+          commandBuilder.continuation(command, diagnostics)?.let { continueLaunch ->
+            { result ->
+              continueLaunch(result)?.copy(flushOutputStreamOnEnd = request.captureDisplayOutput)
+            }
+          },
       ),
     timing =
       AgentRunProcessTimingFields(

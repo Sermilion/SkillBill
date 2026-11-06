@@ -2,29 +2,27 @@ package skillbill.engine.featuretask.slot.state
 
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
-import skillbill.ports.agentrun.model.AgentRunOutputSink
 
 /**
  * The units one fan-out step runs: the units still pending, the pause checks between them, the state each unit runs
  * over, and how the step settles. The state that keeps the units decides what a unit is and what stops the step.
  */
 public interface PhaseRunFanOut {
-  /** The sink unit launches stream to before the fan-out attributes each line to its unit. */
-  public val outputSink: AgentRunOutputSink
-
   /** The units the step still has to run, or the outcome that stops it before any unit runs. */
   public fun pendingUnits(): PhaseFanOutUnits
+
+  /** Persists the scheduler-selected batch before dispatch, or false when its durable write was rejected. */
+  public fun recordWave(
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean
 
   /** The outcome that pauses the step before unit [unitId] runs, or null when the step continues. */
   public fun pauseBefore(unitId: Int): PhaseOutcome?
 
-  /**
-   * The state unit [unitId] reads and writes under the coordinator-authorized fan-out wave, streaming launches to
-   * [outputSink].
-   */
+  /** The state unit [unitId] reads and writes under the coordinator-authorized fan-out wave. */
   public fun <B : PhaseAcceptedStepExecution> unitState(
     unitId: Int,
-    outputSink: AgentRunOutputSink,
     descriptor: PhaseStepDescriptor<B>,
   ): B
 

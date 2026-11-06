@@ -1,3 +1,13 @@
+## [2026-11-06] SKILL-505 live plan run detail
+Areas: runtime-goalrunner, runtime-engine, runtime-ports, runtime-core, runtime-infra, runtime-cli, runtime-contracts, orchestration/contracts, desktop/core/data, desktop/core/domain, desktop/feature/detail
+- Standalone plan capture stores bounded readable output by execution, including the latest four lines, timestamps and attributed subtask output. Migration 103 ties output cleanup to standalone status.
+- Durable phase records, manifest and bundle files supply stage times, briefings, unit states, blocked details and saved files. Fan-out history records planning waves; work-detail contract 1.7 exposes standalone progress.
+- The desktop shows a dedicated plan document and refreshes active or blocked observed plans every two seconds. Saved units open their specs; blocked plans use the existing incident decision path.
+- A completed record with a nonblank output artifact marks a unit saved. Implement requires a finished run, a report and all projected units saved. Goal detail retains its existing projection.
+- Providers without streaming may not show output until exit; stall time is absent without output or after the run ends.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-11-04] SKILL-451 local diff comment runtime
 Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-application, runtime-infra, runtime-cli, runtime-mcp, runtime-engine, runtime-core, orchestration/contracts
 - Migration 101 `record-diff-comments` adds thread and comment tables; `DesktopReadSchema.VERSION` is 101 and the diff comment topic is signalled to desktop readers.

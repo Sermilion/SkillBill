@@ -79,23 +79,41 @@ internal object PlanBundleStagingPromotion {
       unit.target.directory.resolve(unit.storeSubSpec.fileName)
     }
 
-  fun promoteUnit(
-    planner: FeatureTaskRuntimeDecompositionPlanner,
+  fun stagedUnitPath(
     diagnostics: RuntimeDiagnostics,
     unit: StagedUnit,
-  ) {
+  ): Path? =
     try {
       val staged = unit.stagedFile()
       if (!staged.toRealPath().startsWith(unit.target.directory.toRealPath())) {
         throw IOException("'${unit.storeSubSpec.fileName}' resolves outside the bundle.")
       }
-      planner.writeBundleFile(unit.storeSubSpec, planner.specText(staged))
+      staged
     } catch (error: IOException) {
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         warning(unit.target, "staging_promotion_failed", unit.provider),
         error,
       )
+      null
+    }
+
+  fun promoteUnit(
+    planner: FeatureTaskRuntimeDecompositionPlanner,
+    diagnostics: RuntimeDiagnostics,
+    unit: StagedUnit,
+  ): Boolean {
+    val staged = stagedUnitPath(diagnostics, unit) ?: return false
+    return try {
+      planner.writeBundleFile(unit.storeSubSpec, planner.specText(staged))
+      true
+    } catch (error: IOException) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        warning(unit.target, "staging_promotion_failed", unit.provider),
+        error,
+      )
+      false
     }
   }
 

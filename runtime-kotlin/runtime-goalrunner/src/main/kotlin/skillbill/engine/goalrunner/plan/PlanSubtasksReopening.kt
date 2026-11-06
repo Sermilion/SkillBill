@@ -16,6 +16,8 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
@@ -49,7 +51,7 @@ public class PlanSubtasksReopening(
     PlanBundleSnapshots(decompositionPlanner)
       .rebase(replan.repoRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
       ?.let { rebased ->
-        planBundles.recordPlanBundle(replan.planWorkflowId, rebased.withoutPlannedUnits(replan.forcedSubtaskIds))
+        planBundles.replacePlanBundle(replan.planWorkflowId, rebased.withoutPlannedUnits(replan.forcedSubtaskIds))
       }
   }
 
@@ -79,7 +81,10 @@ public class PlanSubtasksReopening(
               artifactsPatch =
                 WorkflowArtifactPatch.from(
                   update.artifactsPatch.orEmpty() +
-                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(null),
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(null) +
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_FAN_OUT_HISTORY.entry(
+                      FeatureTaskRuntimePlanFanOutHistory(emptyList()).asWorkflowArtifactEntry(),
+                    ),
                 ),
             ),
           )

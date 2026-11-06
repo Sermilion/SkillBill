@@ -4,7 +4,10 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 
 public sealed interface FeatureTaskRuntimePreparation {
-  public data class Prepared(val request: FeatureTaskRuntimeRunRequest) : FeatureTaskRuntimePreparation
+  public data class Prepared(
+    val request: FeatureTaskRuntimeRunRequest,
+    val reconciliation: FeatureTaskRuntimeCrashReconciliationResult = FeatureTaskRuntimeCrashReconciliationResult.NONE,
+  ) : FeatureTaskRuntimePreparation
 
   public data class PreparationBlocked(val report: FeatureTaskRuntimeRunReport.Blocked) : FeatureTaskRuntimePreparation
 }

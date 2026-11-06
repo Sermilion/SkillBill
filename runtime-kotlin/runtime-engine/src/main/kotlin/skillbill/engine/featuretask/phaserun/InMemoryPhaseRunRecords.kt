@@ -34,6 +34,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePaus
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanFanOutHistory
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
@@ -61,6 +62,7 @@ public class InMemoryPhaseRunRecords private constructor(
   private val goalQualityProgressSink: ((GoalQualityPhaseProgress) -> Boolean)?,
   private val initialGoalQualityProgress: GoalQualityPhaseProgress?,
   private val goalQualityWorkflowId: String,
+  private val phaseRecordSink: ((FeatureTaskRuntimePhaseRecord) -> Boolean)?,
 ) : PhaseRunRecords,
   StandaloneMonitorRunRecords,
   PhaseLaunchRecords by InMemoryPhaseLaunchRecords(),
@@ -77,6 +79,7 @@ public class InMemoryPhaseRunRecords private constructor(
     goalQualityPhaseProgress: GoalQualityPhaseProgress? = null,
     persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress) -> Boolean)? = null,
     goalQualityWorkflowId: String = "",
+    phaseRecordSink: ((FeatureTaskRuntimePhaseRecord) -> Boolean)? = null,
   ) : this(
     clock,
     resolvedBranch,
@@ -86,6 +89,7 @@ public class InMemoryPhaseRunRecords private constructor(
     persistGoalQualityPhaseProgress,
     goalQualityPhaseProgress,
     goalQualityWorkflowId,
+    phaseRecordSink,
   ) {
     qaState = goalQualityPhaseProgress?.qaRepairState ?: initialQaRepairState
     goalQualityPhaseProgress?.let { progress ->
@@ -161,6 +165,7 @@ public class InMemoryPhaseRunRecords private constructor(
 
   override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
     applyPhaseRecord(phaseRecords, request, clock)
+    if (phaseRecordSink?.invoke(phaseRecords.getValue(request.phaseId).detached()) == false) return false
     if (goalQualityProgressSink != null) {
       persistGoalQualityProgress()
     }
@@ -181,16 +186,25 @@ public class InMemoryPhaseRunRecords private constructor(
           request.attemptCount,
         )
       }
-      if (replacement == existing) return RequiredPhaseWrite.Acknowledged
-      val proposed =
-        goalQualityProgress().copy(
-          phaseRecords = phaseRecords + (request.phaseId to replacement.detached()),
-        )
-      persistGoalQualityProgress(proposed)
-      phaseRecords[request.phaseId] = replacement.detached()
+      if (replacement != existing) {
+        val proposed =
+          goalQualityProgress().copy(
+            phaseRecords = phaseRecords + (request.phaseId to replacement.detached()),
+          )
+        persistGoalQualityProgress(proposed)
+        phaseRecords[request.phaseId] = replacement.detached()
+      }
       return RequiredPhaseWrite.Acknowledged
     }
     applyPhaseRecord(phaseRecords, request, clock)
+    if (phaseRecordSink?.invoke(phaseRecords.getValue(request.phaseId).detached()) == false) {
+      return RequiredPhaseWrite.Rejected(
+        RequiredPhaseWriteKind.START,
+        request.workflowId,
+        request.phaseId,
+        request.attemptCount,
+      )
+    }
     phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.START, request)
     persistGoalQualityProgress()
     return RequiredPhaseWrite.Acknowledged
@@ -202,6 +216,14 @@ public class InMemoryPhaseRunRecords private constructor(
       acceptedOutputs[request.phaseId] = it
     }
     applyPhaseRecord(phaseRecords, request, clock)
+    if (phaseRecordSink?.invoke(phaseRecords.getValue(request.phaseId).detached()) == false) {
+      return RequiredPhaseWrite.Rejected(
+        RequiredPhaseWriteKind.COMPLETION,
+        request.workflowId,
+        request.phaseId,
+        request.attemptCount,
+      )
+    }
     phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
     (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)?.let {
       acceptedOccurrences += GoalQualityAcceptedOutput(request.phaseId, request.attemptCount, it)
@@ -429,8 +451,24 @@ private class InMemoryPhasePlanRecords(
   private val phaseRecords: MutableMap<String, FeatureTaskRuntimePhaseRecord>,
 ) : PhasePlanRecords {
   private val planBundles = mutableMapOf<String, FeatureTaskRuntimePlanBundle>()
+  private val waveHistory = mutableMapOf<String, FeatureTaskRuntimePlanFanOutHistory>()
 
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? = planBundles[workflowId]
+
+  override fun loadPlanFanOutHistory(workflowId: String): FeatureTaskRuntimePlanFanOutHistory? = waveHistory[workflowId]
+
+  override fun recordPlanFanOutWave(
+    workflowId: String,
+    stepId: String,
+    attempt: Int,
+    capacity: Int,
+    unitIds: List<Int>,
+  ): Boolean {
+    waveHistory[workflowId] =
+      (waveHistory[workflowId] ?: FeatureTaskRuntimePlanFanOutHistory(emptyList()))
+        .record(attempt, capacity, unitIds)
+    return true
+  }
 
   override fun recordPlanBundle(
     workflowId: String,
@@ -449,6 +487,15 @@ private class InMemoryPhasePlanRecords(
       phaseRecords[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtaskId)] = record.detached()
     }
     return recordPlanBundle(workflowId, bundle)
+  }
+
+  override fun replacePlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean {
+    waveHistory[workflowId] = FeatureTaskRuntimePlanFanOutHistory(emptyList())
+    return recordPlanBundleWithUnits(workflowId, bundle, unitRecords)
   }
 
   override fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? = null

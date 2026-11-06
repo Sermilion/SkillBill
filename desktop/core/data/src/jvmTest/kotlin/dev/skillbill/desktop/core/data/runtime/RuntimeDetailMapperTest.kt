@@ -13,12 +13,61 @@ import skillbill.goalrunner.model.GoalRunnerRunningReviewLane
 import skillbill.goalrunner.model.GoalRunnerRunningReviewPass
 import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.goalrunner.model.GoalRunnerSubtaskExecution
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.StandalonePlanProgress
+import skillbill.ports.idestatus.model.StandalonePlanReport
+import skillbill.ports.idestatus.model.StandalonePlanStage
+import skillbill.ports.idestatus.model.StandalonePlanSubtask
+import skillbill.ports.idestatus.model.StandalonePlanUnit
+import skillbill.ports.idestatus.model.StandalonePlanUnitState
+import skillbill.ports.idestatus.model.WorkDetailItem
 import java.time.Instant
 import skillbill.review.model.ReviewFindingStatus as RuntimeReviewFindingStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RuntimeDetailMapperTest {
+  @Test
+  fun `standalone plan detail preserves stage output and saved unit projection without inventing output time`() {
+    val started = Instant.parse("2026-10-01T09:00:00Z")
+    val stageFinished = started.plusSeconds(30)
+    val progress = StandalonePlanProgress(
+      report = StandalonePlanReport("Feature", "/repo/specs/SKILL-1/spec.md", listOf(StandalonePlanSubtask(1, "Detail", "/repo/specs/SKILL-1/spec_subtask_1.md", emptyList())), listOf("/repo/specs/SKILL-1/decomposition-manifest.yaml", "/repo/specs/SKILL-1/spec.md")),
+      stages = listOf(StandalonePlanStage("preplan", started, stageFinished, "Read the repository")),
+      plannedSubtaskCount = 1,
+      totalSubtaskCount = 1,
+      currentPlanningSubtaskId = null,
+      planningWaveSubtaskIds = emptyList(),
+      blockedSubtaskId = null,
+      blockedReason = null,
+      units = listOf(StandalonePlanUnit(1, "Detail", "/repo/specs/SKILL-1/spec_subtask_1.md", emptyList(), StandalonePlanUnitState.SAVED, started, stageFinished, null, null)),
+      stalledSince = null,
+    )
+    val item = WorkDetailItem(
+      snapshot = IdeStatusSnapshot("repo", IdeStatusLifecycleState.ACTIVE, IdeStatusStep("plan", "Plan"), started, IdeStatusFreshness.FRESH, "Planning", "Feature"),
+      recoveryWorkId = "invocation",
+      repositoryRoot = "/repo",
+      stepPipeline = listOf("preplan", "plan", "plan_subtasks"),
+      planOutputTail = listOf("planning output"),
+      planOutputUpdatedAt = null,
+      planSubtaskLatestLines = mapOf(1 to "[subtask 1] saved"),
+      standalonePlanProgress = progress,
+    )
+
+    val detail = item.toDetail(started)
+
+    assertEquals(listOf("planning output"), detail.planOutputTail)
+    assertEquals(null, detail.planOutputUpdatedAt)
+    assertEquals("preplan", detail.standalonePlan?.stages?.single()?.phaseId)
+    assertEquals(kotlin.time.Instant.parse(stageFinished.toString()), detail.standalonePlan?.stages?.single()?.finishedAt)
+    assertEquals("[subtask 1] saved", detail.planSubtaskLatestLines[1])
+    assertEquals("saved", detail.standalonePlan?.units?.single()?.state)
+    assertEquals(listOf("/repo/specs/SKILL-1/decomposition-manifest.yaml", "/repo/specs/SKILL-1/spec.md"), detail.standalonePlan?.report?.bundleFiles)
+  }
+
   @Test
   fun `phase results keep the degraded source, the lanes and the finding fields`() {
     val finding =

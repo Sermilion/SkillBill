@@ -31,8 +31,6 @@ import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseRunner
-import skillbill.engine.featuretask.slot.PhaseStepInput
-import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateReporting
@@ -44,6 +42,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diff.DiffResolverPort
@@ -170,23 +169,12 @@ internal class PhaseAttemptRunHost(
   fun runAcceptedAttemptLoop(
     run: PhaseRun,
     call: PhaseStepCall,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
     call.requireAcceptedAttempt(run, call)
     check(run.phaseId == boundPhaseId && run.request === request)
-    return backingRunState.attemptLoop.run(run, call, PhaseRunLoopAttemptScope(this))
-  }
-
-  internal fun runPreparedStep(
-    run: PhaseRun,
-    call: PhaseStepCall,
-    input: PhaseStepInput,
-    launchState: PhaseLaunchState,
-  ): PhaseStepOutput {
-    check(run.phaseId == boundPhaseId && run.request === request)
-    check(input.stepName == boundPhaseId && input.facts.issueKey == request.issueKey)
-    val owner = requireNotNull(backingRunState.selectedOwnerOf(boundPhaseId))
-    check(owner.strategyId == call.strategyId && call.request === request)
-    return backingRunState.runnerFor(boundPhaseId).run(input, launchState)
+    return backingRunState.attemptLoop.run(run, call, PhaseRunLoopAttemptScope(this), outputSink, captureStreamOutput)
   }
 
   internal fun runnerForAcceptedAttempt(

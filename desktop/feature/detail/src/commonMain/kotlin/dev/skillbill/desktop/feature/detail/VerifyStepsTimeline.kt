@@ -145,4 +145,3 @@ private fun VerifyReceiptBody(run: VerifyRunDetails, step: VerifyRunStep, collap
     }
   }
 }
-

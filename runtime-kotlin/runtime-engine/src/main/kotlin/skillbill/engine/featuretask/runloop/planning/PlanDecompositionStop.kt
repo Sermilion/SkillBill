@@ -155,7 +155,7 @@ internal object PlanDecompositionStop {
             }
           }.toMap()
         }.orEmpty()
-      if (context.recorder.recordPlanBundleWithUnits(request.workflowId, bundle, keptUnits)) {
+      if (context.recorder.replacePlanBundleWithUnits(request.workflowId, bundle, keptUnits)) {
         null
       } else {
         PlanBundleRejection(notReadyReason("The plan bundle snapshot could not be recorded."))

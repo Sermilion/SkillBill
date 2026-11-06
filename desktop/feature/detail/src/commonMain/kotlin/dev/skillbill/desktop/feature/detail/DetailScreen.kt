@@ -215,8 +215,8 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
 }
 
-/** HANDOFF 9.2 item 7, with the operator decision notice inside it; a decision with no incident gets its own section. */
-private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+/** HANDOFF 9.2 item 7, with the operator decision inside it; a decision with no incident gets its own section. */
+internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val incident = detail?.incident
   val decision: @Composable () -> Unit = {
@@ -244,6 +244,10 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       val detail = sections.detail
       if (qaView != null) {
         qaDocument(state, view, detail, qaView, onAction, onOpenFinding)
+        return
+      }
+      if (item.isStandalonePlan()) {
+        planDocument(item, detail, state, view, onAction)
         return
       }
       detail.verifyRun?.let { run ->

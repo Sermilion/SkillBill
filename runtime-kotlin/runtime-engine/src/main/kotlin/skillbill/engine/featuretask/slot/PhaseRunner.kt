@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot
 
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 
 /**
@@ -15,6 +16,13 @@ public interface PhaseRunner {
     state: PhaseLaunchState,
   ): PhaseStepOutput
 
+  public fun run(
+    input: PhaseStepInput,
+    state: PhaseLaunchState,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+  ): PhaseStepOutput = run(input, state)
+
   /**
    * Runs [input] against [state] with [session] producing the launch outcome in place of the default agent launch.
    * The runner still resolves the launch request, captures the file manifest, and reads the settlement.
@@ -24,6 +32,14 @@ public interface PhaseRunner {
     state: PhaseLaunchState,
     session: PhaseStepSession,
   ): PhaseStepOutput = run(input, state)
+
+  public fun run(
+    input: PhaseStepInput,
+    state: PhaseLaunchState,
+    session: PhaseStepSession,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
+  ): PhaseStepOutput = run(input, state, session)
 }
 
 /** Produces a step's launch outcome from the launch request the runner resolved for it. */

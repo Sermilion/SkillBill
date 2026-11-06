@@ -345,6 +345,7 @@ internal fun ideStatusService(
             },
         ),
     )
+  val planReports = testPlanReports(manifestStore)
   val projector =
     IdeStatusProjector(
       workflowSnapshotValidator = snapshotValidator,
@@ -353,13 +354,7 @@ internal fun ideStatusService(
       manifestStore = GoalRunnerManifestProjectionReader(manifestStore),
       diagnostics = NoopRuntimeDiagnostics,
       qaCapabilities = ports.qaCapabilities,
-      planReports =
-        StandalonePlanReportBuilder(
-          manifestStore,
-          TestDecompositionManifestStore,
-          FixedProjectStorePort(ideStatusProjectStoreRoot),
-          NoopRuntimeDiagnostics,
-        ),
+      planReports = planReports,
     )
   val boardProjection = testBoardProjection(projector, ports.repositoryEnclosingRootPort)
   (database as? BoardProjectionCapture)?.accept(boardProjection)
@@ -377,6 +372,14 @@ internal fun ideStatusService(
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
+
+private fun testPlanReports(manifestStore: GoalRunnerManifestStore) =
+  StandalonePlanReportBuilder(
+    manifestStore,
+    TestDecompositionManifestStore,
+    FixedProjectStorePort(ideStatusProjectStoreRoot),
+    NoopRuntimeDiagnostics,
+  )
 
 internal interface BoardProjectionCapture {
   fun accept(projection: WorkBoardItemProjection)

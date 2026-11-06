@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot
 import skillbill.config.model.PhaseCompactionDirective
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
-import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -33,7 +32,6 @@ public data class PhaseStepFacts(
   val briefingText: String,
   val subtaskId: Int? = null,
   val progressIdleTimeout: Duration? = null,
-  val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
   val streamOutputForLiveness: Boolean = false,
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
   val additionalWritableDirectories: List<Path> = emptyList(),

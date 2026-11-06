@@ -1,0 +1,23 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/plan-fan-out-history-schema.yaml"
+title: "Feature task plan fan-out history"
+type: object
+additionalProperties: false
+required: [contract_version, history_complete, waves]
+properties:
+  contract_version: {type: string, const: "1.0"}
+  history_complete: {type: boolean}
+  waves:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [attempt, ordinal, capacity, unit_ids]
+      properties:
+        attempt: {type: integer, minimum: 1}
+        ordinal: {type: [integer, "null"], minimum: 1}
+        capacity: {type: integer, minimum: 1}
+        unit_ids:
+          type: array
+          minItems: 1
+          items: {type: integer, minimum: 1}

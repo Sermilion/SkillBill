@@ -55,7 +55,7 @@ class FeatureTaskRuntimeRunExecution(
       )
     val report =
       inputs.featureTaskRuntimeRunOverride?.invoke(input)
-        ?: entry.run(input) { throw UsageError("Could not open a feature-task workflow: ${it.error}") }
+        ?: entry.run(input, { throw UsageError("Could not open a feature-task workflow: ${it.error}") })
     val incidentDetails = readGoalIncidentDetails(status, listOf("work" to report.workflowId), retainFailures = true)
     val payload =
       report.toRuntimeRunCliMap() +

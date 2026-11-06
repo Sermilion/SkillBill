@@ -7,10 +7,14 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.boundedIdeStatusActivity
+import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
+import skillbill.ports.idestatus.StandaloneOutputCaptureScheduler
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
+import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -30,6 +34,7 @@ import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimit
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.LinkedHashMap
 
 public class StandalonePhaseStatusEventSink(
   private val database: DatabaseSessionFactory,
@@ -37,7 +42,9 @@ public class StandalonePhaseStatusEventSink(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val blockIncidentCapture: BlockIncidentCapture,
+  private val outputScheduler: StandaloneOutputCaptureScheduler? = null,
   private val monitorSelector: String? = null,
+  private val capturePlanOutput: Boolean = false,
 ) : FeatureTaskRuntimeRunEventSink {
   private var registered: StandalonePhaseStatusRecord? = null
   private var revision: String? = null
@@ -52,6 +59,33 @@ public class StandalonePhaseStatusEventSink(
   private var qaDetails: QaRunDetails? = null
   private var planReport: StandalonePlanReport? = null
   private var reviewRunId: String? = null
+  private val outputLock = Any()
+  private val outputBuffers = mutableMapOf<AgentRunOutputStream, StringBuilder>()
+  private var outputSnapshot = StandalonePhaseOutputSnapshot()
+  private var snapshotLoaded = false
+  private var outputDirty = false
+  private var outputClosed = false
+  private var scheduledOutputWrite: AutoCloseable? = null
+  private var outputScheduleGeneration = 0L
+
+  public val outputSink: AgentRunOutputSink =
+    AgentRunOutputSink { stream, text ->
+      synchronized(outputLock) {
+        if (outputClosed) return@synchronized
+        val buffer = outputBuffers.getOrPut(stream) { StringBuilder() }
+        text.forEach { character ->
+          if (character == '\n') {
+            appendOutputLine(buffer.toString().trimEnd('\r'), clock.instant())
+            buffer.setLength(0)
+          } else if (buffer.length < MAX_OUTPUT_LINE_CHARS) {
+            buffer.append(character)
+          }
+        }
+      }
+    }
+
+  public val planOutputSink: AgentRunOutputSink
+    get() = if (capturePlanOutput) outputSink else AgentRunOutputSink.NONE
 
   internal fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
     monitorCleanup = cleanup
@@ -92,6 +126,7 @@ public class StandalonePhaseStatusEventSink(
   }
 
   internal fun settle(result: PhaseRunResult) {
+    flushOutput()
     catchingNonCancellation {
       ensureRegistered(null)
       when (result) {
@@ -129,6 +164,7 @@ public class StandalonePhaseStatusEventSink(
     workflowId: String? = null,
     report: StandalonePlanReport? = null,
   ) {
+    flushOutput()
     catchingNonCancellation {
       ensureRegistered(workflowId)
       planReport = report
@@ -158,6 +194,7 @@ public class StandalonePhaseStatusEventSink(
     workflowId: String? = null,
     stepId: String? = null,
   ) {
+    flushOutput()
     catchingNonCancellation {
       ensureRegistered(workflowId)
       currentStep = stepId ?: currentStep
@@ -234,6 +271,7 @@ public class StandalonePhaseStatusEventSink(
     error: Throwable,
     workflowId: String? = null,
   ) {
+    flushOutput()
     catchingNonCancellation {
       ensureRegistered(workflowId)
       persist(
@@ -300,13 +338,139 @@ public class StandalonePhaseStatusEventSink(
   }
 
   private fun ensureRegistered(workflowId: String?) {
-    if (registered != null) return
-    val record = database.transaction { it.standalonePhaseStatuses.register(registrationForWorkflow(workflowId)) }
-    registered = record
-    revision = record.statusRevision
-    activeDurationMs = record.activeDurationMs ?: 0
-    activeDurationAsOf = record.activeDurationAsOf ?: record.startedAt.takeIf { record.lifecycleState == "active" }
-    currentStep = record.phaseId
+    synchronized(outputLock) {
+      if (registered != null) return
+      val record = database.transaction { it.standalonePhaseStatuses.register(registrationForWorkflow(workflowId)) }
+      registered = record
+      revision = record.statusRevision
+      activeDurationMs = record.activeDurationMs ?: 0
+      activeDurationAsOf = record.activeDurationAsOf ?: record.startedAt.takeIf { record.lifecycleState == "active" }
+      currentStep = record.phaseId
+    }
+  }
+
+  private fun flushOutput() {
+    synchronized(outputLock) {
+      cancelScheduledOutputWrite()
+      outputBuffers.values.forEach { buffer ->
+        if (buffer.isNotEmpty()) {
+          appendOutputLine(buffer.toString(), clock.instant())
+          buffer.setLength(0)
+        }
+      }
+      writeOutputSnapshot()
+    }
+  }
+
+  public fun closeOutputCapture() {
+    synchronized(outputLock) {
+      if (outputClosed) return
+      flushOutput()
+      outputClosed = true
+      cancelScheduledOutputWrite()
+    }
+  }
+
+  public fun flushOutputCapture() {
+    flushOutput()
+  }
+
+  private fun appendOutputLine(
+    line: String,
+    completedAt: Instant,
+  ) {
+    if (line.isBlank()) return
+    val boundedLine = line.take(MAX_OUTPUT_LINE_CHARS)
+    val tail = (outputSnapshot.tail + boundedLine).takeLast(OUTPUT_TAIL_LINES)
+    val attributed = LinkedHashMap(outputSnapshot.latestAttributedLines)
+    val attributedAt = LinkedHashMap(outputSnapshot.latestAttributedLineAt)
+    SUBTASK_ATTRIBUTION.find(line)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it > 0 }?.let { unitId ->
+      attributed.remove(unitId)
+      attributed[unitId] = boundedLine
+      attributedAt.remove(unitId)
+      attributedAt[unitId] = completedAt
+      while (attributed.size > MAX_ATTRIBUTED_SUBTASKS) attributed.remove(attributed.keys.first())
+      attributedAt.keys.retainAll(attributed.keys)
+    }
+    outputSnapshot = StandalonePhaseOutputSnapshot(tail, completedAt, attributed, attributedAt)
+    outputDirty = true
+    catchingNonCancellation {
+      ensureRegistered(null)
+      loadOutputSnapshot()
+    }.onFailure { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone plan output initialization failed", error)
+    }
+    scheduleOutputWrite()
+  }
+
+  private fun loadOutputSnapshot() {
+    if (snapshotLoaded) return
+    val current = requireNotNull(registered)
+    val persisted = database.read { it.standalonePhaseStatuses.readOutput(current.executionId) }
+    if (persisted != null) {
+      val tail = (persisted.tail + outputSnapshot.tail).takeLast(OUTPUT_TAIL_LINES)
+      val attributed = LinkedHashMap(persisted.latestAttributedLines)
+      val attributedAt = LinkedHashMap(persisted.latestAttributedLineAt)
+      outputSnapshot.latestAttributedLines.forEach { (unitId, line) ->
+        attributed.remove(unitId)
+        attributed[unitId] = line
+        outputSnapshot.latestAttributedLineAt[unitId]?.let { at ->
+          attributedAt.remove(unitId)
+          attributedAt[unitId] = at
+        }
+      }
+      while (attributed.size > MAX_ATTRIBUTED_SUBTASKS) attributed.remove(attributed.keys.first())
+      attributedAt.keys.retainAll(attributed.keys)
+      outputSnapshot =
+        StandalonePhaseOutputSnapshot(
+          tail,
+          outputSnapshot.latestLineAt ?: persisted.latestLineAt,
+          attributed,
+          attributedAt,
+        )
+    }
+    snapshotLoaded = true
+  }
+
+  private fun scheduleOutputWrite() {
+    if (scheduledOutputWrite != null || outputClosed) return
+    val scheduler = outputScheduler ?: return
+    outputScheduleGeneration++
+    val generation = outputScheduleGeneration
+    scheduledOutputWrite =
+      catchingNonCancellation {
+        scheduler.schedule(OUTPUT_WRITE_DELAY) {
+          synchronized(outputLock) {
+            if (generation != outputScheduleGeneration) return@synchronized
+            scheduledOutputWrite = null
+            if (!outputClosed) writeOutputSnapshot()
+          }
+        }
+      }.onFailure { error ->
+        RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone output write scheduling failed", error)
+      }.getOrNull()
+  }
+
+  private fun cancelScheduledOutputWrite() {
+    val scheduled = scheduledOutputWrite ?: return
+    outputScheduleGeneration++
+    scheduledOutputWrite = null
+    catchingNonCancellation { scheduled.close() }.onFailure { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone output write cancellation failed", error)
+    }
+  }
+
+  private fun writeOutputSnapshot() {
+    if (!outputDirty) return
+    catchingNonCancellation {
+      ensureRegistered(null)
+      loadOutputSnapshot()
+      val executionId = requireNotNull(registered).executionId
+      database.transaction { unit -> unit.standalonePhaseStatuses.writeOutputSnapshot(executionId, outputSnapshot) }
+      outputDirty = false
+    }.onFailure { error ->
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone plan output persistence failed", error)
+    }
   }
 
   private fun activityFor(event: FeatureTaskRuntimeRunEvent): String =
@@ -371,6 +535,11 @@ public class StandalonePhaseStatusEventSink(
   }
 
   private companion object {
+    const val OUTPUT_TAIL_LINES = 4
+    const val MAX_OUTPUT_LINE_CHARS = 160
+    const val MAX_ATTRIBUTED_SUBTASKS = 32
+    val OUTPUT_WRITE_DELAY: Duration = Duration.ofMillis(250)
+    val SUBTASK_ATTRIBUTION = Regex("^\\[subtask ([1-9][0-9]*)] ")
     const val MAX_CHECK_NAME_LENGTH = 160
     const val MAX_VISIBLE_NAME_TEXT = 28
     const val MAX_VISIBLE_TRANSITIONS = 2

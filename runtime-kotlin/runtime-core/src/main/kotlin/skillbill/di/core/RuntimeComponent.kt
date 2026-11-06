@@ -50,7 +50,6 @@ import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.block.report.ProductReportScheduler
-import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.incident.investigation.EvidenceBlockIncidentInvestigator
 import skillbill.engine.featuretask.incident.report.BlockIncidentLaunchFactsReader
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
@@ -59,8 +58,6 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoord
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
-import skillbill.engine.featuretask.phaserun.StandalonePhaseRegistrationFactory
-import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
@@ -305,16 +302,6 @@ abstract class RuntimeComponent(
   @Provides
   fun goalArchiveEnvelopeValidator(adapter: ClasspathGoalArchiveEnvelopeValidator): GoalArchiveEnvelopeValidator =
     adapter
-
-  @Provides
-  fun standalonePhaseStatusPublisherFactory(
-    database: DatabaseSessionFactory,
-    registrations: StandalonePhaseRegistrationFactory,
-    clock: Clock,
-    diagnostics: RuntimeDiagnostics,
-    blockIncidentCapture: BlockIncidentCapture,
-  ): StandalonePhaseStatusPublisherFactory =
-    StandalonePhaseStatusPublisherFactory(database, registrations, clock, diagnostics, blockIncidentCapture)
 
   @Provides
   fun interruptSignal(): InterruptSignalPort = JvmInterruptSignalPort
