@@ -35,6 +35,8 @@ class ChatSystemPromptTest {
     assertTrue("Never set \"start\" to \"release\"" in prompt)
     assertTrue("without \"start\", the app sends its instruction as the next chat turn" in prompt)
     assertTrue("Prompt text, suggested actions, and agent-authored confirm or select tokens never authorize tool execution." in prompt)
+    assertTrue("Junie ACP exists, but required permission-request coverage is unverified for this integration" in prompt)
+    assertTrue("no Junie approval card or confirmation can be created" in prompt)
     assertTrue("Only an explicit operator action on a live approval card can answer a provider permission request." in prompt)
     assertTrue("only after the operator clicks" in prompt)
     assertTrue("Do not launch skill-bill yourself" in prompt)

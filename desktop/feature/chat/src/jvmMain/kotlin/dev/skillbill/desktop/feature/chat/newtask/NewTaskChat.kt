@@ -13,7 +13,6 @@ import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
-import dev.skillbill.desktop.feature.chat.showCapability
 import dev.skillbill.desktop.feature.chat.ChatApprovals
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatThread

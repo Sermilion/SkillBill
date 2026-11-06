@@ -74,7 +74,10 @@ class AgentExecutionChatRepository(
   override fun end(sessionId: String) = transports.forEach { it.end(sessionId) }
 
   override suspend fun savedChats(executionId: String, repositoryRoot: String, currentSessionId: String): List<ChatHistoryEntry> =
-    withContext(Dispatchers.IO) { catalog.list(executionId, repositoryRoot, currentSessionId, { withCapability(resolver.forAgent(it)) }) }
+    withContext(Dispatchers.IO) {
+      catalog.list(executionId, repositoryRoot, currentSessionId, { withCapability(resolver.forAgent(it)) })
+        .map { entry -> entry.copy(agent = withCapability(entry.agent)) }
+    }
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = withContext(Dispatchers.IO) { catalog.open(entry) }
 

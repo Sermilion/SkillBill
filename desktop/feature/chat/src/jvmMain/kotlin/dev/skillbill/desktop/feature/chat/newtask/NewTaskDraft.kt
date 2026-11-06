@@ -348,6 +348,7 @@ class NewTaskDraft(
     current.end()
     val next = open(UUID.randomUUID().toString(), repo.root, branch, agent)
     next.thread.replaceTranscript(lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}."))
+    next.thread.showCapability(agent)
     scope.launch {
       current.job.join()
       chats.deleteSavedChat(previousId)
@@ -379,6 +380,7 @@ class NewTaskDraft(
     val lines = entry.lines.map(::restored)
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
     resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
+    resumed.thread.showCapability(entry.agent)
     cardOwners[resumed.thread] = resumed
     if (!missing) cards.revalidate(resumed.thread, entry.lines.mapNotNull { it.operationCard?.token })
     return true

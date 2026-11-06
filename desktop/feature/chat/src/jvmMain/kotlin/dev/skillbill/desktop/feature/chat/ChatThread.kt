@@ -51,6 +51,17 @@ internal class ChatThread(private val clock: Clock) {
 
   fun append(message: ChatMessage) = messages.update { it + message }
 
+  fun showCapability(agent: ChatAgent) {
+    val reason = agent.approvalUnavailableReason ?: return
+    messages.update { transcript ->
+      if (transcript.any { it is ChatMessage.Error && it.failure == ChatFailure.ApprovalUnsupported && it.text == reason }) {
+        transcript
+      } else {
+        transcript + ChatMessage.Error(ChatFailure.ApprovalUnsupported, reason)
+      }
+    }
+  }
+
   fun replaceTranscript(transcript: List<ChatMessage>) {
     messages.value = transcript
   }
@@ -326,7 +337,3 @@ private fun OperationCardView.validateChoices(choices: Map<String, String>): Map
 /** The saved form of a card: the complete record, without the runtime's grant answer, which is never stored. */
 internal fun ApprovalCard.savedApprovalLine(): ChatHistoryLine =
   ChatHistoryLine(ChatHistoryRole.Approval, "${title}: ${state}", approval = copy(grants = null))
-
-internal fun ChatThread.showCapability(agent: ChatAgent) {
-  agent.approvalUnavailableReason?.let { append(ChatMessage.Error(ChatFailure.ApprovalUnsupported, it)) }
-}

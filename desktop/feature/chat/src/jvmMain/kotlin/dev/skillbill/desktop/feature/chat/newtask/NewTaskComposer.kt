@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -24,7 +25,12 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.component.Callout
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -137,6 +143,15 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
           size = SbControlSize.Small,
           enabled = ready || sendNow,
           shortcut = "↵",
+        )
+      }
+    }
+    state.agent?.approvalUnavailableReason?.let { reason ->
+      SelectionContainer {
+        Callout(
+          tone = FeedbackTone.Info,
+          body = reason,
+          modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         )
       }
     }

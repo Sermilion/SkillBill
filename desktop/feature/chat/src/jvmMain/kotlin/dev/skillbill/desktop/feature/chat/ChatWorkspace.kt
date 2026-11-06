@@ -542,6 +542,7 @@ class ChatWorkspace(
       endAgent(session)
       session.restart(UUID.randomUUID().toString())
       session.replaceTranscript(listOf(stateCard(session.item), ChatMessage.Notice(CLEARED_NOTICE)))
+      session.agentState.value?.let { session.thread.showCapability(it) }
     }
   }
 
