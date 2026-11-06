@@ -8,17 +8,17 @@ import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.PaneContribution
 import dev.skillbill.desktop.core.ui.navigation.PaneSlot
-import dev.skillbill.desktop.core.ui.shell.FloatingPane
+import dev.skillbill.desktop.core.ui.shell.DockedPane
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.IntoSet
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
-/** Contributes the floating chat pane above the active route. */
+/** Contributes the docked chat pane to the work area's right slot. */
 @Inject
 @SingleIn(WindowScope::class)
-class ChatFeatureEntry(workspace: ChatWorkspace) : FeatureEntry {
+class ChatFeatureEntry(workspace: ChatWorkspace, chatPaneWidth: ChatPaneWidth) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = false
 
   @Composable
@@ -26,7 +26,8 @@ class ChatFeatureEntry(workspace: ChatWorkspace) : FeatureEntry {
 
   override val panes: List<PaneContribution> = listOf(PaneContribution(PaneSlot.Chat) {
     val open by workspace.paneOpen.collectAsState()
-    FloatingPane(open, "Chat", onDismiss = workspace::hide) { ChatPane(workspace) }
+    val width by chatPaneWidth.widthDp.collectAsState()
+    if (open) DockedPane("Chat", width, onResize = chatPaneWidth::resizeTo, onDismiss = workspace::hide) { ChatPane(workspace) }
   })
 }
 

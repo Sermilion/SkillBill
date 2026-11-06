@@ -40,7 +40,7 @@ import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
-import dev.skillbill.desktop.core.ui.shell.FloatingPane
+import dev.skillbill.desktop.core.ui.shell.DockedPane
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
 import dev.skillbill.desktop.feature.chat.newtask.unconfinedNewTaskChats
@@ -78,7 +78,7 @@ class ChatComposerTest {
         SkillBillTheme(reducedMotion = true) {
           CompositionLocalProvider(LocalShellInput provides input) {
             focusManager = LocalFocusManager.current
-            FloatingPane(open.value, "Chat", onDismiss = { open.value = false }) {
+            if (open.value) DockedPane("Chat", 560, onResize = {}, onDismiss = { open.value = false }) {
               ChatComposer(session, workspace)
             }
           }

@@ -64,6 +64,10 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
     it.copy(terminalHeightDp = heightDp.coerceIn(AppSettings.TERMINAL_HEIGHT_MIN_DP, AppSettings.TERMINAL_HEIGHT_MAX_DP))
   }
 
+  override suspend fun setChatWidthDp(widthDp: Int) = change {
+    it.copy(chatWidthDp = widthDp.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP))
+  }
+
   override suspend fun setTrayLastTab(tab: TrayTab) = change { it.copy(trayLastTab = tab) }
 
   override suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean) = if (favoriteWriteFailure) {

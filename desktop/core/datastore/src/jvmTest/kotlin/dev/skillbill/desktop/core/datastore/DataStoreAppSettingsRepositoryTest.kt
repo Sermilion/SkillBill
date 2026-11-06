@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.datastore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
@@ -37,6 +38,30 @@ class DataStoreAppSettingsRepositoryTest {
     assertEquals(Outcome.Success(Unit), repository.setDatabasePath("/tmp/a.db"))
     assertEquals(Outcome.Failure(SettingsRejection.BlankDatabasePath), repository.setDatabasePath("   "))
     assertEquals("/tmp/a.db", repository.settings.first().databasePath)
+  }
+
+  @Test
+  fun `chat width round trips and clamps to the maximum`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "chat-width.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+
+    assertEquals(Outcome.Success(Unit), repository.setChatWidthDp(700))
+    assertEquals(700, repository.settings.first().chatWidthDp)
+    assertEquals(Outcome.Success(Unit), repository.setChatWidthDp(5000))
+    // The stored value itself is clamped, not only the decoded settings, which clamp on read too.
+    assertEquals(2000, store.data.first()[AppPreferenceKeys.CHAT_WIDTH_DP])
+    assertEquals(2000, repository.settings.first().chatWidthDp)
+  }
+
+  @Test
+  fun `a stored chat width out of range decodes clamped and is reported, and a missing one decodes to the default`() {
+    val reported = mutableListOf<String>()
+
+    val clamped = mutablePreferencesOf(AppPreferenceKeys.CHAT_WIDTH_DP to 120).toAppSettings { reported += it }
+
+    assertEquals(360, clamped.chatWidthDp)
+    assertEquals(listOf("chat_width_dp=120"), reported)
+    assertEquals(560, emptyPreferences().toAppSettings {}.chatWidthDp)
   }
 
   @Test

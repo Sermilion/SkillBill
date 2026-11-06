@@ -1,3 +1,15 @@
+## [2026-11-06] SKILL-513 docked, resizable chat pane with persisted width
+Areas: desktop/app, desktop/core/datastore, desktop/core/domain, desktop/core/testing, desktop/core/ui, desktop/feature/chat
+- Chat is a docked right pane in the work area, not a floating overlay. It takes the shared right slot while open outside Settings; otherwise the specs pane keeps its rule. WorkArea takes an optional right width.
+- DockedPane (reusable) clamps width between 360 dp and the work-area width minus a 420 dp main-column floor, and reports the clamped result. In drawer mode it covers the work area with no grip. Esc reaches it only while focus is inside it. No scrim or shadow.
+- PaneResizeGrip (reusable) is extracted from FloatingPane and shared by both panes; FloatingPane behaviour is unchanged.
+- The width is saved in app settings as chatWidthDp (default 560 dp, range 360 to 2000) via AppSettingsRepository.setChatWidthDp. A stored value outside the range decodes clamped and is reported unsupported; a missing one decodes to the default. The DataStore key is additive, so no migration.
+- ChatPaneWidth is window-scoped: drags update the on-screen width at once and save once, 300 ms after the last change; closing the window flushes a pending width within one second. Terminal height and floating-pane persistence are unchanged.
+- Validation also isolated tests from the host environment: installer harnesses and the install smoke script no longer inherit the skip-preinstall-uninstall variable, and the governed review evidence bridge test uses the short socket path helper. No production behaviour changed.
+- Limits: verified on macOS only; the agnix and agent-config script checks were not run in the headless validate session.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented (persistence subtask); the docked-layout subtask reported no count
+
 ## [2026-11-06] SKILL-511 multiple New Task chats
 Areas: desktop/app, desktop/core/domain, desktop/core/datastore, desktop/core/testing, desktop/core/ui, desktop/feature/settings, desktop/feature/chat, design/new-task-chat-tabs
 - NewTaskChats owns an uncapped, window-scoped open set with independent repository, branch, agent, text, offer and session state. Selection leaves background streams running; the set always retains an empty draft after its last chat closes.
