@@ -1,3 +1,12 @@
+## [2026-11-06] SKILL-512 main checkout after goal worktree removal
+Areas: runtime-ports, runtime-infra, runtime-domain, runtime-goalrunner, runtime-application, runtime-cli, runtime-contracts, runtime-engine
+- GoalWorktreeResources gains checkoutGoalBranch, returning a sealed checked-out, skipped-for-uncommitted-changes or failed result. The git adapter refuses a blank or dash-leading branch, uncommitted tracked changes, an in-progress merge, rebase, am, cherry-pick or revert, and a missing local branch. It no-ops when HEAD is already on the branch and never forces, merges, stashes, resets or cleans.
+- Completion settlement runs the switch only for a completed goal whose worktree is Removed or Absent, in the same control-state update that records the removal time. Retained worktrees never switch. A thrown exception becomes a best-effort diagnostic and a failed outcome; the removal is still recorded.
+- Control state gains two optional payload keys, the outcome and a detail capped at 300 characters; the four sites that reset the removal time also clear them. No migration. Goal status and the CLI expose main_checkout_outcome and main_checkout_detail.
+- The work-board read model adds the same two optional keys inside goal_worktree. Older rows decode with null fields and an unknown outcome name marks the row invalid; no DesktopReadSchema change.
+- Limits: a skipped or failed switch is not retried, and untracked files do not block it. A git timeout reads "git checkout failed: git timed out".
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
 ## [2026-11-06] SKILL-508 validation page with live checks
 Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-engine, runtime-infra, runtime-mcp, orchestration/contracts, desktop/core, desktop/feature/detail
 - Migration 105 stores validation check events and adds live-check availability and outcome to standalone phase status. DesktopReadSchema is 105.

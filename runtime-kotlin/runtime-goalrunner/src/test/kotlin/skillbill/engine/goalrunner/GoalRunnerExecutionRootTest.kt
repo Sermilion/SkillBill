@@ -1,18 +1,23 @@
 package skillbill.engine.goalrunner
 
 import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
 import skillbill.engine.goalrunner.launch.GoalBranchCheckouts
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.monitoring.GoalWorktreeCompletionSettlement
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
+import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
@@ -20,6 +25,7 @@ import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -105,6 +111,115 @@ class GoalRunnerExecutionRootTest {
     assertEquals("cleanup_failed", store.controlState("parent").executionWorktreeRetentionReason)
   }
 
+  private fun completeOneSubtaskGoal(
+    worktrees: RecordingGoalWorktrees,
+    diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  ): InMemoryGoalManifestStore {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { current -> current.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort())
+          .copy(gitOperations = BranchRootRecordingGit(), goalWorktrees = worktrees, diagnostics = diagnostics),
+      )
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(request()))
+    return store
+  }
+
+  @Test
+  fun `a removed worktree records a failed main checkout switch without retaining it`() {
+    val worktrees =
+      RecordingGoalWorktrees(
+        GoalWorktreeResult.Created(Files.createTempDirectory("goal-main-checkout").toRealPath()),
+        settlementResult = GoalWorktreeSettlement.Removed,
+        checkoutResult = GoalBranchCheckout.Failed("a rebase is in progress in the main checkout"),
+      )
+
+    val control = completeOneSubtaskGoal(worktrees).controlState("parent")
+
+    assertTrue(control.executionWorktreeRemovedAt != null)
+    assertEquals("failed", control.executionMainCheckoutOutcome)
+    assertEquals("a rebase is in progress in the main checkout", control.executionMainCheckoutDetail)
+    assertEquals(null, control.executionWorktreeRetentionReason)
+    assertEquals(listOf("feat/SKILL-56-goal"), worktrees.checkoutBranches)
+  }
+
+  @Test
+  fun `a retained worktree never switches the main checkout`() {
+    val dir = Files.createTempDirectory("goal-main-checkout-retained").toRealPath()
+    val worktrees =
+      RecordingGoalWorktrees(
+        GoalWorktreeResult.Created(dir),
+        settlementResult = GoalWorktreeSettlement.Retained(MonitorRetentionReason.DIRTY_WORKTREE, dir, "dirty"),
+      )
+
+    val control = completeOneSubtaskGoal(worktrees).controlState("parent")
+
+    assertTrue(worktrees.checkoutBranches.isEmpty())
+    assertEquals(null, control.executionMainCheckoutOutcome)
+    assertEquals(null, control.executionMainCheckoutDetail)
+    assertEquals("dirty_worktree", control.executionWorktreeRetentionReason)
+  }
+
+  @Test
+  fun `a throwing main checkout switch still records the removal`() {
+    val worktrees =
+      RecordingGoalWorktrees(
+        GoalWorktreeResult.Created(Files.createTempDirectory("goal-main-checkout-throw").toRealPath()),
+        settlementResult = GoalWorktreeSettlement.Removed,
+        checkoutFailure = IllegalStateException("boom"),
+      )
+    val diagnostics = WarningRecordingDiagnostics()
+
+    val control = completeOneSubtaskGoal(worktrees, diagnostics).controlState("parent")
+
+    assertTrue(control.executionWorktreeRemovedAt != null)
+    assertEquals("failed", control.executionMainCheckoutOutcome)
+    assertEquals("boom", control.executionMainCheckoutDetail)
+    assertEquals(null, control.executionWorktreeRetentionReason)
+    assertTrue(
+      diagnostics.warnings.any { "seam=goal_worktree.main_checkout" in it },
+      diagnostics.warnings.toString(),
+    )
+  }
+
+  @Test
+  fun `a goal without a feature branch records a failed switch without calling the port`() {
+    val dir = Files.createTempDirectory("goal-main-checkout-no-branch").toRealPath()
+    val worktrees =
+      RecordingGoalWorktrees(GoalWorktreeResult.Created(dir), settlementResult = GoalWorktreeSettlement.Removed)
+    val store =
+      InMemoryGoalManifestStore(
+        manifest(subtaskCount = 0).copy(featureBranch = null),
+        initialControlState =
+          GoalRunnerControlState(goalCompletedAt = "2026-11-03T00:00:00Z", executionWorktreePath = dir.toString()),
+      )
+    val state =
+      GoalRunnerManifestState("parent", "/tmp/skillbill-goal-runner/metrics.db", store.manifest, store.controlState)
+    val settlement =
+      GoalWorktreeCompletionSettlement(
+        store,
+        worktrees,
+        TestRepositoryEnclosingRoot,
+        NoopRuntimeDiagnostics,
+        Clock.systemUTC(),
+      )
+
+    settlement.settle(state)
+
+    val control = store.controlState("parent")
+    assertTrue(control.executionWorktreeRemovedAt != null)
+    assertEquals("failed", control.executionMainCheckoutOutcome)
+    assertEquals("the goal has no feature branch", control.executionMainCheckoutDetail)
+    assertTrue(worktrees.checkoutBranches.isEmpty())
+  }
+
   @Test
   fun `a goal with a launched child and no recorded path stays at its bound root`() {
     val bound = Files.createTempDirectory("goal-bound-root").toRealPath()
@@ -176,9 +291,21 @@ private class RecordingGoalWorktrees(
   private val holder: Path? = null,
   private val settlementFailure: RuntimeException? = null,
   private val settlementResult: GoalWorktreeSettlement = GoalWorktreeSettlement.Absent,
+  private val checkoutResult: GoalBranchCheckout = GoalBranchCheckout.CheckedOut,
+  private val checkoutFailure: RuntimeException? = null,
 ) : GoalWorktreeResources {
   var creations = 0
   var settlements = 0
+  val checkoutBranches = mutableListOf<String>()
+
+  override fun checkoutGoalBranch(
+    primaryRoot: Path,
+    branch: String,
+  ): GoalBranchCheckout {
+    checkoutBranches += branch
+    checkoutFailure?.let { throw it }
+    return checkoutResult
+  }
 
   override fun createOrAdopt(
     repoRoot: Path,
@@ -202,6 +329,17 @@ private class RecordingGoalWorktrees(
   }
 
   override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? = null
+}
+
+private class WarningRecordingDiagnostics : RuntimeDiagnostics by NoopRuntimeDiagnostics {
+  val warnings = mutableListOf<String>()
+
+  override fun warning(
+    message: String,
+    error: Throwable?,
+  ) {
+    warnings += message
+  }
 }
 
 private class BranchRootRecordingGit : WorkflowGitOperations by NoopWorkflowGitOperations {

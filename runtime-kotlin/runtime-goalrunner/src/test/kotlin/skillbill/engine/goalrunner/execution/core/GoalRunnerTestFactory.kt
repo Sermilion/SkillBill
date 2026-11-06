@@ -214,6 +214,7 @@ internal data class GoalRunnerTestInputs(
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
   val goalWorktrees: GoalWorktreeResources = InPlaceGoalWorktreeResources,
   val pullRequestWriter: GoalRunnerPullRequestWriter = NoPullRequestWriter,
+  val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -230,7 +231,7 @@ internal data class GoalRunnerTestInputs(
       unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
       executionCoordinator = executionCoordinator,
       phaseQuery = phaseRecorder.phaseQuery,
-      diagnostics = NoopRuntimeDiagnostics,
+      diagnostics = diagnostics,
       phaseRecorder = phaseRecorder,
       childWorkflowDatabase = childWorkflowDatabase,
       ciMonitor = ciMonitor,

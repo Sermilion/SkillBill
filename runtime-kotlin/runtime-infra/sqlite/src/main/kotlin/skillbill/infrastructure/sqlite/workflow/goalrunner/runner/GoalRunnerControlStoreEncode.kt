@@ -83,6 +83,8 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
       executionWorktreeRemovedAt?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_REMOVED_AT to it },
       executionWorktreeRetentionReason?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_REASON to it },
       executionWorktreeRetentionDetail?.let { GoalRunnerControlPayloadKeys.EXECUTION_WORKTREE_RETENTION_DETAIL to it },
+      executionMainCheckoutOutcome?.let { GoalRunnerControlPayloadKeys.EXECUTION_MAIN_CHECKOUT_OUTCOME to it },
+      executionMainCheckoutDetail?.let { GoalRunnerControlPayloadKeys.EXECUTION_MAIN_CHECKOUT_DETAIL to it },
       launchWarning?.let { GoalRunnerControlPayloadKeys.LAUNCH_WARNING to it },
       archiveImportFingerprint?.let { GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_FINGERPRINT to it },
       GoalRunnerControlPayloadKeys.ARCHIVE_IMPORT_SPECS_PENDING.takeIf { archiveImportFingerprint != null }

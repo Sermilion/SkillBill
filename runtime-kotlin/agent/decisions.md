@@ -1,3 +1,13 @@
+## [2026-11-06] Switch the main checkout to the goal branch after its worktree is removed
+Context: A goal's branch is checked out in its worktree. After removal the primary checkout can switch to it, but the operator may have uncommitted work or an operation in progress.
+Decision: Settlement runs a non-forcing checkout through GoalWorktreeResources.checkoutGoalBranch only for a removed or absent worktree. The adapter refuses on uncommitted tracked changes, an in-progress merge, rebase, am, cherry-pick or revert, or a missing local branch. The outcome and a capped detail are stored in the goal control payload; a refusal or failure is recorded, never raised, and never blocks the removal record.
+Reason: Switching only on a clean, idle checkout cannot lose operator work, and git refuses untracked-file collisions on its own. Recording outcome and removal in one update means status always explains why the checkout did or did not move. Extra keys in the JSON control state need no migration.
+Alternatives considered: A forced checkout or stash switches more often but can discard or hide operator changes; a retry loop adds background state for an advisory convenience.
+
+## [2026-11-06] Keep the main-checkout outcome optional in the work-board payload
+Context: The work-board read model is persisted and read by the desktop, and rows written earlier carry no outcome.
+Decision: Resolve the control-state string to a ports enum at projection using the shared wire constants, dropping outcome and detail when the value is unknown. Store the enum name and detail as optional goal_worktree keys, and validate an unknown name as an invalid row.
+Reason: Optional keys decode existing rows unchanged, so no migration or desktop read-schema bump is needed. One set of wire constants keeps one spelling, and validation keeps a bad row from crashing a read.
 ## [2026-11-06] Purge validation events without counting or archiving them
 Context: Goal purge removes standalone status rows, while validation events are keyed by invocation. Counted tables must also appear in archive snapshots.
 Decision: Delete events with their status rows, but omit them from purge counts and archive snapshots.

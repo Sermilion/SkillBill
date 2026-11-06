@@ -9,6 +9,7 @@ import java.net.UnixDomainSocketAddress
 import java.nio.channels.Channels
 import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -52,8 +53,7 @@ class GovernedReviewEvidenceBridgeTest {
 
   @Test
   fun `bridge forwards tools list to the governed evidence socket`() {
-    val socketPath = Files.createTempFile("sb", ".sock")
-    Files.delete(socketPath)
+    val socketPath = newSocketPath()
     val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     server.bind(UnixDomainSocketAddress.of(socketPath))
     var forwardedRequest: String? = null
@@ -142,8 +142,7 @@ class GovernedReviewEvidenceBridgeTest {
 
   @Test
   fun `a forwarded response over the frame limit is rejected by a real unix socket`() {
-    val socketPath = Files.createTempFile("sb", ".sock")
-    Files.delete(socketPath)
+    val socketPath = newSocketPath()
     val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     server.bind(UnixDomainSocketAddress.of(socketPath))
     val thread =
@@ -172,8 +171,7 @@ class GovernedReviewEvidenceBridgeTest {
 
   @Test
   fun `a handshake refusal is reported as a transport error`() {
-    val socketPath = Files.createTempFile("sb", ".sock")
-    Files.delete(socketPath)
+    val socketPath = newSocketPath()
     val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     server.bind(UnixDomainSocketAddress.of(socketPath))
     val thread =
@@ -191,5 +189,25 @@ class GovernedReviewEvidenceBridgeTest {
       }
     assertEquals(GovernedReviewFailureCode.EVIDENCE_TRANSPORT, error.code)
     thread.join()
+  }
+
+  private fun newSocketPath(): Path {
+    val configured = Path.of(System.getProperty("java.io.tmpdir"))
+    val root = if (socketPathFits(configured)) configured else Path.of("/tmp")
+    return Files.createTempFile(root, SOCKET_PREFIX, SOCKET_SUFFIX).also(Files::delete)
+  }
+
+  private fun socketPathFits(root: Path): Boolean =
+    root
+      .resolve(SOCKET_PREFIX + "0".repeat(TEMP_SUFFIX_DIGITS) + SOCKET_SUFFIX)
+      .toString()
+      .toByteArray(Charsets.UTF_8)
+      .size <= MAX_SOCKET_PATH_BYTES
+
+  private companion object {
+    const val SOCKET_PREFIX = "sb"
+    const val SOCKET_SUFFIX = ".sock"
+    const val TEMP_SUFFIX_DIGITS = 20
+    const val MAX_SOCKET_PATH_BYTES = 102
   }
 }
