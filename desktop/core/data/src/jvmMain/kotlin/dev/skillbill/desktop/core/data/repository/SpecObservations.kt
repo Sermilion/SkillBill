@@ -194,7 +194,7 @@ class SpecObservations internal constructor(
       reads.read("spec_control") { component ->
         val control = component.specBrowserService.control(bundle.projectId, bundle.path, bundle.repoRoot?.let(Path::of))
         val liveGoal = control.workflowId?.let { workflowId ->
-          component.ideStatusService.detail(WorkDetailRequest(workflowId)).item?.toWorkItem(sessionId)
+          reads.ideStatusService.detail(WorkDetailRequest(workflowId)).item?.toWorkItem(sessionId)
         }
         SpecControlState.Loaded(control.toDomain(), liveGoal)
       }
