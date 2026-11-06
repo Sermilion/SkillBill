@@ -64,19 +64,21 @@ internal class NewTaskChat(
   val repositoryMissing: Boolean = false,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
   approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
+  retainedThread: ChatThread = ChatThread(clock),
+  private val saveLock: Mutex = Mutex(),
+  private val canPersist: () -> Boolean = { true },
 ) {
   @Volatile
   var sessionId: String = initialSessionId
     private set
 
-  val thread = ChatThread(clock)
+  val thread = retainedThread
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
   private val approvalFlow = ChatApprovals(approvals)
 
   /** True only while the approval feed holds this window's operator registration for the draft's repository. */
   val approvalLiveState = MutableStateFlow(false)
   val approvalLive: StateFlow<Boolean> = approvalLiveState.asStateFlow()
-  private val saveLock = Mutex()
   @Volatile
   private var turnRunning = false
   @Volatile
@@ -359,6 +361,7 @@ internal class NewTaskChat(
 
   private suspend fun save(): Boolean {
     return saveLock.withLock {
+      if (!canPersist()) return@withLock false
       val lines = snapshotLines()
       val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
       chat.saveNewTaskDraft(

@@ -32,6 +32,9 @@ internal class OperationCardCoordinator(
 ) {
   private val requests = ConcurrentHashMap<String, NewTaskStart>()
   private val observations = ConcurrentHashMap<String, Job>()
+  private val outstanding = ConcurrentHashMap<ChatThread, Int>()
+
+  fun hasOutstanding(thread: ChatThread): Boolean = outstanding.containsKey(thread)
 
   /** Keeps the request that parked [launchId], so Adjust can ask for a replacement with the same target and branch. */
   fun remember(launchId: String, request: NewTaskStart) {
@@ -52,7 +55,14 @@ internal class OperationCardCoordinator(
   fun revalidate(thread: ChatThread, tokens: List<String>) {
     tokens.forEach { token ->
       observations.remove(token)?.cancel()
-      val job = scope.launch { observe(thread, token) }
+      val job = scope.launch {
+        val finish = track(thread)
+        try {
+          observe(thread, token)
+        } finally {
+          finish()
+        }
+      }
       observations[token] = job
       job.invokeOnCompletion { observations.remove(token, job) }
     }
@@ -121,6 +131,7 @@ internal class OperationCardCoordinator(
     }
     val selection = message.selectionWire()
     thread.beginOperationDecision(token) ?: return
+    val finish = track(thread)
     scope.launch {
       var refusal: String? = null
       try {
@@ -137,6 +148,7 @@ internal class OperationCardCoordinator(
           } finally {
             thread.operationCardSubmitting(token, false, refusal)
             persistOrWarn(thread)
+            finish()
           }
         }
       }
@@ -149,6 +161,7 @@ internal class OperationCardCoordinator(
 
   private fun dismiss(thread: ChatThread, token: String) {
     thread.beginOperationDecision(token) ?: return
+    val finish = track(thread)
     scope.launch {
       var refusal: String? = null
       try {
@@ -160,6 +173,7 @@ internal class OperationCardCoordinator(
           } finally {
             thread.operationCardSubmitting(token, false, refusal)
             persistOrWarn(thread)
+            finish()
           }
         }
       }
@@ -173,6 +187,7 @@ internal class OperationCardCoordinator(
         scope.launch { persistOrWarn(thread) }
       }
     thread.beginOperationDecision(token) ?: return
+    val finish = track(thread)
     scope.launch {
       var failure: String? = null
       try {
@@ -185,6 +200,7 @@ internal class OperationCardCoordinator(
           } finally {
             thread.operationCardSubmitting(token, false, failure)
             persistOrWarn(thread)
+            finish()
           }
         }
       }
@@ -215,6 +231,13 @@ internal class OperationCardCoordinator(
       is NewTaskStartOutcome.Failed -> readProblemText(outcome.problem)
       is NewTaskStartOutcome.NeedsKey -> "This operation does not take an issue key."
     }
+
+  private fun track(thread: ChatThread): () -> Unit {
+    outstanding.compute(thread) { _, count -> (count ?: 0) + 1 }
+    return {
+      outstanding.computeIfPresent(thread) { _, count -> if (count == 1) null else count - 1 }
+    }
+  }
 
   private fun String.toKind(): NewTaskKind? =
     when (this) {

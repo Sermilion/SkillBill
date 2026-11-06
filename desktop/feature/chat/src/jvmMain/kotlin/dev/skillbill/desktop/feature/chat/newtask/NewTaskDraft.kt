@@ -38,11 +38,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.util.UUID
 import java.util.IdentityHashMap
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 
 data class NewTaskRepository(val root: String, val name: String)
@@ -74,6 +77,9 @@ class NewTaskDraft(
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
+  private val retainedThreads = ConcurrentHashMap<String, ChatThread>()
+  private val saveLocks = ConcurrentHashMap<String, Mutex>()
+  private val invalidDrafts = ConcurrentHashMap.newKeySet<String>()
   private val cards = OperationCardCoordinator(workControls, scope, { kind ->
     val agent = selectedAgent
     val repo = repository
@@ -92,7 +98,9 @@ class NewTaskDraft(
         profile = agent.profile,
       )
     }
-  }, { thread -> cardOwners[thread]?.persist() ?: false })
+  }, { thread ->
+    synchronized(cardOwners) { cardOwners[thread] }?.persist()?.also { if (it) refreshSaved() } ?: false
+  })
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
   private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private val offerState = MutableStateFlow(NewTaskOffer())
@@ -315,7 +323,14 @@ class NewTaskDraft(
   internal fun discard() {
     if (closing) return
     val current = chatState.value ?: return
-    leave(current) { chats.deleteSavedChat(current.sessionId) }
+    val saveLock = saveLocks[current.sessionId]
+    invalidDrafts += current.sessionId
+    retainedThreads.remove(current.sessionId)
+    saveLocks.remove(current.sessionId)
+    synchronized(cardOwners) { cardOwners.remove(current.thread) }
+    leave(current) {
+      saveLock?.withLock { chats.deleteSavedChat(current.sessionId) } ?: chats.deleteSavedChat(current.sessionId)
+    }
   }
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
@@ -351,7 +366,17 @@ class NewTaskDraft(
     next.thread.showCapability(agent)
     scope.launch {
       current.job.join()
-      chats.deleteSavedChat(previousId)
+      if (!cards.hasOutstanding(current.thread)) {
+        val lock = saveLocks[previousId]
+        if (lock != null) {
+          lock.withLock {
+            chats.deleteSavedChat(previousId)
+            retainedThreads.remove(previousId, current.thread)
+            saveLocks.remove(previousId, lock)
+            synchronized(cardOwners) { cardOwners.remove(current.thread) }
+          }
+        } else chats.deleteSavedChat(previousId)
+      }
       if (!next.persist() && chatState.value === next) {
         next.thread.append(ChatMessage.Notice("This draft could not be saved. Keep it open and try again."))
       }
@@ -362,12 +387,14 @@ class NewTaskDraft(
   /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
   internal suspend fun resume(entry: ChatHistoryEntry): Boolean {
     val context = entry.newTask ?: return false
+    if (entry.sessionId in invalidDrafts) return false
     if (!close()) return false
     repository = NewTaskRepository(context.repositoryRoot, File(context.repositoryRoot).name)
     baseBranch = context.baseBranch.orEmpty()
     agentId = entry.agent.agentId
     selectedAgent = entry.agent
     val missing = !File(context.repositoryRoot).isDirectory
+    val retained = retainedThreads[entry.sessionId]
     val resumed = open(
       entry.sessionId,
       context.repositoryRoot,
@@ -377,12 +404,12 @@ class NewTaskDraft(
       context.pendingTurnLineIndex,
       missing,
     )
-    val lines = entry.lines.map(::restored)
+    val lines = if (retained == null) entry.lines.map(::restored) else emptyList()
     val notice = ChatMessage.Notice("This draft's repository no longer exists: ${context.repositoryRoot}. Discard it to continue.")
-    resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
+    if (retained == null) resumed.thread.replaceTranscript(if (missing) lines + notice else lines)
     resumed.thread.showCapability(entry.agent)
-    cardOwners[resumed.thread] = resumed
-    if (!missing) cards.revalidate(resumed.thread, entry.lines.mapNotNull { it.operationCard?.token })
+    synchronized(cardOwners) { cardOwners[resumed.thread] = resumed }
+    if (!missing) cards.revalidate(resumed.thread, resumed.thread.transcript.value.mapNotNull { (it as? ChatMessage.Notice)?.operationCard?.token })
     return true
   }
 
@@ -406,8 +433,10 @@ class NewTaskDraft(
     started: Boolean = false,
     pendingTurnLineIndex: Int? = null,
     missing: Boolean = false,
-  ): NewTaskChat =
-    NewTaskChat(
+  ): NewTaskChat {
+    val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
+    val saveLock = saveLocks.getOrPut(sessionId) { Mutex() }
+    return NewTaskChat(
       chats,
       scope,
       clock,
@@ -421,10 +450,15 @@ class NewTaskDraft(
       missing,
       chatDispatcher,
       approvals,
+      thread,
+      saveLock,
+      { sessionId !in invalidDrafts && retainedThreads[sessionId] === thread },
     ).also {
       clearChatFeedback()
       chatState.value = it
+      synchronized(cardOwners) { cardOwners[thread] = it }
     }
+  }
 
   // Waits for the cancelled turn first, so a save it had in flight cannot recreate a deleted draft or miss the refreshed list.
   private fun leave(current: NewTaskChat, afterEnd: suspend () -> Unit) {
@@ -459,14 +493,15 @@ class NewTaskDraft(
 
   /** Shows the card [launchId] parked; a run that ended cleanly without one has nothing to show when [silentWhenAbsent]. */
   private suspend fun showParkedCard(current: NewTaskChat?, kind: NewTaskKind, launchId: String, silentWhenAbsent: Boolean = false) {
-    if (!ownsChat(current)) {
-      if (!silentWhenAbsent) toasts.show(ToastMessage(ToastTone.Confirmation, "${kind.startName()} is waiting for confirmation."))
-      return
-    }
-    val chat = checkNotNull(current)
-    cardOwners[chat.thread] = chat
+    val chat = current ?: return
+    if (chat.sessionId in invalidDrafts || retainedThreads[chat.sessionId] !== chat.thread) return
+    val shown = cards.show(chat.thread, launchId)
+    val owner = synchronized(cardOwners) { cardOwners[chat.thread] }
+    if (shown && owner?.persist() == true) refreshSaved()
+    val visible = chatState.value?.thread === chat.thread
     when {
-      cards.show(chat.thread, launchId) -> chat.persist()
+      !visible && !silentWhenAbsent -> toasts.show(ToastMessage(ToastTone.Confirmation, "${kind.startName()} is waiting for confirmation."))
+      shown -> Unit
       !silentWhenAbsent ->
         showStartProblem(current, kind, "${kind.startName()} is waiting for confirmation, but its card could not be read.")
     }
