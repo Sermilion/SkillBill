@@ -57,6 +57,7 @@ class ChatSession internal constructor(
   internal var started: Boolean = false
   internal var startedRoot: String? = null
   internal var worktreeRemovedNoticed: Boolean = false
+  internal var mainCheckoutNoticed: Boolean = false
   internal var turnJob: Job? = null
   internal var resumeJob: Job? = null
   internal var stoppedTurn: Job? = null

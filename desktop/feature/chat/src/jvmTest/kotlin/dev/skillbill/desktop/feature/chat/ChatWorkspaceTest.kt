@@ -26,6 +26,7 @@ import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
@@ -225,6 +226,74 @@ class ChatWorkspaceTest {
     assertEquals(1, session.transcript.value.filterIsInstance<ChatMessage.Notice>().count {
       it.text == "$REMOVED_WORKTREE_CHAT_NOTICE /repo."
     })
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `a removal and a failed main checkout in one refresh announce the removal first`() = runTest {
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree("/repo/.skill-bill/worktrees/SKILL-512", GoalWorktreeState.Active, null, null),
+    )
+    val detail = MutableStateFlow(loaded(active))
+    details.details = mapOf(active.id to detail)
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+
+    detail.value = loaded(
+      active.copy(
+        goalWorktree = active.goalWorktree?.copy(
+          state = GoalWorktreeState.Removed,
+          mainCheckout = MainCheckoutOutcome.Failed,
+          mainCheckoutDetail = "rebase in progress",
+        ),
+      ),
+    )
+    runCurrent()
+
+    val notices = session.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
+    assertEquals(
+      listOf("$REMOVED_WORKTREE_CHAT_NOTICE /repo.", "$MAIN_CHECKOUT_NOT_SWITCHED_NOTICE: rebase in progress."),
+      notices.filter { it.startsWith(REMOVED_WORKTREE_CHAT_NOTICE) || it.startsWith(MAIN_CHECKOUT_NOT_SWITCHED_NOTICE) },
+    )
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `a main checkout outcome delivered after the removal notice is announced once`() = runTest {
+    val active = workItem("SKILL-512").copy(
+      repositoryRoot = "/repo",
+      goalWorktree = GoalWorktree("/repo/.skill-bill/worktrees/SKILL-512", GoalWorktreeState.Active, null, null),
+    )
+    val detail = MutableStateFlow(loaded(active))
+    details.details = mapOf(active.id to detail)
+    val workspace = workspace()
+    workspace.open(active)
+    runCurrent()
+    val session = workspace.session(active.id)!!
+
+    val removed = active.copy(goalWorktree = active.goalWorktree?.copy(state = GoalWorktreeState.Removed))
+    detail.value = loaded(removed)
+    runCurrent()
+    val skipped = removed.copy(
+      goalWorktree = removed.goalWorktree?.copy(
+        mainCheckout = MainCheckoutOutcome.SkippedUncommittedChanges,
+        mainCheckoutDetail = "app/build.gradle",
+      ),
+    )
+    detail.value = loaded(skipped)
+    runCurrent()
+    detail.value = loaded(skipped.copy(title = "refreshed"))
+    runCurrent()
+
+    val notices = session.transcript.value.filterIsInstance<ChatMessage.Notice>().map { it.text }
+    val expected = "$MAIN_CHECKOUT_NOT_SWITCHED_NOTICE: app/build.gradle."
+    assertEquals(1, notices.count { it == expected })
+    val removedNotice = notices.indexOf("$REMOVED_WORKTREE_CHAT_NOTICE /repo.")
+    assertTrue(removedNotice >= 0, "the removed-worktree notice is missing: $notices")
+    assertTrue(removedNotice < notices.indexOf(expected))
     workspace.closeAll()
   }
 

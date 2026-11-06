@@ -21,6 +21,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
@@ -83,8 +84,16 @@ internal fun DetailHeader(
       when (val worktree = item.goalWorktree) {
         null -> Unit
         else -> when (worktree.state) {
-          GoalWorktreeState.Removed ->
-            BasicText("The goal's worktree was removed. Its branch stays.", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+          GoalWorktreeState.Removed -> {
+            val detail = worktree.mainCheckoutDetail?.let { ": $it" }.orEmpty()
+            val outcome = when (worktree.mainCheckout) {
+              MainCheckoutOutcome.CheckedOut -> "The main checkout is now on its branch."
+              MainCheckoutOutcome.SkippedUncommittedChanges -> "The main checkout was not switched to its branch because it has uncommitted changes$detail."
+              MainCheckoutOutcome.Failed -> "The main checkout could not be switched to its branch$detail."
+              null -> "Its branch stays."
+            }
+            BasicText("The goal's worktree was removed. $outcome", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
+          }
           GoalWorktreeState.Retained ->
             BasicText(
               "The goal's worktree stays at ${worktree.path}: ${worktree.retentionDetail ?: worktree.retentionReason.orEmpty()}.",

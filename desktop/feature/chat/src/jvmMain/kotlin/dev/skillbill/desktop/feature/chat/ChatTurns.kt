@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -32,6 +33,7 @@ internal const val ACT_PREFIX =
 
 internal const val ALREADY_RUNNING_NOTICE = "The execution is already running again; the app did not relaunch it."
 internal const val REMOVED_WORKTREE_CHAT_NOTICE = "This goal's worktree was removed, so its earlier agent sessions cannot continue. New turns run in"
+internal const val MAIN_CHECKOUT_NOT_SWITCHED_NOTICE = "The main checkout was not switched to the goal branch"
 
 /** The one mode rule: a running or active execution is only read; anything else may be acted on. */
 internal fun modeFor(header: WorkItem): ChatPermissionMode =
@@ -79,9 +81,20 @@ internal class ChatTurns(
   }
 
   fun followWorktree(session: ChatSession) {
-    if (session.item.goalWorktree?.state != GoalWorktreeState.Removed || session.worktreeRemovedNoticed) return
-    session.worktreeRemovedNoticed = true
-    session.append(ChatMessage.Notice("$REMOVED_WORKTREE_CHAT_NOTICE ${session.item.repositoryRoot}."))
+    if (session.item.goalWorktree?.state == GoalWorktreeState.Removed && !session.worktreeRemovedNoticed) {
+      session.worktreeRemovedNoticed = true
+      session.append(ChatMessage.Notice("$REMOVED_WORKTREE_CHAT_NOTICE ${session.item.repositoryRoot}."))
+    }
+    followMainCheckout(session)
+  }
+
+  /** Tells the operator once per session that the main checkout stayed where it was after the worktree was removed. */
+  private fun followMainCheckout(session: ChatSession) {
+    val worktree = session.item.goalWorktree ?: return
+    val notSwitched = worktree.mainCheckout == MainCheckoutOutcome.SkippedUncommittedChanges || worktree.mainCheckout == MainCheckoutOutcome.Failed
+    if (worktree.state != GoalWorktreeState.Removed || !notSwitched || session.mainCheckoutNoticed) return
+    session.mainCheckoutNoticed = true
+    session.append(ChatMessage.Notice(MAIN_CHECKOUT_NOT_SWITCHED_NOTICE + (worktree.mainCheckoutDetail?.let { ": $it" }.orEmpty()) + "."))
   }
 
   fun markGone(session: ChatSession) {

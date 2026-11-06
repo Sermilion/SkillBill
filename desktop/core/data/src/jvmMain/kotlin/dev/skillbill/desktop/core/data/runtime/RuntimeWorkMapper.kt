@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.WorkDisplayGroup
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.GoalWorktree
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import dev.skillbill.desktop.core.domain.model.WorkProgress
@@ -25,6 +26,7 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
+import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import skillbill.ports.idestatus.model.WorkDetailItem
@@ -147,9 +149,22 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     workflowQaOutcome = workflowQaOutcome?.toDomain(),
     standaloneExecution = execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE,
     goalWorktree = verdicts.goalWorktree?.let {
-      GoalWorktree(it.path, it.state.toDomain(), it.retentionReason, it.retentionDetail)
+      GoalWorktree(
+        it.path,
+        it.state.toDomain(),
+        it.retentionReason,
+        it.retentionDetail,
+        it.mainCheckoutOutcome?.toDomain(),
+        it.mainCheckoutDetail,
+      )
     },
   )
+}
+
+internal fun GoalMainCheckoutOutcome.toDomain(): MainCheckoutOutcome = when (this) {
+  GoalMainCheckoutOutcome.CHECKED_OUT -> MainCheckoutOutcome.CheckedOut
+  GoalMainCheckoutOutcome.SKIPPED_UNCOMMITTED_CHANGES -> MainCheckoutOutcome.SkippedUncommittedChanges
+  GoalMainCheckoutOutcome.FAILED -> MainCheckoutOutcome.Failed
 }
 
 private fun RuntimeGoalWorktreeState.toDomain(): GoalWorktreeState = when (this) {

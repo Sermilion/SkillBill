@@ -243,7 +243,16 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     changeBaseline = changeBaseline?.toDomain(),
     degradedGoalStatusSource = GOAL_STATUS_READ_SOURCE.takeIf { goal == null && !goalManifest?.subtasks.isNullOrEmpty() },
     currentSubtaskId = goal?.currentSubtaskId,
-    goalWorktree = goalWorktree?.let { GoalWorktree(it.path, it.state.toWorktreeDomain(), it.retentionReason, it.retentionDetail) },
+    goalWorktree = goalWorktree?.let {
+      GoalWorktree(
+        it.path,
+        it.state.toWorktreeDomain(),
+        it.retentionReason,
+        it.retentionDetail,
+        it.mainCheckoutOutcome?.toDomain(),
+        it.mainCheckoutDetail,
+      )
+    },
     launchWarning = goal?.launchWarning,
     planOutputTail = planOutputTail,
     planOutputUpdatedAt = planOutputUpdatedAt?.toKotlinInstant(),
