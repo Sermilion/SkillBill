@@ -1,3 +1,15 @@
+## [2026-11-06] Save the chat width after a drag settles and flush it on window close
+Context: Dragging the chat divider changes the width many times per second. Writing each value to DataStore is wasteful, and a width changed just before quitting could be lost.
+Decision: ChatPaneWidth updates its state flow immediately and saves through AppSettingsRepository.setChatWidthDp after a 300 ms pause. Closing the window cancels the pending timer and writes the last value once, bounded by a one-second timeout. A rejected write is dropped, not retried. The width is clamped to 360 to 2000 dp on write and again on read.
+Reason: One write per drag keeps settings storage quiet, and the close flush keeps the last width. Clamping on both sides stops an unclamped writer from being hidden by the reader. The timeout stops a stuck store from delaying window shutdown.
+Revisit when: Settings writes become cheap enough to save on every change, or window close gains an asynchronous shutdown hook that replaces the blocking flush.
+
+## [2026-11-06] Dock chat in the shared right pane slot and clamp it to a main-column floor
+Context: Chat floated over the work area as an overlay, covering the main column and competing with the specs pane for Esc and focus.
+Decision: Chat renders through WorkArea's right slot and replaces the specs pane while open outside Settings. DockedPane clamps width to at least 360 dp and at most the work-area width minus 420 dp, and every resize reports the clamped result. In drawer mode it covers the work area without a grip. Esc is routed to the pane only while focus is inside it.
+Reason: A docked pane keeps the main column usable and avoids a scrim that blocks it. Clamping at the pane, from the rendered width, keeps stored widths valid after a window shrink.
+Revisit when: Chat and specs need to be visible together, or the main column floor needs a per-route value.
+
 ## [2026-11-06] Refresh observed standalone plans on a bounded pulse
 Context: Plan output snapshots have no change revision, so database signals alone do not guarantee a full detail refresh when output changes.
 Decision: Refresh full detail every two seconds while an observed standalone plan is active or blocked. Stop when a full read reports it idle or the observer closes.
