@@ -139,6 +139,10 @@ class DataStoreAppSettingsRepository(
     it[AppPreferenceKeys.TERMINAL_HEIGHT_DP] = heightDp.coerceIn(AppSettings.TERMINAL_HEIGHT_MIN_DP, AppSettings.TERMINAL_HEIGHT_MAX_DP)
   }
 
+  override suspend fun setChatWidthDp(widthDp: Int) = edit {
+    it[AppPreferenceKeys.CHAT_WIDTH_DP] = widthDp.coerceIn(AppSettings.CHAT_WIDTH_MIN_DP, AppSettings.CHAT_WIDTH_MAX_DP)
+  }
+
   override suspend fun setTrayLastTab(tab: TrayTab) = edit { it[AppPreferenceKeys.TRAY_LAST_TAB] = tab.wireValue }
 
   override suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean) = edit { preferences ->

@@ -95,6 +95,7 @@ fun ApplicationScope.MainWindow(
       window.terminal.close()
       window.specsPane.close()
       window.chat.closeChats()
+      window.chatPaneWidth.close()
       window.scope.scope.cancel()
     }
   }

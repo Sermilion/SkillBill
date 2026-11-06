@@ -16,6 +16,7 @@ internal object AppPreferenceKeys {
   val HISTORY_RETENTION = stringPreferencesKey("history_retention")
   val START_AT_LOGIN = booleanPreferencesKey("start_at_login")
   val TERMINAL_HEIGHT_DP = intPreferencesKey("terminal_height_dp")
+  val CHAT_WIDTH_DP = intPreferencesKey("chat_width_dp")
   val TRAY_LAST_TAB = stringPreferencesKey("tray_last_tab")
   val FAVORITE_WORK = stringSetPreferencesKey("favorite_work")
   val FAVORITE_SPECS = stringSetPreferencesKey("favorite_specs")
