@@ -56,6 +56,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.io.IOException
 import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
@@ -80,7 +81,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     val bundle =
       parent.records.loadPlanBundle(facts.workflowId)
         ?: return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(MISSING_BUNDLE_REASON))
-    snapshots.drift(facts.repoRoot, facts.issueKey, bundle)?.let { reason ->
+    snapshots.parentAndManifestDrift(facts.repoRoot, facts.issueKey, bundle)?.let { reason ->
       return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(reason))
     }
     val unitRecords = parent.records.loadPhaseRecords(facts.workflowId).orEmpty()
@@ -151,12 +152,19 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
       try {
         val bundle =
           parent.records.loadPlanBundle(facts.workflowId) ?: return blockUnit(unitId, MISSING_BUNDLE_REASON)
-        stagedUnit(storeSubSpec(bundle, unitId))?.let { staged ->
-          PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)
+        val staged = stagedUnit(storeSubSpec(bundle, unitId))
+        if (staged == null) {
+          snapshots.settleUnit(facts.repoRoot, facts.issueKey, bundle, unitId)
+        } else {
+          settleStagedUnit(unitId, bundle, staged)
         }
-        snapshots.settleUnit(facts.repoRoot, facts.issueKey, bundle, unitId)
       } catch (error: SkillBillRuntimeException) {
         return blockUnit(unitId, "Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
+      } catch (error: IOException) {
+        return blockUnit(
+          unitId,
+          "Planning subtask $unitId could not be read or promoted: ${error.message.orEmpty()}",
+        )
       }
     return when (settled) {
       is PlanUnitSettlement.Rejected -> blockUnit(unitId, settled.reason)
@@ -165,6 +173,34 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
           null
         } else {
           blockUnit(unitId, "Planning subtask $unitId could not be recorded.")
+        }
+    }
+  }
+
+  private fun settleStagedUnit(
+    unitId: Int,
+    bundle: FeatureTaskRuntimePlanBundle,
+    staged: StagedUnit,
+  ): PlanUnitSettlement {
+    val stagedPath =
+      PlanBundleStagingPromotion.stagedUnitPath(parent.diagnostics, staged)
+        ?: return PlanUnitSettlement.Rejected("Planning subtask $unitId could not be read or promoted.")
+    return when (
+      val validation =
+        snapshots.settleStagedUnit(
+          facts.repoRoot,
+          facts.issueKey,
+          bundle,
+          unitId,
+          stagedPath,
+        )
+    ) {
+      is PlanUnitSettlement.Rejected -> validation
+      is PlanUnitSettlement.Planned ->
+        if (PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)) {
+          validation
+        } else {
+          PlanUnitSettlement.Rejected("Planning subtask $unitId could not be promoted to the project store.")
         }
     }
   }

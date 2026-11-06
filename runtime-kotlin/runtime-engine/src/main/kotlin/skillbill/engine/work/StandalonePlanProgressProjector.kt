@@ -58,12 +58,14 @@ public class StandalonePlanProgressProjector(
       }
     val report = phase.issueKey?.let { reportPort.detailReport(it, repoRoot, savedIds) }
     val manifestUnits = report?.subtasks.orEmpty()
-    val blocked =
-      manifestUnits.firstNotNullOfOrNull { subtask ->
+    val blockedUnits =
+      manifestUnits.mapNotNull { subtask ->
         records[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtask.id)]
           ?.takeIf { it.status == WorkflowStepStatus.BLOCKED || !it.blockedReason.isNullOrBlank() }
           ?.let { subtask.id to it }
       }
+    val blocked = blockedUnits.firstOrNull()
+    val blockedIds = blockedUnits.map { it.first }
     val blockedId = blocked?.first
     val blockedReason = blocked?.second?.blockedReason
     val savedManifestIds =
@@ -98,6 +100,7 @@ public class StandalonePlanProgressProjector(
       wave?.ordinal,
       wave?.capacity,
       waveHistory?.complete == true,
+      blockedIds,
     )
   }
 

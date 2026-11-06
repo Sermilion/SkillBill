@@ -386,6 +386,7 @@ private fun RuntimeStandalonePlanProgress.toDomain(): DesktopStandalonePlanProgr
   stalledSince?.toKotlinInstant(),
   planningWaveNumber,
   planningWaveHistoryComplete,
+  blockedSubtaskIds,
 )
 
 private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {

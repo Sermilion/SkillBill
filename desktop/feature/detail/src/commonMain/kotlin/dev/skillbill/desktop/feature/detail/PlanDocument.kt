@@ -32,6 +32,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.list.TreeRow
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
 import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -54,17 +55,22 @@ internal fun DetailSections.planDocument(
 ) {
   val plan = detail.standalonePlan
   planStatus(item, detail, plan?.stalledSince)
-  plan?.blockedSubtaskId?.let { id ->
+  val blockedIds = plan?.blockedSubtaskIds.orEmpty().ifEmpty { plan?.blockedSubtaskId?.let(::listOf).orEmpty() }
+  if (blockedIds.isNotEmpty()) {
     this.item(key = "plan-blocked") {
       Column(Modifier.padding(top = DocBlockGap), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Hint("Planning stopped at subtask $id", FeedbackTone.Warn, LucideIcons.alert)
-        plan.blockedReason?.takeIf(String::isNotBlank)?.let { reason ->
-          BasicText(reason, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.stBlocked))
+        Hint(blockedSubtasksLabel(blockedIds), FeedbackTone.Warn, LucideIcons.alert)
+        blockedIds.forEach { id ->
+          val reason = plan?.units?.firstOrNull { it.subtaskId == id }?.blockedReason
+            ?: plan?.blockedReason?.takeIf { blockedIds.size == 1 }
+          reason?.takeIf(String::isNotBlank)?.let {
+            BasicText(if (blockedIds.size == 1) it else "Subtask $id: $it", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.stBlocked))
+          }
         }
       }
     }
   }
-  if (plan?.blockedSubtaskId != null || detail.incident != null || view.decision != null) incident(state, view, onAction)
+  if (blockedIds.isNotEmpty() || detail.incident != null || view.decision != null) incident(state, view, onAction)
   if (plan?.units.isNullOrEmpty()) {
     detail.planOutputTail.takeIf { it.isNotEmpty() }?.let { lines ->
       item(key = "plan-output-tail") {
@@ -121,7 +127,7 @@ private fun PlanStageStrip(item: WorkItem, detail: Detail) {
     Row(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(SkillBillRadius.md))) {
       PLAN_STAGES.forEach { label ->
         val stage = stages[label.id]
-        val blocked = stage?.status == "blocked" || (label.id == "plan_subtasks" && plan?.blockedSubtaskId != null)
+        val blocked = stage?.status == "blocked" || (label.id == "plan_subtasks" && hasBlockedSubtasks(plan))
         val status = when {
           blocked -> "blocked"
           stage?.status == "running" -> "active"
@@ -173,13 +179,21 @@ private fun PlanStageStrip(item: WorkItem, detail: Detail) {
 private fun PlanStatusLine(item: WorkItem, detail: Detail) {
   val plan = detail.standalonePlan
   val status = when {
-    plan?.blockedSubtaskId != null -> "Planning stopped at subtask ${plan.blockedSubtaskId}."
+    hasBlockedSubtasks(plan) -> "${blockedSubtasksLabel(blockedSubtaskIds(plan))}."
     planFinished(item, detail) -> "${plan?.totalSubtaskCount ?: 0} subtasks, all specs saved."
     plan?.currentPlanningSubtaskId != null -> "Writing subtask spec ${plan.currentPlanningSubtaskId} of ${plan.totalSubtaskCount}. ${plan.plannedSubtaskCount} specs saved."
     else -> lifecycleLabel(item.lifecycle)
   }
   BasicText(status, Modifier.fillMaxWidth().padding(top = 4.dp), style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
 }
+
+private fun hasBlockedSubtasks(plan: StandalonePlanProgress?): Boolean = blockedSubtaskIds(plan).isNotEmpty()
+
+private fun blockedSubtaskIds(plan: StandalonePlanProgress?): List<Int> =
+  plan?.blockedSubtaskIds.orEmpty().ifEmpty { plan?.blockedSubtaskId?.let(::listOf).orEmpty() }
+
+private fun blockedSubtasksLabel(ids: List<Int>): String =
+  "Planning stopped at ${if (ids.size == 1) "subtask" else "subtasks"} ${ids.joinToString(", ")}"
 
 @Composable
 private fun PlanHeartbeat(item: WorkItem, detail: Detail, stalledSince: Instant?) {
