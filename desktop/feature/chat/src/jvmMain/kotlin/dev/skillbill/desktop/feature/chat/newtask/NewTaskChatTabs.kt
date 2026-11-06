@@ -3,7 +3,9 @@ package dev.skillbill.desktop.feature.chat.newtask
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -38,8 +40,11 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import kotlinx.coroutines.flow.Flow
@@ -73,6 +78,7 @@ internal fun NewTaskChatTabs(
   selected: NewTaskDraft,
   status: (NewTaskDraft) -> Flow<NewTaskChatStatus>,
   onSelect: (NewTaskDraft) -> Unit,
+  onClose: (NewTaskDraft) -> Unit,
   onNew: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -86,14 +92,14 @@ internal fun NewTaskChatTabs(
     verticalAlignment = Alignment.CenterVertically,
   ) {
     open.forEach { draft ->
-      NewTaskChatTab(draft, draft === selected, remember(draft) { status(draft) }, onClick = { onSelect(draft) })
+      NewTaskChatTab(draft, draft === selected, remember(draft) { status(draft) }, onClick = { onSelect(draft) }, onClose = { onClose(draft) })
     }
     SbIconButton(LucideIcons.plus, EMPTY_CHAT_TITLE, onNew, size = SbControlSize.Small, shortcut = "$MOD_KEY T")
   }
 }
 
 @Composable
-private fun NewTaskChatTab(draft: NewTaskDraft, selected: Boolean, statusFlow: Flow<NewTaskChatStatus>, onClick: () -> Unit) {
+private fun NewTaskChatTab(draft: NewTaskDraft, selected: Boolean, statusFlow: Flow<NewTaskChatStatus>, onClick: () -> Unit, onClose: () -> Unit) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val chat by draft.chat.collectAsState()
@@ -102,10 +108,13 @@ private fun NewTaskChatTab(draft: NewTaskDraft, selected: Boolean, statusFlow: F
   val unread = status == NewTaskChatStatus.NewReply
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   val interaction = remember { MutableInteractionSource() }
+  val hovered by interaction.collectIsHoveredAsState()
+  val title = newTaskChatTitle(transcript)
   Row(
     Modifier.widthIn(min = 112.dp, max = 196.dp).fillMaxHeight()
       .background(if (selected) colors.bgPanel else Color.Transparent, shape)
       .border(1.dp, if (selected) colors.borderSubtle else Color.Transparent, shape)
+      .hoverable(interaction)
       .clickable(interaction, indication = null, onClick = onClick)
       .sbFocusRing(interaction, shape)
       .semantics {
@@ -118,10 +127,38 @@ private fun NewTaskChatTab(draft: NewTaskDraft, selected: Boolean, statusFlow: F
   ) {
     NewTaskChatMarker(status)
     BasicText(
-      newTaskChatTitle(transcript),
+      title,
+      Modifier.weight(1f, fill = false),
       style = if (unread) type.tSm.copy(color = colors.fg, fontWeight = FontWeight.Medium) else type.tSm.copy(color = if (selected) colors.fg else colors.fg2),
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
     )
+    // The slot keeps its width while the button is hidden, so hovering never shifts the title.
+    Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+      if (hovered || selected) TabCloseButton(title, onClose)
+    }
+  }
+}
+
+@Composable
+private fun TabCloseButton(title: String, onClose: () -> Unit) {
+  val interaction = remember { MutableInteractionSource() }
+  val hovered by interaction.collectIsHoveredAsState()
+  val colors = SkillBillTheme.colors
+  val shape = RoundedCornerShape(SkillBillRadius.sm)
+  SbTooltip("Close", "$MOD_KEY W") {
+    Box(
+      Modifier.size(16.dp).background(if (hovered) colors.bgHover else Color.Transparent, shape)
+        .hoverable(interaction)
+        .clickable(interaction, indication = null, onClick = onClose)
+        .sbFocusRing(interaction, shape)
+        .semantics {
+          contentDescription = "Close $title"
+          role = Role.Button
+        },
+      contentAlignment = Alignment.Center,
+    ) {
+      SbIcon(LucideIcons.x, SbIconSize.Xs)
+    }
   }
 }

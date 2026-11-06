@@ -104,6 +104,7 @@ class NewTaskViewModel(
     viewModelScope.launch { observeBoard(loadRepositories()) }
     readAgent(first) { resolveAgent(first, first.agentId ?: defaultAgentId()) }
     viewModelScope.launch { chats.selected.drop(1).collect(::showSelected) }
+    viewModelScope.launch { chats.resumed.collect { if (isSelected(it)) showResumed(it) } }
   }
 
   fun now(): Instant = clock.now()
@@ -140,28 +141,33 @@ class NewTaskViewModel(
       NewTaskAction.Send -> send(target)
       NewTaskAction.Stop -> target.stop()
       NewTaskAction.SendNow -> target.sendNow()
-      NewTaskAction.Discard -> target.discard()
+      NewTaskAction.Discard -> chats.discard(target)
       NewTaskAction.NewChat -> chats.newChat()
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
-      is NewTaskAction.DiscardDraft -> target.discardSaved(action.entry)
+      is NewTaskAction.DiscardDraft -> chats.discardSaved(action.entry)
       NewTaskAction.ShowAllDrafts -> {
         chats.refreshSaved()
         mutableState.update { it.copy(resumePickerOpen = true) }
       }
       is NewTaskAction.ResumeDraft -> {
-        agentReads.remove(target)?.cancel()
-        target.launch {
-          if (target.resume(action.entry) && isSelected(target)) {
-            mutableState.update { it.copy(agent = action.entry.agent, resumePickerOpen = false) }
-            readBranches(target)
-          }
-        }
+        val loadsIntoTarget = target.chat.value == null
+        if (!chats.resume(action.entry)) return
+        // A read still running for the draft that took the load would rebind its chat to the old agent; other drafts keep theirs.
+        if (loadsIntoTarget && target.chat.value != null) agentReads.remove(target)?.cancel()
+        mutableState.update { it.copy(resumePickerOpen = false) }
       }
       is NewTaskAction.RunSuggestedAction -> target.sendSuggestedAction(action.action)
     }
   }
 
   private fun isSelected(target: NewTaskDraft): Boolean = chats.selected.value === target
+
+  /** Re-reads the composer for a saved chat loaded into the selected draft, which a selection change alone does not report. */
+  private fun showResumed(target: NewTaskDraft) {
+    agentReads.remove(target)?.cancel()
+    mutableState.update { it.copy(agent = target.selectedAgent, resumePickerOpen = false) }
+    readBranches(target)
+  }
 
   private fun showSelected(selected: NewTaskDraft) {
     pathCheck?.cancel()

@@ -1,13 +1,18 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
@@ -36,11 +41,14 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -111,6 +119,66 @@ class NewTaskHomeTest {
     draft.refreshSaved()
     waitForIdle()
     onNodeWithText("Show all").assertDoesNotExist()
+  }
+
+  // A badge on a saved chat that is not open, or none on the one that is.
+  @Test
+  fun `recent chats mark only the saved chat that is open in a tab`() = runComposeUiTest {
+    val chats = FakeExecutionChatRepository()
+    val app = savedDraft(chats, "app", "/work/app", Instant.fromEpochSeconds(0), "Build app")
+    val lib = savedDraft(chats, "lib", "/work/lib", Instant.fromEpochSeconds(3_600), "Update library")
+    chats.saved[app.sessionId] = app
+    chats.saved[lib.sessionId] = lib
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    open.resume(app)
+    open.newChat()
+    open.refreshSaved()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) {} }
+      }
+    }
+    waitForIdle()
+
+    onNodeWithText("Update library").assertExists()
+    onAllNodesWithText("open").assertCountEquals(1)
+  }
+
+  // A shortcut the screen ignores or routes to the wrong chat, or a close of a replying chat with no confirmation.
+  @Test
+  fun `chat shortcuts add, select, cycle and close chats`() = runComposeUiTest {
+    val chats = FakeExecutionChatRepository()
+    chats.events = { flow { awaitCancellation() } }
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    open.chatDispatcher = Dispatchers.Unconfined
+    val first = open.selected.value
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) {} }
+      }
+    }
+    val field = onNode(hasSetTextAction())
+
+    field.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.T) } }
+    runOnIdle { assertEquals(2, open.open.value.size) }
+    field.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.One) } }
+    runOnIdle { assertSame(first, open.selected.value) }
+    onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Two) } }
+    runOnIdle { assertSame(open.open.value[1], open.selected.value) }
+    onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Tab) } }
+    runOnIdle { assertSame(first, open.selected.value) }
+
+    runOnIdle {
+      first.repository = NewTaskRepository(".", "repo")
+      first.agentId = requireNotNull(chats.agent).agentId
+      first.selectedAgent = chats.agent
+      first.text = "build export"
+      first.send()
+    }
+    onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.W) } }
+    onNodeWithText("Keep open").assertExists()
+    onNodeWithText("Stop and close").assertExists()
+    runOnIdle { assertEquals(2, open.open.value.size) }
   }
 
   private fun savedDraft(chats: FakeExecutionChatRepository, sessionId: String, root: String, updatedAt: Instant, title: String) =

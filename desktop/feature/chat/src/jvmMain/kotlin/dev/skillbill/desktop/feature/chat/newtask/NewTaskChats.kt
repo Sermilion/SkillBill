@@ -3,9 +3,13 @@ package dev.skillbill.desktop.feature.chat.newtask
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
+import dev.skillbill.desktop.core.designsystem.component.ToastAction
+import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.ui.di.WindowScope
+import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
+import dev.skillbill.desktop.core.ui.feedback.ToastTone
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -13,9 +17,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -66,8 +73,12 @@ class NewTaskChats(
     }
 
   private val newReplyState = MutableStateFlow<Set<NewTaskDraft>>(emptySet())
+  private val closingDrafts = mutableSetOf<NewTaskDraft>()
+  private val replyWatches = mutableMapOf<NewTaskDraft, Job>()
   private val openState = MutableStateFlow(listOf(create()))
   private val selectedState = MutableStateFlow(openState.value.first())
+  private val pendingCloseState = MutableStateFlow<NewTaskDraft?>(null)
+  private val resumedState = MutableSharedFlow<NewTaskDraft>(extraBufferCapacity = 1)
 
   val open: StateFlow<List<NewTaskDraft>> = openState.asStateFlow()
   val selected: StateFlow<NewTaskDraft> = selectedState.asStateFlow()
@@ -77,6 +88,17 @@ class NewTaskChats(
   val anyChatOpen: StateFlow<Boolean> = open
     .flatMapLatest { drafts -> combine(drafts.map { it.chat }) { opened -> opened.any { it != null } } }
     .stateIn(scope, SharingStarted.Eagerly, false)
+
+  /** Session ids of every open chat's conversation, for the "open" badge in Recent chats. */
+  val openSessionIds: StateFlow<Set<String>> = open
+    .flatMapLatest { drafts -> combine(drafts.map(::sessionIdOf)) { ids -> ids.filterNotNull().toSet() } }
+    .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
+  /** A replying chat waiting for the operator to confirm its close. */
+  val pendingClose: StateFlow<NewTaskDraft?> = pendingCloseState.asStateFlow()
+
+  /** A draft that [resume] loaded a saved chat into, so the composer can re-read its agent and branches. */
+  internal val resumed: SharedFlow<NewTaskDraft> = resumedState.asSharedFlow()
 
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
@@ -89,17 +111,82 @@ class NewTaskChats(
 
   /** Opens an empty chat with the selected chat's repository, branch and agent, and selects it. */
   fun newChat(): NewTaskDraft {
-    val from = selectedState.value
-    val draft = create().apply {
-      repository = from.repository
-      addedRepositories = from.addedRepositories
-      baseBranch = from.baseBranch
-      agentId = from.agentId
-      selectedAgent = from.selectedAgent
-    }
+    val draft = createLike(selectedState.value)
     openState.update { it + draft }
     select(draft)
     return draft
+  }
+
+  /** Selects the chat [step] places away from the selected one, wrapping around. */
+  fun selectRelative(step: Int) {
+    val drafts = openState.value
+    select(drafts[Math.floorMod(drafts.indexOf(selectedState.value) + step, drafts.size)])
+  }
+
+  /** Selects the chat at [index]; false when there is none. */
+  fun selectAt(index: Int): Boolean {
+    val draft = openState.value.getOrNull(index) ?: return false
+    select(draft)
+    return true
+  }
+
+  /** Closes [draft], or asks first when its agent is still replying. */
+  fun requestClose(draft: NewTaskDraft) {
+    if (draft.chat.value?.thread?.busy?.value == true) pendingCloseState.value = draft else scope.launch { close(draft) }
+  }
+
+  /** Leaves the pending chat open and streaming. */
+  fun keepOpen() {
+    pendingCloseState.value = null
+  }
+
+  /** Stops the pending chat's reply and closes it. */
+  fun confirmClose() {
+    val draft = pendingCloseState.value ?: return
+    pendingCloseState.value = null
+    scope.launch { close(draft) }
+  }
+
+  /** Ends [draft]'s chat, deletes its save and removes it, with no toast. */
+  fun discard(draft: NewTaskDraft) {
+    if (draft in openState.value && draft.discard()) remove(draft)
+  }
+
+  /** Deletes [entry], removing the open chat that holds it like the header Discard does. */
+  internal fun discardSaved(entry: ChatHistoryEntry) {
+    val holder = openState.value.firstOrNull { it.chat.value?.sessionId == entry.sessionId }
+    if (holder != null) {
+      discard(holder)
+      return
+    }
+    scope.launch {
+      chats.deleteSavedChat(entry.sessionId)
+      refreshSaved()
+    }
+  }
+
+  /**
+   * Shows [entry]: selects the chat that already holds it, loads it into an empty selected chat, or opens it in a new chat.
+   * It never ends another chat. False when the entry cannot load; a chat added for it goes away again.
+   */
+  fun resume(entry: ChatHistoryEntry): Boolean {
+    openState.value.firstOrNull { it.chat.value?.sessionId == entry.sessionId }?.let {
+      select(it)
+      return true
+    }
+    val previous = selectedState.value
+    val target = if (previous.chat.value == null && previous.text.isBlank()) previous else newChat()
+    if (!target.resume(entry)) {
+      if (target !== previous) {
+        openState.update { it - target }
+        forget(target)
+        target.dispose()
+        select(previous)
+      }
+      return false
+    }
+    resumedState.tryEmit(target)
+    return true
   }
 
   fun status(draft: NewTaskDraft): Flow<NewTaskChatStatus> = combine(busyOf(draft), newReplyState.map { draft in it }) { busy, flagged ->
@@ -117,12 +204,73 @@ class NewTaskChats(
   /** Closes every open chat. False when any one fails to save; that chat stays open, so calling again retries it. */
   internal suspend fun closeAll(): Boolean = openState.value.map { it.close() }.all { it }
 
+  private suspend fun close(draft: NewTaskDraft) {
+    if (draft !in openState.value || !closingDrafts.add(draft)) return
+    try {
+      val chat = draft.chat.value
+      val title = newTaskChatTitle(chat?.thread?.transcript?.value.orEmpty())
+      if (!draft.close()) return
+      remove(draft)
+      refreshSaved()
+      if (chat != null) {
+        // Read after close(): the session id can rotate while the last turn finishes.
+        val sessionId = chat.sessionId
+        toasts.show(ToastData("Closed \"$title\". It stays in Recent chats.", actions = listOf(ToastAction("Reopen") { reopen(sessionId) })))
+      }
+    } finally {
+      closingDrafts -= draft
+    }
+  }
+
+  // A fresh read, not the cached list, so a delete from Recent chats after the close is seen.
+  private fun reopen(sessionId: String) = scope.launch {
+    val entry = chats.savedNewTaskDrafts().firstOrNull { it.sessionId == sessionId }
+    if (entry != null) resume(entry) else toasts.show(ToastMessage(ToastTone.Problem, "That chat is no longer in Recent chats."))
+  }
+
+  /** Removes [draft]; a removed selection moves to the chat now at its index, and the last chat is replaced by an empty one. */
+  private fun remove(draft: NewTaskDraft) {
+    val drafts = openState.value
+    val index = drafts.indexOf(draft)
+    if (index < 0) return
+    if (pendingCloseState.value === draft) pendingCloseState.value = null
+    forget(draft)
+    newReplyState.update { it - draft }
+    if (drafts.size == 1) {
+      val replacement = createLike(draft)
+      openState.value = listOf(replacement)
+      select(replacement)
+      return
+    }
+    val remaining = drafts - draft
+    openState.value = remaining
+    if (selectedState.value === draft) select(remaining[index.coerceAtMost(remaining.lastIndex)])
+  }
+
   private fun busyOf(draft: NewTaskDraft): Flow<Boolean> = draft.chat.flatMapLatest { it?.thread?.busy ?: flowOf(false) }
+
+  // Re-read on every busy change: a turn stopped before its session started rotates the id, then goes idle.
+  private fun sessionIdOf(draft: NewTaskDraft): Flow<String?> = draft.chat.flatMapLatest { chat ->
+    if (chat == null) flowOf(null) else chat.thread.busy.map { chat.sessionId }
+  }
+
+  /** Stops watching a draft that left the open set, so it does not outlive its tab. */
+  private fun forget(draft: NewTaskDraft) {
+    replyWatches.remove(draft)?.cancel()
+  }
+
+  private fun createLike(from: NewTaskDraft): NewTaskDraft = create().apply {
+    repository = from.repository
+    addedRepositories = from.addedRepositories
+    baseBranch = from.baseBranch
+    agentId = from.agentId
+    selectedAgent = from.selectedAgent
+  }
 
   private fun create(): NewTaskDraft {
     val draft = NewTaskDraft(chats, workControls, databaseSession, toasts, windowScope, clock, savedChats)
     draft.chatDispatcher = chatDispatcher
-    watchReplies(draft)
+    replyWatches[draft] = watchReplies(draft)
     return draft
   }
 

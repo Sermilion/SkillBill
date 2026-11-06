@@ -251,21 +251,12 @@ class NewTaskDraft internal constructor(
     }
   }
 
-  /** Ends the chat and deletes its saved draft; the selections and any typed text stay. */
-  internal fun discard() {
-    if (closing) return
-    val current = chatState.value ?: return
+  /** Ends the chat and deletes its saved draft; the selections and any typed text stay. False when there was no chat to discard. */
+  internal fun discard(): Boolean {
+    if (closing) return false
+    val current = chatState.value ?: return false
     leave(current) { chats.deleteSavedChat(current.sessionId) }
-  }
-
-  /** Deletes [entry] and refreshes the saved list, routing the open chat through [discard]. */
-  internal fun discardSaved(entry: ChatHistoryEntry) {
-    if (closing) return
-    if (chatState.value?.sessionId == entry.sessionId) return discard()
-    scope.launch {
-      chats.deleteSavedChat(entry.sessionId)
-      refreshSaved()
-    }
+    return true
   }
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
@@ -282,8 +273,6 @@ class NewTaskDraft internal constructor(
       closing = false
     }
   }
-
-  internal fun launch(block: suspend () -> Unit) = scope.launch { block() }
 
   /** Opens a new agent session on the current repository, branch and agent, keeping the transcript. */
   internal fun rebindChat() {
@@ -313,10 +302,9 @@ class NewTaskDraft internal constructor(
     }
   }
 
-  /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
-  internal suspend fun resume(entry: ChatHistoryEntry): Boolean {
+  /** Opens [entry] in this empty draft on its agent session, or with only Discard offered when its repository no longer exists. */
+  internal fun resume(entry: ChatHistoryEntry): Boolean {
     val context = entry.newTask ?: return false
-    if (!close()) return false
     repository = NewTaskRepository(context.repositoryRoot, File(context.repositoryRoot).name)
     baseBranch = context.baseBranch.orEmpty()
     agentId = entry.agent.agentId

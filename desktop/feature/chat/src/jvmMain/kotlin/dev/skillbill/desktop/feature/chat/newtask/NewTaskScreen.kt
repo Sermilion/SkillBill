@@ -23,6 +23,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -39,6 +49,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.feature.chat.ChatTranscript
+import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
 
 private val CONTENT_MAX_WIDTH = 680.dp
@@ -58,28 +69,62 @@ internal fun NewTaskScreen(state: NewTaskUiState, chats: NewTaskChats, host: New
   val open by chats.open.collectAsState()
   val selected by chats.selected.collectAsState()
   val selectedChat = selected.chat.collectAsState().value
+  val pendingClose by chats.pendingClose.collectAsState()
   LaunchedEffect(Unit) { chats.refreshSaved() }
-  Column(Modifier.fillMaxSize()) {
+  Column(Modifier.fillMaxSize().onPreviewKeyEvent { handleChatShortcut(it, chats) }) {
     ViewHeader(
       crumbs = listOf(Crumb("New task")),
       actions = {
         if (selectedChat != null) SbButton("Discard", { onAction(NewTaskAction.Discard) }, size = SbControlSize.Small)
       },
     )
-    NewTaskChatTabs(open, selected, chats::status, chats::select, onNew = { onAction(NewTaskAction.NewChat) })
-    key(selected) { NewTaskChatContent(state, selected, host, onAction) }
+    NewTaskChatTabs(open, selected, chats::status, chats::select, chats::requestClose, onNew = { onAction(NewTaskAction.NewChat) })
+    key(selected) { NewTaskChatContent(state, selected, chats, host, onAction) }
+  }
+  pendingClose?.let { draft ->
+    val transcript = draft.chat.collectAsState().value?.thread?.transcript?.collectAsState()?.value.orEmpty()
+    NewTaskCloseDialog(newTaskChatTitle(transcript), chipText(draft.selectedAgent), chats::keepOpen, chats::confirmClose)
   }
 }
 
+/** Ctrl or Cmd with T, W, Tab, Shift+Tab and 1 to 9 act on the open chats; anything else goes on to the composer and the shell. */
+private fun handleChatShortcut(event: KeyEvent, chats: NewTaskChats): Boolean {
+  if (event.type != KeyEventType.KeyDown || !(event.isCtrlPressed || event.isMetaPressed) || event.isAltPressed) return false
+  return when (val key = event.key) {
+    Key.T -> {
+      chats.newChat()
+      true
+    }
+    Key.W -> {
+      chats.requestClose(chats.selected.value)
+      true
+    }
+    Key.Tab -> {
+      chats.selectRelative(if (event.isShiftPressed) -1 else 1)
+      true
+    }
+    // indexOf gives -1 for a non-digit key, and selectAt(-1) finds no chat.
+    else -> chats.selectAt(DIGIT_KEYS.indexOf(key))
+  }
+}
+
+private val DIGIT_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
+
 @Composable
-private fun ColumnScope.NewTaskChatContent(state: NewTaskUiState, draft: NewTaskDraft, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
+private fun ColumnScope.NewTaskChatContent(
+  state: NewTaskUiState,
+  draft: NewTaskDraft,
+  chats: NewTaskChats,
+  host: NewTaskScreenHost,
+  onAction: (NewTaskAction) -> Unit,
+) {
   val chat = draft.chat.collectAsState().value
   val offer by draft.offer.collectAsState()
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
   if (chat == null) {
-    NewTaskHomeBody(state, draft, host, focus, onAction, Modifier.weight(1f))
+    NewTaskHomeBody(state, draft, chats, host, focus, onAction, Modifier.weight(1f))
   } else {
     key(chat) {
       ChatTranscript(
@@ -133,6 +178,7 @@ private fun ColumnScope.NewTaskChatContent(state: NewTaskUiState, draft: NewTask
 private fun NewTaskHomeBody(
   state: NewTaskUiState,
   draft: NewTaskDraft,
+  chats: NewTaskChats,
   host: NewTaskScreenHost,
   focus: FocusRequester,
   onAction: (NewTaskAction) -> Unit,
@@ -145,6 +191,7 @@ private fun NewTaskHomeBody(
   val progress = if (!reducedMotion && preview == null) rememberIdleProgress() else null
   val homeAlpha by animateFloatAsState(if (preview != null) DIMMED_ALPHA else 1f, hoverSpec())
   val saved by draft.saved.collectAsState()
+  val openSessionIds by chats.openSessionIds.collectAsState()
   BoxWithConstraints(modifier.fillMaxWidth()) {
     Column(
       Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(24.dp),
@@ -164,6 +211,7 @@ private fun NewTaskHomeBody(
           RecentChatsSection(
             saved,
             host.now(),
+            openSessionIds,
             onResume = { onAction(NewTaskAction.ResumeDraft(it)) },
             onDiscard = { onAction(NewTaskAction.DiscardDraft(it)) },
             onShowAll = { onAction(NewTaskAction.ShowAllDrafts) },
