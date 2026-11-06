@@ -98,6 +98,7 @@ data class Detail(
   val currentSubtaskId: Int? = null,
   val goalWorktree: GoalWorktree? = null,
   val launchWarning: String? = null,
+  val verifyRun: VerifyRunDetails? = null,
 )
 
 data class WorkSubtask(

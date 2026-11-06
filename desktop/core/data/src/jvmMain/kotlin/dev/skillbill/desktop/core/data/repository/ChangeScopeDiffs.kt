@@ -61,6 +61,7 @@ internal class ChangeScopeDiffs(
           is Outcome.Success ->
             when (val baseline = resolved.baseline) {
               is ChangeBaseline.CommittedBranchRange -> readBranchRangePatch(target.worktreeRoot, base.value, baseline, file, lock)
+              is ChangeBaseline.CommittedRevisionRange -> readCommittedPatch(target.worktreeRoot, baseline.fromSha, baseline.toSha, file, lock, cache)
               else -> readWorkingPatch(target.worktreeRoot, base.value, file, lock)
             }
         }
@@ -97,6 +98,7 @@ internal class ChangeScopeDiffs(
           is Outcome.Failure -> Outcome.Failure(FileDiffState.Unavailable(result.error)).also { diagnostics.record(SCOPES_READ_FAILED) }
           is Outcome.Success -> result.value.toFileDiffBase()
         }
+      is ChangeBaseline.CommittedRevisionRange -> return Outcome.Success(baseline.fromSha)
     }
     val key = ListedBaseKey(worktreeRoot, scope)
     baseShas[key]?.let { return Outcome.Success(it) }
@@ -369,7 +371,11 @@ internal class ChangeScopeDiffs(
   }
 
   private suspend fun readChanges(baseline: ChangeBaseline, lock: Mutex): Outcome<WorkChangeListResult, ReadProblem> =
-    git(lock) { port.changes(baseline.toPort()) }
+    if (baseline is ChangeBaseline.CommittedRevisionRange) {
+      git(lock) { port.committedChanges(baseline.worktreeRoot, baseline.fromSha, baseline.toSha) }
+    } else {
+      git(lock) { port.changes(baseline.toPort()) }
+    }
 
   private suspend fun <T> git(lock: Mutex, block: () -> T): Outcome<T, ReadProblem> = readOrProblem(runtime, diagnostics) {
     lock.withLock { withContext(io) { block() } }

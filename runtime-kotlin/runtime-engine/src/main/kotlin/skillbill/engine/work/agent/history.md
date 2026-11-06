@@ -1,3 +1,12 @@
+## [2026-11-06] SKILL-506 Verify run detail projection
+Areas: runtime-engine work and Verify operation, runtime-ports idestatus and telemetry, runtime-infra/sqlite, QA report mapping
+- Work detail projects typed Verify artifacts, criteria, findings, QA results, verdict, supersession and stale reason for Verify runs.
+- Receipt parsers retain raw findings with parsed fields; QA mapping shares finding conversion with standalone QA. reusable
+- Verdict receipts store an optional work summary separately from the verdict. Older runs can lack summaries and receipts; stale reasons use the existing session column.
+- CLI JSON does not serialize the Verify projection. Receipt contracts and per-step timing remain out of scope.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-04] SKILL-479 subtask 1: bind task identity without minting
 Areas: runtime-engine work control; desktop core data and domain
 - Goal and plan preparation bind an admitted first-token key, a complete typed key, or a tracker key in a URL. Missing identity returns inventory prefixes as NeedsKey without allocating.

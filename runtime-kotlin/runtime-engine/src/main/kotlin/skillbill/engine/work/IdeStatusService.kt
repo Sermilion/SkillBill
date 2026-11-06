@@ -39,6 +39,7 @@ import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
 import skillbill.engine.work.pagination.workDetailPagedResult
+import skillbill.engine.work.verify.VerifyRunDetailsProjection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
@@ -424,6 +425,7 @@ public class IdeStatusService(
         incidentHistory = incidentSet.incidentHistory,
         changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, goalWorktree, context),
         goalWorktree = goalWorktree,
+        verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
       )
     val nextAnchors = detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead)
     return ProjectedDetailItem(detailItem, nextAnchors)

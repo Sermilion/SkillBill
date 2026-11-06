@@ -1,3 +1,13 @@
+## [2026-11-06] SKILL-506 Verify run detail and actions
+Areas: desktop/feature/detail, desktop/feature/changes, desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/datastore, desktop/core/ui
+- A Verify document displays run state, outcome, criteria filters, expandable receipts and inline QA. It opens a superseding run and the recorded revision range.
+- Fixable findings and criteria route to a combined chat brief or goal intake. Marks persist per workflow and criterion; marked criteria are excluded from selection.
+- Verify again starts a separate request for the original intake and verified branch. Verify remains report-only and an existing nonblank goal draft is preserved.
+- The reusable QA results view displays Verify evidence as names without file-opening actions because Verify has no QA invocation directory.
+- Parked runs keep existing controls; adjusting intake and discarding are out of scope. QA and validation reported capability_absent.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-05] SKILL-504 QA results view
 Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data; runtime QA results projection
 - Goal and standalone QA share a results section with an app-derived verdict, open findings, retained resources, untested work, folds and target coverage. Live standalone results retain the finding navigation target.
@@ -60,4 +70,3 @@ Areas: desktop/feature/detail, desktop/core/ui, desktop/app
 - RepositoryWebPages is reusable and reads git configuration without launching git. URL insteadOf rewrites are not resolved.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
-

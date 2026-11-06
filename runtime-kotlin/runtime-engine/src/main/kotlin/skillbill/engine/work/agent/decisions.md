@@ -1,3 +1,13 @@
+## [2026-11-06] Project Verify details in the runtime
+Context: Work detail needs saved Verify receipts, QA results and session staleness, including for older runs that lack artifacts.
+Decision: Build a read-only, Verify-only projection from the stored snapshot and session telemetry. Keep raw findings with parsed fields and leave missing data null or empty.
+Reason: Verify artifact access belongs to runtime-engine, where VerifyWorkflow is internal. Existing snapshot and session data avoid a second source of state and keep older records readable.
+
+## [2026-11-06] Store the Verify summary separately from the verdict
+Context: Verify detail needs a description of the work as well as the verdict and findings.
+Decision: Store a nonblank SUMMARY section as an optional verdict receipt field.
+Reason: The summary describes the change rather than the verdict. A separate optional field keeps it out of findings and allows older receipts to remain readable.
+
 ## [2026-11-04] Bind operator-supplied task identity without allocation
 Context: Goal and plan starts could mint a new key from a prefix or bind a key mentioned elsewhere in requirements, even when the operator had not supplied that identity.
 Decision: Bind only an admitted first token, a complete typed key, or a tracker key extracted from a URL. Ask for identity when none is available. Allow explicit typed reuse only for completed or abandoned terminal runs, while refusing used URLs and in-flight or resumable runs.

@@ -73,6 +73,10 @@ class ShellKeyboardEscapeTest {
 
     override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) = Unit
 
+    override fun runVerifyFixes(item: WorkItem, brief: String) = Unit
+
+    override fun prefillGoalIntake(repoRoot: String, branch: String, text: String) = false
+
     override fun openChat(item: WorkItem) = Unit
 
     override fun closeChats() = Unit

@@ -45,18 +45,11 @@ internal object QaRunDetailsMapping {
       invocationDirectory = directory,
       skipReason = report.reason,
       retainedResources = retained(resources),
-      findings =
-        report.findings.map { finding ->
-          QaRunFinding(
-            finding.id,
-            finding.title,
-            finding.observed,
-            finding.expected,
-            finding.steps,
-            finding.evidencePaths,
-          )
-        },
+      findings = findings(report),
     )
+
+  fun verify(report: QaReport): QaRunDetails =
+    reported(report).copy(skipReason = report.reason, findings = findings(report))
 
   fun retained(resources: List<QaRetainedResource>): List<QaRunRetainedResource> =
     resources.map { resource -> QaRunRetainedResource(resource.kind, resource.identity) }
@@ -70,6 +63,18 @@ internal object QaRunDetailsMapping {
         },
       temporaryEdits = report.temporaryEdits,
     )
+
+  private fun findings(report: QaReport): List<QaRunFinding> =
+    report.findings.map { finding ->
+      QaRunFinding(
+        finding.id,
+        finding.title,
+        finding.observed,
+        finding.expected,
+        finding.steps,
+        finding.evidencePaths,
+      )
+    }
 
   private fun invocationDirectoryOf(
     evidencePrefix: String?,

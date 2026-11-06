@@ -58,7 +58,7 @@ class ChangeObservations internal constructor(
       emit(ChangesState.Loading)
       while (true) {
         emit(read(baseline, gitReads))
-        if (!running || baseline is ChangeBaseline.CommittedBranchRange) break
+        if (!running || baseline is ChangeBaseline.CommittedBranchRange || baseline is ChangeBaseline.CommittedRevisionRange) break
         delay(CHANGE_REFRESH_INTERVAL)
       }
     }.distinctUntilChanged()
@@ -66,9 +66,16 @@ class ChangeObservations internal constructor(
 
   private suspend fun read(baseline: ChangeBaseline, gitReads: Mutex): ChangesState {
     val read = readOrProblem(runtime, diagnostics) {
-      val portBaseline = baseline.toPort()
-      val read: suspend () -> WorkChangeListResult = { gitReads.withLock { withContext(io) { port.changes(portBaseline) } } }
-      if (baseline is ChangeBaseline.CommittedBranchRange) read() else workingTree.changes(portBaseline, read)
+      when (baseline) {
+        is ChangeBaseline.CommittedRevisionRange -> gitReads.withLock {
+          withContext(io) { port.committedChanges(baseline.worktreeRoot, baseline.fromSha, baseline.toSha) }
+        }
+        else -> {
+          val portBaseline = baseline.toPort()
+          val read: suspend () -> WorkChangeListResult = { gitReads.withLock { withContext(io) { port.changes(portBaseline) } } }
+          if (baseline is ChangeBaseline.CommittedBranchRange) read() else workingTree.changes(portBaseline, read)
+        }
+      }
     }
     val state = when (read) {
       is Outcome.Failure -> ChangesState.Unavailable(read.error)
@@ -92,6 +99,8 @@ class ChangeObservations internal constructor(
           val result = when (baseline) {
             is ChangeBaseline.CommittedBranchRange ->
               port.committedFileDiff(baseline.worktreeRoot, baseSha, baseline.headRef, file.toPort())
+            is ChangeBaseline.CommittedRevisionRange ->
+              port.committedFileDiff(baseline.worktreeRoot, baseline.fromSha, baseline.toSha, file.toPort())
             else -> port.fileDiff(baseline.worktreeRoot, baseSha, file.toPort())
           }
           when (result) {
@@ -114,7 +123,7 @@ class ChangeObservations internal constructor(
 
   /** Strips `VISUAL` and `EDITOR` so the launcher falls through to the system opener; a deleted file is never launched. */
   suspend fun open(baseline: ChangeBaseline, file: ChangedFile): OpenOutcome {
-    if (baseline is ChangeBaseline.CommittedBranchRange) return OpenOutcome.NotOpened
+    if (baseline is ChangeBaseline.CommittedBranchRange || baseline is ChangeBaseline.CommittedRevisionRange) return OpenOutcome.NotOpened
     if (file.status == ChangeStatus.Deleted) return OpenOutcome.NotOpened
     val opened = withContext(io) {
       val target = try {

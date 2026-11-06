@@ -28,6 +28,12 @@ interface ChatCommands {
 
   fun runReviewAction(item: WorkItem, action: ReviewFindingsAction)
 
+  /** Opens the verify item's chat and sends one combined fix brief through pause-and-act. */
+  fun runVerifyFixes(item: WorkItem, brief: String)
+
+  /** Prefills the New task draft when it is empty; leaves any operator text untouched. */
+  fun prefillGoalIntake(repoRoot: String, branch: String, text: String): Boolean
+
   /** Ends every chat of the window; the window calls it when it is disposed. */
   fun closeChats()
 

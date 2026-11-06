@@ -16,6 +16,8 @@ import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.TrayTab
+import dev.skillbill.desktop.core.domain.settings.CriterionMark
+import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
@@ -102,6 +104,21 @@ class DataStoreAppSettingsRepository(
     }
   }.distinctUntilChanged()
 
+  override val criterionMarks: Flow<Outcome<Map<CriterionMarkKey, CriterionMark>, SettingsRejection>> = flow {
+    while (true) {
+      val seenWrites = writes.value
+      store.data
+        .map { preferences -> Outcome.Success(preferences.criterionMarks()) }
+        .catch { failure ->
+          if (failure !is IOException) throw failure
+          diagnostics.record("desktop_settings_unreadable")
+          emit(Outcome.Failure(SettingsRejection.ReadFailed))
+        }
+        .collect { emit(it) }
+      withTimeoutOrNull(FAVORITE_READ_RETRY_MILLIS) { writes.first { it != seenWrites } }
+    }
+  }.distinctUntilChanged()
+
   override suspend fun setDatabasePath(path: String?): Outcome<Unit, SettingsRejection> {
     if (!path.isNullOrEmpty() && path.isBlank()) return Outcome.Failure(SettingsRejection.BlankDatabasePath)
     return edit { if (path.isNullOrEmpty()) it.remove(AppPreferenceKeys.DATABASE_PATH) else it[AppPreferenceKeys.DATABASE_PATH] = path.trim() }
@@ -138,6 +155,14 @@ class DataStoreAppSettingsRepository(
     if (favorite) stored.add(encoded) else stored.remove(encoded)
     if (stored.isEmpty()) preferences.remove(AppPreferenceKeys.FAVORITE_SPECS)
     else preferences[AppPreferenceKeys.FAVORITE_SPECS] = stored
+  }
+
+  override suspend fun setCriterionMark(key: CriterionMarkKey, mark: CriterionMark?) = edit { preferences ->
+    val stored = preferences[AppPreferenceKeys.CRITERION_MARKS].orEmpty().toMutableSet()
+    stored.removeAll { CriterionMarkEncoding.decode(it)?.first == key }
+    if (mark != null) stored.add(CriterionMarkEncoding.encode(key, mark))
+    if (stored.isEmpty()) preferences.remove(AppPreferenceKeys.CRITERION_MARKS)
+    else preferences[AppPreferenceKeys.CRITERION_MARKS] = stored
   }
 
   private suspend fun edit(change: (MutablePreferences) -> Unit): Outcome<Unit, SettingsRejection> = try {

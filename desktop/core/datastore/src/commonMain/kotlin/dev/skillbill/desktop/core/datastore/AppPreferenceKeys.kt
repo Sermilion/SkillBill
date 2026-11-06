@@ -19,6 +19,7 @@ internal object AppPreferenceKeys {
   val TRAY_LAST_TAB = stringPreferencesKey("tray_last_tab")
   val FAVORITE_WORK = stringSetPreferencesKey("favorite_work")
   val FAVORITE_SPECS = stringSetPreferencesKey("favorite_specs")
+  val CRITERION_MARKS = stringSetPreferencesKey("criterion_marks")
 
   private val NOTIFY_BLOCKED = booleanPreferencesKey("notify_blocked")
   private val NOTIFY_FAILED = booleanPreferencesKey("notify_failed")

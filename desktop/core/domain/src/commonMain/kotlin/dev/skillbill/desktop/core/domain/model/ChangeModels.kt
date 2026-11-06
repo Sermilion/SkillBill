@@ -17,6 +17,12 @@ sealed interface ChangeBaseline {
   ) : ChangeBaseline {
     val headRef: String get() = "refs/heads/$headBranch"
   }
+
+  data class CommittedRevisionRange(
+    override val worktreeRoot: String,
+    val fromSha: String,
+    val toSha: String,
+  ) : ChangeBaseline
 }
 
 enum class ChangeStatus { Added, Modified, Deleted, Renamed, Untracked }

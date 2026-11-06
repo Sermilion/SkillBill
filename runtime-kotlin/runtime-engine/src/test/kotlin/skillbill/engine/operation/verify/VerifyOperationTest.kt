@@ -243,6 +243,28 @@ class VerifyOperationTest {
   }
 
   @Test
+  fun `the verdict stores the summary block apart from findings and omits the key without one`() {
+    VerifyOperationHarness().use { harness ->
+      harness.runner.replies[VerifyPromptSections.VERDICT_STEP] =
+        "--- SUMMARY ---\nAdds X.\n\n--- VERDICT ---\nAPPROVE\n"
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      val stored = harness.snapshot(token).artifacts["verdict_result"]
+      assertEquals("Adds X.", VerifyWorkflow.string(stored, VerifyWorkflow.SUMMARY))
+      assertTrue(VerifyWorkflow.strings(stored, VerifyWorkflow.FINDINGS).none { "Adds X." in it })
+    }
+    VerifyOperationHarness().use { harness ->
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      assertFalse(VerifyWorkflow.SUMMARY in harness.snapshot(token).artifacts["verdict_result"] as Map<*, *>)
+    }
+  }
+
+  @Test
   fun `an interrupted run resumes at its current step without rerunning the settled ones`() {
     VerifyOperationHarness().use { harness ->
       val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
