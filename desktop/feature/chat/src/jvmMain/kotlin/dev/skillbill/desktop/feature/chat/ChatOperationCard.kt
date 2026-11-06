@@ -63,25 +63,39 @@ internal data class ChatOperationCardActions(
   val canAdjust: (token: String) -> Boolean,
 )
 
-/** The `select:` value a PR-review-fix confirm sends, or null while any thread has no explicit choice. Verify has none. */
+/** The `select:` value a PR-review-fix confirm sends, or null when no offered option was explicitly chosen. Verify has none. */
 internal fun ChatMessage.OperationCard.selectionWire(): String? {
   val details = card.details as? OperationCardDetailsView.PrReviewFix ?: return null
   val submitted = card.selection
-  if (!choicesSaved && submitted != null && submitted in setOf("all-recommended", "fix-all-unresolved", "select:all-recommended", "select:fix-all-unresolved")) {
+  if (
+    !choicesSaved && submitted != null &&
+    submitted in setOf("all-recommended", "fix-all-unresolved", "select:all-recommended", "select:fix-all-unresolved")
+  ) {
     return submitted.removePrefix("select:")
   }
-  val effective = if (choicesSaved) choices else choices + card.selectionChoices(details)
-  if (details.threads.isEmpty() || details.threads.any { it.ordinal !in effective }) return null
-  return details.threads.joinToString(",") { "${it.ordinal}=${effective.getValue(it.ordinal)}" }
+  val selected = selectedOfferedChoices(details)
+  return selected.takeIf { it.isNotEmpty() }?.joinToString(",") { (ordinal, option) -> "$ordinal=$option" }
 }
 
-/** Names the first thread that still lacks a choice, or null when the card needs none or every thread has one. */
+/** Names the missing choice when no offered option is selected, or null when the card has an explicit selection. */
 internal fun ChatMessage.OperationCard.missingChoiceText(): String? {
   val details = card.details as? OperationCardDetailsView.PrReviewFix ?: return null
   if (details.threads.isEmpty()) return "This proposal offers no thread to fix, so it cannot be confirmed."
-  if (!choicesSaved && card.selection in setOf("fix-all-unresolved", "select:fix-all-unresolved")) return null
+  if (
+    !choicesSaved &&
+    card.selection in setOf("all-recommended", "fix-all-unresolved", "select:all-recommended", "select:fix-all-unresolved")
+  ) return null
+  return selectedOfferedChoices(details).takeIf { it.isEmpty() }?.let { "Choose an option for at least one thread to confirm." }
+}
+
+private fun ChatMessage.OperationCard.selectedOfferedChoices(
+  details: OperationCardDetailsView.PrReviewFix,
+): List<Pair<String, String>> {
   val effective = if (choicesSaved) choices else choices + card.selectionChoices(details)
-  return details.threads.firstOrNull { it.ordinal !in effective }?.let { "Choose an option for thread ${it.ordinal} to confirm." }
+  return details.threads.mapNotNull { thread ->
+    val option = effective[thread.ordinal] ?: return@mapNotNull null
+    (thread.ordinal to option).takeIf { (_, optionId) -> thread.options.any { it.optionId == optionId } }
+  }
 }
 
 /** Why a decidable card's controls are off, or null when they are on. A settled card has none. */
@@ -209,8 +223,7 @@ private fun ThreadOptions(
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  val restoredChoice = if (message.choicesSaved) null else message.card.selectionChoices(details)[thread.ordinal]
-  val chosen = message.choices[thread.ordinal] ?: restoredChoice ?: message.card.selectionFor(thread)
+  val chosen = if (message.choicesSaved) message.choices[thread.ordinal] else message.card.selectionChoices(details)[thread.ordinal]
   BasicText("Thread ${thread.ordinal} (${thread.threadId})", style = type.tSmMedium.copy(color = colors.fg))
   thread.options.forEach { option ->
     val picked = option.optionId == chosen
@@ -236,30 +249,24 @@ private fun ThreadOptions(
   }
 }
 
-private fun OperationCardView.selectionFor(thread: OperationCardThreadView): String? =
-  selection?.split(',')?.firstOrNull { it.substringBefore('=') == thread.ordinal }?.substringAfter('=', "")?.takeIf(String::isNotEmpty)
-
 private fun OperationCardView.selectionChoices(details: OperationCardDetailsView.PrReviewFix): Map<String, String> {
   val submitted = selection ?: return emptyMap()
-  if (submitted.startsWith("select:") || submitted in setOf("all-recommended", "fix-all-unresolved")) {
-    val body = submitted.removePrefix("select:")
-    if (body == "all-recommended") {
-      return details.threads.mapNotNull { thread ->
-        thread.options.firstOrNull { it.recommended }?.let { thread.ordinal to it.optionId }
-      }.toMap()
-    }
-    if (body == "fix-all-unresolved") return emptyMap()
-    return body.split(',').mapNotNull { entry ->
-      val ordinal = entry.substringBefore('=')
-      val option = entry.substringAfter('=', "")
-      (ordinal to option).takeIf {
-        ordinal.isNotBlank() && option.isNotBlank() && details.threads.any { thread ->
-          thread.ordinal == ordinal && thread.options.any { it.optionId == option }
-        }
-      }
+  val body = submitted.removePrefix("select:")
+  if (body == "all-recommended") {
+    return details.threads.mapNotNull { thread ->
+      thread.options.firstOrNull { it.recommended }?.let { thread.ordinal to it.optionId }
     }.toMap()
   }
-  return details.threads.mapNotNull { thread -> selectionFor(thread)?.let { thread.ordinal to it } }.toMap()
+  if (body == "fix-all-unresolved") return emptyMap()
+  return body.split(',').mapNotNull { entry ->
+    val ordinal = entry.substringBefore('=')
+    val option = entry.substringAfter('=', "")
+    (ordinal to option).takeIf {
+      ordinal.isNotBlank() && option.isNotBlank() && details.threads.any { thread ->
+        thread.ordinal == ordinal && thread.options.any { it.optionId == option }
+      }
+    }
+  }.toMap()
 }
 
 @Composable
