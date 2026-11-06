@@ -11,6 +11,7 @@ data class VerifyRunDetails(
   val reviewFindings: VerifyReviewSection?, val flagAudit: VerifyFlagAudit?, val unitTestValue: VerifyUnitTestValue?,
   val changedFiles: List<String>, val verdict: VerifyRunVerdict?, val qa: QaRunDetails?, val qaVerdict: String?, val qaOutcome: String?,
   val qaFindingLocations: Map<String, List<String>>, val supersededBy: String?, val staleReason: String?,
+  val qaReportText: String? = null,
 )
 data class VerifyRunStep(val stepId: String, val status: String, val attemptCount: Int)
 data class VerifyRunCriterion(val number: Int, val text: String)

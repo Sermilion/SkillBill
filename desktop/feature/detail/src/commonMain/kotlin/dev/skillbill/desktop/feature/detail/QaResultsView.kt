@@ -77,6 +77,7 @@ internal data class QaResultsView(
   val targets: String?,
   val reportPath: String?,
   val evidenceMode: QaEvidenceMode,
+  val unblock: List<QaUnblockEntry>,
 )
 
 internal fun goalQaInput(qa: GoalQaResult, running: Boolean): QaResultsInput {
@@ -164,6 +165,7 @@ internal fun qaResultsView(input: QaResultsInput): QaResultsView {
     listFold("Passed", rows.map { QaDetailRow(it.title, it.detail, directory, it.evidencePaths) }, rows.map { shortenPaths(it.title, directory) })
   }
   val notTested = notTestedRows(assertions, details?.coverage.orEmpty(), open.size, directory)
+  val unfinished = input.outcome == QaVerdict.Incomplete || input.outcome == QaVerdict.Skipped || notTested.isNotEmpty()
   val counts = QaCounts(open.size, fixed.size, notTested.size, passed.size, retained.size + leftEdits.size, assertions.isNotEmpty())
   val skipToken = skipToken(input)
   val word = qaWord(input, counts)
@@ -186,6 +188,7 @@ internal fun qaResultsView(input: QaResultsInput): QaResultsView {
     targets = targetsLine(details?.coverage.orEmpty()),
     reportPath = (details?.reportPath ?: input.fallbackReportPath)?.takeIf { it.isNotBlank() },
     evidenceMode = input.evidenceMode,
+    unblock = if (unfinished) unblockEntries(input.reportText, directory) else emptyList(),
   )
 }
 

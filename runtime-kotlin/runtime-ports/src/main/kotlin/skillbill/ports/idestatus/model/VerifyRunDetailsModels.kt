@@ -36,6 +36,7 @@ data class VerifyRunDetails(
   val qaFindingLocations: Map<String, List<String>>,
   val supersededBy: String?,
   val staleReason: String?,
+  val qaReportText: String? = null,
 )
 
 data class VerifyRunStep(val stepId: String, val status: String, val attemptCount: Int)
