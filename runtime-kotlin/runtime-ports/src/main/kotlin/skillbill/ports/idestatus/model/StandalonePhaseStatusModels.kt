@@ -137,6 +137,7 @@ data class StandalonePhaseStatusUpdate(
   val planReport: StandalonePlanReport? = null,
   val reviewRunId: String? = null,
   val qaDetails: QaRunDetails? = null,
+  val validationOutcome: StandaloneValidationOutcome? = null,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -185,9 +186,12 @@ data class StandalonePhaseStatusRecord(
   val reviewRunId: String? = null,
   val qaChecklist: StandaloneQaChecklist? = null,
   val qaDetails: QaRunDetails? = null,
+  val liveChecks: LiveChecksAvailability? = null,
+  val validationOutcome: StandaloneValidationOutcome? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500
+const val VALIDATION_BRANCH_RUN_LIMIT: Int = 50
 
 enum class StandaloneEligibleSlice { LIVE, SETTLED }
 

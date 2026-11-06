@@ -40,6 +40,7 @@ import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
 import skillbill.engine.work.pagination.workDetailPagedResult
+import skillbill.engine.work.validation.withValidationBranchRuns
 import skillbill.engine.work.verify.VerifyRunDetailsProjection
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
@@ -390,6 +391,7 @@ public class IdeStatusService(
         snapshot = snapshot,
         recoveryWorkId = standalone?.invocationId ?: candidate.workflowId,
         executionHistory = history.take(request.pageSize),
+        selectedExecution = workSelectedExecution(standalone, context.unitOfWork),
         repositoryRoot = context.repoRoot.toString(),
         stepPipeline = detailStepPipeline(standalone, runtimeRead?.status?.phaseIds.orEmpty()),
         finishedAt = completion.first,
@@ -425,7 +427,7 @@ public class IdeStatusService(
         planSubtaskLatestLines = planOutput.latestAttributedLines,
         standalonePlanProgress = detailPlanProgress(standalone, context, position, planOutput),
         verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
-      )
+      ).withValidationBranchRuns(standalone, context.unitOfWork)
     val nextAnchors =
       detailNextAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
     return ProjectedDetailItem(detailItem, nextAnchors)

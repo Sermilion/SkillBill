@@ -177,20 +177,40 @@ public class WorkRunActions(
     val liveWorker = worker != null && supervisor.inspect(worker) != FeatureTaskRuntimeProcessInspection.NotRunning
     val completed = snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL
     val canceled = snapshot.lifecycleState == IdeStatusLifecycleState.CANCELED
+    val standaloneValidation = isStandaloneValidation(phase)
+    val terminalValidation = completed && standaloneValidation
+    val validationResume = standaloneValidation && isPausedOrBlocked(snapshot.lifecycleState)
     val agent = launchAgent(item, phase, unit)
     val supported = arguments(item, phase, unit, agent ?: SupportedAgent.supportedIds.first()) != null
     val live =
       snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE || liveWorker ||
         item.goalStatus?.executionLiveness?.let { executionLivenessBlocksIdleSafeRefresh(it) } == true
+    val launchable = canLaunch(completed, terminalValidation, live)
     return WorkRunOptions(
       !completed && !canceled,
-      !completed && !live && supported,
-      launchLabel(canceled, phase),
+      launchable && supported,
+      launchLabel(canceled, terminalValidation, validationResume, phase),
       agent?.takeIf { it in SupportedAgent.supportedIds },
       SupportedAgent.supportedIds,
-      "This older entry has no complete launch details.".takeIf { !completed && !live && !supported },
+      "This older entry has no complete launch details.".takeIf {
+        launchable && !supported
+      },
     )
   }
+
+  private fun canLaunch(
+    completed: Boolean,
+    terminalValidation: Boolean,
+    live: Boolean,
+  ): Boolean = (!completed || terminalValidation) && !live
+
+  private fun isStandaloneValidation(phase: StandalonePhaseStatusRecord?): Boolean =
+    phase?.let {
+      it.launchScope == IdeStatusLaunchScope.STANDALONE && it.phaseId == SkeletonDefinition.VALIDATION.id
+    } == true
+
+  private fun isPausedOrBlocked(lifecycle: IdeStatusLifecycleState): Boolean =
+    lifecycle == IdeStatusLifecycleState.PAUSED || lifecycle == IdeStatusLifecycleState.BLOCKED
 
   private fun launchAgent(
     item: WorkDetailItem,
@@ -202,8 +222,17 @@ public class WorkRunActions(
 
   private fun launchLabel(
     canceled: Boolean,
+    terminalValidation: Boolean,
+    validationResume: Boolean,
     phase: StandalonePhaseStatusRecord?,
-  ): String = if (canceled || phase != null && phase.workflowId == null) "Run again" else "Resume"
+  ): String =
+    if (validationResume) {
+      "Resume"
+    } else if (canceled || terminalValidation || phase?.let { it.workflowId == null } == true) {
+      "Run again"
+    } else {
+      "Resume"
+    }
 
   private fun workerOwnership(
     phase: StandalonePhaseStatusRecord?,

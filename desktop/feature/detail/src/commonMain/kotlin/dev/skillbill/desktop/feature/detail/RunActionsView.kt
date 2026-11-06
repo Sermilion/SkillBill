@@ -59,7 +59,8 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   ).takeIf { goal }
   val pauseNow = ControlButton(label(InFlightControl.PauseNow, "Pause"), ready && item.controlEligible, "Stops the goal runner now").takeIf { goal }
 
-  val resumable = item.lifecycle != Lifecycle.Active && item.lifecycle != Lifecycle.Terminal
+  val resumable = item.lifecycle != Lifecycle.Active &&
+    (item.lifecycle != Lifecycle.Terminal || isStandaloneValidation(item))
   val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
   val agentId = controls.chosenAgent ?: options?.agentId
   val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }

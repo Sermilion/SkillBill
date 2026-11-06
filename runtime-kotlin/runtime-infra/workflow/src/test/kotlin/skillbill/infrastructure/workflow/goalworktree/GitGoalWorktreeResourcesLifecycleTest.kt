@@ -15,8 +15,10 @@ import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
 import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -53,6 +55,14 @@ class GitGoalWorktreeResourcesLifecycleTest {
 
   private fun markInitializing(): Path =
     Files.writeString(repo.resolve(".git/worktrees/checkout/locked"), "initializing\n")
+
+  private fun markRemoval(worktree: Path): Path {
+    val attributes = Files.readAttributes(worktree, BasicFileAttributes::class.java)
+    return Files.writeString(
+      worktree.resolveSibling("checkout.removing"),
+      "${attributes.fileKey()}\n${attributes.creationTime()}",
+    )
+  }
 
   @Test
   fun `a worktree git still marks as initializing is adopted only after git finishes it`() {
@@ -297,6 +307,116 @@ class GitGoalWorktreeResourcesLifecycleTest {
 
     assertTrue("merge" in failed.detail, failed.detail)
     assertEquals("main", runGit(repo, "symbolic-ref", "--short", "HEAD"))
+  }
+
+  @Test
+  fun `settlement finishes a removal that was interrupted part way`() {
+    publishMain("remote-interrupted.git")
+    val worktree = created("SKILL-interrupted")
+    val marker = markRemoval(worktree)
+    Files.delete(worktree.resolve("tracked.txt"))
+    Files.writeString(worktree.resolve("leftover.txt"), "half deleted\n")
+
+    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+    assertTrue(Files.notExists(worktree))
+    assertTrue(Files.notExists(marker))
+    assertFalse(worktree.toString() in runGit(repo, "worktree", "list", "--porcelain"))
+  }
+
+  @Test
+  fun `a failed removal that git finished leaves no marker and keeps the worktree guarded`() {
+    publishMain("remote-locked.git")
+    val worktree = created("SKILL-locked")
+    runGit(repo, "worktree", "lock", worktree.toString())
+
+    val retained =
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+
+    assertEquals(MonitorRetentionReason.CLEANUP_FAILED, retained.reason)
+    assertTrue(Files.notExists(worktree.resolveSibling("checkout.removing")))
+    runGit(repo, "worktree", "unlock", worktree.toString())
+    Files.writeString(worktree.resolve("tracked.txt"), "later edit\n")
+    assertEquals(
+      MonitorRetentionReason.DIRTY_WORKTREE,
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree))).reason,
+    )
+  }
+
+  @Test
+  fun `adopting a worktree whose removal was interrupted checks it out again`() {
+    val worktree = created("SKILL-readopt")
+    val marker = markRemoval(worktree)
+    Files.delete(worktree.resolve("tracked.txt"))
+
+    val recreated =
+      assertIs<GoalWorktreeResult.Created>(resources.createOrAdopt(repo, "SKILL-readopt", worktree, "main"))
+
+    assertEquals("committed\n", Files.readString(recreated.path.resolve("tracked.txt")))
+    assertTrue(Files.notExists(marker))
+  }
+
+  @Test
+  fun `a surviving removal marker cannot delete edits after checkout recreation and resume`() {
+    publishMain("remote-recreated.git")
+    val worktree = created("SKILL-recreated")
+    val marker = markRemoval(worktree)
+    runGit(repo, "worktree", "remove", "--force", worktree.toString())
+
+    assertIs<GoalWorktreeResult.Created>(resources.createOrAdopt(repo, "SKILL-recreated", worktree, "main"))
+    Files.writeString(worktree.resolve("tracked.txt"), "new operator work\n")
+    Files.writeString(worktree.resolve("new.txt"), "new untracked work\n")
+
+    assertIs<GoalWorktreeResult.Adopted>(resources.createOrAdopt(repo, "SKILL-recreated", worktree, "main"))
+    assertEquals("new operator work\n", Files.readString(worktree.resolve("tracked.txt")))
+    assertEquals("new untracked work\n", Files.readString(worktree.resolve("new.txt")))
+    assertTrue(Files.notExists(marker))
+    assertEquals(
+      MonitorRetentionReason.DIRTY_WORKTREE,
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree))).reason,
+    )
+  }
+
+  @Test
+  fun `a removal marker for another directory cannot delete a replacement checkout`() {
+    val worktree = created("SKILL-replaced")
+    markRemoval(worktree)
+    Files.move(worktree, temp.toRealPath().resolve("old-checkout"))
+    runGit(repo, "worktree", "prune")
+    runGit(repo, "worktree", "add", "--detach", worktree.toString(), "main")
+    Files.writeString(worktree.resolve("tracked.txt"), "unpublished replacement work\n")
+    runGit(worktree, "add", ".")
+    runGit(worktree, "commit", "-m", "replacement work")
+    val head = runGit(worktree, "rev-parse", "HEAD")
+
+    assertEquals(
+      MonitorRetentionReason.UNPUBLISHED_COMMITS,
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree))).reason,
+    )
+    Files.writeString(worktree.resolve("tracked.txt"), "new operator edits\n")
+    assertIs<GoalWorktreeResult.Adopted>(resources.createOrAdopt(repo, "SKILL-replaced", worktree, "main"))
+    assertEquals(head, runGit(worktree, "rev-parse", "HEAD"))
+    assertEquals("new operator edits\n", Files.readString(worktree.resolve("tracked.txt")))
+  }
+
+  @Test
+  fun `an empty legacy removal marker cannot authorize deleting retained edits`() {
+    val worktree = created("SKILL-legacy-marker")
+    Files.createFile(worktree.resolveSibling("checkout.removing"))
+    Files.writeString(worktree.resolve("tracked.txt"), "keep this edit\n")
+
+    assertIs<GoalWorktreeResult.Adopted>(resources.createOrAdopt(repo, "SKILL-legacy-marker", worktree, "main"))
+    assertEquals(
+      MonitorRetentionReason.DIRTY_WORKTREE,
+      assertIs<GoalWorktreeSettlement.Retained>(resources.settle(GoalWorktreeSettleRequest(repo, worktree))).reason,
+    )
+    assertEquals("keep this edit\n", Files.readString(worktree.resolve("tracked.txt")))
+  }
+
+  private fun publishMain(remoteName: String) {
+    val remote = Files.createDirectories(temp.toRealPath().resolve(remoteName))
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
   }
 
   @Test

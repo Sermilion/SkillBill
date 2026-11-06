@@ -16,9 +16,12 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 
-/** The run this standalone item describes, from its execution history. */
-internal fun currentExecution(item: WorkItem, detail: Detail) =
-  detail.executionHistory.firstOrNull { it.invocationId == item.control.invocationId }
+internal fun Detail.execution(invocationId: String?) = invocationId?.let { id ->
+  selectedExecution?.takeIf { it.invocationId == id } ?: executionHistory.firstOrNull { it.invocationId == id }
+}
+
+/** The run this standalone item describes. */
+internal fun currentExecution(item: WorkItem, detail: Detail) = detail.execution(item.control.invocationId)
 
 /** A standalone run's saved phase briefings, one folded block per phase, in pipeline order. */
 internal fun DetailSections.briefingSection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit) {

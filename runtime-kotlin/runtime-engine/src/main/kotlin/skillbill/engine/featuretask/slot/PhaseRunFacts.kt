@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.install.model.SupportedAgent
 
 internal fun PhaseRun.stepFacts(
   issueKey: String,
@@ -23,5 +24,12 @@ internal fun PhaseRun.stepFacts(
     attempt = attempt,
     observeLaunch = true,
     briefingText = "",
+    liveChecks =
+      request.validationCheckInvocationId?.let { invocationId ->
+        PhaseLiveChecksLaunch(
+          invocationId,
+          SupportedAgent.fromWireOrNull(resolvedAgent.resolvedAgentId)?.loadsRuntimeMcpHeadless == true,
+        )
+      },
   )
 }

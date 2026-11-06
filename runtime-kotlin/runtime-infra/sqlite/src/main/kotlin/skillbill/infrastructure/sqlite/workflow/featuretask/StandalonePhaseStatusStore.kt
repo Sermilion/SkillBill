@@ -26,6 +26,10 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaDetai
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readReviewRunId
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.StandaloneValidationCheckStore
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.VALIDATION_OUTCOME_ASSIGNMENT
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readLiveChecks
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readValidationOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.writeStandaloneQaChecklist
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
@@ -34,9 +38,12 @@ import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
+import skillbill.infrastructure.sqlite.workflow.featuretask.validation.StandaloneValidationBranchReads
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
+import skillbill.ports.idestatus.StandaloneValidationBranchRepository
+import skillbill.ports.idestatus.StandaloneValidationCheckRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
@@ -64,7 +71,9 @@ internal class StandalonePhaseStatusStore(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val transactionActive: Boolean,
-) : StandalonePhaseStatusRepository {
+) : StandalonePhaseStatusRepository,
+  StandaloneValidationCheckRepository by StandaloneValidationCheckStore(connection, diagnostics, transactionActive),
+  StandaloneValidationBranchRepository by StandaloneValidationBranchReads(connection) {
   override fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       registerInTransaction(request)
@@ -469,7 +478,7 @@ internal class StandalonePhaseStatusStore(
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
           terminal_result = ?, accepted_result = ?,
           $MONITOR_CLEANUP_ASSIGNMENTS, $QA_OUTCOME_ASSIGNMENT, $QA_REPORT_TEXT_ASSIGNMENT, $QA_DETAILS_ASSIGNMENT,
-          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT
+          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT, $VALIDATION_OUTCOME_ASSIGNMENT
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -493,6 +502,7 @@ internal class StandalonePhaseStatusStore(
               request.qaDetails?.let(::encodeQaDetails),
               request.planReport.columnValue(),
               request.reviewRunId,
+              request.validationOutcome?.wireValue,
               request.executionId,
               request.expectedRevision,
               request.leaseOwner,
@@ -837,6 +847,8 @@ internal class StandalonePhaseStatusStore(
       reviewRunId = readReviewRunId(),
       qaChecklist = readQaChecklist(getString("invocation_id"), diagnostics),
       qaDetails = readQaDetailsOrWarn(getString("invocation_id"), diagnostics),
+      liveChecks = readLiveChecks("standalone-status"),
+      validationOutcome = readValidationOutcome("standalone-status"),
     )
   }
 

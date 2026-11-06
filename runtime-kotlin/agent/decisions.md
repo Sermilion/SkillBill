@@ -8,6 +8,30 @@ Alternatives considered: A forced checkout or stash switches more often but can 
 Context: The work-board read model is persisted and read by the desktop, and rows written earlier carry no outcome.
 Decision: Resolve the control-state string to a ports enum at projection using the shared wire constants, dropping outcome and detail when the value is unknown. Store the enum name and detail as optional goal_worktree keys, and validate an unknown name as an invalid row.
 Reason: Optional keys decode existing rows unchanged, so no migration or desktop read-schema bump is needed. One set of wire constants keeps one spelling, and validation keeps a bad row from crashing a read.
+## [2026-11-06] Purge validation events without counting or archiving them
+Context: Goal purge removes standalone status rows, while validation events are keyed by invocation. Counted tables must also appear in archive snapshots.
+Decision: Delete events with their status rows, but omit them from purge counts and archive snapshots.
+Reason: Events are a live progress log rather than goal state to restore. Omitting them from counts keeps dry-run and purge counts aligned without adding them to archives, while deletion prevents orphaned rows.
+
+## [2026-11-06] Let phase definitions opt into live checks
+Context: Phase entry and settlement need to identify validation runs without coupling phase execution to a specific definition.
+Decision: The phase definition exposes `reportsLiveChecks`, which validation enables.
+Reason: Phase execution remains definition-agnostic, and another definition can opt in without changing it.
+
+## [2026-11-06] Advertise validation checks through the started server
+Context: The validation prompt is composed before MCP startup can be observed.
+Decision: A capable standalone launch supplies its invocation identity only to the runtime MCP server. Server initialization marks live checks available and provides the tool protocol.
+Reason: A prompt mention would advertise the tool before startup is known. Server initialization tells the agent about it only when that server starts.
+
+## [2026-11-06] Derive validation outcomes from finished checks
+Context: A validation run can settle with skipped or unfinished checks and a status snapshot older than launch-time availability writes.
+Decision: Re-read availability during derivation and use the last finished event per check, excluding skipped checks. Leave the outcome null when no check counts.
+Reason: A skipped or unfinished check must not count as passed, and the registered snapshot cannot establish current availability.
+
+## [2026-11-06] Bound validation history to the recorded branch
+Context: Standalone validation detail needs peer runs without mixing repositories or branches.
+Decision: Read at most 50 validation runs with the same repository identity and non-null branch correlation. Return no peers for HEAD or missing correlation.
+Reason: A detached or unknown branch cannot identify a stable set of peer runs. The bound limits the detail read.
 
 ## [2026-11-06] Key standalone plan output by execution
 Context: A detached standalone plan and a separate detail reader need the same output after process exit. An issue key can identify multiple executions.
@@ -3524,3 +3548,7 @@ The `sbt-<hash>` directory under the Gradle user home remains the fallback outsi
 The runtime exemptions are narrow. `JdkHostPlatformPort.kt` is the only runtime reader of `java.io.tmpdir`. `RuntimeTempRoot.kt` compares the configured root with the real `/tmp` path and returns `/tmp` only when the configured value is blank and fallback directory creation failed. `GovernedReviewEvidenceEndpoint.kt` uses `/tmp` only for its Unix socket fallback when the path is too long, then removes the directory on close. `DesktopTempRoot.kt` holds the same temp-root decision for desktop code.
 
 The decomposition lock stays under `<state>/locks`. Run temp roots differ, but two runs must resolve the same lock file to exclude each other. The source guard catches literal `/tmp` paths and default-root temp creation, including absent, string, `null`, and all-caps first arguments. It cannot distinguish a lowercase variable or qualified constant from a `Path`; those forms remain review cases. No production call currently uses either form.
+
+## [2026-11-06] validation_check resolves its run from the server environment
+
+The `validation_check` MCP tool reads its run identity from `SKILL_BILL_VALIDATION_INVOCATION_ID` in the server process environment and never from tool arguments. An agent therefore cannot address another run's row, and a user-global server without the variable neither lists the tool nor records anything; a call returns `no_run_identity`. The recorder writes `current_activity` and inserts `validation_check_events` rows through narrow writes that leave `status_revision`, `updated_at` and the lease columns unchanged. `StandalonePhaseStatusEventSink` compare-and-sets on the revision it holds in memory, so a bumped revision would make its next persist stale.

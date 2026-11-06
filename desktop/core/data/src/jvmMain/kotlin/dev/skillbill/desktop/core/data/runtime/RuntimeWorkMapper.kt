@@ -207,7 +207,7 @@ private fun PhaseExecution.label(): String = when (kind) {
 private val acceptanceAuditPhases = setOf("audit", "audit_plan_fix", "audit_implement_fix")
 
 // Exhaustive on purpose: a runtime constant without a desktop counterpart must fail the build, not a read.
-private fun IdeStatusLifecycleState.toDomain(): Lifecycle = when (this) {
+internal fun IdeStatusLifecycleState.toDomain(): Lifecycle = when (this) {
   IdeStatusLifecycleState.ACTIVE -> Lifecycle.Active
   IdeStatusLifecycleState.PAUSED -> Lifecycle.Paused
   IdeStatusLifecycleState.BLOCKED -> Lifecycle.Blocked

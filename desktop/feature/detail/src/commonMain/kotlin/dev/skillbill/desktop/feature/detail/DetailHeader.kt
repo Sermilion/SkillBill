@@ -40,11 +40,16 @@ internal fun DetailHeader(
   onRevealFolder: () -> Unit,
   onOpenBranch: () -> Unit,
   qa: QaHeaderFacts? = null,
+  validation: Boolean = false,
   actions: (@Composable () -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   DocHeader(
-    title = if (qa != null) item.branch?.let { "QA on branch $it" } ?: item.title else item.title,
+    title = when {
+      validation -> item.branch?.let { "Validation on $it" } ?: item.title
+      qa != null -> item.branch?.let { "QA on branch $it" } ?: item.title
+      else -> item.title
+    },
     eyebrow = {
       SbLabel(lifecycleLabel(item.lifecycle), SbLabelStyle.Tint(lifecycleColor(item.lifecycle)))
       if (item.stalledSince != null) SbLabel("Stalled", SbLabelStyle.Tint(colors.stBlocked))
@@ -80,6 +85,7 @@ internal fun DetailHeader(
             BasicText("Criteria from $source", style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
           }
         }
+        if (validation) item.agentId?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted)) }
       }
       when (val worktree = item.goalWorktree) {
         null -> Unit

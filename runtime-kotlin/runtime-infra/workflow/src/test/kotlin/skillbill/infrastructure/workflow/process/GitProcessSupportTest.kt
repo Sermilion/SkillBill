@@ -17,6 +17,16 @@ class GitProcessSupportTest {
   }
 
   @Test
+  fun `worktree remove waits long enough to delete a large checkout`() {
+    assertEquals(
+      GIT_HOOKED_COMMAND_TIMEOUT_SECONDS,
+      gitTimeoutSeconds(listOf("worktree", "remove", "--force", "/tmp/checkout")),
+    )
+    assertEquals(GIT_TIMEOUT_SECONDS, gitTimeoutSeconds(listOf("worktree", "list", "--porcelain")))
+    assertEquals(GIT_TIMEOUT_SECONDS, gitTimeoutSeconds(listOf("worktree", "prune")))
+  }
+
+  @Test
   fun `withValue changes only successful results`() {
     val failed = WorkflowGitOperationResult.Failed(error = "failure", value = "diagnostic")
 
