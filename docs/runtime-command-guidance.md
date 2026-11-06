@@ -361,6 +361,11 @@ supplied briefing without starting standalone phase or operation commands.
 
 ### Phases
 
+`skill-bill phase qa` and `skill-bill goal` accept `--qa-device serial:<serial>`
+or `--qa-device avd:<name>`. The option is refused on other phases and never
+becomes intake text or an acceptance criterion. A goal uses the device only from
+its current launch. Resuming it without the option lets QA choose a device.
+
 Validation runs the project's required checks and fixes every failure in the same
 session, including build failures. It may run repository build and packaging commands,
 including the pack build command, to prepare missing or stale validation artifacts.

@@ -65,6 +65,7 @@ import skillbill.engine.work.control.model.WorkControlAction
 import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.StandaloneCheckout
+import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
@@ -345,9 +346,8 @@ class RuntimeWorkControlRepository(
     return startReservedStandalone(request, session, phaseId, settleOnStarted = true) { runtime ->
       runtime.workControlService.startStandalone(
         Path.of(request.repoRoot),
-        phaseId,
+        StandalonePhaseRequest(phaseId, request.target),
         request.agentId,
-        request.target,
         request.standaloneCheckout(),
       )
     }

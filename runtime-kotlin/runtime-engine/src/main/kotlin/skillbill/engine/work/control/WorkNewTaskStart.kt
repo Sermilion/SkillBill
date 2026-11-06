@@ -3,7 +3,10 @@ package skillbill.engine.work.control
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.GOAL_INTAKE_URL_MARKER
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
+import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.launchArguments
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightPort
@@ -17,6 +20,7 @@ import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.StandaloneCheckout
+import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
@@ -144,6 +148,7 @@ public class WorkNewTaskStart(
     prepared: NewTaskPreparation.Ready,
     kind: NewTaskRunKind,
     agentId: String,
+    qaDevice: QaNamedDevice? = null,
   ): NewTaskStartResult {
     if (agentId !in SupportedAgent.supportedIds) {
       return NewTaskStartResult.Refused("Choose a supported agent before starting this run.")
@@ -187,7 +192,7 @@ public class WorkNewTaskStart(
             "--repo-root",
             repoRoot.toString(),
             "--no-live-output",
-          )
+          ) + qaDevice.launchArguments()
       }
       NewTaskRunKind.PLAN -> {
         ownership = "$identity:$key:plan"
@@ -213,15 +218,20 @@ public class WorkNewTaskStart(
 
   public fun startStandalone(
     repoRoot: Path,
-    phaseId: String,
+    request: StandalonePhaseRequest,
     agentId: String,
-    target: String? = null,
     checkout: StandaloneCheckout = StandaloneCheckout(),
+    qaDevice: QaNamedDevice? = null,
   ): NewTaskStartResult {
+    val phaseId = request.phaseId
+    val target = request.target
     if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
+    if (qaDevice != null && phaseId != QA_PHASE) {
+      return NewTaskStartResult.Refused("$QA_DEVICE_FLAG applies only to the $QA_PHASE phase.")
+    }
     standaloneIntakeRefusal(target, phaseId)?.let { return it }
     val place = if (phaseId == MONITOR_PHASE) checkout.copy(branch = null) else checkout
-    val run = StandaloneRun("phase", BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, phaseId))
+    val run = StandaloneRun("phase", BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, phaseId), qaDevice)
     return launchStandaloneCommand(repoRoot, run, target, agentId, place)
   }
 
@@ -284,6 +294,7 @@ public class WorkNewTaskStart(
         }
         add("--agent")
         add(agentId)
+        addAll(run.qaDevice.launchArguments())
       }
     val result = launchRuntimeCommand(workspace.root, ownership, args)
     if (result is NewTaskStartResult.Refused && workspace.held) releaseAfterRefusal(workspace.root, run.holder)
@@ -496,6 +507,7 @@ public class WorkNewTaskStart(
   private data class StandaloneRun(
     val verb: String,
     val holder: BranchWorktreeHolder,
+    val qaDevice: QaNamedDevice? = null,
   )
 
   private data class StandaloneWorkspace(

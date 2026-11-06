@@ -895,6 +895,7 @@ public class DefaultGoalRunnerQaGate(
         ),
       modelAssignment = resumeModelAssignment(inputs, request),
       qaSelection = inputs.qaSelection,
+      qaDevice = request.qaDevice.takeIf { definition == SkeletonDefinition.GOAL_QA },
       acceptanceCriteria = inputs.acceptanceCriteria,
       eventSink = FeatureTaskRuntimeRunEventSink { event -> record(state, request, event) },
       activityOutput = { stepName, activity -> recordActivity(state, request, stepName, activity) },

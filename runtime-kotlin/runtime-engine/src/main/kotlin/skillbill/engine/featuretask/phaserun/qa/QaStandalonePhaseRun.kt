@@ -47,20 +47,23 @@ public class QaStandalonePhaseRun(
   ): PhaseRunResult {
     val settled =
       execution.withExecution(request.repoRoot, QaPolicy.STANDALONE, invocationId) { qa ->
+        val named = qa.copy(namedDevice = request.qaDevice)
         when (val target = qa.target) {
           is QaExecutionTarget.Skipped ->
-            QaStandaloneSettlement.Recorded(attemptOf(qa, QaReports.skipped(target.reason, target.detail), emptyList()))
+            QaStandaloneSettlement.Recorded(
+              attemptOf(named, QaReports.skipped(target.reason, target.detail), emptyList()),
+            )
           is QaExecutionTarget.Supported -> {
-            seedChecklist(request, qa, target)
-            when (val result = launch(request.copy(qaExecution = qa))) {
+            seedChecklist(request, named, target)
+            when (val result = launch(request.copy(qaExecution = named))) {
               is PhaseRunResult.Blocked ->
                 if (FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)) {
                   QaStandaloneSettlement.ProviderLimitPause(result)
                 } else {
-                  QaStandaloneSettlement.Recorded(attemptOf(qa, stopped(result.reason), result.completedStepIds))
+                  QaStandaloneSettlement.Recorded(attemptOf(named, stopped(result.reason), result.completedStepIds))
                 }
               is PhaseRunResult.Completed ->
-                QaStandaloneSettlement.Recorded(attemptOf(qa, settlement.settle(qa), result.completedStepIds))
+                QaStandaloneSettlement.Recorded(attemptOf(named, settlement.settle(named), result.completedStepIds))
             }
           }
         }

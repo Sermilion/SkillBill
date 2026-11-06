@@ -2,6 +2,8 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.launchArguments
 import skillbill.engine.featuretask.phaserun.monitor.MONITOR_BRANCH_PREFIX
 import skillbill.engine.goal.GoalPreflightGateBlock
 import skillbill.engine.goal.GoalPreflightPort
@@ -60,6 +62,7 @@ public class WorkRunActions(
     repoRoot: Path,
     issueKey: String,
     agentId: String?,
+    qaDevice: QaNamedDevice? = null,
   ): WorkControlResult {
     val agent =
       agentId?.takeIf { it in SupportedAgent.supportedIds }
@@ -83,7 +86,7 @@ public class WorkRunActions(
           repoRoot,
           unit.dbPath,
           ownershipKey,
-          WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(goalArguments(key, agent), repoRoot)),
+          WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(goalArguments(key, agent, qaDevice), repoRoot)),
           emptyMap(),
         )
       when (val launched = launcher.start(request)) {
@@ -263,7 +266,8 @@ public class WorkRunActions(
   private fun goalArguments(
     issue: String,
     agent: String,
-  ): List<String> = listOf("goal", issue, "--agent", agent)
+    qaDevice: QaNamedDevice? = null,
+  ): List<String> = listOf("goal", issue, "--agent", agent) + qaDevice.launchArguments()
 
   private fun phaseArguments(
     phase: StandalonePhaseStatusRecord,

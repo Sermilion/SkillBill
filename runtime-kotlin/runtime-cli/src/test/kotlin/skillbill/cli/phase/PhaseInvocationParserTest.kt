@@ -2,6 +2,8 @@ package skillbill.cli.phase
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.reviewevidence.model.ParallelReviewScope
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
@@ -11,6 +13,22 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class PhaseInvocationParserTest {
+  @Test
+  fun `named QA device is refused outside the qa phase`() {
+    val device = QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123")
+
+    listOf("review", "plan").forEach { phase ->
+      val error =
+        assertFailsWith<UsageError> {
+          PhaseInvocationParser.requireQaDevicePhase(
+            PhaseInvocationParser.parse(phase, if (phase == "plan") listOf("SKILL-1") else emptyList()),
+            device,
+          )
+        }
+      assertContains(error.message.orEmpty(), "--qa-device")
+    }
+  }
+
   @Test
   fun `review parses intake text apart from its mode and target keys`() {
     val invocation = PhaseInvocationParser.parse("review", listOf("tighten", "errors", "mode:delegated", "target:HEAD"))

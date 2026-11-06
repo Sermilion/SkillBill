@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunStat
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.history.GoalHistoryWriterInput
@@ -59,6 +60,7 @@ public data class FeatureTaskRuntimeRunRequest(
   override val phaseInstructions: PhaseInstructions? = null
   override val monitorExecution: MonitorExecutionContext? = null
   override val qaExecution: QaExecutionContext? = null
+  override val qaDevice: QaNamedDevice? = null
   override val goalHistoryWriterInput: GoalHistoryWriterInput? = null
   override val goalQualityAutomaticRecovery: Boolean = false
   override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null

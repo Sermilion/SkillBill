@@ -74,7 +74,17 @@ public class QaExecutionLifecycle(
                   checkouts.open(repoRoot, workspace, expected.headRevision, copyWorkingState = revision == null)
                 }
               checkout = (target as? QaExecutionTarget.Supported)?.checkout
-              val result = execute(QaExecutionContext(workspace, expected, target, policy, warnings.toList(), caller))
+              val result =
+                execute(
+                  QaExecutionContext(
+                    workspace = workspace,
+                    expected = expected,
+                    target = target,
+                    policy = policy,
+                    preparationWarnings = warnings.toList(),
+                    callerBaseline = caller,
+                  ),
+                )
               warnings += callerChanges(repoRoot, caller)
               result
             }

@@ -10,6 +10,7 @@ public data class QaExecutionContext(
   public val expected: QaExpectedIdentity,
   public val target: QaExecutionTarget,
   public val policy: QaPolicy = QaPolicy.STANDALONE,
+  public val namedDevice: QaNamedDevice? = null,
   internal val preparationWarnings: List<String> = emptyList(),
   internal val callerBaseline: QaCallerBaseline? = null,
 )

@@ -337,7 +337,9 @@ private class QaPreparedRun(
       }
     if (recordsGoalOutcome) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
     val result =
-      execution.withExecution(run.request.repoRoot, policy) { qa -> execute(run.copy(qaExecution = qa)) }
+      execution.withExecution(run.request.repoRoot, policy) { qa ->
+        execute(run.copy(qaExecution = qa.copy(namedDevice = run.request.qaDevice)))
+      }
     outcomes.recordRetainedResources(run.request.qaOutcomeWorkflowId, result.retainedResources)
     if (recordsGoalOutcome) {
       val completed = result.value as? PhaseOutcome.Completed

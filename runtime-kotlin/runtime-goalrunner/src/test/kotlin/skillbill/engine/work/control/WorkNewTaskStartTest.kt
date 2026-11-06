@@ -7,6 +7,7 @@ import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goalrunner.goalPreflightServiceForTests
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.ideStatusClock
 import skillbill.engine.work.testGoalRepositoryIdentity
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
@@ -30,7 +31,7 @@ class WorkNewTaskStartTest {
   @Test
   fun `monitor intake launches phase monitor with the intake before the agent flag`() {
     withRecordingStart("work-new-task-start-monitor") { start, root, launches ->
-      val result = start.startStandalone(root, "monitor", "cursor", "branch:main")
+      val result = start.startStandalone(root, StandalonePhaseRequest("monitor", "branch:main"), "cursor")
       assertIs<NewTaskStartResult.Started>(result)
       val command = launches.single().kind as WorkRunLaunchKind.RuntimeCommand
       assertEquals(listOf("phase", "monitor", "branch:main", "--agent", "cursor"), command.arguments)
@@ -41,9 +42,13 @@ class WorkNewTaskStartTest {
   fun `model written intake tokens refuse before launch`() {
     withRecordingStart("work-new-task-start-refuse") { start, root, launches ->
       listOf("--recover-stale-owner", "two tokens", "target:main", "mode:inline").forEach { intake ->
-        assertIs<NewTaskStartResult.Refused>(start.startStandalone(root, "monitor", "cursor", intake))
+        assertIs<NewTaskStartResult.Refused>(
+          start.startStandalone(root, StandalonePhaseRequest("monitor", intake), "cursor"),
+        )
       }
-      assertIs<NewTaskStartResult.Refused>(start.startStandalone(root, "review", "cursor", "branch:main"))
+      assertIs<NewTaskStartResult.Refused>(
+        start.startStandalone(root, StandalonePhaseRequest("review", "branch:main"), "cursor"),
+      )
       assertEquals(emptyList(), launches)
     }
   }
@@ -52,7 +57,9 @@ class WorkNewTaskStartTest {
   fun `qa instructions launch as one positional and keep the qa ownership key`() {
     withRecordingStart("work-new-task-start-qa") { start, root, launches ->
       val instructions = "Use staging.\nCompare against https://example.com/design and skip KYC."
-      assertIs<NewTaskStartResult.Started>(start.startStandalone(root, "qa", "cursor", instructions))
+      assertIs<NewTaskStartResult.Started>(
+        start.startStandalone(root, StandalonePhaseRequest("qa", instructions), "cursor"),
+      )
       val launch = launches.single()
       assertEquals(
         listOf("phase", "qa", instructions, "--agent", "cursor"),
@@ -66,7 +73,9 @@ class WorkNewTaskStartTest {
   fun `qa instructions the cli would read as a phase option refuse before launch`() {
     withRecordingStart("work-new-task-start-qa-refuse") { start, root, launches ->
       listOf("target:main check the login", "mode:inline", "-x staging").forEach { instructions ->
-        assertIs<NewTaskStartResult.Refused>(start.startStandalone(root, "qa", "cursor", instructions))
+        assertIs<NewTaskStartResult.Refused>(
+          start.startStandalone(root, StandalonePhaseRequest("qa", instructions), "cursor"),
+        )
       }
       assertEquals(emptyList(), launches)
     }
@@ -76,8 +85,12 @@ class WorkNewTaskStartTest {
   fun `different monitor intakes use different ownership keys`() {
     withRecordingStart("work-new-task-start-keys") { start, root, launches ->
       val identity = testGoalRepositoryIdentity(root)
-      assertIs<NewTaskStartResult.Started>(start.startStandalone(root, "monitor", "cursor", "branch:one"))
-      assertIs<NewTaskStartResult.Started>(start.startStandalone(root, "monitor", "cursor", "branch:two"))
+      assertIs<NewTaskStartResult.Started>(
+        start.startStandalone(root, StandalonePhaseRequest("monitor", "branch:one"), "cursor"),
+      )
+      assertIs<NewTaskStartResult.Started>(
+        start.startStandalone(root, StandalonePhaseRequest("monitor", "branch:two"), "cursor"),
+      )
       assertEquals(
         listOf("$identity:monitor:standalone:branch:one", "$identity:monitor:standalone:branch:two"),
         launches.map { it.ownershipKey },

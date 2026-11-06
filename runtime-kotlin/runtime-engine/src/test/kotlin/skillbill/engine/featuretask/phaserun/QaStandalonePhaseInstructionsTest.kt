@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
 import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
 import skillbill.engine.featuretask.runner.committedRepoBranchSetup
@@ -70,11 +72,21 @@ class QaStandalonePhaseInstructionsTest {
         qaManifests = listOf(pack),
       ).entry()
 
-    assertIs<PhaseRunResult.Completed>(entry.run(PhaseRunRequest(SkeletonDefinition.QA.id, repoRoot, "claude")))
+    assertIs<PhaseRunResult.Completed>(
+      entry.run(
+        PhaseRunRequest(
+          SkeletonDefinition.QA.id,
+          repoRoot,
+          "claude",
+          qaDevice = QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123"),
+        ),
+      ),
+    )
 
     val prompt = requireNotNull(launcher.requests.first().skillRunRequest.promptOverride)
     assertContains(prompt, "### From .skill-bill/phases/qa.md")
     assertContains(prompt, marker)
     assertContains(prompt, "## Unblock")
+    assertContains(prompt, "Use it for `adb -s 'R58M123'`")
   }
 }

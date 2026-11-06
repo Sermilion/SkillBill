@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
@@ -53,6 +54,7 @@ public data class PhaseRunRequest(
   public val recoverStaleOwner: String? = null,
   public val qaExecution: QaExecutionContext? = null,
   public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  public val qaDevice: QaNamedDevice? = null,
   public val acceptanceCriteria: List<String>? = null,
   public val recordedGoalQaOutcome: FeatureTaskQaOutcome? = null,
   public val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
@@ -150,6 +152,7 @@ public data class InMemoryPhaseRunFacts(
   override val stopAfterIntake: Boolean = false
   override val issueKey: String = intake.issueKey
   override val qaSelection: FeatureTaskRuntimeQaSelection? = request.qaSelection
+  override val qaDevice: QaNamedDevice? = request.qaDevice
   override val runInvariants: FeatureTaskRuntimeRunInvariants =
     request.acceptanceCriteria?.let { intake.runInvariants.copy(acceptanceCriteria = it) } ?: intake.runInvariants
   override val invokedAgentId: String = request.invokedAgentId

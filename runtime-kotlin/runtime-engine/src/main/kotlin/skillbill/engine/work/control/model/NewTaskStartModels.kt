@@ -39,6 +39,11 @@ public sealed interface NewTaskPreparation {
 
 public enum class NewTaskRunKind { GOAL, PLAN }
 
+public data class StandalonePhaseRequest(
+  public val phaseId: String,
+  public val target: String? = null,
+)
+
 public data class StandaloneCheckout(
   public val checkoutRoot: Path? = null,
   public val branch: String? = null,
