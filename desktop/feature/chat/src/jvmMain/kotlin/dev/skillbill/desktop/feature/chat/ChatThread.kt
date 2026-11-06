@@ -118,7 +118,7 @@ internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
   }
 }
 
-private fun ChatMessage.Operator.savedText(): String =
+internal fun ChatMessage.Operator.savedText(): String =
   text.ifBlank { images.indices.joinToString(" ") { imageLabel(it + 1) } }
 
 /** The message a saved line shows as when a chat resumes. */

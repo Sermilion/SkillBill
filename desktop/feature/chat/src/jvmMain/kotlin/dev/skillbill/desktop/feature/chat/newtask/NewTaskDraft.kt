@@ -302,9 +302,14 @@ class NewTaskDraft(
     if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
     val lines = current.thread.transcript.value
     val previousId = current.sessionId
+    val replay = (current.pendingReplay?.takeIf { !current.started }
+      ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
+      .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
     current.end()
-    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent)
-    next.thread.replaceTranscript(lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}."))
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay)
+    val switched = "Switched to ${chipText(agent)} in ${repo.name}."
+    val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
+    next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
     scope.launch {
       current.job.join()
       chats.deleteSavedChat(previousId)
@@ -358,6 +363,7 @@ class NewTaskDraft(
     started: Boolean = false,
     pendingTurnLineIndex: Int? = null,
     missing: Boolean = false,
+    replay: NewTaskReplay? = null,
   ): NewTaskChat =
     NewTaskChat(
       chats,
@@ -371,6 +377,7 @@ class NewTaskDraft(
       started,
       pendingTurnLineIndex,
       missing,
+      replay,
       chatDispatcher,
     ).also {
       clearChatFeedback()

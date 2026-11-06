@@ -53,6 +53,7 @@ internal class NewTaskChat(
   initiallyStarted: Boolean = false,
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
+  replay: NewTaskReplay? = null,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
   @Volatile
@@ -67,7 +68,13 @@ internal class NewTaskChat(
   @Volatile
   private var closing = false
   @Volatile
-  private var started = initiallyStarted
+  var started = initiallyStarted
+    private set
+
+  /** Earlier conversation sent once with the first turn that reaches the agent; never saved. */
+  @Volatile
+  var pendingReplay: NewTaskReplay? = replay
+    private set
   @Volatile
   private var pendingTurnLineIndex: Int? = initiallyPendingTurnLineIndex
   @Volatile
@@ -243,7 +250,9 @@ internal class NewTaskChat(
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
     var seenEvent = false
-    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, text)).collect { event ->
+    val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
+    val prompt = if (preamble == null) text else "$preamble\n\n$text"
+    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt)).collect { event ->
       coroutineContext.ensureActive()
       if (!seenEvent) {
         seenEvent = true
@@ -253,6 +262,7 @@ internal class NewTaskChat(
       if (opening) {
         opened = true
         started = true
+        pendingReplay = null
       }
       thread.show(agent, event)
       if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
