@@ -1,3 +1,8 @@
+## [2026-11-06] Replay an interrupted read-only goal-quality step
+Context: SKILL-507's final QA process died about a minute into `qa#1` and left a `running` record with no accepted envelope. Every resume then refused with "The outcome of goal-quality step 'qa#1' is unknown" until the operator ran `goal fresh-quality`.
+Decision: `validateRetainedRunningPhases` lets a retained running agent step through when the accepted plan's step policy is neither `mutating` nor `fileMutating`, its start history is consistent, and the ledger has no terminal action for that attempt. The run loop then starts the next attempt. `qa_fix`, pack gates and any step with a terminal ledger action keep the unknown-outcome block.
+Reason: A read-only step cannot leave edits for a replay to duplicate, so its lost outcome needs no operator decision.
+
 ## [2026-11-05] Classify direct review launches on stderr before generic exit messages
 Context: Application review runners call AgentRunLauncher without DefaultPhaseRunner PROVIDER_LIMIT classification.
 Decision: reviewLaunchProviderLimitPauseReason runs FeatureTaskRuntimeProviderLimitDetector on non-zero exits before agent exited with status or PROCESS_FAILURE copy.

@@ -11,6 +11,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
@@ -84,16 +85,62 @@ class GoalQualityGateRecoveryTest {
     assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'build#1' is unknown")
   }
 
+  @Test
+  fun `an interrupted read-only QA attempt with a consistent start may run again`() {
+    val qa = record.copy(phaseId = "qa")
+    validateRetained(GoalQualityPhaseProgress(phaseRecords = mapOf("qa" to qa), phaseLedger = qaStarts("qa")))
+  }
+
+  @Test
+  fun `an interrupted QA fix attempt keeps the unknown outcome block`() {
+    val fix = record.copy(phaseId = "qa_fix")
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        validateRetained(
+          GoalQualityPhaseProgress(phaseRecords = mapOf("qa_fix" to fix), phaseLedger = qaStarts("qa_fix")),
+        )
+      }
+    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'qa_fix#1' is unknown")
+  }
+
+  @Test
+  fun `a running QA attempt with a terminal ledger action keeps the unknown outcome block`() {
+    val qa = record.copy(phaseId = "qa")
+    val terminal =
+      first.copy(phaseId = "qa", action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE, sequenceNumber = 11)
+    val ledger = qaStarts("qa") + terminal
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        validateRetained(GoalQualityPhaseProgress(phaseRecords = mapOf("qa" to qa), phaseLedger = ledger))
+      }
+    assertContains(failure.message.orEmpty(), "outcome of goal-quality step 'qa#1' is unknown")
+  }
+
+  private fun qaStarts(phaseId: String) = listOf(first.copy(phaseId = phaseId), second.copy(phaseId = phaseId))
+
+  private fun validateRetained(progress: GoalQualityPhaseProgress) {
+    val resolver = resolver()
+    val plan =
+      resolver.resolveExecutionPlan(
+        PhaseRunRequest(definitionId = SkeletonDefinition.GOAL_QA.id, repoRoot = home, invokedAgentId = "codex"),
+        "goal-parent",
+      )
+    resolver.validateRetainedRunningPhases(progress, plan, "goal-parent:quality-invocation")
+  }
+
+  private fun resolver(): PhaseRunPlanResolver {
+    val clock = Clock.systemUTC()
+    val git = RecordingWorkflowGitOperations()
+    val strategies = testPhaseStrategies(GoalRunnerSubtaskLauncher { error("Unexpected launch") }, git)
+    return PhaseRunEntryFixture(strategies, git, phaseRunDatabase(home, clock), clock).plans()
+  }
+
   private fun progress(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     nested: FeatureTaskRuntimeValidationGateProgress = gate,
   ) = GoalQualityPhaseProgress(phaseLedger = ledger, buildGateProgress = nested, buildGateProgressKey = "key")
 
   private fun validate(progress: GoalQualityPhaseProgress) {
-    val clock = Clock.systemUTC()
-    val git = RecordingWorkflowGitOperations()
-    val strategies = testPhaseStrategies(GoalRunnerSubtaskLauncher { error("Unexpected launch") }, git)
-    val resolver = PhaseRunEntryFixture(strategies, git, phaseRunDatabase(home, clock), clock).plans()
-    resolver.validateRunningGate(progress, record, ValidationGateCommandFamily.BUILD, "key")
+    resolver().validateRunningGate(progress, record, ValidationGateCommandFamily.BUILD, "key")
   }
 }
