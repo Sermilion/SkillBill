@@ -49,7 +49,15 @@ class ProcessLiveChatLauncherTest {
       output !is ChatProcessOutput.Exited
     }.toList()
 
-    assertEquals(listOf(ChatProcessOutput.Line("first"), ChatProcessOutput.Line("second"), ChatProcessOutput.Exited(0, "")), outputs)
+    assertEquals(
+      listOf(
+        ChatProcessOutput.Line("first"),
+        ChatProcessOutput.Line("second"),
+        ChatProcessOutput.StdoutEnded(null, ""),
+        ChatProcessOutput.Exited(0, ""),
+      ),
+      outputs,
+    )
   }
 
   // Windows has no SIGTERM: destroy() terminates at once, and Git Bash $$ is not a Windows pid.

@@ -10,8 +10,10 @@ import skillbill.infrastructure.launcher.process.codex.CodexPhaseSession
 import skillbill.infrastructure.launcher.process.codex.CodexSessionChannel
 import skillbill.infrastructure.launcher.process.codex.CodexSessionLaunch
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
+import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
 import skillbill.infrastructure.launcher.process.cursor.CursorPhaseSession
 import skillbill.infrastructure.launcher.process.cursor.CursorSessionChannel
+import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
 import skillbill.infrastructure.launcher.process.interaction.CLAUDE_APPROVAL_PROVIDER
@@ -37,6 +39,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.agentrun.model.CursorMcpDependencyRequirement
 import skillbill.ports.agentrun.model.MAX_REPORTED_LAUNCH_IDENTITIES
 import skillbill.ports.agentrun.model.ReportedLaunchIdentity
 import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
@@ -60,6 +63,32 @@ internal sealed interface LauncherResolution {
   data class Missing(val message: String) : LauncherResolution
 }
 
+private const val CURSOR_MCP_DEPENDENCY_ENV = "SKILL_BILL_CURSOR_MCP_DEPENDENCY"
+
+private fun resolveCursorMcpDependency(
+  request: CursorMcpDependencyRequirement,
+  providerEnvironment: Map<String, String>,
+): CursorAcpMcpDependency? {
+  val configured = providerEnvironment[CURSOR_MCP_DEPENDENCY_ENV]
+  val environmentRequirement =
+    when (configured) {
+      null -> CursorMcpDependencyRequirement.Unspecified
+      "project-user-only" -> CursorMcpDependencyRequirement.ProjectUserOnly
+      "team-dashboard-required" -> CursorMcpDependencyRequirement.TeamDashboardRequired
+      else -> return null
+    }
+  if (request != CursorMcpDependencyRequirement.Unspecified &&
+    environmentRequirement != CursorMcpDependencyRequirement.Unspecified && request != environmentRequirement
+  ) {
+    return null
+  }
+  return when (request.takeIf { it != CursorMcpDependencyRequirement.Unspecified } ?: environmentRequirement) {
+    CursorMcpDependencyRequirement.Unspecified -> CursorAcpMcpDependency.Unspecified
+    CursorMcpDependencyRequirement.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
+    CursorMcpDependencyRequirement.TeamDashboardRequired -> CursorAcpMcpDependency.TeamDashboardRequired
+  }
+}
+
 internal class ProcessAgentRunAdapter(
   val agent: SupportedAgent,
   private val commandBuilder: AgentRunCommandBuilder,
@@ -74,6 +103,35 @@ internal class ProcessAgentRunAdapter(
   val canHostApprovalCards: Boolean get() = commandBuilder.approvalProtocol != null
 
   fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
+    approvalRefusal(request)?.let { return it }
+    val built = commandBuilder.build(request)
+    val cardRequiredCursor =
+      built.approvalProtocol == AgentRunApprovalProtocol.CURSOR_ACP &&
+        request.approval is AgentRunApprovalRequirement.Owned
+    val cursorDependency =
+      if (cardRequiredCursor) {
+        resolveCursorMcpDependency(request.cursorMcpDependency, inheritedEnvironment)
+          ?: run {
+            diagnostics.warning("seam=agent_run outcome=cursor_capability_declaration_invalid provider=${agent.id}")
+            return UnsupportedAgentRunLaunch(
+              agent,
+              "Cursor MCP dependency declaration is missing, invalid, or conflicts with " +
+                "$CURSOR_MCP_DEPENDENCY_ENV; the phase was not started.",
+            )
+          }
+      } else {
+        CursorAcpMcpDependency.Unspecified
+      }
+    if (cardRequiredCursor) {
+      cursorAcpDependencyRefusal(cursorDependency)?.let { reason ->
+        diagnostics.warning("seam=agent_run outcome=cursor_capability_unsupported provider=${agent.id}")
+        return UnsupportedAgentRunLaunch(agent, reason)
+      }
+    }
+    return launchResolved(request, built, cursorDependency)
+  }
+
+  private fun approvalRefusal(request: SkillRunRequest): UnsupportedAgentRunLaunch? {
     if (request.approval is AgentRunApprovalRequirement.Unowned ||
       (request.approval is AgentRunApprovalRequirement.Owned && !canHostApprovalCards)
     ) {
@@ -84,7 +142,14 @@ internal class ProcessAgentRunAdapter(
         } ?: commandBuilder.approvalUnavailableReason
       return UnsupportedAgentRunLaunch(agent, reason)
     }
-    val built = commandBuilder.build(request)
+    return null
+  }
+
+  private fun launchResolved(
+    request: SkillRunRequest,
+    built: AgentRunCommand,
+    cursorDependency: CursorAcpMcpDependency,
+  ): AgentRunLaunchOutcome {
     val command =
       when (val resolution = resolveLauncherExecutable(built.command, commandBuilder.launcherCli)) {
         is LauncherResolution.Resolved -> built.copy(command = resolution.command)
@@ -92,7 +157,7 @@ internal class ProcessAgentRunAdapter(
       }
     val process = processRequest(command, request)
     if (command.approvalProtocol == AgentRunApprovalProtocol.CURSOR_ACP) {
-      return launchCursorSession(request, command, process)
+      return launchCursorSession(request, command, process, cursorDependency)
     }
     return launchOtherSession(request, command, process)
   }
@@ -180,6 +245,7 @@ internal class ProcessAgentRunAdapter(
       assistantEventCount = decoded.assistantEventCount,
       rawOutputPreview = decoded.rawOutputPreview,
       reportedIdentity = decoded.reportedIdentity,
+      sessionFailureEvidence = result.sessionFailureEvidence,
     )
   }
 
@@ -345,6 +411,7 @@ internal class ProcessAgentRunAdapter(
     request: SkillRunRequest,
     command: AgentRunCommand,
     process: AgentRunProcessRequest,
+    dependency: CursorAcpMcpDependency,
   ): AgentRunLaunchOutcome {
     val launch =
       CursorAcpLaunch(
@@ -352,6 +419,7 @@ internal class ProcessAgentRunAdapter(
         requireNotNull(command.stdinText),
         command.sessionModel,
         if (request.readOnlyPhase) "plan" else "agent",
+        mcpDependency = dependency,
       )
     val deadline = approvalEnclosingDeadline(clock, request.timeout)
     val result =

@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -69,6 +70,7 @@ class AgentChatTransportsTest {
     for (transport in transports) {
       val failure = assertIs<ChatEvent.Failed>(transport.run(request.copy(
         agent = ChatAgent(transport.agentId, null, null),
+        cursorMcpDependency = CursorMcpDependency.ProjectUserOnly,
       )).toList().single())
       assertEquals(ChatFailure.ApprovalUnsupported, failure.failure)
       assertContains(failure.detail.orEmpty(), "operator approval channel")

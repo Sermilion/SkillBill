@@ -529,6 +529,7 @@ internal class CodexSessionChannel(
       truncated = captureTruncated,
       deliveryFailed = proseDeliveryFailed,
       providerDiagnostics = providerDiagnostics.toString().takeIf(String::isNotBlank),
+      failureDiagnostics = providerDiagnostics.toString().takeIf(String::isNotBlank),
     )
 
   private fun sendRequest(

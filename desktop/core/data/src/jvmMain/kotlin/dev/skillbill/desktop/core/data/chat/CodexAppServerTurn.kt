@@ -410,6 +410,9 @@ private class CodexAppServerRpc(
   private suspend fun nextMessage(): JsonObject {
     while (true) {
       when (val item = output.receiveCatching().getOrNull()) {
+        is ChatProcessOutput.StdoutEnded -> {
+          continue
+        }
         is ChatProcessOutput.Line -> {
           val message = parseStreamLine(item.text)
           if (message == null) {

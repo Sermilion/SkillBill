@@ -55,6 +55,8 @@ private object ChatStoreKeys {
   const val ROLE = "role"
   const val TEXT = "text"
   const val AGENT_SESSION = "agent_session"
+  const val CURSOR_PROFILE_IDENTITY = "cursor_profile_identity"
+  const val CURSOR_WORKING_DIRECTORY = "cursor_working_directory"
   const val EXCHANGES = "exchanges"
   const val OPERATOR = "operator"
   const val AGENT = "agent"
@@ -90,6 +92,8 @@ private data class StoredChat(
   val updatedAt: Instant? = null,
   val lines: List<ChatHistoryLine> = emptyList(),
   val agentSession: String? = null,
+  val cursorProfileIdentity: String? = null,
+  val cursorWorkingDirectory: String? = null,
   val exchanges: List<ChatExchange> = emptyList(),
   val newTask: ChatNewTaskContext? = null,
 )
@@ -107,6 +111,21 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
   internal fun agentSession(sessionId: String): String? = read(sessionId)?.agentSession
 
   internal fun saveAgentSession(sessionId: String, agentSession: String) = update(sessionId) { it.copy(agentSession = agentSession) }
+
+  internal fun cursorSessionBinding(sessionId: String): CursorSessionBinding? = read(sessionId)?.let { chat ->
+    val profile = chat.cursorProfileIdentity ?: return@let null
+    val workingDirectory = chat.cursorWorkingDirectory ?: return@let null
+    CursorSessionBinding(profile, workingDirectory)
+  }
+
+  internal fun saveCursorSession(sessionId: String, agentSession: String, binding: CursorSessionBinding) =
+    update(sessionId) {
+      it.copy(
+        agentSession = agentSession,
+        cursorProfileIdentity = binding.profileIdentity,
+        cursorWorkingDirectory = binding.workingDirectory,
+      )
+    }
 
   internal fun exchanges(sessionId: String): List<ChatExchange> = read(sessionId)?.let { chat ->
     if (chat.newTask != null) chat.lines.toExchanges() else chat.exchanges
@@ -260,6 +279,8 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
     },
   )
   chat.agentSession?.let { put(ChatStoreKeys.AGENT_SESSION, it) }
+  chat.cursorProfileIdentity?.let { put(ChatStoreKeys.CURSOR_PROFILE_IDENTITY, it) }
+  chat.cursorWorkingDirectory?.let { put(ChatStoreKeys.CURSOR_WORKING_DIRECTORY, it) }
   chat.newTask?.let { newTask ->
     put(ChatStoreKeys.NEW_TASK_ROOT, newTask.repositoryRoot)
     newTask.baseBranch?.let { put(ChatStoreKeys.NEW_TASK_BASE_BRANCH, it) }
@@ -301,6 +322,8 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
       }
     },
     agentSession = root.string(ChatStoreKeys.AGENT_SESSION),
+    cursorProfileIdentity = root.string(ChatStoreKeys.CURSOR_PROFILE_IDENTITY),
+    cursorWorkingDirectory = root.string(ChatStoreKeys.CURSOR_WORKING_DIRECTORY),
     exchanges = root.objects(ChatStoreKeys.EXCHANGES).mapNotNull { exchange ->
       val operator = exchange.string(ChatStoreKeys.OPERATOR) ?: return@mapNotNull null
       exchange.string(ChatStoreKeys.AGENT)?.let { ChatExchange(operator, it) }

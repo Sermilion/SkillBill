@@ -4,6 +4,7 @@ import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapt
 import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.infrastructure.launcher.process.support.launcherSha256Hex
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
+import skillbill.ports.agentrun.model.AgentRunSessionFailureEvidence
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -60,6 +61,7 @@ data class AgentRunProcessResult(
   val spawnDenied: AgentRunSpawnAuthorizationResult.Denied? = null,
   val sessionOutcome: AgentRunSessionOutcome? = null,
   val sessionCapture: AgentRunSessionCapture? = null,
+  val sessionFailureEvidence: AgentRunSessionFailureEvidence? = null,
 )
 
 interface AgentRunProcessRunner {

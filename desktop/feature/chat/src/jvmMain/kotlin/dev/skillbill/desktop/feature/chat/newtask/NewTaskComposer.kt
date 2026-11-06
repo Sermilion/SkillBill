@@ -32,9 +32,11 @@ import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbPopoverPlacement
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
+import dev.skillbill.desktop.feature.chat.CursorMcpPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
 import dev.skillbill.desktop.feature.chat.ResumePicker
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
@@ -59,6 +61,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
   val stoppable = chat?.let { key(it) { it.thread.stoppable.collectAsState().value } } ?: false
   val queued = chat?.let { key(it) { it.thread.queued.collectAsState().value } }.orEmpty()
   val gate = remember(chat) { SendNowGate() }
+  val cursorMcpDependency = draft.cursorMcpDependency
   val offer by draft.offer.collectAsState()
   val ready = !offer.starting && draft.canSend()
   val sendNow = stoppable && queued.isNotEmpty() && draft.text.isBlank() && !offer.starting
@@ -72,6 +75,7 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
   val saved by draft.saved.collectAsState()
   val submit = {
     val startsTurn = ready && !busy && draft.text.trim() != RESUME_COMMAND
+    draft.cursorMcpDependency = cursorMcpDependency
     onAction(NewTaskAction.Send)
     if (startsTurn) focusManager.clearFocus()
   }
@@ -110,6 +114,9 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         RepositoryPicker(state, draft, chat, offer.starting, focus, now, Modifier.weight(1f, fill = false), onAction)
         AgentPicker(state.agent, state.agents, enabled = pickersEnabled, disabledWhy = pickersDisabledWhy) { onAction(NewTaskAction.ChooseAgent(it)) }
+        if (state.agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
+          CursorMcpPicker(cursorMcpDependency, enabled = pickersEnabled) { draft.cursorMcpDependency = it }
+        }
       }
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (stoppable) {

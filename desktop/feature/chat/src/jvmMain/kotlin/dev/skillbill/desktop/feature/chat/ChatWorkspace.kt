@@ -5,6 +5,7 @@ import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ApprovalRulesResult
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -117,6 +118,7 @@ class ChatWorkspace(
   private val newTask: NewTaskDraft,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
 ) : ChatCommands {
+  internal val cursorMcpDependencies = mutableStateMapOf<String, CursorMcpDependency>()
   private val scope = windowScope.scope
   private val approvalFlow = ChatApprovals(approvals)
   override val newTaskDraftOpen: StateFlow<Boolean> = newTask.chat.map { it != null }.stateIn(scope, SharingStarted.Eagerly, false)
@@ -266,6 +268,7 @@ class ChatWorkspace(
     }
     val session = sessions.remove(id) ?: return
     drafts.remove(id)
+    cursorMcpDependencies.remove(id)
     pastedImages.remove(id)
     operationCards.remove(id)
     session.job.cancel()
@@ -291,6 +294,7 @@ class ChatWorkspace(
       chat.end(it.sessionId)
     }
     sessions.clear()
+    cursorMcpDependencies.clear()
     approvalTabs.values.forEach { it.job.cancel() }
     approvalTabs.clear()
     drafts.clear()
@@ -378,19 +382,21 @@ class ChatWorkspace(
   }
 
   /** Asks the agent about the execution, in the mode its state allows now; it never changes the execution. */
-  fun send(id: String, text: String, images: List<ChatImage> = emptyList()) {
-    enqueue(id, QueuedChatMessage(text, null, pauseAndAct = false, images = images))
+  fun send(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
+    enqueue(id, QueuedChatMessage(text, null, pauseAndAct = false, images = images, cursorMcpDependency = cursorMcpDependency))
   }
 
   private fun send(id: String, text: String, action: ChatSuggestedAction?) {
     enqueue(id, QueuedChatMessage(text, action, pauseAndAct = false))
   }
 
-  private fun send(session: ChatSession, text: String, images: List<ChatImage>) {
+  private fun send(session: ChatSession, text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency) {
     session.stoppableState.value = true
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
-      turns.turn(session, read, modeFor(read.header), text, images = images)
+      if (!turns.turn(session, read, modeFor(read.header), text, images = images, cursorMcpDependency = cursorMcpDependency)) {
+        restoreDraft(session.id, text, images, cursorMcpDependency)
+      }
     }
   }
 
@@ -399,8 +405,8 @@ class ChatWorkspace(
    * or its tab closes. The relaunch is skipped when, after the turn, the execution is already running, finished or gone.
    * On an execution that is not running it is a plain [send].
    */
-  fun pauseAndAct(id: String, text: String, images: List<ChatImage> = emptyList()) {
-    enqueue(id, QueuedChatMessage(text, null, pauseAndAct = true, images = images))
+  fun pauseAndAct(id: String, text: String, images: List<ChatImage> = emptyList(), cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
+    enqueue(id, QueuedChatMessage(text, null, pauseAndAct = true, images = images, cursorMcpDependency = cursorMcpDependency))
   }
 
   private fun pauseAndAct(id: String, text: String, action: ChatSuggestedAction?) {
@@ -413,6 +419,9 @@ class ChatWorkspace(
     if (!session.stoppableState.value) return
     val queued = session.queuedState.value
     if (queued.isNotEmpty()) {
+      cursorMcpDependencies[id] = if (drafts[id].isNullOrBlank() && pastedImages[id].isNullOrEmpty()) {
+        queued.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
+      } else CursorMcpDependency.Unspecified
       session.queuedState.value = emptyList()
       drafts[id] = restoredDraft(queued, drafts[id].orEmpty())
     }
@@ -442,12 +451,14 @@ class ChatWorkspace(
     }
   }
 
-  private fun pauseAndAct(session: ChatSession, text: String, images: List<ChatImage>) {
+  private fun pauseAndAct(session: ChatSession, text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency) {
     session.stoppableState.value = true
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       if (modeFor(read.header) == ChatPermissionMode.Act) {
-        turns.turn(session, read, ChatPermissionMode.Act, text, images = images)
+        if (!turns.turn(session, read, ChatPermissionMode.Act, text, images = images, cursorMcpDependency = cursorMcpDependency)) {
+          restoreDraft(session.id, text, images, cursorMcpDependency)
+        }
         return@launchTurn
       }
       val deadline = clock.now() + PAUSE_WAIT
@@ -477,7 +488,15 @@ class ChatWorkspace(
       val stoppedRead = turns.accept(session, stopped) ?: return@launchTurn
       session.pauseWatch?.cancel()
       if (session.resumeJob?.isActive != true) resumeAfter(turn, session.id, stoppedRead.header)
-      turns.turn(session, stoppedRead, ChatPermissionMode.Act, text, prefix = ACT_PREFIX, images = images)
+      if (!turns.turn(
+        session,
+        stoppedRead,
+        ChatPermissionMode.Act,
+        text,
+        prefix = ACT_PREFIX,
+        images = images,
+        cursorMcpDependency = cursorMcpDependency,
+      )) restoreDraft(session.id, text, images, cursorMcpDependency)
     }
   }
 
@@ -488,6 +507,7 @@ class ChatWorkspace(
   fun switchAgent(id: String, agentId: String) {
     val session = sessions[id] ?: return
     if (session.busyState.value || session.agentState.value?.agentId == agentId) return
+    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     session.busyState.value = true
     session.stoppableState.value = false
     launchTurn(session) {
@@ -508,6 +528,7 @@ class ChatWorkspace(
    */
   fun clear(id: String) {
     val session = sessions[id] ?: return
+    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     pastedImages.remove(id)
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
@@ -543,6 +564,7 @@ class ChatWorkspace(
    */
   fun resume(id: String, entry: ChatHistoryEntry) {
     val session = sessions[id] ?: return
+    cursorMcpDependencies[id] = CursorMcpDependency.Unspecified
     session.resumeChoicesState.value = null
     session.prefixChoiceState.value = null
     if (session.goneState.value || (entry.executionId != null && entry.executionId != session.item.id)) return
@@ -608,13 +630,21 @@ class ChatWorkspace(
     drainQueue(session)
   }
 
+  private fun restoreDraft(id: String, text: String, images: List<ChatImage>, cursorMcpDependency: CursorMcpDependency) {
+    if (!drafts[id].isNullOrBlank() || !pastedImages[id].isNullOrEmpty()) return
+    if (text.isBlank() && images.isEmpty()) return
+    drafts[id] = text
+    pastedImages[id] = images
+    cursorMcpDependencies[id] = cursorMcpDependency
+  }
+
   private fun drainQueue(session: ChatSession) {
     if (!session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return
     val next = session.queuedState.value.firstOrNull() ?: return
     session.queuedState.value = session.queuedState.value.drop(1)
     session.busyState.value = true
     session.append(ChatMessage.Operator(next.text, next.action, next.images))
-    if (next.pauseAndAct) pauseAndAct(session, next.text, next.images) else send(session, next.text, next.images)
+    if (next.pauseAndAct) pauseAndAct(session, next.text, next.images, next.cursorMcpDependency) else send(session, next.text, next.images, next.cursorMcpDependency)
   }
 
   private fun launchTurn(session: ChatSession, block: suspend () -> Unit) {

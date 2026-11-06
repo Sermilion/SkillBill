@@ -28,6 +28,8 @@ Cross-cutting properties:
 - Project-tunable via `.agents/skill-overrides.md`.
 - Decomposes itself when too big.
 
+Cursor ACP does not supply team-dashboard MCP servers. Each Cursor chat request must explicitly declare `Project/user configuration only` or `Requires team dashboard server` in the composer; an unmade choice is unsupported and the request is refused before session setup. The project/user choice states only that the submitted work does not depend on team-dashboard servers. It does not assert that a local MCP server exists or grant permission to use tools. Ordinary runtime phase launches use the invocation-scoped `SKILL_BILL_CURSOR_MCP_DEPENDENCY` environment input (`project-user-only` or `team-dashboard-required`), or a typed `SkillRunRequest` declaration. Missing, invalid, and conflicting declarations refuse the launch. Cursor does not infer this requirement from prompt text or saved history.
+
 It is a tiny CI/CD for the feature itself, not just the code.
 
 The completeness audit has separate inspection and repair steps.

@@ -171,8 +171,8 @@ class ChatApprovalAuthority(
       "Cursor approval scope is unavailable because its profile identity is unknown.",
     )
     val component = sessions.sessions.value ?: return CursorChatApprovalOpening.Refused(NO_SESSION_REASON)
-    val generation = CursorChatGeneration(protocol, stopProcess)
-    val refusal = openOwnerGeneration(component, request, protocol, { owner, generations ->
+    val generation = CursorChatGeneration(protocol, stopProcess, diagnostics)
+    val refusal = openOwnerGeneration(component, request, generation, { owner, generations ->
       protocol.bind(owner)
       generation.admit(generations)
     }, generation::end)

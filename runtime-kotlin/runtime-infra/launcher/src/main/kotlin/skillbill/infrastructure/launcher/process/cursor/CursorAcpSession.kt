@@ -26,7 +26,28 @@ data class CursorAcpLaunch(
   val mode: String,
   val savedSession: String? = null,
   val images: List<CursorAcpImage> = emptyList(),
-)
+  val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.Unspecified,
+) {
+  constructor(
+    cwd: String,
+    prompt: String,
+    model: String?,
+    mode: String,
+    savedSession: String?,
+    images: List<CursorAcpImage>,
+  ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.Unspecified)
+}
+
+enum class CursorAcpMcpDependency { Unspecified, ProjectUserOnly, TeamDashboardRequired }
+
+fun cursorAcpDependencyRefusal(dependency: CursorAcpMcpDependency): String? =
+  when (dependency) {
+    CursorAcpMcpDependency.Unspecified ->
+      "Declare whether this Cursor request needs team-dashboard MCP servers; the missing declaration prevents launch."
+    CursorAcpMcpDependency.TeamDashboardRequired ->
+      "Cursor ACP does not provide team-dashboard MCP servers; this request is unsupported and was not started."
+    CursorAcpMcpDependency.ProjectUserOnly -> null
+  }
 
 data class CursorAcpImage(val data: String, val mimeType: String)
 
@@ -68,6 +89,7 @@ class CursorAcpSession(
   private var closed = false
   private var closing = false
   private val text = StringBuilder()
+  private var textTruncated = false
   private var result: CursorAcpOutcome? = null
   private var permissions: CursorAcpPermissions? = null
   private var providerFailure: String? = null
@@ -83,6 +105,10 @@ class CursorAcpSession(
   }
 
   fun start() {
+    cursorAcpDependencyRefusal(launch.mcpDependency)?.let {
+      record("seam=cursor_acp outcome=dependency_unsupported")
+      return stop(it)
+    }
     send(
       K.INITIALIZE,
       buildJsonObject {
@@ -345,6 +371,7 @@ class CursorAcpSession(
     val overflow =
       synchronized(lock) {
         if (text.length + chunk.length > MAX_CAPTURE) {
+          textTruncated = true
           true
         } else {
           text.append(chunk)
@@ -388,6 +415,8 @@ class CursorAcpSession(
   }
 
   fun textSnapshot(): String = synchronized(lock) { text.toString() }
+
+  fun textCaptureTruncated(): Boolean = synchronized(lock) { textTruncated }
 
   fun outcome(): CursorAcpOutcome? = synchronized(lock) { result }
 

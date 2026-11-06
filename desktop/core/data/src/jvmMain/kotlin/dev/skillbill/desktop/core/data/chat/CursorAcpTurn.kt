@@ -9,26 +9,38 @@ import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.SelectClause1
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.TimeoutCancellationException
 import skillbill.approval.model.ApprovalExecutionMode
+import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpEvent
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpImage
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
+import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpSession
+import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
+import skillbill.ports.approval.ApprovalOwnerEffects
+import skillbill.ports.approval.model.ApprovalDeliveryState
 import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
 import java.nio.file.Path
 import java.time.Clock
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 internal sealed interface CursorChatApprovalOpening {
@@ -39,11 +51,69 @@ internal sealed interface CursorChatApprovalOpening {
 internal class CursorChatGeneration(
   private val protocol: CursorAcpSession,
   private val stopProcess: () -> Unit,
-) : ApprovalGeneration {
+  private val diagnostics: Diagnostics,
+) : ApprovalGeneration, ApprovalOwnerEffects {
   private val generations = AtomicReference<SessionApprovalGenerations?>()
-  fun admit(value: SessionApprovalGenerations): Boolean { generations.set(value); return value.admit(this) }
-  fun release() { generations.getAndSet(null)?.remove(this); protocol.close() }
-  override fun end() { release(); stopProcess() }
+  private val stopping = AtomicBoolean(false)
+  private val released = AtomicBoolean(false)
+  private val terminated = CompletableDeferred<Unit>()
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val termination: SelectClause1<Unit> get() = terminated.onAwait
+  val isStopped: Boolean get() = stopping.get()
+
+  fun admit(value: SessionApprovalGenerations): Boolean {
+    generations.set(value)
+    return value.admit(this)
+  }
+
+  override fun deliver(settled: ApprovalRequestRecord): ApprovalDeliveryState = protocol.deliver(settled)
+
+  override fun stop(reason: String) {
+    if (!stopping.compareAndSet(false, true)) return
+    try {
+      protocol.stop(reason)
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      diagnostics.record("chat.cursor_protocol_stop_failed")
+    } finally {
+      terminated.complete(Unit)
+      try {
+        stopProcess()
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        diagnostics.record("chat.cursor_process_stop_failed")
+      }
+    }
+  }
+
+  fun release() {
+    if (!released.compareAndSet(false, true)) return
+    try {
+      generations.getAndSet(null)?.remove(this)
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      diagnostics.record("chat.cursor_generation_release_failed")
+    } finally {
+      try {
+        protocol.close()
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        diagnostics.record("chat.cursor_protocol_release_failed")
+      }
+    }
+  }
+
+  override fun end() {
+    try {
+      stop("Cursor approval owner ended while its ACP turn was active.")
+    } finally {
+      release()
+    }
+  }
 }
 
 internal fun cursorAcpTurn(
@@ -56,8 +126,19 @@ internal fun cursorAcpTurn(
   environment: Map<String, String>,
   request: ChatTurnRequest,
   saved: String?,
+  binding: CursorSessionBinding,
   prompt: String,
 ): Flow<ChatEvent> = channelFlow {
+  val dependency = when (request.cursorMcpDependency) {
+    CursorMcpDependency.Unspecified -> CursorAcpMcpDependency.Unspecified
+    CursorMcpDependency.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
+    CursorMcpDependency.TeamDashboardRequired -> CursorAcpMcpDependency.TeamDashboardRequired
+  }
+  cursorAcpDependencyRefusal(dependency)?.let { reason ->
+    diagnostics.record("chat.cursor_mcp_dependency_refused")
+    send(ChatEvent.Failed(ChatFailure.AgentUnsupported, reason))
+    return@channelFlow
+  }
   val inputs = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
   val outputs = Channel<ChatProcessOutput>(Channel.UNLIMITED)
   val events = Channel<ChatEvent>(Channel.UNLIMITED)
@@ -92,10 +173,17 @@ internal fun cursorAcpTurn(
       mode = if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "agent",
       savedSession = saved,
       images = request.images.map { CursorAcpImage(Base64.getEncoder().encodeToString(it.bytes), it.mediaType) },
+      mcpDependency = dependency,
     ),
     Clock.systemUTC(),
     writeLine = { inputs.writeAndAwaitBlocking(it) },
-    saveSession = { store.saveAgentSession(request.sessionId, it) },
+    saveSession = {
+      if (saved == null) {
+        store.saveCursorSession(request.sessionId, it, binding)
+      } else {
+        store.agentSession(request.sessionId) == it && store.cursorSessionBinding(request.sessionId) == binding
+      }
+    },
     onEvent = { event ->
       when (event) {
         is CursorAcpEvent.Text -> events.trySend(ChatEvent.TextDelta(event.text))
@@ -130,30 +218,45 @@ internal fun cursorAcpTurn(
   }
   val generation = (opening as CursorChatApprovalOpening.Opened).generation
   val command = ChatCommand(agentCommand(executable, listOf("acp"), shell), request.scope.repositoryRoot, environment, "")
-  val reader = launch {
+  val reader = launch(start = CoroutineStart.LAZY) {
     try { live.openAcknowledged(command, inputs).collect { outputs.send(it) } }
     finally { outputs.close() }
   }
   readerRef.set(reader)
   val reply = ChatReplyStream(diagnostics)
   val eventJob = launch { for (event in events) reply.accept(event).forEach { send(it) } }
+  if (!generation.isStopped) reader.start()
   fun accept(output: ChatProcessOutput) {
     when (output) {
       is ChatProcessOutput.Line -> protocol.observe(output.text)
-      is ChatProcessOutput.Exited -> protocol.stop("Cursor exited before prompt completion (${output.code}): ${output.stderrTail}")
-      is ChatProcessOutput.StartFailed -> protocol.stop(output.message)
+      is ChatProcessOutput.StdoutEnded -> {
+        if (protocol.outcome() == null) {
+          val reason = output.readFailure?.let { "Cursor stdout read failed: $it" }
+            ?: "Cursor stdout disconnected."
+          generation.stop(listOf(reason, output.stderrTail).filter(String::isNotBlank).joinToString("\n"))
+        }
+      }
+      is ChatProcessOutput.Exited -> generation.stop(
+        "Cursor exited before prompt completion (${output.code}): ${output.stderrTail}",
+      )
+      is ChatProcessOutput.StartFailed -> generation.stop(output.message)
     }
   }
+  @OptIn(ExperimentalCoroutinesApi::class)
+  suspend fun receiveOutput(): ChatProcessOutput? = select {
+    outputs.onReceiveCatching { it.getOrNull() }
+    generation.termination { null }
+  }
   try {
-    protocol.start()
+    if (!generation.isStopped) protocol.start()
     withTimeout(30_000) {
       while (!protocol.ready && protocol.outcome() == null) {
-        val output = outputs.receiveCatching().getOrNull() ?: break
+        val output = receiveOutput() ?: break
         accept(output)
       }
     }
     while (protocol.outcome() == null) {
-      val output = outputs.receiveCatching().getOrNull() ?: break
+      val output = receiveOutput() ?: break
       accept(output)
     }
     protocol.close()
@@ -166,11 +269,19 @@ internal fun cursorAcpTurn(
   } catch (cancelled: CancellationException) {
     throw cancelled
   } finally {
-    generation.release()
-    inputs.close()
-    withContext(NonCancellable) { reader.cancelAndJoin() }
-    outputs.cancel()
-    events.close()
-    withContext(NonCancellable) { eventJob.join() }
+    withContext(NonCancellable) {
+      try {
+        generation.release()
+      } finally {
+        inputs.close()
+        try {
+          reader.cancelAndJoin()
+        } finally {
+          outputs.cancel()
+          events.close()
+          eventJob.join()
+        }
+      }
+    }
   }
 }

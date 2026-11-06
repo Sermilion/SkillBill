@@ -12,6 +12,7 @@ data class AgentRunSessionCapture(
   val truncated: Boolean,
   val deliveryFailed: Boolean,
   val providerDiagnostics: String? = null,
+  val failureDiagnostics: String? = null,
 )
 
 data class AgentRunSessionOutcome(

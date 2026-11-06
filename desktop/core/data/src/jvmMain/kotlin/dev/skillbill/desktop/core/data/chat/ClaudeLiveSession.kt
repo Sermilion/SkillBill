@@ -99,6 +99,7 @@ internal class ClaudeLiveSession(
   fun accept(output: ChatProcessOutput) {
     when (output) {
       is ChatProcessOutput.Line -> line(output.text)
+      is ChatProcessOutput.StdoutEnded -> Unit
       is ChatProcessOutput.Exited -> exited(exitFailure(output.code, output.stderrTail))
       is ChatProcessOutput.StartFailed -> exited(ChatEvent.Failed(ChatFailure.ProcessFailed, output.message))
     }

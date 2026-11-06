@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
@@ -114,6 +115,7 @@ class NewTaskDraft(
   internal fun operationCardActions(current: NewTaskChat): ChatOperationCardActions = cards.actions(current.thread)
 
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
+  internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.Unspecified)
 
   /** The selected repository's saved drafts, newest first, as of the latest [refreshSaved]. */
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
@@ -129,7 +131,7 @@ class NewTaskDraft(
   /** Sends the typed text, opening the chat on the first message, and clears it. It does nothing unless [canSend] holds. */
   internal fun send() {
     if (!canSend()) return
-    sendTurn(text, null)
+    sendTurn(text, null, cursorMcpDependency)
   }
 
   internal fun sendSuggestedAction(action: ChatSuggestedAction): Boolean {
@@ -140,17 +142,33 @@ class NewTaskDraft(
 
   internal fun stop() {
     val returned = chatState.value?.stop().orEmpty()
-    if (returned.isNotEmpty()) text = restoredDraft(returned, text)
+    if (returned.isNotEmpty()) {
+      cursorMcpDependency = if (text.isBlank()) {
+        returned.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified
+      } else CursorMcpDependency.Unspecified
+      text = restoredDraft(returned, text)
+    }
   }
 
   internal fun sendNow() {
     chatState.value?.sendNow()
   }
 
-  private fun sendTurn(submitted: String, action: ChatSuggestedAction?) {
+  private fun sendTurn(submitted: String, action: ChatSuggestedAction?, cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null)
-    current.send(submitted, action, onAccepted = { if (action == null && text == submitted) text = "" })
+    current.send(
+      submitted,
+      action,
+      onAccepted = { if (action == null && text == submitted) text = "" },
+      cursorMcpDependency = cursorMcpDependency,
+      onRejected = {
+        if (action == null && text.isBlank()) {
+          text = submitted
+          this.cursorMcpDependency = cursorMcpDependency
+        }
+      },
+    )
   }
 
   internal fun offerKeyChanged(value: String) {

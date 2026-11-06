@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.RepositoryBranches
 import dev.skillbill.desktop.core.domain.model.RepositoryBranchesRead
@@ -102,21 +103,27 @@ class NewTaskViewModel(
 
   fun onAction(action: NewTaskAction) {
     when (action) {
-      is NewTaskAction.TextChanged -> draft.text = action.text
+      is NewTaskAction.TextChanged -> {
+        if (draft.text != action.text) draft.cursorMcpDependency = CursorMcpDependency.Unspecified
+        draft.text = action.text
+      }
       is NewTaskAction.ChooseBaseBranch -> {
         pathCheck?.cancel()
+        draft.cursorMcpDependency = CursorMcpDependency.Unspecified
         draft.baseBranch = action.branch
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
       NewTaskAction.RetryBranches -> draft.repository?.root?.let { readBranches(it) }
       is NewTaskAction.ChooseRepository -> {
         pathCheck?.cancel()
+        draft.cursorMcpDependency = CursorMcpDependency.Unspecified
         selectRepository(action.repository)
       }
       is NewTaskAction.SubmitRepositoryPath -> submitPath(action.path)
       NewTaskAction.AddRepository -> addRepository()
       is NewTaskAction.ChooseAgent -> {
         agentRead?.cancel()
+        draft.cursorMcpDependency = CursorMcpDependency.Unspecified
         draft.agentId = action.agentId
         agentRead = viewModelScope.launch { resolveAgent(action.agentId) }
       }
@@ -133,10 +140,14 @@ class NewTaskViewModel(
       NewTaskAction.Stop -> draft.stop()
       NewTaskAction.SendNow -> draft.sendNow()
       NewTaskAction.Discard -> draft.discard()
-      NewTaskAction.NewChat -> draft.launch { draft.close() }
+      NewTaskAction.NewChat -> {
+        draft.cursorMcpDependency = CursorMcpDependency.Unspecified
+        draft.launch { draft.close() }
+      }
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
       is NewTaskAction.ResumeDraft -> {
         agentRead?.cancel()
+        draft.cursorMcpDependency = CursorMcpDependency.Unspecified
         draft.launch {
           if (draft.resume(action.entry)) {
             mutableState.update { it.copy(agent = action.entry.agent, resumePickerOpen = false) }

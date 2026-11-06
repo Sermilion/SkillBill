@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -95,16 +96,24 @@ internal class ChatTurns(
   }
 
   /** Sends [text] with the full snapshot on a first turn and the diff since the last delivered one after that. */
-  suspend fun turn(session: ChatSession, read: ExecutionRead, mode: ChatPermissionMode, text: String, prefix: String? = null, images: List<ChatImage> = emptyList()) {
+  suspend fun turn(
+    session: ChatSession,
+    read: ExecutionRead,
+    mode: ChatPermissionMode,
+    text: String,
+    prefix: String? = null,
+    images: List<ChatImage> = emptyList(),
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  ): Boolean {
     val agent = session.agentState.value ?: resolve(session, read) ?: run {
       session.append(ChatMessage.Notice(NO_AGENT_NOTICE))
-      return
+      return false
     }
     val current = snapshot(read.header, read.detail)
     val delivered = session.delivered
     val context = if (session.started && delivered != null) diff(delivered, current).render() else current.render()
     val prompt = listOfNotNull(prefix, context, text.takeIf { it.isNotBlank() }).joinToString("\n\n")
-    stream(session, agent, read.header, mode, prompt, current, images)
+    return stream(session, agent, read.header, mode, prompt, current, images, cursorMcpDependency)
   }
 
   /** Resolves the session's agent without a turn, so a chat that skips the opening turn can still be sent to. */
@@ -119,8 +128,7 @@ internal class ChatTurns(
       session.thread.showCapability(it)
     }
 
-  // The snapshot counts as delivered, and the CLI session as created, only once the turn produced output. A turn that ends
-  // without cancellation saves the chat, so a later window can resume it.
+  // A provider session and snapshot count as delivered only after a non-failure update. Refused setup leaves saved history intact.
   private suspend fun stream(
     session: ChatSession,
     agent: ChatAgent,
@@ -129,9 +137,10 @@ internal class ChatTurns(
     prompt: String,
     sent: ExecutionSnapshot,
     images: List<ChatImage>,
-  ) {
+    cursorMcpDependency: CursorMcpDependency,
+  ): Boolean {
     val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, header.checkoutRoot)
-    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt, images)
+    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt, images, cursorMcpDependency)
     var delivered = false
     try {
       chat.send(request).collect { event ->
@@ -149,7 +158,8 @@ internal class ChatTurns(
     } finally {
       session.endStreaming()
     }
-    if (session.started) save(session, agent)
+    if (session.started && delivered) save(session, agent)
+    return delivered
   }
 
   /**

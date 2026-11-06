@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.feature.chat.showCapability
@@ -121,9 +122,21 @@ internal class NewTaskChat(
     scope.launch(job + dispatcher) { approvalFlow.dismiss(thread, approvalId) }
   }
 
-  fun send(text: String, action: ChatSuggestedAction? = null, onAccepted: () -> Unit = {}) {
+  fun send(
+    text: String,
+    action: ChatSuggestedAction? = null,
+    onAccepted: () -> Unit = {},
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+    onRejected: (() -> Unit)? = null,
+  ) {
     if (text.isBlank() || repositoryMissing || closing) return
-    thread.queuedState.value += QueuedChatMessage(text, action, pauseAndAct = false)
+    thread.queuedState.value += QueuedChatMessage(
+      text,
+      action,
+      pauseAndAct = false,
+      cursorMcpDependency = cursorMcpDependency,
+      onRejected = onRejected,
+    )
     onAccepted()
     drainQueue()
   }
@@ -144,10 +157,15 @@ internal class NewTaskChat(
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.queuedState.value.firstOrNull() ?: return
     thread.queuedState.value = thread.queuedState.value.drop(1)
-    startTurn(next.text, next.action)
+    startTurn(next.text, next.action, next.cursorMcpDependency, next.onRejected)
   }
 
-  private fun startTurn(text: String, action: ChatSuggestedAction?) {
+  private fun startTurn(
+    text: String,
+    action: ChatSuggestedAction?,
+    cursorMcpDependency: CursorMcpDependency,
+    onRejected: (() -> Unit)?,
+  ) {
     thread.append(ChatMessage.Operator(text, action))
     pendingTurnLineIndex = snapshotLines().lastIndex
     pendingAcceptance = null
@@ -157,7 +175,7 @@ internal class NewTaskChat(
     val turn = scope.launch(job + dispatcher, start = CoroutineStart.LAZY) {
       turnJob = coroutineContext[Job]
       try {
-        runTurn(text)
+        runTurn(text, cursorMcpDependency, onRejected)
       } finally {
         finishTurn(coroutineContext.job)
       }
@@ -273,15 +291,16 @@ internal class NewTaskChat(
     }
   }
 
-  private suspend fun runTurn(text: String) {
+  private suspend fun runTurn(text: String, cursorMcpDependency: CursorMcpDependency, onRejected: (() -> Unit)?) {
     if (!save()) {
       thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
+      onRejected?.invoke()
       return
     }
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
     var seenEvent = false
-    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, text)).collect { event ->
+    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, text, cursorMcpDependency = cursorMcpDependency)).collect { event ->
       coroutineContext.ensureActive()
       if (!seenEvent) {
         seenEvent = true
@@ -295,6 +314,7 @@ internal class NewTaskChat(
       thread.show(agent, event)
       if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
     }
+    if (!opened) onRejected?.invoke()
   }
 
   private suspend fun showUnprompted(event: ChatEvent) {

@@ -29,6 +29,19 @@ import kotlin.test.assertTrue
 
 class CursorAcpSessionTest {
   @Test
+  fun `missing or team dashboard dependencies refuse before any ACP request`() {
+    for (dependency in listOf(CursorAcpMcpDependency.Unspecified, CursorAcpMcpDependency.TeamDashboardRequired)) {
+      val harness = Harness(dependency = dependency)
+
+      harness.session.start()
+
+      assertNotNull(harness.session.outcome()?.failure)
+      assertTrue(harness.frames.isEmpty())
+      harness.session.close()
+    }
+  }
+
+  @Test
   fun `interleaved permissions preserve typed ids full content and original one time options`() {
     val harness = Harness()
     harness.open()
@@ -113,6 +126,19 @@ class CursorAcpSessionTest {
   }
 
   @Test
+  fun `incompatible ACP version stops before authentication or session creation`() {
+    val harness = Harness()
+    harness.session.start()
+
+    harness.respond("""{"protocolVersion":2,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
+
+    assertNotNull(harness.session.outcome()?.failure)
+    assertFalse(harness.frames.any { it.text(CursorAcpKeys.METHOD) == "authenticate" })
+    assertFalse(harness.frames.any { it.text(CursorAcpKeys.METHOD) == "session/new" })
+    assertFalse(harness.frames.any { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+  }
+
+  @Test
   fun `blocking extensions cancel their method and terminate instead of hanging or approving a plan`() {
     for (method in listOf("cursor/ask_question", "cursor/create_plan", "future/blocker")) {
       val harness = Harness()
@@ -149,13 +175,17 @@ class CursorAcpSessionTest {
     harness.session.close()
   }
 
-  private class Harness(saved: String? = null, model: String? = null) {
+  private class Harness(
+    saved: String? = null,
+    model: String? = null,
+    dependency: CursorAcpMcpDependency = CursorAcpMcpDependency.ProjectUserOnly,
+  ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
     val owner = Owner()
     val session =
       CursorAcpSession(
-        CursorAcpLaunch("/checkout", "scoped prompt", model, "agent", saved),
+        CursorAcpLaunch("/checkout", "scoped prompt", model, "agent", saved, mcpDependency = dependency),
         Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
         {
           frames += Json.parseToJsonElement(it).jsonObject

@@ -46,6 +46,7 @@ internal fun runChatTurn(
     }
     val events = when (output) {
       is ChatProcessOutput.Line -> decoder.decode(output.text)
+      is ChatProcessOutput.StdoutEnded -> emptyList()
       // Agents start through a login shell, which reports a missing binary as exit 127; a start failure is a missing worktree or shell.
       is ChatProcessOutput.StartFailed -> listOf(ChatEvent.Failed(ChatFailure.ProcessFailed, output.message))
       is ChatProcessOutput.Exited -> decoder.exited(output.code, output.stderrTail)

@@ -13,6 +13,7 @@ import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutc
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.ports.agentrun.model.AgentRunSessionFailureEvidence
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
@@ -29,10 +30,10 @@ import kotlin.time.toKotlinDuration
 
 private fun AgentRunSessionCapture.failureMessage(processCaptureIncomplete: Boolean): String? =
   listOfNotNull(
-    "Codex assistant output was truncated at the capture limit.".takeIf { truncated },
-    "Codex assistant output could not be delivered to the phase output sink.".takeIf { deliveryFailed },
-    "Codex app-server output capture did not finish completely.".takeIf { processCaptureIncomplete },
-    "Codex assistant prose capture is incomplete.".takeIf { !complete && !truncated && !deliveryFailed },
+    "Provider session output was truncated at the capture limit.".takeIf { truncated },
+    "Provider session output could not be delivered to the phase output sink.".takeIf { deliveryFailed },
+    "Provider process output capture did not finish completely.".takeIf { processCaptureIncomplete },
+    "Provider session output capture is incomplete.".takeIf { !complete && !truncated && !deliveryFailed },
   ).distinct().joinToString("\n").ifBlank { null }
 
 @Inject
@@ -92,6 +93,13 @@ class JvmAgentRunProcessRunner(
     val capture = result.sessionCapture ?: session.capture()
     val failure = sessionFailureMessage(outcome)
     val captureFailure = capture.failureMessage(result.outputCaptureIncomplete)
+    val sessionFailureEvidence =
+      buildSessionFailureEvidence(
+        result.stderr,
+        capture,
+        failure,
+        captureFailure,
+      )
     val success = sessionSuccessful(result, outcome, capture)
     val unsettled = result.timedOut || result.interrupted || result.spawnFailed
     return result.copy(
@@ -103,7 +111,13 @@ class JvmAgentRunProcessRunner(
         } else {
           1
         },
-      stderr = listOfNotNull(result.stderr.takeIf(String::isNotBlank), failure, captureFailure).joinToString("\n"),
+      stderr =
+        listOfNotNull(
+          failure,
+          result.stderr.takeIf(String::isNotBlank),
+          capture.providerDiagnostics,
+          captureFailure,
+        ).joinToString("\n"),
       sessionOutcome =
         outcome ?: AgentRunSessionOutcome(
           "",
@@ -113,6 +127,7 @@ class JvmAgentRunProcessRunner(
           failure,
         ),
       sessionCapture = capture,
+      sessionFailureEvidence = sessionFailureEvidence,
       outputCaptureIncomplete = result.outputCaptureIncomplete || !capture.complete,
       stdoutTruncated = result.stdoutTruncated || capture.truncated,
     )
@@ -140,6 +155,21 @@ class JvmAgentRunProcessRunner(
       !result.outputCaptureIncomplete,
       !result.stdoutTruncated,
     ).all { it }
+
+  private fun buildSessionFailureEvidence(
+    nativeStderr: String,
+    capture: AgentRunSessionCapture?,
+    failure: String?,
+    captureFailure: String?,
+  ): AgentRunSessionFailureEvidence =
+    AgentRunSessionFailureEvidence(
+      listOfNotNull(
+        nativeStderr.takeIf(String::isNotBlank),
+        capture?.failureDiagnostics,
+        failure,
+        captureFailure,
+      ).joinToString("\n").ifBlank { null },
+    )
 
   private fun approvalRefused(
     reason: String,
@@ -555,9 +585,9 @@ class JvmAgentRunProcessRunner(
     val settledWait = requireNotNull(wait)
     val stderrText =
       listOfNotNull(
+        session.failure,
         stderr.text.withTimeoutMessage(settledWait, input.request).takeIf(String::isNotBlank),
         sessionCapture?.providerDiagnostics,
-        session.failure,
         session.captureFailure,
       ).joinToString("\n")
     return AgentRunProcessResult(
@@ -578,6 +608,7 @@ class JvmAgentRunProcessRunner(
         release.outputCaptureIncomplete || sessionCapture?.complete == false || sessionCleanupFailed,
       sessionOutcome = sessionOutcome,
       sessionCapture = sessionCapture,
+      sessionFailureEvidence = session.failureEvidence,
     )
   }
 
@@ -619,12 +650,18 @@ class JvmAgentRunProcessRunner(
         !release.outputCaptureIncomplete,
         !cleanupFailed,
       ).all { it }
+    val captureFailure = capture?.failureMessage(release.outputCaptureIncomplete)
     return ProcessSessionSettlement(
       effective,
       capture,
       expected && !complete,
       failure,
-      capture?.failureMessage(release.outputCaptureIncomplete),
+      captureFailure,
+      if (expected) {
+        buildSessionFailureEvidence(release.stderrCapture.text, capture, failure, captureFailure)
+      } else {
+        null
+      },
     )
   }
 
@@ -634,6 +671,7 @@ class JvmAgentRunProcessRunner(
     val failed: Boolean,
     val failure: String?,
     val captureFailure: String?,
+    val failureEvidence: AgentRunSessionFailureEvidence?,
   )
 
   private fun interruptedResult(
@@ -650,10 +688,10 @@ class JvmAgentRunProcessRunner(
     val stderrBody =
       stderr.text.let { existing ->
         listOfNotNull(
+          session.failure,
           existing.takeIf(String::isNotBlank),
           sessionCapture?.providerDiagnostics,
           interruptMessage,
-          session.failure,
           session.captureFailure,
         )
           .joinToString("\n")
@@ -681,6 +719,7 @@ class JvmAgentRunProcessRunner(
       outputCaptureIncomplete = release.outputCaptureIncomplete || sessionCapture?.complete == false,
       sessionOutcome = session.outcome,
       sessionCapture = sessionCapture,
+      sessionFailureEvidence = session.failureEvidence,
     )
   }
 

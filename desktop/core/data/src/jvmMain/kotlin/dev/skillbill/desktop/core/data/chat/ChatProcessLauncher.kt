@@ -38,9 +38,11 @@ data class ChatCommand(
   val probeInvocation: List<String> = argv,
 )
 
-/** What a chat process produces: stdout [Line]s, then [Exited] or, when it never started, [StartFailed]. */
+/** What a chat process produces: stdout [Line]s, a possible [StdoutEnded], then [Exited] or [StartFailed]. */
 sealed interface ChatProcessOutput {
   data class Line(val text: String) : ChatProcessOutput
+
+  data class StdoutEnded(val readFailure: String?, val stderrTail: String) : ChatProcessOutput
 
   data class Exited(val code: Int, val stderrTail: String) : ChatProcessOutput
 
@@ -210,8 +212,8 @@ private fun stdoutLines(process: Process): ReceiveChannel<String> {
       process.inputStream.bufferedReader(Charsets.UTF_8).useLines { source ->
         for (line in source) if (lines.trySendBlocking(line).isFailure) break
       }
-    } catch (_: IOException) {
-      // A closed stdout ends the stream; the exit code and stderr tail still report the turn.
+    } catch (failure: IOException) {
+      lines.close(failure)
     } finally {
       lines.close()
     }
@@ -263,12 +265,26 @@ private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: sus
         }
         val feeding = launch { feed(process) }
         val lines = stdoutLines(process)
+        var stdoutFailure: IOException? = null
         try {
-          for (line in lines) emit(ChatProcessOutput.Line(line))
+          while (true) {
+            val line = lines.receiveCatching()
+            if (line.isSuccess) {
+              emit(ChatProcessOutput.Line(requireNotNull(line.getOrNull())))
+            } else {
+              stdoutFailure = line.exceptionOrNull() as? IOException
+              break
+            }
+          }
         } finally {
           lines.cancel()
         }
-        val code = process.waitFor()
+        currentCoroutineContext().ensureActive()
+        val stderrAtStdoutEnd = synchronized(stderr) { stderr.toString() }
+        if (stdoutFailure != null) diagnostics.record("chat.stdout_read_failed")
+        val readFailure = stdoutFailure?.let { (it.message ?: it.toString()).takeLast(1000) }
+        emit(ChatProcessOutput.StdoutEnded(readFailure, stderrAtStdoutEnd))
+        val code = runInterruptible { process.waitFor() }
         // A descendant can hold stderr open after claude exits; report the tail read so far.
         drain.join(ChatProcesses.STDERR_DRAIN_MS)
         emit(ChatProcessOutput.Exited(code, synchronized(stderr) { stderr.toString() }))

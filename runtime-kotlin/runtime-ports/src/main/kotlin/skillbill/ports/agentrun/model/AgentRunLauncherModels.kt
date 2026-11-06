@@ -49,6 +49,7 @@ data class SkillRunRequest(
   val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
   val approval: AgentRunApprovalRequirement = AgentRunApprovalRequirement.Unowned(),
+  val cursorMcpDependency: CursorMcpDependencyRequirement = CursorMcpDependencyRequirement.Unspecified,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -85,6 +86,8 @@ data class SkillRunRequest(
     }
   }
 }
+
+enum class CursorMcpDependencyRequirement { Unspecified, ProjectUserOnly, TeamDashboardRequired }
 
 /**
  * How a launch relates to operator approval cards. Only the owning engine or operation boundary knows this, so it is a
@@ -320,6 +323,7 @@ data class AgentRunLaunchFacts(
     ReportedLaunchIdentity.Unavailable(
       ReportedLaunchIdentityReason.NOT_REPORTED,
     ),
+  val sessionFailureEvidence: AgentRunSessionFailureEvidence? = null,
 ) : AgentRunLaunchOutcome {
   init {
     assistantEventCount?.let { count -> require(count >= 0) { "assistantEventCount cannot be negative." } }
