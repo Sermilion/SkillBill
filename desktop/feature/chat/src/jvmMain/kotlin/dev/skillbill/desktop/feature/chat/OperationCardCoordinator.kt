@@ -96,7 +96,7 @@ internal class OperationCardCoordinator(
         false
       }
       is OperationCardLookup.Present -> {
-        thread.showOperationCard(result.card, restoredCopy = !result.card.canConfirm)
+        thread.showOperationCard(result.card)
         historyChanged(thread)
       }
     }
@@ -130,7 +130,7 @@ internal class OperationCardCoordinator(
       scope.launch { persistOrWarn(thread) }
     }
     val selection = message.selectionWire()
-    thread.beginOperationDecision(token) ?: return
+    thread.beginOperationDecision(token, OperationCardDecision.Confirm) ?: return
     val finish = track(thread)
     scope.launch {
       var refusal: String? = null
@@ -160,7 +160,7 @@ internal class OperationCardCoordinator(
   }
 
   private fun dismiss(thread: ChatThread, token: String) {
-    thread.beginOperationDecision(token) ?: return
+    thread.beginOperationDecision(token, OperationCardDecision.Dismiss) ?: return
     val finish = track(thread)
     scope.launch {
       var refusal: String? = null
@@ -186,7 +186,7 @@ internal class OperationCardCoordinator(
       ?: return thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT).also {
         scope.launch { persistOrWarn(thread) }
       }
-    thread.beginOperationDecision(token) ?: return
+    thread.beginOperationDecision(token, OperationCardDecision.Adjust) ?: return
     val finish = track(thread)
     scope.launch {
       var failure: String? = null

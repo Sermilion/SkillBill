@@ -23,6 +23,8 @@ internal const val STOPPED_NOTICE = "Stopped"
 
 internal const val START_AGAIN_SUFFIX = "Send another message to start again."
 
+internal enum class OperationCardDecision { Confirm, Dismiss, Adjust }
+
 internal fun restoredDraft(queued: List<QueuedChatMessage>, draft: String): String =
   (queued.map { it.text } + listOf(draft).filter { it.isNotBlank() }).joinToString("\n\n")
 
@@ -151,16 +153,16 @@ internal class ChatThread(private val clock: Clock) {
     }
   }
 
-  /**
-   * Claims the one click on a live awaiting card: returns the card and marks it submitting, or null when it is already
-   * submitting, settled, not awaiting or only a restored copy. This is what keeps a double click from sending two decisions.
-   */
-  fun beginOperationDecision(token: String): ChatMessage.OperationCard? {
+  /** Claims one live awaiting-card action atomically; confirmation additionally requires current confirmation eligibility. */
+  fun beginOperationDecision(token: String, decision: OperationCardDecision): ChatMessage.OperationCard? {
     var begun: ChatMessage.OperationCard? = null
     messages.update { list ->
       begun = null
       list.map {
-        if (it is ChatMessage.OperationCard && it.card.token == token && !it.submitting && it.card.state.decidable && it.card.canConfirm) {
+        if (
+          it is ChatMessage.OperationCard && it.card.token == token && !it.submitting && !it.restoredCopy &&
+            it.card.state.decidable && (decision != OperationCardDecision.Confirm || it.card.canConfirm)
+        ) {
           it.copy(submitting = true, refusal = null).also { claimed -> begun = claimed }
         } else {
           it

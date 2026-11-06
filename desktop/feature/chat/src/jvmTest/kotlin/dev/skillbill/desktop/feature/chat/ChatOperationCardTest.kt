@@ -5,6 +5,8 @@ import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardDetailsView
+import dev.skillbill.desktop.core.domain.model.OperationCardConfirmation
+import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardOptionView
 import dev.skillbill.desktop.core.domain.model.OperationCardState
 import dev.skillbill.desktop.core.domain.model.OperationCardThreadView
@@ -19,6 +21,19 @@ import kotlin.test.assertNull
 import kotlin.time.Clock
 
 class ChatOperationCardTest {
+  private fun verify(canConfirm: Boolean = true) = OperationCardView(
+    token = "verify-token",
+    launchId = "verify-launch",
+    operationId = "verify",
+    state = OperationCardState.AwaitingConfirmation,
+    summary = "verification",
+    details = OperationCardDetailsView.Verify(emptyList(), "SKILL-453", null, "SKILL-453", "local", "full"),
+    selection = null,
+    evidence = null,
+    canConfirm = canConfirm,
+    disabledReason = "The source anchors changed.",
+  )
+
   private fun prReviewFix(
     state: OperationCardState = OperationCardState.AwaitingConfirmation,
     recommendations: Boolean = true,
@@ -123,18 +138,98 @@ class ChatOperationCardTest {
   }
 
   @Test
+  fun `stale confirmation stays inert while dismissal reaches the runtime`() = runTest {
+    val stale = verify(canConfirm = false)
+    val controls = FakeWorkControlRepository().apply { operationCards[stale.launchId] = stale }
+    val request = NewTaskStart("/repo", "verify", null, "agent", NewTaskKind.Verify, null, null)
+    val coordinator = OperationCardCoordinator(controls, backgroundScope, { request })
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(stale)
+
+    coordinator.actions(thread).onConfirm(stale.token)
+    coordinator.actions(thread).onDismiss(stale.token)
+    runCurrent()
+
+    assertEquals(emptyList(), controls.newTaskRequests)
+    assertEquals(listOf(stale.token), controls.dismissedCards)
+  }
+
+  @Test
+  fun `stale adjustment uses the remembered request without its confirmation token`() = runTest {
+    val stale = prReviewFix().copy(canConfirm = false, disabledReason = "The source anchors changed.")
+    val controls = FakeWorkControlRepository().apply { operationCards[stale.launchId] = stale }
+    val request = NewTaskStart(
+      "/repo",
+      "replace this proposal",
+      null,
+      "agent",
+      NewTaskKind.PrReviewFix,
+      null,
+      null,
+      target = "SKILL-453",
+      branch = "feature/skill-453",
+      confirmation = OperationCardConfirmation(stale.token),
+    )
+    val coordinator = OperationCardCoordinator(controls, backgroundScope, { null })
+    coordinator.remember(stale.launchId, request)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(stale)
+
+    coordinator.actions(thread).onAdjust(stale.token)
+    runCurrent()
+
+    val sent = controls.newTaskRequests.single()
+    assertNull(sent.confirmation)
+    assertEquals("SKILL-453", sent.target)
+    assertEquals("feature/skill-453", sent.branch)
+  }
+
+  @Test
+  fun `a restored stale card becomes dismissible after successful revalidation`() = runTest {
+    val stale = prReviewFix().copy(canConfirm = false, disabledReason = "The source anchors changed.")
+    val controls = FakeWorkControlRepository().apply {
+      operationCards[stale.launchId] = stale
+      dismissOutcome = OperationCardDismissOutcome.Dismissed
+    }
+    val coordinator = OperationCardCoordinator(controls, backgroundScope, { null })
+    val thread = ChatThread(Clock.System)
+    val saved = ChatThread(Clock.System).apply { showOperationCard(stale) }.historyLines().single()
+    thread.replaceTranscript(listOf(restored(saved)))
+
+    coordinator.revalidate(thread, listOf(stale.token))
+    runCurrent()
+
+    assertEquals(false, thread.operationCard(stale.token)!!.restoredCopy)
+    coordinator.actions(thread).onDismiss(stale.token)
+    runCurrent()
+    assertEquals(listOf(stale.token), controls.dismissedCards)
+  }
+
+  @Test
+  fun `stale proposal cannot mutate review choices`() {
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(prReviewFix().copy(canConfirm = false, disabledReason = "The source anchors changed."))
+
+    thread.chooseOperationOption("opt-1", "T1", "2")
+    thread.chooseRecommendedOptions("opt-1")
+
+    assertEquals(emptyMap(), thread.operationCard("opt-1")!!.choices)
+    assertEquals(false, thread.operationCard("opt-1")!!.choicesSaved)
+  }
+
+  @Test
   fun `a double click claims one decision and a settled card stays inert`() {
     val thread = ChatThread(Clock.System)
     thread.showOperationCard(prReviewFix())
 
-    assertNotNull(thread.beginOperationDecision("opt-1"))
-    assertNull(thread.beginOperationDecision("opt-1"))
+    assertNotNull(thread.beginOperationDecision("opt-1", OperationCardDecision.Confirm))
+    assertNull(thread.beginOperationDecision("opt-1", OperationCardDecision.Dismiss))
 
     thread.showOperationCard(prReviewFix(OperationCardState.Completed))
     thread.showOperationCard(prReviewFix(OperationCardState.AwaitingConfirmation))
 
     assertEquals(OperationCardState.Completed, thread.operationCard("opt-1")!!.card.state)
-    assertNull(thread.beginOperationDecision("opt-1"))
+    assertNull(thread.beginOperationDecision("opt-1", OperationCardDecision.Confirm))
   }
 
   @Test

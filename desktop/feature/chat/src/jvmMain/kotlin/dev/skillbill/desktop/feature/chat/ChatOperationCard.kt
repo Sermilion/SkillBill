@@ -107,6 +107,13 @@ internal fun ChatMessage.OperationCard.controlsOffReason(): String? = when {
   else -> null
 }
 
+private fun ChatMessage.OperationCard.sharedActionOffReason(): String? = when {
+  !card.state.decidable -> "This proposal is no longer awaiting a decision."
+  restoredCopy -> "Restored from history. This copy cannot be answered."
+  submitting -> "Sending your answer."
+  else -> null
+}
+
 internal fun OperationCardState.outcomeText(): String = when (this) {
   OperationCardState.AwaitingConfirmation -> "Waiting for your confirmation"
   OperationCardState.Confirming -> "Confirmation submitted"
@@ -275,7 +282,9 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
   val type = SkillBillTheme.type
   val card = message.card
   val offReason = message.controlsOffReason()
+  val sharedActionOffReason = message.sharedActionOffReason()
   val enabled = offReason == null && actions != null
+  val sharedActionsEnabled = sharedActionOffReason == null && actions != null
   val isPrReviewFix = card.details is OperationCardDetailsView.PrReviewFix
   val missing = message.missingChoiceText()
   val adjustable = actions?.canAdjust?.invoke(card.token) == true
@@ -301,7 +310,7 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
         onClick = { actions?.onAdjust?.invoke(card.token) },
         variant = SbButtonVariant.Secondary,
         size = SbControlSize.Small,
-        enabled = enabled && adjustable,
+        enabled = sharedActionsEnabled && adjustable,
         modifier = Modifier.semantics { contentDescription = "Adjust: ask for a replacement proposal" },
       )
       SbButton(
@@ -309,7 +318,7 @@ private fun OperationCardControls(message: ChatMessage.OperationCard, actions: C
         onClick = { actions?.onDismiss?.invoke(card.token) },
         variant = SbButtonVariant.Ghost,
         size = SbControlSize.Small,
-        enabled = enabled,
+        enabled = sharedActionsEnabled,
       )
     }
     val note = offReason ?: missing ?: ADJUST_UNAVAILABLE.takeUnless { adjustable }
