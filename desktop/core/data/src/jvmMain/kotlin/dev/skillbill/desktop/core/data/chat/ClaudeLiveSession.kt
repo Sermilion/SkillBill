@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
@@ -36,7 +37,7 @@ internal class ClaudeLiveSession(
   private val diagnostics: Diagnostics,
   private val unprompted: (ChatEvent) -> Unit,
 ) {
-  val input = Channel<String>(Channel.UNLIMITED)
+  val input = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
   lateinit var job: Job
 
   /** Completed once the provider answered the initialize request successfully; the first user frame waits for it. */
@@ -65,9 +66,9 @@ internal class ClaudeLiveSession(
 
   /** A turn's user frame is held until the initialize exchange succeeded, then flushed in order. */
   fun send(uuid: String, text: String, images: List<ChatImage>) {
-    val frame = userMessage(uuid, text, images)
+    val frame = ChatProcessInput(userMessage(uuid, text, images))
     synchronized(lock) {
-      if (initialized) input.trySend(frame) else held.add(frame)
+      if (initialized) input.trySend(frame).onFailure { frame.written.complete(false) } else held.add(frame.line)
     }
   }
 
@@ -76,7 +77,10 @@ internal class ClaudeLiveSession(
     synchronized(lock) {
       if (initialized) return
       initialized = true
-      held.forEach { input.trySend(it) }
+      held.forEach { line ->
+        val frame = ChatProcessInput(line)
+        input.trySend(frame).onFailure { frame.written.complete(false) }
+      }
       held.clear()
     }
     initializedSignal.complete(Unit)
@@ -198,7 +202,7 @@ internal class ClaudeLiveSession(
   private fun close(): List<SendChannel<ChatEvent>> = synchronized(lock) {
     closed = true
     pending.values.toList().also { pending.clear() }
-  }.also { input.close() }
+  }.also { input.cancel() }
 }
 
 private fun userMessage(uuid: String, text: String, images: List<ChatImage>): String = buildJsonObject {

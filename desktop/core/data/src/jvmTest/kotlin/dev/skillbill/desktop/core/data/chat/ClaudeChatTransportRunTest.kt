@@ -65,6 +65,36 @@ class ClaudeChatTransportRunTest {
       }
     }
 
+    override fun openAcknowledged(
+      command: ChatCommand,
+      input: ReceiveChannel<ChatProcessInput>,
+    ): Flow<ChatProcessOutput> = channelFlow {
+      opened += command
+      launch {
+        for (message in input) {
+          try {
+            if (INITIALIZE_REQUEST in message.line) {
+              loginOutput.forEach { stdout.send(ChatProcessOutput.Line(it)) }
+              stdout.send(ChatProcessOutput.Line(INITIALIZE_SUCCESS))
+            } else {
+              stdin.send(message.line)
+            }
+            message.written.complete(true)
+          } catch (failure: Throwable) {
+            message.written.complete(false)
+            throw failure
+          }
+        }
+      }
+      try {
+        for (output in stdout) send(output)
+      } finally {
+        stopped.complete(Unit)
+        stopHeld.complete(Unit)
+        withContext(NonCancellable) { holdStop?.await() }
+      }
+    }
+
     suspend fun nextMessage(): Pair<String, String> {
       val message = Json.parseToJsonElement(stdin.receive()).jsonObject
       return message.getValue("uuid").jsonPrimitive.content to
@@ -220,7 +250,7 @@ class ClaudeChatTransportRunTest {
     assertTrue(session.input.tryReceive().isFailure)
 
     session.accept(ChatProcessOutput.Line(FakeClaude.INITIALIZE_SUCCESS))
-    val frame = Json.parseToJsonElement(session.input.tryReceive().getOrThrow()).jsonObject
+    val frame = Json.parseToJsonElement(session.input.tryReceive().getOrThrow().line).jsonObject
     assertEquals("uuid-1", frame.getValue("uuid").jsonPrimitive.content)
     assertTrue(session.initializedSignal.isCompleted)
   }

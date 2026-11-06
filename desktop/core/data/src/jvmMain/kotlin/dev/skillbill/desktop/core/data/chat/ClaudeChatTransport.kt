@@ -132,7 +132,7 @@ class ClaudeChatTransport internal constructor(
         command.environment[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR],
         runCatching { Path.of(host.userHome) }.getOrNull(),
       ),
-      writeLine = { line -> session.input.trySend(line).isSuccess },
+      writeLine = { line -> session.input.writeAndAwaitBlocking(line) },
       stopProcess = { stop(sessionId, session) },
       onCard = session::showCard,
     )
@@ -147,13 +147,19 @@ class ClaudeChatTransport internal constructor(
             if (opening.approval.isReleased) {
               session.accept(ChatProcessOutput.StartFailed(SESSION_CHANGED_REASON))
             } else {
-              session.input.trySend(opening.approval.initializeFrame())
+              val process = launch(start = CoroutineStart.LAZY) {
+                launcher.openAcknowledged(command, session.input).collect(session::accept)
+              }
+              process.start()
+              if (!session.input.writeAndAwait(opening.approval.initializeFrame())) {
+                session.failStartup("Claude initialization delivery is uncertain; it will not be replayed.")
+              }
               // No user frame is sent before the provider answers initialize; silence means an incompatible CLI.
               watchdog = launch {
                 val answered = withTimeoutOrNull(INITIALIZE_WAIT_MS) { session.initializedSignal.await() }
                 if (answered == null) session.failStartup(INITIALIZE_TIMEOUT_MESSAGE)
               }
-              launcher.open(command, session.input).collect(session::accept)
+              process.join()
             }
           }
         }

@@ -8,6 +8,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.CompletableDeferred
@@ -73,8 +74,12 @@ class ChatProcessInput internal constructor(val line: String) {
 
 internal suspend fun Channel<ChatProcessInput>.writeAndAwait(line: String): Boolean {
   val pending = ChatProcessInput(line)
-  send(pending)
-  return pending.written.await()
+  return try {
+    send(pending)
+    pending.written.await()
+  } catch (_: ClosedSendChannelException) {
+    false
+  }
 }
 
 internal fun Channel<ChatProcessInput>.writeAndAwaitBlocking(line: String): Boolean = runBlocking {
