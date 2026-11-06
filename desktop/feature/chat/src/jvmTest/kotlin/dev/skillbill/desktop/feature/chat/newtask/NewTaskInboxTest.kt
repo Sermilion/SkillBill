@@ -38,6 +38,18 @@ class NewTaskInboxTest {
       listOf(InboxItem.Group(InboxDay.Today), InboxItem.Chat(today, chatTitle(today.title), null)),
       inboxItems(emptyList(), emptyList(), listOf(today), null, now, ZoneOffset.UTC),
     )
+    assertEquals(
+      listOf(InboxItem.Run(blocked, blocked = true)),
+      inboxItems(listOf(blocked), listOf(running), listOf(today), null, now, ZoneOffset.UTC, InboxFilter.NeedsYou),
+    )
+    assertEquals(
+      listOf(
+        InboxItem.Group(InboxDay.Today), InboxItem.Chat(today, chatTitle(today.title), null), InboxItem.Chat(future, chatTitle(future.title), null),
+        InboxItem.Group(InboxDay.Yesterday), InboxItem.Chat(yesterday, chatTitle(yesterday.title), null), InboxItem.Chat(yesterdayMorning, chatTitle(yesterdayMorning.title), null),
+        InboxItem.Group(InboxDay.Earlier), InboxItem.Chat(earlier, chatTitle(earlier.title), null),
+      ),
+      inboxItems(listOf(blocked), listOf(running), listOf(today, future, yesterday, yesterdayMorning, earlier), null, now, ZoneOffset.UTC, InboxFilter.Chats),
+    )
   }
 
   @Test

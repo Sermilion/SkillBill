@@ -3,6 +3,8 @@ package dev.skillbill.desktop.feature.chat.newtask
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.skillbill.desktop.core.designsystem.component.ToastAction
+import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -26,8 +28,10 @@ import dev.skillbill.desktop.feature.chat.START_AGAIN_SUFFIX
 import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +53,12 @@ data class NewTaskOffer(
 )
 
 private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
+private const val DISCARD_UNDO_WINDOW_MS = 5_000L
+
+private sealed interface PendingDiscard {
+  class Undoable(val job: Job) : PendingDiscard
+  data object Deleting : PendingDiscard
+}
 
 private fun NewTaskKind.startName(): String =
   NewTaskActionKind.entries.firstOrNull { it.toNewTaskKind() == this }?.wire ?: name.lowercase()
@@ -69,6 +79,7 @@ class NewTaskDraft(
   private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private val offerState = MutableStateFlow(NewTaskOffer())
   private var savedRead: Job? = null
+  private val pendingDiscards = mutableMapOf<String, PendingDiscard>()
   private var closing = false
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
@@ -265,14 +276,28 @@ class NewTaskDraft(
     leave(current) { chats.deleteSavedChat(current.sessionId) }
   }
 
-  /** Deletes [entry] and refreshes the saved list, routing the open chat through [discard]. */
+  /** Discards [entry], allowing undo unless it is the open chat. */
   internal fun discardSaved(entry: ChatHistoryEntry) {
     if (closing) return
     if (chatState.value?.sessionId == entry.sessionId) return discard()
-    scope.launch {
-      chats.deleteSavedChat(entry.sessionId)
-      refreshSaved()
+    if (entry.sessionId in pendingDiscards) return
+    val job = scope.launch(start = CoroutineStart.LAZY) {
+      delay(DISCARD_UNDO_WINDOW_MS)
+      pendingDiscards[entry.sessionId] = PendingDiscard.Deleting
+      try {
+        chats.deleteSavedChat(entry.sessionId)
+      } finally {
+        pendingDiscards.remove(entry.sessionId)
+        refreshSaved()
+      }
     }
+    pendingDiscards[entry.sessionId] = PendingDiscard.Undoable(job)
+    savedState.value = savedState.value.filterNot { it.sessionId == entry.sessionId }
+    job.start()
+    toasts.show(ToastData(
+      title = "Discarded ${chatTitle(entry.title).title}",
+      actions = listOf(ToastAction("Undo") { undoDiscard(entry.sessionId) }),
+    ))
   }
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
@@ -341,7 +366,14 @@ class NewTaskDraft(
 
   internal fun refreshSaved() {
     savedRead?.cancel()
-    savedRead = scope.launch { savedState.value = chats.savedNewTaskDrafts() }
+    savedRead = scope.launch { savedState.value = chats.savedNewTaskDrafts().filterNot { it.sessionId in pendingDiscards } }
+  }
+
+  private fun undoDiscard(sessionId: String) {
+    val pending = pendingDiscards[sessionId] as? PendingDiscard.Undoable ?: return
+    pendingDiscards.remove(sessionId)
+    pending.job.cancel()
+    refreshSaved()
   }
 
   internal fun dispose() {

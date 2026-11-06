@@ -15,6 +15,8 @@ internal enum class InboxDay(val label: String) {
   Earlier("Earlier"),
 }
 
+internal enum class InboxFilter { All, NeedsYou, Chats }
+
 internal sealed interface InboxItem {
   data class Group(val day: InboxDay) : InboxItem
   data class Run(val item: WorkItem, val blocked: Boolean) : InboxItem
@@ -30,17 +32,23 @@ internal fun inboxItems(
   selectedRoot: String?,
   now: Instant,
   zone: ZoneId = ZoneId.systemDefault(),
-): List<InboxItem> = buildList {
-  needsYou.forEach { add(InboxItem.Run(it, blocked = true)) }
-  running.forEach { add(InboxItem.Run(it, blocked = false)) }
-  val chatsByDay = chats.groupBy { inboxDay(it, now, zone) }
-  InboxDay.entries.forEach { day ->
-    val entries = chatsByDay[day].orEmpty()
-    if (entries.isNotEmpty()) {
-      add(InboxItem.Group(day))
-      entries.forEach { entry -> add(InboxItem.Chat(entry, chatTitle(entry.title), chatRepoLabel(entry, selectedRoot))) }
+  filter: InboxFilter = InboxFilter.All,
+): List<InboxItem> = when (filter) {
+  InboxFilter.All, InboxFilter.Chats -> buildList {
+    if (filter == InboxFilter.All) {
+      needsYou.forEach { add(InboxItem.Run(it, blocked = true)) }
+      running.forEach { add(InboxItem.Run(it, blocked = false)) }
+    }
+    val chatsByDay = chats.groupBy { inboxDay(it, now, zone) }
+    InboxDay.entries.forEach { day ->
+      val entries = chatsByDay[day].orEmpty()
+      if (entries.isNotEmpty()) {
+        add(InboxItem.Group(day))
+        entries.forEach { entry -> add(InboxItem.Chat(entry, chatTitle(entry.title), chatRepoLabel(entry, selectedRoot))) }
+      }
     }
   }
+  InboxFilter.NeedsYou -> needsYou.map { InboxItem.Run(it, blocked = true) }
 }
 
 internal fun shortAgo(at: Instant, now: Instant): String {

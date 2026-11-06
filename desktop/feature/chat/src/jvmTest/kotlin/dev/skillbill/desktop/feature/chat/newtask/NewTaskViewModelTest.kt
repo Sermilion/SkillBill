@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -96,6 +97,9 @@ class NewTaskViewModelTest {
     assertEquals(listOf(entry), draft.saved.value)
 
     model.onAction(NewTaskAction.DiscardDraft(entry))
+    runCurrent()
+    assertTrue(entry.sessionId in chatRepo.saved)
+    advanceTimeBy(5_000)
     runCurrent()
     assertTrue(entry.sessionId !in chatRepo.saved)
     assertTrue(draft.saved.value.isEmpty())

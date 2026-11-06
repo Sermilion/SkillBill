@@ -160,6 +160,7 @@ private fun NewTaskHomeBody(
             needsYou = returning?.needsYou.orEmpty(),
             running = returning?.runningItems.orEmpty(),
             chats = shown,
+            savedCount = saved.size,
             selectedRoot = draft.repository?.root,
             home = returning,
             showAll = saved.size > NEW_TASK_HISTORY_ROWS,

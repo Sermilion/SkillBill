@@ -3,7 +3,9 @@ package dev.skillbill.desktop.feature.chat.newtask
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -21,6 +23,7 @@ import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatWorkspace
 import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,6 +38,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlin.coroutines.coroutineContext
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -44,6 +48,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 /** A draft for tests that never send. */
 internal fun testDatabaseSessionController(sessionId: Long? = 1L): DatabaseSessionController = object : DatabaseSessionController {
@@ -87,6 +92,90 @@ class NewTaskDraftTest {
     assertFalse(draft.canSend())
     draft.send()
     assertTrue(chat.requests.isEmpty())
+  }
+
+  @Test
+  fun `saved chat discard hides immediately and each undo window settles independently`() = runTest {
+    val toasts = ToastQueue()
+    val first = ChatHistoryEntry(
+      "first-discard", null, requireNotNull(chat.agent), Instant.fromEpochSeconds(1), "Fix header",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "Fix header")), ChatNewTaskContext(root, "main"),
+    )
+    val second = first.copy(sessionId = "second-discard", title = "Fix footer")
+    chat.saved[first.sessionId] = first
+    chat.saved[second.sessionId] = second
+    val draft = NewTaskDraft(chat, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System)
+
+    draft.refreshSaved()
+    runCurrent()
+    assertEquals(listOf(first, second), draft.saved.value)
+    draft.discardSaved(first)
+    draft.discardSaved(second)
+    draft.discardSaved(first)
+    runCurrent()
+    draft.refreshSaved()
+    runCurrent()
+
+    assertTrue(first.sessionId in chat.saved)
+    assertTrue(second.sessionId in chat.saved)
+    assertTrue(draft.saved.value.isEmpty())
+    assertEquals(2, toasts.host.toasts.size)
+    assertEquals("Discarded Fix footer", toasts.host.toasts.last().data.title)
+    advanceTimeBy(4_999)
+    runCurrent()
+    assertTrue(first.sessionId in chat.saved)
+    assertTrue(second.sessionId in chat.saved)
+    toasts.host.toasts.last().data.actions.single().onClick()
+    runCurrent()
+    assertEquals(listOf(second), draft.saved.value)
+
+    advanceTimeBy(1)
+    runCurrent()
+
+    assertTrue(first.sessionId !in chat.saved)
+    assertTrue(second.sessionId in chat.saved)
+    assertEquals(listOf(second), draft.saved.value)
+  }
+
+  @Test
+  fun `refresh cannot restore a discard while its delete is suspended and expired undo cannot cancel it`() = runTest {
+    val entry = ChatHistoryEntry(
+      "deleting-discard", null, requireNotNull(chat.agent), Instant.fromEpochSeconds(1), "Fix header",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "Fix header")), ChatNewTaskContext(root, "main"),
+    )
+    chat.saved[entry.sessionId] = entry
+    val deleting = CompletableDeferred<Unit>()
+    val completeDelete = CompletableDeferred<Unit>()
+    val repository = object : ExecutionChatRepository by chat {
+      override suspend fun deleteSavedChat(sessionId: String) {
+        deleting.complete(Unit)
+        completeDelete.await()
+        chat.deleteSavedChat(sessionId)
+      }
+    }
+    val toasts = ToastQueue()
+    val draft = NewTaskDraft(repository, FakeWorkControlRepository(), testDatabaseSessionController(), toasts, WindowCoroutineScope(backgroundScope), Clock.System)
+    draft.refreshSaved()
+    runCurrent()
+    assertEquals(listOf(entry), draft.saved.value)
+
+    draft.discardSaved(entry)
+    runCurrent()
+    advanceTimeBy(5_000)
+    runCurrent()
+    assertTrue(deleting.isCompleted)
+    draft.refreshSaved()
+    runCurrent()
+    assertTrue(draft.saved.value.isEmpty())
+    assertTrue(entry.sessionId in chat.saved)
+
+    toasts.host.toasts.single().data.actions.single().onClick()
+    runCurrent()
+    assertTrue(draft.saved.value.isEmpty())
+    completeDelete.complete(Unit)
+    runCurrent()
+    assertTrue(entry.sessionId !in chat.saved)
+    assertTrue(draft.saved.value.isEmpty())
   }
 
   // Reusing ChatTurns.freshRead would mark a chat with no execution gone.

@@ -1,15 +1,24 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
@@ -85,6 +94,47 @@ class NewTaskHomeTest {
     onNodeWithContentDescription("Discard Update library").performClick()
     waitForIdle()
     assertEquals(listOf<NewTaskAction>(NewTaskAction.DiscardDraft(lib)), actions)
+  }
+
+  @Test
+  fun `focused inbox card moves selection and opens the selected row with keyboard`() = runComposeUiTest {
+    val chats = FakeExecutionChatRepository()
+    val entry = savedDraft(chats, "keyboard-draft", "/work/app", Instant.fromEpochSeconds(3_600), "Keyboard draft")
+    chats.saved[entry.sessionId] = entry
+    val draft = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val blocked = workItem("blocked-run")
+    val state = NewTaskUiState(home = newTaskHome(loadedBoard(mapOf(BoardSectionKind.NeedsYou to listOf(blocked)))))
+    val openedRuns = mutableListOf<WorkItem>()
+    val actions = mutableListOf<NewTaskAction>()
+    draft.refreshSaved()
+    val keyboardHost = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = { openedRuns += it }, onShowAllWork = {})
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, draft, keyboardHost) { actions += it } }
+      }
+    }
+    waitForIdle()
+
+    val card = onNodeWithContentDescription("Pick up where you left off")
+    card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+    card.assertIsFocused()
+    card.performKeyInput { pressKey(Key.Delete) }
+    assertTrue(actions.isEmpty())
+    assertTrue(openedRuns.isEmpty())
+    card.performKeyInput {
+      pressKey(Key.DirectionDown)
+      pressKey(Key.Enter)
+    }
+    card.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2 of 2, Keyboard draft"))
+    card.performKeyInput {
+      pressKey(Key.One)
+      pressKey(Key.Delete)
+      pressKey(Key.Enter)
+    }
+    card.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1 of 2, ${blocked.title}"))
+
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(entry)), actions)
+    assertEquals(listOf(blocked, blocked), openedRuns)
   }
 
   @Test
@@ -317,7 +367,7 @@ class NewTaskHomeTest {
       }
     }
 
-    onNodeWithText("Every goal runs this path").assertExists()
+    onNodeWithText("Every goal runs this path").assertDoesNotExist()
     onNodeWithText("Add CSV export to the history screen").performClick()
     waitForIdle()
     assertEquals(fill, draft.text)

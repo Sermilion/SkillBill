@@ -88,7 +88,7 @@ internal fun StepLine(progress: State<Float>?, reducedMotion: Boolean, preview: 
       }
     }
     BasicText(
-      routeCaption(preview),
+      routeCaption(preview).orEmpty(),
       Modifier.semantics { liveRegion = LiveRegionMode.Polite },
       style = SkillBillTheme.type.tSm.copy(color = if (preview != null) colors.accentHover else colors.fgMuted),
     )
