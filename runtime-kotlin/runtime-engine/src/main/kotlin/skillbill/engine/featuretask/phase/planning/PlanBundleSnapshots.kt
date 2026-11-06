@@ -36,7 +36,6 @@ internal object PlanBundleSpecText {
   internal fun acceptanceCriteriaOf(specText: String): List<String> =
     GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }
 
-  // Headings inside fenced code blocks are example text, not section boundaries.
   private fun detailsRange(lines: List<String>): IntRange? {
     val outsideFence = MarkdownFences.outsideFenceMask(lines)
     val start =

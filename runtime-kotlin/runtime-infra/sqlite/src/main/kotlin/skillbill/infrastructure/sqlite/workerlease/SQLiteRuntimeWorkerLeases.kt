@@ -1,7 +1,8 @@
-package skillbill.infrastructure.sqlite
+package skillbill.infrastructure.sqlite.workerlease
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.infrastructure.sqlite.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.ports.db.DatabaseSessionFactory
