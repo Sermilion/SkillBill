@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New task: open chats and home</title>
+<!-- Design reference only. Combines design/new-task-chat-tabs (tab strip, side list, transcript, composer)
+     with design/new-task-home variant A (home with Recent chats and Needs you).
+     Tokens come from the Linear study, which match SkillBillColors. All data is sample data. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../linear-study/ds/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg-frame); color: var(--fg); font: 400 var(--t-base)/1.45 var(--font-sans); display: flex; flex-direction: column; font-feature-settings: "cv11", "ss01"; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  svg { display: block; flex: none; }
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .ico.sm { width: 12px; height: 12px; }
+  .mono { font-family: var(--font-mono); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Review chrome: not part of the design */
+  .chrome { flex: none; display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-bottom: 1px dashed var(--border-strong); }
+  .chrome-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+  .designs { display: flex; gap: 2px; padding: 2px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .designs button { height: 26px; padding: 0 var(--sp-3); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted); cursor: pointer; font-size: var(--t-sm); }
+  .designs button:hover { color: var(--fg); }
+  .designs button[aria-pressed="true"] { background: var(--bg-overlay); color: var(--fg); }
+  .scenario { display: flex; align-items: center; gap: var(--sp-2); color: var(--fg-muted); font-size: var(--t-sm); }
+  .scenario select { height: 30px; padding: 0 var(--sp-2); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .chrome label.opt { display: flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: var(--t-sm); cursor: pointer; }
+  .reset { height: 30px; padding: 0 var(--sp-3); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--fg-muted); font-size: var(--t-sm); cursor: pointer; }
+  .note { margin: 0; max-width: 1100px; color: var(--fg-muted); font-size: var(--t-sm); }
+  .note b { color: var(--fg-2); font-weight: 500; }
+  kbd, .kbd { font: 400 var(--t-2xs) var(--font-mono); padding: 1px 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--fg-muted); background: var(--bg-inset); }
+
+  /* App window: sidebar stub plus the New task panel */
+  .window { flex: 1; min-height: 0; padding: var(--sp-2); display: flex; gap: var(--sp-2); }
+  .appnav { flex: none; width: 196px; display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2); color: var(--fg-muted); font-size: var(--t-sm); }
+  .appnav .nav { height: 28px; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-2); border-radius: var(--r-sm); cursor: pointer; }
+  .appnav .nav:hover { color: var(--fg-2); }
+  .appnav .nav.on { background: var(--bg-active); color: var(--fg); }
+  .appnav .nav .count { margin-left: auto; font-size: var(--t-xs); color: var(--fg-faint); }
+  .appnav .bottom { margin-top: auto; }
+  .panel { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); overflow: hidden; }
+  .head { flex: none; height: var(--header-h); display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3) 0 var(--sp-4); border-bottom: 1px solid var(--border-subtle); }
+  .head .crumb { font-weight: 500; }
+  .head .crumb-sub { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .head .spacer { flex: 1; }
+  .btn { height: 26px; padding: 0 var(--sp-3); display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent; color: var(--fg-2); font-size: var(--t-sm); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--bg-hover); }
+  .btn.danger { background: var(--st-failed); color: #fff; border-color: transparent; font-weight: 500; }
+  .iconbtn { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted); cursor: pointer; }
+  .iconbtn:hover { background: var(--bg-hover); color: var(--fg); }
+
+  /* Status markers, same in both layouts */
+  .agent-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .ag-claude { background: var(--data-1); } .ag-codex { background: var(--data-2); } .ag-cursor { background: var(--data-4); }
+  .mark { width: 14px; height: 14px; display: grid; place-items: center; flex: none; }
+  .mark .unread { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .mark .spin { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--border-strong); border-top-color: var(--st-active); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Tab strip. Tabs are rounded on top only and the selected tab joins the panel below it.
+     The strip only takes the width its tabs need, so "+" sits right after the last tab.
+     The overflow chevron is the only control pushed to the far right, and only when tabs overflow. */
+  .tabs { flex: none; display: flex; align-items: stretch; height: 36px; padding: 0 var(--sp-2); gap: 2px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-frame); }
+  .tabs-scroll { flex: 0 1 auto; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding-top: 4px; }
+  .tabs-scroll::-webkit-scrollbar { display: none; }
+  .tab { position: relative; flex: 0 1 196px; min-width: 112px; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; border: 1px solid transparent; border-bottom: 0; border-radius: var(--r-sm) var(--r-sm) 0 0; color: var(--fg-muted); font-size: var(--t-sm); cursor: pointer; user-select: none; }
+  .tab:hover { background: var(--bg-hover); color: var(--fg-2); }
+  .tab.on { background: var(--bg-panel); color: var(--fg); border-color: var(--border-subtle); margin-bottom: -1px; }
+  .tab .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab .x { visibility: hidden; width: 20px; height: 20px; }
+  .tab:hover .x, .tab.on .x { visibility: visible; }
+  .tab.unread .label { color: var(--fg); font-weight: 500; }
+  .tabs .add { align-self: center; flex: none; }
+  .tabs-scroll.fade-r { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+  .tabs-scroll.fade-l { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+  .tabs-scroll.fade-l.fade-r { mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+  .tabs .overflow { align-self: center; flex: none; margin-left: auto; width: auto; padding: 0 6px; gap: 4px; display: flex; align-items: center; font-size: var(--t-xs); }
+  .tabs .overflow[hidden] { display: none; }
+  .tabs .overflow .mark { width: 8px; }
+
+  /* Chat body */
+  .main { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+  .transcript { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: var(--sp-6) var(--sp-6) var(--sp-4); }
+  .transcript-inner { width: 100%; max-width: 728px; display: flex; flex-direction: column; gap: var(--sp-4); margin-top: auto; }
+  .msg { display: flex; flex-direction: column; gap: 4px; }
+  .msg .who { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); font-weight: 500; color: var(--fg-faint); }
+  .msg.you { align-items: flex-end; }
+  .msg.you .txt { max-width: 80%; padding: var(--sp-2) var(--sp-3); background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: var(--r-md); color: var(--fg); }
+  .msg .txt { color: var(--fg-2); white-space: pre-wrap; }
+  .msg .caret { display: inline-block; width: 7px; height: 14px; vertical-align: -2px; background: var(--fg-muted); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .notice { align-self: center; font-size: var(--t-xs); color: var(--fg-faint); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .msg .chips { margin-top: 4px; }
+  .chip { height: 26px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--r-full); background: transparent; color: var(--fg-muted); font-size: var(--t-sm); cursor: pointer; }
+  .chip:hover { background: var(--bg-hover); color: var(--fg-2); }
+  .chip.start { border-color: var(--accent-ring); color: var(--accent-text); background: var(--accent-tint); }
+
+  /* Home for an empty chat */
+  .home { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; padding: var(--sp-6); }
+  .content { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: var(--sp-8); margin: auto 0; }
+  .hero h1 { margin: 0 0 var(--sp-2); font-size: var(--t-2xl); font-weight: 600; letter-spacing: -0.015em; }
+  .hero p { margin: 0; color: var(--fg-muted); }
+
+  /* Step line */
+  .steps { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); }
+  .steps::before { content: ""; position: absolute; left: calc(100% / 14); right: calc(100% / 14); top: 5px; height: 1px; background: var(--border); }
+  .steps .sweep { position: absolute; left: calc(100% / 14); top: 5px; height: 1px; width: 0; background: linear-gradient(90deg, transparent, var(--accent)); animation: sweep 4.2s var(--ease) infinite; }
+  @keyframes sweep { 0% { width: 0; opacity: 0; } 15% { opacity: 1; } 85% { width: calc(100% - 100% / 7); opacity: 1; } 100% { width: calc(100% - 100% / 7); opacity: 0; } }
+  .step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .step .dot { width: 11px; height: 11px; border-radius: 50%; display: grid; place-items: center; }
+  .step .dot::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--border-strong); }
+  .step .lbl { font: 400 var(--t-xs) var(--font-mono); color: var(--fg-faint); }
+
+  /* Sections */
+  .sec { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .sec-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 22px; }
+  .sec-head .t { font-size: var(--t-sm); font-weight: 500; color: var(--fg-muted); }
+  .sec-head .c { font-size: var(--t-xs); color: var(--fg-faint); }
+  .sec-head .sp { flex: 1; }
+  .ghost { height: 22px; padding: 0 6px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--fg-muted); cursor: pointer; font-size: var(--t-sm); }
+  .ghost:hover { background: var(--bg-hover); color: var(--fg); }
+  .ghost .kbd { font-size: 10px; }
+
+  /* Card list. Each list shows at most 5 rows (5 x 34px) and scrolls past that.
+     The edge that has more rows behind it fades, like the tab strip. */
+  .card { background: rgba(255,255,255,.012); border: 1px solid var(--border-subtle); border-radius: var(--r-md); overflow: hidden; outline: none; }
+  .card:focus-visible { border-color: var(--border-strong); }
+  .card.scrolly { max-height: calc(5 * 34px + 2px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+  .card.scrolly::-webkit-scrollbar { width: 6px; }
+  .card.scrolly::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+  .card.fade-b { mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
+  .card.fade-t { mask-image: linear-gradient(to top, #000 calc(100% - 24px), transparent); }
+  .card.fade-t.fade-b { mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+  .row { position: relative; flex: none; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 12px; cursor: pointer; outline: none; transition: background var(--dur-fast) var(--ease), height var(--dur) var(--ease), opacity var(--dur) var(--ease); }
+  .row + .row { box-shadow: inset 0 1px 0 var(--border-subtle); }
+  .row:hover, .row.sel { background: var(--bg-hover); }
+  .row.sel::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2px; border-radius: 2px; background: var(--accent); }
+  .row.gone { height: 0; opacity: 0; }
+  .row .g { width: 16px; display: grid; place-items: center; color: var(--fg-faint); }
+  .row .g.img { color: var(--data-2); }
+  .row .g.warn { color: var(--st-blocked); }
+  .row .ttl { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; white-space: nowrap; }
+  .row .ttl .main { overflow: hidden; text-overflow: ellipsis; color: var(--fg-2); }
+  .row:hover .ttl .main, .row.sel .ttl .main { color: var(--fg); }
+  .row .ttl .sub { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg-faint); font-size: var(--t-sm); }
+  .row .key { font: 400 var(--t-xs) var(--font-mono); color: var(--fg-muted); flex: none; }
+  .row .badge { flex: none; height: 18px; padding: 0 6px; display: inline-flex; align-items: center; gap: 5px; border-radius: var(--r-full); font-size: var(--t-2xs); color: var(--fg-muted); border: 1px solid var(--border); }
+  .row .badge.open { color: var(--accent-text); border-color: var(--accent-ring); }
+  .row .badge.repo .sw { width: 6px; height: 6px; border-radius: 2px; }
+  .row .meta { position: relative; flex: none; width: 52px; text-align: right; font-size: var(--t-xs); color: var(--fg-faint); }
+  .row .meta .x { position: absolute; right: -4px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; display: none; place-items: center; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--fg-muted); cursor: pointer; }
+  .row .meta .x:hover { background: var(--bg-active); color: var(--st-failed); }
+  .row:hover .meta .t.can-x, .row.sel .meta .t.can-x { visibility: hidden; }
+  .row:hover .meta .x, .row.sel .meta .x { display: grid; }
+  .row.need { background: linear-gradient(90deg, rgba(226,112,60,.07), transparent 40%); }
+  .row.need:hover, .row.need.sel { background: linear-gradient(90deg, rgba(226,112,60,.11), rgba(255,255,255,.03) 40%); }
+  .row.need::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--st-blocked); }
+  .row.need.sel::before { display: none; }
+
+  /* Composer */
+  .dock { flex: none; display: flex; justify-content: center; padding: var(--sp-3) var(--sp-6) var(--sp-4); }
+  .composer { width: 100%; max-width: 728px; display: flex; flex-direction: column; gap: var(--sp-2); }
+  textarea.task { width: 100%; height: 64px; resize: none; padding: var(--sp-2) 10px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-sm); outline: none; display: block; }
+  textarea.task::placeholder { color: var(--fg-faint); }
+  textarea.task:focus { border-color: var(--accent-ring); }
+  .foot { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .pill { height: 26px; padding: 0 10px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: var(--r-full); color: var(--fg-muted); font: 400 var(--t-sm) var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .foot .spacer { flex: 1; }
+  .send { height: 26px; padding: 0 10px; background: var(--accent); color: var(--accent-fg); border: 0; border-radius: var(--r-sm); font-size: var(--t-sm); font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .send:disabled { background: var(--bg-raised); color: var(--fg-faint); cursor: default; }
+  .send.stop { background: var(--bg-raised); color: var(--fg-2); }
+
+  /* Side list layout */
+  .rail-wrap { flex: 1; min-height: 0; display: flex; }
+  .rail { flex: none; width: 248px; display: flex; flex-direction: column; border-right: 1px solid var(--border-subtle); background: var(--bg-frame); }
+  .rail-head { flex: none; display: flex; align-items: center; gap: var(--sp-2); height: 38px; padding: 0 var(--sp-2) 0 var(--sp-3); font-size: var(--t-xs); font-weight: 500; color: var(--fg-faint); }
+  .rail-head .n { margin-right: auto; }
+  .rail-list { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--sp-1) var(--sp-2); }
+  .ritem { display: flex; align-items: flex-start; gap: var(--sp-2); padding: 6px var(--sp-2); border-radius: var(--r-sm); color: var(--fg-2); cursor: pointer; }
+  .ritem:hover { background: var(--bg-hover); }
+  .ritem.on { background: var(--bg-active); color: var(--fg); }
+  .ritem .mark { margin-top: 2px; }
+  .ritem .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .ritem .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); }
+  .ritem.unread .t { color: var(--fg); font-weight: 500; }
+  .ritem .sub { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--fg-faint); white-space: nowrap; overflow: hidden; }
+  .ritem .sub .mono { overflow: hidden; text-overflow: ellipsis; }
+  .ritem .x { visibility: hidden; width: 20px; height: 20px; }
+  .ritem:hover .x { visibility: visible; }
+  .rail-foot { flex: none; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border-subtle); font-size: var(--t-xs); color: var(--fg-faint); display: flex; flex-direction: column; gap: 4px; }
+  .rail-foot span { display: flex; justify-content: space-between; }
+
+  /* Menu, dialog, toast */
+  .menu { position: absolute; z-index: 10; min-width: 300px; max-height: 360px; overflow: auto; padding: var(--sp-1); background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
+  .menu .ritem .x { display: none; }
+  .menu-filter { position: sticky; top: calc(var(--sp-1) * -1); z-index: 1; width: 100%; height: 32px; margin-bottom: 4px; padding: 0 var(--sp-2); background: var(--bg-overlay); border: 0; border-bottom: 1px solid var(--border-subtle); outline: none; }
+  .scrim { position: absolute; inset: 0; z-index: 20; background: var(--scrim); display: grid; place-items: center; }
+  .dialog { width: min(420px, calc(100% - 48px)); padding: var(--sp-4); background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-modal); display: flex; flex-direction: column; gap: var(--sp-3); }
+  .dialog h2 { margin: 0; font-size: var(--t-md); font-weight: 500; }
+  .dialog p { margin: 0; color: var(--fg-muted); font-size: var(--t-sm); }
+  .dialog .actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+  .toast { position: absolute; z-index: 30; left: 50%; bottom: 128px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 6px 0 14px; border-radius: var(--r-md); background: var(--bg-overlay); box-shadow: var(--shadow-pop); font-size: var(--t-sm); color: var(--fg-2); white-space: nowrap; }
+  .toast button { height: 26px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--accent-text); font-weight: 500; cursor: pointer; }
+  .toast button:hover { background: var(--bg-hover); }
+
+  @media (prefers-reduced-motion: reduce) { .steps .sweep, .mark .spin { animation: none; } .mark .spin { border-color: var(--st-active); } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chat" viewBox="0 0 16 16"><path d="M3 3.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5V11.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></symbol>
+  <symbol id="i-img" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="6.5" r="1.2"/><path d="M14 11l-3.5-3.5L4 13"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 5v3.5M8 11h.01"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></symbol>
+</svg>
+
+<header class="chrome">
+  <div class="chrome-row">
+    <div class="designs" id="layouts" role="group" aria-label="Open chats layout">
+      <button data-layout="tabs">Tabs (default)</button>
+      <button data-layout="list">Side list</button>
+    </div>
+    <label class="scenario">State <select id="scenario"></select></label>
+    <label class="opt"><input type="checkbox" id="mixed"> Chats from another repo</label>
+    <label class="opt"><input type="checkbox" id="calm"> Nothing needs you</label>
+    <button class="reset" id="reset">Reset state</button>
+  </div>
+  <p class="note" id="note"></p>
+</header>
+
+<main class="window">
+  <nav class="appnav" aria-label="App">
+    <div class="nav on">New task<span class="count" id="nav-count"></span></div>
+    <div class="nav">Needs you<span class="count" id="nav-needs"></span></div>
+    <div class="nav">Active<span class="count">2</span></div>
+    <div class="nav">Specs</div>
+    <div class="nav">Activity</div>
+    <div class="nav bottom">Settings</div>
+  </nav>
+  <div class="panel" id="stage"></div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ico = (id, cls = '') => `<svg class="ico ${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const short = m => m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : m < 2880 ? '1d' : `${Math.floor(m / 1440)}d`;
+const STAGES = ['plan', 'implement', 'audit', 'review', 'validate', 'qa', 'pr'];
+const REPO_COLOR = { 'SkillBill': 'var(--data-1)', 'readian-android': 'var(--data-2)', 'readian-web': 'var(--data-2)', 'ZeroAccount': 'var(--data-5)', 'space-anime-survivors': 'var(--data-4)' };
+
+/* ---------- Sample data ---------- */
+const SEED = [
+  { title: 'When Verify should park for confirmation', agent: 'claude', repo: 'SkillBill', branch: 'main', m: 4, lines: [
+    ['you', 'i would like to talk about Verify operation and when it should park'],
+    ['agent', 'Verify parks at awaiting_confirmation after it lists the criteria it could not prove. Right now it also parks when every criterion passed, which is one click with nothing to decide.'],
+    ['you', 'yes, that second park feels pointless'],
+    ['agent', 'Then the rule would be: park only when at least one criterion is unproven or contradicted. A clean pass finishes on its own and records the audit.'],
+  ] },
+  { title: 'Specs panel is slow to open the first time', agent: 'codex', repo: 'SkillBill', branch: 'main', m: 1, lines: [
+    ['you', 'when i open Specs panel (at least first time after app start) it takes a few seconds to show anything'],
+    ['agent', 'The first open reads every bundle under the specs root on the UI dispatcher. With 510 bundles that is about 2.8 seconds on your machine.'],
+    ['you', 'can we show the list before the bodies load?'],
+  ], reply: 'Yes. SpecsRepository can return names and keys from the directory listing first, then fill in titles and status as each spec.md is parsed. The panel shows rows within one frame and updates them in place.' },
+  { title: 'Token cost per phase on the run page', agent: 'claude', repo: 'SkillBill', branch: 'main', m: 12, lines: [
+    ['you', 'what do you think about showing the token cost per phase on the run page?'],
+    ['agent', 'The data is there: each phase record already stores input and output tokens. A small column on the phase list would cost little. I would show totals per phase and keep per-call detail in the inspector.', ['Run phase:goal', 'Use SKILL-514']],
+  ] },
+  { title: 'Offline banner covers the toolbar', agent: 'claude', repo: 'readian-android', branch: 'feature/offline-sync', m: 30, lines: [
+    ['you', 'why is the offline banner on top of the toolbar'],
+    ['agent', 'The banner is drawn in the root Box after the Scaffold, so it sits above the TopAppBar. Moving it into the Scaffold topBar slot under the app bar fixes the overlap.'],
+  ] },
+  { title: 'Passkey enrollment screen design', agent: 'claude', repo: 'ZeroAccount', branch: '0AC-72-passkey-enrollment', m: 80, lines: [
+    ['you', 'i want to implement this new design for the passkey enrollment screen'],
+    ['agent', 'I read the mock. Three states: intro, system prompt open, success. The current screen has no success state, it navigates straight away.'],
+  ] },
+  { title: 'Planning phase context budget', agent: 'claude', repo: 'SkillBill', branch: 'main', m: 120, lines: [
+    ['you', 'I want to discuss Planning phase and how much context it gets'],
+    ['agent', 'Planning gets the intake, AGENTS.md and the files it asks for. It does not get earlier specs unless the intake names them.'],
+  ] },
+  { title: 'Board column counts are off by one', agent: 'codex', repo: 'SkillBill', branch: 'main', m: 200, lines: [
+    ['you', 'the board column counts are off by one'],
+    ['agent', 'The count includes the archived run that is filtered out of the list. The fix is to count after the filter.'],
+  ] },
+  { title: 'Boss wave 3 spawns behind the camera', agent: 'cursor', repo: 'space-anime-survivors', branch: 'boss-wave-3', m: 900, lines: [
+    ['you', 'boss wave 3 spawns behind the camera'],
+    ['agent', 'The spawn ring uses world space but the camera follows with a lag, so the off-screen point comes from a stale position.'],
+  ] },
+  { title: 'Migrate the build to Gradle 9', agent: 'codex', repo: 'ZeroAccount', branch: 'chore/gradle-9-upgrade', m: 1400, lines: [
+    ['you', 'migrate the build to gradle 9'],
+    ['agent', 'Two plugins block it: the old protobuf plugin and a custom task that uses Project at execution time.'],
+  ] },
+];
+// Saved chats that are not in SEED. Together with SEED they make the Recent chats list.
+const SAVED_ONLY = [
+  { title: 'Verdict incomplete: environment_unavailable', agent: 'claude', repo: 'SkillBill', m: 24 },
+  { title: 'Background service skillbill-run-47b03a11 stopped', agent: 'codex', repo: 'SkillBill', m: 130 },
+  { title: 'Recent chats feel incomplete', sub: 'Screenshot_20261106_121804.png', img: true, agent: 'claude', repo: 'SkillBill', m: 190 },
+  { title: 'Plan detail misses the subtask list', sub: 'Screenshot_20261106_081402.png', img: true, agent: 'claude', repo: 'SkillBill', m: 262 },
+  { title: 'Add CSV export to the history screen', agent: 'codex', repo: 'readian-web', m: 1500 },
+  { title: 'Have we fixed RAM overuse with many runs open?', agent: 'claude', repo: 'SkillBill', m: 1560 },
+  { title: 'TWS-1 shows monitoring after the PR merged', agent: 'codex', repo: 'SkillBill', m: 1620 },
+  { title: 'Flaky monitor test on CI', agent: 'claude', repo: 'SkillBill', m: 1720 },
+];
+const RUNS = [
+  { key: 'SKILL-510', title: 'QA unblock guidance and retry', stage: 'qa', status: 'blocked', reason: 'The scope of subtask 1 changed while the run was paused', m: 14 },
+  { key: 'SKILL-505', title: 'Archive spec bundles on merge', stage: 'pr', status: 'blocked', reason: 'CI failed: desktop:jvmTest, 2 tests', m: 38 },
+  { key: 'SKILL-503', title: 'Resume palette keyboard flow', stage: 'review', status: 'blocked', reason: '3 blocking findings need a decision', m: 52 },
+  { key: 'SKILL-499', title: 'Verify parks after a clean pass', stage: 'validate', status: 'blocked', reason: 'Gradle daemon ran out of memory', m: 95 },
+  { key: 'SKILL-497', title: 'Board column counts', stage: 'implement', status: 'blocked', reason: 'Subtask 3 asks: keep archived runs in the count?', m: 140 },
+  { key: 'SKILL-494', title: 'Token cost per phase', stage: 'plan', status: 'blocked', reason: 'Plan is ready for your review', m: 210 },
+  { key: 'SKILL-490', title: 'Offline banner overlap', stage: 'qa', status: 'blocked', reason: 'QA target app is not running', m: 400 },
+  { key: 'SKILL-511', title: 'Multi-chat New task', stage: 'implement', status: 'active', reason: 'Subtask 2 of 4', m: 3 },
+  { key: 'SKILL-508', title: 'Resume chat palette polish', stage: 'review', status: 'active', reason: '5 specialists running', m: 1 },
+];
+
+/* ---------- State ---------- */
+const SCENARIOS = {
+  fresh: 'New empty chat (home)',
+  two: 'Two chats, both idle',
+  busy: 'One chat replying in the background',
+  mixed: 'Chats in different repositories',
+  many: 'Nine open chats',
+  lots: 'Twenty open chats (overflow)',
+  closing: 'Closing a chat that is replying',
+  few: 'Home with few items (no scrolling)',
+};
+const params = new URLSearchParams(location.hash.slice(1));
+const s = {
+  layout: params.get('layout') === 'list' ? 'list' : 'tabs',
+  scenario: SCENARIOS[params.get('state')] ? params.get('state') : 'fresh',
+  chats: [], active: 0, menu: false, menuQ: '', confirm: null, toast: null,
+  saved: [], runs: [], listSel: null,
+};
+
+let nextId = 1;
+function mkChat(seed) {
+  return {
+    id: nextId++, title: seed?.title ?? '', agent: seed?.agent ?? 'claude', repo: seed?.repo ?? 'SkillBill', branch: seed?.branch ?? 'main',
+    lines: (seed?.lines ?? []).map(([who, txt, chips]) => ({ who, txt, chips })),
+    reply: seed?.reply ?? null, stream: null, unread: false, draft: '',
+  };
+}
+const cur = () => s.chats[s.active];
+const byId = id => s.chats.find(c => c.id === id);
+const label = c => c.title || 'New chat';
+const isOpen = title => s.chats.some(c => c.title === title);
+
+function applyScenario() {
+  stopAllStreams();
+  nextId = 1;
+  const pick = (...i) => i.map(n => mkChat(SEED[n]));
+  s.menu = false; s.confirm = null; s.toast = null; s.listSel = null;
+  s.saved = [...SEED.map(({ title, agent, repo, m, sub, img }) => ({ title, agent, repo, m, sub, img })), ...SAVED_ONLY].sort((a, b) => a.m - b.m);
+  s.runs = RUNS.map(r => ({ ...r }));
+  switch (s.scenario) {
+    case 'fresh': s.chats = [...pick(0, 1), mkChat()]; s.active = 2; break;
+    case 'few':
+      s.chats = [mkChat()]; s.active = 0;
+      s.saved = s.saved.filter(x => x.repo === 'SkillBill').slice(0, 3);
+      s.runs = s.runs.filter(r => r.status === 'active' || r.key === 'SKILL-510');
+      break;
+    case 'two': s.chats = pick(0, 2); s.active = 0; break;
+    case 'busy': s.chats = pick(0, 1, 2); s.active = 0; s.chats[2].unread = true; break;
+    case 'mixed': s.chats = pick(0, 3, 4); s.active = 1; break;
+    case 'many': s.chats = pick(0, 1, 2, 3, 4, 5, 6, 7, 8); s.active = 4; s.chats[2].unread = true; s.chats[6].unread = true; break;
+    case 'lots':
+      s.chats = Array.from({ length: 20 }, (_, i) => { const c = mkChat(SEED[i % SEED.length]); if (i >= SEED.length) c.title = `${c.title} (${Math.floor(i / SEED.length) + 1})`; return c; });
+      s.active = 3; s.chats[15].unread = true; s.chats[18].unread = true; break;
+    case 'closing': s.chats = pick(0, 1, 2); s.active = 1; break;
+  }
+  if (['fresh', 'busy', 'many'].includes(s.scenario)) startStream(s.chats[1]);
+  if (s.scenario === 'lots') startStream(s.chats[17]);
+  if (s.scenario === 'closing') { startStream(s.chats[1]); s.confirm = s.chats[1].id; }
+}
+
+/* ---------- Simulated replies ---------- */
+const CANNED = [
+  'I checked the code path. The state lives in one place today, so the change is mostly moving it into a per-chat holder and keeping the screen as a thin view over the selected one.',
+  'Short answer: yes. Two things need care. The agent session must keep running when its chat is not on screen, and the saved draft must update from whichever chat changed.',
+  'I would keep it simple for the first cut and leave persistence of the open set for later, unless you want it now.',
+];
+const timers = new Map();
+function startStream(c) {
+  const full = c.reply || CANNED[(c.id + c.lines.length) % CANNED.length];
+  c.reply = null;
+  c.stream = { full, shown: 0 };
+  const t = setInterval(() => {
+    if (!c.stream) { clearInterval(t); return; }
+    c.stream.shown = Math.min(full.length, c.stream.shown + 3 + Math.floor(Math.random() * 4));
+    if (c.stream.shown >= full.length) {
+      c.lines.push({ who: 'agent', txt: full });
+      c.stream = null; clearInterval(t); timers.delete(c.id);
+      if (cur()?.id !== c.id) c.unread = true;
+    }
+    render();
+  }, 90);
+  timers.set(c.id, t);
+}
+function stopStream(c) {
+  if (!c.stream) return;
+  clearInterval(timers.get(c.id)); timers.delete(c.id);
+  c.lines.push({ who: 'agent', txt: c.stream.full.slice(0, c.stream.shown) });
+  c.lines.push({ who: 'notice', txt: 'Stopped.' });
+  c.stream = null;
+}
+function stopAllStreams() { timers.forEach(t => clearInterval(t)); timers.clear(); }
+
+/* ---------- Actions ---------- */
+let toastTimer = null;
+function showToast(text, action, run) {
+  s.toast = { text: text.length > 64 ? text.slice(0, 62) + '…"' : text, action, run };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { s.toast = null; render(); }, 5000);
+}
+function focusChat(id) {
+  const i = s.chats.findIndex(c => c.id === id);
+  if (i < 0) return;
+  s.active = i; s.chats[i].unread = false; s.menu = false; s.listSel = null;
+  render('composer');
+}
+function newChat() { const c = mkChat(); s.chats.push(c); focusChat(c.id); }
+function askClose(id) {
+  if (byId(id).stream) { s.confirm = id; render(); return; }
+  closeChat(id);
+}
+function removeChat(c) {
+  const i = s.chats.indexOf(c);
+  s.chats.splice(i, 1);
+  if (!s.chats.length) s.chats.push(mkChat());
+  if (i < s.active) s.active--;
+  s.active = Math.min(s.active, s.chats.length - 1);
+}
+function closeChat(id) {
+  const c = byId(id);
+  stopStream(c);
+  removeChat(c);
+  s.confirm = null;
+  if (c.lines.length) showToast(`Closed "${label(c)}". It stays in Recent chats.`, 'Reopen', () => { s.chats.push(c); focusChat(c.id); });
+  else s.toast = null;
+  render('composer');
+}
+// Resume from Recent chats: select the tab if the chat is open, otherwise load it into the selected empty chat.
+function resume(saved) {
+  const open = s.chats.find(c => c.title === saved.title);
+  if (open) { focusChat(open.id); return; }
+  const seed = SEED.find(x => x.title === saved.title) || { ...saved, branch: 'main', lines: [['you', saved.title.toLowerCase()], ['agent', 'Picking this up where we left it.']] };
+  const fresh = mkChat(seed);
+  const c = cur();
+  if (c && !c.lines.length && !c.stream) s.chats[s.chats.indexOf(c)] = fresh; else s.chats.push(fresh);
+  s.toast = null;
+  focusChat(fresh.id);
+}
+function discardSaved(title) {
+  const idx = s.saved.findIndex(x => x.title === title);
+  if (idx < 0) return;
+  const finish = () => {
+    const [gone] = s.saved.splice(idx, 1);
+    showToast(`Discarded "${gone.title}"`, 'Undo', () => { s.saved.splice(idx, 0, gone); s.toast = null; render(); });
+    render();
+  };
+  const el = [...document.querySelectorAll('[data-saved]')].find(e => e.dataset.saved === title);
+  if (el) { el.classList.add('gone'); setTimeout(finish, 160); } else finish();
+}
+function send(c) {
+  const text = c.draft.trim();
+  if (!text || c.stream) return;
+  if (!c.title) { c.title = text.length > 60 ? text.slice(0, 58) + '…' : text; s.saved.unshift({ title: c.title, agent: c.agent, repo: c.repo, m: 0 }); }
+  c.lines.push({ who: 'you', txt: text });
+  c.draft = '';
+  render('composer');
+  setTimeout(() => startStream(c), 400);
+}
+function cycle(d) { const n = s.chats.length; focusChat(s.chats[(s.active + d + n) % n].id); }
+
+/* ---------- Pieces ---------- */
+function markHTML(c) {
+  if (c.stream) return `<span class="mark" title="${esc(c.agent)} is replying" aria-label="Replying"><span class="spin"></span></span>`;
+  if (c.unread) return `<span class="mark" title="New reply" aria-label="New reply"><span class="unread"></span></span>`;
+  return `<span class="mark"></span>`;
+}
+function transcriptHTML(c) {
+  const lines = c.lines.map(l => {
+    if (l.who === 'notice') return `<div class="notice">${esc(l.txt)}</div>`;
+    const chips = l.chips ? `<div class="chips">${l.chips.map((t, i) => `<button class="chip ${i === 0 ? 'start' : ''}">${esc(t)}</button>`).join('')}</div>` : '';
+    return l.who === 'you'
+      ? `<div class="msg you"><span class="txt">${esc(l.txt)}</span></div>`
+      : `<div class="msg"><span class="who"><span class="agent-dot ag-${c.agent}"></span>${esc(c.agent)}</span><span class="txt">${esc(l.txt)}</span>${chips}</div>`;
+  }).join('');
+  const live = c.stream ? `<div class="msg"><span class="who"><span class="agent-dot ag-${c.agent}"></span>${esc(c.agent)}</span><span class="txt">${esc(c.stream.full.slice(0, c.stream.shown))}<span class="caret"></span></span></div>` : '';
+  return `<div class="transcript" id="tr-${c.id}"><div class="transcript-inner">${lines}${live}</div></div>`;
+}
+
+function stepLine() {
+  return `<div><div class="steps"><span class="sweep"></span>${STAGES.map(st => `<div class="step"><span class="dot"></span><span class="lbl">${st}</span></div>`).join('')}</div></div>`;
+}
+function savedRow(x, repoNow) {
+  const open = isOpen(x.title);
+  const repo = x.repo !== repoNow ? `<span class="badge repo"><span class="sw" style="background:${REPO_COLOR[x.repo] || 'var(--data-6)'}"></span>${esc(x.repo)}</span>` : '';
+  const sub = x.sub ? `<span class="sub mono">${esc(x.sub)}</span>` : '';
+  // An open chat has no discard button: it is closed or discarded from its tab.
+  const x_ = open ? '' : `<button class="x" data-discard="${esc(x.title)}" aria-label="Discard ${esc(x.title)}" title="Discard (Del)">${ico('x', 'sm')}</button>`;
+  return `<div class="row" role="option" data-saved="${esc(x.title)}">
+    <span class="g ${x.img ? 'img' : ''}">${ico(x.img ? 'img' : 'chat', 'sm')}</span>
+    <span class="ttl"><span class="main">${esc(x.title)}</span>${sub}</span>
+    ${open ? '<span class="badge open">open</span>' : ''}${repo}
+    <span class="meta num"><span class="t ${open ? '' : 'can-x'}">${short(x.m)}</span>${x_}</span>
+  </div>`;
+}
+function runRow(r) {
+  return `<div class="row need" role="option" data-run="${r.key}">
+    <span class="g warn">${ico('warn', 'sm')}</span>
+    <span class="key">${r.key}</span>
+    <span class="ttl"><span class="main">${esc(r.title)}</span><span class="sub">${esc(r.reason)}</span></span>
+    <span class="badge">${r.stage}</span>
+    <span class="meta num"><span class="t">${short(r.m)}</span></span>
+  </div>`;
+}
+const calm = () => $('#calm').checked;
+const mixed = () => $('#mixed').checked;
+const blocked = () => calm() ? [] : s.runs.filter(r => r.status === 'blocked');
+const running = () => s.runs.filter(r => r.status === 'active');
+
+function homeHTML(c) {
+  const list = s.saved.filter(x => mixed() || x.repo === c.repo);
+  const b = blocked();
+  const recent = list.length ? `<section class="sec">
+      <div class="sec-head"><span class="t">Recent chats</span><span class="c">${list.length}</span><span class="sp"></span><button class="ghost">Search chats <span class="kbd">/resume</span></button></div>
+      <div class="card scrolly" id="list-recent" role="listbox" tabindex="0" aria-label="Recent chats">${list.map(x => savedRow(x, c.repo)).join('')}</div>
+    </section>` : '';
+  const needs = `<section class="sec">
+      <div class="sec-head">${b.length ? `<span class="t">Needs you</span><span class="c">${b.length}</span>` : `<span class="t">All clear</span>`}<span class="sp"></span>
+        <button class="ghost"><span style="color:var(--st-active)">●</span> ${running().length} running · 9 finished today ${ico('arrow', 'sm')}</button></div>
+      ${b.length ? `<div class="card scrolly" id="list-needs" role="listbox" tabindex="0" aria-label="Needs you">${b.map(runRow).join('')}</div>` : ''}
+    </section>`;
+  return `<div class="home"><div class="content">
+    <div class="hero"><h1>What should we ship?</h1><p>Describe the work or paste an issue. Skill Bill plans it, builds it, audits it and opens the PR.</p></div>
+    ${stepLine()}${recent}${needs}
+  </div></div>`;
+}
+function composerHTML(c) {
+  const empty = !c.lines.length && !c.stream;
+  const chips = empty ? `<div class="chips"><button class="chip">Review my branch</button><button class="chip">Run the checks</button><button class="chip">QA my branch</button><button class="chip">Open a PR</button></div>` : '';
+  const ph = empty ? 'Describe the work, or paste an issue key or spec path' : `Reply to ${c.agent}`;
+  return `<div class="dock"><div class="composer">${chips}
+    <textarea class="task" id="composer-${c.id}" data-chat="${c.id}" aria-label="Message for ${esc(label(c))}" placeholder="${ph}">${esc(c.draft)}</textarea>
+    <div class="foot"><span class="pill">${ico('folder', 'sm')}${esc(c.repo)} / ${esc(c.branch)}</span><span class="pill"><span class="agent-dot ag-${c.agent}"></span>${esc(c.agent)} · ${c.agent === 'claude' ? 'claude-opus-5-5' : c.agent === 'codex' ? 'gpt-5.5-codex' : 'auto'}</span><span class="spacer"></span>
+      ${c.stream ? `<button class="send stop" data-act="stop" data-chat="${c.id}">Stop</button>` : `<button class="send" data-act="send" data-chat="${c.id}" ${c.draft.trim() ? '' : 'disabled'}>Send ↵</button>`}
+    </div>
+  </div></div>`;
+}
+const chatBody = c => `${c.lines.length || c.stream ? transcriptHTML(c) : homeHTML(c)}${composerHTML(c)}`;
+function headerHTML(c) {
+  const sub = c.lines.length ? `<span class="crumb-sub">/ ${esc(label(c))}</span>` : '';
+  return `<div class="head"><span class="crumb">New task</span>${sub}<span class="spacer"></span>
+    ${c.lines.length ? `<button class="btn" data-act="discard">Discard</button>` : ''}</div>`;
+}
+function listItem(c) {
+  const on = c.id === cur().id;
+  return `<div class="ritem ${on ? 'on' : ''} ${c.unread ? 'unread' : ''}" data-focus="${c.id}" role="tab" aria-selected="${on}">
+    ${markHTML(c)}
+    <div class="body"><span class="t">${esc(label(c))}</span><span class="sub"><span class="mono">${esc(c.repo)}</span><span>·</span><span>${c.stream ? 'replying…' : c.unread ? 'new reply' : esc(c.agent)}</span></span></div>
+    <button class="iconbtn x" data-close="${c.id}" aria-label="Close ${esc(label(c))}" title="Close (Ctrl+W)">${ico('x', 'sm')}</button>
+  </div>`;
+}
+function overlaysHTML() {
+  let out = '';
+  if (s.confirm) {
+    const c = byId(s.confirm);
+    out += `<div class="scrim"><div class="dialog" role="alertdialog" aria-labelledby="dlg-t">
+      <h2 id="dlg-t">Close "${esc(label(c))}"?</h2>
+      <p>${esc(c.agent)} is still replying. Closing stops the reply. The chat stays in Recent chats with everything up to this point.</p>
+      <div class="actions"><button class="btn" data-act="cancel-close">Keep open</button><button class="btn danger" data-act="confirm-close">Stop and close</button></div>
+    </div></div>`;
+  }
+  if (s.toast) out += `<div class="toast" role="status">${esc(s.toast.text)}<button data-act="toast">${esc(s.toast.action)}</button></div>`;
+  return out;
+}
+
+/* ---------- Screens ---------- */
+function tabsScreen() {
+  const c = cur();
+  const tabs = s.chats.map(t => `<div class="tab ${t.id === c.id ? 'on' : ''} ${t.unread ? 'unread' : ''}" data-focus="${t.id}" role="tab" aria-selected="${t.id === c.id}" title="${esc(label(t))}&#10;${esc(t.repo)} · ${esc(t.agent)}">
+      ${markHTML(t)}<span class="label">${esc(label(t))}</span>
+      <button class="iconbtn x" data-close="${t.id}" aria-label="Close ${esc(label(t))}" title="Close (Ctrl+W)">${ico('x', 'sm')}</button>
+    </div>`).join('');
+  const q = s.menuQ.trim().toLowerCase();
+  const matches = s.chats.filter(x => !q || [label(x), x.repo, x.agent].some(v => v.toLowerCase().includes(q)));
+  const filter = s.chats.length > 8 ? `<input class="menu-filter" id="menu-filter" placeholder="Filter ${s.chats.length} open chats" value="${esc(s.menuQ)}" aria-label="Filter open chats">` : '';
+  const menu = s.menu ? `<div class="menu" role="menu" style="right: 8px; top: 82px;">${filter}${matches.map(listItem).join('') || '<div class="notice" style="padding: 8px">No open chat matches.</div>'}</div>` : '';
+  return `${headerHTML(c)}
+    <div class="tabs" role="tablist" aria-label="Open chats">
+      <div class="tabs-scroll" id="tabs-scroll">${tabs}</div>
+      <button class="iconbtn add" data-act="new" aria-label="New chat" title="New chat (Ctrl+T)">${ico('plus')}</button>
+      <button class="iconbtn overflow" id="tabs-more" data-act="menu" aria-label="All ${s.chats.length} open chats" title="All open chats" hidden><span class="mark" id="tabs-more-mark"></span>${s.chats.length}${ico('chevron', 'sm')}</button>
+    </div>
+    <div class="main">${chatBody(c)}</div>${menu}${overlaysHTML()}`;
+}
+function listScreen() {
+  const c = cur();
+  const busy = s.chats.filter(x => x.stream).length, unread = s.chats.filter(x => x.unread).length;
+  return `${headerHTML(c)}
+    <div class="rail-wrap">
+      <aside class="rail" aria-label="Open chats">
+        <div class="rail-head"><span class="n">Open chats · ${s.chats.length}</span><button class="iconbtn" data-act="new" aria-label="New chat" title="New chat (Ctrl+T)">${ico('plus')}</button></div>
+        <div class="rail-list" role="tablist" aria-orientation="vertical">${s.chats.map(listItem).join('')}</div>
+        <div class="rail-foot"><span>Replying<b>${busy}</b></span><span>New replies<b>${unread}</b></span></div>
+      </aside>
+      <div class="main">${chatBody(c)}</div>
+    </div>${overlaysHTML()}`;
+}
+
+/* Tab strip overflow: fades on clipped edges; the chevron shows only when tabs are hidden,
+   with a dot when a hidden tab is replying or has a new reply. */
+function updateOverflow() {
+  const ts = document.getElementById('tabs-scroll'); if (!ts) return;
+  const over = ts.scrollWidth > ts.clientWidth + 1;
+  ts.classList.toggle('fade-l', over && ts.scrollLeft > 1);
+  ts.classList.toggle('fade-r', over && ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1);
+  const more = document.getElementById('tabs-more');
+  more.hidden = !over;
+  const box = ts.getBoundingClientRect();
+  const hidden = [...ts.querySelectorAll('.tab')].filter(el => { const r = el.getBoundingClientRect(); return r.right > box.right - 8 || r.left < box.left + 8; }).map(el => byId(+el.dataset.focus));
+  document.getElementById('tabs-more-mark').innerHTML = hidden.some(c => c.unread) ? '<span class="unread"></span>' : hidden.some(c => c.stream) ? '<span class="spin"></span>' : '';
+}
+/* Home lists: fade the edge that has more rows behind it. */
+function updateCardFades() {
+  document.querySelectorAll('.card.scrolly').forEach(el => {
+    const over = el.scrollHeight > el.clientHeight + 1;
+    el.classList.toggle('fade-t', over && el.scrollTop > 1);
+    el.classList.toggle('fade-b', over && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  });
+}
+window.addEventListener('resize', () => { updateOverflow(); updateCardFades(); });
+
+/* ---------- Render ---------- */
+const stage = document.getElementById('stage');
+function render(focus) {
+  const a = document.activeElement;
+  const keep = a && (a.tagName === 'TEXTAREA' || a.id === 'menu-filter') ? { id: a.id, start: a.selectionStart, end: a.selectionEnd } : null;
+  const keepCard = a?.matches?.('.card[role="listbox"]') ? a.id : null;
+  const scrolls = {};
+  stage.querySelectorAll('.transcript').forEach(t => { scrolls[t.id] = t.scrollHeight - t.scrollTop - t.clientHeight < 24 ? 'bottom' : t.scrollTop; });
+  const cardScroll = {};
+  stage.querySelectorAll('.card.scrolly').forEach(el => { cardScroll[el.id] = el.scrollTop; });
+  const homeScroll = stage.querySelector('.home')?.scrollTop;
+  const tabScroll = document.getElementById('tabs-scroll')?.scrollLeft;
+
+  stage.innerHTML = s.layout === 'list' ? listScreen() : tabsScreen();
+
+  stage.querySelectorAll('.transcript').forEach(t => { const v = scrolls[t.id]; t.scrollTop = v === undefined || v === 'bottom' ? t.scrollHeight : v; });
+  stage.querySelectorAll('.card.scrolly').forEach(el => {
+    if (cardScroll[el.id] != null) el.scrollTop = cardScroll[el.id];
+    el.addEventListener('scroll', updateCardFades);
+  });
+  if (homeScroll != null && stage.querySelector('.home')) stage.querySelector('.home').scrollTop = homeScroll;
+  if (s.listSel) {
+    const list = document.getElementById(s.listSel.id);
+    const r = list ? rows(list) : [];
+    if (r.length) { s.listSel.i = Math.min(s.listSel.i, r.length - 1); r[s.listSel.i].classList.add('sel'); }
+  }
+  updateCardFades();
+
+  const ts = document.getElementById('tabs-scroll');
+  if (ts) {
+    if (tabScroll != null) ts.scrollLeft = tabScroll;
+    ts.querySelector('.tab.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    ts.addEventListener('scroll', updateOverflow);
+    ts.addEventListener('wheel', e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { ts.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+    updateOverflow();
+  }
+  if (keep && document.getElementById(keep.id)) { const el = document.getElementById(keep.id); el.focus(); el.setSelectionRange(keep.start, keep.end); }
+  else if (keepCard && document.getElementById(keepCard)) document.getElementById(keepCard).focus({ preventScroll: true });
+  else if (focus === 'composer') document.getElementById(`composer-${cur().id}`)?.focus();
+
+  $('#note').innerHTML = NOTE;
+  $('#nav-count').textContent = s.chats.length > 1 ? s.chats.length : '';
+  $('#nav-needs').textContent = blocked().length || '';
+  document.querySelectorAll('#layouts button').forEach(b => b.setAttribute('aria-pressed', b.dataset.layout === s.layout));
+  history.replaceState(null, '', `#layout=${s.layout}&state=${s.scenario}`);
+}
+
+const NOTE = `<b>Tabs</b> come straight from new-task-chat-tabs: rounded on top only, the selected tab joins the panel below it, and <b>+</b> sits right after the last tab. Only the overflow chevron goes to the far right, and only when tabs stop fitting. `
+  + `<b>The home</b> is new-task-home variant A: hero, step line, then two sections. <b>Recent chats</b> and <b>Needs you</b> each show 5 rows and scroll past that; the header count says how many there are, and the edge with more rows fades. `
+  + `Chats already open in a tab show an <b>open</b> badge and no discard button; clicking one selects its tab. Other rows load into this empty chat. <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> <kbd>Del</kbd> work when a list has focus. `
+  + `<span class="kbd">In this mock, use Alt instead of Ctrl for T, W, Tab and 1–9; the browser keeps the Ctrl versions.</span>`;
+
+/* ---------- Events ---------- */
+function rows(list) { return [...list.querySelectorAll('.row')]; }
+function paintSel(list, i) {
+  const r = rows(list);
+  if (!r.length) return;
+  i = Math.max(0, Math.min(i, r.length - 1));
+  s.listSel = { id: list.id, i };
+  r.forEach((el, n) => el.classList.toggle('sel', n === i));
+  r[i].scrollIntoView({ block: 'nearest' });
+}
+function openRow(row) {
+  if (row.dataset.run) { showToast(`Open run ${row.dataset.run}`, 'Dismiss', () => { s.toast = null; render(); }); render(); return; }
+  const x = s.saved.find(v => v.title === row.dataset.saved);
+  if (x) resume(x);
+}
+
+stage.addEventListener('click', e => {
+  const close = e.target.closest('[data-close]');
+  if (close) { e.stopPropagation(); askClose(+close.dataset.close); return; }
+  const disc = e.target.closest('[data-discard]');
+  if (disc) { e.stopPropagation(); discardSaved(disc.dataset.discard); return; }
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  const chatOf = el => byId(+el.closest('[data-chat]').dataset.chat);
+  switch (act) {
+    case 'new': newChat(); return;
+    case 'menu': s.menu = !s.menu; s.menuQ = ''; render(); document.getElementById('menu-filter')?.focus(); document.querySelector('.menu .ritem.on')?.scrollIntoView({ block: 'nearest' }); return;
+    case 'send': send(chatOf(e.target)); return;
+    case 'stop': stopStream(chatOf(e.target)); render(); return;
+    case 'cancel-close': s.confirm = null; render(); return;
+    case 'confirm-close': closeChat(s.confirm); return;
+    case 'discard': { const c = cur(); stopStream(c); s.saved = s.saved.filter(x => x.title !== c.title); removeChat(c); s.toast = null; render('composer'); return; }
+    case 'toast': s.toast?.run(); return;
+  }
+  const f = e.target.closest('[data-focus]');
+  if (f) { focusChat(+f.dataset.focus); return; }
+  const row = e.target.closest('.row');
+  if (row) { openRow(row); return; }
+  if (s.menu && !e.target.closest('.menu')) { s.menu = false; render(); }
+});
+stage.addEventListener('input', e => {
+  if (e.target.id === 'menu-filter') { s.menuQ = e.target.value; render(); return; }
+  if (!e.target.dataset.chat) return;
+  const c = byId(+e.target.dataset.chat);
+  c.draft = e.target.value;
+  const btn = stage.querySelector(`.send[data-chat="${c.id}"]`);
+  if (btn && !c.stream) btn.disabled = !c.draft.trim();
+});
+stage.addEventListener('focusin', e => { if (e.target.matches?.('.card[role="listbox"]') && s.listSel?.id !== e.target.id) paintSel(e.target, 0); });
+stage.addEventListener('focusout', e => {
+  if (e.target.matches?.('.card[role="listbox"]') && !e.relatedTarget?.closest?.('.card')) { s.listSel = null; e.target.querySelectorAll('.sel').forEach(el => el.classList.remove('sel')); }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.dataset?.chat && e.key === 'Enter' && !e.shiftKey && !e.altKey) { e.preventDefault(); send(byId(+e.target.dataset.chat)); return; }
+  if (e.key === 'Escape') { if (s.confirm) { s.confirm = null; render(); } else if (s.menu) { s.menu = false; render(); } return; }
+  const list = e.target.closest?.('.card[role="listbox"]');
+  if (list && !e.altKey) {
+    const i = s.listSel?.id === list.id ? s.listSel.i : 0;
+    const r = rows(list);
+    if (e.key === 'ArrowDown') { e.preventDefault(); paintSel(list, i + 1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); paintSel(list, i - 1); return; }
+    if (e.key === 'Enter') { e.preventDefault(); r[i] && openRow(r[i]); return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && r[i]?.querySelector('[data-discard]')) { e.preventDefault(); discardSaved(r[i].dataset.saved); return; }
+  }
+  if (!e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 't') { e.preventDefault(); newChat(); }
+  else if (k === 'w') { e.preventDefault(); askClose(cur().id); }
+  else if (k === 'tab' || k === ']' || k === '[') { e.preventDefault(); cycle(e.shiftKey || k === '[' ? -1 : 1); }
+  else if (/^[1-9]$/.test(k)) { e.preventDefault(); const c = s.chats[Math.min(+k, s.chats.length) - 1]; if (c) focusChat(c.id); }
+});
+
+$('#layouts').addEventListener('click', e => { const b = e.target.closest('[data-layout]'); if (b) { s.layout = b.dataset.layout; render('composer'); } });
+const sel = $('#scenario');
+sel.innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<option value="${k}" ${k === s.scenario ? 'selected' : ''}>${v}</option>`).join('');
+sel.addEventListener('change', () => { s.scenario = sel.value; applyScenario(); render(); });
+$('#reset').addEventListener('click', () => { applyScenario(); render(); });
+$('#mixed').addEventListener('change', () => render());
+$('#calm').addEventListener('change', () => render());
+
+applyScenario();
+render();
+</script>
+</body>
+</html>
