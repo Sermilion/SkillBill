@@ -4,6 +4,7 @@ import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
+import skillbill.review.spec.MarkdownFences
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
@@ -16,7 +17,6 @@ import java.nio.file.Path
 internal object PlanBundleSpecText {
   private val IMPLEMENTATION_HEADING = Regex("""^##\s+implementation\b.*$""", RegexOption.IGNORE_CASE)
   private val SECOND_LEVEL_HEADING = Regex("""^##\s+\S.*$""")
-  private val FENCE = Regex("""^\s{0,3}(`{3,}|~{3,})""")
 
   internal fun scopeOf(specText: String): String {
     val lines = specText.lines()
@@ -36,37 +36,15 @@ internal object PlanBundleSpecText {
   internal fun acceptanceCriteriaOf(specText: String): List<String> =
     GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }
 
-  // Headings inside fenced code blocks are example text, not section boundaries. An unclosed
-  // fence would swallow the rest of the spec, so that case falls back to reading every line.
+  // Headings inside fenced code blocks are example text, not section boundaries.
   private fun detailsRange(lines: List<String>): IntRange? {
-    val outsideFence = outsideFenceMask(lines) ?: BooleanArray(lines.size) { true }
+    val outsideFence = MarkdownFences.outsideFenceMask(lines)
     val start =
       lines.indices.firstOrNull { outsideFence[it] && IMPLEMENTATION_HEADING.matches(lines[it].trim()) }
         ?: return null
     val next = (start + 1..lines.lastIndex).firstOrNull { outsideFence[it] && SECOND_LEVEL_HEADING.matches(lines[it]) }
     return start..(next?.minus(1) ?: lines.lastIndex)
   }
-
-  private fun outsideFenceMask(lines: List<String>): BooleanArray? {
-    val mask = BooleanArray(lines.size)
-    var openFence: String? = null
-    for ((index, line) in lines.withIndex()) {
-      val marker = FENCE.find(line)?.groupValues?.get(1)
-      mask[index] = openFence == null && marker == null
-      if (marker != null) openFence = fenceAfter(openFence, marker)
-    }
-    return mask.takeIf { openFence == null }
-  }
-
-  private fun fenceAfter(
-    openFence: String?,
-    marker: String,
-  ): String? =
-    when {
-      openFence == null -> marker
-      marker[0] == openFence[0] && marker.length >= openFence.length -> null
-      else -> openFence
-    }
 }
 
 public sealed interface PlanUnitSettlement {
