@@ -1,3 +1,13 @@
+## [2026-11-06] Preserve the selected Verify QA report for Unblock
+Context: Verify QA must show the selected saved report's Unblock instructions, including skipped runs without parsed QA details.
+Decision: Carry raw report text through the existing Verify projection and desktop models. Retain QA_REPORT selection with QA_RECEIPT compatibility and parse Unblock only in the desktop view.
+Reason: The operator's scope amendment requires that saved report and unchanged snippet text. A final verdict, reconstructed findings or a repository file cannot supply that report's instructions.
+
+## [2026-11-06] Keep QA setup instructions operator-owned
+Context: Unblock snippets target `.skill-bill/phases/qa.md`, which the runtime reads into later QA prompts.
+Decision: Copy snippets verbatim and open the repository file through `openFileUnder` in the default application. Report opening failure without creating or editing the file.
+Reason: The requested workflow has the operator create the file and paste chosen setup instructions before the next run. Opening must target the repository copy and bypass editor environment variables.
+
 ## [2026-11-06] Show Verify QA evidence as names only
 Context: Verify QA results reuse the desktop QA results view, but Verify has no invocation directory for resolving evidence files.
 Decision: Render evidence names without file-opening actions for Verify QA.
