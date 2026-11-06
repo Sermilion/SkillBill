@@ -2,10 +2,13 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -71,17 +74,13 @@ internal fun IncidentSection(
   collapse: SectionCollapse,
   onCopy: (String) -> Unit,
   modifier: Modifier = Modifier,
+  planHeader: Boolean = false,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val labelColor = incidentLabelColor(incident)
-  Section(
-    title = "Incident",
-    modifier = modifier,
-    actions = { SbLabel(incident.progress.label(), SbLabelStyle.Dot(labelColor)) },
-    collapsed = collapse.isCollapsed(INCIDENT_KEY),
-    onToggle = { collapse.toggle(INCIDENT_KEY) },
-  ) {
+  val collapsed = collapse.isCollapsed(INCIDENT_KEY)
+  val body: @Composable ColumnScope.() -> Unit = {
     // The callout body (screens.js incidentPanel): an `.l-col g-1` of faint-led Cause and Next lines and the `--t-xs`
     // certainty line, then the prerequisite checklist 8 below it, inside the callout.
     val bodyStyle = type.tSm.copy(color = colors.fgMuted, lineHeight = 1.5.em)
@@ -140,6 +139,26 @@ internal fun IncidentSection(
       }
     }
     ReportRow(incident)
+  }
+  if (planHeader) {
+    Column(modifier.fillMaxWidth()) {
+      PlanSectionHeader("Incident", null, !collapsed, { collapse.toggle(INCIDENT_KEY) }, tools = {
+        SbLabel(incident.progress.label(), SbLabelStyle.Dot(labelColor))
+      })
+      if (!collapsed) {
+        Spacer(Modifier.height(planSectionBodyGap))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), content = body)
+      }
+    }
+  } else {
+    Section(
+      title = "Incident",
+      modifier = modifier,
+      actions = { SbLabel(incident.progress.label(), SbLabelStyle.Dot(labelColor)) },
+      collapsed = collapsed,
+      onToggle = { collapse.toggle(INCIDENT_KEY) },
+      body = body,
+    )
   }
 }
 

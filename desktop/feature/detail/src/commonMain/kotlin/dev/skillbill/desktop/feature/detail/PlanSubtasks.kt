@@ -44,7 +44,7 @@ import kotlin.time.Instant
 internal fun DetailSections.planRows(item: WorkItem, plan: StandalonePlanProgress, detail: Detail, onAction: (DetailAction) -> Unit) {
   val saved = plan.units.count { it.state == "saved" }
   val wave = planWaveLabel(plan).takeUnless { planFinished(item, detail) }
-  section("plan-subtasks", "Subtasks", count = listOfNotNull("$saved/${plan.totalSubtaskCount} saved", wave).joinToString(" · ")) {
+  planSection("plan-subtasks", "Subtasks", count = listOfNotNull("$saved/${plan.totalSubtaskCount} saved", wave).joinToString(" · ")) {
     itemsIndexed(plan.units, key = { _, unit -> "plan-unit-${unit.subtaskId}" }) { index, unit ->
       PlanSubtaskRow(unit, item, detail, Modifier.sbBoxSegment(index, plan.units.size)) {
         onAction(DetailAction.OpenSpecFile(unit.specPath))

@@ -91,14 +91,38 @@ class PlanActionsTest {
     } }
 
     onNodeWithText("Planning stopped at subtask 1", substring = true).assertExists()
-    onNodeWithText("The subtask spec could not be reconciled").assertExists()
+    onNodeWithText("Subtask 1 needs your decision").assertExists()
+    onNodeWithText("Blocked").assertExists()
+    onNodeWithText("Planning stopped at subtask 1. The subtask spec could not be reconciled").assertExists()
     onNodeWithText("No output for ", substring = true).assertDoesNotExist()
     onNodeWithText("Retry").assertDoesNotExist()
+    onNodeWithText("Retry subtask 1").assertDoesNotExist()
     onNodeWithText(
       "Subtask 1 finished with no code changes and is waiting for your decision.",
       substring = true,
     ).assertExists()
     onNodeWithText("skill-bill goal operator-decision OAC-86 --subtask 1", substring = true).assertExists()
+  }
+
+  @Test
+  fun `blocked plan exposes recovery only when the incident offers it`() = runComposeUiTest {
+    val report = completedReport()
+    val plan = completedPlan(report).copy(
+      blockedSubtaskId = 1,
+      blockedReason = "Retry after setup",
+      units = listOf(StandalonePlanUnit(1, "Detail view", "/specs/OAC-86/spec_subtask_1.md", emptyList(), "blocked", epoch, null, "Retry after setup", null)),
+    )
+    val detail = emptyDetail.copy(standalonePlan = plan, incident = incident(IncidentProgress.RecoveryAvailable))
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val item = base.copy(issueKey = "OAC-86", standaloneExecution = true,
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
+    val actions = mutableListOf<DetailAction>()
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+    } }
+
+    onNodeWithText("Retry subtask 1").assertIsEnabled().performClick()
+    runOnIdle { assertEquals(listOf<DetailAction>(ControlsAction.Recover), actions) }
   }
 
   @Test

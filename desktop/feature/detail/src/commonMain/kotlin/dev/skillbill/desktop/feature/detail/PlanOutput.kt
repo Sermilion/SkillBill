@@ -30,12 +30,6 @@ import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
-internal fun DetailSections.planOutput(state: DetailUiState, detail: Detail, onAction: (DetailAction) -> Unit) {
-  section("plan-agent-output", if (detail.standalonePlan?.units.isNullOrEmpty()) "Full agent output" else "Agent output") {
-    item(key = "plan-agent-output-log") { PlanOutputLog(state, detail, onAction) }
-  }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PlanOutputLog(state: DetailUiState, detail: Detail, onAction: (DetailAction) -> Unit, raw: Boolean = false) {
@@ -75,7 +69,7 @@ internal fun DetailSections.planOutputTail(item: WorkItem, detail: Detail) {
     "${formatInstant(line.at, "HH:mm:ss")}  ${(parsed.subtaskId ?: line.subtaskId)?.let { "#$it · " }.orEmpty()}${parsed.display.take(160)}"
   }
   if (text.isEmpty()) return
-  section("plan-output-tail", "Agent output", count = "latest ${text.size} lines") {
+  planSection("plan-output-tail", "Agent output", count = "latest ${text.size} lines") {
     item(key = "plan-output-tail-lines") {
       Column(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(8.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         text.forEach { line -> BasicText(line, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis) }

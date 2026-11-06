@@ -1,6 +1,8 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -8,13 +10,20 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
+import dev.skillbill.desktop.core.designsystem.component.UiTicker
 import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.domain.model.PlanAgentActivity
+import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
+import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.testing.workItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Clock
+import kotlin.time.Instant
+import kotlinx.coroutines.test.runTest
 
 @OptIn(ExperimentalTestApi::class)
 class PlanActivityTest {
@@ -37,8 +46,9 @@ class PlanActivityTest {
       PlanAgentActivity("note-$id", "plan_subtasks", "note", "Planning note $id", epoch + id.seconds, epoch + id.seconds, "claude", null, "completed", null, null, null)
     }
     val detail = emptyDetail.copy(planActivity = events)
-    val state = DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch)
-    setContent { SkillBillTheme(reducedMotion = true) { PlanActivityPanel(item, detail, state, rememberSectionCollapse()) {} } }
+    setContent { SkillBillTheme(reducedMotion = true) {
+      PlanActivityPanel(item, detail, rememberSectionCollapse(), rememberPlanScreenState(item.id)) {}
+    } }
     onNodeWithText("Planning note 40").assertExists()
     onNodeWithTag("plan-activity-feed").performTouchInput { swipeDown() }
     onNodeWithText("Jump to latest").performClick()
@@ -46,5 +56,61 @@ class PlanActivityTest {
     onNodeWithText("Jump to latest").assertDoesNotExist()
     onNodeWithText("Notes").performClick()
     onNodeWithText("Planning note 40").assertExists()
+  }
+
+  @Test
+  fun `started stage opens its Activity group and pauses follow`() = runTest {
+    val ticker = UiTicker(object : Clock {
+      override fun now(): Instant = epoch + 50.seconds
+    }, backgroundScope)
+    val item = workItem("plan", kind = WorkKind.Phase).copy(standaloneExecution = true)
+    val events = (1..40).map { id ->
+      PlanAgentActivity("pre-$id", "preplan", "note", "Earlier note $id", epoch + id.seconds, epoch + id.seconds, "claude", null, "completed", null, null, null)
+    } + PlanAgentActivity("stage-note", "plan_subtasks", "note", "Current stage note", epoch + 50.seconds, epoch + 50.seconds, "claude", null, "completed", null, null, null)
+    val progress = StandalonePlanProgress(
+      null,
+      listOf(
+        StandalonePlanStage("preplan", epoch, epoch + 10.seconds, null, "completed"),
+        StandalonePlanStage("plan", epoch + 11.seconds, epoch + 20.seconds, null, "completed"),
+        StandalonePlanStage("plan_subtasks", epoch + 21.seconds, null, null, "running"),
+      ),
+      1, 1, 1, listOf(1), 1, null, null, emptyList(), null,
+    )
+    val detail = emptyDetail.copy(standalonePlan = progress, planActivity = events)
+    val base = item
+    val liveItem = base.copy(running = true, control = base.control.copy(phaseId = "plan", invocationId = "plan"))
+    runComposeUiTest {
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalUiTicker provides ticker) {
+            DetailScreen(DetailUiState(liveItem, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+          }
+        }
+      }
+
+      onNodeWithTag("plan-stage-preplan").performClick()
+      onNodeWithText("Jump to latest").assertIsDisplayed()
+      onNodeWithText("Earlier note 1").assertIsDisplayed()
+    }
+  }
+
+  @Test
+  @OptIn(kotlin.time.ExperimentalTime::class)
+  fun `quiet Now block reports elapsed time from the UI ticker`() = runTest {
+    val ticker = UiTicker(object : Clock {
+      override fun now(): Instant = epoch + 301.seconds
+    }, backgroundScope)
+    val item = workItem("plan", kind = WorkKind.Phase).copy(running = true, startedAt = epoch)
+    val activity = PlanAgentActivity("read-1", "preplan", "read", "Plan.kt", epoch, epoch, "claude", "Plan.kt", "completed", null, null, null)
+    val detail = emptyDetail.copy(planActivity = listOf(activity), planOutputUpdatedAt = epoch, observedAt = epoch + 301.seconds)
+    runComposeUiTest {
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalUiTicker provides ticker) { PlanNowBlock(item, detail) }
+        }
+      }
+
+      onNodeWithText("No output for 5m 01s").assertExists()
+    }
   }
 }

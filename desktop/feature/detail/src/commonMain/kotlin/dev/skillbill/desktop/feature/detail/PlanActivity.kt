@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -53,66 +52,95 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
-import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
+internal fun DetailSections.planActivitySection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit) {
+  val screen = requireNotNull(planScreenState)
+  val events = planActivity(item, detail)
+  val key = "plan-activity"
+  planSection(
+    key,
+    "Activity",
+    count = "${events.size} events",
+    tools = { PlanActivityControls(screen) },
+  ) {
+    item(key = "plan-activity-feed-panel") { PlanActivityFeed(item, detail, screen, onAction) }
+  }
+}
+
+@Composable
+internal fun PlanActivityPanel(item: WorkItem, detail: Detail, collapse: SectionCollapse, screen: PlanScreenState, onAction: (DetailAction) -> Unit) {
+  val events = planActivity(item, detail)
+  val key = "plan-activity"
+  val open = !collapse.isCollapsed(key)
+  Column(Modifier.fillMaxWidth().padding(top = DocBlockGap), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    PlanSectionHeader("Activity", "${events.size} events", open, { collapse.toggle(key) }, { PlanActivityControls(screen) })
+    if (open) PlanActivityFeed(item, detail, screen, onAction)
+  }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun PlanActivityPanel(item: WorkItem, detail: Detail, state: DetailUiState, collapse: SectionCollapse, onAction: (DetailAction) -> Unit) {
+private fun PlanActivityControls(screen: PlanScreenState) {
+  FlowRow(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    PlanActivityFilter.entries.forEach { choice ->
+      SbButton(choice.label, { screen.filter = choice }, variant = if (choice == screen.filter) SbButtonVariant.Secondary else SbButtonVariant.Ghost, size = SbControlSize.Small)
+    }
+    SbButton("Follow", { screen.follow = !screen.follow }, variant = if (screen.follow) SbButtonVariant.Secondary else SbButtonVariant.Ghost, icon = LucideIcons.arrowDown, size = SbControlSize.Small, modifier = Modifier.semantics { stateDescription = if (screen.follow) "Following latest activity" else "Paused" })
+  }
+}
+
+@Composable
+private fun PlanActivityFeed(item: WorkItem, detail: Detail, screen: PlanScreenState, onAction: (DetailAction) -> Unit) {
   val events = planActivity(item, detail)
-  var filter by rememberSaveable(item.id) { mutableStateOf(PlanActivityFilter.All) }
-  var follow by rememberSaveable(item.id) { mutableStateOf(true) }
-  var transcript by rememberSaveable(item.id) { mutableStateOf(false) }
-  var closed by rememberSaveable(item.id) { mutableStateOf(emptyList<String>()) }
-  val list = rememberLazyListState()
-  val rows = planActivityRows(events, filter)
+  val list = screen.activityFeed
+  val rows = planActivityRows(events, screen.filter)
   val views = planStageViews(item, detail)
-  val visibleCount = views.sumOf { view -> 1 + if (view.phaseId in closed) 0 else rows.count { it.phaseId == view.phaseId } } + if (item.running) 1 else 0
+  val visibleCount = views.sumOf { view -> 1 + if (view.phaseId in screen.closedActivityGroups) 0 else rows.count { it.phaseId == view.phaseId } } + if (item.running) 1 else 0
   val scroll = remember(list) { object : NestedScrollConnection {
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-      if (source == NestedScrollSource.UserInput && available.y > 0) follow = false
+      if (source == NestedScrollSource.UserInput && available.y > 0) screen.follow = false
       return Offset.Zero
     }
     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-      if (source == NestedScrollSource.UserInput && !list.canScrollForward) follow = true
+      if (source == NestedScrollSource.UserInput && !list.canScrollForward) screen.follow = true
       return Offset.Zero
     }
   } }
-  LaunchedEffect(follow, visibleCount, events.lastOrNull()?.updatedAt, filter) {
-    if (follow && visibleCount > 0) list.scrollToItem(visibleCount - 1)
+  LaunchedEffect(screen.follow, visibleCount, events.lastOrNull()?.updatedAt, screen.filter) {
+    if (screen.follow && visibleCount > 0) list.scrollToItem(visibleCount - 1)
   }
-  val key = "${item.id}:live-plan-activity"
-  Section("Activity", Modifier.padding(top = DocBlockGap), count = "${events.size} events", collapsed = collapse.isCollapsed(key), onToggle = { collapse.toggle(key) }) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      PlanActivityFilter.entries.forEach { choice ->
-        SbButton(choice.label, { filter = choice }, variant = if (choice == filter) SbButtonVariant.Secondary else SbButtonVariant.Ghost, size = SbControlSize.Small)
-      }
-      SbButton("Follow", { follow = !follow }, variant = if (follow) SbButtonVariant.Secondary else SbButtonVariant.Ghost, icon = LucideIcons.arrowDown, size = SbControlSize.Small, modifier = Modifier.semantics { stateDescription = if (follow) "Following latest activity" else "Paused" })
-      SbButton("Transcript", { transcript = !transcript }, variant = SbButtonVariant.Ghost, icon = LucideIcons.external, size = SbControlSize.Small)
+  LaunchedEffect(screen.activityJumpPhaseId, views, rows, screen.closedActivityGroups.toList()) {
+    val phaseId = screen.activityJumpPhaseId ?: return@LaunchedEffect
+    val index = views.takeWhile { it.phaseId != phaseId }.sumOf { view ->
+      1 + if (view.phaseId in screen.closedActivityGroups) 0 else rows.count { it.phaseId == view.phaseId }
     }
-    Box(Modifier.fillMaxWidth().height(282.dp).border(1.dp, SkillBillTheme.colors.borderSubtle, RoundedCornerShape(8.dp))) {
-      LazyColumn(Modifier.fillMaxSize().testTag("plan-activity-feed").nestedScroll(scroll).onPreviewKeyEvent { event ->
-        if (event.type == KeyEventType.KeyDown && event.key in setOf(Key.DirectionUp, Key.PageUp, Key.MoveHome)) follow = false
-        if (event.type == KeyEventType.KeyDown && event.key == Key.MoveEnd) follow = true
+    list.scrollToItem(index)
+    screen.activityJumpPhaseId = null
+  }
+  Box(Modifier.fillMaxWidth().height(282.dp).border(1.dp, SkillBillTheme.colors.borderSubtle, RoundedCornerShape(8.dp))) {
+    LazyColumn(Modifier.fillMaxSize().testTag("plan-activity-feed").nestedScroll(scroll).onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown && event.key in setOf(Key.DirectionUp, Key.PageUp, Key.MoveHome)) screen.follow = false
+        if (event.type == KeyEventType.KeyDown && event.key == Key.MoveEnd) screen.follow = true
         false
       }, state = list) {
         views.forEach { view ->
           val id = view.phaseId
-          stickyHeader(key = "group-$id") {
-            PlanActivityGroup(view, events.filter { it.phaseId == id }, id !in closed) { closed = if (id in closed) closed - id else closed + id }
+          stickyHeader(key = "plan-group-$id") {
+            PlanActivityGroup(view, events.filter { it.phaseId == id }, id !in screen.closedActivityGroups) {
+              if (id in screen.closedActivityGroups) screen.closedActivityGroups.remove(id) else screen.closedActivityGroups.add(id)
+            }
           }
-          if (id !in closed) items(rows.filter { it.phaseId == id }, key = { it.key }) { event -> PlanActivityRow(event, onAction) }
+          if (id !in screen.closedActivityGroups) items(rows.filter { it.phaseId == id }, key = { it.key }) { event -> PlanActivityRow(event, onAction) }
         }
         if (item.running) item(key = "working") {
           BasicText(if (planQuietSince(item, detail) == null) "Agent is working" else "Waiting for new activity", Modifier.padding(12.dp), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
         }
       }
-      if (!follow) SbButton("Jump to latest", { follow = true }, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), variant = SbButtonVariant.Secondary, icon = LucideIcons.arrowDown, size = SbControlSize.Small)
-    }
-    if (transcript) PlanOutputLog(state, detail, onAction, raw = true)
+    if (!screen.follow) SbButton("Jump to latest", { screen.follow = true }, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), variant = SbButtonVariant.Secondary, icon = LucideIcons.arrowDown, size = SbControlSize.Small)
   }
 }
 
