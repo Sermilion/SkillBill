@@ -6,6 +6,10 @@ import dev.skillbill.desktop.core.domain.model.AuditCriterion
 import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.ValidationBranchRun
+import dev.skillbill.desktop.core.domain.model.ValidationCheck
+import dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt
+import dev.skillbill.desktop.core.domain.model.ValidationCheckResult
+import dev.skillbill.desktop.core.domain.model.ValidationOutcome
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -87,6 +91,9 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaStepStatus
 import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.idestatus.model.StandaloneReviewReport
+import skillbill.ports.idestatus.model.LiveChecksAvailability
+import skillbill.ports.idestatus.model.ValidationCheckOutcome
+import skillbill.ports.idestatus.model.StandaloneValidationOutcome
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.ports.idestatus.model.WorkDetailList
@@ -233,6 +240,16 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         it.planReport?.toDomain(), it.reviewReport?.toDomain(),
         it.qaChecklist?.toDomain(), it.qaFindings.map { finding -> QaChecklistFinding(finding.id, finding.title, null) },
         it.qaDetails?.toDomain(),
+        liveChecks = it.liveChecks == LiveChecksAvailability.AVAILABLE,
+        validationOutcome = it.validationOutcome?.toDomain(),
+        validationChecks = it.validationChecks.map { check ->
+          ValidationCheck(check.checkId, check.name, check.command, check.workingDir, check.attempts.map { attempt ->
+            ValidationCheckAttempt(
+              attempt.number, attempt.startedAt?.toKotlinInstant(), attempt.finishedAt?.toKotlinInstant(),
+              attempt.outcome?.toDomain(), attempt.exitCode, attempt.note,
+            )
+          })
+        },
       )
     },
     validationBranchRuns = validationBranchRuns.map {
@@ -259,6 +276,19 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     goalWorktree = goalWorktree?.let { GoalWorktree(it.path, it.state.toWorktreeDomain(), it.retentionReason, it.retentionDetail) },
     launchWarning = goal?.launchWarning,
   )
+}
+
+private fun StandaloneValidationOutcome.toDomain(): ValidationOutcome = when (this) {
+  StandaloneValidationOutcome.PASSED -> ValidationOutcome.Passed
+  StandaloneValidationOutcome.FAILED -> ValidationOutcome.Failed
+  StandaloneValidationOutcome.BLOCKED -> ValidationOutcome.Blocked
+}
+
+private fun ValidationCheckOutcome.toDomain(): ValidationCheckResult = when (this) {
+  ValidationCheckOutcome.PASSED -> ValidationCheckResult.Passed
+  ValidationCheckOutcome.FAILED -> ValidationCheckResult.Failed
+  ValidationCheckOutcome.BLOCKED -> ValidationCheckResult.Blocked
+  ValidationCheckOutcome.SKIPPED -> ValidationCheckResult.Skipped
 }
 
 private fun RuntimeGoalWorktreeState.toWorktreeDomain(): GoalWorktreeState = when (this) {

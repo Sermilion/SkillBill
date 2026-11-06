@@ -36,6 +36,7 @@ data class DetailUiState(
   val focusSubtaskList: Boolean = false,
   val changes: ChangesUi = ChangesUi(),
   val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
+  val validationCheckOverrides: Map<ValidationCheckKey, Boolean> = emptyMap(),
   val selectedQaRun: String? = null,
   val activity: ActivityResult = ActivityResult.Loading,
 )
@@ -93,10 +94,12 @@ sealed interface ListLoad {
 data class BoardPosition(val index: Int, val total: Int, val previous: WorkItem?, val next: WorkItem?)
 
 data class QaCaseKey(val invocationId: String, val caseId: String)
+data class ValidationCheckKey(val invocationId: String, val checkId: String)
 
 sealed interface DetailAction {
   data object ToggleFavorite : DetailAction
   data class ToggleQaCase(val key: QaCaseKey) : DetailAction
+  data class ToggleValidationCheck(val key: ValidationCheckKey) : DetailAction
   data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction
   data class SelectQaRun(val invocationId: String?) : DetailAction
   data class OpenQaReport(val path: String) : DetailAction

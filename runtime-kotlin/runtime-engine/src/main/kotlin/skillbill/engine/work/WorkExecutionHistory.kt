@@ -6,6 +6,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.qa.report.QaReportParser
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
+import skillbill.engine.work.validation.validationChecksFor
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusPolicy
@@ -115,6 +116,8 @@ internal fun workExecutionHistory(
     )
       .map {
         val reason = resolveExecutionReason(it, unitOfWork)
+        val currentValidation =
+          it.phaseId == SkeletonDefinition.VALIDATION.id && it.invocationId == standalone.invocationId
         WorkExecutionInstance(
           it.invocationId,
           it.executionId,
@@ -141,6 +144,9 @@ internal fun workExecutionHistory(
           qaChecklist = it.qaChecklist,
           qaFindings = qaFindingsOf(it.qaReportText),
           qaDetails = it.qaDetails,
+          liveChecks = if (currentValidation) it.liveChecks else null,
+          validationOutcome = if (currentValidation) it.validationOutcome else null,
+          validationChecks = validationChecksFor(currentValidation, it.invocationId, unitOfWork),
         )
       }
   } else {

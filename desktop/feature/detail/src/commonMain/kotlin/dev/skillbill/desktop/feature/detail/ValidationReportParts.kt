@@ -49,9 +49,10 @@ internal fun rememberValidationPage(
   listState: LazyListState,
   collapse: SectionCollapse,
   keys: LazyKeyIndex,
+  forceClosed: Boolean = false,
 ): ValidationPageState {
   val parts = shape?.parts.orEmpty()
-  val open = remember(invocationId, shape) { mutableStateListOf<Boolean>().apply { addAll(parts.map { it.openByDefault }) } }
+  val open = remember(invocationId, shape) { mutableStateListOf<Boolean>().apply { addAll(parts.map { it.openByDefault && !forceClosed }) } }
   val parentScope = rememberCoroutineScope()
   val navigationJob = remember(invocationId, shape) { Job(parentScope.coroutineContext[Job]) }
   DisposableEffect(navigationJob) {

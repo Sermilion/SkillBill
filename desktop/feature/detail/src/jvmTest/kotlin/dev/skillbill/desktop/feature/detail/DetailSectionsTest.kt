@@ -8,9 +8,12 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
+import dev.skillbill.desktop.core.domain.model.ExecutionInstance
+import dev.skillbill.desktop.core.domain.model.ValidationCheck
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.testing.workItem
 import kotlin.test.Test
@@ -103,5 +106,38 @@ class DetailSectionsTest {
       assertNull(keys.indexOf("nested-0"))
       assertEquals(oldLast - 3, keys.indexOf("last"))
     }
+  }
+
+  @Test
+  fun `checks section requires availability and waits on an active empty run`() = runComposeUiTest {
+    val item = workItem("validation", kind = WorkKind.Phase).copy(
+      stepLabel = "validation",
+      control = workItem("validation", kind = WorkKind.Phase).control.copy(invocationId = "invocation", phaseId = "validation"),
+    )
+    val check = ValidationCheck("c", "compile", "./gradlew check", ".", emptyList())
+    val run = ExecutionInstance(
+      "invocation", "execution", "active", epoch, epoch, null, null, null, null, null, null,
+      liveChecks = false, validationChecks = listOf(check),
+    )
+    val displayedRun = mutableStateOf(run)
+    lateinit var list: androidx.compose.foundation.lazy.LazyListState
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        val collapse = rememberSectionCollapse()
+        list = rememberLazyListState()
+        LazyColumn(state = list) {
+          DetailSections(this, collapse, list).validationChecksSection(
+            item, emptyDetail.copy(executionHistory = listOf(displayedRun.value)),
+            DetailUiState(item, SectionsUi.Loaded(emptyDetail, null, emptyMap(), emptySet()), false, epoch), {},
+          )
+        }
+      }
+    }
+    waitForIdle()
+    onNodeWithText("Checks").assertDoesNotExist()
+
+    runOnIdle { displayedRun.value = run.copy(liveChecks = true, validationChecks = emptyList()) }
+    waitForIdle()
+    onNodeWithText("Waiting for the agent to list its checks.").assertExists()
   }
 }

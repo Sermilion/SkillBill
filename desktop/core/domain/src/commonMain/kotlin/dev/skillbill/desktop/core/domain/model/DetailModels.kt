@@ -288,6 +288,30 @@ data class ExecutionInstance(
   val qaChecklist: QaChecklist? = null,
   val qaFindings: List<QaChecklistFinding> = emptyList(),
   val qaDetails: QaRunDetails? = null,
+  val liveChecks: Boolean = false,
+  val validationOutcome: ValidationOutcome? = null,
+  val validationChecks: List<ValidationCheck> = emptyList(),
+)
+
+enum class ValidationOutcome { Passed, Failed, Blocked }
+
+enum class ValidationCheckResult { Passed, Failed, Blocked, Skipped }
+
+data class ValidationCheck(
+  val checkId: String,
+  val name: String,
+  val command: String,
+  val workingDir: String,
+  val attempts: List<ValidationCheckAttempt>,
+)
+
+data class ValidationCheckAttempt(
+  val number: Int,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val result: ValidationCheckResult?,
+  val exitCode: Int?,
+  val note: String?,
 )
 
 /**

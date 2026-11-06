@@ -145,6 +145,26 @@ data class WorkExecutionInstance(
   val qaChecklist: StandaloneQaChecklist? = null,
   val qaFindings: List<WorkQaFinding> = emptyList(),
   val qaDetails: QaRunDetails? = null,
+  val liveChecks: LiveChecksAvailability? = null,
+  val validationOutcome: StandaloneValidationOutcome? = null,
+  val validationChecks: List<WorkValidationCheck> = emptyList(),
+)
+
+data class WorkValidationCheck(
+  val checkId: String,
+  val name: String,
+  val command: String,
+  val workingDir: String,
+  val attempts: List<WorkValidationCheckAttempt>,
+)
+
+data class WorkValidationCheckAttempt(
+  val number: Int,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val outcome: ValidationCheckOutcome?,
+  val exitCode: Int?,
+  val note: String?,
 )
 
 data class StandaloneReviewReport(

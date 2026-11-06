@@ -20,6 +20,7 @@ internal fun DetailSections.validationDocument(
     ValidationOutcomeCard(item, detail, page.shape)
   }
   validationFlagStrip(page)
+  validationChecksSection(item, detail, state, onAction)
   validationReportSection(page)
   validationRunsSection(detail, detail.invocationId)
   activitySection(item, detail, state, onAction)

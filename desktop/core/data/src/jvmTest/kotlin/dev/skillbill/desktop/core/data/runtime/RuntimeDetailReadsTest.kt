@@ -31,6 +31,10 @@ import skillbill.ports.idestatus.model.StandaloneNarrowWriteResult
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneValidationOutcome
+import skillbill.ports.idestatus.model.LiveChecksWriteMode
+import skillbill.ports.idestatus.model.ValidationCheckEvent
+import skillbill.ports.idestatus.model.ValidationCheckEventRecord
 import skillbill.workflow.taskruntime.model.qa.QaAssertionOutcome as RuntimeQaAssertionOutcome
 import skillbill.workflow.taskruntime.model.qa.QaRunAssertion as RuntimeQaRunAssertion
 import skillbill.workflow.taskruntime.model.qa.QaRunCoverage as RuntimeQaRunCoverage
@@ -85,6 +89,31 @@ class RuntimeDetailReadsTest {
             StandaloneNarrowWriteResult.WRITTEN,
             unit.standalonePhaseStatuses.writeCurrentActivity("validation-a2", "Reading reports"),
           )
+          assertEquals(StandaloneNarrowWriteResult.WRITTEN, unit.standalonePhaseStatuses.writeLiveChecks("validation-a2", LiveChecksWriteMode.AVAILABLE))
+          unit.standalonePhaseStatuses.appendValidationCheckEvent(
+            ValidationCheckEventRecord(
+              "validation-a2", 1, "compile", ValidationCheckEvent.PLANNED, "Compile", "./gradlew check", ".", null, null, null, 0, now,
+            ),
+          )
+          unit.standalonePhaseStatuses.appendValidationCheckEvent(
+            ValidationCheckEventRecord(
+              "review-a1", 1, "compile", ValidationCheckEvent.PLANNED, "Compile", "./gradlew check", ".", null, null, null, 0, now,
+            ),
+          )
+          val record = requireNotNull(unit.standalonePhaseStatuses.readByInvocation("validation-a2"))
+          unit.standalonePhaseStatuses.update(
+            StandalonePhaseStatusUpdate(
+              executionId = record.executionId,
+              expectedRevision = record.statusRevision,
+              leaseOwner = record.leaseOwner,
+              leaseGeneration = record.leaseGeneration,
+              lifecycleState = record.lifecycleState,
+              currentStep = record.currentStep,
+              currentActivity = record.currentActivity,
+              updatedAt = now.plusSeconds(1),
+              validationOutcome = StandaloneValidationOutcome.PASSED,
+            ),
+          )
         }
         val holder = SessionSelectionHolder().apply {
           choose(SessionSelection(1, database.toString(), null, kotlinx.coroutines.CoroutineScope(sessionJob + Dispatchers.IO)))
@@ -94,6 +123,13 @@ class RuntimeDetailReadsTest {
         val loaded = assertIs<DetailRead.Loaded>(detailReads.first("validation-a2"))
         assertEquals(listOf("validation-a2", "validation-a1"), loaded.sections.detail.validationBranchRuns.map { it.invocationId })
         assertEquals("Reading reports", loaded.sections.detail.currentActivity)
+        val current = loaded.sections.detail.executionHistory.first { it.invocationId == "validation-a2" }
+        assertEquals(true, current.liveChecks)
+        assertEquals(dev.skillbill.desktop.core.domain.model.ValidationOutcome.Passed, current.validationOutcome)
+        assertEquals("compile", current.validationChecks.single().checkId)
+        assertEquals(false, loaded.sections.detail.executionHistory.first { it.invocationId == "validation-a1" }.liveChecks)
+        val review = assertIs<DetailRead.Loaded>(detailReads.first("review-a1"))
+        assertEquals(emptyList(), review.sections.detail.executionHistory.first { it.invocationId == "review-a1" }.validationChecks)
       } finally {
         sessionJob.cancel()
         runtime.databaseReadConnections.release()

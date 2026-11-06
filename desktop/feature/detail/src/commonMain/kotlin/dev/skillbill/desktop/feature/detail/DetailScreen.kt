@@ -115,7 +115,8 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val scrollToFinding = rememberQaFindingScroller(listState, collapse, keys)
   val validationResult = loaded?.detail?.selectedValidationResult
   val validationShape = if (validationRow) shapeValidationReport(validationResult) else null
-  val validationPage = if (validationRow && loaded != null) rememberValidationPage(validationShape, item.control.invocationId, listState, collapse, keys) else null
+  val validationChecksShown = loaded?.let { currentExecution(item, it.detail)?.let { run -> run.liveChecks && run.validationChecks.isNotEmpty() } } == true
+  val validationPage = if (validationRow && loaded != null) rememberValidationPage(validationShape, item.control.invocationId, listState, collapse, keys, validationChecksShown) else null
   val peekState = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
