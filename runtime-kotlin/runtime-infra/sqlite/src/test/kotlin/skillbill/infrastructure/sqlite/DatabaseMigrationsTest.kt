@@ -2497,6 +2497,9 @@ private val expectedMigrationDefinitions =
     102 to "record-qa-details",
     103 to "record-standalone-plan-output",
     104 to "record-standalone-plan-attributed-output-times",
+    105 to "record-validation-check-events",
+    106 to "record-standalone-plan-output-history",
+    107 to "record-structured-plan-activity",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

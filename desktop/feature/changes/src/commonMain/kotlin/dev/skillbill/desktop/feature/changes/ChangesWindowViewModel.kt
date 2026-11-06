@@ -748,7 +748,7 @@ private fun DiffCommentsState.thread(id: String) = (this as? DiffCommentsState.A
 private data class GoalObservationKey(val id: String, val running: Boolean, val goalWorktree: dev.skillbill.desktop.core.domain.model.GoalWorktree?)
 
 internal const val FILE_NOT_OPENED = "Could not open the file. Check that it still exists."
-internal const val REMOVED_WORKTREE_FILE_NOT_OPENED = "The goal's worktree was removed, so this file cannot be opened."
+internal const val REMOVED_WORKTREE_FILE_NOT_OPENED = "The goal's worktree was removed and the main checkout is not on its branch, so this file cannot be opened."
 private const val HISTORICAL_FILE_NOT_OPENED = "This file belongs to a historical revision and is not opened from the current checkout."
 
 private data class QuickKey(val target: ChangeScopeTarget, val running: Boolean)

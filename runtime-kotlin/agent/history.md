@@ -1,3 +1,22 @@
+## [2026-11-06] SKILL-512 main checkout after goal worktree removal
+Areas: runtime-ports, runtime-infra, runtime-domain, runtime-goalrunner, runtime-application, runtime-cli, runtime-contracts, runtime-engine
+- GoalWorktreeResources gains checkoutGoalBranch, returning a sealed checked-out, skipped-for-uncommitted-changes or failed result. The git adapter refuses a blank or dash-leading branch, uncommitted tracked changes, an in-progress merge, rebase, am, cherry-pick or revert, and a missing local branch. It no-ops when HEAD is already on the branch and never forces, merges, stashes, resets or cleans.
+- Completion settlement runs the switch only for a completed goal whose worktree is Removed or Absent, in the same control-state update that records the removal time. Retained worktrees never switch. A thrown exception becomes a best-effort diagnostic and a failed outcome; the removal is still recorded.
+- Control state gains two optional payload keys, the outcome and a detail capped at 300 characters; the four sites that reset the removal time also clear them. No migration. Goal status and the CLI expose main_checkout_outcome and main_checkout_detail.
+- The work-board read model adds the same two optional keys inside goal_worktree. Older rows decode with null fields and an unknown outcome name marks the row invalid; no DesktopReadSchema change.
+- Limits: a skipped or failed switch is not retried, and untracked files do not block it. A git timeout reads "git checkout failed: git timed out".
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+## [2026-11-06] SKILL-508 validation page with live checks
+Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-engine, runtime-infra, runtime-mcp, orchestration/contracts, desktop/core, desktop/feature/detail
+- Migration 105 stores validation check events and adds live-check availability and outcome to standalone phase status. DesktopReadSchema is 105.
+- ValidationCheckRecorder stamps and validates bounded event sequences, updates current activity, and signals phase readers. Its narrow status writes preserve revision, timestamps and leases. reusable
+- Capable standalone validation launches pass the invocation identity to the runtime MCP server; server initialization marks availability and supplies the tool protocol. Settlement derives an outcome from finished, non-skipped checks.
+- Work detail projects checks for the current invocation and up to 50 validation runs on the same repository and branch. Desktop renders report parts, branch runs and available checks.
+- Limits: goal validation has no live checks; Junie and Cursor use the report-only layout. A run without a counted finished check has no derived outcome. Desktop builds must match schema 105.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-06] SKILL-505 live plan run detail
 Areas: runtime-goalrunner, runtime-engine, runtime-ports, runtime-core, runtime-infra, runtime-cli, runtime-contracts, orchestration/contracts, desktop/core/data, desktop/core/domain, desktop/feature/detail
 - Standalone plan capture stores bounded readable output by execution, including the latest four lines, timestamps and attributed subtask output. Migration 103 ties output cleanup to standalone status.

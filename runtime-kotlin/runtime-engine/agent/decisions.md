@@ -477,3 +477,8 @@ Revisit when: Ownership written under the old `.git/skill-bill/standalone-monito
 Context: Review strategies that post diff comments must use the same `PhaseRunner` instance held by registry registrations.
 Decision: Provide review strategies through a factory and invoke it with the registry's runner.
 Reason: This preserves shared runner identity without adding a new scope or engine collaborator bag.
+
+## [2026-11-06] Tell agents to use the machine's build tool settings
+Context: The validate prompt told agents to reuse only caches the invocation is allowed to own. Codex read that as a reason to create a session-owned Gradle home, which skipped the machine's Gradle limits.
+Decision: The validate and build prompts tell agents to run build tools with the machine's settings and shared caches, and never to set GRADLE_USER_HOME, GRADLE_OPTS or JAVA_TOOL_OPTIONS, or pass `--gradle-user-home`. The rule against reusing another worktree's mutable state stays, and states that shared tool caches are not worktree state.
+Reason: Memory and worker limits are a machine decision kept in the machine's tool settings. The runtime pin covers only the inline variable, so the prompt has to cover the flags.

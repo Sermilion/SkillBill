@@ -41,7 +41,7 @@ internal fun worktreeDirtyRetention(path: Path): WorktreeRetention? {
   }
 }
 
-internal data class WorktreeGitResult(val ok: Boolean, val output: String)
+internal data class WorktreeGitResult(val ok: Boolean, val output: String, val timedOut: Boolean = false)
 
 internal fun worktreeGit(
   root: Path,
@@ -49,7 +49,11 @@ internal fun worktreeGit(
 ): WorktreeGitResult {
   val result = runGitProcess(root, args.toList(), extraEnvironment = mapOf("GIT_TERMINAL_PROMPT" to "0"))
   val ok = !result.timedOut && result.readFailure == null && result.exitCode == 0
-  return WorktreeGitResult(ok, result.readFailure?.message ?: if (result.timedOut) "git timed out" else result.output)
+  return WorktreeGitResult(
+    ok,
+    result.readFailure?.message ?: if (result.timedOut) "git timed out" else result.output,
+    result.timedOut,
+  )
 }
 
 internal fun parseWorktreeRecords(output: String): List<List<String>> {

@@ -149,6 +149,8 @@ data class GoalRunnerWorktreeStatus(
   val removedAt: String?,
   val retentionReason: String?,
   val retentionDetail: String?,
+  val mainCheckoutOutcome: String? = null,
+  val mainCheckoutDetail: String? = null,
 )
 
 data class GoalRunnerSubtaskValidationEvidence(

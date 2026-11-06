@@ -58,6 +58,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabaseCheckpointResult
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -213,6 +214,7 @@ internal data class GoalRunnerTestInputs(
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
   val goalWorktrees: GoalWorktreeResources = InPlaceGoalWorktreeResources,
   val pullRequestWriter: GoalRunnerPullRequestWriter = NoPullRequestWriter,
+  val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -229,7 +231,7 @@ internal data class GoalRunnerTestInputs(
       unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
       executionCoordinator = executionCoordinator,
       phaseQuery = phaseRecorder.phaseQuery,
-      diagnostics = NoopRuntimeDiagnostics,
+      diagnostics = diagnostics,
       phaseRecorder = phaseRecorder,
       childWorkflowDatabase = childWorkflowDatabase,
       ciMonitor = ciMonitor,
@@ -393,6 +395,7 @@ private fun testGoalRunnerLoopAssembler(
       wiring.clock,
       wiring.diagnostics,
       testProjectStore,
+      ChildFailureOutputStore { _, _, _ -> "test.log" },
     )
   val launchPrepare =
     GoalRunnerSubtaskLaunchPrepare(

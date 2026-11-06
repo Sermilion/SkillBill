@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.goalworktree
 
+import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
@@ -21,4 +22,9 @@ object InPlaceGoalWorktreeResources : GoalWorktreeResources {
   override fun settle(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement = GoalWorktreeSettlement.Absent
 
   override fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained? = null
+
+  override fun checkoutGoalBranch(
+    primaryRoot: Path,
+    branch: String,
+  ): GoalBranchCheckout = GoalBranchCheckout.CheckedOut
 }

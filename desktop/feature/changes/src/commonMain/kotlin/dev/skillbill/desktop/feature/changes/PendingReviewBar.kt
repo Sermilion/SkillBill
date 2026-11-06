@@ -55,8 +55,8 @@ internal fun PendingReviewBar(count: Int, review: ReviewBarUi, onAction: (Change
       } else {
         BasicText("$count pending ${if (count == 1) "comment" else "comments"}", style = changesSans(11f, FontWeight.SemiBold, colors.fg))
         BasicText("· only you can see them", style = changesSans(10.5f, FontWeight.Normal, colors.fgFaint))
-        SbButton("Discard all", { onAction(ChangesWindowAction.RequestDiscard) }, variant = SbButtonVariant.Ghost, size = SbControlSize.Small, enabled = !review.submitting)
-        SbButton("Add review", { onAction(ChangesWindowAction.SubmitReview) }, variant = SbButtonVariant.Primary, size = SbControlSize.Small, shortcut = "⌘/Ctrl+↵", enabled = !review.submitting)
+        SbButton(if (review.inFlight == ReviewWrite.Discard) "Discarding…" else "Discard all", { onAction(ChangesWindowAction.RequestDiscard) }, variant = SbButtonVariant.Ghost, size = SbControlSize.Small, enabled = !review.submitting)
+        SbButton(if (review.inFlight == ReviewWrite.Submit) "Adding review…" else "Add review", { onAction(ChangesWindowAction.SubmitReview) }, variant = SbButtonVariant.Primary, size = SbControlSize.Small, shortcut = "⌘/Ctrl+↵", enabled = !review.submitting)
       }
     }
     review.problem?.let { problem ->

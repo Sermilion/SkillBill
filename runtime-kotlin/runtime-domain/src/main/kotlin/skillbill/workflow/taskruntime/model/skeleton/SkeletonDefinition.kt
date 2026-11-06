@@ -32,6 +32,7 @@ data class SkeletonDefinition(
   val preparedExecutionOf: String? = null,
   val runHarness: PhaseRunHarness = PhaseRunHarness.NONE,
   val loopOnlyStepIds: Set<String> = emptySet(),
+  val reportsLiveChecks: Boolean = false,
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -101,6 +102,7 @@ data class SkeletonDefinition(
         listOf(PhaseSlot.QUALITY_GATE),
         SkeletonRunStateKind.IN_MEMORY,
         standaloneInvocable = true,
+        reportsLiveChecks = true,
       )
     val QA: SkeletonDefinition =
       SkeletonDefinition(
@@ -205,6 +207,8 @@ data class SkeletonDefinition(
 
     fun runHarnessOf(publicId: String): PhaseRunHarness =
       entries.firstOrNull { it.id == publicId }?.runHarness ?: PhaseRunHarness.NONE
+
+    fun reportsLiveChecksOf(publicId: String): Boolean = entries.any { it.id == publicId && it.reportsLiveChecks }
 
     fun byId(id: String): SkeletonDefinition =
       entries.filter { it.id == id }.maxByOrNull(SkeletonDefinition::semanticRevision)

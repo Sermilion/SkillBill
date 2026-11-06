@@ -61,6 +61,7 @@ internal object VerifyRunDetailsProjection {
       qa = qa,
       qaVerdict = qaVerdict,
       qaOutcome = VerifyWorkflow.string(artifacts[VerifyWorkflow.QA_OUTCOME], QaOutcomePayloadKeys.OUTCOME),
+      qaReportText = VerifyWorkflow.string(qaArtifact, QaOutcomePayloadKeys.REPORT_TEXT),
       qaFindingLocations =
         qa
           ?.findings

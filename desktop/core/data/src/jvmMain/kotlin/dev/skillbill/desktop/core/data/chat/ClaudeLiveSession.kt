@@ -23,6 +23,7 @@ import java.util.Base64
  * and [abandon]; turns call [register] from any thread.
  */
 internal class ClaudeLiveSession(
+  val workingDirectory: String,
   private val diagnostics: Diagnostics,
   private val unprompted: (ChatEvent) -> Unit,
 ) {

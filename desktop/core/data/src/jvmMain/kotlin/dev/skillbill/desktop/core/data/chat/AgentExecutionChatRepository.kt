@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.SessionMoveResult
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
@@ -64,6 +65,9 @@ class AgentExecutionChatRepository(
     withContext(Dispatchers.IO) { catalog.list(executionId, repositoryRoot, currentSessionId, resolver::forAgent) }
 
   override suspend fun openSavedChat(entry: ChatHistoryEntry): List<ChatHistoryLine> = withContext(Dispatchers.IO) { catalog.open(entry) }
+
+  override suspend fun moveSessions(fromRoot: String, toRoot: String): SessionMoveResult =
+    withContext(Dispatchers.IO) { catalog.move(fromRoot, toRoot) }
 
   override suspend fun saveChat(entry: ChatHistoryEntry) {
     withContext(Dispatchers.IO) { store.saveChat(entry) }

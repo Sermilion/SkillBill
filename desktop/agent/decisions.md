@@ -10,6 +10,19 @@ Decision: Persist saved conversations through the existing chat store, but keep 
 Reason: Saved drafts provide recovery. Persisting the open set would add another store for those chats beyond the requested scope.
 Revisit when: Operators need their open tabs restored after restart.
 
+## [2026-11-06] Desktop treats a missing worktree directory as Removed, whatever the runtime reports
+Context: The runtime can lag the disk. A goal worktree deleted externally stayed Active, so chat and terminal started agents in a directory that no longer existed (WE-5187).
+Decision: The mapper downgrades Active or Retained to Removed when the worktree path is blank, invalid or not an existing directory. Chat, terminal and the changes window resolve their root at use time: the checkout root if it exists, else the repository root. The changes window opens committed-range files only while the main checkout is on the goal's branch.
+Reason: The directory on disk is the only fact an agent launch depends on; trusting runtime state alone leaves a window of launches into a failing path.
+Alternatives considered: A runtime-only fix leaves stale state between refreshes; a path watcher is more machinery than an existence check.
+Revisit when: The runtime reports worktree liveness itself or the desktop gets a change feed that makes the per-row check unnecessary.
+
+## [2026-11-06] Continue a chat in the main checkout by moving agent session files
+Context: After removal, saved Claude and Codex sessions still live under the worktree path, so opening the chat at the main checkout started a fresh session and lost the conversation.
+Decision: End the agent process, then move or rewrite saved sessions to the main checkout path once per chat session under a lock. Keep the session id only for Claude or Codex when the move reported no failures; otherwise start fresh and say so. Claude files move without overwriting a destination; Codex files get only the first-line cwd rewritten through a same-directory temporary file and atomic replace.
+Reason: Moving the files is the only way to keep the agent's own history, the no-failure condition prevents resuming a half-moved session, and not overwriting protects sessions already at the main checkout.
+Revisit when: Cursor or Junie expose a relocatable session store, or Claude and Codex resume by id regardless of directory.
+
 ## [2026-11-06] Refresh observed standalone plans on a bounded pulse
 Context: Plan output snapshots have no change revision, so database signals alone do not guarantee a full detail refresh when output changes.
 Decision: Refresh full detail every two seconds while an observed standalone plan is active or blocked. Stop when a full read reports it idle or the observer closes.
@@ -142,6 +155,7 @@ Revisit when: Codex, Cursor or Junie accept inline image input, or an agent cann
 Context: A removed goal worktree cannot supply working-tree changes, but its branch commits remain accessible from the primary checkout.
 Decision: Read the goal branch range from the primary checkout and hide Uncommitted and Outside scopes. Keep All available and prevent opening files from the removed worktree.
 Reason: Committed refs preserve the goal's recorded changes without attributing the primary checkout's working files to that goal. Outside does not accept a goal head ref, so it could report the wrong data.
+Superseded by: Desktop treats a missing worktree directory as Removed, whatever the runtime reports (2026-11-06)
 
 ## [2026-11-02] Queue New task messages while a turn runs
 Context: Execution chat queues Send while a reply streams. New task disabled Send because canAdmitTurn required the thread not to be busy, so follow-up messages were dropped until the turn ended.

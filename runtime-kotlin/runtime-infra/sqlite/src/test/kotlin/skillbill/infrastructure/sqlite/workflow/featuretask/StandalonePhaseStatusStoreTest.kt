@@ -3,6 +3,9 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeQaDetails
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.ports.agentrun.activity.model.AgentRunActivity
+import skillbill.ports.agentrun.activity.model.AgentRunActivityKind
+import skillbill.ports.agentrun.activity.model.AgentRunActivityState
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
@@ -10,9 +13,12 @@ import skillbill.ports.idestatus.model.StandaloneEligibleSlice
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
+import skillbill.ports.idestatus.model.StandalonePhaseOutputLine
+import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandalonePlanActivity
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandalonePlanSubtask
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
@@ -31,6 +37,83 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class StandalonePhaseStatusStoreTest {
+  @Test
+  fun `tool completion replaces its start and retained activity keeps stream provenance`() {
+    val database = checklistDatabase()
+    val record = database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
+    val stream =
+      StandalonePlanActivity(
+        "preplan",
+        Instant.EPOCH,
+        Instant.EPOCH,
+        AgentRunActivity("stream", AgentRunActivityKind.STREAM, "", "claude"),
+      )
+    val calls =
+      (1..140).map { index ->
+        val at = Instant.EPOCH.plusSeconds(index.toLong())
+        StandalonePlanActivity(
+          "preplan",
+          at,
+          at,
+          AgentRunActivity(
+            "call-$index",
+            AgentRunActivityKind.READ,
+            "file-$index",
+            "claude",
+            state = AgentRunActivityState.STARTED,
+          ),
+        )
+      }
+
+    fun persist(events: List<StandalonePlanActivity>) =
+      database.transaction {
+        it.standalonePhaseStatuses.writeOutputSnapshot(
+          record.executionId,
+          StandalonePhaseOutputSnapshot(pendingActivity = events),
+        )
+      }
+    persist(listOf(stream) + calls)
+    val call = calls.last()
+    val completed =
+      call.copy(
+        updatedAt = call.at.plusMillis(100),
+        event = call.event.copy(state = AgentRunActivityState.FAILED, durationMs = 100),
+      )
+    repeat(2) { persist(listOf(completed)) }
+    val retained = checkNotNull(database.read { it.standalonePhaseStatuses.readOutput(record.executionId) }).activities
+    assertEquals(129, retained.size)
+    assertEquals(stream, retained.first())
+    assertEquals(completed, retained.last())
+    assertTrue(retained.none { it.event.id == "call-1" })
+  }
+
+  @Test
+  fun `output history retains older lines and pages without duplicating a retried snapshot`() {
+    val database = checklistDatabase()
+    val record = database.transaction { it.standalonePhaseStatuses.register(checklistRegistration()) }
+    val lines = (1..7).map { StandalonePhaseOutputLine("line-$it", "[subtask $it] output", Instant.EPOCH, it) }
+    val snapshot = StandalonePhaseOutputSnapshot(tail = lines.takeLast(4).map { it.text }, pendingLines = lines)
+    repeat(2) { database.transaction { it.standalonePhaseStatuses.writeOutputSnapshot(record.executionId, snapshot) } }
+    val newest = database.read { it.standalonePhaseStatuses.readOutputLines(record.executionId, null, 3) }
+    val older =
+      database.read {
+        it.standalonePhaseStatuses.readOutputLines(
+          record.executionId,
+          newest.last().sequence,
+          10,
+        )
+      }
+    assertEquals(listOf(7, 6, 5), newest.map { it.subtaskId })
+    assertEquals(listOf(4, 3, 2, 1), older.map { it.subtaskId })
+    assertEquals(
+      lines.takeLast(4).map {
+        it.text
+      },
+      database.read { it.standalonePhaseStatuses.readOutput(record.executionId)?.tail },
+    )
+    assertTrue(database.read { it.standalonePhaseStatuses.readOutputLines("other-execution", null, 10) }.isEmpty())
+  }
+
   @Test
   fun `a checklist write stores on a live row and changes no status or lease column, and a finished row refuses`() {
     val database = checklistDatabase()

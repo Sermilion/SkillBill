@@ -66,6 +66,8 @@ class GoalRunnerControlStoreTest {
           executionWorktreeRemovedAt = "2026-11-03T10:00:00Z",
           executionWorktreeRetentionReason = "untracked_files",
           executionWorktreeRetentionDetail = "the worktree has 1 changed path(s)",
+          executionMainCheckoutOutcome = "skipped_uncommitted_changes",
+          executionMainCheckoutDetail = "the main checkout has 1 uncommitted change(s): tracked.txt",
           launchWarning = "2 uncommitted",
         )
 
@@ -85,6 +87,8 @@ class GoalRunnerControlStoreTest {
               "execution_worktree_removed_at",
               "execution_worktree_retention_reason",
               "execution_worktree_retention_detail",
+              "execution_main_checkout_outcome",
+              "execution_main_checkout_detail",
               "launch_warning",
             ).none(raw::containsKey),
             "$raw",

@@ -36,6 +36,7 @@ import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneRev
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
+import skillbill.engine.featuretask.validation.check.ValidationLiveChecks
 import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
 import skillbill.model.EnvironmentContext
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
@@ -50,7 +51,8 @@ internal interface RuntimeFeatureTaskSlotProvides {
   fun phaseRunner(
     launcher: GoalRunnerSubtaskLauncher,
     gitOperations: WorkflowGitOperations,
-  ): PhaseRunner = DefaultPhaseRunner(launcher, gitOperations)
+    liveChecks: ValidationLiveChecks,
+  ): PhaseRunner = DefaultPhaseRunner(launcher, gitOperations, liveChecks)
 
   @Provides
   fun planningPhaseStrategies(

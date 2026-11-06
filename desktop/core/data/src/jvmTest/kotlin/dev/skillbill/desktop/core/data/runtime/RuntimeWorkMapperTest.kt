@@ -1,13 +1,20 @@
 package dev.skillbill.desktop.core.data.runtime
 
+import dev.skillbill.desktop.core.domain.model.GoalWorktree
+import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
+import dev.skillbill.desktop.core.domain.model.MainCheckoutOutcome
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.ports.idestatus.model.GoalMainCheckoutOutcome
+import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.WorkBoardItem
+import java.nio.file.Files
 import java.time.Instant
+import skillbill.ports.idestatus.model.GoalWorktreeState as RuntimeGoalWorktreeState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -39,6 +46,35 @@ class RuntimeWorkMapperTest {
     val keyless = board("wf-2", execution, title = "linear-progress-sync").toWorkItem(1L)
 
     assertEquals("[SKILL-452] Linear progress sync" to "Linear progress sync", keyed.title to keyless.title)
+  }
+
+  // The persisted read model can still say ACTIVE after the directory is gone; that must not send work to the dead path.
+  @Test
+  fun `an active worktree whose directory is gone maps to removed and keeps its other fields`() {
+    val missing = Files.createTempDirectory("worktree").toRealPath().also { it.toFile().deleteRecursively() }
+    val view = GoalWorktreeView(
+      missing.toString(), RuntimeGoalWorktreeState.ACTIVE, "reason", "detail", GoalMainCheckoutOutcome.FAILED, "rebase in progress",
+    )
+
+    assertEquals(
+      GoalWorktree(missing.toString(), GoalWorktreeState.Removed, "reason", "detail", MainCheckoutOutcome.Failed, "rebase in progress"),
+      view.toDomainWorktree(),
+    )
+  }
+
+  // Only a missing directory remaps; a worktree still on disk keeps the state the runtime reported.
+  @Test
+  fun `an active or retained worktree whose directory exists keeps its state`() {
+    val present = Files.createTempDirectory("worktree").toRealPath()
+    try {
+      val active = GoalWorktreeView(present.toString(), RuntimeGoalWorktreeState.ACTIVE, null, null)
+      val retained = GoalWorktreeView(present.toString(), RuntimeGoalWorktreeState.RETAINED, "unpublished", null)
+
+      assertEquals(GoalWorktreeState.Active, active.toDomainWorktree().state)
+      assertEquals(GoalWorktreeState.Retained, retained.toDomainWorktree().state)
+    } finally {
+      present.toFile().deleteRecursively()
+    }
   }
 
   private fun board(

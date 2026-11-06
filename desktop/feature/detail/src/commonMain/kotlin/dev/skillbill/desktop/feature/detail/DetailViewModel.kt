@@ -63,6 +63,8 @@ import kotlin.time.Clock
 private const val CHECKOUT_NOT_OPENED = "Could not open the checkout directory. Check that it still exists."
 private const val BRANCH_NOT_OPENED = "Could not open the repository in your browser. Check its origin remote and default browser."
 private const val FILE_NOT_OPENED = "Could not open the file. Check that it still exists."
+private const val QA_INSTRUCTIONS_NOT_OPENED = "Couldn't open .skill-bill/phases/qa.md. Create it in the repository, then paste the snippet."
+private const val QA_INSTRUCTIONS_PATH = ".skill-bill/phases/qa.md"
 
 /**
  * One item's detail. The first state already holds the route's row as the header, so the header paints before any read. Pages a
@@ -225,10 +227,12 @@ class DetailViewModel(
       DetailAction.ToggleFavorite -> toggleFavorite()
       DetailAction.VerifyAgain -> verifyAgainLauncher.start()
       is DetailAction.ToggleQaCase -> toggleQaCase(action.key)
+      is DetailAction.ToggleValidationCheck -> toggleValidationCheck(action.key)
       is DetailAction.SetAllQaCases -> mutableState.update { current -> current.copy(qaCaseOverrides = current.qaCaseOverrides + action.keys.associateWith { action.open }) }
       is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
       is DetailAction.OpenQaReport -> open(FILE_NOT_OPENED) { specs.openFileInDefaultApp(action.path) }
       is DetailAction.OpenQaEvidence -> open(FILE_NOT_OPENED) { specs.openFileUnder(action.path, action.invocationDirectory) }
+      DetailAction.OpenQaPhaseInstructions -> openQaPhaseInstructions()
       is DetailAction.LoadMore -> loadMore(action.list)
       DetailAction.Next -> step(next = true)
       DetailAction.Previous -> step(next = false)
@@ -270,6 +274,14 @@ class DetailViewModel(
   private fun toggleQaCase(key: QaCaseKey) {
     val open = qaCaseIsOpen(state.value.header, loadedDetail() ?: return, key, state.value.qaCaseOverrides) ?: return
     mutableState.update { it.copy(qaCaseOverrides = it.qaCaseOverrides + (key to !open)) }
+  }
+
+  private fun toggleValidationCheck(key: ValidationCheckKey) {
+    val detail = loadedDetail() ?: return
+    val run = detail.execution(key.invocationId) ?: return
+    val row = validationChecksSummary(run, qaRunLive(state.value.header, run)).rows.firstOrNull { it.check.checkId == key.checkId } ?: return
+    val open = validationCheckIsOpen(row, run.invocationId, qaRunLive(state.value.header, run), state.value.validationCheckOverrides)
+    mutableState.update { it.copy(validationCheckOverrides = it.validationCheckOverrides + (key to !open)) }
   }
 
   private fun effectiveSubtask(): SubtaskKey? = loadedDetail()?.let { selectedSubtask(state.value.header, it, state.value.subtaskChoice.key) }
@@ -505,6 +517,15 @@ class DetailViewModel(
     viewModelScope.launch {
       if (request() == OpenOutcome.NotOpened) effectChannel.send(DetailEffect.ShowToast(ToastMessage(ToastTone.Problem, failure)))
     }
+  }
+
+  private fun openQaPhaseInstructions() {
+    val root = state.value.header.repositoryRoot.trimEnd('/')
+    if (root.isBlank()) {
+      effectChannel.trySend(DetailEffect.ShowToast(ToastMessage(ToastTone.Problem, QA_INSTRUCTIONS_NOT_OPENED)))
+      return
+    }
+    open(QA_INSTRUCTIONS_NOT_OPENED) { specs.openFileUnder("$root/$QA_INSTRUCTIONS_PATH", root) }
   }
 }
 

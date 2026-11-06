@@ -3,6 +3,7 @@ package skillbill.infrastructure.launcher.agentrun.display
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import skillbill.ports.agentrun.model.AgentRunActivityOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -23,6 +24,8 @@ internal class ReadableAgentOutputSink(
   private var cursorPartialTextPending = false
   private var toolTrackingOverflowReported = false
   private val mapper = ObjectMapper()
+  private val activitySink = (delegate as? AgentRunActivityOutputSink)?.takeIf { it.capturesActivity }
+  private val activityDecoder = activitySink?.let { ProviderActivityDecoder(agent, diagnostics) }
 
   @Synchronized
   override fun write(
@@ -37,6 +40,7 @@ internal class ReadableAgentOutputSink(
       val buffer = pending.getOrPut(stream) { StringBuilder() }
       text.forEach { char ->
         if (char == '\n') {
+          activitySink?.raw(stream, buffer.toString().trimEnd('\r'))
           delegate.write(stream, "${buffer.toString().trimEnd('\r')}\n")
           buffer.setLength(0)
         } else {
@@ -76,6 +80,7 @@ internal class ReadableAgentOutputSink(
     if (buffer != null) {
       if (buffer.isNotEmpty() && !dropping.contains(stream)) {
         if (stream == AgentRunOutputStream.STDERR) {
+          activitySink?.raw(stream, buffer.toString())
           delegate.write(stream, "${buffer}\n")
         } else {
           emit(stream, buffer.toString())
@@ -92,6 +97,7 @@ internal class ReadableAgentOutputSink(
     line: String,
   ) {
     if (line.isBlank()) return
+    activitySink?.raw(stream, line)
     val trimmed = line.take(MAX_LINE_CHARS)
     if (agent == "junie") {
       delegate.write(stream, "$trimmed\n")
@@ -108,6 +114,7 @@ internal class ReadableAgentOutputSink(
         delegate.write(stream, "$trimmed\n")
         return
       }
+    publishActivity(event)
     val type = event.path("type").asText("")
     if (agent == "cursor" && type != "partial" && type != "assistant") {
       flushCursorPartial(stream)
@@ -122,6 +129,10 @@ internal class ReadableAgentOutputSink(
         delegate.write(stream, "[provider event: ${type.take(MAX_EVENT_TYPE_CHARS)}]\n")
       }
     }
+  }
+
+  private fun publishActivity(event: JsonNode) {
+    activityDecoder?.decode(event)?.forEach { activitySink?.activity(it) }
   }
 
   private fun emitClaude(

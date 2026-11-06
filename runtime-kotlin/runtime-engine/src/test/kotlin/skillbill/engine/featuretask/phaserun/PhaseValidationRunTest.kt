@@ -73,6 +73,20 @@ class PhaseValidationRunTest {
   }
 
   @Test
+  fun `only a standalone validation launch hands its invocation id to the runtime MCP server`() {
+    val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }
+    val entry = entry(launcher, mutableListOf(), emptyList(), manifests = emptyList())
+
+    val standalone = assertIs<PhaseRunResult.Completed>(entry.run(validationRequest()))
+    entry.runForGoal(validationRequest(), "goal-parent", branchSetup.gitOperations.currentBranchValue)
+
+    assertEquals(
+      listOf(standalone.invocationId, null),
+      launcher.requests.map { it.skillRunRequest.validationCheckInvocationId },
+    )
+  }
+
+  @Test
   fun `no discovered checks completes validation and retains the warning`() {
     val requests = mutableListOf<ValidationGateRunRequest>()
     val warning =

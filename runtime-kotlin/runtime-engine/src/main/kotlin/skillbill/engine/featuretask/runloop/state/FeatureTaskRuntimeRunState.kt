@@ -696,7 +696,8 @@ public class FeatureTaskRuntimeRunState(
       laterPhaseIds.lastOrNull { phaseId ->
         (phaseId in priorRecords) || (phaseId in completedPhases)
       }
-    val resumePhaseId = furthestLater ?: laterPhaseIds.firstOrNull() ?: return null
+    val resumePhaseId =
+      furthestLater ?: laterPhaseIds.firstOrNull { it !in transitions.loopOnlyPhaseIds } ?: return null
     return ExplicitResumeStart(resumePhaseId, reopen = resumePhaseId !in completedPhases)
   }
 

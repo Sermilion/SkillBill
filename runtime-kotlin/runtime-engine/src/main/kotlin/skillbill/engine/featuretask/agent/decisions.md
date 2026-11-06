@@ -1,3 +1,8 @@
+## [2026-11-06] Keep unblock snippets free of heading lines
+Context: QA reports include pasteable setup instructions, and the runtime report parser reads Markdown headings even inside fenced blocks.
+Decision: Put missing capabilities under `####` headings in a final `## Unblock` section and require snippets without lines starting with `#`.
+Reason: Heading lines inside snippets could split report sections or create findings. The spec requires the existing parser, coverage and reason tokens to keep their behavior.
+
 ## [2026-11-05] Treat partly tagged assertions as untagged
 Context: QA reports can contain a mixture of tagged and untagged assertions, and old rows lack structured details.
 Decision: Any untagged assertion bullet clears the assertion list and adds a warning. Null `qa_details` identifies a legacy row without backfill.

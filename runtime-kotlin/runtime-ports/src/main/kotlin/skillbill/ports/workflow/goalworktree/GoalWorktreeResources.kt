@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.goalworktree
 
+import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
@@ -29,4 +30,14 @@ interface GoalWorktreeResources {
 
   /** Reads the retention decision without changing the worktree or repository. */
   fun retentionVerdict(request: GoalWorktreeSettleRequest): GoalWorktreeSettlement.Retained?
+
+  /**
+   * Switches the primary checkout at [primaryRoot] to the local [branch] only when it has no tracked changes and no git
+   * operation in progress. Never forces, stashes, resets or discards anything, and reports expected outcomes as
+   * results.
+   */
+  fun checkoutGoalBranch(
+    primaryRoot: Path,
+    branch: String,
+  ): GoalBranchCheckout
 }
