@@ -19,10 +19,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -30,6 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -38,6 +42,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -45,18 +50,22 @@ import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbIconButton
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.dataColorFor
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.status.statusKind
-import dev.skillbill.desktop.feature.chat.savedAgo
-import java.io.File
 import kotlin.time.Instant
 
 private val CHIP_SHAPE = RoundedCornerShape(13.dp)
-private val TITLE_MAX_WIDTH = 240.dp
 private val SECTION_SPACING = 8.dp
 
 internal const val NEW_TASK_HISTORY_ROWS = 6
@@ -76,56 +85,24 @@ private val START_CHIPS = listOf(
   "Open a PR" to "pr",
 )
 
-/** Lists recent saved drafts with resume, discard and picker actions. */
 @Composable
-internal fun RecentChatsSection(
-  saved: List<ChatHistoryEntry>,
-  now: Instant,
+internal fun InboxSection(
+  needsYou: List<WorkItem>,
+  running: List<WorkItem>,
+  chats: List<ChatHistoryEntry>,
+  selectedRoot: String?,
+  home: NewTaskHome.Returning?,
+  showAll: Boolean,
+  now: () -> Instant,
+  onOpenRun: (WorkItem) -> Unit,
   onResume: (ChatHistoryEntry) -> Unit,
   onDiscard: (ChatHistoryEntry) -> Unit,
   onShowAll: () -> Unit,
+  onShowAllWork: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
-    SectionLabel("Recent chats")
-    saved.take(NEW_TASK_HISTORY_ROWS).forEach { entry ->
-      key(entry.sessionId) {
-        RecentChatRow(entry, now, { onResume(entry) }, { onDiscard(entry) })
-      }
-    }
-    if (saved.size > NEW_TASK_HISTORY_ROWS) {
-      SbButton("Show all", onShowAll, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
-    }
-  }
-}
-
-@Composable
-private fun RecentChatRow(entry: ChatHistoryEntry, now: Instant, onClick: () -> Unit, onDiscard: () -> Unit) {
   val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  HomeRow(onClick, Modifier.height(SkillBillSize.row)) {
-    BasicText(rememberRuntimeText(entry.title.lineSequence().first()), Modifier.weight(1f), style = type.tBase.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    entry.newTask?.let {
-      BasicText(File(it.repositoryRoot).name, Modifier.weight(0.5f, fill = false), style = type.tSm.copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    BasicText(savedAgo(entry.updatedAt, now), style = type.tSm.copy(color = colors.fgFaint), maxLines = 1)
-    SbButton("Discard", onDiscard, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
-  }
-}
-
-@Composable
-internal fun NeedsYouSection(home: NewTaskHome.Returning, now: () -> Instant, onOpenRun: (WorkItem) -> Unit, onShowAllWork: () -> Unit, modifier: Modifier = Modifier) {
-  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-      Box(Modifier.weight(1f)) { if (home.needsYou.isNotEmpty()) SectionLabel("Needs you") }
-      SbButton("${home.running} running · ${home.finished} finished today", onShowAllWork, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
-    }
-    if (home.needsYou.isNotEmpty()) NeedsYouRows(home.needsYou, now, onOpenRun)
-  }
-}
-
-@Composable
-private fun NeedsYouRows(items: List<WorkItem>, now: () -> Instant, onOpenRun: (WorkItem) -> Unit) {
+  val shape = RoundedCornerShape(SkillBillRadius.md)
   val ticker = LocalUiTicker.current
   DisposableEffect(ticker) {
     ticker.retain()
@@ -133,21 +110,172 @@ private fun NeedsYouRows(items: List<WorkItem>, now: () -> Instant, onOpenRun: (
   }
   val tick by ticker.now
   val current = tick.let { now() }
-  Column {
-    items.forEach { item -> key(item.id) { NeedsYouRow(item, current) { onOpenRun(item) } } }
+  val items = remember(needsYou, running, chats, selectedRoot, current) {
+    inboxItems(needsYou, running, chats, selectedRoot, current)
+  }
+  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
+    SectionLabel("Pick up where you left off")
+    Column(
+      Modifier.fillMaxWidth().background(colors.bgPanel, shape).clip(shape)
+        .border(1.dp, colors.borderSubtle, shape),
+    ) {
+      if (items.isEmpty()) {
+        BasicText("Nothing here. Start something below.", Modifier.padding(horizontal = 12.dp, vertical = 10.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
+      } else {
+        items.forEachIndexed { index, item ->
+          val previous = items.getOrNull(index - 1)
+          if (index > 0 && item !is InboxItem.Group && previous !is InboxItem.Group) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+          }
+          when (item) {
+            is InboxItem.Group -> key(item.day) { InboxGroupHeader(item.day) }
+            is InboxItem.Run -> key(item.item.id) { InboxRunRow(item, current, onOpenRun) }
+            is InboxItem.Chat -> key(item.entry.sessionId) { InboxChatRow(item, current, onResume, onDiscard) }
+          }
+        }
+      }
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SECTION_SPACING), verticalAlignment = Alignment.CenterVertically) {
+      if (home != null) {
+        SbButton("${home.running} running · ${home.finished} finished today", onShowAllWork, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+      }
+      if (showAll) SbButton("Show all", onShowAll, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+    }
   }
 }
 
 @Composable
-private fun NeedsYouRow(item: WorkItem, now: Instant, onClick: () -> Unit) {
+private fun InboxGroupHeader(day: InboxDay) {
+  Box(
+    Modifier.fillMaxWidth().height(26.dp).background(SkillBillTheme.colors.bgPanel).padding(horizontal = 12.dp),
+    contentAlignment = Alignment.BottomStart,
+  ) {
+    BasicText(day.label.uppercase(), Modifier.padding(bottom = 3.dp), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
+  }
+}
+
+@Composable
+private fun InboxRunRow(row: InboxItem.Run, now: Instant, onOpenRun: (WorkItem) -> Unit) {
+  val item = row.item
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  HomeRow(onClick, Modifier.height(SkillBillSize.row)) {
-    StatusIcon(item.statusKind(), null)
-    BasicText(item.issueKey ?: item.id, style = type.monoSm.copy(color = colors.fgMuted), maxLines = 1)
-    BasicText(rememberRuntimeText(item.title), Modifier.widthIn(max = TITLE_MAX_WIDTH), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    BasicText(rememberRuntimeText((item.exactPauseReason ?: item.reason).orEmpty()), Modifier.weight(1f), style = type.tSm.copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    BasicText(savedAgo(item.control.updatedAt, now), style = type.tSm.copy(color = colors.fgFaint), maxLines = 1)
+  InboxRow(
+    onClick = { onOpenRun(item) },
+    blocked = row.blocked,
+    leading = { StatusIcon(item.statusKind(), null, modifier = Modifier.size(16.dp)) },
+    middle = { _, _ ->
+      BasicText(
+        item.issueKey ?: item.id,
+        Modifier.weight(1f, fill = false),
+        style = type.monoSm.copy(color = colors.fgMuted),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      BasicText(
+        rememberRuntimeText(item.title),
+        Modifier.weight(2f, fill = false),
+        style = type.tBaseMedium.copy(color = colors.fg),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      (item.exactPauseReason ?: item.reason)?.takeIf(String::isNotEmpty)?.let {
+        BasicText(
+          it,
+          Modifier.weight(1f, fill = false),
+          style = type.tSm.copy(color = colors.fgFaint),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
+      Box(Modifier.weight(1f, fill = false).clipToBounds(), contentAlignment = Alignment.CenterStart) {
+        SbLabel(item.stepLabel, SbLabelStyle.Mono)
+      }
+    },
+    trailing = { _, _ -> InboxTime(shortAgo(item.control.updatedAt, now)) },
+  )
+}
+
+@Composable
+private fun InboxChatRow(row: InboxItem.Chat, now: Instant, onResume: (ChatHistoryEntry) -> Unit, onDiscard: (ChatHistoryEntry) -> Unit) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  InboxRow(
+    onClick = { onResume(row.entry) },
+    blocked = false,
+    leading = {
+      val icon = if (row.title.imageName != null) LucideIcons.image else LucideIcons.messageSquare
+      val tint = if (row.title.imageName != null) colors.data2 else colors.fgFaint
+      CompositionLocalProvider(LocalContentColor provides tint) {
+        SbIcon(icon, SbIconSize.Md)
+      }
+    },
+    middle = { hovered, focused ->
+      BasicText(
+        row.title.title,
+        Modifier.weight(2f, fill = false),
+        style = type.tSm.copy(color = if (hovered || focused) colors.fg else colors.fg2),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      row.title.imageName?.let {
+        BasicText(
+          it,
+          Modifier.weight(1f, fill = false),
+          style = type.monoSm.copy(color = colors.fgFaint),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
+      row.repoLabel?.let {
+        Box(Modifier.weight(1f, fill = false).clipToBounds(), contentAlignment = Alignment.CenterStart) {
+          SbLabel(it, SbLabelStyle.Dot(colors.dataColorFor(it)))
+        }
+      }
+    },
+    trailing = { hovered, focused ->
+      if (hovered || focused) {
+        SbIconButton(LucideIcons.x, "Discard ${row.title.title}", { onDiscard(row.entry) }, size = SbControlSize.Small)
+      } else {
+        InboxTime(shortAgo(row.entry.updatedAt, now))
+      }
+    },
+  )
+}
+
+@Composable
+private fun InboxTime(text: String) {
+  BasicText(text, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontFeatureSettings = "tnum"), maxLines = 1)
+}
+
+@Composable
+private fun InboxRow(
+  onClick: () -> Unit,
+  blocked: Boolean,
+  leading: @Composable () -> Unit,
+  middle: @Composable RowScope.(hovered: Boolean, focused: Boolean) -> Unit,
+  trailing: @Composable (hovered: Boolean, focused: Boolean) -> Unit,
+) {
+  val colors = SkillBillTheme.colors
+  val interaction = remember { MutableInteractionSource() }
+  val hovered by interaction.collectIsHoveredAsState()
+  val focused by interaction.collectIsFocusedAsState()
+  Row(
+    Modifier.fillMaxWidth().height(34.dp)
+      .background(if (hovered || focused) colors.bgHover else Color.Transparent)
+      .drawBehind { if (blocked) drawRect(colors.stBlocked, size = Size(2.dp.toPx(), size.height)) }
+      .pointerHoverIcon(PointerIcon.Hand)
+      .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
+      .padding(start = 12.dp, end = 10.dp),
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { leading() }
+    Row(
+      Modifier.weight(1f).fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) { middle(hovered, focused) }
+    Box(Modifier.width(52.dp), contentAlignment = Alignment.CenterEnd) { trailing(hovered, focused) }
   }
 }
 

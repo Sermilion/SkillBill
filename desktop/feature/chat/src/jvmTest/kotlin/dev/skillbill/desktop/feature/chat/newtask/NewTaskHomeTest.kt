@@ -6,8 +6,10 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
@@ -50,13 +52,15 @@ class NewTaskHomeTest {
   private val host = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {})
 
   @Test
-  fun `recent chats show drafts from each repository and route resume and discard`() = runComposeUiTest {
+  fun `inbox shows draft labels only for another repository and routes resume and discard`() = runComposeUiTest {
     val chats = FakeExecutionChatRepository()
     val app = savedDraft(chats, "app", "/work/app", Instant.fromEpochSeconds(0), "Build app\nsecond line")
     val lib = savedDraft(chats, "lib", "/work/lib", Instant.fromEpochSeconds(3_600), "Update library")
     chats.saved[app.sessionId] = app
     chats.saved[lib.sessionId] = lib
-    val draft = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val draft = NewTaskDraft(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System).apply {
+      repository = NewTaskRepository("/work/app", "app")
+    }
     val actions = mutableListOf<NewTaskAction>()
     draft.refreshSaved()
     val fixedHost = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = {}, onShowAllWork = {})
@@ -67,18 +71,18 @@ class NewTaskHomeTest {
     }
     waitForIdle()
 
-    onNodeWithText("Recent chats").assertExists()
+    onNodeWithText("Pick up where you left off").assertExists()
     onNodeWithText("Build app").assertExists()
     onNodeWithText("Update library").assertExists()
-    onNodeWithText("app").assertExists()
     onNodeWithText("lib").assertExists()
-    onNodeWithText("2h ago").assertExists()
+    onNodeWithText("2h").assertExists()
     onNodeWithText("Build app").performClick()
     waitForIdle()
     assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(app)), actions)
 
     actions.clear()
-    onAllNodesWithText("Discard")[0].performClick()
+    onNodeWithText("Update library").performMouseInput { enter(center) }
+    onNodeWithContentDescription("Discard Update library").performClick()
     waitForIdle()
     assertEquals(listOf<NewTaskAction>(NewTaskAction.DiscardDraft(lib)), actions)
   }
@@ -95,13 +99,17 @@ class NewTaskHomeTest {
     draft.refreshSaved()
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), draft, host) { actions += it } }
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskScreen(NewTaskUiState(home = NewTaskHome.FirstRun), draft, host) { actions += it }
+        }
       }
     }
     waitForIdle()
 
-    onAllNodesWithText("Discard").assertCountEquals(NEW_TASK_HISTORY_ROWS)
+    onAllNodesWithText("Draft ", substring = true).assertCountEquals(NEW_TASK_HISTORY_ROWS)
     onNodeWithText("Draft 0").assertDoesNotExist()
+    onNodeWithText("Try one of these").assertExists()
+    onAllNodesWithText("0 running · 0 finished today").assertCountEquals(0)
     onNodeWithText("Show all").performClick()
     assertEquals(listOf<NewTaskAction>(NewTaskAction.ShowAllDrafts), actions)
 
@@ -134,7 +142,7 @@ class NewTaskHomeTest {
 
     onNodeWithText("Try one of these").assertExists()
     onNodeWithText("Ready: claude found, app selected").assertExists()
-    onAllNodesWithText("Needs you").assertCountEquals(0)
+    onAllNodesWithText("Pick up where you left off").assertCountEquals(0)
     onAllNodesWithText("Review my branch").assertCountEquals(0)
   }
 
@@ -186,11 +194,11 @@ class NewTaskHomeTest {
       }
     }
 
-    onNodeWithText("Needs you").assertExists()
+    onNodeWithText("Pick up where you left off").assertExists()
     onNodeWithText("the exact pause reason").assertExists()
     onAllNodesWithText("the fallback reason").assertCountEquals(0)
     onNodeWithText("the only reason").assertExists()
-    onAllNodesWithText("2h ago").assertCountEquals(2)
+    onAllNodesWithText("2h").assertCountEquals(2)
     onAllNodesWithText("Try one of these").assertCountEquals(0)
 
     onNodeWithText("Title SKILL-2").performClick()
@@ -214,7 +222,8 @@ class NewTaskHomeTest {
     }
 
     onNodeWithText("2 running · 0 finished today").assertExists()
-    onAllNodesWithText("Needs you").assertCountEquals(0)
+    onNodeWithText("Pick up where you left off").assertExists()
+    onNodeWithText("Nothing here. Start something below.").assertExists()
     onAllNodesWithText("Try one of these").assertCountEquals(0)
   }
 

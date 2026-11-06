@@ -153,19 +153,27 @@ private fun NewTaskHomeBody(
           )
         }
         StepLine(progress, reducedMotion, preview)
-        if (saved.isNotEmpty()) {
-          RecentChatsSection(
-            saved,
-            host.now(),
+        val returning = state.home as? NewTaskHome.Returning
+        val shown = saved.take(NEW_TASK_HISTORY_ROWS)
+        if (returning != null || saved.isNotEmpty()) {
+          InboxSection(
+            needsYou = returning?.needsYou.orEmpty(),
+            running = returning?.runningItems.orEmpty(),
+            chats = shown,
+            selectedRoot = draft.repository?.root,
+            home = returning,
+            showAll = saved.size > NEW_TASK_HISTORY_ROWS,
+            now = host.now,
+            onOpenRun = host.onOpenRun,
             onResume = { onAction(NewTaskAction.ResumeDraft(it)) },
             onDiscard = { onAction(NewTaskAction.DiscardDraft(it)) },
             onShowAll = { onAction(NewTaskAction.ShowAllDrafts) },
+            onShowAllWork = host.onShowAllWork,
+            modifier = Modifier.alpha(homeAlpha),
           )
         }
-        when (val home = state.home) {
-          NewTaskHome.Pending -> Unit
-          is NewTaskHome.Returning -> NeedsYouSection(home, host.now, host.onOpenRun, host.onShowAllWork, Modifier.alpha(homeAlpha))
-          NewTaskHome.FirstRun -> ExamplesSection(
+        if (state.home == NewTaskHome.FirstRun) {
+          ExamplesSection(
             readinessLine(state.detectedAgents, draft.repository?.name),
             onExample = {
               onAction(NewTaskAction.TextChanged(it))

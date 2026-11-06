@@ -1,3 +1,8 @@
+## [2026-11-06] Keep fence-parsing rationale outside Kotlin comments
+Context: Validation found non-interface KDoc on MarkdownFences and a line comment in PlanBundleSpecText, which the comment architecture guard rejects.
+Decision: Keep this rationale here and remove the source comments. Heading parsers ignore headings inside fenced examples. An unclosed fence marks every line as outside so it cannot hide the rest of a spec.
+Reason: The comment policy permits KDoc only on interfaces and their members. Parsing behavior stays unchanged.
+
 ## [2026-11-05] Tail-wide reset extraction with earliest match
 Context: Codex emits usage_limit_exceeded before try again at timestamps in the same tail.
 Decision: extractResetHint scans the full inspected tail for both reset and try again at patterns and keeps the earliest capture with existing trim and bounds.
