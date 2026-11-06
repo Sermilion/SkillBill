@@ -37,13 +37,16 @@ internal fun PlanNowCard(item: WorkItem, detail: Detail) {
   val quiet = lastAt?.let { (ticker.now.value - it).inWholeSeconds >= PLAN_QUIET_SECONDS } == true
   val colors = SkillBillTheme.colors
   val color = if (quiet || latest?.state == "failed") colors.stBlocked else colors.stActive
-  val phase = detail.standalonePlan?.stages?.firstOrNull { it.status == "running" }?.phaseId
-  val phaseTitle = when (phase) { "plan" -> "Splitting the work"; "plan_subtasks" -> "Writing subtask specs"; else -> "Reading the repo" }
+  val phaseView = planStageViews(item, detail).lastOrNull { it.state == PlanStageState.Running }
+  val phase = phaseView?.phaseId
+  val phaseTitle = phaseView?.label ?: PLAN_STAGES.first().second
   val what = when {
     quiet -> "No new activity for ${elapsedText(requireNotNull(lastAt), ticker.now.value)}"
     latest != null -> {
       val event = PlanActivityEvent(latest.id, latest.at, latest.text, kind = latest.kind, state = latest.state)
-      listOf(planActivityVerb(event), latest.path?.let(::fileName) ?: latest.text).filter(String::isNotBlank).joinToString(" ")
+      val output = planOutputText(latest.text, planRoots(item))
+      if (output.kind != "note") output.display
+      else listOf(planActivityVerb(event), latest.path?.let(::fileName) ?: output.subject).filter(String::isNotBlank).joinToString(" ")
     }
     else -> phaseTitle
   }

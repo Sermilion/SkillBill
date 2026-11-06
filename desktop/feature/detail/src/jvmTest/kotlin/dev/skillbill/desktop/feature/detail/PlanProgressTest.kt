@@ -32,8 +32,8 @@ class PlanProgressTest {
   fun `progress names every writer and hides none behind the first active subtask`() {
     val item = workItem("plan", kind = WorkKind.Phase).copy(running = true)
     val progress = progress(listOf(unit(3), unit(4), unit(5))).copy(totalSubtaskCount = 7, plannedSubtaskCount = 2)
-    assertEquals("Writing specs for subtasks 3, 4, 5. 2 of 7 saved.", planStatusText(item, emptyDetail.copy(standalonePlan = progress)))
-    assertEquals("Wave 1 of 2 · 5 at a time", planWaveLabel(progress.copy(units = progress.units + unit(6).copy(state = "queued") + unit(7).copy(state = "queued"))))
+    assertEquals("Writing specs for subtasks 3 to 5. 2 of 7 saved.", planStatusText(item, emptyDetail.copy(standalonePlan = progress)))
+    assertEquals("wave 1 of 2", planWaveLabel(progress.copy(units = progress.units + unit(6).copy(state = "queued") + unit(7).copy(state = "queued"))))
   }
 
   @Test

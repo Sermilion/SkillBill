@@ -57,7 +57,6 @@ import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -69,10 +68,9 @@ internal fun PlanActivityPanel(item: WorkItem, detail: Detail, state: DetailUiSt
   var transcript by rememberSaveable(item.id) { mutableStateOf(false) }
   var closed by rememberSaveable(item.id) { mutableStateOf(emptyList<String>()) }
   val list = rememberLazyListState()
-  val stageIds = listOf("preplan", "plan", "plan_subtasks")
   val rows = planActivityRows(events, filter)
-  val stages = detail.standalonePlan?.stages.orEmpty()
-  val visibleCount = stageIds.sumOf { id -> 1 + if (id in closed) 0 else rows.count { it.phaseId == id } } + if (item.running) 1 else 0
+  val views = planStageViews(item, detail)
+  val visibleCount = views.sumOf { view -> 1 + if (view.phaseId in closed) 0 else rows.count { it.phaseId == view.phaseId } } + if (item.running) 1 else 0
   val scroll = remember(list) { object : NestedScrollConnection {
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
       if (source == NestedScrollSource.UserInput && available.y > 0) follow = false
@@ -101,11 +99,10 @@ internal fun PlanActivityPanel(item: WorkItem, detail: Detail, state: DetailUiSt
         if (event.type == KeyEventType.KeyDown && event.key == Key.MoveEnd) follow = true
         false
       }, state = list) {
-        stageIds.forEach { id ->
+        views.forEach { view ->
+          val id = view.phaseId
           stickyHeader(key = "group-$id") {
-            val phase = stages.firstOrNull { it.phaseId == id }
-            val status = when (phase?.status) { "running" -> if (item.running) "active" else "paused"; "completed" -> "done"; else -> phase?.status ?: "queued" }
-            PlanActivityGroup(id, status, phase, events.filter { it.phaseId == id }, id !in closed) { closed = if (id in closed) closed - id else closed + id }
+            PlanActivityGroup(view, events.filter { it.phaseId == id }, id !in closed) { closed = if (id in closed) closed - id else closed + id }
           }
           if (id !in closed) items(rows.filter { it.phaseId == id }, key = { it.key }) { event -> PlanActivityRow(event, onAction) }
         }
@@ -120,22 +117,18 @@ internal fun PlanActivityPanel(item: WorkItem, detail: Detail, state: DetailUiSt
 }
 
 @Composable
-private fun PlanActivityGroup(id: String, status: String, phase: StandalonePlanStage?, events: List<PlanActivityEvent>, open: Boolean, onToggle: () -> Unit) {
+private fun PlanActivityGroup(phase: PlanStageView, events: List<PlanActivityEvent>, open: Boolean, onToggle: () -> Unit) {
   val colors = SkillBillTheme.colors
-  val title = when (id) { "preplan" -> "Reading the repo"; "plan" -> "Splitting the work"; else -> "Writing subtask specs" }
+  val title = phase.label
+  val status = planStageStatus(phase.state)
   Row(Modifier.fillMaxWidth().background(colors.bgPanel).clickable(role = Role.Button, onClickLabel = if (open) "Collapse $title" else "Expand $title", onClick = onToggle).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
     CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(if (open) LucideIcons.chevronDown else LucideIcons.chevronRight, 12.dp) }
     BasicText(title, Modifier.weight(1f), style = SkillBillTheme.type.tSmMedium.copy(color = colors.fg2), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    BasicText(id, style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint))
+    BasicText(phase.phaseId, style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint))
     SbLabel(status, SbLabelStyle.Tint(if (status == "active") colors.stActive else if (status == "blocked" || status == "failed") colors.stBlocked else colors.fgFaint))
   }
-  val summary = listOf("read" to "reads", "write" to "writes", "search" to "searches", "command" to "commands", "note" to "notes").mapNotNull { (kind, label) ->
-    events.count { it.kind == kind }.takeIf { it > 0 }?.let { count ->
-      val singular = when (kind) { "search" -> "search"; else -> label.removeSuffix("s") }
-      "$count ${if (count == 1) singular else label}"
-    }
-  }.joinToString(" · ")
-  val duration = phase?.finishedAt?.let { end -> phase.firstStartedAt?.let { activityDuration((end - it).inWholeMilliseconds) } }
+  val summary = planActivitySummary(events)
+  val duration = phase.finishedAt?.let { end -> phase.startedAt?.let { activityDuration((end - it).inWholeMilliseconds) } }
   if (summary.isNotEmpty() || duration != null) Row(Modifier.fillMaxWidth().background(colors.bgPanel).padding(start = 32.dp, end = 12.dp, bottom = 5.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     BasicText(summary, Modifier.weight(1f), style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis)
     duration?.let { BasicText(it, style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint)) }
@@ -148,11 +141,11 @@ internal fun PlanActivityRow(event: PlanActivityEvent, onAction: (DetailAction) 
   val expandable = event.kind == "note" || event.children.isNotEmpty()
   val colors = SkillBillTheme.colors
   val failed = event.state == "failed"
-  val verb = planActivityVerb(event)
+  val verb = if (event.state == "failed") planActivityVerb(event) else event.verb ?: planActivityVerb(event)
   val isSpec = event.kind == "write" && event.path?.let { fileName(it).endsWith(".md") || fileName(it).endsWith(".yaml") || fileName(it).endsWith(".yml") } == true
   val text = event.subtaskId?.let { "#$it · " }.orEmpty() + listOf(verb, if (isSpec) fileName(requireNotNull(event.path)) else event.text).filter(String::isNotBlank).joinToString(" ") + event.exitCode?.let { " · exit $it" }.orEmpty()
   val modifier = if (expandable) Modifier.clickable(role = Role.Button, onClickLabel = if (open) "Collapse activity" else "Expand activity") { open = !open }
-    else if (isSpec) Modifier.clickable(role = Role.Button, onClickLabel = "Open spec") { onAction(DetailAction.OpenSpecFile(requireNotNull(event.path))) } else Modifier
+    else if (isSpec) Modifier.clickable(role = Role.Button, onClickLabel = "Open spec") { onAction(DetailAction.OpenSpecFile(event.openPath ?: requireNotNull(event.path))) } else Modifier
   Row(Modifier.fillMaxWidth().then(modifier).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
     BasicText(event.at?.let { formatInstant(it, "HH:mm:ss") } ?: "—", style = SkillBillTheme.type.monoSm.copy(color = colors.fgFaint))
     CompositionLocalProvider(LocalContentColor provides if (failed) colors.stBlocked else if (event.kind == "write") colors.stDone else colors.fgFaint) { SbIcon(activityIcon(event), 14.dp) }

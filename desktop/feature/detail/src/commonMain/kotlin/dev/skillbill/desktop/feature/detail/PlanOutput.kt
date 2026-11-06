@@ -28,6 +28,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.WorkItem
 
 internal fun DetailSections.planOutput(state: DetailUiState, detail: Detail, onAction: (DetailAction) -> Unit) {
   section("plan-agent-output", if (detail.standalonePlan?.units.isNullOrEmpty()) "Full agent output" else "Agent output") {
@@ -66,9 +67,13 @@ internal fun PlanOutputLog(state: DetailUiState, detail: Detail, onAction: (Deta
   }
 }
 
-internal fun DetailSections.planOutputTail(detail: Detail) {
+internal fun DetailSections.planOutputTail(item: WorkItem, detail: Detail) {
+  val roots = planRoots(item)
   val captured = detail.planOutputLines.filterNot { it.isRaw }.take(4).asReversed()
-  val text = if (captured.isEmpty()) detail.planOutputTail else captured.map { "${formatInstant(it.at, "HH:mm:ss")}  ${it.text.take(160)}" }
+  val text = if (captured.isEmpty()) detail.planOutputTail.map { planOutputText(it, roots).display } else captured.map { line ->
+    val parsed = planOutputText(line.text, roots)
+    "${formatInstant(line.at, "HH:mm:ss")}  ${(parsed.subtaskId ?: line.subtaskId)?.let { "#$it · " }.orEmpty()}${parsed.display.take(160)}"
+  }
   if (text.isEmpty()) return
   section("plan-output-tail", "Agent output", count = "latest ${text.size} lines") {
     item(key = "plan-output-tail-lines") {

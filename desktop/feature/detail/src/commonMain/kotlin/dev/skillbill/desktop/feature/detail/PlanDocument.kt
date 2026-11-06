@@ -55,7 +55,7 @@ internal fun DetailSections.planDocument(
   }
   if (blockedIds.isNotEmpty() || detail.incident != null || view.decision != null) incident(state, view, onAction)
   item(key = "plan-current-activity") { PlanNowCard(item, detail) }
-  if (plan?.units.isNullOrEmpty() && detail.planActivity.none { it.kind != "stream" }) planOutputTail(detail)
+  if (plan?.units.isNullOrEmpty() && detail.planActivity.none { it.kind != "stream" }) planOutputTail(item, detail)
   item(key = "plan-live-activity") { PlanActivityPanel(item, detail, state, sectionCollapse, onAction) }
   if (plan != null && plan.units.isNotEmpty()) {
     planRows(item, plan, detail, onAction)

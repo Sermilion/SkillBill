@@ -24,17 +24,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
-import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.time.Instant
-
-private data class PlanStageLabel(val title: String, val id: String)
-
-private val PLAN_STAGES = listOf(
-  PlanStageLabel("Reading the repo", "preplan"),
-  PlanStageLabel("Splitting the work", "plan"),
-  PlanStageLabel("Writing subtask specs", "plan_subtasks"),
-)
 
 internal fun DetailSections.planStatus(item: WorkItem, detail: Detail) {
   this.item(key = "plan-stage-strip") {
@@ -51,30 +42,20 @@ internal fun DetailSections.planStatus(item: WorkItem, detail: Detail) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PlanStageStrip(item: WorkItem, detail: Detail) {
-  val plan = detail.standalonePlan
-  val stages = plan?.stages.orEmpty().associateBy(StandalonePlanStage::phaseId)
   val ticker = LocalUiTicker.current
   if (item.running) DisposableEffect(ticker) { ticker.retain(); onDispose { ticker.release() } }
   val now = if (item.running) ticker.now.value else detail.observedAt
   Column(Modifier.fillMaxWidth().padding(top = DocBlockGap), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Row(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(SkillBillRadius.md))) {
-      PLAN_STAGES.forEach { label ->
-        val stage = stages[label.id]
-        val blocked = stage?.status == "blocked" || (label.id == "plan_subtasks" && hasBlockedSubtasks(plan))
-        val quiet = stage?.status == "running" && planQuietSince(item, detail) != null
-        val status = when {
-          blocked -> "blocked"
-          stage?.status == "running" && item.running -> "active"
-          stage?.status == "running" -> "paused"
-          stage?.status == "completed" -> "done"
-          stage?.status == "failed" -> "failed"
-          stage?.status == "paused" -> "paused"
-          else -> "queued"
-        }
+      planStageViews(item, detail).forEach { view ->
+        val blocked = view.state == PlanStageState.Blocked
+        val quiet = view.state == PlanStageState.Running && planQuietSince(item, detail) != null
+        val status = planStageStatus(view.state)
+        val finishedAt = view.finishedAt
         val duration = when {
-          stage?.status == "running" -> elapsedTextOrNull(stage.firstStartedAt, now)
-          stage?.finishedAt != null -> stage.finishedAt?.let { elapsedTextOrNull(stage.firstStartedAt, it) }
-          !item.running -> elapsedTextOrNull(stage?.firstStartedAt, detail.updatedAt)
+          view.state == PlanStageState.Running -> elapsedTextOrNull(view.startedAt, now)
+          finishedAt != null -> elapsedTextOrNull(view.startedAt, finishedAt)
+          !item.running -> elapsedTextOrNull(view.startedAt, detail.updatedAt)
           else -> null
         }
         Column(Modifier.weight(1f).background(if (blocked || quiet) SkillBillTheme.colors.stBlocked.copy(alpha = .06f) else if (status == "active") SkillBillTheme.colors.stActive.copy(alpha = .06f) else Color.Transparent).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -86,10 +67,10 @@ private fun PlanStageStrip(item: WorkItem, detail: Detail) {
           }
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             PlanGlyph(if (blocked) "blocked" else if (status == "done") "saved" else if (status == "active") "writing" else "queued", statusColor)
-            BasicText(label.title, style = SkillBillTheme.type.tSmMedium.copy(color = statusColor))
+            BasicText(view.label, style = SkillBillTheme.type.tSmMedium.copy(color = statusColor))
           }
           FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            BasicText(label.id, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
+            BasicText(view.phaseId, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
             duration?.let { BasicText(it, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted)) }
           }
         }
@@ -110,13 +91,22 @@ internal fun planStatusText(item: WorkItem, detail: Detail): String {
     hasBlockedSubtasks(plan) -> "${blockedSubtasksLabel(blockedSubtaskIds(plan))}. ${plan?.plannedSubtaskCount} of ${plan?.totalSubtaskCount} saved, ${plan?.units?.count { it.state == "queued" }} not started."
     planFinished(item, detail) -> "Plan ready. ${plan?.totalSubtaskCount ?: 0} subtasks, all specs saved."
     !item.running -> lifecycleLabel(item.lifecycle)
-    plan?.units?.isNotEmpty() == true -> {
-      val writing = plan.units.filter { it.state == "writing" }.map { it.subtaskId }
-      val action = if (writing.isEmpty()) "Preparing the next subtask specs" else "Writing specs for ${if (writing.size == 1) "subtask" else "subtasks"} ${writing.joinToString(", ")}"
-      "$action. ${plan.plannedSubtaskCount} of ${plan.totalSubtaskCount} saved."
+    else -> {
+      val views = planStageViews(item, detail).associateBy { it.phaseId }
+      when {
+        !plan?.units.isNullOrEmpty() || views["plan_subtasks"]?.state == PlanStageState.Running -> {
+          val writing = plan?.units.orEmpty().filter { it.state == "writing" }.map { it.subtaskId }
+          val action = when {
+            writing.isEmpty() -> "Writing specs"
+            writing.size == 1 -> "Writing specs for subtask ${writing.single()}"
+            else -> "Writing specs for subtasks ${writing.min()} to ${writing.max()}"
+          }
+          "$action. ${plan?.plannedSubtaskCount ?: 0} of ${plan?.totalSubtaskCount ?: 0} saved."
+        }
+        views["plan"]?.state == PlanStageState.Running -> "Splitting the work into subtasks. Their specs appear in the bundle once the manifest is saved."
+        else -> "Reading the repository and the intake before it splits the work."
+      }
     }
-    plan?.stages?.firstOrNull { it.status == "running" }?.phaseId == "plan" -> "Splitting the work into subtasks. The list appears here once the decomposition is saved."
-    else -> "Reading the repository and the intake before it splits the work."
   }
 }
 

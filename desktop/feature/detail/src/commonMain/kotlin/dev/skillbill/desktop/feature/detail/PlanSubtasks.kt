@@ -55,10 +55,11 @@ internal fun DetailSections.planRows(item: WorkItem, plan: StandalonePlanProgres
 
 internal fun planWaveLabel(plan: StandalonePlanProgress): String? {
   val wave = plan.planningWaveNumber ?: return null
-  val capacity = plan.planningWaveCapacity?.takeIf { it > 0 } ?: return "Wave $wave"
+  val capacity = plan.planningWaveCapacity?.takeIf { it > 0 } ?: return "wave $wave"
   val remaining = plan.units.count { it.state == "queued" }
+  if (hasBlockedSubtasks(plan) && remaining > 0) return "wave ${wave + 1} waits"
   val total = wave + (remaining + capacity - 1) / capacity
-  return "Wave $wave of $total · ${if (hasBlockedSubtasks(plan)) "next wave waits" else "$capacity at a time"}"
+  return "wave $wave of $total"
 }
 
 @Composable
@@ -108,7 +109,7 @@ private fun PlanSubtaskRow(unit: StandalonePlanUnit, item: WorkItem, detail: Det
     val outputIsCurrent = unit.latestOutputAt?.let { unit.startedAt?.let { started -> it >= started } != false } != false
     val line = when {
       blocked -> unit.blockedReason
-      writing && outputIsCurrent -> unit.latestOutput ?: detail.planSubtaskLatestLines[unit.subtaskId]
+      writing && outputIsCurrent -> (unit.latestOutput ?: detail.planSubtaskLatestLines[unit.subtaskId])?.let { planOutputText(it, planRoots(item)).display }
       else -> null
     } ?: if (unit.dependsOn.isEmpty()) "no dependencies" else "after ${unit.dependsOn.joinToString(", ")}"
     BasicText(line, Modifier.padding(start = 24.dp), style = (if (writing) SkillBillTheme.type.monoSm else SkillBillTheme.type.tXs).copy(color = if (blocked) colors.stBlocked else colors.fgMuted), maxLines = if (blocked) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
