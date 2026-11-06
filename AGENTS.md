@@ -2,7 +2,7 @@
 
 ## Project Context
 
-skill-bill governs skill authoring, routing, validation, installation, and measurement. It provides orchestration, telemetry, workflow state, and shells for review, checks, feature work, verification, and PRs.
+skill-bill governs skill authoring, routing, validation, installation, and measurement, with orchestration, telemetry, and workflow state.
 
 Non-negotiable contracts:
 
@@ -22,7 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Each goal runs in its own runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after recording completion unless it holds unpublished work. Standalone phases keep working in the caller's checkout. A desktop start naming a branch runs in that branch's checkout or a runtime-created sibling worktree, removed once its last run completes.
+Goals use runtime-owned worktrees at `<state>/goals/<repo>/<goal>/checkout`, removed after completion unless they hold unpublished work. Standalone phases use the caller's checkout. Desktop branch starts use that branch's checkout or a runtime-created sibling, removed after its last run.
 
 ## Product Intent
 
@@ -78,13 +78,17 @@ Code review: pack root + conforming manifest/`content.md`, manifest-registered p
 
 ## Writing And Comments
 
-Write direct, active prose; drop filler, stale wording, praise and repetition; preserve names, numbers and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
+Write direct, active prose; preserve names, numbers and qualifications. Commits/PRs/docs: state the outcome, change and reason; avoid unsupported praise. Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
 
 ## Testing
 
 Write few, high-value tests; name the realistic bug each would catch before authoring. Assert observable boundaries, not implementation structure. `skill-bill operation unit-test-value-check` is the review gate.
 
 No timing-based tests. Tests must not depend on wall-clock time or thread scheduling. Ban real sleeps (`Thread.sleep`, shell `sleep N`) racing timeouts, idle windows or poll intervals; elapsed-time or poll-count assertions; real-time deadline polling; latch or join timeouts; and real `delay` outside `runTest`. CI's loaded self-hosted runner makes these flaky, so do not widen sleeps or deadlines. Inject a clock and scheduler (fake `Clock`, `runTest` virtual time or code-signalled latches) to control every transition. Leave real-time-only behavior untested.
+
+## Desktop QA
+
+QA of this repository's desktop app launches with `cd desktop && ./gradlew :app:runFromSource`. The task builds same-checkout `runtime-cli` and uses a scratch home under `desktop/app/build/source-run/`. `:app:run` reports the runtime as unavailable unless the installed runtime matches the checkout. QA must not point the app at `~/.skill-bill`. See `desktop/QA.md`.
 
 ## Comments
 

@@ -37,14 +37,25 @@ class InstalledRuntimeBuildGateTest {
     )
   }
 
+  @Test
+  fun `the source-run layout with two dirty records sharing a run id is available`() {
+    val dirty = record(readSchema = 7, dirty = true, runId = "source-run-1")
+    installRuntime(dirty)
+    val appRecord = write(directory.resolve("app-resources/build-identity.properties"), dirty)
+
+    val installation = InstalledRuntimeBuildGate(directory.resolve("runtime"), appRecord).check()
+
+    assertIs<RuntimeAvailability.Available>(installation.availability)
+  }
+
   private fun installRuntime(record: String?) {
     val runtimeCli = directory.resolve("runtime/runtime-cli")
     write(runtimeCli.resolve("lib/runtime-core-0.1.0.jar"), "")
     if (record != null) write(runtimeCli.resolve("build-identity.properties"), record)
   }
 
-  private fun record(readSchema: Int) =
-    "commit=abc123\ndirty=false\nrelease_tag=\ninstall_run_id=\nread_schema=$readSchema\nincident_detail_version=1\nmin_incident_detail_read_schema=1\n"
+  private fun record(readSchema: Int, dirty: Boolean = false, runId: String = "") =
+    "commit=abc123\ndirty=$dirty\nrelease_tag=\ninstall_run_id=$runId\nread_schema=$readSchema\nincident_detail_version=1\nmin_incident_detail_read_schema=1\n"
 
   private fun write(path: Path, text: String): Path {
     Files.createDirectories(path.parent)
