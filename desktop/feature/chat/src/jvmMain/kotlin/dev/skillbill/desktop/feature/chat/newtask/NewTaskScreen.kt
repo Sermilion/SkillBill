@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -53,72 +54,78 @@ internal class NewTaskScreenHost(
 )
 
 @Composable
-internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
+internal fun NewTaskScreen(state: NewTaskUiState, chats: NewTaskChats, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
+  val open by chats.open.collectAsState()
+  val selected by chats.selected.collectAsState()
+  val selectedChat = selected.chat.collectAsState().value
+  LaunchedEffect(Unit) { chats.refreshSaved() }
+  Column(Modifier.fillMaxSize()) {
+    ViewHeader(
+      crumbs = listOf(Crumb("New task")),
+      actions = {
+        if (selectedChat != null) SbButton("Discard", { onAction(NewTaskAction.Discard) }, size = SbControlSize.Small)
+      },
+    )
+    NewTaskChatTabs(open, selected, chats::status, chats::select, onNew = { onAction(NewTaskAction.NewChat) })
+    key(selected) { NewTaskChatContent(state, selected, host, onAction) }
+  }
+}
+
+@Composable
+private fun ColumnScope.NewTaskChatContent(state: NewTaskUiState, draft: NewTaskDraft, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
   val chat = draft.chat.collectAsState().value
   val offer by draft.offer.collectAsState()
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
-  LaunchedEffect(Unit) { draft.refreshSaved() }
-  Column(Modifier.fillMaxSize()) {
-    ViewHeader(
-      crumbs = listOf(Crumb("New task")),
-      actions = {
-        if (chat != null) {
-          if (!chat.repositoryMissing) SbButton("New chat", { onAction(NewTaskAction.NewChat) }, size = SbControlSize.Small)
-          SbButton("Discard", { onAction(NewTaskAction.Discard) }, size = SbControlSize.Small)
-        }
-      },
-    )
-    if (chat == null) {
-      NewTaskHomeBody(state, draft, host, focus, onAction, Modifier.weight(1f))
-    } else {
-      key(chat) {
-        ChatTranscript(
-          chat.thread,
-          gone = false,
-          mode = ChatPermissionMode.Act,
-          modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
-          allowStartActions = host.onStart != null,
-          allowSuggestedActions = !offer.starting,
-          footer = if (offer.prefixKind != null) {
-            {
-              NewTaskPrefixPrompt(
-                offer.choices,
-                enabled = !chatBusy && !offer.starting && offer.started == null,
-                onChoose = draft::retryPrefix,
-              )
-            }
-          } else null,
-        ) { _, action ->
-          val start = action.start
-          if (start == null) {
-            if (draft.sendSuggestedAction(action)) {
-              focusManager.clearFocus()
-            }
-          } else if (host.onStart != null) {
-            val monitorTarget =
-              action.target?.trim()?.takeIf(String::isNotBlank)
-                ?: action.instruction.trim().takeIf { start == NewTaskActionKind.Monitor }
-            host.onStart?.invoke(start.wire, monitorTarget, action)
+  if (chat == null) {
+    NewTaskHomeBody(state, draft, host, focus, onAction, Modifier.weight(1f))
+  } else {
+    key(chat) {
+      ChatTranscript(
+        chat.thread,
+        gone = false,
+        mode = ChatPermissionMode.Act,
+        modifier = Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = COMPOSER_MAX_WIDTH),
+        allowStartActions = host.onStart != null,
+        allowSuggestedActions = !offer.starting,
+        footer = if (offer.prefixKind != null) {
+          {
+            NewTaskPrefixPrompt(
+              offer.choices,
+              enabled = !chatBusy && !offer.starting && offer.started == null,
+              onChoose = draft::retryPrefix,
+            )
           }
+        } else null,
+      ) { _, action ->
+        val start = action.start
+        if (start == null) {
+          if (draft.sendSuggestedAction(action)) {
+            focusManager.clearFocus()
+          }
+        } else if (host.onStart != null) {
+          val monitorTarget =
+            action.target?.trim()?.takeIf(String::isNotBlank)
+              ?: action.instruction.trim().takeIf { start == NewTaskActionKind.Monitor }
+          host.onStart?.invoke(start.wire, monitorTarget, action)
         }
       }
     }
-    Column(
-      Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-      if (chat == null && state.home is NewTaskHome.Returning) {
-        val startable = draft.repository != null && draft.agentId != null
-        NewTaskChips(
-          host.onStart?.takeIf { startable }?.let { onStart -> { wire, target -> onStart(wire, target, null) } },
-          Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
-        )
-      }
-      NewTaskComposer(state, draft, focus, host.now, onAction)
+  }
+  Column(
+    Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    if (chat == null && state.home is NewTaskHome.Returning) {
+      val startable = draft.repository != null && draft.agentId != null
+      NewTaskChips(
+        host.onStart?.takeIf { startable }?.let { onStart -> { wire, target -> onStart(wire, target, null) } },
+        Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
+      )
     }
+    NewTaskComposer(state, draft, focus, host.now, onAction)
   }
 }
 

@@ -251,9 +251,15 @@ class NewTaskDraftTest {
   @Test
   fun `closeAll ends the new-task chat, keeps its save and never lists it as a tab`() = runTest {
     chat.events = { flowOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed) }
-    val draft = draft()
+    val chats = testNewTaskChats(chat)
+    val draft = chats.selected.value.apply {
+      repository = NewTaskRepository(root, "repo")
+      baseBranch = "main"
+      agentId = "claude"
+      selectedAgent = this@NewTaskDraftTest.chat.agent
+    }
     val workspace = ChatWorkspace(
-      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), draft,
+      chat, FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(), chats,
     )
     draft.say("add export")
     runCurrent()

@@ -25,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
@@ -74,10 +75,10 @@ sealed interface NewTaskAction {
   data class RunSuggestedAction(val action: ChatSuggestedAction) : NewTaskAction
 }
 
-/** Reads the choices the composer offers and keeps the operator's values in [draft]. */
+/** Reads the choices the composer offers and keeps the operator's values in the selected chat of [chats]. */
 @Inject
 class NewTaskViewModel(
-  val draft: NewTaskDraft,
+  val chats: NewTaskChats,
   private val board: WorkBoardRepository,
   private val specs: SpecRepository,
   private val branches: RepositoryBranchesRepository,
@@ -89,77 +90,94 @@ class NewTaskViewModel(
   private val mutableState = MutableStateFlow(NewTaskUiState(agents = chat.agents()))
   val state: StateFlow<NewTaskUiState> = mutableState.asStateFlow()
 
+  /** The selected chat; every action acts on it. */
+  val draft: NewTaskDraft get() = chats.selected.value
+
   private var pathCheck: Job? = null
-  private var agentRead: Job? = null
+  private val agentReads = mutableMapOf<NewTaskDraft, Job>()
   private var branchReadJob: Job? = null
   private var readinessRequested = false
 
   init {
-    readBranches()
+    val first = draft
+    readBranches(first)
     viewModelScope.launch { observeBoard(loadRepositories()) }
-    agentRead = viewModelScope.launch { resolveAgent(draft.agentId ?: defaultAgentId()) }
+    readAgent(first) { resolveAgent(first, first.agentId ?: defaultAgentId()) }
+    viewModelScope.launch { chats.selected.drop(1).collect(::showSelected) }
   }
 
   fun now(): Instant = clock.now()
 
   fun onAction(action: NewTaskAction) {
+    val target = draft
     when (action) {
-      is NewTaskAction.TextChanged -> draft.text = action.text
+      is NewTaskAction.TextChanged -> target.text = action.text
       is NewTaskAction.ChooseBaseBranch -> {
         pathCheck?.cancel()
-        draft.baseBranch = action.branch
+        target.baseBranch = action.branch
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
-      NewTaskAction.RetryBranches -> draft.repository?.root?.let { readBranches(it) }
+      NewTaskAction.RetryBranches -> target.repository?.root?.let { readBranches(target, it) }
       is NewTaskAction.ChooseRepository -> {
         pathCheck?.cancel()
-        selectRepository(action.repository)
+        selectRepository(target, action.repository)
       }
-      is NewTaskAction.SubmitRepositoryPath -> submitPath(action.path)
-      NewTaskAction.AddRepository -> addRepository()
+      is NewTaskAction.SubmitRepositoryPath -> submitPath(target, action.path)
+      NewTaskAction.AddRepository -> addRepository(target)
       is NewTaskAction.ChooseAgent -> {
-        agentRead?.cancel()
-        draft.agentId = action.agentId
-        agentRead = viewModelScope.launch { resolveAgent(action.agentId) }
+        target.agentId = action.agentId
+        readAgent(target) { resolveAgent(target, action.agentId) }
       }
       NewTaskAction.OpenRepositoryPicker -> {
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = true) }
-        readBranches()
+        readBranches(target)
       }
       NewTaskAction.CloseRepositoryPicker -> {
         if (mutableState.value.choosingFolder) return
         pathCheck?.cancel()
         mutableState.update { it.copy(repositoryError = null, repositoryPickerOpen = false) }
       }
-      NewTaskAction.Send -> send()
-      NewTaskAction.Stop -> draft.stop()
-      NewTaskAction.SendNow -> draft.sendNow()
-      NewTaskAction.Discard -> draft.discard()
-      NewTaskAction.NewChat -> draft.launch { draft.close() }
+      NewTaskAction.Send -> send(target)
+      NewTaskAction.Stop -> target.stop()
+      NewTaskAction.SendNow -> target.sendNow()
+      NewTaskAction.Discard -> target.discard()
+      NewTaskAction.NewChat -> chats.newChat()
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
-      is NewTaskAction.DiscardDraft -> draft.discardSaved(action.entry)
+      is NewTaskAction.DiscardDraft -> target.discardSaved(action.entry)
       NewTaskAction.ShowAllDrafts -> {
-        draft.refreshSaved()
+        chats.refreshSaved()
         mutableState.update { it.copy(resumePickerOpen = true) }
       }
       is NewTaskAction.ResumeDraft -> {
-        agentRead?.cancel()
-        draft.launch {
-          if (draft.resume(action.entry)) {
+        agentReads.remove(target)?.cancel()
+        target.launch {
+          if (target.resume(action.entry) && isSelected(target)) {
             mutableState.update { it.copy(agent = action.entry.agent, resumePickerOpen = false) }
-            readBranches()
+            readBranches(target)
           }
         }
       }
-      is NewTaskAction.RunSuggestedAction -> draft.sendSuggestedAction(action.action)
+      is NewTaskAction.RunSuggestedAction -> target.sendSuggestedAction(action.action)
     }
   }
 
-  private fun send() {
-    if (!draft.canSend()) return
-    if (draft.text.trim() != RESUME_COMMAND) return draft.send()
-    draft.text = ""
-    draft.refreshSaved()
+  private fun isSelected(target: NewTaskDraft): Boolean = chats.selected.value === target
+
+  private fun showSelected(selected: NewTaskDraft) {
+    pathCheck?.cancel()
+    mutableState.update {
+      it.copy(agent = selected.selectedAgent, repositoryPickerOpen = false, resumePickerOpen = false, repositoryError = null)
+    }
+    readBranches(selected)
+    val resolved = selected.selectedAgent != null && selected.selectedAgent?.agentId == selected.agentId
+    if (!resolved && selected !in agentReads) readAgent(selected) { resolveAgent(selected, selected.agentId ?: defaultAgentId()) }
+  }
+
+  private fun send(target: NewTaskDraft) {
+    if (!target.canSend()) return
+    if (target.text.trim() != RESUME_COMMAND) return target.send()
+    target.text = ""
+    chats.refreshSaved()
     mutableState.update { it.copy(resumePickerOpen = true) }
   }
 
@@ -174,10 +192,11 @@ class NewTaskViewModel(
 
   private suspend fun observeBoard(listed: List<NewTaskRepository>) {
     board.observe(ShellBoard.query).collect { read ->
-      if (read !is BoardState.Loading && draft.repository == null) {
+      val target = draft
+      if (read !is BoardState.Loading && target.repository == null) {
         val row = (read as? BoardState.Loaded)?.items?.firstOrNull()
-        draft.repository = row?.let { NewTaskRepository(it.repositoryRoot, it.repositoryName) } ?: listed.firstOrNull()
-        readBranches()
+        target.repository = row?.let { NewTaskRepository(it.repositoryRoot, it.repositoryName) } ?: listed.firstOrNull()
+        readBranches(target)
       }
       val home = newTaskHome(read)
       mutableState.update { it.copy(home = home) }
@@ -201,19 +220,28 @@ class NewTaskViewModel(
     return agents.firstOrNull { id -> detected.any { it.name.equals(id, ignoreCase = true) } } ?: agents.first()
   }
 
-  private suspend fun resolveAgent(agentId: String?) {
-    if (agentId == null) return
-    draft.agentId = agentId
-    val agent = chat.agentFor(agentId)
-    if (draft.agentId != agentId) return
-    draft.selectedAgent = agent
-    mutableState.update { it.copy(agent = agent) }
-    draft.rebindChat()
+  /** Runs [read] as [target]'s only agent read, so a newer choice in one chat never cancels another chat's read. */
+  private fun readAgent(target: NewTaskDraft, read: suspend () -> Unit) {
+    agentReads.remove(target)?.cancel()
+    val job = viewModelScope.launch { read() }
+    agentReads[target] = job
+    job.invokeOnCompletion { if (agentReads[target] === job) agentReads.remove(target) }
   }
 
-  private fun readBranches(rootOverride: String? = null) {
+  private suspend fun resolveAgent(target: NewTaskDraft, agentId: String?) {
+    if (agentId == null) return
+    target.agentId = agentId
+    val agent = chat.agentFor(agentId)
+    if (target.agentId != agentId) return
+    target.selectedAgent = agent
+    if (isSelected(target)) mutableState.update { it.copy(agent = agent) }
+    target.rebindChat()
+  }
+
+  private fun readBranches(target: NewTaskDraft, rootOverride: String? = null) {
+    if (!isSelected(target)) return
     branchReadJob?.cancel()
-    val root = rootOverride ?: draft.repository?.root
+    val root = rootOverride ?: target.repository?.root
     if (root == null) {
       mutableState.update { it.copy(branchRead = BranchReadState.Idle) }
       return
@@ -228,23 +256,24 @@ class NewTaskViewModel(
         is RepositoryBranchesRead.NotARepository -> BranchReadState.Failed(root, "${result.path} is not a git repository.")
         is RepositoryBranchesRead.Unavailable -> BranchReadState.Failed(root, readProblemText(result.problem))
       }
-      if (draft.repository?.root == root) mutableState.update { it.copy(branchRead = read) }
+      if (isSelected(target) && target.repository?.root == root) mutableState.update { it.copy(branchRead = read) }
     }
   }
 
-  private fun selectRepository(repository: NewTaskRepository, listed: RepositoryBranches? = null) {
-    if (repository.root != draft.repository?.root) draft.baseBranch = ""
-    draft.repository = repository
+  private fun selectRepository(target: NewTaskDraft, repository: NewTaskRepository, listed: RepositoryBranches? = null) {
+    if (repository.root != target.repository?.root) target.baseBranch = ""
+    target.repository = repository
+    if (!isSelected(target)) return
     mutableState.update { it.copy(repositoryError = null, repositoryPicks = it.repositoryPicks + 1) }
     if (listed != null) {
       branchReadJob?.cancel()
       mutableState.update { it.copy(branchRead = BranchReadState.Loaded(repository.root, listed)) }
     } else if ((mutableState.value.branchRead as? BranchReadState.Loaded)?.root != repository.root) {
-      readBranches()
+      readBranches(target)
     }
   }
 
-  private fun addRepository() {
+  private fun addRepository(target: NewTaskDraft) {
     if (mutableState.value.choosingFolder) return
     pathCheck?.cancel()
     mutableState.update { it.copy(choosingFolder = true) }
@@ -257,39 +286,39 @@ class NewTaskViewModel(
       }
       when (choice) {
         FolderChoice.Cancelled -> Unit
-        is FolderChoice.Failed -> showRepositoryError("Could not open the folder chooser: ${choice.message}")
-        is FolderChoice.Chosen -> checkPath(choice.path)
+        is FolderChoice.Failed -> showRepositoryError(target, "Could not open the folder chooser: ${choice.message}")
+        is FolderChoice.Chosen -> checkPath(target, choice.path)
       }
     }
   }
 
-  private fun submitPath(path: String) {
+  private fun submitPath(target: NewTaskDraft, path: String) {
     if (path.isBlank()) return
     pathCheck?.cancel()
-    pathCheck = viewModelScope.launch { checkPath(path) }
+    pathCheck = viewModelScope.launch { checkPath(target, path) }
   }
 
-  private suspend fun checkPath(path: String) {
+  private suspend fun checkPath(target: NewTaskDraft, path: String) {
     when (val read = branches.branches(path)) {
-      is RepositoryBranchesRead.NotARepository -> showRepositoryError("$path is not a git repository.")
-      is RepositoryBranchesRead.Unavailable -> showRepositoryError("Could not read $path: ${readProblemText(read.problem)}")
-      is RepositoryBranchesRead.Listed -> addListedRepository(read.branches)
+      is RepositoryBranchesRead.NotARepository -> showRepositoryError(target, "$path is not a git repository.")
+      is RepositoryBranchesRead.Unavailable -> showRepositoryError(target, "Could not read $path: ${readProblemText(read.problem)}")
+      is RepositoryBranchesRead.Listed -> addListedRepository(target, read.branches)
     }
   }
 
-  private suspend fun addListedRepository(listed: RepositoryBranches) {
+  private suspend fun addListedRepository(target: NewTaskDraft, listed: RepositoryBranches) {
     when (val project = specs.projectFor(listed.repositoryRoot)) {
-      is Outcome.Failure -> showRepositoryError(readProblemText(project.error))
+      is Outcome.Failure -> showRepositoryError(target, readProblemText(project.error))
       is Outcome.Success -> {
         val repository = NewTaskRepository(project.value.repoRoot ?: listed.repositoryRoot, project.value.displayName)
-        val known = mutableState.value.repositories + draft.addedRepositories
-        if (known.none { it.root == repository.root }) draft.addedRepositories += repository
-        selectRepository(repository, listed)
+        val known = mutableState.value.repositories + target.addedRepositories
+        if (known.none { it.root == repository.root }) target.addedRepositories += repository
+        selectRepository(target, repository, listed)
       }
     }
   }
 
-  private fun showRepositoryError(message: String) {
-    mutableState.update { it.copy(repositoryError = message) }
+  private fun showRepositoryError(target: NewTaskDraft, message: String) {
+    if (isSelected(target)) mutableState.update { it.copy(repositoryError = message) }
   }
 }

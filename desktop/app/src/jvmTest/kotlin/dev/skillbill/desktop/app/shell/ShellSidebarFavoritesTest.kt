@@ -12,6 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -48,7 +51,7 @@ class ShellSidebarFavoritesTest {
         Box(Modifier.width(280.dp).height(420.dp)) {
           ShellSidebar(
             topRoute = WorkRoute(null), sectionSizes = null, favorites = entries, specFavorites = emptyList(), specsOpen = false, terminalOpen = false,
-            chatOpen = false, newTaskDraft = false, contributions = emptyList(), onNavigate = { selected = it },
+            chatOpen = false, newTaskDraft = false, newTaskOpenChats = 1, contributions = emptyList(), onNavigate = { selected = it },
             onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {}, onToggleChat = {}, onShowShortcuts = {},
             onRemoveFavorite = { removed = it }, onRemoveSpecFavorite = {}, onOpenSpecFavorite = { _, _ -> },
           )
@@ -79,7 +82,7 @@ class ShellSidebarFavoritesTest {
         Box(Modifier.width(280.dp).height(420.dp)) {
           ShellSidebar(
             topRoute = WorkRoute(null), sectionSizes = null, favorites = emptyList(), specFavorites = specEntries, specsOpen = false,
-            terminalOpen = false, chatOpen = false, newTaskDraft = false, contributions = emptyList(), onNavigate = { selected = it },
+            terminalOpen = false, chatOpen = false, newTaskDraft = false, newTaskOpenChats = 1, contributions = emptyList(), onNavigate = { selected = it },
             onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {}, onToggleChat = {}, onShowShortcuts = {},
             onRemoveFavorite = {}, onRemoveSpecFavorite = {}, onOpenSpecFavorite = { projectId, path -> opened = projectId to path },
           )
@@ -109,7 +112,7 @@ class ShellSidebarFavoritesTest {
             sidebar = {
               ShellSidebar(
                 topRoute = WorkRoute(null), sectionSizes = null, favorites = emptyList(), specFavorites = listOf(specEntry), specsOpen = panes.specsOpen,
-                terminalOpen = false, chatOpen = false, newTaskDraft = false, contributions = emptyList(), onNavigate = {},
+                terminalOpen = false, chatOpen = false, newTaskDraft = false, newTaskOpenChats = 1, contributions = emptyList(), onNavigate = {},
                 onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {}, onToggleChat = {}, onShowShortcuts = {},
                 onRemoveFavorite = {}, onRemoveSpecFavorite = {},
                 onOpenSpecFavorite = { projectId, path ->
@@ -143,5 +146,29 @@ class ShellSidebarFavoritesTest {
       assertEquals(false, panes.drawerOpen)
       assertEquals(true, clickedBehindDrawer)
     }
+  }
+
+  @Test
+  fun `new task shows the open chat count instead of the draft dot when more than one chat is open`() = runComposeUiTest {
+    var openChats by mutableIntStateOf(2)
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Box(Modifier.width(280.dp).height(420.dp)) {
+          ShellSidebar(
+            topRoute = WorkRoute(null), sectionSizes = null, favorites = emptyList(), specFavorites = emptyList(), specsOpen = false,
+            terminalOpen = false, chatOpen = false, newTaskDraft = true, newTaskOpenChats = openChats, contributions = emptyList(), onNavigate = {},
+            onOpenCommandMenu = {}, onToggleSpecs = {}, onToggleTerminal = {}, onToggleChat = {}, onShowShortcuts = {},
+            onRemoveFavorite = {}, onRemoveSpecFavorite = {}, onOpenSpecFavorite = { _, _ -> },
+          )
+        }
+      }
+    }
+
+    onNodeWithText("2").assertExists()
+    onNodeWithText("1").assertDoesNotExist()
+
+    openChats = 1
+    onNodeWithText("2").assertDoesNotExist()
+    onNodeWithText("1").assertExists()
   }
 }

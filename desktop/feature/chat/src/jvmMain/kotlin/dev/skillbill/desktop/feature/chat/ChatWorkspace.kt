@@ -28,7 +28,7 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
-import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskChats
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -43,7 +43,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
@@ -92,10 +91,12 @@ class ChatWorkspace(
   private val clock: Clock,
   private val panes: ShellPanes,
   private val selection: SelectionHolder,
-  private val newTask: NewTaskDraft,
+  private val newTask: NewTaskChats,
 ) : ChatCommands {
   private val scope = windowScope.scope
-  override val newTaskDraftOpen: StateFlow<Boolean> = newTask.chat.map { it != null }.stateIn(scope, SharingStarted.Eagerly, false)
+  override val newTaskDraftOpen: StateFlow<Boolean> = newTask.anyChatOpen
+
+  override val newTaskOpenChats: StateFlow<Int> = newTask.openCount
   private val turns = ChatTurns(chat, details, clock)
   private val sessions = LinkedHashMap<String, ChatSession>()
   private val resumeJobs = LinkedHashSet<Job>()
@@ -164,10 +165,11 @@ class ChatWorkspace(
   override fun runVerifyFixes(item: WorkItem, brief: String) = actOnItemChat(item, brief)
 
   override fun prefillGoalIntake(repoRoot: String, branch: String, text: String): Boolean {
-    if (newTask.chat.value != null || newTask.text.isNotBlank()) return false
-    newTask.text = text
-    newTask.repository = dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository(repoRoot, File(repoRoot).name)
-    newTask.baseBranch = branch
+    val draft = newTask.selected.value
+    if (draft.chat.value != null || draft.text.isNotBlank()) return false
+    draft.text = text
+    draft.repository = dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository(repoRoot, File(repoRoot).name)
+    draft.baseBranch = branch
     return true
   }
 
@@ -180,7 +182,7 @@ class ChatWorkspace(
   }
 
   override fun closeChats() {
-    newTask.dispose()
+    newTask.disposeAll()
     closeExecutionChats()
   }
 
@@ -252,9 +254,9 @@ class ChatWorkspace(
     observeActive()
   }
 
-  /** Ends every chat, and the new-task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
+  /** Ends every chat, and every New task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
   suspend fun closeAll(): Boolean {
-    if (!newTask.close()) return false
+    if (!newTask.closeAll()) return false
     closeExecutionChats()
     return true
   }

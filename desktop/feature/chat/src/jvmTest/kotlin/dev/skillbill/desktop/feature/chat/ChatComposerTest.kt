@@ -43,7 +43,7 @@ import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.core.ui.shell.FloatingPane
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
-import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.unconfinedNewTaskChats
 import androidx.compose.ui.test.hasText
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
@@ -65,7 +65,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      testNewTaskDraft(),
+      unconfinedNewTaskChats(),
     )
     val item = workItem("SKILL-1")
     workspace.open(item)
@@ -135,7 +135,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      testNewTaskDraft(),
+      unconfinedNewTaskChats(),
     )
     val item = workItem("SKILL-469")
     workspace.open(item)
@@ -173,7 +173,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(supported = setOf("claude")), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      testNewTaskDraft(),
+      unconfinedNewTaskChats(),
     )
     val item = workItem("SKILL-450")
     workspace.open(item)
@@ -222,7 +222,7 @@ class ChatComposerTest {
     val workspace = ChatWorkspace(
       FakeExecutionChatRepository(), FakeWorkDetailRepository(), FakeWorkControlRepository(), testDatabaseSessionController(),
       WindowCoroutineScope(backgroundScope), Clock.System, ShellPanes(), SelectionHolder(),
-      testNewTaskDraft(),
+      unconfinedNewTaskChats(),
     )
     val item = workItem("SKILL-1")
     workspace.open(item)

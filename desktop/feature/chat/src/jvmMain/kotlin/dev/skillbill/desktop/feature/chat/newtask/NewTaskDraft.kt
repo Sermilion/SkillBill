@@ -15,7 +15,6 @@ import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
-import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
@@ -27,13 +26,10 @@ import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import me.tatarka.inject.annotations.Inject
-import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.util.UUID
 import kotlin.time.Clock
@@ -53,22 +49,19 @@ private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
 private fun NewTaskKind.startName(): String =
   NewTaskActionKind.entries.firstOrNull { it.toNewTaskKind() == this }?.wire ?: name.lowercase()
 
-/** What the operator set up on New task, with its chat. It lives with the window, so navigation and session switches keep it. */
-@Inject
-@SingleIn(WindowScope::class)
-class NewTaskDraft(
+/** One open New task chat: what the operator set up for it, with its conversation. [NewTaskChats] owns the open set for the window. */
+class NewTaskDraft internal constructor(
   private val chats: ExecutionChatRepository,
   private val workControls: WorkControlRepository,
   private val databaseSession: DatabaseSessionController,
   private val toasts: ToastQueue,
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
+  private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope),
 ) {
   private val scope = windowScope.scope
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
-  private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private val offerState = MutableStateFlow(NewTaskOffer())
-  private var savedRead: Job? = null
   private var closing = false
   private var offerKeyEdit: NewTaskOfferKeyEdit? = null
   private var lastOfferFieldValue: String? = null
@@ -86,7 +79,7 @@ class NewTaskDraft(
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 
   /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
-  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
+  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
   internal fun canSend(): Boolean = canAdmitTurn(text)
 
@@ -345,8 +338,7 @@ class NewTaskDraft(
   }
 
   internal fun refreshSaved() {
-    savedRead?.cancel()
-    savedRead = scope.launch { savedState.value = chats.savedNewTaskDrafts() }
+    savedChats.refresh()
   }
 
   internal fun dispose() {
