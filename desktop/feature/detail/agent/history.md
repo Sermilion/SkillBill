@@ -9,6 +9,15 @@ Areas: desktop/feature/detail; desktop/core/domain; desktop/core/data; runtime-e
 Feature flag: N/A
 Acceptance criteria: 4/4 subtask criteria implemented; 5/5 parent criteria implemented across runtime and desktop
 
+## [2026-11-06] SKILL-508 validation page with live checks
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, runtime-engine, runtime-ports, runtime-infra
+- Standalone validation detail shows an outcome card, foldable report parts, flagged links and runs on the same branch while retaining activity and run controls.
+- Report shaping and invocation-scoped fold state support expanding and scrolling to flagged parts. reusable
+- Available live checks show progress, outcomes and expandable attempts for the current invocation. Unavailable and older runs retain the report-only layout.
+- Peer runs require matching repository and non-null branch correlation; detached HEAD and missing correlation yield no peers. Other phase layouts and the CLI detail schema remain unchanged.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-06] SKILL-506 Verify run detail and actions
 Areas: desktop/feature/detail, desktop/feature/changes, desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/datastore, desktop/core/ui
 - A Verify document displays run state, outcome, criteria filters, expandable receipts and inline QA. It opens a superseding run and the recorded revision range.

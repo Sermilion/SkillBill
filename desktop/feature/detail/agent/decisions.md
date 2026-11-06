@@ -8,6 +8,11 @@ Context: Unblock snippets target `.skill-bill/phases/qa.md`, which the runtime r
 Decision: Copy snippets verbatim and open the repository file through `openFileUnder` in the default application. Report opening failure without creating or editing the file.
 Reason: The requested workflow has the operator create the file and paste chosen setup instructions before the next run. Opening must target the repository copy and bypass editor environment variables.
 
+## [2026-11-06] Scope live validation checks to the current invocation
+Context: Resumed validation runs can retain earlier execution records, and some runs do not provide live checks.
+Decision: Project checks for the current standalone validation invocation and show them only when its availability flag is set.
+Reason: Earlier events would misrepresent the current run. The flag records availability without tying the UI to an agent name.
+
 ## [2026-11-06] Show Verify QA evidence as names only
 Context: Verify QA results reuse the desktop QA results view, but Verify has no invocation directory for resolving evidence files.
 Decision: Render evidence names without file-opening actions for Verify QA.

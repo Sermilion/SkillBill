@@ -5,6 +5,11 @@ import dev.skillbill.desktop.core.domain.model.AuditAttempt
 import dev.skillbill.desktop.core.domain.model.AuditCriterion
 import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.Detail
+import dev.skillbill.desktop.core.domain.model.ValidationBranchRun
+import dev.skillbill.desktop.core.domain.model.ValidationCheck
+import dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt
+import dev.skillbill.desktop.core.domain.model.ValidationCheckResult
+import dev.skillbill.desktop.core.domain.model.ValidationOutcome
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -90,7 +95,12 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaStepStatus
 import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.idestatus.model.StandaloneReviewReport
+import skillbill.ports.idestatus.model.LiveChecksAvailability
+import skillbill.ports.idestatus.model.ValidationCheckOutcome
+import skillbill.ports.idestatus.model.StandaloneValidationOutcome
 import skillbill.ports.idestatus.model.WorkDetailItem
+import skillbill.ports.idestatus.model.WorkExecutionInstance
+import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.ports.idestatus.model.WorkDetailList
 import skillbill.ports.idestatus.model.WorkIncidentProgress
 import skillbill.ports.idestatus.model.WorkIncidentProjection
@@ -124,7 +134,9 @@ internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: Checked
         (this.changeBaseline as? WorkChangeBaseline.CommittedBranchRange)?.headBranch ?: item.branch
       null -> if (standalone) item.branch else branches.checkedOutBranch(Path.of(repositoryRoot)) ?: item.branch
     }
-  val planFeature = executionHistory.firstOrNull { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
+  val planFeature =
+    selectedExecution?.takeIf { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
+      ?: executionHistory.firstOrNull { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
   return item.copy(
     title = goalManifest?.featureName?.takeIf { item.kind == WorkKind.Goal && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) }
       ?: planFeature?.takeIf { standalone && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) } ?: item.title,
@@ -164,6 +176,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     updatedAt = snapshot.updatedAt.toKotlinInstant(),
     lastAgentActivityLabel = snapshot.lastAgentActivityLabel?.wireValue,
     lastAgentActivityAt = snapshot.lastAgentActivityAt?.toKotlinInstant(),
+    currentActivity = snapshot.currentActivity,
     currentSubtaskStartedAt = snapshot.currentSubtask?.startedAt?.toKotlinInstant(),
     subtaskActiveDurationMs = snapshot.currentSubtask?.activeDurationMs,
     subtaskActiveDurationAsOf = snapshot.currentSubtask?.activeDurationAsOf?.toKotlinInstant(),
@@ -227,15 +240,22 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         WorktreeEdit(it.recordedAt.toKotlinInstant(), it.pathSample, it.netInsertions, it.netDeletions, it.phaseId)
       },
     ),
-    executionHistory = executionHistory.map {
-      ExecutionInstance(
-        it.invocationId, it.executionId, it.lifecycleState, it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(),
-        it.finishedAt?.toKotlinInstant(), it.result, it.restoration?.toDomain(), it.qaOutcome?.toDomain(), it.qaReportText,
-        it.planReport?.toDomain(), it.reviewReport?.toDomain(),
-        it.qaChecklist?.toDomain(), it.qaFindings.map { finding -> QaChecklistFinding(finding.id, finding.title, null) },
-        it.qaDetails?.toDomain(),
+    executionHistory = executionHistory.map { it.toDomain() },
+    selectedExecution = selectedExecution?.toDomain(),
+    validationBranchRuns = validationBranchRuns.map {
+      ValidationBranchRun(
+        invocationId = it.invocationId,
+        runSequence = it.runSequence,
+        lifecycle = IdeStatusPolicy.standaloneLifecycle(it.lifecycleState).toDomain(),
+        startedAt = it.startedAt.toKotlinInstant(),
+        finishedAt = it.finishedAt?.toKotlinInstant(),
+        activeDurationMs = it.activeDurationMs,
+        agent = it.launchAgentId,
+        currentActivity = it.currentActivity,
+        result = it.result,
       )
     },
+    selectedValidationResult = selectedValidationResult,
     incident = incident?.toDomain(),
     incidentHistory = incidentHistory.map { it.toDomain() },
     goalSpecBundle = goalSpecBundle?.toDomain(),
@@ -251,6 +271,37 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     standalonePlan = standalonePlanProgress?.toDomain(),
     verifyRun = verifyRun?.toDomain(),
   )
+}
+
+private fun StandaloneValidationOutcome.toDomain(): ValidationOutcome = when (this) {
+  StandaloneValidationOutcome.PASSED -> ValidationOutcome.Passed
+  StandaloneValidationOutcome.FAILED -> ValidationOutcome.Failed
+  StandaloneValidationOutcome.BLOCKED -> ValidationOutcome.Blocked
+}
+
+private fun WorkExecutionInstance.toDomain() = ExecutionInstance(
+  invocationId, executionId, lifecycleState, startedAt.toKotlinInstant(), updatedAt.toKotlinInstant(),
+  finishedAt?.toKotlinInstant(), result, restoration?.toDomain(), qaOutcome?.toDomain(), qaReportText,
+  planReport?.toDomain(), reviewReport?.toDomain(),
+  qaChecklist?.toDomain(), qaFindings.map { finding -> QaChecklistFinding(finding.id, finding.title, null) },
+  qaDetails?.toDomain(),
+  liveChecks = liveChecks == LiveChecksAvailability.AVAILABLE,
+  validationOutcome = validationOutcome?.toDomain(),
+  validationChecks = validationChecks.map { check ->
+    ValidationCheck(check.checkId, check.name, check.command, check.workingDir, check.attempts.map { attempt ->
+      ValidationCheckAttempt(
+        attempt.number, attempt.startedAt?.toKotlinInstant(), attempt.finishedAt?.toKotlinInstant(),
+        attempt.outcome?.toDomain(), attempt.exitCode, attempt.note,
+      )
+    })
+  },
+)
+
+private fun ValidationCheckOutcome.toDomain(): ValidationCheckResult = when (this) {
+  ValidationCheckOutcome.PASSED -> ValidationCheckResult.Passed
+  ValidationCheckOutcome.FAILED -> ValidationCheckResult.Failed
+  ValidationCheckOutcome.BLOCKED -> ValidationCheckResult.Blocked
+  ValidationCheckOutcome.SKIPPED -> ValidationCheckResult.Skipped
 }
 
 private fun RuntimeGoalWorktreeState.toWorktreeDomain(): GoalWorktreeState = when (this) {

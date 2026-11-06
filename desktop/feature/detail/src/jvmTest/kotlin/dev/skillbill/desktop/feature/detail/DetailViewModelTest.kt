@@ -358,7 +358,7 @@ class DetailViewModelTest {
     val execution = dev.skillbill.desktop.core.domain.model.ExecutionInstance(
       "run-1", "run-1", "active", epoch, epoch, null, null, null, null, null, null, null, checklist,
     )
-    val read = DetailState(source, DetailSections.Loaded(emptyDetail.copy(executionHistory = listOf(execution)), null, emptyMap(), emptySet(), stale = false))
+    val read = DetailState(source, DetailSections.Loaded(emptyDetail.copy(selectedExecution = execution), null, emptyMap(), emptySet(), stale = false))
     val viewModel = viewModel(source = source)
     val effects = mutableListOf<DetailEffect>()
     backgroundScope.launch { viewModel.effects.collect { effects += it } }
@@ -376,6 +376,34 @@ class DetailViewModelTest {
     assertEquals(false, viewModel.state.value.qaCaseOverrides[key])
     assertEquals("run-1", viewModel.state.value.selectedQaRun)
     assertEquals(listOf(ToastTone.Problem), effects.filterIsInstance<DetailEffect.ShowToast>().map { it.message.tone })
+  }
+
+  @Test
+  fun `validation check toggle resolves selected execution outside history page`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val source = item.copy(kind = WorkKind.Phase, control = item.control.copy(invocationId = "older-run"))
+    val check = dev.skillbill.desktop.core.domain.model.ValidationCheck(
+      "compile", "Compile", "./gradlew check", ".", listOf(
+        dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt(1, epoch, epoch, dev.skillbill.desktop.core.domain.model.ValidationCheckResult.Failed, 1, null),
+        dev.skillbill.desktop.core.domain.model.ValidationCheckAttempt(2, epoch, epoch, dev.skillbill.desktop.core.domain.model.ValidationCheckResult.Passed, 0, null),
+      ),
+    )
+    val execution = dev.skillbill.desktop.core.domain.model.ExecutionInstance(
+      "older-run", "older-run", "completed", epoch, epoch, epoch, null, null, null, null, null,
+      liveChecks = true, validationChecks = listOf(check),
+    )
+    val viewModel = viewModel(source = source)
+    advanceUntilIdle()
+    details.flow.emit(DetailState(
+      source,
+      DetailSections.Loaded(emptyDetail.copy(selectedExecution = execution), null, emptyMap(), emptySet(), stale = false),
+    ))
+    advanceUntilIdle()
+
+    val key = ValidationCheckKey("older-run", "compile")
+    viewModel.onAction(DetailAction.ToggleValidationCheck(key))
+
+    assertEquals(true, viewModel.state.value.validationCheckOverrides[key])
   }
 
   @Test

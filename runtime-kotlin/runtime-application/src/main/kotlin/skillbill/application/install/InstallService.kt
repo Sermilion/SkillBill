@@ -1,11 +1,7 @@
 package skillbill.application.install
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.failureCodeLabel
 import skillbill.install.model.BaselineManifest
-import skillbill.install.model.InstallApplyIssue
-import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallApplyResult
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.InstallPlan
@@ -22,7 +18,6 @@ import skillbill.install.model.buildInstallPlanWireMap
 import skillbill.install.model.selectedPlatformSlugs
 import skillbill.install.policy.InstallPlanPolicy
 import skillbill.model.toPath
-import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.apply.InstallApplyExecutionPort
 import skillbill.ports.install.apply.model.InstallApplyExecutionRequest
@@ -59,7 +54,7 @@ class InstallService(
   private val skillLinkPort: InstallSkillLinkPort,
   private val installSelectionPersistencePort: InstallSelectionPersistencePort,
   private val installPlanWireValidator: InstallPlanWireValidator,
-  private val databaseSchemaPort: DatabaseSchemaPort,
+  private val databasePreparation: InstallDatabasePreparation,
 ) {
   fun planInstall(request: InstallPlanRequest): InstallPlan {
     val facts = planningFactsPort.collectPlanningFacts(InstallPlanningFactsRequest(request)).facts
@@ -153,31 +148,9 @@ class InstallService(
           telemetryLevelMutator = telemetryLevelMutator,
         ),
       ).result
-    val result = prepareDatabase(applied)
+    val result = databasePreparation.prepare(applied)
     persistSuccessfulInstallSelection(plan, result)
     return result
-  }
-
-  private fun prepareDatabase(result: InstallApplyResult): InstallApplyResult {
-    if (result.status == InstallApplyStatus.FAILURE) {
-      return result
-    }
-    return try {
-      databaseSchemaPort.ensureDatabaseReady()
-      result
-    } catch (error: SkillBillRuntimeException) {
-      result.copy(
-        status = InstallApplyStatus.WARNING,
-        warnings =
-          result.warnings +
-            InstallApplyIssue(
-              kind = InstallApplyIssueKind.DATABASE_MIGRATION_FAILED,
-              message = error.message.orEmpty(),
-              guidance = "The database will migrate on the next Skill Bill run that writes to it.",
-              causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
-            ),
-      )
-    }
   }
 
   fun validateInstallPlanWire(plan: InstallPlan) {

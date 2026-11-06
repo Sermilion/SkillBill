@@ -39,7 +39,9 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
   appendLine("You may suggest the next free local key implied by the inventory in prose only. Wait for the operator to send that complete key in chat or say they will type it on the start card. Never silently mint or use a suggested key before acceptance.")
   appendLine(
     "To let the operator accept a suggested key with one click, offer an action without \"start\" whose instruction is exactly the bare key, such as \"SKILL-12\", and whose label shows that key, such as \"Use SKILL-12\". " +
-      "Clicking it counts as acceptance. Any other wording in the instruction does not.",
+      "Clicking it counts as acceptance. Any other wording in the instruction does not. " +
+      "Offer this key action only in a reply that proposes a new key for work the operator wants to start as a goal or plan. " +
+      "Never offer it for a key that already has a run or spec bundle, and leave it out of replies about anything else.",
   )
   appendLine(
     "Once the operator has accepted a key in chat, the start button already carries it. Offer the start action in that same reply and do not ask them to type the key again on the card. " +

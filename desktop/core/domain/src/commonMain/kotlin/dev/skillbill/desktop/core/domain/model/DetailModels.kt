@@ -98,11 +98,27 @@ data class Detail(
   val currentSubtaskId: Int? = null,
   val goalWorktree: GoalWorktree? = null,
   val launchWarning: String? = null,
+  val currentActivity: String? = null,
+  val validationBranchRuns: List<ValidationBranchRun> = emptyList(),
+  val selectedValidationResult: String? = null,
+  val selectedExecution: ExecutionInstance? = null,
   val planOutputTail: List<String> = emptyList(),
   val planOutputUpdatedAt: Instant? = null,
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
   val standalonePlan: StandalonePlanProgress? = null,
   val verifyRun: VerifyRunDetails? = null,
+)
+
+data class ValidationBranchRun(
+  val invocationId: String,
+  val runSequence: String,
+  val lifecycle: Lifecycle,
+  val startedAt: Instant,
+  val finishedAt: Instant?,
+  val activeDurationMs: Long?,
+  val agent: String?,
+  val currentActivity: String?,
+  val result: String?,
 )
 
 data class WorkSubtask(
@@ -278,6 +294,30 @@ data class ExecutionInstance(
   val qaChecklist: QaChecklist? = null,
   val qaFindings: List<QaChecklistFinding> = emptyList(),
   val qaDetails: QaRunDetails? = null,
+  val liveChecks: Boolean = false,
+  val validationOutcome: ValidationOutcome? = null,
+  val validationChecks: List<ValidationCheck> = emptyList(),
+)
+
+enum class ValidationOutcome { Passed, Failed, Blocked }
+
+enum class ValidationCheckResult { Passed, Failed, Blocked, Skipped }
+
+data class ValidationCheck(
+  val checkId: String,
+  val name: String,
+  val command: String,
+  val workingDir: String,
+  val attempts: List<ValidationCheckAttempt>,
+)
+
+data class ValidationCheckAttempt(
+  val number: Int,
+  val startedAt: Instant?,
+  val finishedAt: Instant?,
+  val result: ValidationCheckResult?,
+  val exitCode: Int?,
+  val note: String?,
 )
 
 /**

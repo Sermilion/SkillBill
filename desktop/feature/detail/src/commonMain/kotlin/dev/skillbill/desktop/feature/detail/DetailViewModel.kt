@@ -227,6 +227,7 @@ class DetailViewModel(
       DetailAction.ToggleFavorite -> toggleFavorite()
       DetailAction.VerifyAgain -> verifyAgainLauncher.start()
       is DetailAction.ToggleQaCase -> toggleQaCase(action.key)
+      is DetailAction.ToggleValidationCheck -> toggleValidationCheck(action.key)
       is DetailAction.SetAllQaCases -> mutableState.update { current -> current.copy(qaCaseOverrides = current.qaCaseOverrides + action.keys.associateWith { action.open }) }
       is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
       is DetailAction.OpenQaReport -> open(FILE_NOT_OPENED) { specs.openFileInDefaultApp(action.path) }
@@ -273,6 +274,14 @@ class DetailViewModel(
   private fun toggleQaCase(key: QaCaseKey) {
     val open = qaCaseIsOpen(state.value.header, loadedDetail() ?: return, key, state.value.qaCaseOverrides) ?: return
     mutableState.update { it.copy(qaCaseOverrides = it.qaCaseOverrides + (key to !open)) }
+  }
+
+  private fun toggleValidationCheck(key: ValidationCheckKey) {
+    val detail = loadedDetail() ?: return
+    val run = detail.execution(key.invocationId) ?: return
+    val row = validationChecksSummary(run, qaRunLive(state.value.header, run)).rows.firstOrNull { it.check.checkId == key.checkId } ?: return
+    val open = validationCheckIsOpen(row, run.invocationId, qaRunLive(state.value.header, run), state.value.validationCheckOverrides)
+    mutableState.update { it.copy(validationCheckOverrides = it.validationCheckOverrides + (key to !open)) }
   }
 
   private fun effectiveSubtask(): SubtaskKey? = loadedDetail()?.let { selectedSubtask(state.value.header, it, state.value.subtaskChoice.key) }

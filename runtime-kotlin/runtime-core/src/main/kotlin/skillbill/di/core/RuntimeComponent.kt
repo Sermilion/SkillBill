@@ -90,6 +90,7 @@ import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
 import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
+import skillbill.infrastructure.sqlite.workerlease.SQLiteRuntimeWorkerLeases
 import skillbill.infrastructure.sqlite.workflow.goalrunner.archive.SqliteGoalArchiveSnapshotPort
 import skillbill.infrastructure.workflow.git.branches.GitRepositoryBranchesAdapter
 import skillbill.infrastructure.workflow.git.changes.GitWorkChangesAdapter
@@ -112,6 +113,7 @@ import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.RuntimeWorkerLeaseQuery
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.editor.FileEditorLauncherPort
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -295,6 +297,9 @@ abstract class RuntimeComponent(
 
   @Provides
   fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter
+
+  @Provides
+  fun runtimeWorkerLeaseQuery(adapter: SQLiteRuntimeWorkerLeases): RuntimeWorkerLeaseQuery = adapter
 
   @Provides
   fun goalArchiveSnapshotPort(adapter: SqliteGoalArchiveSnapshotPort): GoalArchiveSnapshotPort = adapter

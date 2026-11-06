@@ -21,4 +21,7 @@ class SQLiteDatabaseSchema(
     DatabaseRuntime.migrateExistingDatabase(database.resolveDbPath(), diagnostics)
     return true
   }
+
+  override fun hasPendingMigrations(): Boolean =
+    database.databaseExists() && DatabaseRuntime.hasPendingMigrations(database.resolveDbPath(), diagnostics)
 }
