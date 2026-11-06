@@ -46,6 +46,7 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -54,6 +55,7 @@ import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
+import skillbill.ports.idestatus.model.StandalonePlanProgress
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
 import skillbill.ports.idestatus.model.WorkBoardItem
@@ -387,7 +389,6 @@ public class IdeStatusService(
         (validationRead?.page?.remainingCount ?: 0) > request.pageSize,
         runtimeRead?.hasMore == true && request.includesDetailList(WorkDetailList.PHASES),
       )
-    val allMoreLists = if (dependencies?.nextOffset == null) moreLists else moreLists + WorkDetailList.DEPENDENCIES
     val planOutput = standalonePlanOutput(standalone, context.unitOfWork)
     val detailItem =
       WorkDetailItem(
@@ -405,8 +406,8 @@ public class IdeStatusService(
         goalStatus = goalStatus,
         pageOffset = position.offset,
         pageSize = request.pageSize,
-        hasMore = allMoreLists.isNotEmpty(),
-        moreLists = allMoreLists,
+        hasMore = moreLists.isNotEmpty() || dependencies?.nextOffset != null,
+        moreLists = if (dependencies?.nextOffset == null) moreLists else moreLists + WorkDetailList.DEPENDENCIES,
         dependencies = dependencies?.entries.orEmpty(),
         freshnessDeadline = snapshot.updatedAt.plus(IdeStatusFreshnessClassifier.FRESH_WINDOW).plusNanos(1),
         observation = context.unitOfWork.workList.observation(),
@@ -427,10 +428,33 @@ public class IdeStatusService(
         planOutputTail = planOutput.tail,
         planOutputUpdatedAt = planOutput.latestLineAt,
         planSubtaskLatestLines = planOutput.latestAttributedLines,
+        standalonePlanProgress = detailPlanProgress(standalone, context, position, planOutput),
       )
     val nextAnchors =
       detailNextAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
     return ProjectedDetailItem(detailItem, nextAnchors)
+  }
+
+  private fun detailPlanProgress(
+    standalone: StandalonePhaseStatusRecord?,
+    context: IdeStatusProjectionContext,
+    position: WorkDetailPagePosition,
+    planOutput: StandalonePhaseOutputSnapshot,
+  ): StandalonePlanProgress? {
+    return standalone
+      ?.takeIf {
+        it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN &&
+          it.launchScope == IdeStatusLaunchScope.STANDALONE
+      }
+      ?.let {
+        projector.standalonePlanProgressProjector.project(
+          it,
+          context.repoRoot,
+          context.unitOfWork,
+          position.observedAt,
+          planOutput,
+        )
+      }
   }
 
   private fun detailStepPipeline(

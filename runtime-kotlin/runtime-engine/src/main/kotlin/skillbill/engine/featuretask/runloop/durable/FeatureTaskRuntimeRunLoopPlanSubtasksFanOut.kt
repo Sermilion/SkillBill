@@ -115,6 +115,11 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   override fun settleUnit(
     unitId: Int,
     result: Result<PhaseOutcome>,
+  ): PhaseOutcome? = synchronized(parent.records) { settleUnitLocked(unitId, result) }
+
+  private fun settleUnitLocked(
+    unitId: Int,
+    result: Result<PhaseOutcome>,
   ): PhaseOutcome? {
     val outcome =
       result.getOrElse { error ->
@@ -264,7 +269,18 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override val session = FeatureTaskRuntimeRunLoopSession(operatorBlockRetry = null, initialPendingReentry = null)
   override val clock: Clock get() = parent.clock
   override val diagnostics: RuntimeDiagnostics get() = parent.diagnostics
-  override val records: PhaseRunRecords = InMemoryPhaseRunRecords(parent.clock, null)
+  override val records: PhaseRunRecords =
+    InMemoryPhaseRunRecords(parent.clock, null, phaseRecordSink = { record ->
+      synchronized(parent.records) {
+        val bundle = parent.records.loadPlanBundle(facts.workflowId)
+        bundle != null &&
+          parent.records.recordPlanBundleWithUnits(
+            facts.workflowId,
+            bundle,
+            mapOf(unit.subtaskId to record),
+          )
+      }
+    })
   override val specSource: SpecSource get() = parent.specSource
   override val transitions: FeatureTaskRuntimeTransitionDeclaration get() = parent.transitions
   override val telemetry: FeatureTaskRuntimeRunObservability =

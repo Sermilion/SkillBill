@@ -89,6 +89,12 @@ public interface StandalonePlanReportPort {
     issueKey: String,
     repoRoot: Path,
   ): String?
+
+  public fun detailReport(
+    issueKey: String,
+    repoRoot: Path,
+    savedSubtaskIds: Set<Int>,
+  ): StandalonePlanReport?
 }
 
 public interface GoalBlockRecoveryPort {

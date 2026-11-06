@@ -61,6 +61,7 @@ public class InMemoryPhaseRunRecords private constructor(
   private val goalQualityProgressSink: ((GoalQualityPhaseProgress) -> Boolean)?,
   private val initialGoalQualityProgress: GoalQualityPhaseProgress?,
   private val goalQualityWorkflowId: String,
+  private val phaseRecordSink: ((FeatureTaskRuntimePhaseRecord) -> Boolean)?,
 ) : PhaseRunRecords,
   StandaloneMonitorRunRecords,
   PhaseLaunchRecords by InMemoryPhaseLaunchRecords(),
@@ -77,6 +78,7 @@ public class InMemoryPhaseRunRecords private constructor(
     goalQualityPhaseProgress: GoalQualityPhaseProgress? = null,
     persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress) -> Boolean)? = null,
     goalQualityWorkflowId: String = "",
+    phaseRecordSink: ((FeatureTaskRuntimePhaseRecord) -> Boolean)? = null,
   ) : this(
     clock,
     resolvedBranch,
@@ -86,6 +88,7 @@ public class InMemoryPhaseRunRecords private constructor(
     persistGoalQualityPhaseProgress,
     goalQualityPhaseProgress,
     goalQualityWorkflowId,
+    phaseRecordSink,
   ) {
     qaState = goalQualityPhaseProgress?.qaRepairState ?: initialQaRepairState
     goalQualityPhaseProgress?.let { progress ->
@@ -161,6 +164,7 @@ public class InMemoryPhaseRunRecords private constructor(
 
   override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
     applyPhaseRecord(phaseRecords, request, clock)
+    if (phaseRecordSink?.invoke(phaseRecords.getValue(request.phaseId).detached()) == false) return false
     if (goalQualityProgressSink != null) {
       persistGoalQualityProgress()
     }
@@ -181,16 +185,25 @@ public class InMemoryPhaseRunRecords private constructor(
           request.attemptCount,
         )
       }
-      if (replacement == existing) return RequiredPhaseWrite.Acknowledged
-      val proposed =
-        goalQualityProgress().copy(
-          phaseRecords = phaseRecords + (request.phaseId to replacement.detached()),
-        )
-      persistGoalQualityProgress(proposed)
-      phaseRecords[request.phaseId] = replacement.detached()
+      if (replacement != existing) {
+        val proposed =
+          goalQualityProgress().copy(
+            phaseRecords = phaseRecords + (request.phaseId to replacement.detached()),
+          )
+        persistGoalQualityProgress(proposed)
+        phaseRecords[request.phaseId] = replacement.detached()
+      }
       return RequiredPhaseWrite.Acknowledged
     }
     applyPhaseRecord(phaseRecords, request, clock)
+    if (phaseRecordSink?.invoke(phaseRecords.getValue(request.phaseId).detached()) == false) {
+      return RequiredPhaseWrite.Rejected(
+        RequiredPhaseWriteKind.START,
+        request.workflowId,
+        request.phaseId,
+        request.attemptCount,
+      )
+    }
     phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.START, request)
     persistGoalQualityProgress()
     return RequiredPhaseWrite.Acknowledged
@@ -202,6 +215,14 @@ public class InMemoryPhaseRunRecords private constructor(
       acceptedOutputs[request.phaseId] = it
     }
     applyPhaseRecord(phaseRecords, request, clock)
+    if (phaseRecordSink?.invoke(phaseRecords.getValue(request.phaseId).detached()) == false) {
+      return RequiredPhaseWrite.Rejected(
+        RequiredPhaseWriteKind.COMPLETION,
+        request.workflowId,
+        request.phaseId,
+        request.attemptCount,
+      )
+    }
     phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
     (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)?.let {
       acceptedOccurrences += GoalQualityAcceptedOutput(request.phaseId, request.attemptCount, it)

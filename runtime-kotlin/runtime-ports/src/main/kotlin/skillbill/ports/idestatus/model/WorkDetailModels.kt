@@ -90,6 +90,7 @@ data class WorkDetailItem(
   val planOutputTail: List<String> = emptyList(),
   val planOutputUpdatedAt: Instant? = null,
   val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
+  val standalonePlanProgress: StandalonePlanProgress? = null,
 )
 
 data class WorkDetailRuntimeStatus(
