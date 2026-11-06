@@ -33,7 +33,9 @@ internal object McpStdioServer {
       method == "tools/list" ->
         McpProtocolFramer.successResponse(
           id,
-          McpProtocolFramer.toolsList(McpToolRegistry.tools.map(McpTool::toPayload)),
+          McpProtocolFramer.toolsList(
+            McpToolRegistry.tools.filter { it.advertised(component) }.map(McpTool::toPayload),
+          ),
         )
       method == "tools/call" -> {
         val params = message.arguments()

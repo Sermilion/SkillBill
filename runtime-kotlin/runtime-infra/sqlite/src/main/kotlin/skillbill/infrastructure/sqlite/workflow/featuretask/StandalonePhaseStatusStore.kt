@@ -26,6 +26,9 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaDetai
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readReviewRunId
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.StandaloneValidationCheckStore
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readLiveChecks
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readValidationOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.writeStandaloneQaChecklist
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
@@ -37,6 +40,7 @@ import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
+import skillbill.ports.idestatus.StandaloneValidationCheckRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
@@ -63,7 +67,8 @@ internal class StandalonePhaseStatusStore(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val transactionActive: Boolean,
-) : StandalonePhaseStatusRepository {
+) : StandalonePhaseStatusRepository,
+  StandaloneValidationCheckRepository by StandaloneValidationCheckStore(connection, diagnostics, transactionActive) {
   override fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       registerInTransaction(request)
@@ -771,6 +776,8 @@ internal class StandalonePhaseStatusStore(
       reviewRunId = readReviewRunId(),
       qaChecklist = readQaChecklist(getString("invocation_id"), diagnostics),
       qaDetails = readQaDetailsOrWarn(getString("invocation_id"), diagnostics),
+      liveChecks = readLiveChecks("standalone-status"),
+      validationOutcome = readValidationOutcome("standalone-status"),
     )
   }
 

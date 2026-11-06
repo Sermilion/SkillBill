@@ -5,6 +5,8 @@ import skillbill.application.telemetry.validation.qualityCheckResults
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.mcp.featuretask.featureTaskPhaseBlock
 import skillbill.mcp.featuretask.featureTaskPhaseComplete
+import skillbill.mcp.featuretask.validationCheck
+import skillbill.mcp.featuretask.validationCheckInvocationId
 import skillbill.mcp.lifecycle.featureVerifyFinished
 import skillbill.mcp.lifecycle.featureVerifyStarted
 import skillbill.mcp.lifecycle.prDescriptionGenerated
@@ -47,6 +49,7 @@ internal data class McpTool(
   val normalize: ((Map<String, Any?>) -> Map<String, Any?>)? = null,
   val runtimeOwnedArgumentKeys: Set<String> = emptySet(),
   val advertisedEnumSubset: Pair<String, List<String>>? = null,
+  val advertised: (McpComponent) -> Boolean = { true },
 ) {
   fun toPayload(): Map<String, Any?> =
     linkedMapOf(
@@ -106,6 +109,16 @@ internal object McpToolRegistry {
           "Store a prose feature-task result for runtime validation. An ok response confirms receipt, " +
             "not phase or workflow completion.",
         handler = ::featureTaskPhaseComplete,
+      ),
+      McpTool(
+        name = "validation_check",
+        description =
+          "Report one validation check of the running validation phase. Call planned once per check before " +
+            "running any check. Call started right before you run a check and finished with its outcome right " +
+            "after it ends. Report a check you will not run as finished with outcome skipped, without a start. " +
+            "Never send times; the runtime records them. Keep check_id the same for every event of one check.",
+        handler = ::validationCheck,
+        advertised = { component -> validationCheckInvocationId(component) != null },
       ),
       McpTool(
         name = McpToolPayloadKeys.FEATURE_VERIFY_FINISHED,
