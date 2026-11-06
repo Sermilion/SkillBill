@@ -37,8 +37,7 @@ internal fun DetailSections.verifyDocument(state: DetailUiState, run: VerifyRunD
   }
   val showChanges = run.changedFiles.isNotEmpty() && verifyRunState(run) != VerifyRunState.Parked
   val showCopy = verifyRunState(run) == VerifyRunState.Finished
-  val runAgain = verifyRunState(run) in setOf(VerifyRunState.Finished, VerifyRunState.Stopped, VerifyRunState.Superseded) &&
-    !run.intake.isNullOrBlank() && !run.repoRoot.isNullOrBlank() && !run.target.isNullOrBlank() && !(state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.isNullOrEmpty()
+  val runAgain = canVerifyAgain(run, (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty())
   if (showChanges || showCopy || runAgain) item(key = "verify-actions") {
     androidx.compose.foundation.layout.Row(Modifier.padding(top = 12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
       if (showChanges) SbButton("Open changes · ${run.changedFiles.size}", { onAction(DetailAction.OpenChangesWindow()) })

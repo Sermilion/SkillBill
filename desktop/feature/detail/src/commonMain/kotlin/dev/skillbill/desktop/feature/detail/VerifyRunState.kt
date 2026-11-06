@@ -61,6 +61,10 @@ internal fun verifyIntakeLabel(intake: String?): String {
 }
 internal fun isFreeTextIntake(intake: String?) = intake == null || !(intake.startsWith("spec:") || intake.startsWith("http://", ignoreCase = true) || intake.startsWith("https://", ignoreCase = true))
 
+internal fun canVerifyAgain(run: VerifyRunDetails, agentChoices: List<String>) =
+  verifyRunState(run) in setOf(VerifyRunState.Finished, VerifyRunState.Stopped, VerifyRunState.Superseded) &&
+    !run.intake.isNullOrBlank() && !run.repoRoot.isNullOrBlank() && !run.target.isNullOrBlank() && agentChoices.isNotEmpty()
+
 @androidx.compose.runtime.Composable
 internal fun rememberVerifySectionScroller(
   listState: androidx.compose.foundation.lazy.LazyListState,

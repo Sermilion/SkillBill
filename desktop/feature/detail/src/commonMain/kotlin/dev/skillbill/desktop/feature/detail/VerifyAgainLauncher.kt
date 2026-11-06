@@ -26,12 +26,12 @@ internal class VerifyAgainLauncher(
     val current = state.value
     val run = (current.sections as? SectionsUi.Loaded)?.detail?.verifyRun ?: return false
     val options = (current.sections as? SectionsUi.Loaded)?.runOptions ?: return false
+    if (!canVerifyAgain(run, options.agentChoices)) return false
     val agent = options.agentId?.takeIf { it in options.agentChoices } ?: options.agentChoices.firstOrNull() ?: return false
     val intake = run.intake?.takeIf(String::isNotBlank) ?: return false
     val repoRoot = run.repoRoot?.takeIf(String::isNotBlank) ?: return false
     val branch = run.target?.takeIf(String::isNotBlank) ?: return false
     if (current.verifyAgainInFlight) return false
-    if (verifyRunState(run) !in setOf(VerifyRunState.Finished, VerifyRunState.Stopped, VerifyRunState.Superseded)) return false
     state.update { it.copy(verifyAgainInFlight = true) }
     scope.launch {
       try {

@@ -4,6 +4,7 @@ import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.engine.featuretask.qa.report.QaReportParser
 import skillbill.engine.featuretask.qa.report.QaRunDetailsMapping
 import skillbill.engine.operation.verify.VerifyCriteria
+import skillbill.engine.operation.verify.VerifyIntake
 import skillbill.engine.operation.verify.VerifyWorkflow
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
@@ -37,7 +38,7 @@ internal object VerifyRunDetailsProjection {
       currentStepId = snapshot.currentStepId,
       startedAt = snapshot.startedAt,
       finishedAt = snapshot.finishedAt,
-      intake = input(VerifyWorkflow.INTAKE),
+      intake = intake(inputContext),
       target = input(VerifyWorkflow.TARGET),
       repoRoot = input(VerifyWorkflow.REPO_ROOT),
       baseRevision = input(VerifyWorkflow.BASE_REVISION),
@@ -70,6 +71,14 @@ internal object VerifyRunDetailsProjection {
       staleReason = unitOfWork.lifecycleTelemetry.featureVerifyStaleReason(snapshot.sessionId),
     )
   }
+
+  internal fun intake(inputContext: Any?): String? =
+    VerifyIntake.stored(inputContext)?.let { stored ->
+      when (stored) {
+        is VerifyIntake.SpecFile -> "spec:${stored.value}"
+        is VerifyIntake.Text -> stored.value
+      }
+    }
 
   private fun qaDetails(
     reportText: String?,
