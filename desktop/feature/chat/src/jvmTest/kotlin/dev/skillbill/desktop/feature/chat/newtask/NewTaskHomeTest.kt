@@ -1,11 +1,16 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
@@ -101,39 +106,97 @@ class NewTaskHomeTest {
   }
 
   @Test
-  fun `section rows open and discard with keyboard focus without hover`() = runComposeUiTest {
+  fun `open chat row shows its badge and cannot be discarded`() = runComposeUiTest {
     val chats = FakeExecutionChatRepository()
-    val entry = savedDraft(chats, "keyboard-draft", "/work/app", Instant.fromEpochSeconds(0), "Keyboard draft")
-    val blocked = workItem("blocked-run")
-    val resumed = mutableListOf<ChatHistoryEntry>()
-    val discarded = mutableListOf<ChatHistoryEntry>()
-    val opened = mutableListOf<WorkItem>()
+    val app = savedDraft(chats, "open-app", "/work/app", Instant.fromEpochSeconds(0), "Build app")
+    val other = savedDraft(chats, "other-app", "/work/app", Instant.fromEpochSeconds(1), "Other app chat")
+    chats.saved[app.sessionId] = app
+    chats.saved[other.sessionId] = other
+    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    open.selected.value.repository = NewTaskRepository("/work/app", "app")
+    open.resume(app)
+    open.newChat()
+    open.refreshSaved()
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        Column {
-          RecentChatsSection(listOf(entry), "/work/app", host.now, { resumed += it }, { discarded += it }, {})
-          NeedsYouSection(NewTaskHome.Returning(listOf(blocked), 0, 0), host.now, { opened += it }, {})
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) {} }
+      }
+    }
+    waitForIdle()
+
+    onAllNodesWithText("open").assertCountEquals(1)
+    onNode(hasText("Build app") and hasAnyAncestor(hasContentDescription("Recent chats"))).performMouseInput { moveTo(center) }
+    onNodeWithContentDescription("Discard Build app").assertDoesNotExist()
+    onNodeWithText("Other app chat").performMouseInput { moveTo(center) }
+    onNodeWithContentDescription("Discard Other app chat").assertExists()
+  }
+
+  @Test
+  fun `recent chat card opens the selected row and ignores delete on an open row`() = runComposeUiTest {
+    val repository = FakeExecutionChatRepository()
+    val entries = (0..2).map { index ->
+      savedDraft(repository, "keyboard-$index", "/work/app", Instant.fromEpochSeconds(index.toLong()), "Keyboard $index")
+    }
+    entries.forEach { repository.saved[it.sessionId] = it }
+    val open = NewTaskChats(repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    open.selected.value.repository = NewTaskRepository("/work/app", "app")
+    open.resume(entries.first())
+    open.newChat()
+    open.refreshSaved()
+    val actions = mutableListOf<NewTaskAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) { actions += it } }
+      }
+    }
+    waitForIdle()
+
+    val card = onNodeWithContentDescription("Recent chats")
+    card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+    card.assertIsFocused()
+    card.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1 of 3, Keyboard 2"))
+    card.performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.Enter) }
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(entries[1])), actions)
+    card.performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.Delete) }
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(entries[1])), actions)
+  }
+
+  @Test
+  fun `tab from recent chats focuses the two row needs you card and opens its selected run`() = runComposeUiTest {
+    val repository = FakeExecutionChatRepository()
+    val saved = savedDraft(repository, "focus-chat", "/work/app", Instant.fromEpochSeconds(0), "Focus chat")
+    repository.saved[saved.sessionId] = saved
+    val chats = NewTaskChats(repository, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    chats.selected.value.repository = NewTaskRepository("/work/app", "app")
+    chats.refreshSaved()
+    val runs = listOf(workItem("SKILL-1", reason = "First pause"), workItem("SKILL-2", reason = "Second pause"))
+    val opened = mutableListOf<WorkItem>()
+    val runHost = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = { opened += it }, onShowAllWork = {})
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+          NewTaskScreen(NewTaskUiState(home = NewTaskHome.Returning(runs, 0, 0)), chats, runHost) {}
         }
       }
     }
 
-    val chat = onNodeWithText("Keyboard draft")
-    chat.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-    chat.assertIsFocused()
-    chat.performKeyInput { pressKey(Key.Enter) }
-    assertEquals(listOf(entry), resumed)
-    chat.performKeyInput { pressKey(Key.Tab) }
-    val discard = onNodeWithContentDescription("Discard Keyboard draft")
-    discard.assertIsFocused()
-    discard.performKeyInput { pressKey(Key.Enter) }
-    assertEquals(listOf(entry), discarded)
-    assertEquals(listOf(entry), resumed)
+    val recent = onNodeWithContentDescription("Recent chats")
+    val needsYou = onNodeWithContentDescription("Needs you")
+    recent.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+    recent.assertIsFocused()
+    recent.performKeyInput { pressKey(Key.Tab) }
+    needsYou.assertIsFocused()
+    needsYou.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1 of 2, ${runs[0].title}"))
+    assertEquals(2, needsYou.fetchSemanticsNode().config[SemanticsProperties.CollectionInfo].rowCount)
+    assertEquals(1, needsYou.fetchSemanticsNode().config[SemanticsProperties.CollectionInfo].columnCount)
+    val cardBounds = needsYou.fetchSemanticsNode().boundsInRoot
+    val rowBounds = runs.map { onNodeWithText(it.title).fetchSemanticsNode().boundsInRoot }
+    assertTrue(rowBounds.all { it.top >= cardBounds.top && it.bottom <= cardBounds.bottom })
+    assertTrue(cardBounds.height < 3 * rowBounds.first().height)
 
-    val run = onNodeWithText(blocked.title)
-    run.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-    run.assertIsFocused()
-    run.performKeyInput { pressKey(Key.Enter) }
-    assertEquals(listOf(blocked), opened)
+    needsYou.performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.DirectionDown); pressKey(Key.Enter) }
+    needsYou.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2 of 2, ${runs[1].title}"))
+    assertEquals(listOf(runs[1]), opened)
   }
 
   @Test

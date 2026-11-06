@@ -204,6 +204,8 @@ private fun NewTaskHomeBody(
   val progress = if (!reducedMotion && preview == null) rememberIdleProgress() else null
   val homeAlpha by animateFloatAsState(if (preview != null) DIMMED_ALPHA else 1f, hoverSpec())
   val saved by draft.saved.collectAsState()
+  val openSessionIds by chats.openSessionIds.collectAsState()
+  val needsYouFocusRequester = remember { FocusRequester() }
   val root = draft.repository?.root
   val recent = remember(saved, root) { resumableDrafts(saved, root) }
   BoxWithConstraints(modifier.fillMaxWidth()) {
@@ -213,6 +215,7 @@ private fun NewTaskHomeBody(
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       val returning = state.home as? NewTaskHome.Returning
+      val hasNeedsYouCard = returning != null && returning.needsYou.isNotEmpty()
       val hasSections = recent.isNotEmpty() || returning != null
       Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (hasSections) 32.dp else 40.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -227,15 +230,24 @@ private fun NewTaskHomeBody(
           RecentChatsSection(
             chats = recent,
             selectedRoot = root,
+            openSessionIds = openSessionIds,
             now = host.now,
             onResume = { onAction(NewTaskAction.ResumeDraft(it)) },
             onDiscard = { onAction(NewTaskAction.DiscardDraft(it)) },
             onSearch = { onAction(NewTaskAction.ShowAllDrafts) },
             modifier = Modifier.alpha(homeAlpha),
+            nextCardFocusRequester = if (hasNeedsYouCard) needsYouFocusRequester else FocusRequester.Default,
           )
         }
         if (returning != null) {
-          NeedsYouSection(returning, host.now, host.onOpenRun, host.onShowAllWork, Modifier.alpha(homeAlpha))
+          NeedsYouSection(
+            returning,
+            host.now,
+            host.onOpenRun,
+            host.onShowAllWork,
+            Modifier.alpha(homeAlpha),
+            needsYouFocusRequester.takeIf { hasNeedsYouCard },
+          )
         }
         if (state.home == NewTaskHome.FirstRun) {
           ExamplesSection(

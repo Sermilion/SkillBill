@@ -51,6 +51,13 @@ class NewTaskInboxTest {
     }
   }
 
+  @Test
+  fun `nearest scroll target moves only rows outside the viewport`() {
+    assertEquals(34, nearestScrollTarget(start = 34, end = 68, scroll = 50, viewport = 100))
+    assertEquals(84, nearestScrollTarget(start = 150, end = 184, scroll = 50, viewport = 100))
+    assertEquals(null, nearestScrollTarget(start = 70, end = 104, scroll = 50, viewport = 100))
+  }
+
   private fun chat(session: String, title: String, updatedAt: String, root: String? = null) = ChatHistoryEntry(
     sessionId = session,
     executionId = null,
