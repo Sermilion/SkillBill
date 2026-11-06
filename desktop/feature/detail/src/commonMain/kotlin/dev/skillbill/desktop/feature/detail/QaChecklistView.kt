@@ -65,7 +65,7 @@ internal data class QaChecklistView(
 )
 
 internal fun qaDisplayedRun(item: WorkItem, detail: Detail, selectedRun: String?): ExecutionInstance? =
-  selectedRun?.let { selected -> detail.executionHistory.firstOrNull { it.invocationId == selected } }
+  selectedRun?.let(detail::execution)
     ?: currentExecution(item, detail)
     ?: detail.executionHistory.maxByOrNull { it.startedAt }
 
@@ -139,7 +139,7 @@ internal fun qaChecklistView(
 }
 
 internal fun qaCaseIsOpen(item: WorkItem, detail: Detail, key: QaCaseKey, overrides: Map<QaCaseKey, Boolean>): Boolean? {
-  val run = detail.executionHistory.firstOrNull { it.invocationId == key.invocationId } ?: return null
+  val run = detail.execution(key.invocationId) ?: return null
   val qaCase = run.qaChecklist?.cases?.firstOrNull { it.id == key.caseId } ?: return null
   return overrides[key] ?: (caseStatus(qaCase.steps, qaRunLive(item, run)).label in setOf("Running", "Failed"))
 }

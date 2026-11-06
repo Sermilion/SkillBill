@@ -394,6 +394,7 @@ public class IdeStatusService(
         snapshot = snapshot,
         recoveryWorkId = standalone?.invocationId ?: candidate.workflowId,
         executionHistory = shownHistory,
+        selectedExecution = workSelectedExecution(standalone, context.unitOfWork),
         repositoryRoot = context.repoRoot.toString(),
         stepPipeline = standalone?.let { standaloneStepPipeline(it.phaseId) } ?: runtimeStatus?.phaseIds.orEmpty(),
         finishedAt = completion.first,

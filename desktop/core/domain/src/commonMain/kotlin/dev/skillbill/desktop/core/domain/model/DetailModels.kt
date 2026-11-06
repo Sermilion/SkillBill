@@ -101,6 +101,7 @@ data class Detail(
   val currentActivity: String? = null,
   val validationBranchRuns: List<ValidationBranchRun> = emptyList(),
   val selectedValidationResult: String? = null,
+  val selectedExecution: ExecutionInstance? = null,
 )
 
 data class ValidationBranchRun(

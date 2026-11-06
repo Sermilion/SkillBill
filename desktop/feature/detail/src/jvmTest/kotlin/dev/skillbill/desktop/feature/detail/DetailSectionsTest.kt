@@ -127,7 +127,7 @@ class DetailSectionsTest {
         list = rememberLazyListState()
         LazyColumn(state = list) {
           DetailSections(this, collapse, list).validationChecksSection(
-            item, emptyDetail.copy(executionHistory = listOf(displayedRun.value)),
+            item, emptyDetail.copy(selectedExecution = displayedRun.value),
             DetailUiState(item, SectionsUi.Loaded(emptyDetail, null, emptyMap(), emptySet()), false, epoch), {},
           )
         }
@@ -135,6 +135,10 @@ class DetailSectionsTest {
     }
     waitForIdle()
     onNodeWithText("Checks").assertDoesNotExist()
+
+    runOnIdle { displayedRun.value = run.copy(liveChecks = true) }
+    waitForIdle()
+    onNodeWithText("compile").assertExists()
 
     runOnIdle { displayedRun.value = run.copy(liveChecks = true, validationChecks = emptyList()) }
     waitForIdle()

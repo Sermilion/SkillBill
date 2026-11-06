@@ -252,7 +252,7 @@ class DetailViewModel(
 
   private fun toggleValidationCheck(key: ValidationCheckKey) {
     val detail = loadedDetail() ?: return
-    val run = detail.executionHistory.firstOrNull { it.invocationId == key.invocationId } ?: return
+    val run = detail.execution(key.invocationId) ?: return
     val row = validationChecksSummary(run, qaRunLive(state.value.header, run)).rows.firstOrNull { it.check.checkId == key.checkId } ?: return
     val open = validationCheckIsOpen(row, run.invocationId, qaRunLive(state.value.header, run), state.value.validationCheckOverrides)
     mutableState.update { it.copy(validationCheckOverrides = it.validationCheckOverrides + (key to !open)) }

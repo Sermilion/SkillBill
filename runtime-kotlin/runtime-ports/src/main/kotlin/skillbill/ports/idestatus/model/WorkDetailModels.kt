@@ -65,6 +65,7 @@ data class WorkDetailItem(
   val runtimeStatus: WorkDetailRuntimeStatus? = null,
   val goalStatus: GoalRunnerStatusProjection? = null,
   val executionHistory: List<WorkExecutionInstance> = emptyList(),
+  val selectedExecution: WorkExecutionInstance? = null,
   val pageOffset: Int = 0,
   val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
   val hasMore: Boolean = false,

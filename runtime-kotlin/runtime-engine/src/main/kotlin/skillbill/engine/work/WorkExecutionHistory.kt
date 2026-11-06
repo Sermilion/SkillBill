@@ -114,41 +114,7 @@ internal fun workExecutionHistory(
         anchor,
       ),
     )
-      .map {
-        val reason = resolveExecutionReason(it, unitOfWork)
-        val currentValidation =
-          it.phaseId == SkeletonDefinition.VALIDATION.id && it.invocationId == standalone.invocationId
-        WorkExecutionInstance(
-          it.invocationId,
-          it.executionId,
-          it.lifecycleState,
-          it.startedAt,
-          it.updatedAt,
-          it.finishedAt,
-          reason.text,
-          reason.restoration,
-          it.runSequence,
-          it.qaOutcome,
-          it.qaReportText,
-          it.planReport,
-          reviewReport =
-            if (it.phaseId == SkeletonDefinition.REVIEW.id) {
-              reviewReport(
-                it,
-                reason.text,
-                unitOfWork,
-              )
-            } else {
-              null
-            },
-          qaChecklist = it.qaChecklist,
-          qaFindings = qaFindingsOf(it.qaReportText),
-          qaDetails = it.qaDetails,
-          liveChecks = if (currentValidation) it.liveChecks else null,
-          validationOutcome = if (currentValidation) it.validationOutcome else null,
-          validationChecks = validationChecksFor(currentValidation, it.invocationId, unitOfWork),
-        )
-      }
+      .map { workExecutionInstance(it, standalone.invocationId, unitOfWork) }
   } else {
     unitOfWork.standalonePhaseStatuses
       .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
@@ -165,6 +131,47 @@ internal fun workExecutionHistory(
         )
       }
   }
+}
+
+internal fun workSelectedExecution(
+  record: StandalonePhaseStatusRecord?,
+  unitOfWork: UnitOfWork,
+): WorkExecutionInstance? = record?.let { workExecutionInstance(it, it.invocationId, unitOfWork) }
+
+internal fun workExecutionInstance(
+  record: StandalonePhaseStatusRecord,
+  selectedInvocationId: String,
+  unitOfWork: UnitOfWork,
+): WorkExecutionInstance {
+  val reason = resolveExecutionReason(record, unitOfWork)
+  val currentValidation =
+    record.phaseId == SkeletonDefinition.VALIDATION.id && record.invocationId == selectedInvocationId
+  return WorkExecutionInstance(
+    record.invocationId,
+    record.executionId,
+    record.lifecycleState,
+    record.startedAt,
+    record.updatedAt,
+    record.finishedAt,
+    reason.text,
+    reason.restoration,
+    record.runSequence,
+    record.qaOutcome,
+    record.qaReportText,
+    record.planReport,
+    reviewReport =
+      if (record.phaseId == SkeletonDefinition.REVIEW.id) {
+        reviewReport(record, reason.text, unitOfWork)
+      } else {
+        null
+      },
+    qaChecklist = record.qaChecklist,
+    qaFindings = qaFindingsOf(record.qaReportText),
+    qaDetails = record.qaDetails,
+    liveChecks = if (currentValidation) record.liveChecks else null,
+    validationOutcome = if (currentValidation) record.validationOutcome else null,
+    validationChecks = validationChecksFor(currentValidation, record.invocationId, unitOfWork),
+  )
 }
 
 private fun qaFindingsOf(text: String?): List<WorkQaFinding> =
