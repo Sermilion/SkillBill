@@ -1,3 +1,18 @@
+## [2026-11-06] Keep home inbox derivation separate from saved chat data
+Context: The home combines work rows and saved drafts, with filtering, keyboard selection and deferred discard layered onto the same list.
+Decision: Keep InboxItem and its derivation helpers free of Compose. Derive plain titles, image names, repository badges and short times for the card without changing saved-chat contracts or resume-palette formatting.
+Reason: The interaction layer can use the inbox model without changing saved-chat data. Pure helpers also allow fixed-clock and explicit-zone tests without a UI harness.
+
+## [2026-11-06] Keep inbox navigation on the focused card
+Context: Inbox rows share a screen with the composer. Existing shell routing allows unmodified navigation keys through when no screen handler is registered.
+Decision: The card handles navigation, opening and chat Delete on key-down. Rows and discard buttons stay outside Tab traversal, and Ctrl, Meta and Alt combinations pass through.
+Reason: Card-local handling keeps composer digits as text and prevents row controls from also handling the same key. No shell or screen-level handler is needed.
+
+## [2026-11-06] Let each saved-chat discard own its undo window
+Context: Home-list discard must hide a chat immediately and allow five seconds to undo. Several chats can be discarded before their windows expire.
+Decision: The window's shared NewTaskSavedChats tracks Undoable and Deleting states per session. Each job starts deletion after five seconds; Undo cancels only Undoable. Refreshes exclude both states, and window close does not flush timers.
+Reason: Independent jobs preserve each chat's undo window. Keeping Deleting prevents refresh from restoring a row during suspended deletion and prevents expired Undo from cancelling deletion. Cancellation before deletion preserves the saved draft as the intended safe outcome.
+
 ## [2026-11-06] Bind New Task async results to their originating draft
 Context: Operators can select another open chat while agent resolution, a branch read or a repository path check is suspended.
 Decision: Capture the target draft once per action and write results only into it. Update shared composer UI only while that draft is selected; selection refreshes agent and branches and closes both pickers.

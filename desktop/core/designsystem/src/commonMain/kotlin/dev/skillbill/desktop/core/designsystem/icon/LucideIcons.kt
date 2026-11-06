@@ -178,6 +178,11 @@ object LucideIcons {
       path("m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21")
     }
   }
+  val messageSquare: ImageVector by lazy {
+    imageVector("message-square") {
+      path("M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z")
+    }
+  }
   val pause: ImageVector by lazy {
     imageVector("pause") {
       rect(14.0f, 4.0f, 4.0f, 16.0f, 1.0f)

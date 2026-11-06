@@ -45,7 +45,6 @@ data class NewTaskOffer(
 )
 
 private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
-
 private fun NewTaskKind.startName(): String =
   NewTaskActionKind.entries.firstOrNull { it.toNewTaskKind() == this }?.wire ?: name.lowercase()
 
@@ -57,7 +56,7 @@ class NewTaskDraft internal constructor(
   private val toasts: ToastQueue,
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
-  private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope),
+  private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
 ) {
   private val scope = windowScope.scope
   private val chatState = MutableStateFlow<NewTaskChat?>(null)
@@ -258,6 +257,16 @@ class NewTaskDraft internal constructor(
     val current = chatState.value ?: return false
     leave(current) { chats.deleteSavedChat(current.sessionId) }
     return true
+  }
+
+  /** Discards [entry], allowing undo unless it is the open chat. */
+  internal fun discardSaved(entry: ChatHistoryEntry) {
+    if (closing) return
+    if (chatState.value?.sessionId == entry.sessionId) {
+      discard()
+      return
+    }
+    savedChats.discardSaved(entry)
   }
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */

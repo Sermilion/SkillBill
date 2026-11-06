@@ -54,7 +54,7 @@ import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
 
-private val CONTENT_MAX_WIDTH = 680.dp
+private val CONTENT_MAX_WIDTH = 720.dp
 
 private const val DIMMED_ALPHA = .45f
 
@@ -203,14 +203,15 @@ private fun NewTaskHomeBody(
   val progress = if (!reducedMotion && preview == null) rememberIdleProgress() else null
   val homeAlpha by animateFloatAsState(if (preview != null) DIMMED_ALPHA else 1f, hoverSpec())
   val saved by draft.saved.collectAsState()
-  val openSessionIds by chats.openSessionIds.collectAsState()
   BoxWithConstraints(modifier.fillMaxWidth()) {
     Column(
       Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(24.dp),
       verticalArrangement = Arrangement.Center,
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-      Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(40.dp)) {
+      val returning = state.home as? NewTaskHome.Returning
+      val hasInbox = returning != null || saved.isNotEmpty()
+      Column(Modifier.widthIn(max = CONTENT_MAX_WIDTH).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (hasInbox) 32.dp else 40.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           BasicText("What should we ship?", Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
           BasicText(
@@ -219,20 +220,27 @@ private fun NewTaskHomeBody(
           )
         }
         StepLine(progress, reducedMotion, preview)
-        if (saved.isNotEmpty()) {
-          RecentChatsSection(
-            saved,
-            host.now(),
-            openSessionIds,
+        val shown = if (returning != null) saved else saved.take(NEW_TASK_HISTORY_ROWS)
+        if (hasInbox) {
+          InboxSection(
+            needsYou = returning?.needsYou.orEmpty(),
+            running = returning?.runningItems.orEmpty(),
+            chats = shown,
+            savedCount = saved.size,
+            selectedRoot = draft.repository?.root,
+            home = returning,
+            showAll = saved.size > shown.size,
+            now = host.now,
+            onOpenRun = host.onOpenRun,
             onResume = { onAction(NewTaskAction.ResumeDraft(it)) },
             onDiscard = { onAction(NewTaskAction.DiscardDraft(it)) },
             onShowAll = { onAction(NewTaskAction.ShowAllDrafts) },
+            onShowAllWork = host.onShowAllWork,
+            modifier = Modifier.alpha(homeAlpha),
           )
         }
-        when (val home = state.home) {
-          NewTaskHome.Pending -> Unit
-          is NewTaskHome.Returning -> NeedsYouSection(home, host.now, host.onOpenRun, host.onShowAllWork, Modifier.alpha(homeAlpha))
-          NewTaskHome.FirstRun -> ExamplesSection(
+        if (state.home == NewTaskHome.FirstRun) {
+          ExamplesSection(
             readinessLine(state.detectedAgents, draft.repository?.name),
             onExample = {
               onAction(NewTaskAction.TextChanged(it))

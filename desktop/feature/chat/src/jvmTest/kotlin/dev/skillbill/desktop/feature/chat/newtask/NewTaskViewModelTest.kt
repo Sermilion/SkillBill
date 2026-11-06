@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -140,6 +141,9 @@ class NewTaskViewModelTest {
     assertEquals(listOf(entry), draft.saved.value)
 
     model.onAction(NewTaskAction.DiscardDraft(entry))
+    runCurrent()
+    assertTrue(entry.sessionId in chatRepo.saved)
+    advanceTimeBy(5_000)
     runCurrent()
     assertTrue(entry.sessionId !in chatRepo.saved)
     assertTrue(draft.saved.value.isEmpty())
@@ -288,9 +292,10 @@ class NewTaskViewModelTest {
     assertEquals(NewTaskHome.FirstRun, model.state.value.home)
     assertEquals(DetectedAgentsRead.Success(listOf(DetectedAgent("claude", "/bin/claude"))), model.state.value.detectedAgents)
 
-    board.state.value = loadedBoard(mapOf(BoardSectionKind.Goals to listOf(workItem("SKILL-1"))))
+    val running = workItem("SKILL-1")
+    board.state.value = loadedBoard(mapOf(BoardSectionKind.Goals to listOf(running)))
     advanceUntilIdle()
-    assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0), model.state.value.home)
+    assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0, runningItems = listOf(running)), model.state.value.home)
     model.viewModelScope.cancel()
   }
 

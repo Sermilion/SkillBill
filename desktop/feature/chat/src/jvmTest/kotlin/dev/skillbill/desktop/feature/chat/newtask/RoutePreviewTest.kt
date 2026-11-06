@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -43,8 +44,8 @@ class RoutePreviewTest {
 
   @Test
   fun `the caption words each route as a guess`() {
+    assertNull(routeCaption(null))
     val table = mapOf(
-      null to "Every goal runs this path",
       NewTaskRoutePreview.Goal to "Looks like a goal run, all 7 steps",
       NewTaskRoutePreview.Plan to "Looks like a standalone plan, just this step",
       NewTaskRoutePreview.Review to "Looks like a standalone review, just this step",

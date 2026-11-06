@@ -1,3 +1,18 @@
+## [2026-11-06] SKILL-512 merge New Task home lists
+Areas: desktop/feature/chat newtask, desktop/core/designsystem
+- Recent chats and Needs you merge into one bordered "Pick up where you left off" card. Blocked runs precede running runs, then drafts grouped by local calendar date into Today, Yesterday and Earlier.
+- Rows use 34dp height, hairline dividers, status or chat/image glyphs, run stage badges and 52dp short-time columns. Hover or card selection replaces a chat's time with an accessible discard button.
+- InboxItem, inboxItems, chatTitle, chatRepoLabel and shortAgo separate derivation from Compose. Titles use plain text with path fallback and image-name suffixes; repository badges compare normalized roots. reusable
+- Returning homes show all saved drafts. Pending and first-run homes cap drafts at six and offer Show all through the existing repository-scoped resume palette. Drafts in the card remain cross-repository.
+- All, Needs you and Chats filters use blocked-run and full saved-chat counts. The focused card owns bounded selection, Up/Down, Enter, Delete and digits 1 through 9, skipping date headers and leaving composer input alone.
+- NewTaskSavedChats shares the saved list and pending discards across window drafts. Each discard hides its row immediately and owns a five-second Undo window; refresh excludes pending and deleting sessions, and expired Undo cannot cancel deletion. reusable
+- InboxSection retains one shared ticker to refresh both short times and date groups. The work-summary link and keyboard hints sit below the card. An idle step line has no caption node; typed-request captions remain.
+- Limits: filter selection does not persist, open-chat discard has no Undo, and window close does not flush pending discard timers. Cancelling a timer before deletion preserves the draft. No persistence or shared contract changes.
+- Verification limits: native macOS and Windows targets remain unverified; QA covered an earlier tree than the final source.
+Feature size: MEDIUM
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-06] SKILL-509 resume chat palette with preview
 Areas: desktop/feature/chat, desktop/core/designsystem
 - /resume opens a centered filterable palette with a chat preview in New Task and run-chat composers. New Task scopes drafts to the selected repository; run chats retain checkout-scoped choices. The Recent chats home list remains cross-repository.

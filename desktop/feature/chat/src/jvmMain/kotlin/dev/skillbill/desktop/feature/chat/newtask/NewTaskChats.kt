@@ -16,6 +16,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,17 +39,57 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import kotlin.time.Clock
 
 /** Every repository's saved New task drafts, newest first, shared by all open chats and the home. */
-internal class NewTaskSavedChats(private val chats: ExecutionChatRepository, private val scope: CoroutineScope) {
+private const val DISCARD_UNDO_WINDOW_MS = 5_000L
+
+private sealed interface PendingDiscard {
+  class Undoable(val job: Job) : PendingDiscard
+  data object Deleting : PendingDiscard
+}
+
+internal class NewTaskSavedChats(
+  private val chats: ExecutionChatRepository,
+  private val scope: CoroutineScope,
+  private val toasts: ToastQueue,
+) {
   private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private var savedRead: Job? = null
+  private val pendingDiscards = mutableMapOf<String, PendingDiscard>()
 
   val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
 
   fun refresh() {
     scope.launch {
       savedRead?.cancel()
-      savedRead = launch { savedState.value = chats.savedNewTaskDrafts() }
+      savedRead = launch { savedState.value = chats.savedNewTaskDrafts().filterNot { it.sessionId in pendingDiscards } }
     }
+  }
+
+  fun discardSaved(entry: ChatHistoryEntry) {
+    if (entry.sessionId in pendingDiscards) return
+    val job = scope.launch(start = CoroutineStart.LAZY) {
+      delay(DISCARD_UNDO_WINDOW_MS)
+      pendingDiscards[entry.sessionId] = PendingDiscard.Deleting
+      try {
+        chats.deleteSavedChat(entry.sessionId)
+      } finally {
+        pendingDiscards.remove(entry.sessionId)
+        refresh()
+      }
+    }
+    pendingDiscards[entry.sessionId] = PendingDiscard.Undoable(job)
+    savedState.value = savedState.value.filterNot { it.sessionId == entry.sessionId }
+    job.start()
+    toasts.show(ToastData(
+      title = "Discarded ${chatTitle(entry.title).title}",
+      actions = listOf(ToastAction("Undo") { undoDiscard(entry.sessionId) }),
+    ))
+  }
+
+  private fun undoDiscard(sessionId: String) {
+    val pending = pendingDiscards[sessionId] as? PendingDiscard.Undoable ?: return
+    pendingDiscards.remove(sessionId)
+    pending.job.cancel()
+    refresh()
   }
 }
 
@@ -66,7 +108,7 @@ class NewTaskChats(
   private val clock: Clock,
 ) {
   private val scope = windowScope.scope
-  private val savedChats = NewTaskSavedChats(chats, scope)
+  private val savedChats = NewTaskSavedChats(chats, scope, toasts)
 
   internal var chatDispatcher: CoroutineDispatcher = Dispatchers.IO
     set(value) {
@@ -161,10 +203,7 @@ class NewTaskChats(
       discard(holder)
       return
     }
-    scope.launch {
-      chats.deleteSavedChat(entry.sessionId)
-      refreshSaved()
-    }
+    savedChats.discardSaved(entry)
   }
 
   /**
