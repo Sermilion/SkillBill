@@ -1,3 +1,8 @@
+## [2026-11-06] Drop only the invalid suggested action and say why in the reply
+Context: An instruction over 2000 characters made decodeActions drop the whole skillbill-actions block. Only a chat.actions_invalid diagnostic recorded it, so the agent told the operator to click a start button that never appeared.
+Decision: Each action is checked on its own. An invalid one is dropped, records chat.action_invalid (or chat.action_start_unknown), and appends one visible notice to the reply naming the label and reason. Valid siblings still become buttons. A block that does not parse, has more than 3 actions, or repeats a label still drops as a whole, with chat.actions_invalid and the same visible notice.
+Reason: The operator is the only one who can see the app's verdict on a reply. Without the notice, a missing button looks like a UI bug and neither side knows to ask for a shorter instruction.
+
 ## [2026-11-05] List New task chats from every repository on the home
 Context: The home showed one Continue row for the selected repository's newest draft.
 Decision: The home lists up to 6 saved New Task drafts from every repository with resume and discard per row. "Show all" opens the /resume picker when more drafts exist. `refreshSaved` and the picker read every repository's drafts, and the list stays a plain capped column with no nested scroll.
