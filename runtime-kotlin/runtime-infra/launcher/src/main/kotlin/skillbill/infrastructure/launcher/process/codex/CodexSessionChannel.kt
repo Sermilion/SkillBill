@@ -36,6 +36,7 @@ internal data class CodexSessionLaunch(
   val savedThread: String?,
   val outputSink: AgentRunOutputSink,
   val workspaceRoots: List<String> = emptyList(),
+  val readOnly: Boolean = false,
 )
 
 internal class CodexSessionChannel(
@@ -177,9 +178,10 @@ internal class CodexSessionChannel(
         put(K.CWD, launch.cwd)
         if (launch.workspaceRoots.isNotEmpty()) {
           val roots = (listOf(launch.cwd) + launch.workspaceRoots).distinct().map(::JsonPrimitive)
-          put(K.WORKSPACE_ROOTS, JsonArray(roots))
+          if (!launch.readOnly) put(K.WORKSPACE_ROOTS, JsonArray(roots))
         }
         launch.model?.let { put(K.MODEL, it) }
+        if (launch.readOnly) put(K.SANDBOX, K.READ_ONLY_SANDBOX)
       },
     )
   }
@@ -189,9 +191,7 @@ internal class CodexSessionChannel(
     val returnedModel = result.text(K.MODEL)
     synchronized(captureLock) { effectiveModel = returnedModel }
     val validIdentity = !returned.isNullOrBlank() && (launch.savedThread == null || returned == launch.savedThread)
-    val validSettings =
-      result.text(K.CWD) == launch.cwd && !returnedModel.isNullOrBlank() &&
-        (launch.model == null || returnedModel == launch.model)
+    val validSettings = preservesThreadSettings(result, returnedModel)
     if (!validIdentity && launch.savedThread != null) {
       stop(
         "The saved Codex provider thread could not be resumed unchanged; start an " +
@@ -217,6 +217,16 @@ internal class CodexSessionChannel(
         launch.model?.let { put(K.MODEL, it) }
         launch.effort?.let { put(K.EFFORT, it) }
         put(
+          K.SANDBOX_POLICY,
+          buildJsonObject {
+            put(K.TYPE, if (launch.readOnly) K.READ_ONLY_POLICY else K.WORKSPACE_WRITE_POLICY)
+            if (!launch.readOnly) {
+              val roots = (listOf(launch.cwd) + launch.workspaceRoots).distinct().map(::JsonPrimitive)
+              put(K.WRITABLE_ROOTS, JsonArray(roots))
+            }
+          },
+        )
+        put(
           K.INPUT,
           JsonArray(
             listOf(
@@ -231,6 +241,14 @@ internal class CodexSessionChannel(
       },
     )
   }
+
+  private fun preservesThreadSettings(
+    result: JsonObject,
+    returnedModel: String?,
+  ): Boolean =
+    result.text(K.CWD) == launch.cwd && !returnedModel.isNullOrBlank() &&
+      (launch.model == null || returnedModel == launch.model) &&
+      (!launch.readOnly || result.obj(K.SANDBOX)?.text(K.TYPE) == K.READ_ONLY_POLICY)
 
   private fun openTurn(result: JsonObject) {
     val turn = result[K.TURN] as? JsonObject

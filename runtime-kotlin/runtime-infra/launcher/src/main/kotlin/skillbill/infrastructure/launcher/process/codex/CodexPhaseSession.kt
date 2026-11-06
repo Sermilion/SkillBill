@@ -73,6 +73,7 @@ internal class CodexPhaseSession(
       launch.model,
       launch.effort,
       launch.workspaceRoots.isNotEmpty(),
+      launch.readOnly,
     )?.let(::refused)
   }
 

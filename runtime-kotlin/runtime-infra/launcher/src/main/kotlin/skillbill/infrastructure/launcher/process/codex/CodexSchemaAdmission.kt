@@ -14,9 +14,10 @@ internal object CodexSchemaAdmission {
     model: String?,
     effort: String?,
     workspaceRoots: Boolean,
+    readOnly: Boolean = false,
   ): String? =
     try {
-      inspectShapes(directory, model, effort, workspaceRoots)
+      inspectShapes(directory, model, effort, workspaceRoots, readOnly)
     } catch (failure: IOException) {
       "Could not read the installed Codex app-server schema: ${failure.message.orEmpty()}"
     }
@@ -26,17 +27,19 @@ internal object CodexSchemaAdmission {
     model: String?,
     effort: String?,
     workspaceRoots: Boolean,
+    readOnly: Boolean,
   ): String? {
     val outgoing =
       listOfNotNull(
         K.CWD,
         K.MODEL.takeIf { model != null },
-        K.WORKSPACE_ROOTS.takeIf { workspaceRoots },
+        K.WORKSPACE_ROOTS.takeIf { workspaceRoots && !readOnly },
+        K.SANDBOX.takeIf { readOnly },
       ).toSet()
     val turnFields =
-      (outgoing - K.WORKSPACE_ROOTS) + setOf(K.THREAD_ID, K.INPUT) +
-        listOfNotNull(K.EFFORT.takeIf { effort != null })
-    val projections = sessionShapes(outgoing, turnFields) + approvalShapes()
+      (outgoing - setOf(K.WORKSPACE_ROOTS, K.SANDBOX)) + setOf(K.THREAD_ID, K.INPUT) +
+        listOfNotNull(K.EFFORT.takeIf { effort != null }, K.SANDBOX_POLICY)
+    val projections = sessionShapes(outgoing, turnFields, readOnly) + approvalShapes()
     for (shape in projections) {
       val schema = read(directory, shape.file)
       if (!acceptsShape(schema, shape)) {
@@ -50,14 +53,45 @@ internal object CodexSchemaAdmission {
         return "The installed Codex app-server has incompatible method bindings in $file."
       }
     }
+    if (!sandboxPoliciesCompatible(directory, readOnly)) {
+      return "The installed Codex app-server does not support the required read-only sandbox shapes."
+    }
     return inspectInitialization(
       directory,
     ) ?: inspectNested(directory) ?: inspectApprovalDecisions(directory) ?: CodexRefusalSchema.inspect(directory)
   }
 
+  private fun sandboxPoliciesCompatible(
+    directory: Path,
+    readOnly: Boolean,
+  ): Boolean {
+    val start = read(directory, "v2/ThreadStartParams.json")
+    val resume = read(directory, "v2/ThreadResumeParams.json")
+    val turn = read(directory, "v2/TurnStartParams.json")
+    val startSandbox = start.path(S.PROPERTIES).path(K.SANDBOX)
+    val resumeSandbox = resume.path(S.PROPERTIES).path(K.SANDBOX)
+    val policy = turn.path(S.PROPERTIES).path(K.SANDBOX_POLICY)
+    val responses =
+      listOf("v2/ThreadStartResponse.json", "v2/ThreadResumeResponse.json")
+        .map { file -> read(directory, file).let { it.path(S.PROPERTIES).path(K.SANDBOX) to it } }
+    return (
+      !readOnly ||
+        listOf(startSandbox to start, resumeSandbox to resume).all { (sandbox, root) ->
+          enumTokens(sandbox, root, emptySet()).contains(K.READ_ONLY_SANDBOX)
+        }
+    ) && (
+      !readOnly ||
+        responses.all { (sandbox, root) ->
+          enumTokens(sandbox, root, emptySet()).contains(K.READ_ONLY_POLICY)
+        }
+    ) && enumTokens(policy, turn, emptySet()).contains(K.WORKSPACE_WRITE_POLICY) &&
+      (!readOnly || enumTokens(policy, turn, emptySet()).contains(K.READ_ONLY_POLICY))
+  }
+
   private fun sessionShapes(
     outgoing: Set<String>,
     turnFields: Set<String>,
+    readOnly: Boolean,
   ): List<Shape> =
     listOf(
       Shape(
@@ -66,20 +100,32 @@ internal object CodexSchemaAdmission {
         setOf(K.CLIENT_INFO, K.CAPABILITIES),
       ),
       Shape("v1/InitializeResponse.json", mapOf(K.USER_AGENT to "string")),
-      Shape("v2/ThreadStartParams.json", threadRequestFields, outgoing, threadRequestFields.keys),
+      Shape(
+        "v2/ThreadStartParams.json",
+        threadRequestFields + listOfNotNull(K.SANDBOX.takeIf { readOnly }?.let { it to "string" }),
+        outgoing,
+        threadRequestFields.keys + listOfNotNull(K.SANDBOX.takeIf { readOnly }),
+      ),
       Shape(
         "v2/ThreadResumeParams.json",
-        threadRequestFields + (K.THREAD_ID to "string"),
+        threadRequestFields +
+          listOfNotNull(K.SANDBOX.takeIf { readOnly }?.let { it to "string" }) + (K.THREAD_ID to "string"),
         outgoing + K.THREAD_ID,
-        threadRequestFields.keys,
+        threadRequestFields.keys + listOfNotNull(K.SANDBOX.takeIf { readOnly }),
       ),
-      Shape("v2/ThreadStartResponse.json", threadResponseFields),
-      Shape("v2/ThreadResumeResponse.json", threadResponseFields),
+      Shape("v2/ThreadStartResponse.json", threadResponseFields(readOnly)),
+      Shape("v2/ThreadResumeResponse.json", threadResponseFields(readOnly)),
       Shape(
         "v2/TurnStartParams.json",
-        (turnFields + setOf(K.MODEL, K.EFFORT)).associateWith { if (it == K.INPUT) "array" else "string" },
+        (turnFields + setOf(K.MODEL, K.EFFORT)).associateWith {
+          when (it) {
+            K.INPUT -> "array"
+            K.SANDBOX_POLICY -> "object"
+            else -> "string"
+          }
+        },
         turnFields,
-        nullableFields = setOf(K.CWD, K.MODEL, K.EFFORT),
+        nullableFields = setOf(K.CWD, K.MODEL, K.EFFORT, K.SANDBOX_POLICY),
       ),
       Shape("v2/TurnStartResponse.json", mapOf(K.TURN to "object")),
       Shape("v2/AgentMessageDeltaNotification.json", deltaFields),
@@ -397,7 +443,14 @@ internal object CodexSchemaAdmission {
       K.MODEL to "string",
       K.WORKSPACE_ROOTS to "array",
     )
-  private val threadResponseFields = mapOf(K.THREAD to "object", K.CWD to "string", K.MODEL to "string")
+
+  private fun threadResponseFields(readOnly: Boolean) =
+    mapOf(
+      K.THREAD to "object",
+      K.CWD to "string",
+      K.MODEL to "string",
+    ) + listOfNotNull(K.SANDBOX.takeIf { readOnly }?.let { it to "object" })
+
   private val deltaFields =
     mapOf(
       K.THREAD_ID to "string",

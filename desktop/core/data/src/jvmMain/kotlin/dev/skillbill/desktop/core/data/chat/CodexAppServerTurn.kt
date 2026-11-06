@@ -112,6 +112,7 @@ internal fun codexAppServerTurn(
       if (savedThread != null) put("threadId", savedThread)
       put("cwd", command.workingDirectory)
       request.agent.model?.let { put("model", it) }
+      if (request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly) put("sandbox", "read-only")
     }
     var threadId: String? = null
     try {
@@ -129,6 +130,11 @@ internal fun codexAppServerTurn(
         }
         if (effectiveCwd != command.workingDirectory) {
           throw CodexSessionFailure("Codex opened the thread in a different checkout; the turn was not started.")
+        }
+        if (request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly &&
+          result.obj("sandbox")?.string("type") != "readOnly"
+        ) {
+          throw CodexSessionFailure("Codex did not confirm the read-only sandbox; the turn was not started.")
         }
         threadId = returnedId
         if (savedThread == null && !saveThread(returnedId)) {
@@ -154,6 +160,14 @@ internal fun codexAppServerTurn(
       request.agent.model?.let { put("model", it) }
       request.agent.effort?.let { put("effort", it) }
       put("cwd", command.workingDirectory)
+      put("sandboxPolicy", buildJsonObject {
+        if (request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly) {
+          put("type", "readOnly")
+        } else {
+          put("type", "workspaceWrite")
+          put("writableRoots", JsonArray(listOf(JsonPrimitive(command.workingDirectory))))
+        }
+      })
     }) { result ->
       val turn = result.obj("turn")
         ?: throw CodexSessionFailure("Codex returned a malformed turn/start response.")

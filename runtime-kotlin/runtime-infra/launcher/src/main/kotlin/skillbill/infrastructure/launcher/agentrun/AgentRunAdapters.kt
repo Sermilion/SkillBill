@@ -177,6 +177,7 @@ internal class ProcessAgentRunAdapter(
             effort = request.effortOverride,
             savedThread = null,
             outputSink = request.outputSink,
+            readOnly = request.readOnlyPhase,
             workspaceRoots = request.additionalWritableDirectories.map { it.toAbsolutePath().normalize().toString() },
           )
         val approvalDeadline = approvalEnclosingDeadline(clock, request.timeout)

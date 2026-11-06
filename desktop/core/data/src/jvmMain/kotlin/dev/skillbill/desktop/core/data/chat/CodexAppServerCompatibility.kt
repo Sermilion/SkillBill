@@ -48,10 +48,12 @@ internal suspend fun codexAppServerCompatibility(
         "v1/InitializeParams.json" to setOf("clientInfo"),
         "v1/InitializeResponse.json" to setOf("userAgent"),
         "v2/ThreadStartParams.json" to setOf("cwd", "model"),
-        "v2/ThreadStartResponse.json" to setOf("thread", "cwd", "model"),
+        "v2/ThreadStartResponse.json" to setOf("thread", "cwd", "model") +
+          setOfNotNull("sandbox".takeIf { request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly }),
         "v2/ThreadResumeParams.json" to setOf("threadId"),
-        "v2/ThreadResumeResponse.json" to setOf("thread", "cwd", "model"),
-        "v2/TurnStartParams.json" to setOf("threadId", "input", "effort", "cwd"),
+        "v2/ThreadResumeResponse.json" to setOf("thread", "cwd", "model") +
+          setOfNotNull("sandbox".takeIf { request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly }),
+        "v2/TurnStartParams.json" to setOf("threadId", "input", "effort", "cwd", "sandboxPolicy"),
         "v2/TurnStartResponse.json" to setOf("turn"),
         "v2/AgentMessageDeltaNotification.json" to setOf("threadId", "turnId", "itemId", "delta"),
         "v2/ItemStartedNotification.json" to setOf("threadId", "turnId", "item"),
@@ -300,13 +302,16 @@ internal fun codexProjectionCompatibility(
     .orEmpty()
   val outgoingFields = when (relative) {
     "v1/InitializeParams.json" -> setOf("clientInfo", "capabilities")
-    "v2/ThreadStartParams.json" -> setOf("cwd") + setOfNotNull("model".takeIf { request.agent.model != null })
+    "v2/ThreadStartParams.json" -> setOf("cwd") + setOfNotNull("model".takeIf { request.agent.model != null }) +
+      setOfNotNull("sandbox".takeIf { request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly })
     "v2/ThreadResumeParams.json" -> setOf("threadId", "cwd") +
-      setOfNotNull("model".takeIf { request.agent.model != null })
+      setOfNotNull("model".takeIf { request.agent.model != null }) +
+      setOfNotNull("sandbox".takeIf { request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly })
     "v2/TurnStartParams.json" -> setOf("threadId", "input", "cwd") +
       setOfNotNull(
         "model".takeIf { request.agent.model != null },
         "effort".takeIf { request.agent.effort != null },
+        "sandboxPolicy",
       )
     else -> emptySet()
   }
@@ -319,7 +324,8 @@ internal fun codexProjectionCompatibility(
   }
   val consumedRequired = when (relative) {
     "v1/InitializeResponse.json" -> setOf("userAgent")
-    "v2/ThreadStartResponse.json", "v2/ThreadResumeResponse.json" -> setOf("thread")
+    "v2/ThreadStartResponse.json", "v2/ThreadResumeResponse.json" -> setOf("thread") +
+      setOfNotNull("sandbox".takeIf { request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly })
     "v2/TurnStartResponse.json" -> setOf("turn")
     "v2/AgentMessageDeltaNotification.json" -> setOf("threadId", "turnId", "itemId", "delta")
     "v2/ItemStartedNotification.json", "v2/ItemCompletedNotification.json" -> setOf("threadId", "turnId", "item")
@@ -335,10 +341,13 @@ internal fun codexProjectionCompatibility(
   val expectedTypes = when (relative) {
     "v1/InitializeParams.json" -> mapOf("clientInfo" to "object")
     "v1/InitializeResponse.json" -> mapOf("userAgent" to "string")
-    "v2/ThreadStartParams.json" -> mapOf("cwd" to "string", "model" to "string")
+    "v2/ThreadStartParams.json" -> mapOf("cwd" to "string", "model" to "string", "sandbox" to "string")
     "v2/ThreadStartResponse.json", "v2/ThreadResumeResponse.json" ->
-      mapOf("thread" to "object", "cwd" to "string", "model" to "string")
-    "v2/ThreadResumeParams.json" -> mapOf("threadId" to "string", "cwd" to "string", "model" to "string")
+      mapOf("thread" to "object", "cwd" to "string", "model" to "string") +
+        setOfNotNull("sandbox".takeIf {
+          request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly
+        }).associateWith { "object" }
+    "v2/ThreadResumeParams.json" -> mapOf("threadId" to "string", "cwd" to "string", "model" to "string", "sandbox" to "string")
     "v2/TurnStartParams.json" ->
       mapOf(
         "threadId" to "string",
@@ -346,6 +355,7 @@ internal fun codexProjectionCompatibility(
         "model" to "string",
         "effort" to "string",
         "cwd" to "string",
+        "sandboxPolicy" to "object",
       )
     "CommandExecutionRequestApprovalParams.json" -> mapOf(
       "itemId" to "string", "threadId" to "string", "turnId" to "string", "startedAtMs" to "integer",
@@ -367,11 +377,14 @@ internal fun codexProjectionCompatibility(
     else -> mapOf("threadId" to "string", "turn" to "object")
   }
   val nullableRequestValues = when (relative) {
-    "v2/ThreadStartParams.json" -> setOf("cwd") + setOfNotNull("model".takeIf { request.agent.model != null })
-    "v2/ThreadResumeParams.json" -> setOf("cwd") + setOfNotNull("model".takeIf { request.agent.model != null })
+    "v2/ThreadStartParams.json" -> setOf("cwd") + setOfNotNull("model".takeIf { request.agent.model != null }) +
+      setOfNotNull("sandbox".takeIf { request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly })
+    "v2/ThreadResumeParams.json" -> setOf("cwd") + setOfNotNull("model".takeIf { request.agent.model != null }) +
+      setOfNotNull("sandbox".takeIf { request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly })
     "v2/TurnStartParams.json" -> setOf("cwd") + setOfNotNull(
       "model".takeIf { request.agent.model != null },
       "effort".takeIf { request.agent.effort != null },
+      "sandboxPolicy",
     )
     "CommandExecutionRequestApprovalParams.json" -> setOf(
       "command", "cwd", "reason", "availableDecisions", "commandActions", "additionalPermissions",
@@ -393,6 +406,25 @@ internal fun codexProjectionCompatibility(
     }
   ) {
     return "The installed Codex app-server protocol has incompatible field types in $relative."
+  }
+  run {
+    val requiredToken = when (relative) {
+      "v2/ThreadStartParams.json", "v2/ThreadResumeParams.json" ->
+        ("read-only" to properties["sandbox"]).takeIf {
+          request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly
+        }
+      "v2/ThreadStartResponse.json", "v2/ThreadResumeResponse.json" ->
+        ("readOnly" to properties["sandbox"]).takeIf {
+          request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly
+        }
+      "v2/TurnStartParams.json" -> (if (
+        request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly
+      ) "readOnly" else "workspaceWrite") to properties["sandboxPolicy"]
+      else -> null
+    }
+    if (requiredToken != null && requiredToken.first !in codexDecisionTokens(requiredToken.second, definitions)) {
+      return "The installed Codex app-server protocol does not support the required read-only sandbox in $relative."
+    }
   }
   return null
 }

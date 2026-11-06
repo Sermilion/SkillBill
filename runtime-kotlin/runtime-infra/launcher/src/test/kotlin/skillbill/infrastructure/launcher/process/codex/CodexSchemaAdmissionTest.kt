@@ -16,6 +16,7 @@ class CodexSchemaAdmissionTest {
       writeCodexSchemaFixture(directory)
       assertNull(CodexSchemaAdmission.inspect(directory, "worker-model", "high", true))
       assertNull(CodexSchemaAdmission.inspect(directory, null, null, false))
+      assertNull(CodexSchemaAdmission.inspect(directory, "worker-model", "high", true, readOnly = true))
       val file = directory.resolve("v2/ThreadStartParams.json")
       val mapper = ObjectMapper()
       val schema = mapper.readTree(file.toFile())
