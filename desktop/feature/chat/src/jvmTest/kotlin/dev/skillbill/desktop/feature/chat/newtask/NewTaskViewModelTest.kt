@@ -27,10 +27,15 @@ import dev.skillbill.desktop.core.domain.repository.FolderChooser
 import dev.skillbill.desktop.core.domain.repository.RepositoryBranchesRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.settings.AppSettings
+import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
+import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import dev.skillbill.desktop.core.testing.loadedBoard
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -72,8 +77,43 @@ class NewTaskViewModelTest {
   @AfterTest
   fun tearDown() = Dispatchers.resetMain()
 
-  private fun viewModel(board: FakeWorkBoardRepository, chats: NewTaskChats, specs: SpecRepository = FakeSpecs(), branches: RepositoryBranchesRepository = FakeBranches(), folders: FolderChooser = FolderChooser { FolderChoice.Cancelled }) =
-    NewTaskViewModel(chats, board, specs, branches, folders, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK)
+  private fun viewModel(board: FakeWorkBoardRepository, chats: NewTaskChats, specs: SpecRepository = FakeSpecs(), branches: RepositoryBranchesRepository = FakeBranches(), folders: FolderChooser = FolderChooser { FolderChoice.Cancelled }, settings: AppSettingsRepository = FakeAppSettingsRepository(), diagnostics: RecordingDiagnostics = RecordingDiagnostics()) =
+    NewTaskViewModel(chats, board, specs, branches, folders, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK, settings, diagnostics)
+
+  @Test
+  fun `chat layout follows settings without changing open or selected chats`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chats = testNewTaskChats()
+    val second = chats.newChat()
+    val open = chats.open.value
+    val settings = FakeAppSettingsRepository()
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), chats, settings = settings)
+    runCurrent()
+
+    assertEquals(NewTaskChatLayout.Tabs, model.state.value.newTaskChatLayout)
+    settings.settings.value = settings.settings.value.copy(newTaskChatLayout = NewTaskChatLayout.SideList)
+    runCurrent()
+
+    assertEquals(NewTaskChatLayout.SideList, model.state.value.newTaskChatLayout)
+    assertEquals(open, chats.open.value)
+    assertEquals(second, chats.selected.value)
+    model.viewModelScope.cancel()
+  }
+
+  @Test
+  fun `an unavailable chat layout records the fallback and keeps the default`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val diagnostics = RecordingDiagnostics()
+    val settings = object : AppSettingsRepository by FakeAppSettingsRepository() {
+      override val settings: Flow<AppSettings> = flow { throw IllegalStateException("Settings unavailable") }
+    }
+    val model = viewModel(FakeWorkBoardRepository(loadedBoard()), testNewTaskChats(), settings = settings, diagnostics = diagnostics)
+    runCurrent()
+
+    assertEquals(NewTaskChatLayout.Tabs, model.state.value.newTaskChatLayout)
+    assertEquals(listOf("desktop_new_task_chat_layout_unavailable"), diagnostics.categories)
+    model.viewModelScope.cancel()
+  }
 
   @Test
   fun `discarding a closed draft deletes it and show all opens the picker`() = runTest {
@@ -91,7 +131,7 @@ class NewTaskViewModelTest {
     chatRepo.saved[entry.sessionId] = entry
     val chats = NewTaskChats(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
     val draft = chats.selected.value
-    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     runCurrent()
     draft.refreshSaved()
     runCurrent()
@@ -226,7 +266,7 @@ class NewTaskViewModelTest {
     val chats = unconfinedNewTaskChats()
     val draft = chats.selected.value
     val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
-    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chat, detecting("Codex"), FIXED_CLOCK)
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chat, detecting("Codex"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     advanceUntilIdle()
 
     assertEquals("codex", draft.agentId)
@@ -238,7 +278,7 @@ class NewTaskViewModelTest {
   fun `the home follows the board after the default repository is chosen`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val board = FakeWorkBoardRepository(BoardState.Loading)
-    val model = NewTaskViewModel(unconfinedNewTaskChats(), board, FakeSpecs(listed = listOf(SpecProject("p", "p", "/specs/p", "/work/p"))), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, FakeExecutionChatRepository(), detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(unconfinedNewTaskChats(), board, FakeSpecs(listed = listOf(SpecProject("p", "p", "/specs/p", "/work/p"))), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, FakeExecutionChatRepository(), detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     advanceUntilIdle()
     assertEquals(NewTaskHome.Pending, model.state.value.home)
 
@@ -265,7 +305,7 @@ class NewTaskViewModelTest {
       selectedAgent = chatRepo.agent
       text = "add export"
     }
-    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     advanceUntilIdle()
     model.onAction(NewTaskAction.Send)
     runCurrent()
@@ -305,7 +345,7 @@ class NewTaskViewModelTest {
       selectedAgent = chatRepo.agent
       text = "add export"
     }
-    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, gated, detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, gated, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     advanceUntilIdle()
     model.onAction(NewTaskAction.Send)
     runCurrent()
@@ -567,7 +607,7 @@ class NewTaskViewModelTest {
       agentId = "claude"
       selectedAgent = chatRepo.agent
     }
-    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK)
+    val model = NewTaskViewModel(chats, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK, FakeAppSettingsRepository(), RecordingDiagnostics())
     advanceUntilIdle()
     draft.text = "first"
     model.onAction(NewTaskAction.Send)

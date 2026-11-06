@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatAgent
@@ -17,6 +18,8 @@ import dev.skillbill.desktop.core.domain.repository.RepositoryBranchesRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
+import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
@@ -26,6 +29,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
@@ -51,6 +59,7 @@ data class NewTaskUiState(
   val resumePickerOpen: Boolean = false,
   val branchRead: BranchReadState = BranchReadState.Idle,
   val repositoryPicks: Int = 0,
+  val newTaskChatLayout: NewTaskChatLayout = NewTaskChatLayout.DEFAULT,
 )
 
 sealed interface NewTaskAction {
@@ -86,6 +95,8 @@ class NewTaskViewModel(
   private val chat: ExecutionChatRepository,
   private val config: RuntimeConfigRepository,
   private val clock: Clock,
+  private val settings: AppSettingsRepository,
+  private val diagnostics: Diagnostics,
 ) : ViewModel() {
   private val mutableState = MutableStateFlow(NewTaskUiState(agents = chat.agents()))
   val state: StateFlow<NewTaskUiState> = mutableState.asStateFlow()
@@ -99,6 +110,10 @@ class NewTaskViewModel(
   private var readinessRequested = false
 
   init {
+    settings.settings.map { it.newTaskChatLayout }.distinctUntilChanged()
+      .onEach { layout -> mutableState.update { it.copy(newTaskChatLayout = layout) } }
+      .catch { diagnostics.record("desktop_new_task_chat_layout_unavailable") }
+      .launchIn(viewModelScope)
     val first = draft
     readBranches(first)
     viewModelScope.launch { observeBoard(loadRepositories()) }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -48,6 +49,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.feature.chat.ChatTranscript
 import dev.skillbill.desktop.feature.chat.chipText
 import kotlin.time.Instant
@@ -66,10 +68,10 @@ internal class NewTaskScreenHost(
 
 @Composable
 internal fun NewTaskScreen(state: NewTaskUiState, chats: NewTaskChats, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
-  val open by chats.open.collectAsState()
   val selected by chats.selected.collectAsState()
   val selectedChat = selected.chat.collectAsState().value
   val pendingClose by chats.pendingClose.collectAsState()
+  val items = rememberOpenChatItems(chats)
   LaunchedEffect(Unit) { chats.refreshSaved() }
   Column(Modifier.fillMaxSize().onPreviewKeyEvent { handleChatShortcut(it, chats) }) {
     ViewHeader(
@@ -78,8 +80,18 @@ internal fun NewTaskScreen(state: NewTaskUiState, chats: NewTaskChats, host: New
         if (selectedChat != null) SbButton("Discard", { onAction(NewTaskAction.Discard) }, size = SbControlSize.Small)
       },
     )
-    NewTaskChatTabs(open, selected, chats::status, chats::select, chats::requestClose, onNew = { onAction(NewTaskAction.NewChat) })
-    key(selected) { NewTaskChatContent(state, selected, chats, host, onAction) }
+    when (state.newTaskChatLayout) {
+      NewTaskChatLayout.Tabs -> {
+        NewTaskChatTabs(items, selected, chats::select, chats::requestClose, onNew = chats::newChat)
+        key(selected) { NewTaskChatContent(state, selected, chats, host, onAction) }
+      }
+      NewTaskChatLayout.SideList -> Row(Modifier.weight(1f)) {
+        NewTaskChatList(items, selected, chats::select, chats::newChat, chats::requestClose)
+        Column(Modifier.weight(1f)) {
+          key(selected) { NewTaskChatContent(state, selected, chats, host, onAction) }
+        }
+      }
+    }
   }
   pendingClose?.let { draft ->
     val transcript = draft.chat.collectAsState().value?.thread?.transcript?.collectAsState()?.value.orEmpty()
