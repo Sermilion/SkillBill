@@ -11,9 +11,16 @@ internal const val GIT_DIFF_RENAME_LIMIT = "1000"
 private val HOOKED_GIT_COMMANDS = setOf("commit", "push")
 
 internal fun gitTimeoutSeconds(args: List<String>): Long {
-  val command = args.firstOrNull { arg -> !arg.startsWith("-") } ?: return GIT_TIMEOUT_SECONDS
-  return if (command in HOOKED_GIT_COMMANDS) GIT_HOOKED_COMMAND_TIMEOUT_SECONDS else GIT_TIMEOUT_SECONDS
+  val commands = args.filterNot { arg -> arg.startsWith("-") }
+  val command = commands.firstOrNull() ?: return GIT_TIMEOUT_SECONDS
+  return when {
+    command in HOOKED_GIT_COMMANDS -> GIT_HOOKED_COMMAND_TIMEOUT_SECONDS
+    commands.take(2) == WORKTREE_REMOVE_COMMAND -> GIT_HOOKED_COMMAND_TIMEOUT_SECONDS
+    else -> GIT_TIMEOUT_SECONDS
+  }
 }
+
+private val WORKTREE_REMOVE_COMMAND = listOf("worktree", "remove")
 
 internal fun gitTimedOutError(args: List<String>): String =
   "git ${args.joinToString(" ")} timed out after ${gitTimeoutSeconds(args)}s."
