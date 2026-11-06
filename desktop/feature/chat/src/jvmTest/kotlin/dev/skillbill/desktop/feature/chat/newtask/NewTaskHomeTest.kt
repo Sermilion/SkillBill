@@ -1,12 +1,10 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
@@ -66,15 +64,18 @@ class NewTaskHomeTest {
   private val host = NewTaskScreenHost(now = { Instant.fromEpochMilliseconds(0) }, onOpenRun = {}, onShowAllWork = {})
 
   @Test
-  fun `inbox shows draft labels only for another repository and routes resume and discard`() = runComposeUiTest {
+  fun `recent chats filter to the selected repository and route resume and discard`() = runComposeUiTest {
     val chats = FakeExecutionChatRepository()
     val app = savedDraft(chats, "app", "/work/app", Instant.fromEpochSeconds(0), "Build app\nsecond line")
+    val appOther = savedDraft(chats, "app-other", "/work/app", Instant.fromEpochSeconds(1_800), "Review app")
     val lib = savedDraft(chats, "lib", "/work/lib", Instant.fromEpochSeconds(3_600), "Update library")
     chats.saved[app.sessionId] = app
+    chats.saved[appOther.sessionId] = appOther
     chats.saved[lib.sessionId] = lib
     val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
     val draft = open.selected.value
     val actions = mutableListOf<NewTaskAction>()
+    draft.repository = NewTaskRepository("/work/app", "app")
     draft.refreshSaved()
     val fixedHost = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = {}, onShowAllWork = {})
     setContent {
@@ -84,73 +85,68 @@ class NewTaskHomeTest {
     }
     waitForIdle()
 
-    onNodeWithText("Pick up where you left off").assertExists()
+    onNodeWithText("Recent chats").assertExists()
     onNodeWithText("Build app").assertExists()
-    onNodeWithText("Update library").assertExists()
-    onNodeWithText("lib").assertExists()
+    onNodeWithText("Update library").assertDoesNotExist()
     onNodeWithText("2h").assertExists()
     onNodeWithText("Build app").performClick()
     waitForIdle()
     assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(app)), actions)
 
     actions.clear()
-    onNodeWithText("Update library").performMouseInput { enter(center) }
-    onNodeWithContentDescription("Discard Update library").performClick()
+    onNodeWithText("Review app").performMouseInput { enter(center) }
+    onNodeWithContentDescription("Discard Review app").performClick()
     waitForIdle()
-    assertEquals(listOf<NewTaskAction>(NewTaskAction.DiscardDraft(lib)), actions)
+    assertEquals(listOf<NewTaskAction>(NewTaskAction.DiscardDraft(appOther)), actions)
   }
 
   @Test
-  fun `focused inbox card moves selection and opens the selected row with keyboard`() = runComposeUiTest {
+  fun `section rows open and discard with keyboard focus without hover`() = runComposeUiTest {
     val chats = FakeExecutionChatRepository()
-    val entry = savedDraft(chats, "keyboard-draft", "/work/app", Instant.fromEpochSeconds(3_600), "Keyboard draft")
-    chats.saved[entry.sessionId] = entry
-    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
+    val entry = savedDraft(chats, "keyboard-draft", "/work/app", Instant.fromEpochSeconds(0), "Keyboard draft")
     val blocked = workItem("blocked-run")
-    val state = NewTaskUiState(home = newTaskHome(loadedBoard(mapOf(BoardSectionKind.NeedsYou to listOf(blocked)))))
-    val openedRuns = mutableListOf<WorkItem>()
-    val actions = mutableListOf<NewTaskAction>()
-    open.refreshSaved()
-    val keyboardHost = NewTaskScreenHost(now = { Instant.fromEpochSeconds(7_200) }, onOpenRun = { openedRuns += it }, onShowAllWork = {})
+    val resumed = mutableListOf<ChatHistoryEntry>()
+    val discarded = mutableListOf<ChatHistoryEntry>()
+    val opened = mutableListOf<WorkItem>()
     setContent {
       SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(state, open, keyboardHost) { actions += it } }
+        Column {
+          RecentChatsSection(listOf(entry), "/work/app", host.now, { resumed += it }, { discarded += it }, {})
+          NeedsYouSection(NewTaskHome.Returning(listOf(blocked), 0, 0), host.now, { opened += it }, {})
+        }
       }
     }
-    waitForIdle()
 
-    val card = onNodeWithContentDescription("Pick up where you left off")
-    card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-    card.assertIsFocused()
-    card.performKeyInput { pressKey(Key.Delete) }
-    assertTrue(actions.isEmpty())
-    assertTrue(openedRuns.isEmpty())
-    card.performKeyInput {
-      pressKey(Key.DirectionDown)
-      pressKey(Key.Enter)
-    }
-    card.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2 of 2, Keyboard draft"))
-    card.performKeyInput {
-      pressKey(Key.One)
-      pressKey(Key.Delete)
-      pressKey(Key.Enter)
-    }
-    card.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1 of 2, ${blocked.title}"))
+    val chat = onNodeWithText("Keyboard draft")
+    chat.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+    chat.assertIsFocused()
+    chat.performKeyInput { pressKey(Key.Enter) }
+    assertEquals(listOf(entry), resumed)
+    chat.performKeyInput { pressKey(Key.Tab) }
+    val discard = onNodeWithContentDescription("Discard Keyboard draft")
+    discard.assertIsFocused()
+    discard.performKeyInput { pressKey(Key.Enter) }
+    assertEquals(listOf(entry), discarded)
+    assertEquals(listOf(entry), resumed)
 
-    assertEquals(listOf<NewTaskAction>(NewTaskAction.ResumeDraft(entry)), actions)
-    assertEquals(listOf(blocked, blocked), openedRuns)
+    val run = onNodeWithText(blocked.title)
+    run.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+    run.assertIsFocused()
+    run.performKeyInput { pressKey(Key.Enter) }
+    assertEquals(listOf(blocked), opened)
   }
 
   @Test
-  fun `show all appears only when drafts are hidden`() = runComposeUiTest {
+  fun `recent chats list every saved chat and search opens the palette`() = runComposeUiTest {
     val chats = FakeExecutionChatRepository()
-    val drafts = (0..NEW_TASK_HISTORY_ROWS).map { index ->
-      savedDraft(chats, "draft-$index", "/work/repo-$index", Instant.fromEpochSeconds(index.toLong()), "Draft $index")
+    val drafts = (0..6).map { index ->
+      savedDraft(chats, "draft-$index", "/work/app", Instant.fromEpochSeconds(index.toLong()), "Draft $index")
     }
     drafts.forEach { chats.saved[it.sessionId] = it }
     val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
     val draft = open.selected.value
     val actions = mutableListOf<NewTaskAction>()
+    draft.repository = NewTaskRepository("/work/app", "app")
     draft.refreshSaved()
     setContent {
       SkillBillTheme(reducedMotion = true) {
@@ -159,40 +155,12 @@ class NewTaskHomeTest {
     }
     waitForIdle()
 
-    onAllNodesWithText("Draft ", substring = true).assertCountEquals(NEW_TASK_HISTORY_ROWS)
-    onNodeWithText("Draft 0").assertDoesNotExist()
+    (0..6).forEach { onNodeWithText("Draft $it").assertExists() }
+    onNodeWithText("Show all").assertDoesNotExist()
     onNodeWithText("Try one of these").assertExists()
-    onAllNodesWithText("0 running · 0 finished today").assertCountEquals(0)
-    onNodeWithText("Show all").performClick()
+    onNodeWithContentDescription("Search chats").performClick()
     assertEquals(listOf<NewTaskAction>(NewTaskAction.ShowAllDrafts), actions)
 
-    chats.saved.remove(drafts.last().sessionId)
-    draft.refreshSaved()
-    waitForIdle()
-    onNodeWithText("Show all").assertDoesNotExist()
-  }
-
-  // A badge on a saved chat that is not open, or none on the one that is.
-  @Test
-  fun `recent chats mark only the saved chat that is open in a tab`() = runComposeUiTest {
-    val chats = FakeExecutionChatRepository()
-    val app = savedDraft(chats, "app", "/work/app", Instant.fromEpochSeconds(0), "Build app")
-    val lib = savedDraft(chats, "lib", "/work/lib", Instant.fromEpochSeconds(3_600), "Update library")
-    chats.saved[app.sessionId] = app
-    chats.saved[lib.sessionId] = lib
-    val open = NewTaskChats(chats, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(CoroutineScope(Dispatchers.Unconfined)), Clock.System)
-    open.resume(app)
-    open.newChat()
-    open.refreshSaved()
-    setContent {
-      SkillBillTheme(reducedMotion = true) {
-        CompositionLocalProvider(LocalShellInput provides ShellInput()) { NewTaskScreen(NewTaskUiState(), open, host) {} }
-      }
-    }
-    waitForIdle()
-
-    onNodeWithText("Update library").assertExists()
-    onAllNodesWithText("open").assertCountEquals(1)
   }
 
   // A shortcut the screen ignores or routes to the wrong chat, or a close of a replying chat with no confirmation.
@@ -256,7 +224,7 @@ class NewTaskHomeTest {
 
     onNodeWithText("Try one of these").assertExists()
     onNodeWithText("Ready: claude found, app selected").assertExists()
-    onAllNodesWithText("Pick up where you left off").assertCountEquals(0)
+    onAllNodesWithText("Recent chats").assertCountEquals(0)
     onAllNodesWithText("Review my branch").assertCountEquals(0)
   }
 
@@ -271,6 +239,7 @@ class NewTaskHomeTest {
 
     onAllNodesWithText("Try one of these").assertCountEquals(0)
     onAllNodesWithText("Needs you").assertCountEquals(0)
+    onAllNodesWithText("All clear").assertCountEquals(0)
     onAllNodesWithText("Review my branch").assertCountEquals(0)
   }
 
@@ -308,7 +277,8 @@ class NewTaskHomeTest {
       }
     }
 
-    onNodeWithText("Pick up where you left off").assertExists()
+    onNodeWithText("Needs you").assertExists()
+    onNodeWithText("2").assertExists()
     onNodeWithText("the exact pause reason").assertExists()
     onAllNodesWithText("the fallback reason").assertCountEquals(0)
     onNodeWithText("the only reason").assertExists()
@@ -319,7 +289,8 @@ class NewTaskHomeTest {
     waitForIdle()
     assertEquals(listOf(plain), opened)
 
-    onNodeWithText("1 finished today").assertExists()
+    onNodeWithText("●").assertExists()
+    onNodeWithText("0 running · 1 finished today").assertExists()
     onNodeWithContentDescription("0 running · 1 finished today").performClick()
     waitForIdle()
     assertTrue(showedAllWork)
@@ -336,10 +307,10 @@ class NewTaskHomeTest {
       }
     }
 
-    onNodeWithText("0 finished today").assertExists()
+    onNodeWithText("All clear").assertExists()
     onNodeWithContentDescription("2 running · 0 finished today").assertExists()
-    onNodeWithText("Pick up where you left off").assertExists()
-    onNodeWithText("Nothing here. Start something below.").assertExists()
+    onNodeWithText("Needs you").assertDoesNotExist()
+    onNodeWithText("Nothing here. Start something below.").assertDoesNotExist()
     onAllNodesWithText("Try one of these").assertCountEquals(0)
   }
 

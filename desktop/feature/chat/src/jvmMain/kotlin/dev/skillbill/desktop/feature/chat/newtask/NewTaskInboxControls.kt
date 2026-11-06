@@ -6,11 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -23,13 +24,14 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 
@@ -45,94 +47,64 @@ internal fun inboxTextStyle(size: TextUnit = 13.sp, mono: Boolean = false): Text
 }
 
 @Composable
-internal fun InboxFilterControl(selected: InboxFilter, needsCount: Int, savedCount: Int, onSelect: (InboxFilter) -> Unit) {
+internal fun HomeSectionHeader(title: String, count: Int?, action: @Composable () -> Unit) {
   val colors = SkillBillTheme.colors
-  Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-    listOf(Triple(InboxFilter.All, "All", null), Triple(InboxFilter.NeedsYou, "Needs you", needsCount), Triple(InboxFilter.Chats, "Chats", savedCount)).forEach { (filter, label, count) ->
-      val active = selected == filter
-      val interaction = remember(filter) { MutableInteractionSource() }
-      val hovered by interaction.collectIsHoveredAsState()
-      val shape = RoundedCornerShape(4.dp)
-      Row(
-        Modifier.height(22.dp)
-          .then(if (active) Modifier.background(colors.bgActive, shape) else Modifier)
-          .pointerHoverIcon(PointerIcon.Hand)
-          .clickable(interaction, indication = null, role = Role.Tab, onClick = { onSelect(filter) })
-          .sbFocusRing(interaction, shape)
-          .semantics { this.selected = active; contentDescription = label }
-          .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-      ) {
-        val foreground = if (active) colors.fg else if (hovered) colors.fg2 else colors.fgFaint
-        BasicText(label, style = inboxTextStyle(12.sp).copy(color = foreground), maxLines = 1)
-        count?.let {
-          val countColor = if (filter == InboxFilter.NeedsYou && it > 0) colors.stBlocked else colors.fgFaint
-          BasicText(it.toString(), style = inboxTextStyle(10.5.sp).copy(color = countColor), maxLines = 1)
-        }
-      }
-    }
-  }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun InboxHint(home: NewTaskHome.Returning?, showAll: Boolean, onShowAll: () -> Unit, onShowAllWork: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  FlowRow(
-    modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
-    verticalArrangement = Arrangement.spacedBy(8.dp),
+  val type = SkillBillTheme.type
+  Row(
+    Modifier.fillMaxWidth().heightIn(min = 22.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.CenterVertically,
   ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-      InboxKeycap("1")
-      BasicText("–", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
-      InboxKeycap("9")
-      BasicText("open", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-      InboxKeycap("↑")
-      InboxKeycap("↓")
-      BasicText("move", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-      InboxKeycap("Del")
-      BasicText("discard chat", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
-    }
-    if (home != null) InboxHintLink(
-      "${home.finished} finished today", onShowAllWork, arrow = true,
-      description = "${home.running} running · ${home.finished} finished today",
-    )
-    if (showAll) InboxHintLink("Show all", onShowAll)
+    BasicText(title, Modifier.semantics { heading() }, style = type.tSmMedium.copy(color = colors.fgMuted), maxLines = 1)
+    count?.let { BasicText(it.toString(), style = type.tXs.copy(color = colors.fgFaint), maxLines = 1) }
+    Spacer(Modifier.weight(1f))
+    action()
   }
 }
 
 @Composable
-private fun InboxKeycap(text: String) {
+internal fun SearchChatsButton(onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
-  BasicText(
-    text,
-    Modifier.background(colors.bgInset, RoundedCornerShape(3.dp))
-      .border(1.dp, colors.border, RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
-    style = inboxTextStyle(10.5.sp, mono = true).copy(color = colors.fgMuted, lineHeight = 12.sp),
-  )
+  HomeGhostAction(onClick, Modifier.semantics { contentDescription = "Search chats" }) { hovered ->
+    BasicText("Search chats", style = SkillBillTheme.type.tSm.copy(color = if (hovered) colors.fg else colors.fgMuted), maxLines = 1)
+    BasicText(
+      "/resume",
+      Modifier.background(colors.bgInset, RoundedCornerShape(3.dp))
+        .border(1.dp, colors.border, RoundedCornerShape(3.dp))
+        .padding(horizontal = 5.dp, vertical = 2.dp),
+      style = inboxTextStyle(10.sp, mono = true).copy(color = colors.fgMuted, lineHeight = 12.sp),
+      maxLines = 1,
+    )
+  }
 }
 
 @Composable
-private fun InboxHintLink(text: String, onClick: () -> Unit, arrow: Boolean = false, description: String? = null) {
+internal fun WorkSummaryLink(running: Int, finished: Int, onClick: () -> Unit) {
+  val colors = SkillBillTheme.colors
+  val description = "$running running · $finished finished today"
+  HomeGhostAction(onClick, Modifier.semantics { contentDescription = description }) { hovered ->
+    BasicText("●", style = SkillBillTheme.type.tSm.copy(color = colors.stActive), maxLines = 1)
+    BasicText(description, style = SkillBillTheme.type.tSm.copy(color = if (hovered) colors.fg else colors.fgMuted), maxLines = 1)
+    InboxGlyph(InboxGlyphKind.Arrow, if (hovered) colors.fg else colors.fgMuted)
+  }
+}
+
+@Composable
+private fun HomeGhostAction(
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+  content: @Composable RowScope.(hovered: Boolean) -> Unit,
+) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
+  val shape = RoundedCornerShape(SkillBillRadius.xs)
   Row(
-    Modifier.pointerHoverIcon(PointerIcon.Hand)
+    modifier.height(22.dp).then(if (hovered) Modifier.background(colors.bgHover, shape) else Modifier)
+      .pointerHoverIcon(PointerIcon.Hand)
       .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
-      .semantics { if (description != null) contentDescription = description }
-      .sbFocusRing(interaction, RoundedCornerShape(3.dp)),
-    horizontalArrangement = Arrangement.spacedBy(5.dp),
+      .sbFocusRing(interaction, shape).padding(horizontal = 6.dp),
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
-  ) {
-    val color = if (hovered) colors.fg else colors.fgFaint
-    BasicText(text, style = inboxTextStyle(11.5.sp).copy(color = color))
-    if (arrow) InboxGlyph(InboxGlyphKind.Arrow, color)
-  }
+  ) { content(hovered) }
 }
