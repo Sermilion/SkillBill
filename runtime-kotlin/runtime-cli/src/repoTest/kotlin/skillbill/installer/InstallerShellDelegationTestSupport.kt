@@ -334,6 +334,8 @@ internal fun runPrebuiltInstaller(
   builder.environment().installDesktopUnder(home)
   if (options.skipPreinstallUninstall) {
     builder.environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
+  } else {
+    builder.environment().remove("SKILL_BILL_SKIP_PREINSTALL_UNINSTALL")
   }
   if (options.seedPriorInstall) {
     Files.createDirectories(home.resolve(".skill-bill"))

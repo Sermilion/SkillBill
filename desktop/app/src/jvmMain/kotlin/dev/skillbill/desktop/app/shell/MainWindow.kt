@@ -32,6 +32,7 @@ import dev.skillbill.desktop.app.keyboard.KeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.app.keyboard.toKeyPress
 import dev.skillbill.desktop.core.designsystem.icon.skillBillIcon
+import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
@@ -204,8 +205,10 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val newTaskDraft by window.chat.newTaskDraftOpen.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
+  val chatShown = panes.chatOpen && topRoute !is SettingsRoute
   val chat = contributions.firstOrNull { it.slot == PaneSlot.Chat }?.content
-  val right = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
+  val specs = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
+  val right = if (chatShown) chat else specs
   val bottom = contributions.firstOrNull { it.slot == PaneSlot.Bottom }?.takeIf { panes.terminalOpen && topRoute !is SettingsRoute }?.content
   val navigate: (AppRoute) -> Unit = { route ->
     panes.drawerOpen = false
@@ -241,7 +244,7 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
     }
   }
   ShellFrame(sidebar, drawerMode, panes.drawerOpen, onDismissDrawer = { panes.drawerOpen = false }) {
-    WorkArea(drawerMode, right, bottom) {
+    WorkArea(drawerMode, right, bottom, rightWidth = if (chatShown) null else SkillBillSize.specsPane) {
       Box(Modifier.fillMaxSize()) {
         AppNavHost(navigator, window.entries, window.workImportRequests, shellProblem(session, board)) { problem ->
           ProblemStatePanel(
@@ -249,7 +252,6 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
             onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },
           )
         }
-        if (topRoute !is SettingsRoute) chat?.invoke()
       }
     }
   }

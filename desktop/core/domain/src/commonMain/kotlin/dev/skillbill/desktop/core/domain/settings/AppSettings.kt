@@ -21,6 +21,9 @@ data class AppSettings(
     const val TERMINAL_HEIGHT_DEFAULT_DP = 200
     const val TERMINAL_HEIGHT_MIN_DP = 120
     const val TERMINAL_HEIGHT_MAX_DP = 1200
+    const val CHAT_WIDTH_DEFAULT_DP = 560
+    const val CHAT_WIDTH_MIN_DP = 360
+    const val CHAT_WIDTH_MAX_DP = 2000
 
     val DEFAULT = AppSettings(
       databasePath = null,
