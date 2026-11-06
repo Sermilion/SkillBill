@@ -44,6 +44,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.isCooperativeCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
@@ -135,22 +136,72 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     val outcome =
       result.getOrElse { error ->
         if (error.isCooperativeCancellation()) throw error
-        return PhaseOutcome.blocked("Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
+        return blockUnit(unitId, "Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
       }
+    if (outcome is PhaseOutcome.Blocked) return blockUnit(unitId, outcome.reason, outcome.failureCode)
     if (outcome !is PhaseOutcome.Completed) return outcome
-    val bundle =
-      parent.records.loadPlanBundle(facts.workflowId) ?: return PhaseOutcome.blocked(MISSING_BUNDLE_REASON)
-    stagedUnit(storeSubSpec(bundle, unitId))?.let { staged ->
-      PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)
-    }
-    return when (val settled = snapshots.settleUnit(facts.repoRoot, facts.issueKey, bundle, unitId)) {
-      is PlanUnitSettlement.Rejected -> PhaseOutcome.blocked(settled.reason)
+    return settleCompletedUnit(unitId, outcome)
+  }
+
+  private fun settleCompletedUnit(
+    unitId: Int,
+    outcome: PhaseOutcome.Completed,
+  ): PhaseOutcome? {
+    val settled =
+      try {
+        val bundle =
+          parent.records.loadPlanBundle(facts.workflowId) ?: return PhaseOutcome.blocked(MISSING_BUNDLE_REASON)
+        stagedUnit(storeSubSpec(bundle, unitId))?.let { staged ->
+          PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)
+        }
+        snapshots.settleUnit(facts.repoRoot, facts.issueKey, bundle, unitId)
+      } catch (error: SkillBillRuntimeException) {
+        return blockUnit(unitId, "Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
+      }
+    return when (settled) {
+      is PlanUnitSettlement.Rejected -> blockUnit(unitId, settled.reason)
       is PlanUnitSettlement.Planned ->
         if (recordUnit(unitId, outcome, settled.bundle)) {
           null
         } else {
-          PhaseOutcome.blocked("Planning subtask $unitId could not be recorded.")
+          blockUnit(unitId, "Planning subtask $unitId could not be recorded.")
         }
+    }
+  }
+
+  private fun blockUnit(
+    unitId: Int,
+    reason: String,
+    failureCode: String? = null,
+  ): PhaseOutcome {
+    val bundle =
+      parent.records.loadPlanBundle(facts.workflowId)
+        ?: return PhaseOutcome.blocked(
+          "$reason The plan bundle is unavailable, so the blocked unit record could not be saved.",
+          failureCode,
+        )
+    val unit = PlanUnit(facts.workflowId, stepId, unitId)
+    val current =
+      parent.records.loadPhaseRecords(facts.workflowId)?.get(unitRecordId(unitId))
+        ?: unitStates[unitId]?.records?.loadPhaseRecords(facts.workflowId)?.get(stepId)
+    val blocked =
+      current?.let { PlanUnitRecords.blocked(it, reason) }
+        ?: PlanUnitRecords.blocked(
+          unit,
+          PlanUnitAttempt(
+            attemptCount = 1,
+            resolvedAgentId =
+              FeatureTaskRuntimeAgentResolver
+                .resolve(stepId, facts.agentAssignment, facts.invokedAgentId)
+                .resolvedAgentId,
+          ),
+          reason,
+          parent.clock.instant(),
+        )
+    return if (parent.records.recordPlanBundleWithUnits(facts.workflowId, bundle, mapOf(unitId to blocked))) {
+      PhaseOutcome.blocked(reason, failureCode)
+    } else {
+      PhaseOutcome.blocked("$reason The blocked unit record could not be saved.", failureCode)
     }
   }
 
