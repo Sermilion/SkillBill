@@ -21,6 +21,7 @@ data class AgentRunProcessLaunchFields(
   val stdinText: String? = null,
   val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
   val continuation: ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null,
+  val session: AgentRunApprovalChannelOpening? = null,
 )
 
 data class AgentRunProcessTimingFields(

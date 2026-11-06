@@ -6,7 +6,13 @@ import kotlin.time.Instant
  * The agent a chat turn runs on; a null [model] or [effort] leaves the agent CLI's own default. [profile] is the agent's config
  * directory, such as `~/.codex-api`, when a resumed session came from it; null runs the agent as the app is configured to.
  */
-data class ChatAgent(val agentId: String, val model: String?, val effort: String?, val profile: String? = null)
+data class ChatAgent(
+  val agentId: String,
+  val model: String?,
+  val effort: String?,
+  val profile: String? = null,
+  val approvalUnavailableReason: String? = null,
+)
 
 /** [ReadOnly] while the execution runs; [Act] once the operator paused it to act. */
 enum class ChatPermissionMode { ReadOnly, Act }
@@ -86,6 +92,8 @@ data class ChatToolCall(val id: String, val name: String, val input: String, val
 sealed interface ChatEvent {
   data class TextDelta(val text: String) : ChatEvent
 
+  data class Notice(val text: String) : ChatEvent
+
   data class ToolUse(val call: ChatToolCall) : ChatEvent
 
   data class ToolResult(val callId: String, val output: String, val isError: Boolean) : ChatEvent
@@ -101,7 +109,7 @@ sealed interface ChatEvent {
 }
 
 /** Why a turn ended without an answer. */
-enum class ChatFailure { AgentUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
+enum class ChatFailure { AgentUnsupported, ApprovalUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
 
 enum class ChatHistoryRole { Operator, Agent, Notice, Error, Approval, OperationCard }
 

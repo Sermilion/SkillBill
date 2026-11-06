@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.repository.ApprovalFeedRepository
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
+import dev.skillbill.desktop.feature.chat.showCapability
 import dev.skillbill.desktop.feature.chat.ChatApprovals
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import dev.skillbill.desktop.feature.chat.ChatThread
@@ -94,6 +95,7 @@ internal class NewTaskChat(
   init {
     thread.agentState.value = agent
     thread.agentSupportedState.value = chat.supports(agent.agentId)
+    thread.showCapability(agent)
     observeUnprompted()
     followApprovals()
   }
@@ -285,7 +287,7 @@ internal class NewTaskChat(
         seenEvent = true
         thread.dropUnprompted = false
       }
-      val opening = !opened && event !is ChatEvent.Failed
+      val opening = !opened && event !is ChatEvent.Failed && event !is ChatEvent.Notice
       if (opening) {
         opened = true
         started = true
@@ -297,7 +299,7 @@ internal class NewTaskChat(
 
   private suspend fun showUnprompted(event: ChatEvent) {
     if (thread.dropUnprompted) return
-    if (event is ChatEvent.ApprovalRequested) {
+    if (event is ChatEvent.ApprovalRequested || event is ChatEvent.Notice) {
       // A card is not reply text: it neither opens a turn nor holds the composer busy.
       thread.show(thread.agentState.value, event)
       if (started && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))

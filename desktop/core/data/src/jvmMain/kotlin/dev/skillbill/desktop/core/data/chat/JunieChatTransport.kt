@@ -3,10 +3,12 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
@@ -30,29 +32,13 @@ class JunieChatTransport(
 ) : ChatTransport {
   override val agentId = "junie"
 
-  override fun run(request: ChatTurnRequest): Flow<ChatEvent> = turnWithImages(request) { text ->
-    val history = if (request.scope is ChatScope.NewTask) {
-      store.newTaskHistory(request.sessionId)
-    } else if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
-    val prompt = juniePrompt(scopeSystemPrompt(request.scope, request.mode), history, text)
-    val command = ChatCommand(
-      argv = agentCommand("junie", junieArguments(request, prompt), host.variables["SHELL"]),
-      workingDirectory = request.scope.repositoryRoot,
-      environment = host.variables,
-      stdin = "",
-    )
-    val reply = StringBuilder()
-    runChatTurn(launcher, diagnostics, command, JunieTextDecoder).onEach { event ->
-      when (event) {
-        is ChatEvent.TextDelta -> reply.append(event.text)
-        ChatEvent.Completed -> store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
-        else -> Unit
-      }
-    }.onCompletion { cause ->
-      if (cause is CancellationException && reply.isNotBlank() && request.scope !is ChatScope.NewTask) {
-        store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
-      }
-    }
+  override val approvalUnavailableReason =
+    "Junie cannot run card-required chat: Junie ACP exists, but permission-request coverage is unverified " +
+      "for this integration. Select a supported provider explicitly; this request was not started."
+
+  override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
+    diagnostics.record("chat.junie_approval_unsupported")
+    emit(ChatEvent.Failed(ChatFailure.ApprovalUnsupported, approvalUnavailableReason))
   }
 
   override fun end(sessionId: String) = deleteChatImages(sessionId)

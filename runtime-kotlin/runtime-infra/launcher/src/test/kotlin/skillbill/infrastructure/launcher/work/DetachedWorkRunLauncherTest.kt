@@ -69,11 +69,21 @@ class DetachedWorkRunLauncherTest {
   }
 
   @Test
-  fun `a runtime that exits 4 inside the startup grace is awaiting confirmation, not a failed runner`() {
+  fun `a runtime observed exited with 4 during startup awaits confirmation instead of failing`() {
     val home = Files.createTempDirectory("early-parked")
     executable(home, "#!/bin/sh\nexit 4", "skill-bill")
 
-    val result = launcher(home).start(runtimeRequest(home))
+    val result =
+      DetachedWorkRunLauncher(
+        EnvironmentContext(environment = TRAY_ENVIRONMENT, userHome = home),
+        NoopRuntimeDiagnostics,
+        Duration.ZERO,
+        HostAgentHomesPort { emptyMap() },
+        awaitStartupExit = { process, _ ->
+          process.waitFor()
+          true
+        },
+      ).start(runtimeRequest(home))
 
     assertIs<WorkRunLaunchResult.AwaitingConfirmation>(result)
   }

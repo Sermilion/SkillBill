@@ -32,7 +32,9 @@ class CodexOutputTokenContinuationTest {
               if (requests.size <= 5) exhausted() else completed()
             }
         },
-      ).launchFacts(request(model = "worker-model", effort = "high").copy(timeout = null))
+      ).launchFacts(
+        governedReviewRequest().copy(modelOverride = "worker-model", effortOverride = "high", timeout = null),
+      )
 
     assertEquals(AgentRunTermination.Exited(0), facts.termination)
     assertEquals("Completed work", facts.stdout)
@@ -122,7 +124,7 @@ class CodexOutputTokenContinuationTest {
           return completed()
         }
       },
-    ).launch(request())
+    ).launch(governedReviewRequest())
     return requireNotNull(captured)
   }
 
@@ -133,6 +135,7 @@ class CodexOutputTokenContinuationTest {
       processRunner = runner,
       executableLookup = ALL_EXECUTABLES_AVAILABLE,
       diagnostics = NoopRuntimeDiagnostics,
+      clock = LAUNCH_TEST_CLOCK,
     )
 
   private fun exhausted(

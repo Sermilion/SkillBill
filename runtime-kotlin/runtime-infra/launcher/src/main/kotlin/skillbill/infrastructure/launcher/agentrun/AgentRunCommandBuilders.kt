@@ -7,6 +7,7 @@ import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
 import skillbill.infrastructure.launcher.mcp.claudeRuntimeMcpArguments
 import skillbill.infrastructure.launcher.mcp.claudeRuntimeSettlementToolArguments
 import skillbill.infrastructure.launcher.mcp.codexRuntimeMcpArguments
+import skillbill.infrastructure.launcher.process.codex.CODEX_OUTPUT_EXHAUSTED
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
@@ -37,10 +38,13 @@ internal data class AgentRunCommand(
   val outputDecoder: AgentRunOutputDecoder? = null,
   val environmentPassthroughKeys: Set<String> = emptySet(),
   val approvalProtocol: AgentRunApprovalProtocol? = null,
+  val sessionModel: String? = null,
 )
 
 internal enum class AgentRunApprovalProtocol {
   CLAUDE_HOST,
+  CODEX_APP_SERVER,
+  CURSOR_ACP,
 }
 
 internal interface AgentRunCommandBuilder {
@@ -51,6 +55,9 @@ internal interface AgentRunCommandBuilder {
 
   /** The approval protocol this CLI can host; null means it cannot run card-required work at all. */
   val approvalProtocol: AgentRunApprovalProtocol?
+
+  val approvalUnavailableReason: String get() =
+    "Agent '${agent.id}' cannot host operator approval cards. Select a supported provider explicitly."
 
   /** The headless CLI this builder's command execs, resolved against PATH before every spawn. */
   val launcherCli: AgentLauncherCli get() =
@@ -319,7 +326,7 @@ internal class CodexAgentRunCommandBuilder(
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.CODEX
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CODEX_JSONL
-  override val approvalProtocol: AgentRunApprovalProtocol? = null
+  override val approvalProtocol: AgentRunApprovalProtocol = AgentRunApprovalProtocol.CODEX_APP_SERVER
   override val reviewIsolation: ReviewLaunchIsolationStrategy =
     ReviewLaunchIsolationStrategy.CODEX_NATIVE_FORK_TURNS_NONE
 
@@ -327,7 +334,7 @@ internal class CodexAgentRunCommandBuilder(
     command: AgentRunCommand,
     diagnostics: RuntimeDiagnostics,
   ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? =
-    if (command.stdinText == null) {
+    if (command.stdinText == null || command.approvalProtocol == AgentRunApprovalProtocol.CODEX_APP_SERVER) {
       null
     } else {
       CodexOutputTokenContinuation(command, diagnostics)::nextLaunch
@@ -336,24 +343,21 @@ internal class CodexAgentRunCommandBuilder(
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)
-    return goalContinuationCommand(request, agent, databasePath) ?: AgentRunCommand(
-      command =
-        buildList {
-          add(SupportedAgent.CODEX.wireValue)
-          add("exec")
-          add("--json")
-          add("--cd")
-          add(request.repoRoot.toString())
-          request.additionalWritableDirectories.forEach { directory ->
-            add("--add-dir")
-            add(directory.toString())
-          }
-          if (request.reviewEvidenceBroker == null) {
-            add("--dangerously-bypass-approvals-and-sandbox")
-            add("--config")
-            add("shell_environment_policy.inherit=all")
-            addAll(codexRuntimeMcpArguments(request, runtimeMcpBin, databasePath))
-          } else {
+    return goalContinuationCommand(request, agent, databasePath) ?: if (request.reviewEvidenceBroker == null) {
+      appServerCommand(request)
+    } else {
+      AgentRunCommand(
+        command =
+          buildList {
+            add(SupportedAgent.CODEX.wireValue)
+            add("exec")
+            add("--json")
+            add("--cd")
+            add(request.repoRoot.toString())
+            request.additionalWritableDirectories.forEach { directory ->
+              add("--add-dir")
+              add(directory.toString())
+            }
             add("--skip-git-repo-check")
             add("--ignore-user-config")
             add("--sandbox")
@@ -377,29 +381,42 @@ internal class CodexAgentRunCommandBuilder(
                 add(override)
               }
             }
-          }
-          request.modelOverride?.let {
-            add("--model")
-            add(it)
-          }
-          request.effortOverride?.let {
-            add("--config")
-            add("model_reasoning_effort=$it")
-          }
-        },
+            request.modelOverride?.let {
+              add("--model")
+              add(it)
+            }
+            request.effortOverride?.let {
+              add("--config")
+              add("model_reasoning_effort=$it")
+            }
+          },
+        workingDirectory = request.repoRoot,
+        timeout = request.timeout,
+        stdinText = launchPrompt(request),
+        environment =
+          goalContinuationEnvironment(request) +
+            runtimeDatabaseEnvironment(false, databasePath),
+        inheritEnvironment = false,
+        conversationIsolation = governedReviewConversationIsolation(request),
+        idlePolicy = codexLivenessPolicy(request),
+        environmentPassthroughKeys = CODEX_PROVIDER_PASSTHROUGH_KEYS,
+      )
+    }
+  }
+
+  private fun appServerCommand(request: SkillRunRequest): AgentRunCommand =
+    AgentRunCommand(
+      command =
+        listOf(agent.wireValue, "app-server", "--listen", "stdio://") +
+          codexRuntimeMcpArguments(request, runtimeMcpBin, databasePath),
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
       stdinText = launchPrompt(request),
-      environment =
-        goalContinuationEnvironment(request) +
-          runtimeDatabaseEnvironment(request.reviewEvidenceBroker == null, databasePath),
-      inheritEnvironment = request.reviewEvidenceBroker == null,
-      conversationIsolation = governedReviewConversationIsolation(request),
+      environment = goalContinuationEnvironment(request) + runtimeDatabaseEnvironment(true, databasePath),
       idlePolicy = codexLivenessPolicy(request),
-      environmentPassthroughKeys =
-        if (request.reviewEvidenceBroker != null) CODEX_PROVIDER_PASSTHROUGH_KEYS else emptySet(),
+      outputDecoder = AgentRunOutputDecoder.PLAIN,
+      approvalProtocol = AgentRunApprovalProtocol.CODEX_APP_SERVER,
     )
-  }
 }
 
 internal val GOVERNED_REVIEW_TOOLS: List<String> =
@@ -412,7 +429,7 @@ internal val REVIEW_FAN_OUT_TOOLS = (listOf("Agent", "Task") + GOVERNED_REVIEW_T
 internal fun governedReviewToolList(fanOut: Boolean): String =
   if (fanOut) REVIEW_FAN_OUT_TOOLS else GOVERNED_REVIEW_TOOLS.joinToString(",")
 
-internal const val CODEX_OUTPUT_TOKEN_LIMIT_MESSAGE = "Incomplete response returned, reason: max_output_tokens"
+internal const val CODEX_OUTPUT_TOKEN_LIMIT_MESSAGE = CODEX_OUTPUT_EXHAUSTED
 
 private val CODEX_SESSION_ID = Regex("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
@@ -427,17 +444,25 @@ private class CodexOutputTokenContinuation(
     if (decoded.failureDiagnostic != CODEX_OUTPUT_TOKEN_LIMIT_MESSAGE) return null
     val observedSession = decoded.continuationSessionId?.takeIf(CODEX_SESSION_ID::matches)
     if (observedSession == null || sessionId != null && observedSession != sessionId) {
-      diagnostics.warning("seam=codex_output_continuation reason=max_output_tokens outcome=session_unavailable")
+      diagnostics.warning(
+        "seam=codex_output_continuation reason=max_output_tokens " +
+          "outcome=session_unavailable",
+      )
       return null
     }
     sessionId = observedSession
-    diagnostics.warning("seam=codex_output_continuation reason=max_output_tokens outcome=continuation_requested")
+    diagnostics.warning(
+      "seam=codex_output_continuation reason=max_output_tokens " +
+        "outcome=continuation_requested",
+    )
     return AgentRunProcessLaunchFields(
       command = command.command + listOf("resume", observedSession, "-"),
       workingDirectory = command.workingDirectory,
       stdinText =
-        "Continue the same task from the current session and worktree. The previous response reached its " +
-          "output-token limit. Preserve completed edits and continue the unfinished work. " +
+        "Continue the same task from the current session and worktree. The " +
+          "previous response reached its " +
+          "output-token limit. Preserve completed edits and continue the unfinished " +
+          "work. " +
           "Return the required final output only after the work is complete.",
     )
   }

@@ -7,10 +7,15 @@ import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannel
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapture
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionChannel
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
@@ -21,6 +26,14 @@ import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import kotlin.time.Duration
 import kotlin.time.toKotlinDuration
+
+private fun AgentRunSessionCapture.failureMessage(processCaptureIncomplete: Boolean): String? =
+  listOfNotNull(
+    "Codex assistant output was truncated at the capture limit.".takeIf { truncated },
+    "Codex assistant output could not be delivered to the phase output sink.".takeIf { deliveryFailed },
+    "Codex app-server output capture did not finish completely.".takeIf { processCaptureIncomplete },
+    "Codex assistant prose capture is incomplete.".takeIf { !complete && !truncated && !deliveryFailed },
+  ).distinct().joinToString("\n").ifBlank { null }
 
 @Inject
 class JvmAgentRunProcessRunner(
@@ -51,13 +64,18 @@ class JvmAgentRunProcessRunner(
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
     val approval =
-      when (val opened = request.approval.channel?.open()) {
+      when (val opened = (request.launch.session ?: request.approval.channel)?.open()) {
         null -> null
         is AgentRunApprovalOpenResult.Refused -> return approvalRefused(opened.reason, request)
         is AgentRunApprovalOpenResult.Opened -> opened.channel
       }
     try {
-      return runGovernedSpawn(request, approval)
+      val result = runGovernedSpawn(request, approval)
+      return if (approval is AgentRunSessionChannel && !result.processStarted) {
+        settleSession(result, approval)
+      } else {
+        result
+      }
     } finally {
       approval?.let { channel ->
         catchingNonCancellation { channel.finish() }
@@ -65,6 +83,63 @@ class JvmAgentRunProcessRunner(
       }
     }
   }
+
+  private fun settleSession(
+    result: AgentRunProcessResult,
+    session: AgentRunSessionChannel,
+  ): AgentRunProcessResult {
+    val outcome = session.outcome()
+    val capture = result.sessionCapture ?: session.capture()
+    val failure = sessionFailureMessage(outcome)
+    val captureFailure = capture.failureMessage(result.outputCaptureIncomplete)
+    val success = sessionSuccessful(result, outcome, capture)
+    val unsettled = result.timedOut || result.interrupted || result.spawnFailed
+    return result.copy(
+      exitStatus =
+        if (unsettled || result.spawnDenied != null) {
+          result.exitStatus
+        } else if (success) {
+          0
+        } else {
+          1
+        },
+      stderr = listOfNotNull(result.stderr.takeIf(String::isNotBlank), failure, captureFailure).joinToString("\n"),
+      sessionOutcome =
+        outcome ?: AgentRunSessionOutcome(
+          "",
+          null,
+          null,
+          false,
+          failure,
+        ),
+      sessionCapture = capture,
+      outputCaptureIncomplete = result.outputCaptureIncomplete || !capture.complete,
+      stdoutTruncated = result.stdoutTruncated || capture.truncated,
+    )
+  }
+
+  private fun sessionFailureMessage(outcome: AgentRunSessionOutcome?): String? =
+    outcome?.failure ?: when {
+      outcome == null ->
+        "Provider session closed before a matching terminal turn; delivery will " +
+          "not be replayed."
+      outcome.completed && outcome.text.isBlank() ->
+        "Provider completed the turn without a completed assistant response."
+      else -> null
+    }
+
+  private fun sessionSuccessful(
+    result: AgentRunProcessResult,
+    outcome: AgentRunSessionOutcome?,
+    capture: AgentRunSessionCapture,
+  ): Boolean =
+    listOf(
+      outcome?.completed == true,
+      outcome?.text?.isNotBlank() == true,
+      capture.complete,
+      !result.outputCaptureIncomplete,
+      !result.stdoutTruncated,
+    ).all { it }
 
   private fun approvalRefused(
     reason: String,
@@ -176,7 +251,8 @@ class JvmAgentRunProcessRunner(
         if (sinkDelivered.isFailure) {
           val sinkFailure = sinkDelivered.exceptionOrNull()
           agentRunTeardownLogger.warning(
-            "skillbill agent run: endpoint teardown failed and stderr sink rejected the diagnostic; " +
+            "skillbill agent run: endpoint teardown failed and stderr sink rejected " +
+              "the diagnostic; " +
               "endpoint=${boundedTeardownFailureDetail(failure)}; " +
               "sink=${boundedTeardownFailureDetail(sinkFailure ?: failure)}",
           )
@@ -347,6 +423,9 @@ class JvmAgentRunProcessRunner(
         lifetime = resources.lifetime,
         degradation = degradation,
         mcpStartupObservedAtStart = mcpStartupObservedAtStart,
+        sessionExpected = approval is AgentRunSessionChannel,
+        sessionOutcome = (approval as? AgentRunSessionChannel)?.outcome(),
+        sessionCapture = (approval as? AgentRunSessionChannel)?.capture(),
       ),
     )
   }
@@ -388,10 +467,21 @@ class JvmAgentRunProcessRunner(
       Utf8Drain(
         input = args.stdoutStream,
         outputStream = AgentRunOutputStream.STDOUT,
-        outputSink = args.request.launch.outputSink,
+        outputSink =
+          if (args.approval is AgentRunSessionChannel) {
+            AgentRunOutputSink.NONE
+          } else {
+            args.request.launch.outputSink
+          },
         onChunkRead = { chunk ->
           args.outputTracker.markObserved()
           args.approval?.observe(chunk)
+        },
+        onStreamEnd = {
+          (args.approval as? AgentRunSessionChannel)?.let { session ->
+            catchingNonCancellation { session.finish() }
+              .onFailure { failure -> args.degradation.recordCleanupFailure("stdout_session_finish", failure) }
+          }
         },
       )
     val stderr =
@@ -419,12 +509,34 @@ class JvmAgentRunProcessRunner(
     val lifetime: ProcessRunLifetime,
     val degradation: ProcessRunDegradationRecorder,
     val mcpStartupObservedAtStart: Boolean,
+    val sessionExpected: Boolean,
+    val sessionOutcome: AgentRunSessionOutcome?,
+    val sessionCapture: AgentRunSessionCapture?,
   )
 
   private fun buildRunResult(input: BuildRunResultInput): AgentRunProcessResult {
     val release = input.lifetime.cachedRelease()
     val wait = input.waitResult.getOrNull()
-    val terminalOutcome = input.lifetime.terminalOutcome(release, wait)
+    val processOutcome = input.lifetime.terminalOutcome(release, wait)
+    val sessionCleanupFailed = sessionCleanupFailed(input.degradation.snapshot())
+    val session =
+      sessionSettlement(
+        input.sessionOutcome,
+        input.sessionCapture,
+        input.sessionExpected,
+        release,
+        sessionCleanupFailed,
+      )
+    val sessionCapture = session.capture
+    val sessionOutcome = session.outcome
+    val sessionFailure = session.failed
+    val terminalOutcome =
+      when {
+        release.interrupted -> GoalProgressOutcome.CANCELLED
+        wait?.finished != true -> GoalProgressOutcome.TIMED_OUT
+        sessionFailure -> GoalProgressOutcome.FAILED
+        else -> processOutcome
+      }
     input.lifecycleEmitter.emitCompleted(processAlive = false, outcome = terminalOutcome)
     val mcpStartupObserved =
       input.mcpStartupObservedAtStart ||
@@ -435,14 +547,21 @@ class JvmAgentRunProcessRunner(
         outputTracker = input.outputTracker,
         mcpStartupObserved = mcpStartupObserved,
         degradation = input.degradation,
+        session = session,
       )
     }
     val stdout = release.stdoutCapture
     val stderr = release.stderrCapture
     val settledWait = requireNotNull(wait)
-    val stderrText = stderr.text.withTimeoutMessage(settledWait, input.request)
+    val stderrText =
+      listOfNotNull(
+        stderr.text.withTimeoutMessage(settledWait, input.request).takeIf(String::isNotBlank),
+        sessionCapture?.providerDiagnostics,
+        session.failure,
+        session.captureFailure,
+      ).joinToString("\n")
     return AgentRunProcessResult(
-      exitStatus = if (settledWait.finished) input.process.exitValue() else null,
+      exitStatus = settledExitStatus(input, settledWait, session),
       stdout = stdout.text,
       stdoutBytes = stdout.bytes,
       stderr = input.degradation.appendToStderr(stderrText),
@@ -452,29 +571,92 @@ class JvmAgentRunProcessRunner(
       liveness = settledWait.liveness,
       processStarted = true,
       mcpStartupObserved = mcpStartupObserved,
-      stdoutTruncated = false,
+      stdoutTruncated = sessionCapture?.truncated == true,
       stdoutByteSize = stdout.totalByteSize,
       stdoutSha256 = stdout.sha256,
-      outputCaptureIncomplete = release.outputCaptureIncomplete,
+      outputCaptureIncomplete =
+        release.outputCaptureIncomplete || sessionCapture?.complete == false || sessionCleanupFailed,
+      sessionOutcome = sessionOutcome,
+      sessionCapture = sessionCapture,
     )
   }
+
+  private fun settledExitStatus(
+    input: BuildRunResultInput,
+    wait: ProcessWait,
+    session: ProcessSessionSettlement,
+  ): Int? =
+    when {
+      input.sessionExpected && !wait.finished -> null
+      input.sessionExpected -> if (session.failed) 1 else 0
+      wait.sessionSettled -> 0
+      wait.finished -> input.process.exitValue()
+      else -> null
+    }
+
+  private fun sessionCleanupFailed(records: List<ProcessRunDegradationRecord>): Boolean =
+    records.any { record ->
+      val processSeam =
+        record.seam.startsWith("process_") || record.seam.endsWith("_drain_join") ||
+          record.seam.endsWith("_stream_close")
+      record.kind == ProcessRunDegradationKind.CLEANUP_FAILURE && processSeam
+    }
+
+  private fun sessionSettlement(
+    outcome: AgentRunSessionOutcome?,
+    capture: AgentRunSessionCapture?,
+    expected: Boolean,
+    release: ProcessRunReleaseSnapshot,
+    cleanupFailed: Boolean,
+  ): ProcessSessionSettlement {
+    val failure = if (expected) sessionFailureMessage(outcome) else null
+    val effective = outcome ?: if (expected) AgentRunSessionOutcome("", null, null, false, failure) else null
+    val complete =
+      listOf(
+        effective?.completed == true,
+        effective?.text?.isNotBlank() == true,
+        capture?.complete == true,
+        !release.outputCaptureIncomplete,
+        !cleanupFailed,
+      ).all { it }
+    return ProcessSessionSettlement(
+      effective,
+      capture,
+      expected && !complete,
+      failure,
+      capture?.failureMessage(release.outputCaptureIncomplete),
+    )
+  }
+
+  private data class ProcessSessionSettlement(
+    val outcome: AgentRunSessionOutcome?,
+    val capture: AgentRunSessionCapture?,
+    val failed: Boolean,
+    val failure: String?,
+    val captureFailure: String?,
+  )
 
   private fun interruptedResult(
     release: ProcessRunReleaseSnapshot,
     outputTracker: OutputObservationTracker,
     mcpStartupObserved: Boolean,
     degradation: ProcessRunDegradationRecorder,
+    session: ProcessSessionSettlement,
   ): AgentRunProcessResult {
     val stdout = release.stdoutCapture
     val stderr = release.stderrCapture
     val interruptMessage = "Agent run interrupted by parent signal before completion."
+    val sessionCapture = session.capture
     val stderrBody =
       stderr.text.let { existing ->
-        if (existing.isBlank()) {
-          interruptMessage
-        } else {
-          "$existing\n$interruptMessage"
-        }
+        listOfNotNull(
+          existing.takeIf(String::isNotBlank),
+          sessionCapture?.providerDiagnostics,
+          interruptMessage,
+          session.failure,
+          session.captureFailure,
+        )
+          .joinToString("\n")
       }
     return AgentRunProcessResult(
       exitStatus = null,
@@ -493,10 +675,12 @@ class JvmAgentRunProcessRunner(
           processState = GoalRunnerProcessState.KILLED,
           lastOutputAt = outputTracker.lastObservedAt()?.toIsoUtc(),
         ),
-      stdoutTruncated = false,
+      stdoutTruncated = sessionCapture?.truncated == true,
       stdoutByteSize = stdout.totalByteSize,
       stdoutSha256 = stdout.sha256,
-      outputCaptureIncomplete = release.outputCaptureIncomplete,
+      outputCaptureIncomplete = release.outputCaptureIncomplete || sessionCapture?.complete == false,
+      sessionOutcome = session.outcome,
+      sessionCapture = sessionCapture,
     )
   }
 

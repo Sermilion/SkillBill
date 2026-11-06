@@ -21,6 +21,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastEr
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
+import skillbill.infrastructure.sqlite.core.migration.area.addApprovalNotRequiredDelivery
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalLeasesAndGrantFacts
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalOwnerLeaseExpiry
@@ -425,14 +426,16 @@ internal val databaseMigrations: List<DatabaseMigration> =
       operation = { connection ->
         val alreadyRekeyed =
           connection.prepareStatement(
-            "SELECT 1 FROM pragma_table_info('producer_output_evidence') WHERE name = 'generation'",
+            "SELECT 1 FROM pragma_table_info('producer_output_evidence') WHERE name = " +
+              "'generation'",
           ).use { statement ->
             statement.executeQuery().use { resultSet -> resultSet.next() }
           }
         if (!alreadyRekeyed) {
           connection.createStatement().use {
             it.execute(
-              "ALTER TABLE producer_output_evidence RENAME TO producer_output_evidence_pre_generation",
+              "ALTER TABLE producer_output_evidence RENAME TO " +
+                "producer_output_evidence_pre_generation",
             )
             it.execute(
               """
@@ -776,7 +779,8 @@ internal val databaseMigrations: List<DatabaseMigration> =
           statement.execute(
             "CREATE INDEX IF NOT EXISTS idx_feature_task_workflows_goal_parent " +
               "ON feature_task_workflows(CASE WHEN json_valid(artifacts_json) " +
-              "THEN json_extract(artifacts_json, '$.goal_continuation.parent_workflow_id') END)",
+              "THEN json_extract(artifacts_json, " +
+              "'$.goal_continuation.parent_workflow_id') END)",
           )
         }
       },
@@ -1008,4 +1012,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 107,
       name = "add-operation-confirmation-executions",
       operation = ::addOperationConfirmationExecutions,
+    ) +
+    DatabaseMigration(
+      version = 108,
+      name = "add-approval-not-required-delivery",
+      operation = ::addApprovalNotRequiredDelivery,
     )

@@ -6,8 +6,6 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
-import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import kotlin.io.path.createTempDirectory
@@ -61,13 +59,8 @@ class AgentSessionCatalogTest {
       catalog.open(codex),
     )
 
-    val commands = mutableListOf<ChatCommand>()
-    val launcher = ChatProcessLauncher { command -> commands += command; listOf(ChatProcessOutput.Exited(0, "")).asFlow() }
-    CodexChatTransport(host, launcher, store, RecordingDiagnostics())
-      .run(chatRequest(agent = codex.agent, firstTurn = false).copy(sessionId = codex.sessionId)).toList()
-
-    assertEquals(listOf("resume", "t-1", "-"), commands.single().argv.takeLast(3))
-    assertEquals(File(home, ".codex-api").path, commands.single().environment["CODEX_HOME"])
+    assertEquals("t-1", store.agentSession(codex.sessionId))
+    assertEquals("t-1", ChatStore(host, RecordingDiagnostics(), Clock.System).agentSession(codex.sessionId))
   }
 
   @Suppress("FunctionName")

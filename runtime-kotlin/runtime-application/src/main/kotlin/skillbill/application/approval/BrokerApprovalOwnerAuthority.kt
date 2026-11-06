@@ -17,6 +17,7 @@ import skillbill.ports.approval.model.ApprovalOwnerRegistration
 import skillbill.ports.approval.model.ApprovalOwnerResult
 import skillbill.ports.approval.model.ApprovalOwnerSession
 import skillbill.ports.approval.model.ApprovalPendingWait
+import skillbill.ports.approval.model.ApprovalProviderClearance
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
 import skillbill.ports.approval.model.ApprovalRequestIdentity
@@ -56,7 +57,9 @@ class BrokerApprovalOwnerAuthority(
           BrokerApprovalOwnerSession(broker, key, result.lease.nonce, request.provider, scope, pending),
         )
       ApprovalOwnerResult.AlreadyRegistered -> {
-        val reason = "Operator approvals are unavailable: the process generation is already registered."
+        val reason =
+          "Operator approvals are unavailable: the process generation is already " +
+            "registered."
         diagnostics.warning(reason)
         ApprovalOwnerOpenResult.Refused(reason)
       }
@@ -150,7 +153,8 @@ private class BrokerApprovalOwnerSession(
 
   override fun register(command: ApprovalRegistrationCommand): ApprovalRegistrationResult {
     require(command.request.ownerKey() == key && command.request.provider == provider) {
-      "An approval request must be registered under the process generation that raised it."
+      "An approval request must be registered under the process generation that " +
+        "raised it."
     }
     val request =
       command.request.copy(
@@ -191,6 +195,28 @@ private class BrokerApprovalOwnerSession(
       ),
       disposition,
     )
+
+  override fun clearByProvider(
+    approvalId: String,
+    providerRequestId: ApprovalProviderRequestId,
+    clearance: ApprovalProviderClearance,
+  ): ApprovalDecisionResult {
+    if (synchronized(this) { released }) return ApprovalDecisionResult.Missing
+    val identity =
+      ApprovalRequestIdentity(
+        approvalId,
+        key.repositoryIdentity,
+        key.runId,
+        key.processGeneration,
+        provider,
+        providerRequestId,
+      )
+    val result = broker.clearByProvider(identity, clearance, nonce)
+    if (result is ApprovalDecisionResult.Settled || result is ApprovalDecisionResult.AlreadySettled) {
+      pending.remove(identity)
+    }
+    return result
+  }
 
   override fun pendingWait(): ApprovalPendingWait? = pending.waitView()
 

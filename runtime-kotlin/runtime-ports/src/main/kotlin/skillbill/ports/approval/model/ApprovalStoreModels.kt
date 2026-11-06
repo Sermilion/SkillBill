@@ -8,6 +8,7 @@ import skillbill.contracts.approval.ApprovalRequestRecord
 enum class ApprovalDeliveryState(val databaseValue: String) {
   WRITTEN("written"),
   UNCERTAIN("uncertain"),
+  NOT_REQUIRED("not_required"),
 }
 
 sealed interface ApprovalRegistration {
@@ -24,7 +25,7 @@ data class ApprovalStoredRequest(
   val delivery: ApprovalDeliveryProgress? = null,
 )
 
-enum class ApprovalDeliveryProgress { CLAIMED, WRITTEN, UNCERTAIN }
+enum class ApprovalDeliveryProgress { CLAIMED, WRITTEN, UNCERTAIN, NOT_REQUIRED }
 
 data class ApprovalRequestIdentity(
   val approvalId: String,

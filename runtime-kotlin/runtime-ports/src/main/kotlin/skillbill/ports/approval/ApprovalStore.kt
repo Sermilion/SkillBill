@@ -1,6 +1,7 @@
 package skillbill.ports.approval
 
 import skillbill.approval.model.ApprovalGrantFacts
+import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.approval.ApprovalRuleRecord
 import skillbill.ports.approval.model.ApprovalDeliveryState
@@ -10,7 +11,7 @@ import skillbill.ports.approval.model.ApprovalRequestIdentity
 import skillbill.ports.approval.model.ApprovalStoredRequest
 
 /** Owns durable approval admission, terminal claims, lifetime leases and repository-scoped rule state. */
-interface ApprovalStore : ApprovalLeaseStore {
+interface ApprovalStore : ApprovalLeaseStore, ApprovalRuleStore {
   /** Registers a request with its grant facts or returns the existing record for the exact request identity. */
   fun register(
     request: ApprovalRequestRecord,
@@ -28,20 +29,22 @@ interface ApprovalStore : ApprovalLeaseStore {
     claimedAt: String,
   ): Boolean
 
+  /** Settles a provider-cleared pending request without creating a response claim. */
+  fun settleWithoutDelivery(
+    identity: ApprovalRequestIdentity,
+    settled: ApprovalRequestRecord,
+  ): Boolean
+
+  /** Records an observed provider denial without changing the immutable local decision. */
+  fun recordProviderDisposition(
+    identity: ApprovalRequestIdentity,
+    disposition: ApprovalProviderDisposition,
+  ): Boolean
+
   /** Records whether the already claimed provider response was written or became uncertain. */
   fun finishDelivery(
     identity: ApprovalRequestIdentity,
     state: ApprovalDeliveryState,
-  ): Boolean
-
-  /** Lists active rules for one canonical repository identity. */
-  fun activeRules(repositoryIdentity: String): List<ApprovalRuleRecord>
-
-  /** Revokes one active rule for its owning repository identity. */
-  fun revokeRule(
-    ruleId: String,
-    repositoryIdentity: String,
-    revokedAt: String,
   ): Boolean
 
   /** Lists still pending requests of one repository, narrowed to one owning process generation when given. */

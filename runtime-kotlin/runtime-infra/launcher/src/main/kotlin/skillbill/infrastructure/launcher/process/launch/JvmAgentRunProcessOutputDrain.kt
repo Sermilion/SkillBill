@@ -91,6 +91,7 @@ internal class Utf8Drain(
   internal val outputStream: AgentRunOutputStream,
   internal val outputSink: AgentRunOutputSink,
   internal val onChunkRead: (String) -> Unit,
+  internal val onStreamEnd: (() -> Unit)? = null,
 ) {
   private val output = ByteArrayOutputStream(INITIAL_OUTPUT_BUFFER_BYTES)
 
@@ -154,6 +155,8 @@ internal class Utf8Drain(
         workerFailure = cancelled
       } finally {
         workerCompleted = true
+        catchingNonCancellation { onStreamEnd?.invoke() }
+          .onFailure { failure -> workerFailure = workerFailure ?: failure }
       }
     }
 

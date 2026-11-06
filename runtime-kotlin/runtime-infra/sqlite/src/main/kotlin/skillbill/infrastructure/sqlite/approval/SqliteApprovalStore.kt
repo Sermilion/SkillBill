@@ -107,18 +107,54 @@ internal class SqliteApprovalStore(
     return true
   }
 
+  override fun settleWithoutDelivery(
+    identity: ApprovalRequestIdentity,
+    settled: ApprovalRequestRecord,
+  ): Boolean {
+    if (settled.state == ApprovalState.PENDING || settled.identity() != identity) return false
+    return connection.prepareStatement(
+      """
+      UPDATE approval_requests SET record_json = ?, terminal_decision_json = COALESCE(terminal_decision_json, ?),
+        delivery_state = 'not_required'
+      WHERE $IDENTITY_MATCH AND (delivery_state = 'claimed' OR terminal_decision_json IS NULL)
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(listOf(encode(settled), encode(settled)) + identityValues(identity))
+      statement.executeUpdate() == 1
+    }
+  }
+
+  override fun recordProviderDisposition(
+    identity: ApprovalRequestIdentity,
+    disposition: ApprovalProviderDisposition,
+  ): Boolean =
+    connection.prepareStatement(
+      "UPDATE approval_requests SET provider_disposition = ? WHERE $IDENTITY_MATCH",
+    ).use { statement ->
+      statement.bindAll(listOf(disposition.wireValue) + identityValues(identity))
+      statement.executeUpdate() == 1
+    }
+
   override fun finishDelivery(
     identity: ApprovalRequestIdentity,
     state: ApprovalDeliveryState,
-  ): Boolean =
-    connection.prepareStatement(
-      """
-      UPDATE approval_requests SET delivery_state = ? WHERE $IDENTITY_MATCH AND delivery_state = 'claimed'
-      """.trimIndent(),
-    ).use { statement ->
-      statement.bindAll(listOf(state.databaseValue) + identityValues(identity))
-      statement.executeUpdate() == 1
+  ): Boolean {
+    val updated =
+      connection.prepareStatement(
+        """
+        UPDATE approval_requests SET delivery_state = ? WHERE $IDENTITY_MATCH AND delivery_state = 'claimed'
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(listOf(state.databaseValue) + identityValues(identity))
+        statement.executeUpdate() == 1
+      }
+    if (updated || state != ApprovalDeliveryState.NOT_REQUIRED) return updated
+    return connection.prepareStatement("SELECT delivery_state FROM approval_requests WHERE $IDENTITY_MATCH").use {
+        statement ->
+      statement.bindAll(identityValues(identity))
+      statement.executeQuery().use { rows -> rows.next() && rows.getString(1) == state.databaseValue }
     }
+  }
 
   override fun activeRules(repositoryIdentity: String): List<ApprovalRuleRecord> =
     connection.prepareStatement(
@@ -437,9 +473,11 @@ internal class SqliteApprovalStore(
 
   private companion object {
     const val STORED_REQUEST_COLUMNS =
-      "record_json, action_class, write_capable, input_complete, provider_disposition, delivery_state"
+      "record_json, action_class, write_capable, input_complete, " +
+        "provider_disposition, delivery_state"
     const val IDENTITY_MATCH =
-      "approval_id = ? AND repository_identity = ? AND run_id = ? AND process_generation = ? AND provider = ? " +
+      "approval_id = ? AND repository_identity = ? AND run_id = ? AND " +
+        "process_generation = ? AND provider = ? " +
         "AND provider_request_id_type = ? AND provider_request_id = ?"
     const val NOT_CLAIMED = "not_claimed"
   }

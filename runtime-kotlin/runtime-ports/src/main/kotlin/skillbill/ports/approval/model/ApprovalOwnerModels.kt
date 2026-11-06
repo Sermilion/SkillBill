@@ -21,6 +21,8 @@ sealed interface ApprovalOwnerOpenResult {
   data class Refused(val reason: String) : ApprovalOwnerOpenResult
 }
 
+enum class ApprovalProviderClearance { RESOLVED, DENIED }
+
 /** One live owner generation. Everything it registers is keyed by [key] and ends with [release]. */
 interface ApprovalOwnerSession {
   val key: ApprovalOwnerKey
@@ -33,6 +35,13 @@ interface ApprovalOwnerSession {
     approvalId: String,
     providerRequestId: ApprovalProviderRequestId,
     disposition: ApprovalProviderDisposition,
+  ): ApprovalDecisionResult
+
+  /** Clears one exact live request after the provider reports it no longer needs a response. */
+  fun clearByProvider(
+    approvalId: String,
+    providerRequestId: ApprovalProviderRequestId,
+    clearance: ApprovalProviderClearance,
   ): ApprovalDecisionResult
 
   /**

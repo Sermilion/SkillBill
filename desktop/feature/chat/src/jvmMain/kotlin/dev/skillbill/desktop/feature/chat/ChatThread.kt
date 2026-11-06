@@ -65,6 +65,8 @@ internal class ChatThread(private val clock: Clock) {
       when {
         message is ChatMessage.Notice && message.operationCard != null ->
           ChatHistoryLine(ChatHistoryRole.OperationCard, message.text, operationCard = message.operationCard)
+        message is ChatMessage.Notice -> ChatHistoryLine(ChatHistoryRole.Notice, message.text)
+        message is ChatMessage.Error -> ChatHistoryLine(ChatHistoryRole.Error, message.text, failure = message.failure)
         message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
         message is ChatMessage.Agent && !message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty()) ->
           ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
@@ -257,6 +259,7 @@ internal class ChatThread(private val clock: Clock) {
 internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
   when (event) {
     is ChatEvent.TextDelta -> appendDelta(event.text)
+    is ChatEvent.Notice -> append(ChatMessage.Notice(event.text))
     is ChatEvent.ToolUse -> appendTool(event.call)
     is ChatEvent.ToolResult -> recordToolResult(event)
     is ChatEvent.SuggestedActions -> suggestActions(event.actions)
@@ -323,3 +326,7 @@ private fun OperationCardView.validateChoices(choices: Map<String, String>): Map
 /** The saved form of a card: the complete record, without the runtime's grant answer, which is never stored. */
 internal fun ApprovalCard.savedApprovalLine(): ChatHistoryLine =
   ChatHistoryLine(ChatHistoryRole.Approval, "${title}: ${state}", approval = copy(grants = null))
+
+internal fun ChatThread.showCapability(agent: ChatAgent) {
+  agent.approvalUnavailableReason?.let { append(ChatMessage.Error(ChatFailure.ApprovalUnsupported, it)) }
+}

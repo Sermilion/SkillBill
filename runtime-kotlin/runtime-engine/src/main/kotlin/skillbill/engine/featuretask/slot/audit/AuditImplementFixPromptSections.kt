@@ -55,7 +55,9 @@ internal object AuditImplementFixPromptSections {
       "Either change files or return a no-change claim, never both. " +
       ImplementationPromptSections.NO_CHANGE_CLAIM_DIRECTIVE + " " +
       "Completed repairs return to a fresh source audit. " +
-      "When every in-scope production finding is addressed, report that in ordinary prose. " +
+      "When every in-scope production finding is addressed, report that in ordinary prose and pass verdict " +
+      "completed or satisfied to the completion tool. A missing or unrecognized verdict, including final " +
+      "prose without a settlement, requires read-only report admission before source verification. " +
       "Finish every production item in the saved plan before reporting the repair satisfied. " +
       "One guard or one safe edit is not completion when the saved plan still has missing behavior. " +
       "Continue implementing while any in-scope production item remains and authorized source work can proceed. " +

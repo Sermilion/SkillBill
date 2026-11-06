@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.data.approval.ApprovalGeneration
 import dev.skillbill.desktop.core.data.approval.SessionApprovalGenerations
 import dev.skillbill.desktop.core.data.approval.toCard
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
+import dev.skillbill.desktop.core.data.session.DatabaseSessionComponent
 import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import kotlinx.serialization.json.Json
@@ -33,12 +34,15 @@ import skillbill.contracts.approval.ApprovalProviderRequestId
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.approval.ApprovalState
 import skillbill.contracts.approval.OPERATOR_APPROVAL_CONTRACT_VERSION
+import skillbill.infrastructure.launcher.process.codex.CodexApprovalRequests
+import skillbill.infrastructure.launcher.process.cursor.CursorAcpSession
 import skillbill.ports.approval.ApprovalOwnerEffects
 import skillbill.ports.approval.model.ApprovalDeliveryState
 import skillbill.ports.approval.model.ApprovalOwnerKey
 import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
 import skillbill.ports.approval.model.ApprovalOwnerOpenResult
 import skillbill.ports.approval.model.ApprovalOwnerSession
+import skillbill.ports.approval.model.ApprovalProviderClearance
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -47,6 +51,7 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.Base64
 
 internal sealed interface ChatApprovalOpening {
   data class Opened(val approval: ClaudeChatApproval) : ChatApprovalOpening
@@ -88,7 +93,6 @@ class ChatApprovalAuthority(
   ): ChatApprovalOpening {
     // The generation belongs to the session component that was current when it opened, and ends with that session.
     val component = sessions.sessions.value ?: return ChatApprovalOpening.Refused(NO_SESSION_REASON)
-    val authority = component.runtime.approvalOwners
     val approval = ClaudeChatApproval(repositoryRoot, writeLine, stopProcess, diagnostics, onCard)
     val request =
       ApprovalOwnerOpenRequest(
@@ -99,20 +103,99 @@ class ChatApprovalAuthority(
         profileIdentity = profileIdentity,
         enclosingDeadline = null,
       )
-    return when (val opened = authority.open(request, approval)) {
-      is ApprovalOwnerOpenResult.Opened -> {
-        approval.bind(opened.session)
-        if (approval.admitTo(component.approvalGenerations)) {
-          ChatApprovalOpening.Opened(approval)
-        } else {
-          // The session closed between reading it and admitting the generation; its database is about to be released.
-          approval.release()
-          ChatApprovalOpening.Refused(SESSION_CHANGED_REASON)
-        }
-      }
-      is ApprovalOwnerOpenResult.Refused -> ChatApprovalOpening.Refused(opened.reason)
+    val refusal = openOwnerGeneration(
+      component = component,
+      request = request,
+      effects = approval,
+      bindAndAdmit = { owner, generations ->
+        approval.bind(owner)
+        approval.admitTo(generations)
+      },
+      release = approval::release,
+    )
+    return if (refusal == null) {
+      ChatApprovalOpening.Opened(approval)
+    } else {
+      ChatApprovalOpening.Refused(refusal)
     }
   }
+
+  internal fun openCodex(
+    sessionId: String,
+    repositoryRoot: String,
+    mode: ChatPermissionMode,
+    profileIdentity: String,
+    writeLine: (String) -> Boolean,
+    stopProcess: () -> Unit,
+    onCard: (ApprovalCard) -> Unit,
+  ): CodexChatApprovalOpening {
+    if (profileIdentity.isBlank()) {
+      return CodexChatApprovalOpening.Refused(
+        "Codex approval scope is unavailable because its profile identity is unknown.",
+      )
+    }
+    val component = sessions.sessions.value ?: return CodexChatApprovalOpening.Refused(NO_SESSION_REASON)
+    val approval = CodexChatApproval(writeLine, stopProcess, diagnostics, onCard, repositoryRoot, profileIdentity)
+    val request = ApprovalOwnerOpenRequest(
+      checkoutRoot = Path.of(repositoryRoot),
+      runId = sessionId,
+      provider = CODEX_CHAT_APPROVAL_PROVIDER,
+      executionMode =
+        if (mode == ChatPermissionMode.ReadOnly) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
+      profileIdentity = profileIdentity,
+      enclosingDeadline = null,
+    )
+    val refusal = openOwnerGeneration(
+      component = component,
+      request = request,
+      effects = approval,
+      bindAndAdmit = { owner, generations ->
+        approval.bind(owner)
+        approval.admitTo(generations)
+      },
+      release = approval::release,
+    )
+    return if (refusal == null) {
+      CodexChatApprovalOpening.Opened(approval)
+    } else {
+      CodexChatApprovalOpening.Refused(refusal)
+    }
+  }
+
+  internal fun openCursor(
+    request: ApprovalOwnerOpenRequest,
+    protocol: CursorAcpSession,
+    stopProcess: () -> Unit,
+  ): CursorChatApprovalOpening {
+    if (request.profileIdentity.isBlank()) return CursorChatApprovalOpening.Refused(
+      "Cursor approval scope is unavailable because its profile identity is unknown.",
+    )
+    val component = sessions.sessions.value ?: return CursorChatApprovalOpening.Refused(NO_SESSION_REASON)
+    val generation = CursorChatGeneration(protocol, stopProcess)
+    val refusal = openOwnerGeneration(component, request, protocol, { owner, generations ->
+      protocol.bind(owner)
+      generation.admit(generations)
+    }, generation::end)
+    return if (refusal == null) CursorChatApprovalOpening.Opened(generation)
+    else CursorChatApprovalOpening.Refused(refusal)
+  }
+
+  private fun openOwnerGeneration(
+    component: DatabaseSessionComponent,
+    request: ApprovalOwnerOpenRequest,
+    effects: ApprovalOwnerEffects,
+    bindAndAdmit: (ApprovalOwnerSession, SessionApprovalGenerations) -> Boolean,
+    release: () -> Unit,
+  ): String? =
+    when (val opened = component.runtime.approvalOwners.open(request, effects)) {
+      is ApprovalOwnerOpenResult.Opened -> if (bindAndAdmit(opened.session, component.approvalGenerations)) {
+        null
+      } else {
+        release()
+        SESSION_CHANGED_REASON
+      }
+      is ApprovalOwnerOpenResult.Refused -> opened.reason
+    }
 
   private companion object {
     const val NO_SESSION_REASON =
@@ -123,11 +206,53 @@ class ChatApprovalAuthority(
 internal const val SESSION_CHANGED_REASON = "The database session changed while the chat was starting; send the message again."
 
 internal const val CHAT_APPROVAL_PROVIDER = "claude"
+internal const val CODEX_CHAT_APPROVAL_PROVIDER = "codex"
 
-/**
- * Claude host protocol for one live chat process: a `can_use_tool` request becomes one broker registration, and the only
- * way a response reaches the process is [deliver], after the broker claimed the operator's decision.
- */
+internal sealed interface CodexChatApprovalOpening {
+  data class Opened(val approval: CodexChatApproval) : CodexChatApprovalOpening
+  data class Refused(val reason: String) : CodexChatApprovalOpening
+}
+
+internal class CodexChatApproval(
+  writeLine: (String) -> Boolean,
+  private val stopProcess: () -> Unit,
+  diagnostics: Diagnostics,
+  onCard: (ApprovalCard) -> Unit,
+  repositoryRoot: String,
+  profileIdentity: String,
+) : ApprovalOwnerEffects, ApprovalGeneration {
+  private val generations = AtomicReference<SessionApprovalGenerations?>()
+  private val ended = AtomicBoolean(false)
+  private val stopping = AtomicBoolean(false)
+  private val requests = CodexApprovalRequests(repositoryRoot, { writeLine(it.toString()) },
+    { onCard(it.toCard()) }, ::stop, { diagnostics.record("chat.codex_approval_diagnostic") })
+
+  fun bind(session: ApprovalOwnerSession) = requests.bind(session)
+  fun admitTo(value: SessionApprovalGenerations): Boolean { generations.set(value); return value.admit(this) }
+  fun bindTurn(thread: String, turn: String) = requests.bindTurn(thread, turn)
+  fun handleServerRequest(message: JsonObject, itemFacts: Map<CodexChatItemIdentity, JsonObject>) {
+    val params = message.obj("params")
+    val key = params?.let { codexItemKey(it.string("threadId").orEmpty(), it.string("turnId").orEmpty(), it.string("itemId").orEmpty()) }
+    itemFacts[key]?.let { requests.itemStarted(requireNotNull(params), it) }
+    requests.request(message)
+  }
+  fun providerResolved(params: JsonObject) = requests.providerResolved(params)
+  fun itemCompleted(params: JsonObject, item: JsonObject): Boolean? = requests.itemCompleted(params, item)
+  fun turnEnded(thread: String, turn: String) = requests.turnEnded(thread, turn)
+  fun release() {
+    if (!ended.compareAndSet(false, true)) return
+    generations.getAndSet(null)?.remove(this)
+    requests.release()
+  }
+  override fun deliver(settled: ApprovalRequestRecord): ApprovalDeliveryState = requests.deliver(settled)
+  override fun stop(reason: String) {
+    if (!stopping.compareAndSet(false, true)) return
+    stopProcess()
+    release()
+  }
+  override fun end() { release(); stopProcess() }
+}
+
 internal class ClaudeChatApproval(
   private val repositoryRoot: String,
   private val writeLine: (String) -> Boolean,
@@ -398,7 +523,11 @@ internal class ClaudeChatApproval(
   }
 }
 
-/** The outcome of reading one control response against the opening initialize request. */
+internal fun codexItemKey(threadId: String, turnId: String, itemId: String): CodexChatItemIdentity =
+  CodexChatItemIdentity(threadId, turnId, itemId)
+
+internal data class CodexChatItemIdentity(val threadId: String, val turnId: String, val itemId: String)
+
 internal sealed interface ChatInitializeOutcome {
   data object Initialized : ChatInitializeOutcome
 

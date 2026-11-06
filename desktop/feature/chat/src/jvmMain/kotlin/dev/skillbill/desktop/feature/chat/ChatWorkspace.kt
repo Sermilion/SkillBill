@@ -56,6 +56,7 @@ import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -493,6 +494,7 @@ class ChatWorkspace(
       val agent = chat.agentFor(agentId)
       session.agentState.value = agent
       session.agentSupportedState.value = chat.supports(agentId)
+      session.thread.showCapability(agent)
       endAgent(session)
       session.restart(UUID.randomUUID().toString())
       session.append(ChatMessage.Notice("Switched to ${chipText(agent)}. Its next turn starts a new conversation with the current execution state."))
@@ -550,7 +552,12 @@ class ChatWorkspace(
     session.stoppableState.value = false
     launchTurn(session) {
       running?.cancelAndJoin()
-      val lines = chat.openSavedChat(entry)
+      val lines = try {
+        chat.openSavedChat(entry)
+      } catch (failure: IOException) {
+        session.append(ChatMessage.Error(null, failure.message ?: "Couldn't open the saved provider session."))
+        return@launchTurn
+      }
       endAgent(session)
       session.resumeFrom(entry.sessionId, session.item.checkoutRoot)
       session.agentState.value = entry.agent
@@ -561,6 +568,7 @@ class ChatWorkspace(
           "The next turn continues it with the current execution state.",
       )
       session.replaceTranscript(listOf(stateCard(session.item), notice) + lines.map(::restored))
+      session.thread.showCapability(entry.agent)
       cards(session).revalidate(session.thread, lines.mapNotNull { it.operationCard?.token })
     }
   }

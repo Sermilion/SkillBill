@@ -76,5 +76,6 @@ class CodexAgentFailureDiagnosticTest {
       ),
     executableLookup = ALL_EXECUTABLES_AVAILABLE,
     diagnostics = NoopRuntimeDiagnostics,
-  ).launchFacts(request())
+    clock = LAUNCH_TEST_CLOCK,
+  ).launchFacts(governedReviewRequest())
 }

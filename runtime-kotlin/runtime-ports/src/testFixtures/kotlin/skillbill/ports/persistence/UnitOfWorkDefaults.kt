@@ -1,6 +1,7 @@
 package skillbill.ports.persistence
 
 import skillbill.approval.model.ApprovalGrantFacts
+import skillbill.approval.model.ApprovalProviderDisposition
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.approval.ApprovalRuleRecord
 import skillbill.ports.approval.ApprovalStore
@@ -144,6 +145,16 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         settled: ApprovalRequestRecord,
         rule: ApprovalRuleRecord?,
         claimedAt: String,
+      ): Boolean = false
+
+      override fun settleWithoutDelivery(
+        identity: ApprovalRequestIdentity,
+        settled: ApprovalRequestRecord,
+      ): Boolean = false
+
+      override fun recordProviderDisposition(
+        identity: ApprovalRequestIdentity,
+        disposition: ApprovalProviderDisposition,
       ): Boolean = false
 
       override fun finishDelivery(

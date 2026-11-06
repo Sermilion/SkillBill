@@ -1,5 +1,8 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -11,6 +14,19 @@ import kotlin.test.assertEquals
 import kotlin.time.Clock
 
 class ChatThreadTest {
+  @Test
+  fun `unsupported Junie reason and historical prose restore without a runnable approval`() {
+    val thread = ChatThread(Clock.System)
+    thread.append(ChatMessage.Agent("Earlier Junie prose", false, emptyList()))
+    val reason = "Junie ACP permission-request coverage remains unverified. " + "Full explanation. ".repeat(1000)
+    thread.show(ChatAgent("junie", null, null), ChatEvent.Failed(ChatFailure.ApprovalUnsupported, reason))
+    val lines = thread.historyLines()
+    assertEquals("Earlier Junie prose", lines[0].text)
+    assertEquals(ChatHistoryRole.Error, lines[1].role)
+    assertEquals(reason, lines[1].text)
+    assertEquals(ChatMessage.Error(ChatFailure.ApprovalUnsupported, reason), restored(lines[1]))
+  }
+
   @Test
   fun `history keeps action-only replies and selected operator actions for restoration`() {
     val suggested = listOf(ChatSuggestedAction("Review", "Review this", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review))

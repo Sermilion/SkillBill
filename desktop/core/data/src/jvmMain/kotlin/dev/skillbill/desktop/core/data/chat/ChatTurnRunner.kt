@@ -60,9 +60,13 @@ internal fun runChatTurn(
 
 /** Runs [binary] through a POSIX login shell so the login PATH applies; fish and other shells read `$0`/`$@` differently, so they use `/bin/sh`. */
 internal fun agentCommand(binary: String, arguments: List<String>, shell: String?): List<String> {
-  if (shell.isNullOrBlank()) return listOf(binary) + arguments
+  return agentInvocation(binary, shell) + arguments
+}
+
+internal fun agentInvocation(binary: String, shell: String?): List<String> {
+  if (shell.isNullOrBlank()) return listOf(binary)
   val loginShell = if (File(shell).name in posixShells) shell else "/bin/sh"
-  return listOf(loginShell, "-l", "-c", "exec \"\$0\" \"\$@\"", binary) + arguments
+  return listOf(loginShell, "-l", "-c", "exec \"\$0\" \"\$@\"", binary)
 }
 
 /** Agents whose CLI has no system-prompt flag get the scope ahead of the first message. */

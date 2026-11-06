@@ -1,13 +1,9 @@
 package skillbill.infrastructure.launcher.agentrun
 
-import skillbill.contracts.time.JvmSystemClock
-import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRequest
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
-import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
-import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -16,6 +12,7 @@ import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.review.context.model.launch.ReviewConversationIsolation
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -48,6 +45,7 @@ internal class RecordingAgentRunProcessRunner(
 class HeadlessAgentRunAdapterTest {
   private fun phaseRunRequest(): SkillRunRequest =
     SkillRunRequest(
+      approval = AgentRunApprovalRequirement.OutsideApproval,
       issueKey = "SKILL-88",
       repoRoot = Path.of("/tmp/skillbill-agent-run"),
       subtaskId = 1,
@@ -57,6 +55,7 @@ class HeadlessAgentRunAdapterTest {
 
   private fun skillRunRequest(): SkillRunRequest =
     SkillRunRequest(
+      approval = AgentRunApprovalRequirement.OutsideApproval,
       issueKey = "SKILL-88",
       repoRoot = Path.of("/tmp/skillbill-agent-run"),
       subtaskId = 1,
@@ -68,7 +67,12 @@ class HeadlessAgentRunAdapterTest {
 
   @Test
   fun `headless runtime adapters cover exactly the runtime-capable install agents`() {
-    val adapters = headlessAgentRunAdapters(RecordingAgentRunProcessRunner(), diagnostics = NoopRuntimeDiagnostics)
+    val adapters =
+      headlessAgentRunAdapters(
+        RecordingAgentRunProcessRunner(),
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
 
     assertEquals(
       setOf(SupportedAgent.CLAUDE, SupportedAgent.CODEX, SupportedAgent.JUNIE, SupportedAgent.CURSOR),
@@ -88,6 +92,7 @@ class HeadlessAgentRunAdapterTest {
       runner,
       ALL_EXECUTABLES_AVAILABLE,
       diagnostics = NoopRuntimeDiagnostics,
+      clock = LAUNCH_TEST_CLOCK,
     ).launch(request)
 
     assertEquals(ReviewConversationIsolation.FRESH, runner.requests.single().review.conversationIsolation)
@@ -97,7 +102,13 @@ class HeadlessAgentRunAdapterTest {
   @Test
   fun `cursor is registered as a headless adapter with correct builder and decoder`() {
     val runner = RecordingAgentRunProcessRunner()
-    val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+    val adapters =
+      headlessAgentRunAdapters(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
 
     val cursorAdapter = adapters[SupportedAgent.CURSOR]
     assertNotNull(cursorAdapter, "cursor must be registered as a headless adapter")
@@ -105,25 +116,26 @@ class HeadlessAgentRunAdapterTest {
     val request = phaseRunRequest()
     cursorAdapter.launch(request)
 
-    val captured = runner.requests.single()
+    val captured = runner.requests.last()
     assertEquals("agent", captured.launch.command.first())
-    assertTrue(captured.launch.command.contains("--workspace"))
+    assertEquals(listOf("agent", "acp"), captured.launch.command)
   }
 
   @Test
-  fun `cursor launch is not refused and succeeds`() {
+  fun `cursor admitted launch selects ACP without requiring a live provider account`() {
     val launcher =
       FileSystemAgentRunLauncher(
-        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()),
+        RecordingAgentRunProcessRunner(),
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )
 
     val outcome =
       launcher.launch(
         AgentRunLaunchRequest(
           agentId = "cursor",
-          skillRunRequest = skillRunRequest().copy(approval = AgentRunApprovalRequirement.GovernedReview),
+          skillRunRequest = skillRunRequest().copy(approval = AgentRunApprovalRequirement.OutsideApproval),
         ),
       )
 
@@ -131,26 +143,48 @@ class HeadlessAgentRunAdapterTest {
   }
 
   @Test
-  fun `launch outside approval cards reaches a codex process`() {
+  fun `launch outside approval cards reaches codex compatibility admission`() {
     val runner = RecordingAgentRunProcessRunner()
-    val launcher = FileSystemAgentRunLauncher(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
-
-    val outcome =
-      launcher.launch(
-        AgentRunLaunchRequest(
-          agentId = "codex",
-          skillRunRequest = skillRunRequest().copy(approval = AgentRunApprovalRequirement.OutsideApproval),
-        ),
+    val launcher =
+      FileSystemAgentRunLauncher(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )
+    val directory = Files.createTempDirectory("codex-admission")
+    try {
+      val outcome =
+        launcher.launch(
+          AgentRunLaunchRequest(
+            agentId = "codex",
+            skillRunRequest =
+              skillRunRequest().copy(
+                repoRoot = directory,
+                goalContinuation = null,
+                promptOverride = "phase briefing",
+                approval = AgentRunApprovalRequirement.OutsideApproval,
+              ),
+          ),
+        )
 
-    assertFalse(outcome is UnsupportedAgentRunLaunch, "a launch outside approval cards must not be refused")
-    assertEquals(1, runner.requests.size)
+      assertFalse(outcome is UnsupportedAgentRunLaunch)
+      assertEquals(listOf("codex", "--version"), runner.requests.single().launch.command)
+    } finally {
+      directory.toFile().deleteRecursively()
+    }
   }
 
   @Test
   fun `unowned launch is refused with its stated reason and spawns nothing`() {
     val runner = RecordingAgentRunProcessRunner()
-    val launcher = FileSystemAgentRunLauncher(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+    val launcher =
+      FileSystemAgentRunLauncher(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
 
     val outcome =
       launcher.launch(
@@ -180,7 +214,13 @@ class HeadlessAgentRunAdapterTest {
             spawnFailed = false,
           ),
       )
-    val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+    val adapters =
+      headlessAgentRunAdapters(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
     val request =
       skillRunRequest().copy(
         promptOverride = "Run timeout test",
@@ -189,9 +229,9 @@ class HeadlessAgentRunAdapterTest {
 
     requireNotNull(adapters[SupportedAgent.CURSOR]).launch(request)
 
-    val captured = runner.requests.single()
+    val captured = runner.requests.last()
     assertEquals(100.milliseconds, captured.timing.timeout)
-    assertTrue(captured.launch.command.contains("stream-json"))
+    assertTrue(captured.launch.command.contains("acp"))
   }
 
   @Test
@@ -208,7 +248,13 @@ class HeadlessAgentRunAdapterTest {
             spawnFailed = false,
           ),
       )
-    val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+    val adapters =
+      headlessAgentRunAdapters(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
 
     val outcome = requireNotNull(adapters[SupportedAgent.CURSOR]).launchFacts(skillRunRequest())
 
@@ -219,7 +265,13 @@ class HeadlessAgentRunAdapterTest {
   @Test
   fun `cursor durable-progress policies remain in force with streamed output`() {
     val runner = RecordingAgentRunProcessRunner()
-    val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
+    val adapters =
+      headlessAgentRunAdapters(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
+      )
     val request =
       skillRunRequest().copy(
         promptOverride = "Test progress policies",
@@ -228,7 +280,7 @@ class HeadlessAgentRunAdapterTest {
 
     requireNotNull(adapters[SupportedAgent.CURSOR]).launch(request)
 
-    val captured = runner.requests.single()
+    val captured = runner.requests.last()
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, captured.probes.idlePolicy)
   }
 }

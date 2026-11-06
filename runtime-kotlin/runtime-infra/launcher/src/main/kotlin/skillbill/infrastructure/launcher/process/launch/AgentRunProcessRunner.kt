@@ -1,5 +1,7 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionCapture
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.infrastructure.launcher.process.support.launcherSha256Hex
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -56,6 +58,8 @@ data class AgentRunProcessResult(
   val stdoutSha256: String = launcherSha256Hex(stdoutBytes),
   val outputCaptureIncomplete: Boolean = false,
   val spawnDenied: AgentRunSpawnAuthorizationResult.Denied? = null,
+  val sessionOutcome: AgentRunSessionOutcome? = null,
+  val sessionCapture: AgentRunSessionCapture? = null,
 )
 
 interface AgentRunProcessRunner {

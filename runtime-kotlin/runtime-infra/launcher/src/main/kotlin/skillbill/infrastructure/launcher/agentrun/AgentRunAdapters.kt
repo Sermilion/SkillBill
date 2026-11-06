@@ -6,6 +6,12 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.approval.model.ApprovalExecutionMode
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.error.core.catchingNonCancellation
+import skillbill.infrastructure.launcher.process.codex.CodexPhaseSession
+import skillbill.infrastructure.launcher.process.codex.CodexSessionChannel
+import skillbill.infrastructure.launcher.process.codex.CodexSessionLaunch
+import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
+import skillbill.infrastructure.launcher.process.cursor.CursorPhaseSession
+import skillbill.infrastructure.launcher.process.cursor.CursorSessionChannel
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
 import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalOpenResult
 import skillbill.infrastructure.launcher.process.interaction.CLAUDE_APPROVAL_PROVIDER
@@ -35,9 +41,11 @@ import skillbill.ports.agentrun.model.MAX_REPORTED_LAUNCH_IDENTITIES
 import skillbill.ports.agentrun.model.ReportedLaunchIdentity
 import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.approval.ApprovalOwnerAuthority
 import skillbill.ports.approval.claudeProfileIdentity
 import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
+import skillbill.ports.approval.model.ApprovalOwnerOpenResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
@@ -58,6 +66,7 @@ internal class ProcessAgentRunAdapter(
   private val processRunner: AgentRunProcessRunner,
   private val executableLookup: ExecutableLookup = PathExecutableLookup(),
   private val diagnostics: RuntimeDiagnostics,
+  private val clock: Clock,
   private val approvals: AgentRunApprovalOwners? = null,
   private val inheritedEnvironment: Map<String, String> = emptyMap(),
   private val userHome: Path? = null,
@@ -65,13 +74,53 @@ internal class ProcessAgentRunAdapter(
   val canHostApprovalCards: Boolean get() = commandBuilder.approvalProtocol != null
 
   fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
+    if (request.approval is AgentRunApprovalRequirement.Unowned ||
+      (request.approval is AgentRunApprovalRequirement.Owned && !canHostApprovalCards)
+    ) {
+      diagnostics.warning("seam=agent_run outcome=approval_unsupported provider=${agent.id}")
+      val reason =
+        (request.approval as? AgentRunApprovalRequirement.Unowned)?.let {
+          "Agent '${agent.id}' launch requires operator approval facts; ${it.reason}, so it was not started."
+        } ?: commandBuilder.approvalUnavailableReason
+      return UnsupportedAgentRunLaunch(agent, reason)
+    }
     val built = commandBuilder.build(request)
     val command =
       when (val resolution = resolveLauncherExecutable(built.command, commandBuilder.launcherCli)) {
         is LauncherResolution.Resolved -> built.copy(command = resolution.command)
         is LauncherResolution.Missing -> return unavailableLauncherFacts(request, built, resolution.message)
       }
-    val result = processRunner.run(processRequest(command, request))
+    val process = processRequest(command, request)
+    if (command.approvalProtocol == AgentRunApprovalProtocol.CURSOR_ACP) {
+      return launchCursorSession(request, command, process)
+    }
+    return launchOtherSession(request, command, process)
+  }
+
+  private fun launchOtherSession(
+    request: SkillRunRequest,
+    command: AgentRunCommand,
+    process: AgentRunProcessRequest,
+  ): AgentRunLaunchOutcome {
+    val result =
+      if (command.approvalProtocol == AgentRunApprovalProtocol.CODEX_APP_SERVER) {
+        val launch =
+          CodexSessionLaunch(
+            prompt = requireNotNull(command.stdinText),
+            cwd = command.workingDirectory.toString(),
+            model = request.modelOverride,
+            effort = request.effortOverride,
+            savedThread = null,
+            outputSink = request.outputSink,
+            workspaceRoots = request.additionalWritableDirectories.map { it.toAbsolutePath().normalize().toString() },
+          )
+        val approvalDeadline = approvalEnclosingDeadline(clock, request.timeout)
+        CodexPhaseSession(process, processRunner, clock, diagnostics) { settings ->
+          openCodexSession(settings, request, approvalDeadline)
+        }.run(launch)
+      } else {
+        processRunner.run(process)
+      }
     result.spawnDenied?.let { denied -> return AgentRunLaunchDenied(agent, denied.pauseReason) }
     return launchFacts(request, command, result)
   }
@@ -81,48 +130,85 @@ internal class ProcessAgentRunAdapter(
     command: AgentRunCommand,
     result: AgentRunProcessResult,
   ): AgentRunLaunchFacts {
-    val decoder = command.outputDecoder ?: commandBuilder.outputDecoder
-    val decoded =
-      catchingNonCancellation { decoder.decode(result.stdout) }.getOrElse { error ->
-        if (!decoder.undecodable(error)) throw error
-
-        DecodedAgentRunOutput(text = "", rawOutputPreview = result.stdout.take(RAW_OUTPUT_PREVIEW_MAX_CHARS))
-      }
+    val decoded = decodeResult(command, result)
 
     require(result.spawnFailed != result.processStarted) {
-      "AgentRunProcessRunner result must report exactly one of spawnFailed/processStarted; got " +
+      "AgentRunProcessRunner result must report exactly one of " +
+        "spawnFailed/processStarted; got " +
         "spawnFailed=${result.spawnFailed}, processStarted=${result.processStarted}."
     }
     val normalizedStdout = decoded.text
     val decodedBodyBytes =
-      if (normalizedStdout == result.stdout) {
+      if (result.sessionOutcome == null && normalizedStdout == result.stdout) {
         result.stdoutBytes
       } else {
         normalizedStdout.encodeToByteArray()
       }
+    val execFailure = result.sessionOutcome == null && decoded.failureDiagnostic != null
     recordReportedLaunchIdentity(request, decoded.reportedIdentity)
     return AgentRunLaunchFacts(
       agent = agent,
       termination = result.termination(),
       stdout = normalizedStdout,
       stderr =
-        if (result.exitStatus != null && result.exitStatus != 0 && decoded.failureDiagnostic != null) {
-          listOf(result.stderr.trimEnd(), decoded.failureDiagnostic).filter(String::isNotBlank).joinToString("\n")
+        if (execFailure && result.exitStatus != null && result.exitStatus != 0) {
+          listOfNotNull(
+            result.stderr.trimEnd(),
+            decoded.failureDiagnostic,
+          ).filter(String::isNotBlank).joinToString("\n")
         } else {
           result.stderr
         },
       liveness = result.liveness,
       processStarted = result.processStarted,
       mcpStartupObserved = result.mcpStartupObserved,
-      stdoutTruncated = result.stdoutTruncated,
-      stdoutByteSize = if (result.stdoutTruncated) result.stdoutByteSize else decodedBodyBytes.size.toLong(),
-      stdoutSha256 = if (result.stdoutTruncated) result.stdoutSha256 else launcherSha256Hex(decodedBodyBytes),
+      stdoutTruncated = result.stdoutTruncated || result.sessionCapture?.truncated == true,
+      stdoutByteSize =
+        if (result.sessionOutcome == null && result.stdoutTruncated) {
+          result.stdoutByteSize
+        } else {
+          decodedBodyBytes.size.toLong()
+        },
+      stdoutSha256 =
+        if (result.sessionOutcome == null && result.stdoutTruncated) {
+          result.stdoutSha256
+        } else {
+          launcherSha256Hex(decodedBodyBytes)
+        },
       childSessionPath = command.workingDirectory.toString(),
       childSessionId = childSessionId(agent, request, command.workingDirectory),
       assistantEventCount = decoded.assistantEventCount,
       rawOutputPreview = decoded.rawOutputPreview,
       reportedIdentity = decoded.reportedIdentity,
     )
+  }
+
+  private fun decodeResult(
+    command: AgentRunCommand,
+    result: AgentRunProcessResult,
+  ): DecodedAgentRunOutput {
+    val decoder = command.outputDecoder ?: commandBuilder.outputDecoder
+    return catchingNonCancellation {
+      result.sessionOutcome?.let { outcome ->
+        DecodedAgentRunOutput(
+          text =
+            if (outcome.completed && result.exitStatus == 0 && result.sessionCapture?.complete == true) {
+              outcome.text
+            } else {
+              result.sessionCapture?.text.orEmpty()
+            },
+          reportedIdentity =
+            outcome.model?.takeIf(LAUNCH_MODEL_TOKEN_PATTERN::matches)?.let { model ->
+              ReportedLaunchIdentity.Reported(setOf(model))
+            } ?: ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED),
+          failureDiagnostic = outcome.failure,
+        )
+      } ?: decoder.decode(result.stdout)
+    }.getOrElse { error ->
+      if (!decoder.undecodable(error)) throw error
+
+      DecodedAgentRunOutput(text = "", rawOutputPreview = result.stdout.take(RAW_OUTPUT_PREVIEW_MAX_CHARS))
+    }
   }
 
   private fun resolveLauncherExecutable(
@@ -197,7 +283,12 @@ internal class ProcessAgentRunAdapter(
       ),
     environmentFields =
       AgentRunProcessEnvironmentFields(
-        environment = command.environment,
+        environment =
+          if (command.approvalProtocol == AgentRunApprovalProtocol.CODEX_APP_SERVER) {
+            inheritedEnvironment + command.environment
+          } else {
+            command.environment
+          },
         inheritEnvironment = command.inheritEnvironment,
         environmentPassthroughKeys = command.environmentPassthroughKeys,
       ),
@@ -245,7 +336,106 @@ internal class ProcessAgentRunAdapter(
           diagnostics = diagnostics,
         )
       }
+      AgentRunApprovalProtocol.CODEX_APP_SERVER, AgentRunApprovalProtocol.CURSOR_ACP -> null
       null -> refusedOpening("agent '${agent.id}' cannot host approval cards for this launch")
+    }
+  }
+
+  private fun launchCursorSession(
+    request: SkillRunRequest,
+    command: AgentRunCommand,
+    process: AgentRunProcessRequest,
+  ): AgentRunLaunchOutcome {
+    val launch =
+      CursorAcpLaunch(
+        command.workingDirectory.toString(),
+        requireNotNull(command.stdinText),
+        command.sessionModel,
+        if (request.readOnlyPhase) "plan" else "agent",
+      )
+    val deadline = approvalEnclosingDeadline(clock, request.timeout)
+    val result =
+      CursorPhaseSession(
+        process,
+        processRunner,
+        clock,
+        diagnostics,
+        executableLookup,
+        commandBuilder.launcherCli,
+      ) { openCursorSession(launch, request, command, deadline) }.run()
+    return result.spawnDenied?.let {
+      AgentRunLaunchDenied(
+        agent,
+        it.pauseReason,
+      )
+    } ?: launchFacts(request, command, result)
+  }
+
+  private fun openCursorSession(
+    launch: CursorAcpLaunch,
+    request: SkillRunRequest,
+    command: AgentRunCommand,
+    deadline: Instant?,
+  ): AgentRunApprovalOpenResult {
+    val channel = CursorSessionChannel(launch, clock, request.outputSink, diagnostics)
+    val owned =
+      request.approval as? AgentRunApprovalRequirement.Owned
+        ?: return AgentRunApprovalOpenResult.Opened(channel)
+    val authority =
+      approvals?.authority ?: return AgentRunApprovalOpenResult.Refused(
+        "No approval authority is configured.",
+      )
+    val profile =
+      command.environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
+        ?: inheritedEnvironment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR] ?: userHome?.toString().orEmpty()
+    val openRequest =
+      ApprovalOwnerOpenRequest(
+        request.repoRoot,
+        owned.runId,
+        agent.id,
+        if (request.readOnlyPhase) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
+        profile,
+        deadline,
+      )
+    return when (val opened = authority.open(openRequest, channel.effects)) {
+      is ApprovalOwnerOpenResult.Opened -> {
+        channel.bind(opened.session)
+        AgentRunApprovalOpenResult.Opened(channel)
+      }
+      is ApprovalOwnerOpenResult.Refused -> AgentRunApprovalOpenResult.Refused(opened.reason)
+    }
+  }
+
+  private fun openCodexSession(
+    launch: CodexSessionLaunch,
+    request: SkillRunRequest,
+    deadline: Instant?,
+  ): AgentRunApprovalOpenResult {
+    val channel = CodexSessionChannel(launch, clock, diagnostics)
+    val owned =
+      request.approval as? AgentRunApprovalRequirement.Owned
+        ?: return AgentRunApprovalOpenResult.Opened(channel)
+    val authority =
+      approvals?.authority
+        ?: return AgentRunApprovalOpenResult.Refused("No approval authority is configured.")
+    val ownerRequest =
+      ApprovalOwnerOpenRequest(
+        checkoutRoot = request.repoRoot,
+        runId = owned.runId,
+        provider = "codex",
+        executionMode = if (request.readOnlyPhase) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
+        profileIdentity = inheritedEnvironment[AgentHomeEnvironmentKeys.CODEX_HOME] ?: userHome?.toString().orEmpty(),
+        enclosingDeadline = deadline,
+      )
+    return when (val opened = authority.open(ownerRequest, channel)) {
+      is ApprovalOwnerOpenResult.Opened -> {
+        channel.bind(opened.session)
+        AgentRunApprovalOpenResult.Opened(channel)
+      }
+      is ApprovalOwnerOpenResult.Refused -> {
+        channel.finish()
+        AgentRunApprovalOpenResult.Refused(opened.reason)
+      }
     }
   }
 
@@ -455,18 +645,19 @@ internal data class AgentRunWorkerBinding(
   val runtimeMcpBin: Path? = null,
   val approvals: AgentRunApprovalOwners? = null,
   val userHome: Path? = null,
+  val providerEnvironment: Map<String, String> = emptyMap(),
 )
 
 internal fun headlessAgentRunAdapters(
   processRunner: AgentRunProcessRunner,
   executableLookup: ExecutableLookup = PathExecutableLookup(),
   workerBinding: AgentRunWorkerBinding = AgentRunWorkerBinding(),
-  providerEnvironment: Map<String, String> = emptyMap(),
   diagnostics: RuntimeDiagnostics,
+  clock: Clock,
 ): Map<SupportedAgent, ProcessAgentRunAdapter> =
   listOf(
     ClaudeAgentRunCommandBuilder(
-      providerEnvironment = providerEnvironment,
+      providerEnvironment = workerBinding.providerEnvironment,
       databasePath = workerBinding.databasePath,
       runtimeMcpBin = workerBinding.runtimeMcpBin,
     ),
@@ -482,10 +673,11 @@ internal fun headlessAgentRunAdapters(
         agent = builder.agent,
         commandBuilder = builder,
         processRunner = processRunner,
+        clock = clock,
         executableLookup = executableLookup,
         diagnostics = diagnostics,
         approvals = workerBinding.approvals,
-        inheritedEnvironment = providerEnvironment,
+        inheritedEnvironment = workerBinding.providerEnvironment,
         userHome = workerBinding.userHome,
       )
   }

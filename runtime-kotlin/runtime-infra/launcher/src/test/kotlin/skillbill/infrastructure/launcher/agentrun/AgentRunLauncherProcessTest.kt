@@ -23,6 +23,37 @@ import kotlin.time.Duration.Companion.seconds
 
 class AgentRunLauncherProcessTest {
   @Test
+  fun `truncated process output retains the full stream byte count and digest`() {
+    val runner =
+      RecordingAgentRunProcessRunner(
+        AgentRunProcessResult(
+          exitStatus = 0,
+          stdout = "retained preview",
+          stderr = "",
+          timedOut = false,
+          interrupted = false,
+          spawnFailed = false,
+          stdoutTruncated = true,
+          stdoutByteSize = 5_000_000,
+          stdoutSha256 = "full-stream-digest",
+        ),
+      )
+    val facts =
+      requireNotNull(
+        headlessAgentRunAdapters(
+          runner,
+          ALL_EXECUTABLES_AVAILABLE,
+          diagnostics = NoopRuntimeDiagnostics,
+          clock = LAUNCH_TEST_CLOCK,
+        )[SupportedAgent.CLAUDE],
+      ).launchFacts(skillRunRequest())
+
+    assertTrue(facts.stdoutTruncated)
+    assertEquals(5_000_000L, facts.stdoutByteSize)
+    assertEquals("full-stream-digest", facts.stdoutSha256)
+  }
+
+  @Test
   fun `a phase-briefing prompt override drives the per-agent CLI for stdin-delivered agents`() {
     val runner = RecordingAgentRunProcessRunner()
     val request = skillRunRequest(goalContinuation = null).copy(promptOverride = AGENT_RUN_LAUNCHER_PHASE_PROMPT)
@@ -32,6 +63,7 @@ class AgentRunLauncherProcessTest {
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )[SupportedAgent.CLAUDE],
     ).launch(request)
 
@@ -53,6 +85,7 @@ class AgentRunLauncherProcessTest {
         runner,
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )[SupportedAgent.JUNIE],
     ).launch(request)
 
@@ -68,6 +101,7 @@ class AgentRunLauncherProcessTest {
         JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()),
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )
 
     assertFailsWith<IllegalArgumentException> {
@@ -100,6 +134,7 @@ class AgentRunLauncherProcessTest {
           timeoutRunner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
+          clock = LAUNCH_TEST_CLOCK,
         )[SupportedAgent.CODEX],
       ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.TimedOut, timeout.termination)
@@ -122,6 +157,7 @@ class AgentRunLauncherProcessTest {
           spawnRunner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
+          clock = LAUNCH_TEST_CLOCK,
         )[SupportedAgent.CODEX],
       ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.SpawnFailed, spawnFailure.termination)
@@ -151,6 +187,7 @@ class AgentRunLauncherProcessTest {
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
+          clock = LAUNCH_TEST_CLOCK,
         )[SupportedAgent.CODEX],
       )
         .launchFacts(skillRunRequest())
@@ -181,6 +218,7 @@ class AgentRunLauncherProcessTest {
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
+          clock = LAUNCH_TEST_CLOCK,
         )[SupportedAgent.CLAUDE],
       )
         .launchFacts(skillRunRequest())
@@ -199,7 +237,8 @@ class AgentRunLauncherProcessTest {
           runner,
           ALL_EXECUTABLES_AVAILABLE,
           diagnostics = NoopRuntimeDiagnostics,
-        )[SupportedAgent.CODEX],
+          clock = LAUNCH_TEST_CLOCK,
+        )[SupportedAgent.CLAUDE],
       )
 
     adapter.launch(

@@ -9,6 +9,11 @@ import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -17,10 +22,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
-/**
- * Runs each turn as one Cursor `agent --print` stream-json process with `--force`, as executions run. Cursor names its own
- * chat, so later turns resume the chat id the first turn reported, which [ChatStore] keeps across windows.
- */
 @Inject
 @SingleIn(AppScope::class)
 class CursorChatTransport(
@@ -28,39 +29,46 @@ class CursorChatTransport(
   private val launcher: ChatProcessLauncher,
   private val store: ChatStore,
   private val diagnostics: Diagnostics,
+  private val liveLauncher: LiveChatProcessLauncher? = null,
+  private val approvalAuthority: ChatApprovalAuthority? = null,
 ) : ChatTransport {
   override val agentId = "cursor"
+  override val approvalCapable = true
+  private val turns = ConcurrentHashMap<String, Job>()
 
-  override fun run(request: ChatTurnRequest): Flow<ChatEvent> = turnWithImages(request) { text ->
-    val chat = if (request.firstTurn) null else store.agentSession(request.sessionId)
-    if (!request.firstTurn && chat == null) diagnostics.record("chat.cursor_chat_missing")
-    val prompt = if (chat == null || request.scope is ChatScope.NewTask) {
-      withScope(scopeSystemPrompt(request.scope, request.mode), text)
-    } else {
-      text
+  override fun run(request: ChatTurnRequest): Flow<ChatEvent> = flow {
+    val live = liveLauncher
+    val authority = approvalAuthority
+    if (live == null || authority == null) {
+      emit(ChatEvent.Failed(ChatFailure.ApprovalUnsupported,
+        "Cursor ACP requires a live process and operator approval channel; the chat was not started."))
+      return@flow
     }
-    val command = ChatCommand(
-      argv = agentCommand("agent", cursorArguments(request, chat), host.variables["SHELL"]),
-      workingDirectory = request.scope.repositoryRoot,
-      environment = host.variables + request.agent.profile?.let { mapOf(AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR to it) }.orEmpty(),
-      stdin = prompt,
-    )
-    runChatTurn(launcher, diagnostics, command, CursorStreamDecoder { store.saveAgentSession(request.sessionId, it) })
+    val saved = store.agentSession(request.sessionId)
+    if (saved?.isBlank() == true || (!request.firstTurn && saved == null)) {
+      emit(ChatEvent.Failed(ChatFailure.ProcessFailed,
+        "The saved Cursor session is unavailable. Start an explicit new chat; history was not replaced."))
+      return@flow
+    }
+    val environment = host.variables + mapOf("HOME" to (host.variables["HOME"] ?: host.userHome)) + request.agent.profile
+      ?.let { mapOf(AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR to it) }.orEmpty()
+    val prompt = if (saved == null || request.scope is ChatScope.NewTask) {
+      withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt)
+    } else request.prompt
+    val job = currentCoroutineContext()[Job]
+    if (job != null) turns[request.sessionId] = job
+    try {
+      emitAll(cursorAcpTurn(live, launcher, authority, store, diagnostics, host.variables["SHELL"],
+        environment, request, saved, prompt))
+    } finally {
+      if (job != null) turns.remove(request.sessionId, job)
+    }
   }
 
-  override fun end(sessionId: String) = deleteChatImages(sessionId)
+  override fun end(sessionId: String) { turns.remove(sessionId)?.cancel(); deleteChatImages(sessionId) }
 }
 
-internal fun cursorArguments(request: ChatTurnRequest, chat: String?): List<String> = buildList {
-  addAll(listOf("--print", "--output-format", "stream-json", "--force", "--trust", "--approve-mcps"))
-  addAll(listOf("--workspace", request.scope.repositoryRoot))
-  request.agent.model?.let { model ->
-    // Cursor takes effort inside the model name, as the execution launcher passes it.
-    val effort = request.agent.effort?.takeIf { "[effort=" !in model }
-    addAll(listOf("--model", if (effort != null) "$model[effort=$effort]" else model))
-  }
-  if (chat != null) addAll(listOf("--resume", chat))
-}
+internal fun cursorArguments(request: ChatTurnRequest, chat: String?): List<String> = listOf("acp")
 
 /** Decodes Cursor stream-json lines; without partial output each `assistant` line is one whole message. */
 internal class CursorStreamDecoder(private val onChat: (String) -> Unit) : ChatLineDecoder {

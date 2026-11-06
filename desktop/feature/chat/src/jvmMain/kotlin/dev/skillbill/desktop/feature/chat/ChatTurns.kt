@@ -116,6 +116,7 @@ internal class ChatTurns(
     chat.resolveAgent(read.header, read.detail, read.runOptions)?.also {
       session.agentState.value = it
       session.agentSupportedState.value = chat.supports(it.agentId)
+      session.thread.showCapability(it)
     }
 
   // The snapshot counts as delivered, and the CLI session as created, only once the turn produced output. A turn that ends
@@ -136,10 +137,12 @@ internal class ChatTurns(
       chat.send(request).collect { event ->
         session.thread.dropUnprompted = false
         if (event !is ChatEvent.Failed && !delivered) {
-          delivered = true
-          session.delivered = sent
-          session.started = true
-          session.startedRoot = header.checkoutRoot
+          if (event !is ChatEvent.Notice) {
+            delivered = true
+            session.delivered = sent
+            session.started = true
+            session.startedRoot = header.checkoutRoot
+          }
         }
         session.thread.show(agent, event)
       }
@@ -155,7 +158,7 @@ internal class ChatTurns(
    */
   suspend fun unprompted(session: ChatSession, event: ChatEvent) {
     if (session.thread.dropUnprompted) return
-    if (event is ChatEvent.ApprovalRequested) {
+    if (event is ChatEvent.ApprovalRequested || event is ChatEvent.Notice) {
       // A card is not a reply: it neither holds the composer nor ends with a completion, so it never starts an own turn.
       session.thread.show(session.agentState.value, event)
       return

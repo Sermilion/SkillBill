@@ -85,7 +85,7 @@ internal class ApprovalOwnerDelivery(
     val recorded =
       catchingNonCancellation { database.transaction { unit -> unit.approvals.finishDelivery(identity, outcome) } }
         .onFailure { failure -> diagnostics.error("Approval delivery state could not be recorded.", failure) }
-        .isSuccess
+        .getOrDefault(false)
     return if (recorded) outcome else ApprovalDeliveryState.UNCERTAIN
   }
 

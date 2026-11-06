@@ -22,6 +22,9 @@ interface ChatTransport {
    */
   val approvalCapable: Boolean get() = false
 
+  val approvalUnavailableReason: String get() =
+    "$agentId cannot host operator approval cards, so its chat was not started. Select a supported provider explicitly."
+
   fun run(request: ChatTurnRequest): Flow<ChatEvent>
 
   /** Replies the agent starts on its own between turns; a transport that runs one process per turn has none. */

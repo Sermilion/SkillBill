@@ -8,7 +8,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
-import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -26,6 +25,7 @@ class FileSystemAgentRunLauncher internal constructor(
   databasePath: Path? = null,
   private val providerEnvironment: Map<String, String> = emptyMap(),
   diagnostics: RuntimeDiagnostics,
+  clock: Clock,
   runtimeMcpBin: Path? = null,
   approvals: AgentRunApprovalOwners? = null,
   userHome: Path? = null,
@@ -45,6 +45,7 @@ class FileSystemAgentRunLauncher internal constructor(
     databasePath = databaseSessionFactory.resolveDbPath(),
     providerEnvironment = environment.environment,
     diagnostics = diagnostics,
+    clock = clock,
     runtimeMcpBin = resolveRuntimeMcpBin(environment.environment, environment.userHome),
     approvals = AgentRunApprovalOwners(approvalOwners, clock),
     userHome = environment.userHome.takeUnless { it == EnvironmentContext.UnspecifiedUserHome },
@@ -54,9 +55,9 @@ class FileSystemAgentRunLauncher internal constructor(
     headlessAgentRunAdapters(
       processRunner,
       executableLookup,
-      AgentRunWorkerBinding(databasePath, runtimeMcpBin, approvals, userHome),
-      providerEnvironment,
+      AgentRunWorkerBinding(databasePath, runtimeMcpBin, approvals, userHome, providerEnvironment),
       diagnostics,
+      clock,
     )
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
@@ -70,32 +71,6 @@ class FileSystemAgentRunLauncher internal constructor(
           agent = agent,
           reason = "Agent '${agent.id}' does not have a supported headless feature runtime launch path.",
         )
-    approvalRefusal(agent, adapter, request.skillRunRequest.approval)?.let { return it }
     return adapter.launch(request.skillRunRequest)
   }
-
-  private fun approvalRefusal(
-    agent: SupportedAgent,
-    adapter: ProcessAgentRunAdapter,
-    approval: AgentRunApprovalRequirement,
-  ): UnsupportedAgentRunLaunch? =
-    when (approval) {
-      is AgentRunApprovalRequirement.Unowned ->
-        UnsupportedAgentRunLaunch(
-          agent = agent,
-          reason =
-            "Agent '${agent.id}' launch requires operator approval facts; ${approval.reason}, so it was not started.",
-        )
-      is AgentRunApprovalRequirement.Owned ->
-        UnsupportedAgentRunLaunch(
-          agent = agent,
-          reason =
-            "Agent '${agent.id}' cannot host operator approval cards, so card-required execution is unavailable " +
-              "on it. Use the claude agent.",
-        ).takeUnless { adapter.canHostApprovalCards }
-      AgentRunApprovalRequirement.GovernedReview,
-      AgentRunApprovalRequirement.RuntimeHosted,
-      AgentRunApprovalRequirement.OutsideApproval,
-      -> null
-    }
 }

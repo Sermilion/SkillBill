@@ -28,6 +28,7 @@ import skillbill.ports.approval.model.ApprovalDeliveryState
 import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
 import skillbill.ports.approval.model.ApprovalOwnerOpenResult
 import skillbill.ports.approval.model.ApprovalOwnerSession
+import skillbill.ports.approval.model.ApprovalProviderClearance
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
 import skillbill.ports.approval.model.ApprovalRequestIdentity
@@ -120,6 +121,57 @@ class OperatorApprovalRuleMenuTest {
     )
   }
 
+  @Test
+  fun `provider clearance cancels pending without delivery and preserves a committed operator decision`() {
+    val consumer = menu.registerConsumer(repository, "desktop").lease.nonce
+    val owner = openOwner("profile-a")
+    try {
+      val pending = assertIs<ApprovalRegistrationResult.Registered>(owner.register(command(owner, "first"))).request
+      val cleared =
+        assertIs<ApprovalDecisionResult.Settled>(
+          owner.clearByProvider(
+            pending.approvalId,
+            pending.providerRequestId,
+            ApprovalProviderClearance.RESOLVED,
+          ),
+        ).request
+      assertEquals(ApprovalState.CANCELLED, cleared.state)
+      assertNull(owner.pendingWait())
+      assertTrue(delivered.isEmpty())
+      assertIs<ApprovalDecisionResult.AlreadySettled>(menu.decide(pending.identity(), consumer, ALLOW, false))
+      assertTrue(menu.listRules(repository).isEmpty())
+
+      val next = assertIs<ApprovalRegistrationResult.Registered>(owner.register(command(owner, "second"))).request
+      val allowed =
+        assertIs<ApprovalDecisionResult.Settled>(
+          menu.decide(next.identity(), consumer, ALLOW, false),
+        ).request
+      val terminal = terminalDecision(next.approvalId)
+      val observed =
+        assertIs<ApprovalDecisionResult.AlreadySettled>(
+          owner.clearByProvider(
+            next.approvalId,
+            next.providerRequestId,
+            ApprovalProviderClearance.DENIED,
+          ),
+        ).request
+      assertEquals(allowed, observed)
+      assertEquals(terminal, terminalDecision(next.approvalId))
+      assertEquals(listOf(next.approvalId), delivered.map { it.approvalId })
+      assertIs<ApprovalDecisionResult.AlreadySettled>(
+        owner.clearByProvider(
+          next.approvalId,
+          next.providerRequestId,
+          ApprovalProviderClearance.RESOLVED,
+        ),
+      )
+      assertEquals(1, delivered.size)
+    } finally {
+      owner.release()
+      menu.releaseConsumer(repository, consumer)
+    }
+  }
+
   private fun openOwner(profile: String): ApprovalOwnerSession {
     val opened =
       runtime.approvalOwners.open(
@@ -177,7 +229,9 @@ class OperatorApprovalRuleMenuTest {
 
   private fun corruptGrantFacts(approvalId: String) {
     DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
-      val sql = "UPDATE approval_requests SET action_class = 'unknown_class' WHERE approval_id = ?"
+      val sql =
+        "UPDATE approval_requests SET action_class = 'unknown_class' WHERE " +
+          "approval_id = ?"
       connection.prepareStatement(sql).use {
         it.setString(1, approvalId)
         assertEquals(1, it.executeUpdate())

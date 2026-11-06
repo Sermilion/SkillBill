@@ -168,3 +168,29 @@ The normal repository validator also runs the exemption-free platform substance 
 This is the governance layer that keeps the other ten features from rotting — once you have seen what they enable, you also see why this one exists.
 
 </details>
+
+## Operator approval adapters
+
+Codex card-required chat and phase workers use app-server stdio. Admission checks
+the installed 0.166.0 protocol schemas before a turn. Command and file decisions
+are one-time grants; app rules never write provider session or policy amendments.
+Network-context commands, permission grants and MCP elicitation are refused with
+their own documented negative responses. Other blocking interactions stop their
+owning session and retain the complete unsupported request.
+
+Cursor card-required chat and phase workers use ACP v1 through the declared
+`agent` / `cursor-agent` aliases. Setup checks authentication, saved-session load,
+model/effort, mode and content capabilities before sending a prompt. App rules
+select an offered `allow_once` option; Cursor's remembered options remain unavailable.
+ACP does not supply team-dashboard MCP servers. Work requiring those servers is
+unsupported in this integration; no substitute server or permission is inferred.
+
+Junie remains selectable for historical content, but card-required chat and phase
+launches refuse before starting a process. Junie ACP exists; its permission coverage
+has not been verified for this integration. Enabling it requires observed permission
+request/response coverage for shell commands, file edits and tools at both chat and
+phase launch roots, original request/session correlation, documented safe denials
+and cancellation, capability/version checks, and proof that provider restrictions
+remain effective without bypass flags. A new process must not inherit historical
+card authority. Until that evidence exists, no successful Junie approval adapter or
+automatic provider switch is claimed.

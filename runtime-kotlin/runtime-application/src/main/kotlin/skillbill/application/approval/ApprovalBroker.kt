@@ -31,6 +31,7 @@ import skillbill.ports.approval.model.ApprovalOwnerKey
 import skillbill.ports.approval.model.ApprovalOwnerLease
 import skillbill.ports.approval.model.ApprovalOwnerRegistration
 import skillbill.ports.approval.model.ApprovalOwnerResult
+import skillbill.ports.approval.model.ApprovalProviderClearance
 import skillbill.ports.approval.model.ApprovalRegistration
 import skillbill.ports.approval.model.ApprovalRegistrationCommand
 import skillbill.ports.approval.model.ApprovalRegistrationResult
@@ -215,6 +216,12 @@ class ApprovalBroker(
       }
     return lifecycle.settleTerminal(identity, cause, deliver = true)
   }
+
+  fun clearByProvider(
+    identity: ApprovalRequestIdentity,
+    clearance: ApprovalProviderClearance,
+    nonce: String,
+  ): ApprovalDecisionResult = lifecycle.clearByProvider(identity, clearance, nonce)
 
   fun listRules(repositoryIdentity: String): List<ApprovalRuleRecord> =
     database.read { unit -> unit.approvals.activeRules(repositoryIdentity) }
@@ -459,6 +466,7 @@ class ApprovalBroker(
     val APPROVAL_BUDGET: Duration = Duration.ofMinutes(5)
     val CONSUMER_LEASE: Duration = Duration.ofSeconds(60)
     const val CONFLICT_STOP_REASON =
-      "An approval request identity was reused with changed provider content, so the owning process is unsafe."
+      "An approval request identity was reused with changed provider content, so " +
+        "the owning process is unsafe."
   }
 }

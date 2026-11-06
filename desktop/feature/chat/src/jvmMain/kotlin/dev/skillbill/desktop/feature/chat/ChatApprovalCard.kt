@@ -83,6 +83,7 @@ private fun ApprovalCard.deliveryText(): String? = when (delivery) {
   "claimed" -> "The answer is claimed and about to be written to the process."
   "written" -> "The answer was written to the process."
   "uncertain" -> "It is not certain the process received the answer."
+  "not_required" -> "The provider cleared the request before a response was needed."
   else -> null
 }
 

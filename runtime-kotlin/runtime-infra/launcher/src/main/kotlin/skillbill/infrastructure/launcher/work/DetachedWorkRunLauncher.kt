@@ -28,6 +28,9 @@ class DetachedWorkRunLauncher internal constructor(
   private val diagnostics: RuntimeDiagnostics,
   private val startupGrace: Duration,
   private val agentHomes: HostAgentHomesPort,
+  private val awaitStartupExit: (Process, Duration) -> Boolean = { process, grace ->
+    process.waitFor(grace.toMillis(), TimeUnit.MILLISECONDS)
+  },
 ) : WorkRunLauncher,
   LaunchAgentHomesPort {
   @Inject
@@ -146,7 +149,7 @@ class DetachedWorkRunLauncher internal constructor(
       }
       var exitedEarly: Int? = null
       try {
-        exitedEarly = process.takeIf { it.waitFor(startupGrace.toMillis(), TimeUnit.MILLISECONDS) }?.exitValue()
+        exitedEarly = process.takeIf { awaitStartupExit(it, startupGrace) }?.exitValue()
       } finally {
         if (exitedEarly == null || exitedEarly == 0) {
           releaseOnExit(process, request, log, input)
