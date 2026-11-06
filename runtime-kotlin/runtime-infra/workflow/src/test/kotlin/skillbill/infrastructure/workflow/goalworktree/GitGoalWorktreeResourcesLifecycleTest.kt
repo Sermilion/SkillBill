@@ -8,6 +8,7 @@ import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.time.NoopRuntimeTimingPort
 import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.time.model.RuntimeWaitResult
+import skillbill.ports.workflow.goalworktree.model.GoalBranchCheckout
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeResult
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettleRequest
 import skillbill.ports.workflow.goalworktree.model.GoalWorktreeSettlement
@@ -238,6 +239,64 @@ class GitGoalWorktreeResourcesLifecycleTest {
     assertEquals(GoalWorktreeSettlement.Removed, resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
     assertTrue(Files.notExists(worktree))
     assertEquals(branchTip, runGit(repo, "rev-parse", "refs/heads/feat/skill-468"))
+  }
+
+  private fun removePublishedGoalWorktree() {
+    val remote = temp.toRealPath().resolve("remote-main-checkout.git")
+    Files.createDirectories(remote)
+    runGit(remote, "init", "--bare", "-b", "main")
+    runGit(repo, "remote", "add", "origin", remote.toString())
+    runGit(repo, "push", "--set-upstream", "origin", "main")
+    val worktree = created("SKILL-9")
+    runGit(worktree, "checkout", "-b", "feat/X")
+    Files.writeString(worktree.resolve("goal.txt"), "from the goal\n")
+    runGit(worktree, "add", "goal.txt")
+    runGit(worktree, "commit", "-m", "goal work")
+    runGit(worktree, "push", "--set-upstream", "origin", "feat/X")
+    assertEquals(GoalWorktreeSettlement.Removed, resources.settle(GoalWorktreeSettleRequest(repo, worktree)))
+  }
+
+  @Test
+  fun `a clean main checkout switches to the goal branch once its worktree is removed`() {
+    removePublishedGoalWorktree()
+
+    assertEquals(GoalBranchCheckout.CheckedOut, resources.checkoutGoalBranch(repo, "feat/X"))
+    assertEquals("feat/X", runGit(repo, "symbolic-ref", "--short", "HEAD"))
+    assertTrue(Files.exists(repo.resolve("goal.txt")))
+  }
+
+  @Test
+  fun `a main checkout with a modified tracked file is skipped and left untouched`() {
+    removePublishedGoalWorktree()
+    Files.writeString(repo.resolve("tracked.txt"), "operator edit\n")
+
+    val skipped = assertIs<GoalBranchCheckout.SkippedUncommittedChanges>(resources.checkoutGoalBranch(repo, "feat/X"))
+
+    assertTrue("tracked.txt" in skipped.detail, skipped.detail)
+    assertEquals("operator edit\n", Files.readString(repo.resolve("tracked.txt")))
+    assertEquals("main", runGit(repo, "symbolic-ref", "--short", "HEAD"))
+  }
+
+  @Test
+  fun `an untracked file the goal branch would overwrite fails the switch and survives`() {
+    removePublishedGoalWorktree()
+    Files.writeString(repo.resolve("goal.txt"), "operator file\n")
+
+    assertIs<GoalBranchCheckout.Failed>(resources.checkoutGoalBranch(repo, "feat/X"))
+
+    assertEquals("operator file\n", Files.readString(repo.resolve("goal.txt")))
+    assertEquals("main", runGit(repo, "symbolic-ref", "--short", "HEAD"))
+  }
+
+  @Test
+  fun `a merge in progress in the main checkout fails the switch and keeps the branch`() {
+    removePublishedGoalWorktree()
+    Files.writeString(repo.resolve(".git/MERGE_HEAD"), runGit(repo, "rev-parse", "HEAD") + "\n")
+
+    val failed = assertIs<GoalBranchCheckout.Failed>(resources.checkoutGoalBranch(repo, "feat/X"))
+
+    assertTrue("merge" in failed.detail, failed.detail)
+    assertEquals("main", runGit(repo, "symbolic-ref", "--short", "HEAD"))
   }
 
   @Test

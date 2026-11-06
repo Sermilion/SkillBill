@@ -434,6 +434,8 @@ public class GoalRunnerStatusProjectionAssembler(
               control.executionWorktreeRemovedAt,
               control.executionWorktreeRetentionReason,
               control.executionWorktreeRetentionDetail,
+              mainCheckoutOutcome = control.executionMainCheckoutOutcome,
+              mainCheckoutDetail = control.executionMainCheckoutDetail,
             )
           } else {
             null

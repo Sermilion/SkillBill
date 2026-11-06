@@ -35,7 +35,7 @@ public class GoalCompletionRecorder(
     checkpoint.truncateWalBestEffort(diagnostics, "goal_completion")
   }
 
-  internal fun settleWorktree(parentWorkflowId: String) = worktreeSettlement.settle(parentWorkflowId)
+  internal fun settleWorktree(state: GoalRunnerManifestState) = worktreeSettlement.settle(state)
 
   internal fun retryWorktreeIfPending(state: GoalRunnerManifestState) = worktreeSettlement.retryIfPending(state)
 }
