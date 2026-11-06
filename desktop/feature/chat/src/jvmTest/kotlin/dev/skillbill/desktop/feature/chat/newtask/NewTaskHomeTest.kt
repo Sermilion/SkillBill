@@ -255,7 +255,8 @@ class NewTaskHomeTest {
     waitForIdle()
     assertEquals(listOf(plain), opened)
 
-    onNodeWithText("0 running · 1 finished today").performClick()
+    onNodeWithText("1 finished today").assertExists()
+    onNodeWithContentDescription("0 running · 1 finished today").performClick()
     waitForIdle()
     assertTrue(showedAllWork)
   }
@@ -271,7 +272,8 @@ class NewTaskHomeTest {
       }
     }
 
-    onNodeWithText("2 running · 0 finished today").assertExists()
+    onNodeWithText("0 finished today").assertExists()
+    onNodeWithContentDescription("2 running · 0 finished today").assertExists()
     onNodeWithText("Pick up where you left off").assertExists()
     onNodeWithText("Nothing here. Start something below.").assertExists()
     onAllNodesWithText("Try one of these").assertCountEquals(0)
