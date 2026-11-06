@@ -59,7 +59,7 @@ internal fun NewTaskScreen(state: NewTaskUiState, draft: NewTaskDraft, host: New
   val chatBusy = chat?.thread?.busy?.collectAsState()?.value ?: false
   val focusManager = LocalFocusManager.current
   val focus = remember { FocusRequester() }
-  LaunchedEffect(draft.repository?.root) { draft.refreshSaved() }
+  LaunchedEffect(Unit) { draft.refreshSaved() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = listOf(Crumb("New task")),
@@ -153,7 +153,15 @@ private fun NewTaskHomeBody(
           )
         }
         StepLine(progress, reducedMotion, preview)
-        saved.firstOrNull()?.let { latest -> ContinueRow(latest, host.now()) { onAction(NewTaskAction.ResumeDraft(latest)) } }
+        if (saved.isNotEmpty()) {
+          RecentChatsSection(
+            saved,
+            host.now(),
+            onResume = { onAction(NewTaskAction.ResumeDraft(it)) },
+            onDiscard = { onAction(NewTaskAction.DiscardDraft(it)) },
+            onShowAll = { onAction(NewTaskAction.ShowAllDrafts) },
+          )
+        }
         when (val home = state.home) {
           NewTaskHome.Pending -> Unit
           is NewTaskHome.Returning -> NeedsYouSection(home, host.now, host.onOpenRun, host.onShowAllWork, Modifier.alpha(homeAlpha))

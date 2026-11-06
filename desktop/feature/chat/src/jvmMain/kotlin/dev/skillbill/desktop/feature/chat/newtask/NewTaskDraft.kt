@@ -85,7 +85,7 @@ class NewTaskDraft(
 
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
 
-  /** The selected repository's saved drafts, newest first, as of the latest [refreshSaved]. */
+  /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
 
   internal fun canSend(): Boolean = canAdmitTurn(text)
@@ -265,6 +265,16 @@ class NewTaskDraft(
     leave(current) { chats.deleteSavedChat(current.sessionId) }
   }
 
+  /** Deletes [entry] and refreshes the saved list, routing the open chat through [discard]. */
+  internal fun discardSaved(entry: ChatHistoryEntry) {
+    if (closing) return
+    if (chatState.value?.sessionId == entry.sessionId) return discard()
+    scope.launch {
+      chats.deleteSavedChat(entry.sessionId)
+      refreshSaved()
+    }
+  }
+
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
   internal suspend fun close(): Boolean {
     if (closing) return false
@@ -330,9 +340,8 @@ class NewTaskDraft(
   }
 
   internal fun refreshSaved() {
-    val root = repository?.root
     savedRead?.cancel()
-    savedRead = scope.launch { savedState.value = root?.let { chats.savedNewTaskDrafts(it) }.orEmpty() }
+    savedRead = scope.launch { savedState.value = chats.savedNewTaskDrafts() }
   }
 
   internal fun dispose() {

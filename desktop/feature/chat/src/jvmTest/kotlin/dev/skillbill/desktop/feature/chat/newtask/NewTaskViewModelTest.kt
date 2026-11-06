@@ -5,6 +5,10 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
@@ -68,6 +72,41 @@ class NewTaskViewModelTest {
 
   private fun viewModel(board: FakeWorkBoardRepository, draft: NewTaskDraft, specs: SpecRepository = FakeSpecs(), branches: RepositoryBranchesRepository = FakeBranches(), folders: FolderChooser = FolderChooser { FolderChoice.Cancelled }) =
     NewTaskViewModel(draft, board, specs, branches, folders, FakeExecutionChatRepository(), detecting(), FIXED_CLOCK)
+
+  @Test
+  fun `discarding a closed draft deletes it and show all opens the picker`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val chatRepo = FakeExecutionChatRepository()
+    val entry = ChatHistoryEntry(
+      "saved-draft",
+      null,
+      requireNotNull(chatRepo.agent),
+      Instant.fromEpochSeconds(1),
+      "Saved task",
+      listOf(ChatHistoryLine(ChatHistoryRole.Operator, "Saved task")),
+      ChatNewTaskContext("/work/app", "main"),
+    )
+    chatRepo.saved[entry.sessionId] = entry
+    val draft = NewTaskDraft(chatRepo, FakeWorkControlRepository(), testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), FIXED_CLOCK)
+    val model = NewTaskViewModel(draft, FakeWorkBoardRepository(loadedBoard()), FakeSpecs(), FakeBranches(), FolderChooser { FolderChoice.Cancelled }, chatRepo, detecting("claude"), FIXED_CLOCK)
+    runCurrent()
+    draft.refreshSaved()
+    runCurrent()
+
+    assertEquals(listOf(entry), draft.saved.value)
+
+    model.onAction(NewTaskAction.DiscardDraft(entry))
+    runCurrent()
+    assertTrue(entry.sessionId !in chatRepo.saved)
+    assertTrue(draft.saved.value.isEmpty())
+
+    draft.text = "keep this text"
+    model.onAction(NewTaskAction.ShowAllDrafts)
+    runCurrent()
+    assertTrue(model.state.value.resumePickerOpen)
+    assertEquals("keep this text", draft.text)
+    model.viewModelScope.cancel()
+  }
 
   // View models die on sidebar navigation, so state kept in one would lose the chat.
   @Test

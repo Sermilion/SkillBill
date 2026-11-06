@@ -1,3 +1,13 @@
+## [2026-11-06] SKILL-507 New Task chat history list
+Areas: desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/chat
+- Saved New Task drafts now span repositories, newest first. The optional store limit applies after conversion to usable history entries.
+- The home shows up to six recent drafts with resume and discard controls. Show all opens the uncapped resume picker; the list uses the existing scroll area.
+- Draft refresh runs without a selected repository. Resuming restores the saved repository, branch and agent.
+- The repository draft-read interface replaces its repository argument with an optional limit. The chat storage format is unchanged.
+- QA or validation reported environment_unavailable.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-05] SKILL-503 Specs panel selection bar
 Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/core/designsystem, desktop/feature/specs, runtime-kotlin/runtime-engine
 - A docked selection bar and panel header replace the old toolbar. File selection keeps its row highlight while its parent bundle owns controls, favorites and reservations.
@@ -119,4 +129,3 @@ Areas: desktop/app, core modules, feature modules, desktop build and CI, runtime
 - Platform-specific tray, login and packaging behavior requires its respective host. Benchmark targets are measurements, not a passing guarantee.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
-

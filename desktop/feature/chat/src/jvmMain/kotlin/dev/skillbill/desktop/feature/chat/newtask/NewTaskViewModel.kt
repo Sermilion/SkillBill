@@ -69,6 +69,8 @@ sealed interface NewTaskAction {
   data object NewChat : NewTaskAction
   data object DismissResume : NewTaskAction
   data class ResumeDraft(val entry: ChatHistoryEntry) : NewTaskAction
+  data class DiscardDraft(val entry: ChatHistoryEntry) : NewTaskAction
+  data object ShowAllDrafts : NewTaskAction
   data class RunSuggestedAction(val action: ChatSuggestedAction) : NewTaskAction
 }
 
@@ -135,6 +137,11 @@ class NewTaskViewModel(
       NewTaskAction.Discard -> draft.discard()
       NewTaskAction.NewChat -> draft.launch { draft.close() }
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
+      is NewTaskAction.DiscardDraft -> draft.discardSaved(action.entry)
+      NewTaskAction.ShowAllDrafts -> {
+        draft.refreshSaved()
+        mutableState.update { it.copy(resumePickerOpen = true) }
+      }
       is NewTaskAction.ResumeDraft -> {
         agentRead?.cancel()
         draft.launch {
