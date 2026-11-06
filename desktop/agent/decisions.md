@@ -7,6 +7,7 @@ Reason: The operator is the only one who can see the app's verdict on a reply. W
 Context: The home showed one Continue row for the selected repository's newest draft.
 Decision: The home lists up to 6 saved New Task drafts from every repository with resume and discard per row. "Show all" opens the /resume picker when more drafts exist. `refreshSaved` and the picker read every repository's drafts, and the list stays a plain capped column with no nested scroll.
 Reason: Drafts in other repositories stayed hidden until the operator switched repository.
+Superseded by: Scope the New Task resume palette to the picked repository (2026-11-06), for the picker only. The cross-repository home list decision stands.
 
 ## [2026-11-05] Keep spec deletion refusal in the runtime
 Context: Desktop control facts and the runtime board projection can disagree while a goal changes state.
