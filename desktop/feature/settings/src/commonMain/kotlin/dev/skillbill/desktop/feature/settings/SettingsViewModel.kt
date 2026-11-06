@@ -58,6 +58,7 @@ class SettingsViewModel(
       SettingsAction.SavePath -> savePath()
       is SettingsAction.ClaudeDirectoryChosen -> write { setClaudeConfigDir(action.directory) }
       is SettingsAction.RetentionChosen -> write { setHistoryWindow(action.window) }
+      is SettingsAction.NewTaskChatLayoutChosen -> write { setNewTaskChatLayout(action.layout) }
       is SettingsAction.NotificationToggled -> write { setNotification(action.kind, action.enabled) }
       is SettingsAction.StartAtLoginChanged -> updateLoginItem(action.enabled)
     }

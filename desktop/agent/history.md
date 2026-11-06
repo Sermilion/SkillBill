@@ -1,3 +1,17 @@
+## [2026-11-06] SKILL-511 multiple New Task chats
+Areas: desktop/app, desktop/core/domain, desktop/core/datastore, desktop/core/testing, desktop/core/ui, desktop/feature/settings, desktop/feature/chat, design/new-task-chat-tabs
+- NewTaskChats owns an uncapped, window-scoped open set with independent repository, branch, agent, text, offer and session state. Selection leaves background streams running; the set always retains an empty draft after its last chat closes.
+- NewTaskSavedChats shares saved drafts across open chats and the home. Resume selects an open session, loads an empty selected draft or adds a chat without ending another. reusable
+- Close confirms a running reply, saves its partial transcript and offers Reopen using a fresh saved-chat read. Discard deletes the save; failed close keeps the chat open.
+- Tabs and Side list share OpenChatItem, OpenChatRow and reply markers. Background busy-to-idle transitions set unread state until selection. reusable
+- Tabs shrink to 112dp before scrolling, translate vertical wheel input, fade clipped edges and expose an overflow menu with filtering above eight chats. Ctrl/Cmd shortcuts create, close, cycle and select chats; the sidebar shows the open count above one.
+- Settings > General persists Open chats as newTaskChatLayout through the existing wire-value enum and DataStore pattern. Tabs is the default for missing or unknown values; layout changes preserve drafts, selection and sessions.
+- Async agent, repository and branch actions capture their target draft. Successful resume signals refresh composer context even when selection stays unchanged.
+- Rebound sessions replay operator and finished agent messages on the first turn, with a 24,000-character conversation budget. Replay stays off visible and saved operator lines, survives failure before output and does not stack across unsent switches.
+- Design references live in design/new-task-chat-tabs. Limits: open tabs are not restored after restart; closing and resuming an unsent rebound chat loses pending replay; layout changes may reset transcript scroll.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-06] SKILL-512 desktop follows a removed worktree to the main checkout
 Areas: desktop/core/data, desktop/core/domain, desktop/core/testing, desktop/feature/chat, desktop/feature/terminal, desktop/feature/changes, desktop/feature/detail
 - A goal worktree row reads as Removed when its directory is gone from disk, even if the runtime reports Active or Retained. The shared mapper keeps path, retention and main-checkout outcome fields, and the detail header explains removal by outcome.

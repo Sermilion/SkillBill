@@ -81,6 +81,7 @@ private val START_CHIPS = listOf(
 internal fun RecentChatsSection(
   saved: List<ChatHistoryEntry>,
   now: Instant,
+  openSessionIds: Set<String>,
   onResume: (ChatHistoryEntry) -> Unit,
   onDiscard: (ChatHistoryEntry) -> Unit,
   onShowAll: () -> Unit,
@@ -90,7 +91,7 @@ internal fun RecentChatsSection(
     SectionLabel("Recent chats")
     saved.take(NEW_TASK_HISTORY_ROWS).forEach { entry ->
       key(entry.sessionId) {
-        RecentChatRow(entry, now, { onResume(entry) }, { onDiscard(entry) })
+        RecentChatRow(entry, now, entry.sessionId in openSessionIds, { onResume(entry) }, { onDiscard(entry) })
       }
     }
     if (saved.size > NEW_TASK_HISTORY_ROWS) {
@@ -100,17 +101,32 @@ internal fun RecentChatsSection(
 }
 
 @Composable
-private fun RecentChatRow(entry: ChatHistoryEntry, now: Instant, onClick: () -> Unit, onDiscard: () -> Unit) {
+private fun RecentChatRow(entry: ChatHistoryEntry, now: Instant, open: Boolean, onClick: () -> Unit, onDiscard: () -> Unit) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   HomeRow(onClick, Modifier.height(SkillBillSize.row)) {
-    BasicText(rememberRuntimeText(entry.title.lineSequence().first()), Modifier.weight(1f), style = type.tBase.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+      BasicText(rememberRuntimeText(entry.title.lineSequence().first()), Modifier.weight(1f, fill = false), style = type.tBase.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      if (open) OpenBadge()
+    }
     entry.newTask?.let {
       BasicText(File(it.repositoryRoot).name, Modifier.weight(0.5f, fill = false), style = type.tSm.copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     BasicText(savedAgo(entry.updatedAt, now), style = type.tSm.copy(color = colors.fgFaint), maxLines = 1)
     SbButton("Discard", onDiscard, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
   }
+}
+
+/** `.home-row .open`: marks a saved chat that is open in a tab. */
+@Composable
+private fun OpenBadge() {
+  val colors = SkillBillTheme.colors
+  BasicText(
+    "open",
+    Modifier.border(1.dp, colors.accentRing, RoundedCornerShape(percent = 50)).padding(horizontal = 6.dp),
+    style = SkillBillTheme.type.tXs.copy(color = colors.accentText),
+    maxLines = 1,
+  )
 }
 
 @Composable

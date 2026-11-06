@@ -1,3 +1,35 @@
+## [2026-11-06] Bind New Task async results to their originating draft
+Context: Operators can select another open chat while agent resolution, a branch read or a repository path check is suspended.
+Decision: Capture the target draft once per action and write results only into it. Update shared composer UI only while that draft is selected; selection refreshes agent and branches and closes both pickers.
+Reason: Reading the selected draft after suspension could rebind or overwrite a different chat. Per-draft agent reads also keep a choice in one chat from cancelling another chat's resolution.
+
+## [2026-11-06] Detect background replies from the busy-to-idle transition
+Context: Both prompted and unprompted replies need the same unread marker when they finish in an unselected chat.
+Decision: NewTaskChats watches each draft's chat busy state, flags an unselected chat when that same chat transitions to idle, and clears the flag on selection. Removing a draft cancels its watcher.
+Reason: NewTaskChat sets busy for both kinds of reply, so the transition covers both without comparing transcript contents.
+Revisit when: Replies can arrive without setting busy.
+
+## [2026-11-06] Resolve Reopen from the saved chat after close
+Context: Closing flushes a running turn, which can rotate its session id. The operator may delete the saved chat before clicking Reopen.
+Decision: Capture the session id after close succeeds and read saved drafts afresh when Reopen is clicked. Resume only a matching entry; otherwise show the missing-chat toast.
+Reason: A pre-close id can point to the replaced session, and the cached saved list can retain a deleted entry.
+
+## [2026-11-06] Share resume routing in the window's chat holder
+Context: Recent chats, /resume and the close toast must open a saved chat without ending another conversation.
+Decision: NewTaskChats selects an existing session, loads an empty selected draft or adds a draft. NewTaskDraft.resume only loads an empty draft; a failed added-draft load removes it and restores selection.
+Reason: The window holder owns the open set and selection. The former draft-level close before resume would end another chat.
+
+## [2026-11-06] Signal saved-chat loads separately from selection
+Context: Reopen bypasses the view-model action, and loading an empty selected draft causes no selection change.
+Decision: NewTaskChats emits successful loads through resumed. For a selected loaded draft, the view model cancels its pending agent read and refreshes its agent and branches.
+Reason: Observing selection alone misses this load and can leave the composer showing the previous agent or branches.
+
+## [2026-11-06] Replay the transcript in the first prompt after a context switch
+Context: Rebinding the agent, repository or base branch opens a fresh session that has not seen the transcript still visible in the chat.
+Decision: Prefix the first prompt with operator and finished agent messages, retaining the newest conversation within 24,000 characters. Clear pending replay on the first non-Failed event, pass it unchanged through unsent rebinds, and keep it out of transcript storage.
+Reason: Reusing the app transcript avoids an extra agent turn for a handoff summary. Clearing replay where started flips preserves retries before output without resending it on later turns. Persisting pending replay would require ChatNewTaskContext and ChatStore changes outside scope.
+Revisit when: Pending replay must survive saved-chat resume, or the conversation budget needs to change.
+
 ## [2026-11-06] Scope the New Task resume palette to the picked repository
 Context: The home lists drafts across repositories, while the resume palette identifies a single repository with its scope chip.
 Decision: New Task passes only drafts for the picked repository to the palette, or none if no repository is picked. The home list remains cross-repository; its Show all opens the scoped palette.

@@ -39,9 +39,12 @@ import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
-import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.unconfinedNewTaskChats
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
-import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskChats
+import dev.skillbill.desktop.feature.chat.newtask.testNewTaskChats
+import kotlin.test.assertNotNull
+import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -92,15 +95,58 @@ class ChatWorkspaceTest {
   /** A real directory standing in for a goal worktree; `toRealPath` avoids the macOS `/var` symlink. */
   private fun worktreeDir(): String = Files.createTempDirectory("chat-worktree").toRealPath().also(tempDirs::add).toString()
 
-  private fun TestScope.workspace(draft: NewTaskDraft = testNewTaskDraft(), repository: FakeExecutionChatRepository = chat): ChatWorkspace {
+  private fun TestScope.workspace(
+    chats: NewTaskChats = unconfinedNewTaskChats(),
+    repository: ExecutionChatRepository = chat,
+  ): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, draft)
+    return ChatWorkspace(repository, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, chats)
+  }
+
+  // A window that closes while one New task chat could not be saved, or a retry that leaves the rest open.
+  @Test
+  fun `closing the window keeps it open while one New task chat fails to save, and the retry closes it`() = runTest {
+    var failing: String? = null
+    val flaky = object : ExecutionChatRepository by chat {
+      override suspend fun saveNewTaskDraft(entry: ChatHistoryEntry): Boolean {
+        if (entry.sessionId == failing) {
+          failing = null
+          return false
+        }
+        return chat.saveNewTaskDraft(entry)
+      }
+    }
+    val chats = testNewTaskChats(flaky)
+    chats.selected.value.apply {
+      repository = NewTaskRepository("/existing/repo", "repo")
+      baseBranch = "main"
+      agentId = "claude"
+      selectedAgent = ChatAgent("claude", null, null)
+    }
+    val drafts = List(3) { index ->
+      val draft = if (index == 0) chats.selected.value else chats.newChat()
+      draft.text = "task $index"
+      draft.send()
+      runCurrent()
+      draft
+    }
+    val workspace = workspace(chats)
+    failing = checkNotNull(drafts[1].chat.value).sessionId
+
+    assertFalse(workspace.closeAll())
+    runCurrent()
+    assertNotNull(drafts[1].chat.value)
+
+    assertTrue(workspace.closeAll())
+    runCurrent()
+    assertTrue(drafts.all { it.chat.value == null })
   }
 
   @Test
   fun `goal intake prefill keeps a nonblank draft and fills an empty draft`() = runTest {
-    val draft = testNewTaskDraft()
-    val workspace = workspace(draft)
+    val chats = unconfinedNewTaskChats()
+    val draft = chats.selected.value
+    val workspace = workspace(chats)
     assertTrue(workspace.prefillGoalIntake("/verified/repo", "feature/verify", "Fix criterion 2"))
     assertEquals("Fix criterion 2", draft.text)
     assertEquals(NewTaskRepository("/verified/repo", "repo"), draft.repository)
@@ -116,16 +162,17 @@ class ChatWorkspaceTest {
 
   @Test
   fun `goal intake rejects an empty composer when a conversation exists for the same or another repository`() = runTest {
-    val draft = NewTaskDraft(
+    val chats = NewTaskChats(
       chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
-    ).apply {
+    )
+    val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/existing/repo", "repo")
       baseBranch = "existing-branch"
       agentId = "claude"
       selectedAgent = ChatAgent("claude", null, null)
     }
-    val workspace = workspace(draft)
+    val workspace = workspace(chats)
     draft.text = "unrelated existing work"
     draft.send()
     runCurrent()
@@ -153,16 +200,17 @@ class ChatWorkspaceTest {
   @Test
   fun `goal intake rejects an empty composer while its conversation turn is active`() = runTest {
     chat.events = { flow { awaitCancellation() } }
-    val draft = NewTaskDraft(
+    val chats = NewTaskChats(
       chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
-    ).apply {
+    )
+    val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
       repository = NewTaskRepository("/existing/repo", "repo")
       baseBranch = "existing-branch"
       agentId = "claude"
       selectedAgent = ChatAgent("claude", null, null)
     }
-    val workspace = workspace(draft)
+    val workspace = workspace(chats)
     draft.text = "unrelated active work"
     draft.send()
     runCurrent()
@@ -182,12 +230,13 @@ class ChatWorkspaceTest {
 
   @Test
   fun `goal intake rejects an empty composer when a conversation has been resumed`() = runTest {
-    val draft = NewTaskDraft(
+    val chats = NewTaskChats(
       chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
-    ).apply {
+    )
+    val draft = chats.selected.value.apply {
       chatDispatcher = StandardTestDispatcher(testScheduler)
     }
-    val workspace = workspace(draft)
+    val workspace = workspace(chats)
     val saved = ChatHistoryEntry(
       sessionId = "resumed-session",
       executionId = null,
@@ -1284,7 +1333,7 @@ class ChatWorkspaceTest {
     }
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val workspace = ChatWorkspace(
-      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft(),
+      chat, details, controls, closedDb, WindowCoroutineScope(backgroundScope), clock, panes, selection, unconfinedNewTaskChats(),
     )
     workspace.open(item)
     runCurrent()

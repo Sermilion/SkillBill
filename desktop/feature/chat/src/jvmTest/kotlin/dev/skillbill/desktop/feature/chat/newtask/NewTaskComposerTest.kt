@@ -239,7 +239,7 @@ class NewTaskComposerTest {
   }
 
   @Test
-  fun `the repository pill turns static once a chat starts and the agent chip stays clickable after the first reply`() = runComposeUiTest {
+  fun `the repository pill stays available after a chat reply`() = runComposeUiTest {
     val chat = FakeExecutionChatRepository(supported = setOf("claude", "codex"))
     val events = Channel<ChatEvent>(Channel.UNLIMITED)
     chat.events = { events.consumeAsFlow().takeWhile { it != ChatEvent.Completed } }
@@ -282,8 +282,10 @@ class NewTaskComposerTest {
     waitUntil { draft.chat.value?.thread?.busy?.value == false }
     waitForIdle()
 
-    onNode(hasClickLabel("Change repository or base branch")).assertDoesNotExist()
-    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertDoesNotExist()
+    onNode(hasClickLabel("Change repository or base branch")).assertIsEnabled()
+    onNodeWithContentDescription(REPOSITORY_PILL_CHEVRON, useUnmergedTree = true).assertExists()
+    onNode(hasClickLabel("Change repository or base branch")).performClick()
+    assertTrue(actions.contains(NewTaskAction.OpenRepositoryPicker))
     onNode(hasClickLabel("Change agent")).assertIsEnabled().performClick()
     onNodeWithText("codex").assertExists()
   }

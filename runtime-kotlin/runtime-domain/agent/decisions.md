@@ -135,3 +135,13 @@ Decision: (c) Retain `AttemptLedgerWorkflowDecoding.asLenientIntOrNull` as the s
 Evidence: `FeatureTaskRuntimePersistenceMapFieldsTest`, `ReviewRunLaneSegmentAccountingJsonTest`, `TypedParseBoundaryArchitectureTest`.
 
 Revisit when: SKILL-352 replaces any remaining engine-local readers or workflow status moves to closed enums at the engine boundary.
+
+## [2026-11-06] Governed spec section parsing ignores fenced headings
+
+Context: Specs quote example markdown, such as a fenced `## Unblock`, that heading-based section parsing read as a section boundary.
+
+Decision: `MarkdownFences.outsideFenceMask` returns one flag per spec line, true when the line sits outside every fence and is not a fence marker. Section parsers, including `PlanBundleSnapshots.detailsRange`, only match headings on those lines. An unclosed fence would swallow the rest of the spec, so in that case every line counts as outside.
+
+Evidence: `MarkdownFences`, `GovernedSpecSectionParser`, `PlanBundleSnapshots`.
+
+Revisit when: Specs move to a structured format or a markdown parser replaces line matching.
