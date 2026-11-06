@@ -1,3 +1,14 @@
+## [2026-11-06] Refresh observed standalone plans on a bounded pulse
+Context: Plan output snapshots have no change revision, so database signals alone do not guarantee a full detail refresh when output changes.
+Decision: Refresh full detail every two seconds while an observed standalone plan is active or blocked. Stop when a full read reports it idle or the observer closes.
+Reason: The pulse makes persisted progress visible without changing producer or persistence ownership.
+Revisit when: Output writes provide a reliable change signal.
+
+## [2026-11-06] Require saved plan units before implementation
+Context: Seeded spec files and a saved report do not establish that every plan unit finished writing its spec.
+Decision: Enable Implement only for a finished standalone plan with a saved report and all projected units in the saved state.
+Reason: File existence alone can admit an incomplete plan.
+
 ## [2026-11-05] Keep spec deletion refusal in the runtime
 Context: Desktop control facts and the runtime board projection can disagree while a goal changes state.
 Decision: Guard desktop deletion with matching loaded canDelete verdicts and launch reservations, while allowing requests without loaded control. SpecBrowserService.deleteBundle retains the final refusal.
