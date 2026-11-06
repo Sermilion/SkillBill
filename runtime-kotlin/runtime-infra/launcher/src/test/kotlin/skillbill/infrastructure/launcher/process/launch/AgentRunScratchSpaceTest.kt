@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.time.JvmSystemClock
+import skillbill.infrastructure.host.jvm.AgentGradleMemoryLimits
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.host.scratch.AgentRunScratchSpace
 import skillbill.infrastructure.host.scratch.testAgentRunScratchRoot
@@ -33,5 +34,21 @@ class AgentRunScratchSpaceTest {
     assertEquals(root, scratch.parent)
     assertFalse(Files.exists(scratch))
     assertEquals(listOf(root.resolve(AgentRunScratchSpace.JVM_DIRECTORY)), root.listDirectoryEntries())
+  }
+
+  @Test
+  fun `an isolated agent launch still hands Gradle the agent memory limits`(
+    @TempDir stateDir: Path,
+  ) {
+    val runner = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot(stateDir))
+
+    val result =
+      runner.run(
+        testAgentRunProcessRequest(listOf("sh", "-c", "printf %s \"\$GRADLE_OPTS\""), Path.of(".")) {
+          inheritEnvironment = false
+        },
+      )
+
+    assertEquals(AgentGradleMemoryLimits.environment(emptyMap())[AgentGradleMemoryLimits.GRADLE_OPTS], result.stdout)
   }
 }
