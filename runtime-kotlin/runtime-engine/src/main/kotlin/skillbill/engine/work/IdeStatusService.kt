@@ -424,7 +424,7 @@ public class IdeStatusService(
         incidentHistory = incidentSet.incidentHistory,
         changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, goalWorktree, context),
         goalWorktree = goalWorktree,
-      )
+      ).withValidationBranchRuns(standalone, context.unitOfWork)
     val nextAnchors = detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead)
     return ProjectedDetailItem(detailItem, nextAnchors)
   }

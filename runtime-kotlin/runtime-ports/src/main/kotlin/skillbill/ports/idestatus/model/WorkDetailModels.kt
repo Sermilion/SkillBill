@@ -87,6 +87,20 @@ data class WorkDetailItem(
   val incidentHistory: List<WorkIncidentProjection> = emptyList(),
   val changeBaseline: WorkChangeBaseline? = null,
   val goalWorktree: GoalWorktreeView? = null,
+  val validationBranchRuns: List<WorkValidationBranchRun> = emptyList(),
+  val selectedValidationResult: String? = null,
+)
+
+data class WorkValidationBranchRun(
+  val invocationId: String,
+  val runSequence: String,
+  val lifecycleState: String,
+  val startedAt: Instant,
+  val finishedAt: Instant?,
+  val activeDurationMs: Long?,
+  val launchAgentId: String?,
+  val currentActivity: String?,
+  val result: String?,
 )
 
 data class WorkDetailRuntimeStatus(

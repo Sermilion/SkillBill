@@ -42,6 +42,7 @@ import skillbill.ports.idestatus.model.ValidationCheckEventRecord
 import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
+import skillbill.ports.idestatus.model.WorkValidationBranchRun
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
@@ -85,6 +86,8 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
       ): List<IdeStatusWorkflowExecution> = emptyList()
 
       override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? = null
+
+      override fun readValidationBranchRuns(invocationId: String): List<WorkValidationBranchRun> = emptyList()
 
       override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? = null
 

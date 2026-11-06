@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.AuditAttempt
 import dev.skillbill.desktop.core.domain.model.AuditCriterion
 import dev.skillbill.desktop.core.domain.model.AuditOutcome
 import dev.skillbill.desktop.core.domain.model.Detail
+import dev.skillbill.desktop.core.domain.model.ValidationBranchRun
 import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -87,6 +88,7 @@ import skillbill.ports.idestatus.model.StandaloneQaStepStatus
 import skillbill.ports.idestatus.model.StandaloneQaTargetState
 import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.WorkDetailItem
+import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.ports.idestatus.model.WorkDetailList
 import skillbill.ports.idestatus.model.WorkIncidentProgress
 import skillbill.ports.idestatus.model.WorkIncidentProjection
@@ -160,6 +162,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     updatedAt = snapshot.updatedAt.toKotlinInstant(),
     lastAgentActivityLabel = snapshot.lastAgentActivityLabel?.wireValue,
     lastAgentActivityAt = snapshot.lastAgentActivityAt?.toKotlinInstant(),
+    currentActivity = snapshot.currentActivity,
     currentSubtaskStartedAt = snapshot.currentSubtask?.startedAt?.toKotlinInstant(),
     subtaskActiveDurationMs = snapshot.currentSubtask?.activeDurationMs,
     subtaskActiveDurationAsOf = snapshot.currentSubtask?.activeDurationAsOf?.toKotlinInstant(),
@@ -232,6 +235,20 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         it.qaDetails?.toDomain(),
       )
     },
+    validationBranchRuns = validationBranchRuns.map {
+      ValidationBranchRun(
+        invocationId = it.invocationId,
+        runSequence = it.runSequence,
+        lifecycle = IdeStatusPolicy.standaloneLifecycle(it.lifecycleState).toDomain(),
+        startedAt = it.startedAt.toKotlinInstant(),
+        finishedAt = it.finishedAt?.toKotlinInstant(),
+        activeDurationMs = it.activeDurationMs,
+        agent = it.launchAgentId,
+        currentActivity = it.currentActivity,
+        result = it.result,
+      )
+    },
+    selectedValidationResult = selectedValidationResult,
     incident = incident?.toDomain(),
     incidentHistory = incidentHistory.map { it.toDomain() },
     goalSpecBundle = goalSpecBundle?.toDomain(),

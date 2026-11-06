@@ -108,10 +108,14 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
   val qaRow = isStandaloneQa(item)
+  val validationRow = isStandaloneValidation(item)
   val loaded = state.sections as? SectionsUi.Loaded
   val qaView = if (qaRow && loaded != null) qaChecklistView(item, loaded.detail, state.selectedQaRun, state.qaCaseOverrides) else null
   val keys = remember { LazyKeyIndex() }
   val scrollToFinding = rememberQaFindingScroller(listState, collapse, keys)
+  val validationResult = loaded?.detail?.selectedValidationResult
+  val validationShape = if (validationRow) shapeValidationReport(validationResult) else null
+  val validationPage = if (validationRow && loaded != null) rememberValidationPage(validationShape, item.control.invocationId, listState, collapse, keys) else null
   val peekState = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -166,10 +170,14 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         ) {
           val sections = DetailSections(this, collapse, listState, assessmentOrder, keys)
           sections.item(key = "header") {
-            DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null) {
+            DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
                 RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+                val report = validationResult
+                if (validationRow && item.lifecycle != Lifecycle.Active && !report.isNullOrBlank()) {
+                  SbButton("Copy report", { onAction(DetailAction.Copy(report)) })
+                }
               }
             }
           }
@@ -177,10 +185,10 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (view.pausePending) sections.item(key = "pause-notice") {
             Column(Modifier.padding(top = DocBlockGap)) { Hint("Pause recorded. The goal pauses at its next checkpoint.", FeedbackTone.Info, LucideIcons.pause) }
           }
-          if (item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
+          if (!validationRow && item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, onAction, qaView, scrollToFinding)
+          sections.document(state, view, onAction, qaView, scrollToFinding, validationPage)
         }
       }
       DetailPeek(
@@ -209,7 +217,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
 }
 
 /** HANDOFF 9.2 item 7, with the operator decision notice inside it; a decision with no incident gets its own section. */
-private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val incident = detail?.incident
   val decision: @Composable () -> Unit = {
@@ -225,7 +233,7 @@ private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, 
 }
 
 /** Detail sections with Activity last; placeholders hold their place until the first read lands. */
-private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit) {
+internal fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, validationPage: ValidationPageState? = null) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -235,6 +243,10 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
     }
     is SectionsUi.Loaded -> {
       val detail = sections.detail
+      if (validationPage != null) {
+        validationDocument(state, view, detail, validationPage, onAction)
+        return
+      }
       if (qaView != null) {
         qaDocument(state, view, detail, qaView, onAction, onOpenFinding)
         return

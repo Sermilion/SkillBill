@@ -38,9 +38,11 @@ import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
+import skillbill.infrastructure.sqlite.workflow.featuretask.validation.StandaloneValidationBranchReads
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
+import skillbill.ports.idestatus.StandaloneValidationBranchRepository
 import skillbill.ports.idestatus.StandaloneValidationCheckRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -69,7 +71,8 @@ internal class StandalonePhaseStatusStore(
   private val diagnostics: RuntimeDiagnostics,
   private val transactionActive: Boolean,
 ) : StandalonePhaseStatusRepository,
-  StandaloneValidationCheckRepository by StandaloneValidationCheckStore(connection, diagnostics, transactionActive) {
+  StandaloneValidationCheckRepository by StandaloneValidationCheckStore(connection, diagnostics, transactionActive),
+  StandaloneValidationBranchRepository by StandaloneValidationBranchReads(connection) {
   override fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       registerInTransaction(request)

@@ -191,6 +191,7 @@ data class StandalonePhaseStatusRecord(
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500
+const val VALIDATION_BRANCH_RUN_LIMIT: Int = 50
 
 enum class StandaloneEligibleSlice { LIVE, SETTLED }
 

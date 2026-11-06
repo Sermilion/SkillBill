@@ -98,6 +98,21 @@ data class Detail(
   val currentSubtaskId: Int? = null,
   val goalWorktree: GoalWorktree? = null,
   val launchWarning: String? = null,
+  val currentActivity: String? = null,
+  val validationBranchRuns: List<ValidationBranchRun> = emptyList(),
+  val selectedValidationResult: String? = null,
+)
+
+data class ValidationBranchRun(
+  val invocationId: String,
+  val runSequence: String,
+  val lifecycle: Lifecycle,
+  val startedAt: Instant,
+  val finishedAt: Instant?,
+  val activeDurationMs: Long?,
+  val agent: String?,
+  val currentActivity: String?,
+  val result: String?,
 )
 
 data class WorkSubtask(

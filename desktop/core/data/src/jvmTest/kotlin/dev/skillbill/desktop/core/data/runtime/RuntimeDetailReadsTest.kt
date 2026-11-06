@@ -27,6 +27,7 @@ import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.model.EnvironmentContext
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
+import skillbill.ports.idestatus.model.StandaloneNarrowWriteResult
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
@@ -47,6 +48,60 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class RuntimeDetailReadsTest {
+  @Test
+  fun `validation detail includes only validation runs from its branch and maps current activity`() {
+    runBlocking {
+      val root = Files.createTempDirectory("runtime-validation-branch-runs")
+      val sessionJob = SupervisorJob()
+      val database = root.resolve("work.db")
+      val runtime = RuntimeComponent::class.create(
+        RuntimeContext(
+          EnvironmentContext(database.toString(), environment = mapOf("SKILL_BILL_TEST" to "1"), userHome = root, repositoryRoot = root),
+          TransportContext(), WorkflowOpsContext(), OptionalCallbacks(),
+        ),
+      )
+      try {
+        val now = Instant.parse("2026-01-01T00:00:00Z")
+        val repositoryIdentity = runtime.repositoryEnclosingRootPort.repositoryIdentity(root)
+        runtime.databaseSession.transaction { unit ->
+          listOf(
+            "validation-a1" to "branch-a",
+            "validation-a2" to "branch-a",
+            "validation-b1" to "branch-b",
+            "review-a1" to "branch-a",
+          ).mapIndexed { index, (invocation, branch) ->
+            unit.standalonePhaseStatuses.register(
+              StandalonePhaseStatusRegistration(
+                repositoryIdentity, branch, "SKILL-508", null, invocation,
+                if (invocation.startsWith("review")) "review" else "validation",
+                "$invocation-execution", "active", "validation", now.plusSeconds(index.toLong()),
+                "$invocation-owner", 1, Instant.parse("9999-01-01T00:00:00Z"), launchAgentId = "agent-$invocation",
+              ),
+            )
+          }
+        }
+        runtime.databaseSession.transaction { unit ->
+          assertEquals(
+            StandaloneNarrowWriteResult.WRITTEN,
+            unit.standalonePhaseStatuses.writeCurrentActivity("validation-a2", "Reading reports"),
+          )
+        }
+        val holder = SessionSelectionHolder().apply {
+          choose(SessionSelection(1, database.toString(), null, kotlinx.coroutines.CoroutineScope(sessionJob + Dispatchers.IO)))
+        }
+        val reads = RuntimeReads(runtime, holder, DatabaseDispatcher(), DiagnosticsSwitch(false), NoopDiagnostics)
+        val detailReads = RuntimeDetailReads(reads, runtime, NoopDiagnostics, holder.selection.id)
+        val loaded = assertIs<DetailRead.Loaded>(detailReads.first("validation-a2"))
+        assertEquals(listOf("validation-a2", "validation-a1"), loaded.sections.detail.validationBranchRuns.map { it.invocationId })
+        assertEquals("Reading reports", loaded.sections.detail.currentActivity)
+      } finally {
+        sessionJob.cancel()
+        runtime.databaseReadConnections.release()
+        Files.walk(root).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+      }
+    }
+  }
+
   @Test
   fun `detail read returns runtime run options for the loaded item`() {
     runBlocking {
