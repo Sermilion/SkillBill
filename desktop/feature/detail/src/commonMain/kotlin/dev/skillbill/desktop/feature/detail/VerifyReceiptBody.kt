@@ -8,16 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.SbButton
-import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.domain.model.VerifyFlagAudit
@@ -28,7 +22,6 @@ import dev.skillbill.desktop.core.domain.model.VerifyCompletenessAudit
 
 @Composable
 internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
-  val hasStructuredOutput = !receipt.skipReason.isNullOrBlank() || !receipt.flagName.isNullOrBlank() || !receipt.pattern.isNullOrBlank() || !receipt.issues.isNullOrBlank() || receipt.checks.isNotEmpty()
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     receipt.skipReason?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Skipped", it) }
     receipt.flagName?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Flag", it) }
@@ -40,14 +33,14 @@ internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
         BasicText(check.text, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
       }
     }
-    VerifyRawFindings(receipt.findings, hasStructuredOutput)
+    VerifyRawFindings(receipt.findings)
   }
 }
 
 @Composable
 internal fun VerifyReviewReceipt(receipt: VerifyReviewSection, leading: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}) {
   if (receipt.items.isNotEmpty()) receipt.items.forEach { finding -> VerifyFindingRow(finding) { leading(finding) } }
-  VerifyRawFindings(receipt.findings, hasStructuredOutput = receipt.items.isNotEmpty())
+  VerifyRawFindings(receipt.findings)
 }
 
 @Composable
@@ -69,7 +62,6 @@ internal fun VerifyFindingRow(finding: dev.skillbill.desktop.core.domain.model.V
 
 @Composable
 internal fun VerifyTestValueReceipt(receipt: VerifyUnitTestValue, leading: @Composable (Int, VerifyTestValueRow) -> Unit = { _, _ -> }) {
-  val hasStructuredOutput = !receipt.skipReason.isNullOrBlank() || !receipt.overall.isNullOrBlank() || !receipt.summary.isNullOrBlank() || receipt.rows.isNotEmpty() || receipt.keep.isNotEmpty() || receipt.rewrite.isNotEmpty() || receipt.delete.isNotEmpty() || receipt.missingCases.isNotEmpty()
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     receipt.skipReason?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Skipped", it) }
     receipt.overall?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Overall", it) }
@@ -79,7 +71,7 @@ internal fun VerifyTestValueReceipt(receipt: VerifyUnitTestValue, leading: @Comp
     VerifyTestPlanGroup("Rewrite", receipt.rewrite)
     VerifyTestPlanGroup("Delete", receipt.delete)
     VerifyTestPlanGroup("Add (missing cases)", receipt.missingCases)
-    VerifyRawFindings(receipt.findings, hasStructuredOutput)
+    VerifyRawFindings(receipt.findings)
   }
 }
 
@@ -107,7 +99,7 @@ internal fun VerifyTestRow(row: VerifyTestValueRow, leading: @Composable () -> U
 @Composable
 internal fun VerifyCompletenessReceipt(receipt: VerifyCompletenessAudit, onScrollToSection: (String) -> Unit) {
   receipt.verdict?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Verdict", it) }
-  VerifyRawFindings(receipt.findings, hasStructuredOutput = !receipt.verdict.isNullOrBlank() || receipt.grades.isNotEmpty())
+  VerifyRawFindings(receipt.findings)
   BasicText(
     "View criteria",
     Modifier.clickable(role = Role.Button, onClickLabel = "View criteria", onClick = { onScrollToSection(VERIFY_CRITERIA_KEY) }).padding(vertical = 4.dp),
@@ -132,14 +124,7 @@ private fun VerifyReceiptField(label: String, value: String) {
 }
 
 @Composable
-private fun VerifyRawFindings(findings: List<String>, hasStructuredOutput: Boolean = false) {
+private fun VerifyRawFindings(findings: List<String>) {
   val visibleFindings = findings.filter { it.isNotBlank() }
-  if (visibleFindings.isEmpty()) return
-  if (hasStructuredOutput) {
-    var expanded by rememberSaveable(visibleFindings) { mutableStateOf(false) }
-    SbButton(if (expanded) "Hide original findings" else "Show original findings", { expanded = !expanded }, variant = SbButtonVariant.Ghost)
-    if (expanded) visibleFindings.forEach { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)) }
-  } else {
-    visibleFindings.forEach { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)) }
-  }
+  visibleFindings.forEach { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2)) }
 }

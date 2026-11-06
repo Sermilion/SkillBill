@@ -19,7 +19,7 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalTestApi::class)
 class VerifyReceiptBodyTest {
   @Test
-  fun `completeness receipt exposes unparsed findings with a verdict`() = runComposeUiTest {
+  fun `completeness receipt shows unparsed findings with a verdict`() = runComposeUiTest {
     var target = ""
     val unparsed = "Audit note without a grade line"
     setContent {
@@ -29,14 +29,13 @@ class VerifyReceiptBodyTest {
     }
 
     onNodeWithText("Verdict:").assertExists()
-    onNodeWithText("Show original findings").performClick()
     onNodeWithText(unparsed).assertExists()
     onNodeWithText("View criteria").performClick()
     assertEquals(VERIFY_CRITERIA_KEY, target)
   }
 
   @Test
-  fun `completeness receipt exposes unparsed lines beside parsed grades`() = runComposeUiTest {
+  fun `completeness receipt shows unparsed lines beside parsed grades`() = runComposeUiTest {
     val gradeLine = "[PASS] #1: Required behavior works"
     val extraLine = "Additional operator detail"
     setContent {
@@ -47,13 +46,14 @@ class VerifyReceiptBodyTest {
       }
     }
 
-    onNodeWithText("Show original findings").performClick()
+    onNodeWithText("Verdict:").assertExists()
+    onNodeWithText("View criteria").assertExists()
     onNodeWithText(gradeLine).assertExists()
     onNodeWithText(extraLine).assertExists()
   }
 
   @Test
-  fun `partially parsed flag audit exposes original findings and keeps checks`() = runComposeUiTest {
+  fun `partially parsed flag audit shows original findings and keeps checks`() = runComposeUiTest {
     val raw = "Additional flag audit details"
     setContent {
       SkillBillTheme(reducedMotion = true) {
@@ -62,12 +62,11 @@ class VerifyReceiptBodyTest {
     }
 
     onNodeWithText("Flag is declared").assertExists()
-    onNodeWithText("Show original findings").performClick()
     onNodeWithText(raw).assertExists()
   }
 
   @Test
-  fun `partially parsed review exposes original findings and keeps finding row`() = runComposeUiTest {
+  fun `partially parsed review shows original findings and keeps finding row`() = runComposeUiTest {
     val raw = "More review context that was not parsed"
     setContent {
       SkillBillTheme(reducedMotion = true) {
@@ -78,12 +77,11 @@ class VerifyReceiptBodyTest {
     }
 
     onNodeWithText("Parsed finding description").assertExists()
-    onNodeWithText("Show original findings").performClick()
     onNodeWithText(raw).assertExists()
   }
 
   @Test
-  fun `partially parsed unit test value exposes original findings and keeps rows`() = runComposeUiTest {
+  fun `partially parsed unit test value shows original findings and keeps rows`() = runComposeUiTest {
     val raw = "Additional test value rationale"
     setContent {
       SkillBillTheme(reducedMotion = true) {
@@ -96,7 +94,6 @@ class VerifyReceiptBodyTest {
     }
 
     onNodeWithText("Catches malformed input").assertExists()
-    onNodeWithText("Show original findings").performClick()
     onNodeWithText(raw).assertExists()
   }
 }
