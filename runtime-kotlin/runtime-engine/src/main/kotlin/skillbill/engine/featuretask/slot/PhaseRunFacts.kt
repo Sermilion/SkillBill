@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 
 internal fun PhaseRun.stepFacts(
@@ -25,6 +26,13 @@ internal fun PhaseRun.stepFacts(
     attempt = attempt,
     observeLaunch = true,
     briefingText = "",
+    liveChecks =
+      request.validationCheckInvocationId?.let { invocationId ->
+        PhaseLiveChecksLaunch(
+          invocationId,
+          SupportedAgent.fromWireOrNull(resolvedAgent.resolvedAgentId)?.loadsRuntimeMcpHeadless == true,
+        )
+      },
   )
 }
 

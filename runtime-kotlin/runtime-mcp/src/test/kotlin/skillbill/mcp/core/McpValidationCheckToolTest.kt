@@ -3,6 +3,7 @@ package skillbill.mcp.core
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.persistence.RuntimeMcpEnvironmentKeys
 import skillbill.contracts.system.UpdateCheckPayloadKeys
+import skillbill.mcp.featuretask.VALIDATION_CHECK_PROTOCOL
 import skillbill.mcp.featuretask.ValidationCheckPayloadKeys
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.callToolError
@@ -12,7 +13,12 @@ import skillbill.mcp.shared.fieldMap
 import skillbill.mcp.shared.properties
 import skillbill.mcp.shared.schemaFor
 import skillbill.mcp.shared.toolNamedOrNull
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.idestatus.model.LiveChecksAvailability
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -54,6 +60,55 @@ class McpValidationCheckToolTest {
     )
   }
 
+  @Test
+  fun `initialize marks a live validation run available and leaves a finished run unchanged`() {
+    val plain = context(emptyMap())
+    assertNull(initialize(plain)["instructions"])
+
+    val live = context(mapOf(RuntimeMcpEnvironmentKeys.VALIDATION_INVOCATION_ID to RUN))
+    val database = live.runtimeComponent().databaseSession
+    register(database, RUN, lifecycleState = "active")
+    assertEquals(VALIDATION_CHECK_PROTOCOL, initialize(live)["instructions"])
+    assertEquals(LiveChecksAvailability.AVAILABLE, liveChecks(database, RUN))
+
+    val settled = context(mapOf(RuntimeMcpEnvironmentKeys.VALIDATION_INVOCATION_ID to SETTLED))
+    val settledDatabase = settled.runtimeComponent().databaseSession
+    register(settledDatabase, SETTLED, lifecycleState = "terminal")
+    assertEquals(VALIDATION_CHECK_PROTOCOL, initialize(settled)["instructions"])
+    assertNull(liveChecks(settledDatabase, SETTLED))
+  }
+
+  private fun initialize(context: McpRuntimeContext): Map<*, *> =
+    decodeResponse(
+      McpStdioServer.handleLine(
+        """{"jsonrpc":"2.0","id":"init","method":"initialize","params":{}}""",
+        context.mcpComponent(),
+      ),
+    ).fieldMap("result")
+
+  private fun liveChecks(
+    database: DatabaseSessionFactory,
+    invocationId: String,
+  ): LiveChecksAvailability? = database.read { it.standalonePhaseStatuses.readByInvocation(invocationId)?.liveChecks }
+
+  private fun register(
+    database: DatabaseSessionFactory,
+    invocationId: String,
+    lifecycleState: String,
+  ) {
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo", branchCorrelation = "main", issueKey = null, workflowId = null,
+          invocationId = invocationId, phaseId = SkeletonDefinition.VALIDATION.id,
+          executionId = "execution-$invocationId", lifecycleState = lifecycleState,
+          currentStep = SkeletonDefinition.VALIDATION.id, startedAt = Instant.EPOCH, leaseOwner = "owner",
+          leaseGeneration = 1, leaseExpiresAt = Instant.EPOCH.plusSeconds(3600),
+        ),
+      )
+    }
+  }
+
   private fun context(extra: Map<String, String>): McpRuntimeContext {
     val tempDir = Files.createTempDirectory("skillbill-mcp-validation-check")
     return McpRuntimeContext(environment = disabledTelemetryEnvironment(tempDir) + extra, userHome = tempDir)
@@ -69,5 +124,7 @@ class McpValidationCheckToolTest {
 
   private companion object {
     const val TOOL = "validation_check"
+    const val RUN = "validation-run"
+    const val SETTLED = "settled-run"
   }
 }

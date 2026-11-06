@@ -27,6 +27,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaOutco
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readReviewRunId
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.StandaloneValidationCheckStore
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.VALIDATION_OUTCOME_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readLiveChecks
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.readValidationOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.writeStandaloneQaChecklist
@@ -400,7 +401,7 @@ internal class StandalonePhaseStatusStore(
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
           terminal_result = ?, accepted_result = ?,
           $MONITOR_CLEANUP_ASSIGNMENTS, $QA_OUTCOME_ASSIGNMENT, $QA_REPORT_TEXT_ASSIGNMENT, $QA_DETAILS_ASSIGNMENT,
-          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT
+          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT, $VALIDATION_OUTCOME_ASSIGNMENT
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -424,6 +425,7 @@ internal class StandalonePhaseStatusStore(
               request.qaDetails?.let(::encodeQaDetails),
               request.planReport.columnValue(),
               request.reviewRunId,
+              request.validationOutcome?.wireValue,
               request.executionId,
               request.expectedRevision,
               request.leaseOwner,

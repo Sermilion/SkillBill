@@ -15,10 +15,12 @@ import skillbill.engine.featuretask.slot.PhaseStepStdout
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.engine.featuretask.validation.check.ValidationLiveChecks
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
@@ -36,6 +38,7 @@ import kotlin.time.Duration.Companion.minutes
 public class DefaultPhaseRunner(
   private val launcher: GoalRunnerSubtaskLauncher,
   private val gitOperations: WorkflowGitOperations,
+  private val liveChecks: ValidationLiveChecks? = null,
 ) : PhaseRunner {
   override fun run(
     input: PhaseStepInput,
@@ -69,6 +72,7 @@ public class DefaultPhaseRunner(
     session: PhaseStepSession,
   ): PhaseStepOutput {
     val step = input.stepName
+    markLiveChecks(input)
     val outcome = session.execute(launchRequest(input, state))
     if (outcome is AgentRunLaunchFacts) {
       state.recordTokenUsage(step, estimateTokens(input.facts.briefingText), estimateTokens(outcome.stdout))
@@ -96,6 +100,7 @@ public class DefaultPhaseRunner(
     session: PhaseStepSession,
   ): PhaseStepOutput {
     val input = state.prepareLaunch(unprepared) ?: return preparationRejected(unprepared.stepName)
+    markLiveChecks(input)
     val outcome = session.execute(launchRequest(input, state))
     return launched(outcome, null, PhaseSettledEnvelopeRead.None, classify(input, outcome))
   }
@@ -112,6 +117,7 @@ public class DefaultPhaseRunner(
       } else {
         PhaseLaunchObservation(AgentRunActivityStampSink.NONE, AgentRunWorktreeEditObserver.NONE)
       }
+    val liveChecksInvocation = facts.liveChecks?.takeIf { it.agentCapable }?.invocationId
     return GoalRunnerSubtaskLaunchRequest(
       invokedAgentId = facts.invokedAgentId,
       configuredAgentOverrideId = facts.configuredAgentOverrideId,
@@ -137,8 +143,14 @@ public class DefaultPhaseRunner(
           progressEmitter =
             observation.progressEmitter?.let { callback -> AgentRunProgressEmitter(callback) }
               ?: AgentRunProgressEmitter.NONE,
+          validationCheckInvocationId = liveChecksInvocation,
+          mcpStartupProbe = liveChecksInvocation?.let { liveChecks?.startupProbe(it) } ?: AgentRunMcpStartupProbe.NONE,
         ),
     )
+  }
+
+  private fun markLiveChecks(input: PhaseStepInput) {
+    input.facts.liveChecks?.let { liveChecks?.beforeLaunch(it.invocationId, it.agentCapable) }
   }
 
   private fun composePrompt(input: PhaseStepInput): String {

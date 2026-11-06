@@ -403,7 +403,9 @@ public class PhaseRunEntry(
         ?.let { FeatureTaskRuntimeResolvedBranch(branch = it.worktree.branch, baseBranch = it.target.base.ref) }
         ?: plans.currentBranch(request)
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
-    val resolutionFacts = InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context)
+    val liveChecksInvocation = invocationId.takeIf { standaloneValidation(request, definition, workflowId) }
+    val resolutionFacts =
+      InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context, liveChecksInvocation)
     val executionPlan =
       acceptedExecutionPlan?.let { encoded ->
         plans.validateGoalQualityExecutionPlan(encoded, request.definitionId, request.invokedAgentId)
@@ -415,6 +417,7 @@ public class PhaseRunEntry(
         intake,
         workflowId,
         standalone?.context,
+        liveChecksInvocation,
       )
     if (expectedBranch != null && branch?.branch != expectedBranch) {
       return PhaseRunResult.Blocked(
@@ -544,6 +547,17 @@ public class PhaseRunEntry(
   ): List<String> {
     return stepIds.mapNotNull { id -> records.loadPhaseRecords("")[id]?.outputArtifact?.takeIf(String::isNotBlank) }
   }
+
+  private fun standaloneValidation(
+    request: PhaseRunRequest,
+    definition: SkeletonDefinition,
+    workflowId: String,
+  ): Boolean =
+    definition.reportsLiveChecks &&
+      workflowId.isEmpty() &&
+      request.goalQualityPhaseProgress == null &&
+      request.acceptedGoalQualityPlanText == null &&
+      request.goalQualityInvocationId == null
 }
 
 private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"

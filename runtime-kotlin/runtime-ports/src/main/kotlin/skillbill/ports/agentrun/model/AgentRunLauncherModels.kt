@@ -48,10 +48,14 @@ data class SkillRunRequest(
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
   val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
+  val validationCheckInvocationId: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
     promptOverride?.let { prompt -> require(prompt.isNotBlank()) { "promptOverride must be non-blank when provided." } }
+    validationCheckInvocationId?.let { id ->
+      require(id.isNotBlank()) { "validationCheckInvocationId must be non-blank when provided." }
+    }
     modelOverride?.let { model -> require(model.isNotBlank()) { "modelOverride must be non-blank when provided." } }
     effortOverride?.let { effort -> require(effort.isNotBlank()) { "effortOverride must be non-blank when provided." } }
     subtaskId?.let { id -> require(id > 0) { "subtaskId must be positive when provided." } }

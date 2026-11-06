@@ -5,6 +5,7 @@ import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
+import skillbill.engine.featuretask.validation.check.readValidationOutcome
 import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
@@ -17,6 +18,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneValidationOutcome
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
@@ -26,6 +28,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvai
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
 import skillbill.workflow.taskruntime.model.qa.QaRunDetails
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 import java.time.Clock
 import java.time.Duration
@@ -52,6 +55,7 @@ public class StandalonePhaseStatusEventSink(
   private var qaDetails: QaRunDetails? = null
   private var planReport: StandalonePlanReport? = null
   private var reviewRunId: String? = null
+  private var validationOutcome: StandaloneValidationOutcome? = null
 
   internal fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
     monitorCleanup = cleanup
@@ -100,6 +104,7 @@ public class StandalonePhaseStatusEventSink(
           qaReportText = result.qaReportText
           qaDetails = result.qaDetails
           reviewRunId = result.reviewRunId
+          captureValidationOutcome()
           persist(
             state = "terminal",
             finishedAt = clock.instant(),
@@ -109,6 +114,7 @@ public class StandalonePhaseStatusEventSink(
         }
         is PhaseRunResult.Blocked -> {
           val providerLimitPause = FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(result.reason)
+          if (!providerLimitPause) captureValidationOutcome()
           persist(
             state = if (providerLimitPause) "paused" else "blocked",
             finishedAt = null,
@@ -246,6 +252,19 @@ public class StandalonePhaseStatusEventSink(
     }
   }
 
+  private fun captureValidationOutcome() {
+    val current = registered?.takeIf { SkeletonDefinition.reportsLiveChecksOf(it.phaseId) } ?: return
+    catchingNonCancellation { database.readValidationOutcome(current.invocationId) }
+      .onSuccess { validationOutcome = it }
+      .onFailure { error ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "IDE status validation outcome derivation failed",
+          error,
+        )
+      }
+  }
+
   private fun persist(
     state: String,
     finishedAt: Instant?,
@@ -280,6 +299,7 @@ public class StandalonePhaseStatusEventSink(
             qaDetails = qaDetails,
             planReport = planReport,
             reviewRunId = reviewRunId,
+            validationOutcome = validationOutcome,
           ),
         )
       }

@@ -38,6 +38,12 @@ public data class PhaseStepFacts(
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
   val additionalWritableDirectories: List<Path> = emptyList(),
   val agentWorkingDirectory: Path? = null,
+  val liveChecks: PhaseLiveChecksLaunch? = null,
+)
+
+public data class PhaseLiveChecksLaunch(
+  val invocationId: String,
+  val agentCapable: Boolean,
 )
 
 public data class PhaseStepOutput(

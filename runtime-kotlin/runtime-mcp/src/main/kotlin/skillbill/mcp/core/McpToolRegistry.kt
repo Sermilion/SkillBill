@@ -3,6 +3,7 @@ package skillbill.mcp.core
 import skillbill.application.telemetry.validation.featureVerifyCompletionStatuses
 import skillbill.application.telemetry.validation.qualityCheckResults
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.mcp.featuretask.VALIDATION_CHECK_PROTOCOL
 import skillbill.mcp.featuretask.featureTaskPhaseBlock
 import skillbill.mcp.featuretask.featureTaskPhaseComplete
 import skillbill.mcp.featuretask.validationCheck
@@ -112,11 +113,7 @@ internal object McpToolRegistry {
       ),
       McpTool(
         name = "validation_check",
-        description =
-          "Report one validation check of the running validation phase. Call planned once per check before " +
-            "running any check. Call started right before you run a check and finished with its outcome right " +
-            "after it ends. Report a check you will not run as finished with outcome skipped, without a start. " +
-            "Never send times; the runtime records them. Keep check_id the same for every event of one check.",
+        description = VALIDATION_CHECK_PROTOCOL,
         handler = ::validationCheck,
         advertised = { component -> validationCheckInvocationId(component) != null },
       ),

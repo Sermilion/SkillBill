@@ -12,6 +12,7 @@ import skillbill.application.workflow.service.WorkflowService
 import skillbill.di.core.RuntimeComponent
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.validation.check.ValidationCheckRecorder
+import skillbill.engine.featuretask.validation.check.ValidationLiveChecks
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.scaffold.ScaffoldGateway
@@ -33,6 +34,7 @@ internal abstract class McpComponent(
   abstract val updateCheckService: UpdateCheckService
   abstract val featureTaskPhaseSettlementService: FeatureTaskPhaseSettlementService
   abstract val validationCheckRecorder: ValidationCheckRecorder
+  abstract val validationLiveChecks: ValidationLiveChecks
   abstract val scaffoldGateway: ScaffoldGateway
   abstract val resolvedEnvironmentContext: EnvironmentContext
   abstract val clock: Clock

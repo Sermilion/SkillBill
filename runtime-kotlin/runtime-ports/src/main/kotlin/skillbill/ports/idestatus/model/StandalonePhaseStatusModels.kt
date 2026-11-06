@@ -137,6 +137,7 @@ data class StandalonePhaseStatusUpdate(
   val planReport: StandalonePlanReport? = null,
   val reviewRunId: String? = null,
   val qaDetails: QaRunDetails? = null,
+  val validationOutcome: StandaloneValidationOutcome? = null,
 )
 
 enum class StandalonePhaseStatusUpdateResult {

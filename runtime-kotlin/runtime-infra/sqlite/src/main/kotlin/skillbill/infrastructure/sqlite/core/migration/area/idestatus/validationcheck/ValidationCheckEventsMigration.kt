@@ -15,6 +15,9 @@ internal const val LIVE_CHECKS_COLUMN: String = "live_checks"
 
 internal const val VALIDATION_OUTCOME_COLUMN: String = "validation_outcome"
 
+internal const val VALIDATION_OUTCOME_ASSIGNMENT: String =
+  "$VALIDATION_OUTCOME_COLUMN = COALESCE(?, $VALIDATION_OUTCOME_COLUMN)"
+
 internal fun recordValidationCheckEvents(connection: Connection) {
   val events = ValidationCheckEvent.entries.joinToString { "'${it.wireValue}'" }
   val outcomes = ValidationCheckOutcome.entries.joinToString { "'${it.wireValue}'" }

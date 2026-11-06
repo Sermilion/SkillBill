@@ -140,6 +140,7 @@ public data class InMemoryPhaseRunFacts(
   val intake: PhaseRunIntake,
   override val workflowId: String = "",
   override val monitorExecution: MonitorExecutionContext? = null,
+  override val validationCheckInvocationId: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null
   override val activityParentWorkflowId: String? = null

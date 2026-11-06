@@ -11,6 +11,12 @@ import skillbill.mcp.shared.McpToolPayloadKeys
 import skillbill.ports.idestatus.model.ValidationCheckEvent
 import skillbill.ports.idestatus.model.ValidationCheckOutcome
 
+internal const val VALIDATION_CHECK_PROTOCOL: String =
+  "Report one validation check of the running validation phase. Call planned once per check before " +
+    "running any check. Call started right before you run a check and finished with its outcome right " +
+    "after it ends. Report a check you will not run as finished with outcome skipped, without a start. " +
+    "Never send times; the runtime records them. Keep check_id the same for every event of one check."
+
 internal fun validationCheckInvocationId(component: McpComponent): String? =
   component.resolvedEnvironmentContext.environment[RuntimeMcpEnvironmentKeys.VALIDATION_INVOCATION_ID]
     ?.takeIf(String::isNotBlank)
