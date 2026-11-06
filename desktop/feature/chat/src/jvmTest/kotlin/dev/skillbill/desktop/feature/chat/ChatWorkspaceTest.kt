@@ -5,9 +5,11 @@ import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
-import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
+import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -30,6 +32,7 @@ import dev.skillbill.desktop.core.testing.FakeExecutionChatRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.FakeWorkDetailRepository
 import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
@@ -96,6 +99,102 @@ class ChatWorkspaceTest {
     assertEquals("operator draft", draft.text)
     assertEquals(NewTaskRepository("/verified/repo", "repo"), draft.repository)
     assertEquals("feature/verify", draft.baseBranch)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `goal intake rejects an empty composer when a conversation exists for the same or another repository`() = runTest {
+    val draft = NewTaskDraft(
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+    ).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/existing/repo", "repo")
+      baseBranch = "existing-branch"
+      agentId = "claude"
+      selectedAgent = ChatAgent("claude", null, null)
+    }
+    val workspace = workspace(draft)
+    draft.text = "unrelated existing work"
+    draft.send()
+    runCurrent()
+    draft.text = ""
+    val conversation = draft.chat.value!!
+    val transcript = conversation.thread.transcript.value
+    val sessionId = conversation.sessionId
+
+    assertFalse(workspace.prefillGoalIntake("/existing/repo", "verify-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository("/existing/repo", "repo"), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals(sessionId, draft.chat.value?.sessionId)
+    assertEquals(transcript, conversation.thread.transcript.value)
+
+    assertFalse(workspace.prefillGoalIntake("/other/repo", "other-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository("/existing/repo", "repo"), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals(sessionId, draft.chat.value?.sessionId)
+    assertEquals(transcript, conversation.thread.transcript.value)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `goal intake rejects an empty composer while its conversation turn is active`() = runTest {
+    chat.events = { flow { awaitCancellation() } }
+    val draft = NewTaskDraft(
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+    ).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+      repository = NewTaskRepository("/existing/repo", "repo")
+      baseBranch = "existing-branch"
+      agentId = "claude"
+      selectedAgent = ChatAgent("claude", null, null)
+    }
+    val workspace = workspace(draft)
+    draft.text = "unrelated active work"
+    draft.send()
+    runCurrent()
+    draft.text = ""
+    val conversation = draft.chat.value!!
+    val transcript = conversation.thread.transcript.value
+    assertTrue(conversation.thread.busy.value)
+
+    assertFalse(workspace.prefillGoalIntake("/other/repo", "verify-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository("/existing/repo", "repo"), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals(transcript, conversation.thread.transcript.value)
+    assertTrue(conversation.thread.busy.value)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `goal intake rejects an empty composer when a conversation has been resumed`() = runTest {
+    val draft = NewTaskDraft(
+      chat, controls, testDatabaseSessionController(), ToastQueue(), WindowCoroutineScope(backgroundScope), clock,
+    ).apply {
+      chatDispatcher = StandardTestDispatcher(testScheduler)
+    }
+    val workspace = workspace(draft)
+    val saved = ChatHistoryEntry(
+      sessionId = "resumed-session",
+      executionId = null,
+      agent = ChatAgent("claude", null, null),
+      updatedAt = clock.now(),
+      title = "Existing work",
+      lines = listOf(ChatHistoryLine(ChatHistoryRole.Operator, "unrelated existing work")),
+      newTask = ChatNewTaskContext(".", "existing-branch"),
+    )
+    assertTrue(draft.resume(saved))
+    val conversation = draft.chat.value!!
+    val transcript = conversation.thread.transcript.value
+
+    assertFalse(workspace.prefillGoalIntake("/other/repo", "verify-branch", "Verify fixes"))
+    assertEquals("", draft.text)
+    assertEquals(NewTaskRepository(".", "."), draft.repository)
+    assertEquals("existing-branch", draft.baseBranch)
+    assertEquals("resumed-session", draft.chat.value?.sessionId)
+    assertEquals(transcript, conversation.thread.transcript.value)
     workspace.closeAll()
   }
 

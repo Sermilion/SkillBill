@@ -164,7 +164,7 @@ class ChatWorkspace(
   override fun runVerifyFixes(item: WorkItem, brief: String) = actOnItemChat(item, brief)
 
   override fun prefillGoalIntake(repoRoot: String, branch: String, text: String): Boolean {
-    if (newTask.text.isNotBlank()) return false
+    if (newTask.chat.value != null || newTask.text.isNotBlank()) return false
     newTask.text = text
     newTask.repository = dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository(repoRoot, File(repoRoot).name)
     newTask.baseBranch = branch
