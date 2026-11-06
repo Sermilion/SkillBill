@@ -66,6 +66,7 @@ internal fun RunActions(
     }
     // `.t-faint` at `--t-xs`, regular weight.
     if (view.launchNote) BasicText("Starts the installed agent harness", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))
+    if (view.implementationNote) BasicText("Implement turns on when every spec is saved", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))
     view.unavailableReason?.let { Hint(it, FeedbackTone.Warn) }
     if (view.refreshNeeded) Hint(REFRESH_BEFORE_CONTROLS, FeedbackTone.Warn)
   }

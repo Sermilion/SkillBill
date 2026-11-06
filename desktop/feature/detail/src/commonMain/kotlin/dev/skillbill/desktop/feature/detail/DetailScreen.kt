@@ -117,6 +117,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val validationShape = if (validationRow) shapeValidationReport(validationResult) else null
   val validationChecksShown = loaded?.let { currentExecution(item, it.detail)?.let { run -> run.liveChecks && run.validationChecks.isNotEmpty() } } == true
   val validationPage = if (validationRow && loaded != null) rememberValidationPage(validationShape, item.control.invocationId, listState, collapse, keys, validationChecksShown) else null
+  val scrollToVerifySection = rememberVerifySectionScroller(listState, collapse, keys, loaded?.detail?.verifyRun?.workflowId)
   val peekState = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -171,7 +172,13 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         ) {
           val sections = DetailSections(this, collapse, listState, assessmentOrder, keys)
           sections.item(key = "header") {
-            DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow) {
+            val verifyRun = loaded?.detail?.verifyRun
+            if (verifyRun != null) VerifyHeader(verifyRun, onAction) {
+              if (state.sections != SectionsUi.Gone) {
+                val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
+                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+              }
+            } else DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }, qa = if (qaRow) QaHeaderFacts(qaView?.testedCommit, qaView?.criteriaSource) else null, validation = validationRow) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
                 RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
@@ -189,7 +196,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (!validationRow && item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, onAction, qaView, scrollToFinding, validationPage)
+          sections.document(state, view, onAction, qaView, scrollToFinding, validationPage, scrollToVerifySection)
         }
       }
       DetailPeek(
@@ -217,7 +224,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
 }
 
-/** HANDOFF 9.2 item 7, with the operator decision notice inside it; a decision with no incident gets its own section. */
+/** HANDOFF 9.2 item 7, with the operator decision inside it; a decision with no incident gets its own section. */
 internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val incident = detail?.incident
@@ -234,7 +241,7 @@ internal fun DetailSections.incident(state: DetailUiState, view: RunActionsView,
 }
 
 /** Detail sections with Activity last; placeholders hold their place until the first read lands. */
-internal fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, validationPage: ValidationPageState? = null) {
+internal fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, qaView: QaChecklistView?, onOpenFinding: (String) -> Unit, validationPage: ValidationPageState? = null, onScrollToVerifySection: (String) -> Unit = {}) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -250,6 +257,14 @@ internal fun DetailSections.document(state: DetailUiState, view: RunActionsView,
       }
       if (qaView != null) {
         qaDocument(state, view, detail, qaView, onAction, onOpenFinding)
+        return
+      }
+      if (item.isStandalonePlan()) {
+        planDocument(item, detail, state, view, onAction)
+        return
+      }
+      detail.verifyRun?.let { run ->
+        verifyDocument(state, run, onAction, onScrollToVerifySection)
         return
       }
       // HANDOFF 9.2 order: the incident (item 7) comes before the metrics (item 8).

@@ -47,6 +47,7 @@ import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.newtask.IssuePrefixPicker
+import java.io.File
 import java.io.IOException
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
@@ -150,7 +151,10 @@ internal fun ChatComposer(
         visualTransformation = CommandHighlight(SkillBillTheme.colors),
       )
       choices?.let { saved ->
-        ResumePicker(saved, workspace.now(), { workspace.resume(id, it) }, { workspace.dismissResume(id) })
+        ResumePalette(
+          saved, workspace.now(), ResumeScope(session.item.branch ?: File(session.item.checkoutRoot).name, worktree = true),
+          { session.item.branch }, focus, { workspace.resume(id, it) }, { workspace.dismissResume(id) },
+        )
       }
     }
     if (images.isNotEmpty()) {

@@ -84,6 +84,7 @@ import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBin
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -284,9 +285,11 @@ private abstract class FeatureTaskRuntimeRunLoopLaunchingStepBinding(
   override fun runAcceptedAgentStep(
     run: PhaseRun,
     call: PhaseStepCall,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
     requireAcceptedAttempt(run, call)
-    return environment.runAcceptedAttemptLoop(run, call)
+    return environment.runAcceptedAttemptLoop(run, call, outputSink, captureStreamOutput)
   }
 }
 

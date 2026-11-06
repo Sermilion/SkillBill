@@ -36,9 +36,11 @@ import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.feature.chat.AgentPicker
 import dev.skillbill.desktop.feature.chat.ChatActivityPill
-import dev.skillbill.desktop.feature.chat.ResumePicker
+import dev.skillbill.desktop.feature.chat.ResumePalette
+import dev.skillbill.desktop.feature.chat.ResumeScope
 import dev.skillbill.desktop.feature.chat.RESUME_COMMAND
 import dev.skillbill.desktop.feature.chat.SendNowGate
+import dev.skillbill.desktop.feature.chat.resumableDrafts
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -102,7 +104,10 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
         onSubmit = { press(true) },
       )
       if (state.resumePickerOpen) {
-        ResumePicker(saved, now(), { onAction(NewTaskAction.ResumeDraft(it)) }, { onAction(NewTaskAction.DismissResume) })
+        ResumePalette(
+          resumableDrafts(saved, draft.repository?.root), now(), ResumeScope(draft.repository?.name, worktree = false),
+          { it.newTask?.baseBranch }, focus, { onAction(NewTaskAction.ResumeDraft(it)) }, { onAction(NewTaskAction.DismissResume) },
+        )
       }
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")

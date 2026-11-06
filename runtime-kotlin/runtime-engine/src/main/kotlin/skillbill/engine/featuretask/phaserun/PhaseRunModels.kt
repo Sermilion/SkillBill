@@ -63,6 +63,7 @@ public data class PhaseRunRequest(
   internal val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null,
   internal val goalQualityInvocationId: String? = null,
   internal val acceptedGoalQualityPlanText: String? = null,
+  public val acceptedGoalQualityAgentId: String? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }

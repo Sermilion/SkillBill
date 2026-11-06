@@ -1,3 +1,13 @@
+## [2026-11-06] Purge validation events without counting or archiving them
+Context: Goal purge removes standalone status rows, while validation events are keyed by invocation. Counted tables must also appear in archive snapshots.
+Decision: Delete events with their status rows, but omit them from purge counts and archive snapshots.
+Reason: Events are a live progress log rather than goal state to restore. Omitting them from counts keeps dry-run and purge counts aligned without adding them to archives, while deletion prevents orphaned rows.
+
+## [2026-11-06] Let phase definitions opt into live checks
+Context: Phase entry and settlement need to identify validation runs without coupling phase execution to a specific definition.
+Decision: The phase definition exposes `reportsLiveChecks`, which validation enables.
+Reason: Phase execution remains definition-agnostic, and another definition can opt in without changing it.
+
 ## [2026-11-06] Advertise validation checks through the started server
 Context: The validation prompt is composed before MCP startup can be observed.
 Decision: A capable standalone launch supplies its invocation identity only to the runtime MCP server. Server initialization marks live checks available and provides the tool protocol.
@@ -12,6 +22,11 @@ Reason: A skipped or unfinished check must not count as passed, and the register
 Context: Standalone validation detail needs peer runs without mixing repositories or branches.
 Decision: Read at most 50 validation runs with the same repository identity and non-null branch correlation. Return no peers for HEAD or missing correlation.
 Reason: A detached or unknown branch cannot identify a stable set of peer runs. The bound limits the detail read.
+
+## [2026-11-06] Key standalone plan output by execution
+Context: A detached standalone plan and a separate detail reader need the same output after process exit. An issue key can identify multiple executions.
+Decision: Store bounded output snapshots under the standalone execution ID in SQLite. The status publisher owns capture and flushes pending output at settlement and close; the status row owns output cleanup.
+Reason: Both processes can resolve the same execution without conflating runs. Bounded snapshots limit retention, and status-linked cleanup avoids orphaned rows.
 
 ## [2026-11-05] Set JVM temp roots at launch
 Context: The JDK snapshots java.io.tmpdir before main, so setting it in the CLI or MCP entry point does not redirect default-root JDK temp calls.

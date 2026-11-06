@@ -28,6 +28,7 @@ import skillbill.engine.featuretask.slot.PhaseStepFailureSource
 import skillbill.engine.featuretask.slot.PhaseUpstreamFailureContinuationHooks
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -87,6 +88,8 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun runPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     args: RunPhaseArgs,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
   ): PhaseOutcome {
     val phaseId = args.phaseId
     val run =
@@ -104,7 +107,7 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
         state = args.state,
         observability = args.observability,
       )?.let { return it }
-    return runPreparedPhase(context, run)
+    return runPreparedPhase(context, run, outputSink, captureStreamOutput)
   }
 
   internal fun phaseDeclarationForRun(
@@ -160,15 +163,19 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun runPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
+    outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+    captureStreamOutput: Boolean = false,
   ): PhaseOutcome {
     val strategy = context.runState.strategyFor(run.phaseId)
-    val dispatch = { prepared: PhaseRun -> dispatchPreparedPhase(context, prepared) }
+    val dispatch = { prepared: PhaseRun -> dispatchPreparedPhase(context, prepared, outputSink, captureStreamOutput) }
     return (strategy as? PhasePreparedRunCapability)?.withPreparedRun(run, dispatch) ?: dispatch(run)
   }
 
   private fun dispatchPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
+    outputSink: AgentRunOutputSink,
+    captureStreamOutput: Boolean,
   ): PhaseOutcome {
     val continuation = BoundFailureContinuation()
     val prepared = run.copy(failureContinuation = continuation)
@@ -176,7 +183,7 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
     return context.runState
       .strategyFor(prepared.phaseId)
       .stepDescriptor(prepared.phaseId)
-      .capture(PreparedPhaseDispatch(context, prepared, continuation))
+      .capture(PreparedPhaseDispatch(context, prepared, continuation), outputSink, captureStreamOutput)
   }
 
   internal fun <T : Any> decideByStep(
@@ -279,7 +286,14 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
     private val stepId: String,
     private val decide: (PhaseBoundLoopRules) -> T?,
   ) : PhaseStepCapture<T?> {
-    override fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): T? {
+    override fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): T? =
+      capture(descriptor, AgentRunOutputSink.NONE, false)
+
+    override fun <B : PhaseAcceptedStepExecution> capture(
+      descriptor: PhaseStepDescriptor<B>,
+      outputSink: AgentRunOutputSink,
+      captureStreamOutput: Boolean,
+    ): T? {
       val rules = descriptor.loopRules ?: return null
       val run =
         buildPhaseRun(
@@ -329,6 +343,12 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
   ) : PhaseStepCapture<PhaseFailureContinuationOutput?> {
     override fun <B : PhaseAcceptedStepExecution> capture(
       descriptor: PhaseStepDescriptor<B>,
+    ): PhaseFailureContinuationOutput? = capture(descriptor, AgentRunOutputSink.NONE, false)
+
+    override fun <B : PhaseAcceptedStepExecution> capture(
+      descriptor: PhaseStepDescriptor<B>,
+      outputSink: AgentRunOutputSink,
+      captureStreamOutput: Boolean,
     ): PhaseFailureContinuationOutput? {
       context.runState.stepBinding.authorizeCoordinatorDispatch(run)
       val state = descriptor.bind(context.bindingFactory(run))
@@ -346,11 +366,18 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
     private val run: PhaseRun,
     private val continuation: BoundFailureContinuation,
   ) : PhaseStepCapture<PhaseOutcome> {
-    override fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): PhaseOutcome {
+    override fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): PhaseOutcome =
+      capture(descriptor, AgentRunOutputSink.NONE, false)
+
+    override fun <B : PhaseAcceptedStepExecution> capture(
+      descriptor: PhaseStepDescriptor<B>,
+      outputSink: AgentRunOutputSink,
+      captureStreamOutput: Boolean,
+    ): PhaseOutcome {
       val state = descriptor.bind(context.bindingFactory(run))
       continuation.hooks = state.boundHooks
       return try {
-        execute(descriptor, state)
+        execute(descriptor, state, outputSink, captureStreamOutput)
       } finally {
         state.finishStepExecution()
         context.runState.stepBinding.releaseCoordinatorDispatch()
@@ -360,9 +387,11 @@ internal object FeatureTaskRuntimeRunLoopPlanningBranch {
     private fun <B : PhaseAcceptedStepExecution> execute(
       descriptor: PhaseStepDescriptor<B>,
       state: B,
+      outputSink: AgentRunOutputSink,
+      captureStreamOutput: Boolean,
     ): PhaseOutcome =
       try {
-        descriptor.execute(run, state)
+        descriptor.execute(run, state, outputSink, captureStreamOutput)
       } catch (error: SkillBillRuntimeException) {
         FeatureTaskRuntimeNonBlockingFailure.settle(
           context.recorder,

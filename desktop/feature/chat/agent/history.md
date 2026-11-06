@@ -1,3 +1,12 @@
+## [2026-11-06] SKILL-509 resume chat palette with preview
+Areas: desktop/feature/chat, desktop/core/designsystem
+- /resume opens a centered filterable palette with a chat preview in New Task and run-chat composers. New Task scopes drafts to the selected repository; run chats retain checkout-scoped choices. The Recent chats home list remains cross-repository.
+- ChatResumeListing handles title cleanup, local calendar-day groups, filtering and the 30-chat default limit. Leading image paths become attachment chips. reusable
+- The preview reads saved lines only; CLI sessions without lines show a message that content loads on resume. Arrow keys select, Enter or double-click resumes, and Esc closes and returns focus.
+- The palette uses a separate Dialog focus owner. LucideIcons.image is available to other UI. reusable
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-05] SKILL-482 two-column repository and branch picker
 Areas: desktop/feature/chat, desktop/core/domain, desktop/core/data, desktop/core/designsystem, desktop/build-logic, runtime-ports, runtime-infra/workflow, runtime-core
 - New Task uses a two-column repository and branch picker. The repository pill becomes static after chat starts; the agent picker retains its existing behavior.

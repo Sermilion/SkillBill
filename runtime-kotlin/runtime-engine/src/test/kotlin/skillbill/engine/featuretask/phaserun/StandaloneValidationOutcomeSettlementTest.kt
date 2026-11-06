@@ -60,9 +60,9 @@ class StandaloneValidationOutcomeSettlementTest {
     events: List<(String, Int) -> ValidationCheckEventRecord>,
   ): StandaloneValidationOutcome? {
     val capture = BlockIncidentCapture(database, clock, InMemoryBlockIncidentSpool(), NoopRuntimeDiagnostics)
-    val base = testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics)
+    val registrations = testStandalonePhaseRegistration(clock, NoopRuntimeDiagnostics)
     val publisher =
-      StandalonePhaseStatusPublisherFactory(database, base.registrations, clock, NoopRuntimeDiagnostics, capture)
+      StandalonePhaseStatusPublisherFactory(database, registrations, clock, NoopRuntimeDiagnostics, capture, null)
         .forPhase(home, SkeletonDefinition.VALIDATION.id, invocationId)
     publisher.publishActivity(SkeletonDefinition.VALIDATION.id, "Running checks")
     database.transaction { unit ->

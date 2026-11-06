@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.baseBranch
@@ -344,6 +345,7 @@ internal fun ideStatusService(
             },
         ),
     )
+  val planReports = testPlanReports(manifestStore)
   val projector =
     IdeStatusProjector(
       workflowSnapshotValidator = snapshotValidator,
@@ -352,13 +354,7 @@ internal fun ideStatusService(
       manifestStore = GoalRunnerManifestProjectionReader(manifestStore),
       diagnostics = NoopRuntimeDiagnostics,
       qaCapabilities = ports.qaCapabilities,
-      planReports =
-        StandalonePlanReportBuilder(
-          manifestStore,
-          TestDecompositionManifestStore,
-          FixedProjectStorePort(ideStatusProjectStoreRoot),
-          NoopRuntimeDiagnostics,
-        ),
+      planReports = planReports,
     )
   val boardProjection = testBoardProjection(projector, ports.repositoryEnclosingRootPort)
   (database as? BoardProjectionCapture)?.accept(boardProjection)
@@ -376,6 +372,14 @@ internal fun ideStatusService(
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
+
+private fun testPlanReports(manifestStore: GoalRunnerManifestStore) =
+  StandalonePlanReportBuilder(
+    manifestStore,
+    TestDecompositionManifestStore,
+    FixedProjectStorePort(ideStatusProjectStoreRoot),
+    NoopRuntimeDiagnostics,
+  )
 
 internal interface BoardProjectionCapture {
   fun accept(projection: WorkBoardItemProjection)
@@ -595,6 +599,7 @@ internal class TrackingDatabase(
   internal val goalPage: WorkGoalSubtaskPage? = null,
   internal val goalPages: ((afterSubtaskId: Int?, limit: Int) -> WorkGoalSubtaskPage?)? = null,
   internal val qaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository(),
+  internal val telemetry: LifecycleTelemetryRepository = RecordingLifecycleTelemetryRepository(),
 ) : DatabaseSessionFactory {
   override fun acquireDatabasePathProtection() =
     DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
@@ -695,8 +700,7 @@ internal class TrackingDatabase(
         get() = error("Not exercised by IdeStatusServiceTest.")
       override val reviews: ReviewRepository
         get() = error("Not exercised by IdeStatusServiceTest.")
-      override val lifecycleTelemetry: LifecycleTelemetryRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
+      override val lifecycleTelemetry: LifecycleTelemetryRepository = telemetry
       override val telemetryReconciliation: TelemetryReconciliationRepository
         get() = error("Not exercised by IdeStatusServiceTest.")
       override val telemetryOutbox: TelemetryOutboxRepository

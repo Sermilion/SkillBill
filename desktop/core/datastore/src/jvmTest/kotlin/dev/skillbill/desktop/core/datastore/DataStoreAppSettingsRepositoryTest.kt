@@ -8,6 +8,8 @@ import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
 import dev.skillbill.desktop.core.domain.settings.FavoriteSpecKey
 import dev.skillbill.desktop.core.domain.settings.FavoriteWorkKey
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
+import dev.skillbill.desktop.core.domain.settings.CriterionMark
+import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -95,5 +97,19 @@ class DataStoreAppSettingsRepositoryTest {
     assertEquals(setOf(work), repository.settings.first().favoriteWork)
     assertTrue("unsupported-spec" in store.data.first()[AppPreferenceKeys.FAVORITE_SPECS].orEmpty())
     assertEquals(Outcome.Success(setOf(key)), repository.favoriteSpecs.first { it is Outcome.Success })
+  }
+
+  @Test
+  fun `criterion marks replace and clear persisted workflow criteria`() = runTest {
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(directory, "criterion-marks.preferences_pb") }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    val key = CriterionMarkKey("verify-1", 3)
+
+    assertEquals(Outcome.Success(Unit), repository.setCriterionMark(key, CriterionMark.NotInRepo))
+    assertEquals(mapOf(key to CriterionMark.NotInRepo), (repository.criterionMarks.first() as Outcome.Success).value)
+    assertEquals(Outcome.Success(Unit), repository.setCriterionMark(key, CriterionMark.SpecQuestion))
+    assertEquals(mapOf(key to CriterionMark.SpecQuestion), (repository.criterionMarks.first() as Outcome.Success).value)
+    assertEquals(Outcome.Success(Unit), repository.setCriterionMark(key, null))
+    assertEquals(emptyMap(), (repository.criterionMarks.first() as Outcome.Success).value)
   }
 }

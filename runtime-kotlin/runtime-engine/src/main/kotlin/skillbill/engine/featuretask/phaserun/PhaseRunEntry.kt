@@ -165,7 +165,7 @@ public class PhaseRunEntry(
       plans.validateGoalQualityExecutionPlan(
         acceptedExecutionPlan,
         request.definitionId,
-        request.invokedAgentId,
+        requireNotNull(request.acceptedGoalQualityAgentId),
       )
     retained.let {
       plans.validateNestedProgressKeys(it)
@@ -408,7 +408,11 @@ public class PhaseRunEntry(
       InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context, liveChecksInvocation)
     val executionPlan =
       acceptedExecutionPlan?.let { encoded ->
-        plans.validateGoalQualityExecutionPlan(encoded, request.definitionId, request.invokedAgentId)
+        plans.validateGoalQualityExecutionPlan(
+          encoded,
+          request.definitionId,
+          requireNotNull(request.acceptedGoalQualityAgentId),
+        )
       } ?: plans.resolveExecutionPlan(request, workflowId, branch, resolutionFacts)
     val facts =
       InMemoryPhaseRunFacts(

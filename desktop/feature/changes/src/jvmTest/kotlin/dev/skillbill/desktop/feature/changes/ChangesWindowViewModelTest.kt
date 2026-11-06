@@ -1,5 +1,17 @@
 package dev.skillbill.desktop.feature.changes
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.ChangeBaseline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangeScopeTimeline
@@ -53,6 +65,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -79,6 +92,33 @@ class ChangesWindowViewModelTest {
     assertEquals(listOf<ChangeScope>(ChangeScope.All), scopes.shown)
   }
 
+  @OptIn(ExperimentalTestApi::class)
+  @Test
+  fun `the review bar buttons work in the changes dialog`() = runComposeUiTest {
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    scopes.list(ChangeScope.All).value = listed(file("src/A.kt"))
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        Dialog({}, DialogProperties(usePlatformDefaultWidth = false)) {
+          Box(Modifier.size(1100.dp, 700.dp)) { ChangesScreen(viewModel, ChangesWindowKeys(), {}) }
+        }
+      }
+    }
+    waitUntil(timeoutMillis = 5_000) { viewModel.state.value.pendingCount == 2 }
+
+    onNodeWithText("Discard all").performMouseInput { click() }
+    waitUntil(timeoutMillis = 5_000) { viewModel.state.value.review.confirmingDiscard }
+    onNodeWithText("Keep").performMouseInput { click() }
+    waitUntil(timeoutMillis = 5_000) { !viewModel.state.value.review.confirmingDiscard }
+
+    comments.submitResult = Outcome.Success(2)
+    onNodeWithText("Add review").performMouseInput { click() }
+    waitUntil(timeoutMillis = 5_000) { viewModel.state.value.pendingCount == 0 }
+  }
+
   @Test
   fun `a failed submit keeps the drafts and shows the reason`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
@@ -96,6 +136,46 @@ class ChangesWindowViewModelTest {
     assertEquals("closed", viewModel.state.value.review.problem)
     assertEquals(false, viewModel.state.value.review.submitting)
     assertEquals(null, viewModel.state.value.reviewToast)
+  }
+
+  @Test
+  fun `a submit that never returns frees the bar after the timeout`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    comments.reviewWrite = CompletableDeferred()
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.SubmitReview)
+    runCurrent()
+    assertEquals(ReviewWrite.Submit, viewModel.state.value.review.inFlight)
+
+    advanceTimeBy(20_001)
+    runCurrent()
+    assertEquals(null, viewModel.state.value.review.inFlight)
+    assertNotNull(viewModel.state.value.review.problem)
+    assertEquals(2, viewModel.state.value.pendingCount)
+  }
+
+  @Test
+  fun `a discard that throws frees the bar and shows a problem`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val phase = workItem("P", kind = WorkKind.Phase)
+    detailOf(phase)
+    comments.state.value = availablePending()
+    comments.discardFailure = NoSuchMethodError("discardPending")
+    val viewModel = ChangesWindowViewModel(phase, ChangeScope.All, details, scopes, opener, comments)
+    runCurrent()
+
+    viewModel.onAction(ChangesWindowAction.RequestDiscard)
+    viewModel.onAction(ChangesWindowAction.ConfirmDiscard)
+    runCurrent()
+
+    assertEquals(null, viewModel.state.value.review.inFlight)
+    assertNotNull(viewModel.state.value.review.problem)
+    assertEquals(2, viewModel.state.value.pendingCount)
   }
 
   @Test
@@ -515,6 +595,7 @@ class ChangesWindowViewModelTest {
     var submitResult: Outcome<Int, CommentRejection> = Outcome.Success(0)
     var pendingWrite: CompletableDeferred<Outcome<Unit, CommentRejection>>? = null
     var reviewWrite: CompletableDeferred<Outcome<Int, CommentRejection>>? = null
+    var discardFailure: Throwable? = null
 
     override fun observe(baseline: ChangeBaseline): Flow<DiffCommentsState> = state
     override suspend fun reply(threadId: String, body: String): Outcome<Unit, CommentRejection> = Outcome.Success(Unit)
@@ -527,7 +608,10 @@ class ChangesWindowViewModelTest {
       if (submitResult is Outcome.Success) state.value = availablePending().copy(threads = availablePending().threads.map { it.copy(state = CommentState.Open) })
       return submitResult
     }
-    override suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> = Outcome.Success(0)
+    override suspend fun discardPending(baseline: ChangeBaseline, branch: String): Outcome<Int, CommentRejection> {
+      discardFailure?.let { throw it }
+      return Outcome.Success(0)
+    }
   }
 
   private fun detailOf(item: WorkItem): MutableStateFlow<DetailState> {

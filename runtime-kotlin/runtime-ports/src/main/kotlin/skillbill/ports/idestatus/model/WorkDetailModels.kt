@@ -90,6 +90,11 @@ data class WorkDetailItem(
   val goalWorktree: GoalWorktreeView? = null,
   val validationBranchRuns: List<WorkValidationBranchRun> = emptyList(),
   val selectedValidationResult: String? = null,
+  val planOutputTail: List<String> = emptyList(),
+  val planOutputUpdatedAt: Instant? = null,
+  val planSubtaskLatestLines: Map<Int, String> = emptyMap(),
+  val standalonePlanProgress: StandalonePlanProgress? = null,
+  val verifyRun: VerifyRunDetails? = null,
 )
 
 data class WorkValidationBranchRun(

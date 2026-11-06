@@ -23,14 +23,14 @@ class StandalonePhaseProviderLimitSettleTest {
     val database = phaseRunDatabase(home, clock)
     val spool = InMemoryBlockIncidentSpool()
     val capture = BlockIncidentCapture(database, clock, spool, NoopRuntimeDiagnostics)
-    val base = testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics)
     val publisher =
       StandalonePhaseStatusPublisherFactory(
         database,
-        base.registrations,
+        testStandalonePhaseRegistration(clock, NoopRuntimeDiagnostics),
         clock,
         NoopRuntimeDiagnostics,
         capture,
+        null,
       ).forPhase(home, "validation", INVOCATION)
     try {
       publisher.emit(FeatureTaskRuntimeRunEvent.PhaseStarted("wf-1", "validation", "codex", 1, false))

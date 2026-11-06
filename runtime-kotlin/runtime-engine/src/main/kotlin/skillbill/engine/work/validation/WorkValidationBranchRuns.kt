@@ -1,4 +1,4 @@
-package skillbill.engine.work
+package skillbill.engine.work.validation
 
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkDetailItem

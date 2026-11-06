@@ -67,4 +67,6 @@ internal class DetailSections(
     countStyle: (@Composable () -> TextStyle)? = null,
     content: LazyListScope.() -> Unit,
   ) = lazySection(key, title, count, lead, actions, spaceBefore, collapse, collapsedByDefault, countStyle, content)
+
+  fun indexOf(key: Any): Int? = keys.indexOf(key)
 }

@@ -39,6 +39,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -303,6 +306,17 @@ class GoalQaRepairLoopTest {
     assertEquals(prose, outcome.reportText)
   }
 
+  @Test
+  fun `QA resumes with the newly selected agent after a provider limit`() {
+    val fixture = Fixture(verdicts = listOf(QaVerdict.PASSED), qaFixOutput = { "unused" }, limitFirstQa = true)
+
+    assertIs<GoalQaGateResult.Paused>(fixture.gate.run(fixture.state, fixture.request))
+    fixture.gate.run(fixture.state, fixture.request.copy(invokedAgentId = "codex"))
+
+    assertEquals(listOf("claude", "codex"), fixture.qaAgents())
+    assertEquals(StandaloneQaOutcome.PASSED, assertNotNull(fixture.storedOutcome()).outcome)
+  }
+
   private inner class Fixture(
     verdicts: List<QaVerdict?>,
     findingIds: List<List<String>>? = null,
@@ -312,6 +326,7 @@ class GoalQaRepairLoopTest {
     recordedAttempts: Int = 0,
     buildGateRunner: ValidationGateRunner? = null,
     freeFormReport: String? = null,
+    limitFirstQa: Boolean = false,
   ) {
     private val clock = Clock.systemUTC()
     private val database: DatabaseSessionFactory = phaseRunDatabase(home, clock)
@@ -328,34 +343,44 @@ class GoalQaRepairLoopTest {
     private val launcher =
       RuntimeRecordingLauncher { request ->
         val phase = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-        val output =
-          when (phase) {
-            "qa" -> {
-              qaVisits++
-              val identity =
-                QaExpectedIdentity(
-                  QA_TEST_HEAD,
-                  checkNotNull(git.repositoryFingerprintValue),
-                  qaTestEvidencePrefix("qa-$qaVisits"),
-                )
-              val verdict = verdicts[qaVisits - 1]
-              val ids = findingIds?.get(qaVisits - 1)
-              workspaces.report =
-                when {
-                  freeFormReport != null -> freeFormReport
-                  verdict == null -> null
-                  ids == null -> qaTestReport(verdict, identity)
-                  else -> qaTestReport(verdict, identity, ids)
-                }?.let { report ->
-                  if (freeFormReport == null) "$report\n## Coverage\n- android: passed\n" else report
-                }
-              "QA settled."
+        if (phase == "qa" && limitFirstQa && qaVisits == 0) {
+          qaVisits++
+          agentRunLaunchFacts(
+            agent = SupportedAgent.CLAUDE,
+            termination = AgentRunTermination.Exited(1),
+            stdout = "",
+            stderr = "You've hit your usage limit",
+          )
+        } else {
+          val output =
+            when (phase) {
+              "qa" -> {
+                qaVisits++
+                val identity =
+                  QaExpectedIdentity(
+                    QA_TEST_HEAD,
+                    checkNotNull(git.repositoryFingerprintValue),
+                    qaTestEvidencePrefix("qa-$qaVisits"),
+                  )
+                val verdict = verdicts[qaVisits - 1 - if (limitFirstQa) 1 else 0]
+                val ids = findingIds?.get(qaVisits - 1 - if (limitFirstQa) 1 else 0)
+                workspaces.report =
+                  when {
+                    freeFormReport != null -> freeFormReport
+                    verdict == null -> null
+                    ids == null -> qaTestReport(verdict, identity)
+                    else -> qaTestReport(verdict, identity, ids)
+                  }?.let { report ->
+                    if (freeFormReport == null) "$report\n## Coverage\n- android: passed\n" else report
+                  }
+                "QA settled."
+              }
+              "qa_fix" -> qaFixOutput().also { onQaFix(git) }
+              "build" -> "Build repair attempted."
+              else -> "Validation passed.".also { onValidate(git) }
             }
-            "qa_fix" -> qaFixOutput().also { onQaFix(git) }
-            "build" -> "Build repair attempted."
-            else -> "Validation passed.".also { onValidate(git) }
-          }
-        facts(output)
+          facts(output)
+        }
       }
     private val outcomes = FeatureTaskQaOutcomeRecorder(database, clock)
     private val progress = DatabaseGoalQaOutcomes(database)
@@ -450,6 +475,10 @@ class GoalQaRepairLoopTest {
           NoopRuntimeDiagnostics,
         )
     }
+
+    fun qaAgents(): List<String> =
+      launcher.requests.filter { phaseIdFromPrompt(requireNotNull(it.skillRunRequest.promptOverride)) == "qa" }
+        .map { it.configuredAgentOverrideId ?: it.invokedAgentId }
 
     fun launchedPhases(): List<String> =
       launcher.requests.map { phaseIdFromPrompt(requireNotNull(it.skillRunRequest.promptOverride)) }

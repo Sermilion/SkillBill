@@ -1,12 +1,22 @@
 ## [2026-11-06] SKILL-508 validation page with live checks
 Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-engine, runtime-infra, runtime-mcp, orchestration/contracts, desktop/core, desktop/feature/detail
-- Migration 103 stores validation check events and adds live-check availability and outcome to standalone phase status. DesktopReadSchema is 103.
+- Migration 105 stores validation check events and adds live-check availability and outcome to standalone phase status. DesktopReadSchema is 105.
 - ValidationCheckRecorder stamps and validates bounded event sequences, updates current activity, and signals phase readers. Its narrow status writes preserve revision, timestamps and leases. reusable
 - Capable standalone validation launches pass the invocation identity to the runtime MCP server; server initialization marks availability and supplies the tool protocol. Settlement derives an outcome from finished, non-skipped checks.
 - Work detail projects checks for the current invocation and up to 50 validation runs on the same repository and branch. Desktop renders report parts, branch runs and available checks.
-- Limits: goal validation has no live checks; Junie and Cursor use the report-only layout. A run without a counted finished check has no derived outcome. Desktop builds must match schema 103.
+- Limits: goal validation has no live checks; Junie and Cursor use the report-only layout. A run without a counted finished check has no derived outcome. Desktop builds must match schema 105.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented
+
+## [2026-11-06] SKILL-505 live plan run detail
+Areas: runtime-goalrunner, runtime-engine, runtime-ports, runtime-core, runtime-infra, runtime-cli, runtime-contracts, orchestration/contracts, desktop/core/data, desktop/core/domain, desktop/feature/detail
+- Standalone plan capture stores bounded readable output by execution, including the latest four lines, timestamps and attributed subtask output. Migration 103 ties output cleanup to standalone status.
+- Durable phase records, manifest and bundle files supply stage times, briefings, unit states, blocked details and saved files. Fan-out history records planning waves; work-detail contract 1.7 exposes standalone progress.
+- The desktop shows a dedicated plan document and refreshes active or blocked observed plans every two seconds. Saved units open their specs; blocked plans use the existing incident decision path.
+- A completed record with a nonblank output artifact marks a unit saved. Implement requires a finished run, a report and all projected units saved. Goal detail retains its existing projection.
+- Providers without streaming may not show output until exit; stall time is absent without output or after the run ends.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
 
 ## [2026-11-04] SKILL-451 local diff comment runtime
 Areas: runtime-contracts, runtime-domain, runtime-ports, runtime-application, runtime-infra, runtime-cli, runtime-mcp, runtime-engine, runtime-core, orchestration/contracts

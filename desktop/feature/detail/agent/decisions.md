@@ -3,6 +3,21 @@ Context: Resumed validation runs can retain earlier execution records, and some 
 Decision: Project checks for the current standalone validation invocation and show them only when its availability flag is set.
 Reason: Earlier events would misrepresent the current run. The flag records availability without tying the UI to an agent name.
 
+## [2026-11-06] Show Verify QA evidence as names only
+Context: Verify QA results reuse the desktop QA results view, but Verify has no invocation directory for resolving evidence files.
+Decision: Render evidence names without file-opening actions for Verify QA.
+Reason: The existing evidence-opening path needs an invocation directory to constrain the target.
+
+## [2026-11-06] Preserve the goal intake draft when routing Verify fixes
+Context: Verify findings can be routed to a new goal while the operator has an unsent draft.
+Decision: Prefill goal intake only when its text is blank. Otherwise retain the draft and report the refusal.
+Reason: Replacing a nonblank draft would discard the operator's work.
+
+## [2026-11-06] Start a separate Verify run for re-verification
+Context: A completed, stopped or superseded Verify run records an intake and a verified target branch.
+Decision: Verify again submits a new Verify request with the intake as target, the recorded target as branch, and the current database session id.
+Reason: Re-verification must address the same branch while preserving the original run and respecting session changes.
+
 ## [2026-11-05] Derive QA results from recorded fields
 Context: The full report buried open problems and untested work, and reports without tags cannot establish check counts.
 Decision: Derive the displayed verdict and sentence from recorded fields and counts. Untagged passes remain grey and show no check counts.
@@ -117,4 +132,3 @@ Reason: Recovery eligibility can forbid retry without indicating that an operato
 Context: Opening a branch page needs the origin URL, but the desktop process allowlist forbids launching git.
 Decision: Resolve the git directory and origin from configuration and open the resulting URL with the desktop browser API.
 Reason: This keeps branch navigation within the process allowlist. URL insteadOf rewrites are not supported.
-

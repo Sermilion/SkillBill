@@ -13,6 +13,7 @@ import dev.skillbill.desktop.core.domain.model.RunOptions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -91,6 +92,34 @@ class DetailRepositoryTest {
     assertEquals(OPTIONS, after.runOptions)
     assertEquals(before.detail.subtasks, after.detail.subtasks)
     assertEquals(Instant.fromEpochMilliseconds(1), after.detail.latestActivity.event?.at)
+  }
+
+  @Test
+  fun `an active standalone plan refreshes on the bounded signal and stops after becoming idle`() = runTest {
+    val base = workItem("plan-1").copy(kind = dev.skillbill.desktop.core.domain.model.WorkKind.Phase)
+    val plan = base.copy(standaloneExecution = true, control = base.control.copy(phaseId = "plan"))
+    val signals = MutableStateFlow(signal())
+    val pulse = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val reads = FakeDetailReads().apply { header = plan }
+    val details = DetailObservations(backgroundScope, signals, reads, pulse)
+    val states = mutableListOf<DetailState>()
+    backgroundScope.launch { details.observe(plan).collect { states += it } }
+    runCurrent()
+    assertEquals(0, reads.refreshes)
+
+    pulse.emit(Unit)
+    runCurrent()
+
+    assertEquals(1, reads.refreshes)
+    assertEquals(Instant.fromEpochMilliseconds(1), assertIs<DetailSections.Loaded>(states.last().sections).detail.observedAt)
+
+    reads.header = plan.copy(lifecycle = Lifecycle.Terminal, running = false)
+    signals.value = signal(phases = 2, changed = mapOf("phases" to ChangedIds.Ids(base = 1, ids = listOf(plan.id))))
+    runCurrent()
+    pulse.emit(Unit)
+    runCurrent()
+
+    assertEquals(2, reads.refreshes)
   }
 
   @Test

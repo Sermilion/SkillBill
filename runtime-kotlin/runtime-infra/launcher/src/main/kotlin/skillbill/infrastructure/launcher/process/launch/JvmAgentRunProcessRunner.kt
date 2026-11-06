@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
+import skillbill.infrastructure.host.jvm.AgentGradleUserHome
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.scratch.AgentRunScratchRoot
@@ -43,12 +44,16 @@ class JvmAgentRunProcessRunner(
   }
 
   private fun AgentRunProcessRequest.withScratchDirectory(directory: Path?): AgentRunProcessRequest {
+    val machine = JdkHostPlatformPort.resolveEnvironment()
     val requested = environmentFields.environment
-    val inherited =
-      if (environmentFields.inheritEnvironment) JdkHostPlatformPort.resolveEnvironment() + requested else requested
+    val inherited = if (environmentFields.inheritEnvironment) machine + requested else requested
     return copy(
       environmentFields =
-        environmentFields.copy(environment = requested + scratchSpace.environment(directory, inherited)),
+        environmentFields.copy(
+          environment =
+            requested + scratchSpace.environment(directory, inherited) +
+              AgentGradleUserHome.environment(inherited, machine),
+        ),
     )
   }
 
@@ -328,6 +333,7 @@ class JvmAgentRunProcessRunner(
         outputStream = AgentRunOutputStream.STDOUT,
         outputSink = args.request.launch.outputSink,
         onChunkRead = { args.outputTracker.markObserved() },
+        flushOutputStreamOnEnd = args.request.launch.flushOutputStreamOnEnd,
       )
     val stderr =
       Utf8Drain(
@@ -335,6 +341,7 @@ class JvmAgentRunProcessRunner(
         outputStream = AgentRunOutputStream.STDERR,
         outputSink = args.request.launch.outputSink,
         onChunkRead = { args.outputTracker.markObserved() },
+        flushOutputStreamOnEnd = args.request.launch.flushOutputStreamOnEnd,
       )
     return ProcessResources(
       stdout = stdout,

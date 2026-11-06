@@ -51,6 +51,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 
 class RuntimeDetailReadsTest {
   @Test
@@ -268,6 +269,7 @@ class RuntimeDetailReadsTest {
         }
         val reads = RuntimeReads(runtime, holder, DatabaseDispatcher(), DiagnosticsSwitch(false), NoopDiagnostics)
         val detailReads = RuntimeDetailReads(reads, runtime, NoopDiagnostics, holder.selection.id)
+        val statusService = reads.ideStatusService
 
         val loaded = assertIs<DetailRead.Loaded>(detailReads.first("detail-read"))
 
@@ -279,6 +281,7 @@ class RuntimeDetailReadsTest {
         assertEquals(listOf("QA-1"), execution.qaFindings.map { it.id })
         assertEquals(QaRunDetails(skipReason = "docker_unavailable", retainedResources = listOf(QaRunRetainedResource("process", "42"))), execution.qaDetails)
         assertIs<DetailRead.Gone>(detailReads.first("missing-favorite-id"))
+        assertSame(statusService, reads.ideStatusService)
       } finally {
         sessionJob.cancel()
         runtime.databaseReadConnections.release()

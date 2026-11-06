@@ -63,6 +63,9 @@ import dev.skillbill.desktop.core.domain.model.SubtaskAuditResult
 import dev.skillbill.desktop.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.desktop.core.domain.model.SubtaskExecution
 import dev.skillbill.desktop.core.domain.model.SubtaskValidation
+import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress as DesktopStandalonePlanProgress
+import dev.skillbill.desktop.core.domain.model.StandalonePlanStage as DesktopStandalonePlanStage
+import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit as DesktopStandalonePlanUnit
 import dev.skillbill.desktop.core.domain.model.ValidationCommand
 import dev.skillbill.desktop.core.domain.model.ValidationGateRun
 import dev.skillbill.desktop.core.domain.model.ValidationResult
@@ -87,6 +90,7 @@ import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaChecklist
 import skillbill.ports.idestatus.model.StandalonePlanReport
+import skillbill.ports.idestatus.model.StandalonePlanProgress as RuntimeStandalonePlanProgress
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaStepStatus
 import skillbill.ports.idestatus.model.StandaloneQaTargetState
@@ -261,6 +265,11 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     currentSubtaskId = goal?.currentSubtaskId,
     goalWorktree = goalWorktree?.let { GoalWorktree(it.path, it.state.toWorktreeDomain(), it.retentionReason, it.retentionDetail) },
     launchWarning = goal?.launchWarning,
+    planOutputTail = planOutputTail,
+    planOutputUpdatedAt = planOutputUpdatedAt?.toKotlinInstant(),
+    planSubtaskLatestLines = planSubtaskLatestLines,
+    standalonePlan = standalonePlanProgress?.toDomain(),
+    verifyRun = verifyRun?.toDomain(),
   )
 }
 
@@ -401,6 +410,37 @@ private fun StandaloneReviewReport.toDomain(): ReviewReport =
 private fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)
 
+private fun RuntimeStandalonePlanProgress.toDomain(): DesktopStandalonePlanProgress = DesktopStandalonePlanProgress(
+  report?.toDomain(),
+  stages.map {
+    DesktopStandalonePlanStage(
+      it.phaseId,
+      it.firstStartedAt?.toKotlinInstant(),
+      it.finishedAt?.toKotlinInstant(),
+      it.briefingText,
+      it.status,
+    )
+  },
+  plannedSubtaskCount,
+  totalSubtaskCount,
+  currentPlanningSubtaskId,
+  planningWaveSubtaskIds,
+  planningWaveCapacity,
+  blockedSubtaskId,
+  blockedReason,
+  units.map { unit ->
+    DesktopStandalonePlanUnit(
+      unit.subtaskId, unit.name, unit.specPath, unit.dependsOn, unit.state.wireValue,
+      unit.startedAt?.toKotlinInstant(), unit.finishedAt?.toKotlinInstant(), unit.blockedReason, unit.latestOutput,
+      unit.latestOutputAt?.toKotlinInstant(),
+    )
+  },
+  stalledSince?.toKotlinInstant(),
+  planningWaveNumber,
+  planningWaveHistoryComplete,
+  blockedSubtaskIds,
+)
+
 private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {
   GoalRunnerAssessmentState.BLOCKED -> GoalAssessmentState.Blocked
   GoalRunnerAssessmentState.PENDING -> GoalAssessmentState.Pending
@@ -498,7 +538,7 @@ internal fun GoalRunnerQaResult.toDomain() = GoalQaResult(
   details?.toDomain(),
 )
 
-private fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
+internal fun RuntimeQaRunDetails.toDomain() = QaRunDetails(
   reportPath, invocationDirectory, skipReason,
   assertions.map { assertion ->
     val outcome = when (assertion.outcome) {

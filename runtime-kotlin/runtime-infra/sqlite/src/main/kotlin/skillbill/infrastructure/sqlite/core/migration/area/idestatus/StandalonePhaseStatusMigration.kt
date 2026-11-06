@@ -10,6 +10,38 @@ internal object StandalonePhaseStatusMigration {
     backfillWorkflowExecutions(connection)
   }
 
+  fun createOutputCapture(connection: Connection) {
+    connection.createStatement().use { statement ->
+      statement.execute(
+        """
+        CREATE TABLE IF NOT EXISTS standalone_phase_output (
+          execution_id TEXT PRIMARY KEY REFERENCES standalone_phase_status(execution_id) ON DELETE CASCADE,
+          tail_json TEXT NOT NULL CHECK (length(tail_json) <= 4096),
+          latest_line_at TEXT,
+          attributed_json TEXT NOT NULL CHECK (length(attributed_json) <= 32768)
+        )
+        """.trimIndent(),
+      )
+    }
+  }
+
+  fun addAttributedOutputTimes(connection: Connection) {
+    val exists =
+      connection.prepareStatement(
+        "SELECT 1 FROM pragma_table_info('standalone_phase_output') WHERE name = ?",
+      ).use { statement ->
+        statement.setString(1, "attributed_at_json")
+        statement.executeQuery().use { it.next() }
+      }
+    if (exists) return
+    connection.createStatement().use { statement ->
+      statement.execute(
+        "ALTER TABLE standalone_phase_output ADD COLUMN attributed_at_json TEXT " +
+          "CHECK (attributed_at_json IS NULL OR length(attributed_at_json) <= 32768)",
+      )
+    }
+  }
+
   private fun createSchema(connection: Connection) {
     createExecutionRegistry(connection)
     createStandalonePhaseStatus(connection)

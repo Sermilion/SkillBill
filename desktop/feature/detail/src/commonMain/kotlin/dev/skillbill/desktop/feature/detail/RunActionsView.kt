@@ -37,6 +37,7 @@ internal data class RunActionsView(
   val checklistEnabled: Boolean,
   val decision: OperatorDecisionNeeded?,
   val implement: ControlButton? = null,
+  val implementationNote: Boolean = false,
 )
 
 /** HANDOFF 9.2 items 4, 5 and 7 as rules D-A to D-F: presence, labels and enablement only; nothing is sorted or timed. */
@@ -106,6 +107,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
       label(InFlightControl.Launch, "Implement"),
       ready && !controls.implementationStarted && planImplementationEnabled(item, loaded.detail) && item.issueKey !in controls.reservations,
     ).takeIf { item.isStandalonePlan() },
+    implementationNote = item.isStandalonePlan() && !planFinished(item, loaded?.detail),
   )
 }
 

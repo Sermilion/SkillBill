@@ -982,6 +982,16 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 103,
+      name = "record-standalone-plan-output",
+      operation = { connection -> StandalonePhaseStatusMigration.createOutputCapture(connection) },
+    ) +
+    DatabaseMigration(
+      version = 104,
+      name = "record-standalone-plan-attributed-output-times",
+      operation = { connection -> StandalonePhaseStatusMigration.addAttributedOutputTimes(connection) },
+    ) +
+    DatabaseMigration(
+      version = 105,
       name = "record-validation-check-events",
       operation = ::recordValidationCheckEvents,
     )

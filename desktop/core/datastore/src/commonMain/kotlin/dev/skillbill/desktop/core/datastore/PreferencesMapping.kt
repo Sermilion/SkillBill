@@ -5,6 +5,8 @@ import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.domain.settings.NotificationKind
 import dev.skillbill.desktop.core.domain.settings.TrayTab
+import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
+import dev.skillbill.desktop.core.domain.settings.CriterionMark
 
 /** Decodes tolerantly: an unknown or out-of-range stored value falls back to its default and is passed to [onUnsupported] as `key=raw`. */
 internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSettings {
@@ -35,3 +37,6 @@ internal fun Preferences.toAppSettings(onUnsupported: (String) -> Unit): AppSett
     favoriteSpecs = favoriteSpecs,
   )
 }
+
+internal fun Preferences.criterionMarks(): Map<CriterionMarkKey, CriterionMark> =
+  this[AppPreferenceKeys.CRITERION_MARKS].orEmpty().mapNotNull(CriterionMarkEncoding::decode).toMap()

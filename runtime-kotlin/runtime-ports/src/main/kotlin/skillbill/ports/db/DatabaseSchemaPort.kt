@@ -12,4 +12,10 @@ interface DatabaseSchemaPort {
    * Returns false when no database exists yet, leaving the selected path absent.
    */
   fun migrateExistingDatabase(): Boolean
+
+  /**
+   * Reports whether an existing database has migrations this runtime would apply, without changing it.
+   * Returns false when no database exists yet and refuses newer or unrecognized schemas.
+   */
+  fun hasPendingMigrations(): Boolean
 }

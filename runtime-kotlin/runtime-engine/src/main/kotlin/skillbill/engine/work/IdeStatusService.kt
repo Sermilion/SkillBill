@@ -1,6 +1,7 @@
 package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goal.GoalRunnerStatusPort
@@ -39,18 +40,24 @@ import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
 import skillbill.engine.work.pagination.workDetailPagedResult
+import skillbill.engine.work.validation.withValidationBranchRuns
+import skillbill.engine.work.verify.VerifyRunDetailsProjection
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.GoalWorktreeView
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.StandalonePhaseOutputSnapshot
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
+import skillbill.ports.idestatus.model.StandalonePlanProgress
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
 import skillbill.ports.idestatus.model.WorkBoardItem
@@ -361,7 +368,6 @@ public class IdeStatusService(
     request: WorkDetailRequest,
     position: WorkDetailPagePosition,
   ): ProjectedDetailItem {
-    val pageSize = request.pageSize
     val projection = projector.project(candidate, context)
     val snapshot = projection.snapshot
     val incidentSet = detailIncidents(candidate, context, snapshot)
@@ -371,43 +377,34 @@ public class IdeStatusService(
     val goal = item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
     val goalRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = false)
     val validationRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = true)
-    val validationPage = validationRead?.page
-    val goalStatus = goal?.let { work -> detailGoalStatus(work, validationPage, goalRead?.page, context) }
+    val goalStatus = goal?.let { work -> detailGoalStatus(work, validationRead?.page, goalRead?.page, context) }
     val goalWorktree = goal?.let { workBoardItemProjection.goalWorktreeView(candidate.workflowId, context.unitOfWork) }
     val dependencies = detailDependencies(goal, context.unitOfWork.workList, request, position)
-    val runtimeWorkflowId = goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId()
     val runtimeRead =
-      runtimeWorkflowId?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
-    val runtimeStatus = runtimeRead?.status
+      (goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId())
+        ?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
     val history = detailExecutionHistory(candidate, context, request, position)
-    val moreLists =
-      detailContinuationLists(
-        history.size > pageSize,
-        (goalRead?.page?.remainingCount ?: 0) > goalSubtaskPageLimit(pageSize, completedOnly = false),
-        (validationPage?.remainingCount ?: 0) > pageSize,
-        runtimeRead?.hasMore == true && request.includesDetailList(WorkDetailList.PHASES),
-      )
-    val allMoreLists = if (dependencies?.nextOffset == null) moreLists else moreLists + WorkDetailList.DEPENDENCIES
-    val shownHistory = history.take(pageSize)
+    val moreLists = detailMoreLists(history.size > request.pageSize, goalRead, validationRead, runtimeRead, request)
+    val planOutput = standalonePlanOutput(standalone, context.unitOfWork)
     val detailItem =
       WorkDetailItem(
         snapshot = snapshot,
         recoveryWorkId = standalone?.invocationId ?: candidate.workflowId,
-        executionHistory = shownHistory,
+        executionHistory = history.take(request.pageSize),
         selectedExecution = workSelectedExecution(standalone, context.unitOfWork),
         repositoryRoot = context.repoRoot.toString(),
-        stepPipeline = standalone?.let { standaloneStepPipeline(it.phaseId) } ?: runtimeStatus?.phaseIds.orEmpty(),
+        stepPipeline = detailStepPipeline(standalone, runtimeRead?.status?.phaseIds.orEmpty()),
         finishedAt = completion.first,
         finishedAtSource = completion.second,
         goalManifest = goalRead?.page?.manifest,
         goalSpecBundle = goalRead?.page?.manifest?.let { projector.goalSpecBundle(it, context.repoRoot) },
         goalFinishPipeline = goalRead?.page?.let { detailGoalFinishPipeline(context, goalStatus) }.orEmpty(),
-        runtimeStatus = runtimeStatus,
+        runtimeStatus = runtimeRead?.status,
         goalStatus = goalStatus,
         pageOffset = position.offset,
-        pageSize = pageSize,
-        hasMore = allMoreLists.isNotEmpty(),
-        moreLists = allMoreLists,
+        pageSize = request.pageSize,
+        hasMore = moreLists.isNotEmpty() || dependencies?.nextOffset != null,
+        moreLists = if (dependencies?.nextOffset == null) moreLists else moreLists + WorkDetailList.DEPENDENCIES,
         dependencies = dependencies?.entries.orEmpty(),
         freshnessDeadline = snapshot.updatedAt.plus(IdeStatusFreshnessClassifier.FRESH_WINDOW).plusNanos(1),
         observation = context.unitOfWork.workList.observation(),
@@ -425,10 +422,43 @@ public class IdeStatusService(
         incidentHistory = incidentSet.incidentHistory,
         changeBaseline = detailChangeBaseline(standalone, goalRead?.page?.manifest, item, goalWorktree, context),
         goalWorktree = goalWorktree,
+        planOutputTail = planOutput.tail,
+        planOutputUpdatedAt = planOutput.latestLineAt,
+        planSubtaskLatestLines = planOutput.latestAttributedLines,
+        standalonePlanProgress = detailPlanProgress(standalone, context, position, planOutput),
+        verifyRun = VerifyRunDetailsProjection.project(candidate, context.unitOfWork),
       ).withValidationBranchRuns(standalone, context.unitOfWork)
-    val nextAnchors = detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead)
+    val nextAnchors =
+      detailNextAnchors(history.take(request.pageSize), goalRead, validationRead, dependencies, runtimeRead)
     return ProjectedDetailItem(detailItem, nextAnchors)
   }
+
+  private fun detailPlanProgress(
+    standalone: StandalonePhaseStatusRecord?,
+    context: IdeStatusProjectionContext,
+    position: WorkDetailPagePosition,
+    planOutput: StandalonePhaseOutputSnapshot,
+  ): StandalonePlanProgress? {
+    return standalone
+      ?.takeIf {
+        it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN &&
+          it.launchScope == IdeStatusLaunchScope.STANDALONE
+      }
+      ?.let {
+        projector.standalonePlanProgressProjector.project(
+          it,
+          context.repoRoot,
+          context.unitOfWork,
+          position.observedAt,
+          planOutput,
+        )
+      }
+  }
+
+  private fun detailStepPipeline(
+    standalone: StandalonePhaseStatusRecord?,
+    runtimePhases: List<String>,
+  ): List<String> = standalone?.let { standaloneStepPipeline(it.phaseId) } ?: runtimePhases
 
   private fun WorkItem.taskRuntimeWorkflowId(): String? =
     workflowId.takeIf { workflowKind == WorkItemKind.FEATURE_TASK_RUNTIME }
@@ -450,6 +480,21 @@ public class IdeStatusService(
       goalWorktree,
     ),
   )
+
+  private fun standalonePlanOutput(
+    standalone: StandalonePhaseStatusRecord?,
+    unitOfWork: UnitOfWork,
+  ) = standalone?.takeIf { it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN }
+    ?.let { record ->
+      catchingNonCancellation { unitOfWork.standalonePhaseStatuses.readOutput(record.executionId) }
+        .onFailure { error ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Standalone plan output read failed",
+            error,
+          )
+        }.getOrNull()
+    } ?: StandalonePhaseOutputSnapshot()
 
   private fun detailCompletion(
     snapshot: IdeStatusSnapshot,
@@ -579,6 +624,20 @@ public class IdeStatusService(
       if (moreValidation) add(WorkDetailList.VALIDATION)
       if (morePhases) add(WorkDetailList.PHASES)
     }
+
+  private fun detailMoreLists(
+    moreExecutions: Boolean,
+    goalRead: GoalPageRead?,
+    validationRead: GoalPageRead?,
+    runtimeRead: RuntimePhasePageRead?,
+    request: WorkDetailRequest,
+  ): Set<WorkDetailList> =
+    detailContinuationLists(
+      moreExecutions,
+      (goalRead?.page?.remainingCount ?: 0) > goalSubtaskPageLimit(request.pageSize, completedOnly = false),
+      (validationRead?.page?.remainingCount ?: 0) > request.pageSize,
+      runtimeRead?.hasMore == true && request.includesDetailList(WorkDetailList.PHASES),
+    )
 
   private fun detailRuntimeStatus(
     workflowId: String,

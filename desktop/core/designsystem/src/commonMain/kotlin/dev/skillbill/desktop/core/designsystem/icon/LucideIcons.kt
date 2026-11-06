@@ -171,6 +171,13 @@ object LucideIcons {
       line(12.0f, 19.0f, 20.0f, 19.0f)
     }
   }
+  val image: ImageVector by lazy {
+    imageVector("image") {
+      rect(3f, 3f, 18f, 18f, 2f)
+      circle(9f, 9f, 2f)
+      path("m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21")
+    }
+  }
   val pause: ImageVector by lazy {
     imageVector("pause") {
       rect(14.0f, 4.0f, 4.0f, 16.0f, 1.0f)

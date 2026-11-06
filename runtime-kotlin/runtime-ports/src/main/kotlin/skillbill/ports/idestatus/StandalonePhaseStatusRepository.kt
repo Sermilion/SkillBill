@@ -16,7 +16,8 @@ import java.time.Instant
 interface StandalonePhaseStatusRepository :
   StandalonePhaseCancellationRepository,
   StandaloneValidationCheckRepository,
-  StandaloneValidationBranchRepository {
+  StandaloneValidationBranchRepository,
+  StandaloneOutputRepository {
   fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord
 
   fun registerWorkflow(request: IdeStatusWorkflowRegistration): IdeStatusWorkflowExecution?

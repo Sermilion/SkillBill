@@ -12,10 +12,12 @@ import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.idestatus.model.LiveChecksAvailability
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
@@ -37,6 +39,44 @@ import kotlin.test.fail
 
 class DefaultPhaseRunnerTest {
   @TempDir lateinit var databaseHome: Path
+
+  @Test
+  fun `captured planning launches request provider output while uncaptured launches do not`() {
+    val requests = mutableListOf<GoalRunnerSubtaskLaunchRequest>()
+    val runner =
+      DefaultPhaseRunner(
+        GoalRunnerSubtaskLauncher { request ->
+          requests += request
+          agentRunLaunchFacts(SupportedAgent.CLAUDE)
+        },
+        NoopWorkflowGitOperations,
+      )
+    val outputSink = AgentRunOutputSink { _, _ -> }
+
+    listOf("preplan", "plan").forEach { stepName ->
+      runner.run(input(stepName), PrepareOnlyPhaseRunState, outputSink, true)
+      runner.run(input(stepName), PrepareOnlyPhaseRunState, outputSink, false)
+      runner.run(
+        input(stepName).let { it.copy(facts = it.facts.copy(streamOutputForLiveness = true)) },
+        PrepareOnlyPhaseRunState,
+        outputSink,
+        false,
+      )
+    }
+
+    assertEquals(
+      listOf(true, false, false, true, false, false),
+      requests.map { it.skillRunRequest.streamProviderOutput },
+    )
+    assertEquals(
+      listOf(true, false, false, true, false, false),
+      requests.map { it.skillRunRequest.captureDisplayOutput },
+    )
+    assertEquals(
+      listOf(true, false, true, true, false, true),
+      requests.map { it.skillRunRequest.streamOutputForLiveness },
+    )
+  }
 
   @Test
   fun `a step captures its stdout as process output without reading an envelope from it`() {

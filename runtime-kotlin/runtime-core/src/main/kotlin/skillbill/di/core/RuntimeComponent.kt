@@ -50,7 +50,6 @@ import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.block.report.ProductReportScheduler
-import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.incident.investigation.EvidenceBlockIncidentInvestigator
 import skillbill.engine.featuretask.incident.report.BlockIncidentLaunchFactsReader
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
@@ -59,8 +58,6 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoord
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
-import skillbill.engine.featuretask.phaserun.StandalonePhaseRegistrationFactory
-import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
@@ -93,6 +90,7 @@ import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
 import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
+import skillbill.infrastructure.sqlite.workerlease.SQLiteRuntimeWorkerLeases
 import skillbill.infrastructure.sqlite.workflow.goalrunner.archive.SqliteGoalArchiveSnapshotPort
 import skillbill.infrastructure.workflow.git.branches.GitRepositoryBranchesAdapter
 import skillbill.infrastructure.workflow.git.changes.GitWorkChangesAdapter
@@ -115,6 +113,7 @@ import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.RuntimeWorkerLeaseQuery
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.editor.FileEditorLauncherPort
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -300,21 +299,14 @@ abstract class RuntimeComponent(
   fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter
 
   @Provides
+  fun runtimeWorkerLeaseQuery(adapter: SQLiteRuntimeWorkerLeases): RuntimeWorkerLeaseQuery = adapter
+
+  @Provides
   fun goalArchiveSnapshotPort(adapter: SqliteGoalArchiveSnapshotPort): GoalArchiveSnapshotPort = adapter
 
   @Provides
   fun goalArchiveEnvelopeValidator(adapter: ClasspathGoalArchiveEnvelopeValidator): GoalArchiveEnvelopeValidator =
     adapter
-
-  @Provides
-  fun standalonePhaseStatusPublisherFactory(
-    database: DatabaseSessionFactory,
-    registrations: StandalonePhaseRegistrationFactory,
-    clock: Clock,
-    diagnostics: RuntimeDiagnostics,
-    blockIncidentCapture: BlockIncidentCapture,
-  ): StandalonePhaseStatusPublisherFactory =
-    StandalonePhaseStatusPublisherFactory(database, registrations, clock, diagnostics, blockIncidentCapture)
 
   @Provides
   fun interruptSignal(): InterruptSignalPort = JvmInterruptSignalPort
