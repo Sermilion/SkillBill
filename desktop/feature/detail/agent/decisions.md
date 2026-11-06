@@ -1,3 +1,8 @@
+## [2026-11-06] Scope live validation checks to the current invocation
+Context: Resumed validation runs can retain earlier execution records, and some runs do not provide live checks.
+Decision: Project checks for the current standalone validation invocation and show them only when its availability flag is set.
+Reason: Earlier events would misrepresent the current run. The flag records availability without tying the UI to an agent name.
+
 ## [2026-11-05] Derive QA results from recorded fields
 Context: The full report buried open problems and untested work, and reports without tags cannot establish check counts.
 Decision: Derive the displayed verdict and sentence from recorded fields and counts. Untagged passes remain grey and show no check counts.

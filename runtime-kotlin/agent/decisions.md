@@ -1,3 +1,18 @@
+## [2026-11-06] Advertise validation checks through the started server
+Context: The validation prompt is composed before MCP startup can be observed.
+Decision: A capable standalone launch supplies its invocation identity only to the runtime MCP server. Server initialization marks live checks available and provides the tool protocol.
+Reason: A prompt mention would advertise the tool before startup is known. Server initialization tells the agent about it only when that server starts.
+
+## [2026-11-06] Derive validation outcomes from finished checks
+Context: A validation run can settle with skipped or unfinished checks and a status snapshot older than launch-time availability writes.
+Decision: Re-read availability during derivation and use the last finished event per check, excluding skipped checks. Leave the outcome null when no check counts.
+Reason: A skipped or unfinished check must not count as passed, and the registered snapshot cannot establish current availability.
+
+## [2026-11-06] Bound validation history to the recorded branch
+Context: Standalone validation detail needs peer runs without mixing repositories or branches.
+Decision: Read at most 50 validation runs with the same repository identity and non-null branch correlation. Return no peers for HEAD or missing correlation.
+Reason: A detached or unknown branch cannot identify a stable set of peer runs. The bound limits the detail read.
+
 ## [2026-11-05] Set JVM temp roots at launch
 Context: The JDK snapshots java.io.tmpdir before main, so setting it in the CLI or MCP entry point does not redirect default-root JDK temp calls.
 Decision: Start scripts pass run scratch as a JVM option. JAVA_TOOL_OPTIONS and Linux wrappers name the shared state scratch root; test workers receive run scratch through their task configuration.

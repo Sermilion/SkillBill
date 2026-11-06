@@ -1,3 +1,12 @@
+## [2026-11-06] SKILL-508 validation page with live checks
+Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data, runtime-engine, runtime-ports, runtime-infra
+- Standalone validation detail shows an outcome card, foldable report parts, flagged links and runs on the same branch while retaining activity and run controls.
+- Report shaping and invocation-scoped fold state support expanding and scrolling to flagged parts. reusable
+- Available live checks show progress, outcomes and expandable attempts for the current invocation. Unavailable and older runs retain the report-only layout.
+- Peer runs require matching repository and non-null branch correlation; detached HEAD and missing correlation yield no peers. Other phase layouts and the CLI detail schema remain unchanged.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented across runtime and desktop
+
 ## [2026-11-05] SKILL-504 QA results view
 Areas: desktop/feature/detail, desktop/core/domain, desktop/core/data; runtime QA results projection
 - Goal and standalone QA share a results section with an app-derived verdict, open findings, retained resources, untested work, folds and target coverage. Live standalone results retain the finding navigation target.
