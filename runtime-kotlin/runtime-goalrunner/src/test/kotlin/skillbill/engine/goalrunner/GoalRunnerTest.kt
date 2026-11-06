@@ -140,6 +140,7 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -5673,6 +5674,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
+        childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
       )
 
     val launchRequest =
@@ -5726,6 +5728,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
+        childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
       )
 
     val launchRequest =
@@ -5766,6 +5769,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
+        childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
       )
 
     val launchRequest =
@@ -5804,6 +5808,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
+        childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
       )
     val launchRequest =
       reconciler.subtaskLaunchRequest(

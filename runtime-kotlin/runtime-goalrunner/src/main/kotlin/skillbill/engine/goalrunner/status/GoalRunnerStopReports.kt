@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.status
 
+import skillbill.engine.diagnostics.block.FailurePhaseEvidence
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
@@ -152,3 +153,17 @@ internal fun supervisionEvent(
     lastFileActivityAt = liveness?.lastFileActivityAt,
     lastOutputAt = liveness?.lastOutputAt,
   )
+
+internal fun failurePhaseEvidence(
+  reason: GoalRunnerStopReason,
+  workflowId: String,
+  liveness: GoalRunnerLivenessSnapshot?,
+): FailurePhaseEvidence? =
+  if (reason == GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME) {
+    FailurePhaseEvidence(
+      liveness?.takeIf { it.workflowId == workflowId }?.workflowStep
+        ?.takeIf { it in FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds },
+    )
+  } else {
+    null
+  }

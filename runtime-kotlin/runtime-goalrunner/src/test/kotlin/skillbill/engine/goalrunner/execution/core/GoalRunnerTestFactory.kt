@@ -58,6 +58,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabaseCheckpointResult
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.diagnostics.ChildFailureOutputStore
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -393,6 +394,7 @@ private fun testGoalRunnerLoopAssembler(
       wiring.clock,
       wiring.diagnostics,
       testProjectStore,
+      ChildFailureOutputStore { _, _, _ -> "test.log" },
     )
   val launchPrepare =
     GoalRunnerSubtaskLaunchPrepare(

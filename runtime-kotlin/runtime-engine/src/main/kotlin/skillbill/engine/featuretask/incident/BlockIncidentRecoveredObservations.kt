@@ -87,12 +87,14 @@ internal object BlockIncidentRecoveredObservations {
       when {
         family != WorkflowFamily.TASK_RUNTIME -> null
         identity.childIncidentToken != null -> childReference?.blockedStepId
+        identity.failurePhaseEvidence != null -> identity.failurePhaseEvidence.phaseId
         else -> identity.stepId
       }
+    val incidentAttempt = identity.attempt.takeIf { phaseId == identity.stepId }
     return BlockIncidentObservation(
       workflowId = record.workflowId,
       phaseId = phaseId,
-      attempt = identity.attempt,
+      attempt = incidentAttempt,
       reason = reason,
       alias = identity.alias,
       linkOccurrenceToken = identity.incidentToken,
@@ -112,14 +114,14 @@ internal object BlockIncidentRecoveredObservations {
           UNRECOVERABLE_FAILURE_FIELDS.associateWith { BlockIncidentFieldAvailability.NOT_CAPTURED } +
           mapOf(
             BlockIncidentCorrelatedField.ATTEMPT to
-              if (phaseId == null || identity.attempt == null) {
+              if (phaseId == null || incidentAttempt == null) {
                 BlockIncidentFieldAvailability.NOT_APPLICABLE
               } else {
                 BlockIncidentFieldAvailability.AVAILABLE
               },
             BlockIncidentCorrelatedField.PHASE_ID to
               if (phaseId == null) {
-                if (identity.childIncidentToken != null) {
+                if (identity.childIncidentToken != null || identity.failurePhaseEvidence != null) {
                   BlockIncidentFieldAvailability.NOT_CAPTURED
                 } else {
                   BlockIncidentFieldAvailability.NOT_APPLICABLE
