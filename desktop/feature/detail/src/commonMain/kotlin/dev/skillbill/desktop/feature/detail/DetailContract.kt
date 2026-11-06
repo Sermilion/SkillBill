@@ -122,6 +122,8 @@ sealed interface DetailAction {
   data class SelectQaRun(val invocationId: String?) : DetailAction
   data class OpenQaReport(val path: String) : DetailAction
   data class OpenQaEvidence(val path: String, val invocationDirectory: String) : DetailAction
+  /** Opens .skill-bill/phases/qa.md without writing it. */
+  data object OpenQaPhaseInstructions : DetailAction
   data class ReviewFindings(val action: ReviewFindingsAction) : DetailAction
   data class LoadMore(val list: DetailList) : DetailAction
   data object Next : DetailAction

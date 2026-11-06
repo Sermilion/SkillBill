@@ -20,12 +20,16 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.domain.model.QaRunDetails
 import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
 import dev.skillbill.desktop.core.domain.model.VerifyRunStep
 
-internal fun verifyQaInput(run: VerifyRunDetails): QaResultsInput? = run.qa?.let { qa ->
-  QaResultsInput(
+internal fun verifyQaInput(run: VerifyRunDetails): QaResultsInput? {
+  val qa = run.qa ?: if (run.qaVerdict == "skipped" && !run.qaReportText.isNullOrBlank()) {
+    QaRunDetails()
+  } else return null
+  return QaResultsInput(
     runKey = "verify:${run.workflowId}",
     outcome = when (run.qaVerdict) {
       "passed" -> QaVerdict.Passed
@@ -36,6 +40,7 @@ internal fun verifyQaInput(run: VerifyRunDetails): QaResultsInput? = run.qa?.let
       else -> QaVerdict.Attempted
     },
     reason = qa.skipReason,
+    reportText = run.qaReportText,
     findings = qa.findings.map { finding ->
       QaResultsFinding(finding.id, finding.title, observed = finding.observed, expected = finding.expected, steps = finding.steps, evidencePaths = finding.evidencePaths)
     },

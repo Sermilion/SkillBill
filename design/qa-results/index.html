@@ -270,8 +270,12 @@ const SCENARIOS = [
     sentence: 'QA found no problems, but could not test 2 things. 3 checks passed.',
     legacyLine: '',
     findings: [], gaps: REAL_GAPS, passed: REAL_PASSED,
+    unblock: [
+      { capability: 'display', target: 'desktop', tried: 'Started the app on a private display, but no window appeared.', evidence: [SAMPLE + 'xvfb.log'], remedy: 'Install Xvfb with apt install xvfb.', snippet: 'Install Xvfb on the QA host.\nStart Xvfb before launching the desktop app.' },
+      { capability: 'app_startup_gate', target: 'desktop', tried: 'The app startup gate stopped before the first window.', evidence: [SAMPLE + 'app-startup.log'], remedy: 'Set SKILL_BILL_RUNTIME_DIR to a writable directory.', snippet: 'Set SKILL_BILL_RUNTIME_DIR to a writable directory before launch.' },
+    ],
     targets: [['Desktop', 'incomplete, capability missing'], [NOT_IN_SCOPE, 'not in scope']],
-    report: 'Verdict: incomplete\n\nI exercised the helpers and tests. No app window appeared on the private display, so live UI behavior remains incomplete.\n\n## Coverage\n\n- desktop: incomplete [reason: capability_absent]',
+    report: 'Verdict: incomplete\n\nI exercised the helpers and tests. No app window appeared on the private display, so live UI behavior remains incomplete.\n\n## Coverage\n\n- desktop: incomplete [reason: capability_absent]\n\n## Unblock\n#### display\n- Target: desktop\n- Tried: Started the app on a private display, but no window appeared.\n- Evidence: ' + SAMPLE + 'xvfb.log\n- Remedy: Install Xvfb with apt install xvfb.\n```markdown\nInstall Xvfb on the QA host.\nStart Xvfb before launching the desktop app.\n```\n#### app_startup_gate\n- Target: desktop\n- Tried: The app startup gate stopped before the first window.\n- Evidence: ' + SAMPLE + 'app-startup.log\n- Remedy: Set SKILL_BILL_RUNTIME_DIR to a writable directory.\n```markdown\nSet SKILL_BILL_RUNTIME_DIR to a writable directory before launch.\n```',
     why: 'This must never read as a pass. Any untested item keeps the verdict orange, even when every check that did run passed.',
   },
   {
@@ -445,6 +449,22 @@ function leftItem(l) {
   </div>`;
 }
 
+function unblockItem(u) {
+  return `<div class="item">
+    <div class="item-head" style="cursor:default">
+      <span class="glyph tone-blocked">${icon('gap')}</span>
+      <span class="item-title">${esc(u.capability)}</span>
+      <span></span>
+      <span class="item-line" style="display:block">${u.target ? `Target: ${esc(u.target)}` : ''}</span>
+    </div>
+    <div class="item-body">
+      ${u.remedy ? `<div><div class="field-label">Remedy</div>${inline(u.remedy)}</div>` : ''}
+      ${u.tried ? `<div><div class="field-label">Tried</div>${inline(u.tried)}</div>` : ''}
+      <div class="actions">${u.evidence.map(fileChip).join('')}<button type="button" class="chip" data-act="copy" data-arg="${esc(u.snippet)}">${icon('copy', 'sm')}Copy for qa.md</button></div>
+    </div>
+  </div>`;
+}
+
 function fold(key, glyph, label, preview, inner) {
   const openNow = isOpen(key);
   return `<button type="button" class="fold" aria-expanded="${openNow}" data-act="toggle" data-arg="${key}">
@@ -466,6 +486,10 @@ function redesign(s) {
   if (open.length) parts.push(group('Needs you', open.length, open.map(findingItem).join('')));
   if (s.left) parts.push(group('Left behind', s.left.length, s.left.map(leftItem).join('')));
   if (s.gaps.length) parts.push(group('Not tested', s.gaps.length, s.gaps.map(gapItem).join('')));
+  if (s.unblock?.length) {
+    const openChip = '<div class="item-body"><div class="actions"><button type="button" class="chip" data-act="open-qa-md">' + icon('open', 'sm') + 'Open qa.md</button></div></div>';
+    parts.push(group('Unblock', s.unblock.length, s.unblock.map(unblockItem).join('') + openChip));
+  }
 
   const folds = [];
   if (fixed.length) {
@@ -532,7 +556,7 @@ function notes(s) {
     <section><h2>Rules worth arguing about</h2><ul>
       <li>A failed assertion doesn't get its own row. "Benchmark completion" and QA-1 say the same thing, so only the finding shows.</li>
       <li>Green requires zero open findings, zero untested items and nothing left behind.</li>
-      <li>No new actions. Open and copy already exist as <code>OpenQaEvidence</code>, <code>OpenQaReport</code> and <code>Copy</code>.</li>
+      <li><code>Copy for qa.md</code> gives the operator the exact snippet to paste. <code>Open qa.md</code> opens the repository file the runtime reads, and the desktop app never writes it.</li>
       <li>The same block would replace <code>qaFindingsSection</code> and <code>qaReportSection</code> on standalone QA. Its live checklist stays.</li>
     </ul></section>`;
 }
@@ -597,6 +621,8 @@ paneEl.addEventListener('click', (e) => {
   } else if (act === 'copy') {
     if (navigator.clipboard) navigator.clipboard.writeText(arg).catch(() => {});
     toast('Copied');
+  } else if (act === 'open-qa-md') {
+    toast('Opens .skill-bill/phases/qa.md in the default app. The app never writes it.');
   }
 });
 

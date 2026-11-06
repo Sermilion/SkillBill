@@ -92,7 +92,29 @@ class DetailViewModelTest {
     source: WorkItem = item,
     workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
     toastQueue: ToastQueue = ToastQueue(),
-  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings)
+    specs: SpecRepository = NoSpecs,
+  ) = DetailViewModel(source, session, details, changes, scopes, activity, board, specs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, toastQueue, settings)
+
+  @Test
+  fun `opening qa instructions targets the repository file and reports a missing file`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val specs = RecordingSpecs()
+    val viewModel = viewModel(specs = specs)
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    runCurrent()
+    details.flow.emit(DetailState(item, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    runCurrent()
+
+    viewModel.onAction(DetailAction.OpenQaPhaseInstructions)
+    runCurrent()
+
+    assertEquals(listOf("/work/skill-bill/.skill-bill/phases/qa.md" to "/work/skill-bill"), specs.openedFiles)
+    assertEquals(
+      DetailEffect.ShowToast(dev.skillbill.desktop.core.ui.feedback.ToastMessage(ToastTone.Problem, "Couldn't open .skill-bill/phases/qa.md. Create it in the repository, then paste the snippet.")),
+      effects.single(),
+    )
+  }
 
   @Test
   fun `favorite membership follows confirmed settings and a failed write leaves it unchanged`() = runTest {
@@ -469,6 +491,15 @@ class DetailViewModelTest {
     override suspend fun openFileUnder(path: String, directory: String) = OpenOutcome.NotOpened
     override suspend fun revealFolder(path: String) = OpenOutcome.Opened
     override suspend fun deleteBundle(bundle: SpecBundleRef): SpecDeleteOutcome = error("unused")
+  }
+
+  private class RecordingSpecs : SpecRepository by NoSpecs {
+    val openedFiles = mutableListOf<Pair<String, String>>()
+
+    override suspend fun openFileUnder(path: String, directory: String): OpenOutcome {
+      openedFiles += path to directory
+      return OpenOutcome.NotOpened
+    }
   }
 
   private object NoWebPages : RepositoryWebPages {

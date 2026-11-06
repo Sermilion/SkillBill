@@ -1,5 +1,11 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.runComposeUiTest
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
 import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
@@ -16,6 +22,7 @@ import dev.skillbill.desktop.core.domain.model.QaRunFinding
 import dev.skillbill.desktop.core.domain.model.QaRunRetainedResource
 import dev.skillbill.desktop.core.domain.model.QaRunTemporaryEdit
 import dev.skillbill.desktop.core.domain.model.QaVerdict
+import dev.skillbill.desktop.core.domain.model.VerifyRunDetails
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.isFileUnderDirectory
 import dev.skillbill.desktop.core.testing.workItem
@@ -74,6 +81,111 @@ class QaResultsViewTest {
   fun `gaps scenario`() {
     val view = qaResultsView(input(QaVerdict.Incomplete, QaRunDetails(assertions = assertions(Passed, 3) + assertions(NotExercised, 2))))
     assertHead(view, "Incomplete", QaResultsTone.Blocked, "QA found no problems, but could not test 2 things. 3 checks passed.")
+  }
+
+  @Test
+  fun `unblock parses fields and keeps heading lines inside the fenced snippet`() {
+    val report = """Verdict: incomplete
+
+## Unblock
+#### display
+- Target: desktop
+- Tried: Started /tmp/run/xvfb.log
+- Evidence: /tmp/run/xvfb.log, , /tmp/run/app.log
+- Remedy: install xvfb
+```markdown
+# not a heading
+### 1 not a finding
+Start Xvfb before launching.
+```
+#### app_startup_gate
+- Target: desktop
+- Tried:
+- Evidence:
+- Remedy: set SKILL_BILL_RUNTIME_DIR
+~~~
+Set SKILL_BILL_RUNTIME_DIR before launch.
+~~~
+
+## Assertions
+must stay out
+"""
+    val view = qaResultsView(input(QaVerdict.Incomplete, reportText = report).copy(fallbackInvocationDirectory = "/tmp/run"))
+
+    assertEquals(2, view.unblock.size)
+    assertEquals(
+      QaUnblockEntry(
+        "display", "desktop", "Started xvfb.log", "/tmp/run", listOf("/tmp/run/xvfb.log", "/tmp/run/app.log"), "install xvfb",
+        "# not a heading\n### 1 not a finding\nStart Xvfb before launching.",
+      ),
+      view.unblock[0],
+    )
+    assertEquals("app_startup_gate", view.unblock[1].capability)
+    assertNull(view.unblock[1].tried)
+    assertEquals(emptyList(), view.unblock[1].evidencePaths)
+    assertEquals("Set SKILL_BILL_RUNTIME_DIR before launch.", view.unblock[1].snippet)
+  }
+
+  @Test
+  fun `unblock keeps shorter fences and tagged fence lines inside snippets`() {
+    for (fence in listOf("````", "~~~~")) {
+      val marker = fence.take(3)
+      val snippet = "Run this setup:\n${marker}sh\nexport DISPLAY=:99\n$marker\n## Keep inside the snippet\n${fence}markdown\n- Remedy: keep this literal"
+      val report = "## Unblock\n#### display\n- Remedy: install Xvfb\n${fence}markdown\n$snippet\n$fence\n#### input\n- Remedy: install a driver\n## Assertions\n#### must_stay_out"
+
+      val entries = qaResultsView(input(QaVerdict.Incomplete, reportText = report)).unblock
+
+      assertEquals(listOf("display", "input"), entries.map { it.capability })
+      assertEquals(snippet, entries[0].snippet)
+      assertEquals("install Xvfb", entries[0].remedy)
+      assertEquals("install a driver", entries[1].remedy)
+      assertNull(entries[1].snippet)
+    }
+  }
+
+  @Test
+  fun `unblock stays empty for passed missing and malformed sections`() {
+    val section = "## Unblock\n#### display\n- Remedy: install xvfb\n```text\n# in snippet\n```."
+    assertTrue(qaResultsView(input(QaVerdict.Passed, reportText = section)).unblock.isEmpty())
+    assertTrue(qaResultsView(input(QaVerdict.Incomplete, reportText = "Verdict: incomplete")).unblock.isEmpty())
+    assertTrue(qaResultsView(input(QaVerdict.Skipped, reportText = "## Unblock\n- Remedy: x\n####\n```\nunclosed")).unblock.isEmpty())
+  }
+
+  @Test
+  fun `verify qa keeps the selected skipped receipt report for unblock parsing`() {
+    val report = "## Unblock\n#### display\n- Remedy: install Xvfb\n```markdown\nStart Xvfb.\n```"
+    val run = VerifyRunDetails(
+      workflowId = "verify-1", issueKey = null, workflowStatus = "completed", currentStepId = null,
+      startedAt = null, finishedAt = null, intake = null, target = null, repoRoot = "/repo", baseRevision = null,
+      headRevision = null, reviewMode = null, qaSelection = "on", specPath = null, steps = emptyList(), criteria = emptyList(),
+      criteriaRaw = null, nonGoals = emptyList(), technicalConstraints = emptyList(), rolloutExpectation = null,
+      completenessAudit = null, reviewFindings = null, flagAudit = null, unitTestValue = null, changedFiles = emptyList(),
+      verdict = null, qa = null, qaVerdict = "skipped", qaOutcome = "skipped", qaFindingLocations = emptyMap(),
+      supersededBy = null, staleReason = null, qaReportText = report,
+    )
+
+    val input = requireNotNull(verifyQaInput(run))
+    assertEquals(report, input.reportText)
+    assertEquals(1, qaResultsView(input).unblock.size)
+  }
+
+  @OptIn(ExperimentalTestApi::class)
+  @Test
+  fun `unblock chips copy the snippet verbatim and ask to open qa md`() = runComposeUiTest {
+    val snippet = "Set SKILL_BILL_RUNTIME_DIR.\nKeep this line."
+    val report = "## Unblock\n#### app_startup_gate\n```markdown\n$snippet\n```"
+    val view = qaResultsView(input(QaVerdict.Incomplete, reportText = report))
+    val actions = mutableListOf<DetailAction>()
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        QaResultsContent(view, rememberSectionCollapse(), { actions += it })
+      }
+    }
+
+    onNodeWithText("Copy for qa.md").performClick()
+    onNodeWithText("Open qa.md").performClick()
+
+    assertEquals(listOf(DetailAction.Copy(snippet), DetailAction.OpenQaPhaseInstructions), actions)
   }
 
   @Test

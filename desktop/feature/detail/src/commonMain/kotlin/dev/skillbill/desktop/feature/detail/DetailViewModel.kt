@@ -63,6 +63,8 @@ import kotlin.time.Clock
 private const val CHECKOUT_NOT_OPENED = "Could not open the checkout directory. Check that it still exists."
 private const val BRANCH_NOT_OPENED = "Could not open the repository in your browser. Check its origin remote and default browser."
 private const val FILE_NOT_OPENED = "Could not open the file. Check that it still exists."
+private const val QA_INSTRUCTIONS_NOT_OPENED = "Couldn't open .skill-bill/phases/qa.md. Create it in the repository, then paste the snippet."
+private const val QA_INSTRUCTIONS_PATH = ".skill-bill/phases/qa.md"
 
 /**
  * One item's detail. The first state already holds the route's row as the header, so the header paints before any read. Pages a
@@ -230,6 +232,7 @@ class DetailViewModel(
       is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
       is DetailAction.OpenQaReport -> open(FILE_NOT_OPENED) { specs.openFileInDefaultApp(action.path) }
       is DetailAction.OpenQaEvidence -> open(FILE_NOT_OPENED) { specs.openFileUnder(action.path, action.invocationDirectory) }
+      DetailAction.OpenQaPhaseInstructions -> openQaPhaseInstructions()
       is DetailAction.LoadMore -> loadMore(action.list)
       DetailAction.Next -> step(next = true)
       DetailAction.Previous -> step(next = false)
@@ -514,6 +517,15 @@ class DetailViewModel(
     viewModelScope.launch {
       if (request() == OpenOutcome.NotOpened) effectChannel.send(DetailEffect.ShowToast(ToastMessage(ToastTone.Problem, failure)))
     }
+  }
+
+  private fun openQaPhaseInstructions() {
+    val root = state.value.header.repositoryRoot.trimEnd('/')
+    if (root.isBlank()) {
+      effectChannel.trySend(DetailEffect.ShowToast(ToastMessage(ToastTone.Problem, QA_INSTRUCTIONS_NOT_OPENED)))
+      return
+    }
+    open(QA_INSTRUCTIONS_NOT_OPENED) { specs.openFileUnder("$root/$QA_INSTRUCTIONS_PATH", root) }
   }
 }
 
