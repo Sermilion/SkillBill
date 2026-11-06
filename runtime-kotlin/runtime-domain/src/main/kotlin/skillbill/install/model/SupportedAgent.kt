@@ -12,6 +12,7 @@ enum class SupportedAgent(
   val profileDirectoryPrefix: String? = null,
   val mcpProfileFileName: String = mcpConfigRelativePath.substringAfterLast('/'),
   val honorsAdditionalWritableDirectories: Boolean,
+  val loadsRuntimeMcpHeadless: Boolean,
 ) {
   CLAUDE(
     "claude",
@@ -22,6 +23,7 @@ enum class SupportedAgent(
     false,
     ".claude-",
     honorsAdditionalWritableDirectories = true,
+    loadsRuntimeMcpHeadless = true,
   ),
   CODEX(
     "codex",
@@ -32,6 +34,7 @@ enum class SupportedAgent(
     true,
     ".codex-",
     honorsAdditionalWritableDirectories = true,
+    loadsRuntimeMcpHeadless = true,
   ),
   JUNIE(
     "junie",
@@ -41,6 +44,7 @@ enum class SupportedAgent(
     ".junie/mcp/mcp.json",
     false,
     honorsAdditionalWritableDirectories = false,
+    loadsRuntimeMcpHeadless = false,
   ),
   CURSOR(
     "cursor",
@@ -50,6 +54,7 @@ enum class SupportedAgent(
     ".cursor/mcp.json",
     false,
     honorsAdditionalWritableDirectories = false,
+    loadsRuntimeMcpHeadless = false,
   ),
   ;
 

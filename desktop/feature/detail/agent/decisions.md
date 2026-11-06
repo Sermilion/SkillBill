@@ -1,3 +1,8 @@
+## [2026-11-06] Scope live validation checks to the current invocation
+Context: Resumed validation runs can retain earlier execution records, and some runs do not provide live checks.
+Decision: Project checks for the current standalone validation invocation and show them only when its availability flag is set.
+Reason: Earlier events would misrepresent the current run. The flag records availability without tying the UI to an agent name.
+
 ## [2026-11-06] Show Verify QA evidence as names only
 Context: Verify QA results reuse the desktop QA results view, but Verify has no invocation directory for resolving evidence files.
 Decision: Render evidence names without file-opening actions for Verify QA.
