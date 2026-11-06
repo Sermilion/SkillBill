@@ -54,6 +54,7 @@ import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.util.UUID
+import java.io.File
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -157,6 +158,20 @@ class ChatWorkspace(
 
   override fun runReviewAction(item: WorkItem, action: ReviewFindingsAction) {
     val instruction = reviewActionInstruction(item, action) ?: return
+    actOnItemChat(item, instruction)
+  }
+
+  override fun runVerifyFixes(item: WorkItem, brief: String) = actOnItemChat(item, brief)
+
+  override fun prefillGoalIntake(repoRoot: String, branch: String, text: String): Boolean {
+    if (newTask.text.isNotBlank()) return false
+    newTask.text = text
+    newTask.repository = dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository(repoRoot, File(repoRoot).name)
+    newTask.baseBranch = branch
+    return true
+  }
+
+  private fun actOnItemChat(item: WorkItem, instruction: String) {
     setPaneOpen(true)
     val existing = tabState.value.tabs.firstOrNull { it.executionId == item.id }
     val id = existing?.id ?: item.id

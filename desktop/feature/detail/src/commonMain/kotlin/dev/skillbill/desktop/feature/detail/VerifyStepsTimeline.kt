@@ -44,7 +44,7 @@ internal fun verifyQaInput(run: VerifyRunDetails): QaResultsInput? = run.qa?.let
   )
 }
 
-internal fun DetailSections.verifyStepsTimeline(run: VerifyRunDetails, onAction: (DetailAction) -> Unit, onScrollToSection: (String) -> Unit) {
+internal fun DetailSections.verifyStepsTimeline(run: VerifyRunDetails, state: DetailUiState, items: List<FixItem>, onAction: (DetailAction) -> Unit, onScrollToSection: (String) -> Unit) {
   val collapse = collapse
   section(VERIFY_STEPS_KEY, "Steps", spaceBefore = DocBlockGap) {
     auditedSteps(run).forEach { step ->
@@ -56,7 +56,7 @@ internal fun DetailSections.verifyStepsTimeline(run: VerifyRunDetails, onAction:
         VerifyStepHeader(step, open, receipt) { collapse.toggle(stateKey, default = true) }
       }
       if (open) item(key = "$targetKey:receipt") {
-        VerifyReceiptBody(run, step, collapse, onAction, onScrollToSection)
+        VerifyReceiptBody(run, step, collapse, state, items, onAction, onScrollToSection)
       }
     }
   }
@@ -107,16 +107,34 @@ private fun VerifyStepHeader(step: VerifyRunStep, open: Boolean, expandable: Boo
 }
 
 @Composable
-private fun VerifyReceiptBody(run: VerifyRunDetails, step: VerifyRunStep, collapse: dev.skillbill.desktop.core.designsystem.detail.SectionCollapse, onAction: (DetailAction) -> Unit, onScrollToSection: (String) -> Unit) {
+private fun VerifyReceiptBody(run: VerifyRunDetails, step: VerifyRunStep, collapse: dev.skillbill.desktop.core.designsystem.detail.SectionCollapse, state: DetailUiState, items: List<FixItem>, onAction: (DetailAction) -> Unit, onScrollToSection: (String) -> Unit) {
   Column(Modifier.fillMaxWidth().padding(start = 26.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     when (step.stepId) {
       "feature_flag_audit" -> run.flagAudit?.let { VerifyFlagAuditReceipt(it) }
-      "code_review" -> run.reviewFindings?.let { VerifyReviewReceipt(it) }
-      "unit_test_value_check" -> run.unitTestValue?.let { VerifyTestValueReceipt(it) }
+      "code_review" -> run.reviewFindings?.let { receipt ->
+        VerifyFixSelectAll(items, FixKind.Finding, state, verifySelectionAllowed(run), onAction)
+        VerifyReviewReceipt(receipt) { finding ->
+          items.filterIsInstance<FixItem.Finding>().firstOrNull { it.finding.ref == finding.ref }?.let { VerifyFixItemControls(it, items, state, verifySelectionAllowed(run), onAction) }
+        }
+      }
+      "unit_test_value_check" -> run.unitTestValue?.let { receipt ->
+        VerifyFixSelectAll(items, FixKind.TestRow, state, verifySelectionAllowed(run), onAction)
+        VerifyTestValueReceipt(receipt) { index, _ ->
+          items.filterIsInstance<FixItem.TestRow>().firstOrNull { it.key == "t:$index" }?.let { VerifyFixItemControls(it, items, state, verifySelectionAllowed(run), onAction) }
+        }
+      }
       "completeness_audit" -> run.completenessAudit?.let { VerifyCompletenessReceipt(it, onScrollToSection) }
       "qa" -> {
         val input = verifyQaInput(run)
-        if (input != null) QaResultsContent(qaResultsView(input), collapse, onAction, showVerdictMark = true)
+        if (input != null) QaResultsContent(
+          qaResultsView(input), collapse, onAction, showVerdictMark = true,
+          beforeFindings = { VerifyFixSelectAll(items, FixKind.QaFinding, state, verifySelectionAllowed(run), onAction) },
+          findingExtra = { row ->
+            items.filterIsInstance<FixItem.QaFinding>().firstOrNull { it.finding.id == row.id }?.let { fix ->
+              VerifyFixItemControls(fix, items, state, verifySelectionAllowed(run), onAction)
+            }
+          },
+        )
         else BasicText(run.qaVerdict?.takeIf { it.isNotBlank() } ?: "skipped", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
       }
       "verdict" -> run.verdict?.let { receipt ->

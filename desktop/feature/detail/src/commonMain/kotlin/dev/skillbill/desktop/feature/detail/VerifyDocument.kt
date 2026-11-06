@@ -37,15 +37,21 @@ internal fun DetailSections.verifyDocument(state: DetailUiState, run: VerifyRunD
   }
   val showChanges = run.changedFiles.isNotEmpty() && verifyRunState(run) != VerifyRunState.Parked
   val showCopy = verifyRunState(run) == VerifyRunState.Finished
-  if (showChanges || showCopy) item(key = "verify-actions") {
+  val runAgain = verifyRunState(run) in setOf(VerifyRunState.Finished, VerifyRunState.Stopped, VerifyRunState.Superseded) &&
+    !run.intake.isNullOrBlank() && !run.repoRoot.isNullOrBlank() && !run.target.isNullOrBlank() && !(state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.isNullOrEmpty()
+  if (showChanges || showCopy || runAgain) item(key = "verify-actions") {
     androidx.compose.foundation.layout.Row(Modifier.padding(top = 12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
       if (showChanges) SbButton("Open changes · ${run.changedFiles.size}", { onAction(DetailAction.OpenChangesWindow()) })
       if (showCopy) SbButton("Copy report", { onAction(DetailAction.Copy(verifyReportText(run))) })
+      if (runAgain) SbButton(if (verifyRunState(run) == VerifyRunState.Finished) "Verify again" else "Run again", { onAction(DetailAction.VerifyAgain) }, enabled = !state.verifyAgainInFlight)
     }
   }
   item(key = "verify-outcome") {
     VerifyOutcomeCard(verifyOutcomeView(run), onScrollToSection)
   }
-  verifyCriteriaSection(verifyCriteriaView(run, state.verifyCriteriaFilter), onAction)
-  verifyStepsTimeline(run, onAction, onScrollToSection)
+  val items = verifyFixItems(run, state.criterionMarks)
+  val allowed = verifySelectionAllowed(run)
+  verifyCriteriaSection(verifyCriteriaView(run, state.verifyCriteriaFilter), run, state, items, onAction)
+  verifyStepsTimeline(run, state, items, onAction, onScrollToSection)
+  item(key = "verify-fix-bar") { VerifyFixBar(items, state, allowed, onAction) }
 }

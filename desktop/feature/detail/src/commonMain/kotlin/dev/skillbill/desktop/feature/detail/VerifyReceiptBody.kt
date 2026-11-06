@@ -40,9 +40,9 @@ internal fun VerifyFlagAuditReceipt(receipt: VerifyFlagAudit) {
 }
 
 @Composable
-internal fun VerifyReviewReceipt(receipt: VerifyReviewSection) {
+internal fun VerifyReviewReceipt(receipt: VerifyReviewSection, leading: @Composable (dev.skillbill.desktop.core.domain.model.VerifyReviewFinding) -> Unit = {}) {
   if (receipt.items.isEmpty()) VerifyRawFindings(receipt.findings)
-  else receipt.items.forEach { finding -> VerifyFindingRow(finding) }
+  else receipt.items.forEach { finding -> VerifyFindingRow(finding) { leading(finding) } }
 }
 
 @Composable
@@ -63,12 +63,12 @@ internal fun VerifyFindingRow(finding: dev.skillbill.desktop.core.domain.model.V
 }
 
 @Composable
-internal fun VerifyTestValueReceipt(receipt: VerifyUnitTestValue) {
+internal fun VerifyTestValueReceipt(receipt: VerifyUnitTestValue, leading: @Composable (Int, VerifyTestValueRow) -> Unit = { _, _ -> }) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     receipt.skipReason?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Skipped", it) }
     receipt.overall?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Overall", it) }
     receipt.summary?.takeIf { it.isNotBlank() }?.let { VerifyReceiptField("Summary", it) }
-    receipt.rows.forEach { VerifyTestRow(it) }
+    receipt.rows.forEachIndexed { index, row -> VerifyTestRow(row) { leading(index, row) } }
     VerifyTestPlanGroup("Keep", receipt.keep)
     VerifyTestPlanGroup("Rewrite", receipt.rewrite)
     VerifyTestPlanGroup("Delete", receipt.delete)

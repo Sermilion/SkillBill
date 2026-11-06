@@ -37,9 +37,11 @@ internal fun verifyCriteriaView(run: VerifyRunDetails, filter: VerifyCriteriaFil
   return VerifyCriteriaView(run.workflowId, visible, filter, rows.size, rows.count { it.grade?.status in setOf("PARTIAL", "FAIL") }, rows.count { it.grade?.status == "PASS" }, grades.isNotEmpty() && raw == null, raw, run.nonGoals, run.technicalConstraints, run.rolloutExpectation)
 }
 
-internal fun DetailSections.verifyCriteriaSection(view: VerifyCriteriaView, onAction: (DetailAction) -> Unit) {
+internal fun DetailSections.verifyCriteriaSection(view: VerifyCriteriaView, run: VerifyRunDetails, state: DetailUiState, items: List<FixItem>, onAction: (DetailAction) -> Unit) {
   val sectionCollapse = collapse
   section(VERIFY_CRITERIA_KEY, "Criteria", spaceBefore = DocBlockGap) {
+    val allowed = verifySelectionAllowed(run)
+    item(key = "verify-select-all-criteria") { VerifyFixSelectAll(items, FixKind.Criterion, state, allowed, onAction) }
     if (view.showFilter) item(key = "verify-filter") {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         filterButton("All", view.allCount, VerifyCriteriaFilter.All, view.filter, onAction)
@@ -47,7 +49,10 @@ internal fun DetailSections.verifyCriteriaSection(view: VerifyCriteriaView, onAc
         filterButton("Met", view.metCount, VerifyCriteriaFilter.Met, view.filter, onAction)
       }
     }
-    view.rows.forEach { row -> item(key = "verify-criterion-${row.number}") { VerifyCriterionRow(row) } }
+    view.rows.forEach { row -> item(key = "verify-criterion-${row.number}") {
+      val fix = items.filterIsInstance<FixItem.Criterion>().firstOrNull { it.grade.number == row.number }
+      VerifyCriterionRow(row, leading = { fix?.let { VerifyFixItemControls(it, items, state, allowed, onAction) } })
+    } }
     view.raw?.let { raw -> item(key = "verify-criteria-raw") { BasicText(raw) } }
     view.nonGoals.takeIf { it.isNotEmpty() }?.let { contextFold(sectionCollapse, "$VERIFY_NON_GOALS_KEY:${view.workflowId}", "Non-goals", it.joinToString("\n")) }
     view.technicalConstraints.takeIf { it.isNotEmpty() }?.let { contextFold(sectionCollapse, "$VERIFY_TECHNICAL_CONSTRAINTS_KEY:${view.workflowId}", "Technical constraints", it.joinToString("\n")) }

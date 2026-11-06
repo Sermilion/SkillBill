@@ -123,6 +123,8 @@ class DetailViewModel(
   )
 
   private val controls = DetailControls(viewModelScope, workControls, toasts, ::launchStarted, ::launchFinished) { mutableState.value }
+  private val verifyFixActions = VerifyFixActions(viewModelScope, settings, toasts, mutableState) { effectChannel.trySend(it) }
+  private val verifyAgainLauncher = VerifyAgainLauncher(viewModelScope, workControls, session, toasts, mutableState)
 
   init {
     selection.select(null)
@@ -211,9 +213,17 @@ class DetailViewModel(
 
   fun onAction(action: DetailAction) {
     if (!state.value.itemResolved && action != DetailAction.Retry && action !is DetailAction.Navigate) return
+    if (action is DetailAction.ToggleFix || action is DetailAction.SetFixRoute || action is DetailAction.ToggleSelectAllFixes ||
+      action == DetailAction.ClearFixSelection || action == DetailAction.FixInChat || action == DetailAction.StartGoalWithFixes ||
+      action is DetailAction.GoalIntakeResult || action is DetailAction.MarkCriterion
+    ) {
+      verifyFixActions.onAction(action)
+      return
+    }
     when (action) {
       is ControlsAction -> controls.onAction(action)
       DetailAction.ToggleFavorite -> toggleFavorite()
+      DetailAction.VerifyAgain -> verifyAgainLauncher.start()
       is DetailAction.ToggleQaCase -> toggleQaCase(action.key)
       is DetailAction.SetAllQaCases -> mutableState.update { current -> current.copy(qaCaseOverrides = current.qaCaseOverrides + action.keys.associateWith { action.open }) }
       is DetailAction.SelectQaRun -> if (action.invocationId != null) mutableState.update { it.copy(selectedQaRun = action.invocationId) }
@@ -325,6 +335,7 @@ class DetailViewModel(
       )
     }
     updateFavoriteState()
+    verifyFixActions.refresh()
   }
 
   private fun favoriteKey(header: WorkItem): FavoriteWorkKey? =

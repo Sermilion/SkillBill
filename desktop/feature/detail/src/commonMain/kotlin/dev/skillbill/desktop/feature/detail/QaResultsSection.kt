@@ -92,7 +92,14 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
 }
 
 @Composable
-internal fun QaResultsContent(view: QaResultsView, state: SectionCollapse, onAction: (DetailAction) -> Unit, showVerdictMark: Boolean = false) {
+internal fun QaResultsContent(
+  view: QaResultsView,
+  state: SectionCollapse,
+  onAction: (DetailAction) -> Unit,
+  showVerdictMark: Boolean = false,
+  beforeFindings: @Composable () -> Unit = {},
+  findingExtra: @Composable (QaFindingRow) -> Unit = {},
+) {
   val base = "qa-results:${view.runKey}"
   Column(Modifier.fillMaxWidth()) {
     if (showVerdictMark) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,8 +107,12 @@ internal fun QaResultsContent(view: QaResultsView, state: SectionCollapse, onAct
       BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     } else BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     if (view.open.isNotEmpty()) {
+      beforeFindings()
       QaGroupLabel("Needs you", view.open.size)
-      view.open.forEachIndexed { index, row -> QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode) }
+      view.open.forEachIndexed { index, row ->
+        QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode)
+        findingExtra(row)
+      }
     }
     if (view.left.isNotEmpty()) {
       QaGroupLabel("Left behind", view.left.size)

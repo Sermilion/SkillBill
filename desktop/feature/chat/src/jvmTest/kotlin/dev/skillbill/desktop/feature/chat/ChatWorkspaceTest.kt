@@ -35,6 +35,8 @@ import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.newtask.testDatabaseSessionController
 import dev.skillbill.desktop.feature.chat.newtask.testNewTaskDraft
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskRepository
+import dev.skillbill.desktop.feature.chat.newtask.NewTaskDraft
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -75,9 +77,26 @@ class ChatWorkspaceTest {
   @AfterTest
   fun tearDown() = Dispatchers.resetMain()
 
-  private fun TestScope.workspace(): ChatWorkspace {
+  private fun TestScope.workspace(draft: NewTaskDraft = testNewTaskDraft()): ChatWorkspace {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    return ChatWorkspace(chat, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, testNewTaskDraft())
+    return ChatWorkspace(chat, details, controls, testDatabaseSessionController(), WindowCoroutineScope(backgroundScope), clock, panes, selection, draft)
+  }
+
+  @Test
+  fun `goal intake prefill keeps a nonblank draft and fills an empty draft`() = runTest {
+    val draft = testNewTaskDraft()
+    val workspace = workspace(draft)
+    assertTrue(workspace.prefillGoalIntake("/verified/repo", "feature/verify", "Fix criterion 2"))
+    assertEquals("Fix criterion 2", draft.text)
+    assertEquals(NewTaskRepository("/verified/repo", "repo"), draft.repository)
+    assertEquals("feature/verify", draft.baseBranch)
+
+    draft.text = "operator draft"
+    assertFalse(workspace.prefillGoalIntake("/other", "other", "replacement"))
+    assertEquals("operator draft", draft.text)
+    assertEquals(NewTaskRepository("/verified/repo", "repo"), draft.repository)
+    assertEquals("feature/verify", draft.baseBranch)
+    workspace.closeAll()
   }
 
   @Test
