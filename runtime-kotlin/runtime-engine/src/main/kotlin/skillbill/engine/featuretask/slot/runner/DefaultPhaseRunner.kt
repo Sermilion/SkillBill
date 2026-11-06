@@ -147,6 +147,7 @@ public class DefaultPhaseRunner(
           compaction = facts.compaction,
           outputSink = outputSink,
           promptOverride = composePrompt(input),
+          streamProviderOutput = captureStreamOutput,
           streamOutputForLiveness = facts.streamOutputForLiveness || captureStreamOutput,
           captureDisplayOutput = captureStreamOutput,
           readOnlyPhase = readOnly,

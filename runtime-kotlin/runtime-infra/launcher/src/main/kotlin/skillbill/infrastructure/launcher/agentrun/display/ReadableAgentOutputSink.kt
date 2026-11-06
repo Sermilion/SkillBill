@@ -20,6 +20,7 @@ internal class ReadableAgentOutputSink(
   private val cursorPartialMessage = StringBuilder()
   private var droppingCursorPartialLine = false
   private var cursorPartialMessageOverflowed = false
+  private var cursorPartialTextPending = false
   private var toolTrackingOverflowReported = false
   private val mapper = ObjectMapper()
 
@@ -362,18 +363,32 @@ internal class ReadableAgentOutputSink(
         diagnostics.warning("seam=standalone_output_decode value_expected=bounded_partial_line value_used=truncated")
       }
     }
+    emitCursorPartialText(stream)
   }
 
   private fun flushCursorPartial(stream: AgentRunOutputStream) {
-    if (cursorPartialLine.isNotEmpty()) emitCursorPartialLine(stream)
+    if (cursorPartialLine.isNotEmpty()) {
+      emitCursorPartialLine(stream)
+    } else if (cursorPartialTextPending) {
+      delegate.write(stream, "\n")
+      cursorPartialTextPending = false
+    }
     droppingCursorPartialLine = false
     cursorPartialMessage.setLength(0)
     cursorPartialMessageOverflowed = false
   }
 
   private fun emitCursorPartialLine(stream: AgentRunOutputStream) {
-    delegate.write(stream, "${cursorPartialLine}\n")
+    emitCursorPartialText(stream)
+    delegate.write(stream, "\n")
+    cursorPartialTextPending = false
+  }
+
+  private fun emitCursorPartialText(stream: AgentRunOutputStream) {
+    if (cursorPartialLine.isEmpty()) return
+    delegate.write(stream, cursorPartialLine.toString())
     cursorPartialLine.setLength(0)
+    cursorPartialTextPending = true
   }
 
   private fun hasUsefulInput(input: JsonNode?): Boolean =
