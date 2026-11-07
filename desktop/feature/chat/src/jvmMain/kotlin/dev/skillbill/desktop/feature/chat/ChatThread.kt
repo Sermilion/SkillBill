@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ApprovalCard
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
@@ -183,7 +184,7 @@ internal class ChatThread(private val clock: Clock) {
    * settled outcome to pending, and a live card keeps the grant eligibility the feed already supplied.
    */
   fun showApproval(card: ApprovalCard, live: Boolean = true) = messages.update { list ->
-    val index = list.indexOfFirst { it is ChatMessage.Approval && it.card.key.approvalId == card.key.approvalId }
+    val index = list.indexOfFirst { it is ChatMessage.Approval && it.card.key == card.key }
     if (index < 0) return@update list + ChatMessage.Approval(card, restoredCopy = !live)
     val existing = list[index] as ChatMessage.Approval
     if (!existing.card.isPending && card.isPending) return@update list
@@ -199,20 +200,20 @@ internal class ChatThread(private val clock: Clock) {
     }
   }
 
-  /** The card currently shown for [approvalId], if the transcript has one. */
-  fun approval(approvalId: String): ApprovalCard? =
-    messages.value.firstNotNullOfOrNull { (it as? ChatMessage.Approval)?.card?.takeIf { card -> card.key.approvalId == approvalId } }
+  /** The card currently shown for [key], if the transcript has one. */
+  fun approval(key: ApprovalCardKey): ApprovalCard? =
+    messages.value.firstNotNullOfOrNull { (it as? ChatMessage.Approval)?.card?.takeIf { card -> card.key == key } }
 
   /**
    * Claims the one click on a live pending card: returns its card and marks it submitting, or null when it is already
    * submitting, settled or only a restored copy. This is what keeps a double click from sending two decisions.
    */
-  fun beginApprovalDecision(approvalId: String): ApprovalCard? {
+  fun beginApprovalDecision(key: ApprovalCardKey): ApprovalCard? {
     var begun: ApprovalCard? = null
     messages.update { list ->
       begun = null
       list.map {
-        if (it is ChatMessage.Approval && it.card.key.approvalId == approvalId && !it.submitting && !it.restoredCopy && it.card.isPending) {
+        if (it is ChatMessage.Approval && it.card.key == key && !it.submitting && !it.restoredCopy && it.card.isPending) {
           begun = it.card
           it.copy(submitting = true, refusal = null)
         } else {
@@ -223,10 +224,10 @@ internal class ChatThread(private val clock: Clock) {
     return begun
   }
 
-  /** Marks the card of [approvalId] as awaiting the answer to a click sent from this window. */
-  fun approvalSubmitting(approvalId: String, submitting: Boolean, refusal: String? = null) = messages.update { list ->
+  /** Marks the card of [key] as awaiting the answer to a click sent from this window. */
+  fun approvalSubmitting(key: ApprovalCardKey, submitting: Boolean, refusal: String? = null) = messages.update { list ->
     list.map {
-      if (it is ChatMessage.Approval && it.card.key.approvalId == approvalId) it.copy(submitting = submitting, refusal = refusal) else it
+      if (it is ChatMessage.Approval && it.card.key == key) it.copy(submitting = submitting, refusal = refusal) else it
     }
   }
 

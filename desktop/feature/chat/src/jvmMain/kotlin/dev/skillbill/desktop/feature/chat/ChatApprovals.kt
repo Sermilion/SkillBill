@@ -64,7 +64,7 @@ internal class ChatApprovals(private val repository: ApprovalFeedRepository) {
           is ApprovalFeed.Observing -> {
             var outcomeChanged = false
             feed.cards.forEach { card ->
-              val known = thread.approval(card.key.approvalId)
+              val known = thread.approval(card.key)
               if (known == null && !owns(card)) return@forEach
               thread.showApproval(card)
               if (known == null || known.state != card.state) outcomeChanged = true
@@ -80,35 +80,35 @@ internal class ChatApprovals(private val repository: ApprovalFeedRepository) {
   }
 
   /** Sends the operator's click on [optionId]; the card shows as submitting until the feed reports its new outcome. */
-  suspend fun decide(thread: ChatThread, approvalId: String, optionId: String, alwaysAllow: Boolean) {
-    val card = thread.beginApprovalDecision(approvalId) ?: return
+  suspend fun decide(thread: ChatThread, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
+    val card = thread.beginApprovalDecision(key) ?: return
     val outcome = try {
       repository.decide(card.key, optionId, alwaysAllow)
     } catch (cancelled: CancellationException) {
-      thread.approvalSubmitting(approvalId, submitting = false)
+      thread.approvalSubmitting(key, submitting = false)
       throw cancelled
     }
-    settle(thread, approvalId, outcome)
+    settle(thread, key, outcome)
   }
 
   /** Dismisses the pending request without choosing an option. */
-  suspend fun dismiss(thread: ChatThread, approvalId: String) {
-    val card = thread.beginApprovalDecision(approvalId) ?: return
+  suspend fun dismiss(thread: ChatThread, key: ApprovalCardKey) {
+    val card = thread.beginApprovalDecision(key) ?: return
     val outcome = try {
       repository.dismiss(card.key)
     } catch (cancelled: CancellationException) {
-      thread.approvalSubmitting(approvalId, submitting = false)
+      thread.approvalSubmitting(key, submitting = false)
       throw cancelled
     }
-    settle(thread, approvalId, outcome)
+    settle(thread, key, outcome)
   }
 
-  private fun settle(thread: ChatThread, approvalId: String, outcome: ApprovalDecisionOutcome) {
+  private fun settle(thread: ChatThread, key: ApprovalCardKey, outcome: ApprovalDecisionOutcome) {
     when (outcome) {
       // The feed reports the settled card next; that update ends the submitting state.
       ApprovalDecisionOutcome.Settled, ApprovalDecisionOutcome.AlreadySettled -> Unit
-      ApprovalDecisionOutcome.NotLive -> thread.approvalSubmitting(approvalId, submitting = false, refusal = APPROVAL_NOT_LIVE_NOTE)
-      is ApprovalDecisionOutcome.Refused -> thread.approvalSubmitting(approvalId, submitting = false, refusal = outcome.reason)
+      ApprovalDecisionOutcome.NotLive -> thread.approvalSubmitting(key, submitting = false, refusal = APPROVAL_NOT_LIVE_NOTE)
+      is ApprovalDecisionOutcome.Refused -> thread.approvalSubmitting(key, submitting = false, refusal = outcome.reason)
     }
   }
 }

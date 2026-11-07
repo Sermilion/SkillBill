@@ -34,6 +34,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.ApprovalCard
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ApprovalCardOption
 import dev.skillbill.desktop.core.domain.model.PROVIDER_REMEMBER_OPTION_KIND
 
@@ -47,8 +48,8 @@ private val INPUT_MAX_HEIGHT = 220.dp
  */
 internal data class ChatApprovalActions(
   val live: Boolean,
-  val onDecide: (approvalId: String, optionId: String, alwaysAllow: Boolean) -> Unit,
-  val onDismiss: (approvalId: String) -> Unit,
+  val onDecide: (key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) -> Unit,
+  val onDismiss: (key: ApprovalCardKey) -> Unit,
   /** Opens the repository's durable-rule list. It lists only and never decides; null hides the entry. */
   val onOpenRules: (() -> Unit)? = null,
 )
@@ -181,14 +182,14 @@ private fun ApprovalControls(message: ChatMessage.Approval, actions: ChatApprova
       if (allowOption != null) {
         SbButton(
           label = alwaysAllowLabel(card),
-          onClick = { actions?.onDecide(card.key.approvalId, allowOption.optionId, true) },
+          onClick = { actions?.onDecide(card.key, allowOption.optionId, true) },
           size = SbControlSize.Small,
           enabled = enabled && alwaysUnavailable == null,
         )
       }
       SbButton(
         label = "Dismiss",
-        onClick = { actions?.onDismiss(card.key.approvalId) },
+        onClick = { actions?.onDismiss(card.key) },
         variant = SbButtonVariant.Ghost,
         size = SbControlSize.Small,
         enabled = enabled,
@@ -270,7 +271,7 @@ private fun OptionRow(card: ApprovalCard, option: ApprovalCardOption, primary: B
     if (button != null) {
       SbButton(
         label = if (option.kind == ALLOW_KIND) "Allow" else "Deny",
-        onClick = { actions?.onDecide(card.key.approvalId, option.optionId, false) },
+        onClick = { actions?.onDecide(card.key, option.optionId, false) },
         // The visible label is short; the accessible name is the provider's full option label.
         modifier = Modifier.semantics { contentDescription = option.label },
         variant = button,

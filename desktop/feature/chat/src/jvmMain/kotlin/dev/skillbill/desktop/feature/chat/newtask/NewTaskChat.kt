@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatAgent
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
@@ -113,14 +114,14 @@ internal class NewTaskChat(
   }
 
   /** The operator's click on one option of a pending card; it sends nothing unless the feed holds a live registration. */
-  fun decideApproval(approvalId: String, optionId: String, alwaysAllow: Boolean) {
+  fun decideApproval(key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
     if (!approvalLiveState.value || closing) return
-    scope.launch(job + dispatcher) { approvalFlow.decide(thread, approvalId, optionId, alwaysAllow) }
+    scope.launch(job + dispatcher) { approvalFlow.decide(thread, key, optionId, alwaysAllow) }
   }
 
-  fun dismissApproval(approvalId: String) {
+  fun dismissApproval(key: ApprovalCardKey) {
     if (!approvalLiveState.value || closing) return
-    scope.launch(job + dispatcher) { approvalFlow.dismiss(thread, approvalId) }
+    scope.launch(job + dispatcher) { approvalFlow.dismiss(thread, key) }
   }
 
   fun send(

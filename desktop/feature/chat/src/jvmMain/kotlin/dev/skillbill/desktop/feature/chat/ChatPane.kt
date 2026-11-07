@@ -48,8 +48,8 @@ fun ChatPane(workspace: ChatWorkspace) {
           val live by approvalsTab.liveState.collectAsState()
           val approvals = ChatApprovalActions(
             live = live,
-            onDecide = { approvalId, optionId, always -> workspace.decideRepositoryApproval(tabId, approvalId, optionId, always) },
-            onDismiss = { approvalId -> workspace.dismissRepositoryApproval(tabId, approvalId) },
+            onDecide = { key, optionId, always -> workspace.decideRepositoryApproval(tabId, key, optionId, always) },
+            onDismiss = { key -> workspace.dismissRepositoryApproval(tabId, key) },
             onOpenRules = { workspace.refreshApprovalRules(tabId) },
           )
           Column(Modifier.fillMaxSize()) {
@@ -77,8 +77,8 @@ fun ChatPane(workspace: ChatWorkspace) {
           val approvalLive by session.approvalLive.collectAsState()
           val approvals = ChatApprovalActions(
             live = approvalLive,
-            onDecide = { approvalId, optionId, always -> workspace.decideApproval(session.id, approvalId, optionId, always) },
-            onDismiss = { approvalId -> workspace.dismissApproval(session.id, approvalId) },
+            onDecide = { key, optionId, always -> workspace.decideApproval(session.id, key, optionId, always) },
+            onDismiss = { key -> workspace.dismissApproval(session.id, key) },
             onOpenRules = { workspace.openApprovals(session.item.repositoryRoot) },
           )
           Column(Modifier.fillMaxSize()) {

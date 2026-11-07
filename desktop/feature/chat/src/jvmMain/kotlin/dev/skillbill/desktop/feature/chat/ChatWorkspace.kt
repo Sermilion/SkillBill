@@ -2,6 +2,7 @@ package dev.skillbill.desktop.feature.chat
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -842,26 +843,26 @@ class ChatWorkspace(
     }
   }
 
-  internal fun decideRepositoryApproval(id: String, approvalId: String, optionId: String, alwaysAllow: Boolean) {
+  internal fun decideRepositoryApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
     val tab = approvalTabs[id]?.takeIf { it.liveState.value } ?: return
-    scope.launch(tab.job) { approvalFlow.decide(tab.thread, approvalId, optionId, alwaysAllow) }
+    scope.launch(tab.job) { approvalFlow.decide(tab.thread, key, optionId, alwaysAllow) }
   }
 
-  internal fun dismissRepositoryApproval(id: String, approvalId: String) {
+  internal fun dismissRepositoryApproval(id: String, key: ApprovalCardKey) {
     val tab = approvalTabs[id]?.takeIf { it.liveState.value } ?: return
-    scope.launch(tab.job) { approvalFlow.dismiss(tab.thread, approvalId) }
+    scope.launch(tab.job) { approvalFlow.dismiss(tab.thread, key) }
   }
 
-  fun decideApproval(id: String, approvalId: String, optionId: String, alwaysAllow: Boolean) {
+  fun decideApproval(id: String, key: ApprovalCardKey, optionId: String, alwaysAllow: Boolean) {
     val session = sessions[id] ?: return
     if (!session.approvalLiveState.value) return
-    scope.launch(session.job) { approvalFlow.decide(session.thread, approvalId, optionId, alwaysAllow) }
+    scope.launch(session.job) { approvalFlow.decide(session.thread, key, optionId, alwaysAllow) }
   }
 
-  fun dismissApproval(id: String, approvalId: String) {
+  fun dismissApproval(id: String, key: ApprovalCardKey) {
     val session = sessions[id] ?: return
     if (!session.approvalLiveState.value) return
-    scope.launch(session.job) { approvalFlow.dismiss(session.thread, approvalId) }
+    scope.launch(session.job) { approvalFlow.dismiss(session.thread, key) }
   }
 
   // Keeps the active session's header, mode and gone state current while its tab is shown.
