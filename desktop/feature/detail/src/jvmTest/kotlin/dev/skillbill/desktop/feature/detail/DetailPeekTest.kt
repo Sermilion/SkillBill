@@ -67,6 +67,8 @@ class DetailPeekTest {
       }
     }
 
+    onNodeWithText("Desktop preview").assertDoesNotExist()
+    onNodeWithText("QA").performClick()
     onNodeWithContentDescription("Live desktop QA preview for run goal-qa").performScrollTo().assertIsDisplayed()
     runOnIdle { state.value = state.value.copy(qaPreview = QaPreviewState.Ended) }
     onNodeWithContentDescription("Live desktop QA preview for run goal-qa").assertDoesNotExist()

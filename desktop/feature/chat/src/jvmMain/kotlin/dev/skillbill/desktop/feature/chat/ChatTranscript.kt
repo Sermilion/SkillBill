@@ -53,6 +53,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import java.awt.Toolkit
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import java.awt.datatransfer.StringSelection
 
@@ -211,6 +212,7 @@ private fun OperatorMessage(message: ChatMessage.Operator) {
           }
         }
       }
+      if (message.text.isNotEmpty()) MessageCopyButton(message.text)
       if (action != null) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
           ModeBadge(action.mode)
@@ -255,22 +257,30 @@ private fun AgentTurn(
     }
     if (message.tools.isNotEmpty()) ChatToolGroup(message.tools, message.streaming)
     if (message.text.isNotEmpty()) ChatMarkdown(message.text, Modifier.fillMaxWidth())
-    if (!message.streaming && message.text.isNotEmpty()) ReplyFooter(message.text)
+    if (!message.streaming && message.text.isNotEmpty()) MessageCopyButton(message.text)
     val actions = if (allowStartActions) message.actions else message.actions.filter { it.start == null }
     if (onAction != null && !message.streaming && actions.isNotEmpty()) ChatActionButtons(actions, actionsEnabled, mode, onAction)
   }
 }
 
 @Composable
-private fun ReplyFooter(text: String) {
+private fun MessageCopyButton(text: String) {
+  var copied by remember(text) { mutableStateOf(false) }
+  LaunchedEffect(copied) {
+    if (copied) {
+      delay(1_500)
+      copied = false
+    }
+  }
   Row(Modifier.padding(start = 0.dp), verticalAlignment = Alignment.CenterVertically) {
     SbIconButton(
-      icon = LucideIcons.copy,
-      label = "Copy reply",
+      icon = if (copied) LucideIcons.check else LucideIcons.copy,
+      label = if (copied) "Copied" else "Copy message",
       size = SbControlSize.Small,
       onClick = {
         val selection = StringSelection(text)
         Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
+        copied = true
       },
     )
   }

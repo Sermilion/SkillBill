@@ -118,6 +118,7 @@ public class PhaseRunPlanResolver(
     progress: GoalQualityPhaseProgress,
     plan: ResolvedPhaseExecutionPlan,
     outcomeNamespace: String,
+    inputSourceUnchanged: () -> Boolean = { false },
   ) {
     progress.phaseRecords.values.filter { record ->
       retainedRunningPhase(progress, plan, record)
@@ -157,7 +158,9 @@ public class PhaseRunPlanResolver(
           ) {
             unknownQualityStep(record)
           }
-          if (!envelopeAccepted && !replayableReadOnlyStep(progress, record, plan)) unknownQualityStep(record)
+          if (!envelopeAccepted && !replayableStep(progress, record, plan, inputSourceUnchanged)) {
+            unknownQualityStep(record)
+          }
         }
       }
     }
@@ -212,16 +215,27 @@ public class PhaseRunPlanResolver(
     return !envelopeAccepted && idle && !resumableProviderPause
   }
 
-  private fun replayableReadOnlyStep(
+  private fun replayableStep(
     progress: GoalQualityPhaseProgress,
     record: FeatureTaskRuntimePhaseRecord,
     plan: ResolvedPhaseExecutionPlan,
+    inputSourceUnchanged: () -> Boolean,
   ): Boolean {
     val policy = strategies.selectedOwnerOf(record.phaseId, plan)?.policyFor(record.phaseId) ?: return false
-    if (policy.mutating || policy.fileMutating) return false
+    val readOnly = !policy.mutating && !policy.fileMutating
+    if (!readOnly && !untouchedFirstAttempt(progress, record)) return false
     validateAttemptStarts(progress.phaseLedger, record)
-    return !hasTerminalAction(progress.phaseLedger, record)
+    if (hasTerminalAction(progress.phaseLedger, record)) return false
+    return readOnly || inputSourceUnchanged()
   }
+
+  private fun untouchedFirstAttempt(
+    progress: GoalQualityPhaseProgress,
+    record: FeatureTaskRuntimePhaseRecord,
+  ): Boolean =
+    record.attemptCount == 1 && progress.phaseRecords.keys == setOf(record.phaseId) &&
+      progress.acceptedOutputs.isEmpty() && progress.acceptedEnvelopes.isEmpty() &&
+      progress.acceptedSourceObservations.isEmpty()
 
   internal fun validateRunningGate(
     progress: GoalQualityPhaseProgress,

@@ -275,6 +275,16 @@ internal class ChatThread(private val clock: Clock) {
     }
   }
 
+  /** A new provider message keeps tool-only output in the same transcript entry. */
+  fun endMessage() = messages.update { list ->
+    val last = list.lastOrNull()
+    if (last is ChatMessage.Agent && last.streaming && (last.text.isNotEmpty() || last.actions.isNotEmpty())) {
+      list.dropLast(1) + last.copy(streaming = false, finishedAt = clock.now())
+    } else {
+      list
+    }
+  }
+
   // A card stays where it was requested: output after it finishes the reply above and continues in a new reply below it.
   private fun updateStreaming(change: (ChatMessage.Agent) -> ChatMessage.Agent) = messages.update { list ->
     val last = list.lastOrNull()
@@ -294,6 +304,7 @@ internal class ChatThread(private val clock: Clock) {
 
 internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
   when (event) {
+    ChatEvent.MessageStarted -> endMessage()
     is ChatEvent.TextDelta -> appendDelta(event.text)
     is ChatEvent.Notice -> append(ChatMessage.Notice(event.text))
     is ChatEvent.ToolUse -> appendTool(event.call)

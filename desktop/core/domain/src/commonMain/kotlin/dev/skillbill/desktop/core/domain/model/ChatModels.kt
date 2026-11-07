@@ -93,6 +93,8 @@ data class ChatToolCall(val id: String, val name: String, val input: String, val
 
 /** What one turn streams back; a turn ends with [Completed] or [Failed]. */
 sealed interface ChatEvent {
+  data object MessageStarted : ChatEvent
+
   data class TextDelta(val text: String) : ChatEvent
 
   data class Notice(val text: String) : ChatEvent

@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.data.qa
 
 import dev.skillbill.desktop.core.common.Diagnostics
+import dev.skillbill.desktop.core.domain.model.QaPreviewFrame
 import dev.skillbill.desktop.core.domain.model.QaPreviewRequest
 import dev.skillbill.desktop.core.domain.model.QaPreviewState
 import kotlinx.coroutines.CancellationException
@@ -64,12 +65,18 @@ internal class QaPreviewReader(
     }
     if (!invocation.isAbsolute) return waiting(QaPreviewState.Reason.InvalidSource)
     return when (val decoded = source.read(invocation)) {
-      is XwdDecodeResult.Frame -> QaPreviewState.Live(decoded.value)
+      is XwdDecodeResult.Frame -> if (decoded.value.isBlank()) waiting(QaPreviewState.Reason.BlankDisplay) else QaPreviewState.Live(decoded.value)
       is XwdDecodeResult.Rejected -> waiting(decoded.reason)
     }
   }
 
   private fun waiting(reason: QaPreviewState.Reason) = QaPreviewState.Waiting(reason)
+
+  // An X server with no client windows paints its root one solid color, so a uniform frame means nothing has drawn yet.
+  private fun QaPreviewFrame.isBlank(): Boolean {
+    val first = argb.firstOrNull() ?: return true
+    return argb.all { it == first }
+  }
 
   private fun QaPreviewState.Reason.category(): String = when (this) {
     QaPreviewState.Reason.SourceUnavailable -> "qa_preview_source_unavailable"
@@ -78,6 +85,7 @@ internal class QaPreviewReader(
     QaPreviewState.Reason.UnsupportedFormat -> "qa_preview_format_unsupported"
     QaPreviewState.Reason.LimitsExceeded -> "qa_preview_limits_exceeded"
     QaPreviewState.Reason.ReadFailed -> "qa_preview_read_failed"
+    QaPreviewState.Reason.BlankDisplay -> "qa_preview_display_blank"
   }
 
   private companion object {

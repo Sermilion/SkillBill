@@ -180,7 +180,9 @@ public class PhaseRunEntry(
     }
     retained.let {
       plans.validateNestedProgressKeys(it)
-      plans.validateRetainedRunningPhases(it, plan, "$parentWorkflowId:$invocationId")
+      plans.validateRetainedRunningPhases(it, plan, "$parentWorkflowId:$invocationId") {
+        request.goalQualityInputSourceUnchanged?.invoke() == true
+      }
     }
     val boundRequest =
       if (request.definitionId == goalBuildDefinitionId) {

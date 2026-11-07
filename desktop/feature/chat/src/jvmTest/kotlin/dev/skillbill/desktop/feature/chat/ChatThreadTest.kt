@@ -18,6 +18,21 @@ import kotlin.time.Clock
 
 class ChatThreadTest {
   @Test
+  fun `tool-only messages share one tool group until a message with text closes the entry`() {
+    val thread = ChatThread(Clock.System)
+    val calls = (1..3).map { ChatToolCall("t$it", "Bash", "{}", null) }
+    calls.forEach { call ->
+      thread.show(null, ChatEvent.MessageStarted)
+      thread.show(null, ChatEvent.ToolUse(call))
+      thread.show(null, ChatEvent.ToolResult(call.id, "ok", false))
+    }
+    listOf(ChatEvent.MessageStarted, ChatEvent.TextDelta("Done."), ChatEvent.Completed).forEach { thread.show(null, it) }
+    val entry = thread.transcript.value.filterIsInstance<ChatMessage.Agent>().single()
+    assertEquals(listOf("t1", "t2", "t3"), entry.tools.map { it.call.id })
+    assertEquals("Done.", entry.text)
+  }
+
+  @Test
   fun `unsupported Junie reason and historical prose restore without a runnable approval`() {
     val thread = ChatThread(Clock.System)
     thread.append(ChatMessage.Agent("Earlier Junie prose", false, emptyList()))
@@ -28,6 +43,21 @@ class ChatThreadTest {
     assertEquals(ChatHistoryRole.Error, lines[1].role)
     assertEquals(reason, lines[1].text)
     assertEquals(ChatMessage.Error(ChatFailure.ApprovalUnsupported, reason), restored(lines[1]))
+  }
+
+  @Test
+  fun `stream chunks join within a message and separate messages survive history restoration`() {
+    val thread = ChatThread(Clock.System)
+    val call = ChatToolCall("t1", "shell", "git status", null)
+    listOf(
+      ChatEvent.MessageStarted, ChatEvent.TextDelta("Check"), ChatEvent.TextDelta("ing."), ChatEvent.ToolUse(call),
+      ChatEvent.MessageStarted, ChatEvent.TextDelta("Done."), ChatEvent.ToolResult("t1", "clean", false), ChatEvent.Completed,
+    ).forEach { thread.show(null, it) }
+    val messages = thread.transcript.value.filterIsInstance<ChatMessage.Agent>()
+    assertEquals(listOf("Checking.", "Done."), messages.map { it.text })
+    assertEquals(listOf(false, false), messages.map { it.streaming })
+    assertEquals("clean", messages.first().tools.single().result?.output)
+    assertEquals(listOf("Checking.", "Done."), thread.historyLines().map(::restored).filterIsInstance<ChatMessage.Agent>().map { it.text })
   }
 
   @Test

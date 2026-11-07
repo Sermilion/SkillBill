@@ -129,6 +129,9 @@ public class GoalQualityPhaseRequests(
           definition in setOf(SkeletonDefinition.GOAL_BUILD, SkeletonDefinition.VALIDATION)
         },
       acceptedGoalQualitySourceFingerprint = sourceFingerprint,
+      goalQualityInputSourceUnchanged =
+        { validationInputSourceUnchanged(gitOperations, execution, request) }
+          .takeIf { definition == SkeletonDefinition.VALIDATION },
       latestGoalQualityPhaseProgress = { latestProgress },
     )
   }
