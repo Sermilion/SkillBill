@@ -1,3 +1,8 @@
+## [2026-11-07] Publish a conflict repair that merged a base which moved since
+Context: In SKILL-516 the monitor_fix agent merged `origin/main` and resolved conflicts while three more commits landed on main. The guard only accepted a `MERGE_HEAD` that reached the current `origin/main`, so the runtime blocked a valid two-parent merge and asked the operator to redo it.
+Decision: The guard also accepts an in-progress merge whose `MERGE_HEAD` is an older commit on `origin/<base>`, as long as HEAD does not already contain it. If the pull request still conflicts after publication, the next monitor round merges the newer tip.
+Reason: A stale base merge still keeps the base as a parent, so publishing it is progress, not a flattened merge. Requiring base commits HEAD lacks keeps each uncharged repair round moving the branch forward.
+
 ## [2026-11-07] Keep the QA device separate from requirements and durable goal inputs
 Context: SKILL-517 needs an operator-selected device for standalone and goal QA. Standalone QA treats intake as requirements, and goal QA takes no operator text.
 Decision: Carry the typed device through launch requests and QA execution context, beside lease guidance. Read goal selection from the current launch without persisting it in goal-quality inputs or continuation tokens.
