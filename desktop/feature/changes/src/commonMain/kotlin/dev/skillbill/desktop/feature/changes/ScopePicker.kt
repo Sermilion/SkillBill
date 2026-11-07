@@ -6,8 +6,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.layeredShadow
@@ -218,8 +217,8 @@ private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
           val inScope = (state.scope as? ChangeScope.Commits)?.shas?.contains(commit.sha) == true
           val interaction = remember { MutableInteractionSource() }
           Row(
-            Modifier.fillMaxWidth().background(if (inScope || keyboardSha == commit.sha) colors.bgRaised else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(6.dp))
-              .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+            Modifier.fillMaxWidth().sbRowSurface(interaction, selected = inScope, focused = keyboardSha == commit.sha, shape = RoundedCornerShape(6.dp))
+              .pointerHoverIcon(PointerIcon.Hand)
               .semantics(mergeDescendants = true) {
                 role = Role.Button
                 selected = inScope
@@ -273,13 +272,7 @@ private fun PickerRow(subtask: ScopeSubtask, stats: SubtaskStats?, inScope: Bool
   val enabled = subtask.selectable
   val pick by rememberUpdatedState(onPick)
   val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
   val shape = RoundedCornerShape(6.dp)
-  val background = when {
-    inScope -> colors.accent.copy(alpha = 0.10f)
-    hovered || keyboard -> colors.bgRaised
-    else -> androidx.compose.ui.graphics.Color.Transparent
-  }
   val nameColor = when {
     !enabled -> colors.fgFaint
     inScope -> colors.fg
@@ -287,8 +280,7 @@ private fun PickerRow(subtask: ScopeSubtask, stats: SubtaskStats?, inScope: Bool
   }
   Row(
     Modifier.fillMaxWidth()
-      .background(background, shape)
-      .hoverable(interaction)
+      .sbRowSurface(interaction, selected = inScope, focused = keyboard, shape = shape)
       .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
       .semantics(mergeDescendants = true) {
         role = Role.Button

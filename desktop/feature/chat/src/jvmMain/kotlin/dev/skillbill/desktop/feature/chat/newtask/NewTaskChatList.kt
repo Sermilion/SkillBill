@@ -2,7 +2,6 @@ package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
@@ -47,6 +45,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 import dev.skillbill.desktop.feature.chat.chipText
@@ -93,8 +92,8 @@ internal fun OpenChatRow(item: OpenChatItem, selected: Boolean, onClick: () -> U
   val hovered by interaction.collectIsHoveredAsState()
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   Row(
-    Modifier.fillMaxWidth().background(if (selected) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent, shape)
-      .hoverable(interaction).clickable(interaction, indication = null, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
+    Modifier.fillMaxWidth().sbRowSurface(interaction, selected = selected, shape = shape)
+      .clickable(interaction, indication = null, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
       .sbFocusRing(interaction, shape)
       .semantics { role = Role.Button; this.selected = selected }.padding(horizontal = 8.dp, vertical = 6.dp),
     verticalAlignment = Alignment.CenterVertically,

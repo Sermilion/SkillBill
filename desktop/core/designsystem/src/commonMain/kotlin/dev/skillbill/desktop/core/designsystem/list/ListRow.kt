@@ -2,9 +2,7 @@ package dev.skillbill.desktop.core.designsystem.list
 
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -26,10 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -92,10 +87,9 @@ fun ListRow(
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val interaction = remember { MutableInteractionSource() }
-  val hovered = interaction.collectIsHoveredAsState().value
   val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
   var rowSize by remember { mutableStateOf(IntSize.Zero) }
-  val shape = if (compact) Modifier.clip(RoundedCornerShape(SkillBillRadius.sm)) else Modifier
+  val shape = if (compact) RoundedCornerShape(SkillBillRadius.sm) else RectangleShape
   val menu = if (onContextMenu == null) Modifier else Modifier
     .pointerInput(onContextMenu) {
       awaitPointerEventScope {
@@ -116,8 +110,8 @@ fun ListRow(
     // `.sb-row.faded` is element opacity, so it fades the fill, the focus bar and the hairline too, not only the content.
     modifier.then(if (faded) Modifier.alpha(0.6f) else Modifier)
       .fillMaxWidth().height(if (compact) SkillBillSize.compactRow else SkillBillSize.row)
-      .then(shape).rowSurface(hovered, focused, selected, line = !compact && divider)
-      .onSizeChanged { rowSize = it }.hoverable(interaction).then(menu)
+      .sbRowSurface(interaction, selected, focused, line = !compact && divider, shape = shape)
+      .onSizeChanged { rowSize = it }.then(menu)
       .pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
       .semantics(mergeDescendants = true) { this.selected = selected }
       // A bottom border takes 1px of the row height, so the content centers in the space above it.
@@ -140,34 +134,6 @@ fun ListRow(
         if (timeContent == null) BasicText(time.orEmpty(), style = type.tSm.tabular().copy(color = colors.fgFaint, textAlign = TextAlign.End), maxLines = 1)
       }
     }
-  }
-}
-
-/**
- * The row's fill, focus bar and bottom hairline. `.sb-row` declares no transition, so the fill switches instantly; the focus bar
- * (`::before`, top 0 to bottom 0 of the padding box) stops above the bottom border.
- */
-@Composable
-private fun Modifier.rowSurface(hovered: Boolean, focused: Boolean, selected: Boolean, line: Boolean): Modifier {
-  val colors = SkillBillTheme.colors
-  val fill = when {
-    selected -> colors.bgSelected
-    focused -> colors.bgActive
-    hovered -> colors.bgHover
-    else -> Color.Transparent
-  }
-  val accent = colors.accent
-  val border = colors.borderSubtle
-  return drawBehind {
-    if (fill != Color.Transparent) drawRect(fill)
-    val stroke = 1.dp.toPx()
-    val inner = if (line) size.height - stroke else size.height
-    if (focused) {
-      val bar = 2.dp.toPx()
-      val x = if (layoutDirection == LayoutDirection.Rtl) size.width - bar else 0f
-      drawRect(accent, topLeft = Offset(x, 0f), size = Size(bar, inner))
-    }
-    if (line) drawRect(border, topLeft = Offset(0f, inner), size = Size(size.width, stroke))
   }
 }
 

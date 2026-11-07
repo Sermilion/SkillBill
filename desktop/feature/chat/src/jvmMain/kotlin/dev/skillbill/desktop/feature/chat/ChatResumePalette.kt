@@ -5,9 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,7 +40,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -60,6 +57,7 @@ import androidx.compose.ui.window.DialogProperties
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.Kbd
@@ -235,16 +233,10 @@ private fun ResumeRow(
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
   val title = resumeTitle(entry)
-  val background = when {
-    active -> colors.bgActive
-    hovered -> colors.bgHover
-    else -> Color.Transparent
-  }
   Column(
-    Modifier.fillMaxWidth().padding(horizontal = 6.dp).background(background, RoundedCornerShape(SkillBillRadius.sm))
-      .hoverable(interaction).focusProperties { canFocus = false }.combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onDoubleClick = onDoubleClick)
+    Modifier.fillMaxWidth().padding(horizontal = 6.dp).sbRowSurface(interaction, selected = active)
+      .focusProperties { canFocus = false }.combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onDoubleClick = onDoubleClick)
       .padding(horizontal = 8.dp, vertical = 6.dp),
     verticalArrangement = Arrangement.spacedBy(2.dp),
   ) {

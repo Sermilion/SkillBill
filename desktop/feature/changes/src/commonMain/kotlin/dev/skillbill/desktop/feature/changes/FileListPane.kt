@@ -3,7 +3,6 @@ package dev.skillbill.desktop.feature.changes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,14 +17,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +36,7 @@ import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
@@ -87,18 +86,12 @@ private fun FileRow(row: FileRowUi, selected: Boolean, onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
   val file = row.file
   val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
-  val background = when {
-    selected -> colors.bgOverlay
-    hovered -> colors.bgRaised
-    else -> Color.Transparent
-  }
   val marker = colors.accent
   val tip = if (row.touchCount >= 2) "${file.path}\nChanged by ${row.touchCount} subtasks in this scope" else file.path
   SbTooltip(tip) {
     Row(
       Modifier.fillMaxWidth()
-        .background(background)
+        .sbRowSurface(interaction, selected = selected, shape = RectangleShape)
         .drawBehind { if (selected) drawRect(marker, Offset.Zero, Size(2.dp.toPx(), size.height)) }
         .pointerHoverIcon(PointerIcon.Hand)
         .clickable(interaction, indication = null, onClick = onClick)

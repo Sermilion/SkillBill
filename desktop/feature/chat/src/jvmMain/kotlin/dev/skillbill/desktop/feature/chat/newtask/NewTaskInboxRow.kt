@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.FirstBaseline
@@ -45,6 +46,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.dataColorFor
 import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
+import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.math.max
@@ -172,11 +174,12 @@ private fun InboxRow(
   val highlighted = hovered || selected
   Row(
     Modifier.fillMaxWidth().height(34.dp).focusProperties { canFocus = false }
+      .sbRowSurface(interaction, selected = selected, shape = RectangleShape)
       .drawBehind {
         if (blocked) {
           val end = if (highlighted) Color.White.copy(alpha = .03f) else Color.Transparent
           drawRect(Brush.horizontalGradient(listOf(colors.stBlocked.copy(alpha = if (highlighted) .11f else .07f), end), endX = size.width * .4f))
-        } else if (highlighted) drawRect(colors.bgHover)
+        }
         if (divider) drawRect(colors.borderSubtle, size = Size(size.width, 1.dp.toPx()))
         if (blocked) drawRect(colors.stBlocked, size = Size(2.dp.toPx(), size.height))
         else if (selected) drawRoundRect(colors.accent, topLeft = Offset(0f, 7.dp.toPx()), size = Size(2.dp.toPx(), (size.height - 14.dp.toPx()).coerceAtLeast(0f)), cornerRadius = CornerRadius(2.dp.toPx()))
