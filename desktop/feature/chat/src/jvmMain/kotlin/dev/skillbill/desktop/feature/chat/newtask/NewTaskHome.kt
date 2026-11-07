@@ -4,7 +4,6 @@ import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.DetectedAgentsRead
 import dev.skillbill.desktop.core.domain.model.WorkItem
-import dev.skillbill.desktop.core.domain.model.liveRows
 import dev.skillbill.desktop.core.domain.model.sectionSize
 
 /** Which content the home shows under the step line, decided by the board. */
@@ -14,7 +13,6 @@ sealed interface NewTaskHome {
     val needsYou: List<WorkItem>,
     val running: Int,
     val finished: Int,
-    val runningItems: List<WorkItem> = emptyList(),
   ) : NewTaskHome
   data object FirstRun : NewTaskHome
 }
@@ -26,12 +24,10 @@ internal fun newTaskHome(board: BoardState): NewTaskHome = when (board) {
       NewTaskHome.FirstRun
     } else {
       val needsYou = board.sections.firstOrNull { it.kind == BoardSectionKind.NeedsYou }?.items.orEmpty()
-      val needIds = needsYou.mapTo(HashSet()) { it.id }
       NewTaskHome.Returning(
         needsYou = needsYou,
         running = board.counts.running,
         finished = board.sectionSize(BoardSectionKind.Finished),
-        runningItems = board.liveRows().filter { it.running && it.id !in needIds },
       )
     }
 }

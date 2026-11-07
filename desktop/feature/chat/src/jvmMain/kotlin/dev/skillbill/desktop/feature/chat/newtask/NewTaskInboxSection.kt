@@ -6,29 +6,37 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
@@ -37,13 +45,14 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
@@ -52,112 +61,183 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.time.Instant
 
-private val SECTION_SPACING = 8.dp
+internal fun nearestScrollTarget(start: Int, end: Int, scroll: Int, viewport: Int): Int? = when {
+  start < scroll -> start
+  end > scroll + viewport -> end - viewport
+  else -> null
+}
 
 @Composable
-internal fun InboxSection(
-  needsYou: List<WorkItem>,
-  running: List<WorkItem>,
+internal fun RecentChatsSection(
   chats: List<ChatHistoryEntry>,
-  savedCount: Int,
   selectedRoot: String?,
-  home: NewTaskHome.Returning?,
-  showAll: Boolean,
+  openSessionIds: Set<String>,
   now: () -> Instant,
-  onOpenRun: (WorkItem) -> Unit,
   onResume: (ChatHistoryEntry) -> Unit,
   onDiscard: (ChatHistoryEntry) -> Unit,
-  onShowAll: () -> Unit,
+  onSearch: () -> Unit,
+  modifier: Modifier = Modifier,
+  nextCardFocusRequester: FocusRequester = FocusRequester.Default,
+) {
+  HomeSection("Recent chats", chats.size, { SearchChatsButton(onSearch) }, modifier) {
+    val current = rememberHomeNow(now)
+    HomeCard(
+      rows = chats,
+      description = "Recent chats",
+      keyOf = { it.sessionId },
+      titleOf = { chatTitle(it.title).title },
+      onOpen = onResume,
+      onDelete = { entry ->
+        if (entry.sessionId in openSessionIds) false else {
+          onDiscard(entry)
+          true
+        }
+      },
+      nextFocusRequester = nextCardFocusRequester,
+    ) { entry, selected, divider ->
+      InboxChatRow(entry, selectedRoot, current, divider, entry.sessionId in openSessionIds, selected, onResume, onDiscard)
+    }
+  }
+}
+
+@Composable
+internal fun NeedsYouSection(
+  home: NewTaskHome.Returning,
+  now: () -> Instant,
+  onOpenRun: (WorkItem) -> Unit,
   onShowAllWork: () -> Unit,
   modifier: Modifier = Modifier,
+  cardFocusRequester: FocusRequester? = null,
+) {
+  val title = if (home.needsYou.isEmpty()) "All clear" else "Needs you"
+  val count = home.needsYou.size.takeIf { it > 0 }
+  HomeSection(title, count, { WorkSummaryLink(home.running, home.finished, onShowAllWork) }, modifier) {
+    if (home.needsYou.isNotEmpty()) {
+      val current = rememberHomeNow(now)
+      HomeCard(
+        rows = home.needsYou,
+        description = "Needs you",
+        keyOf = { it.id },
+        titleOf = { it.title },
+        onOpen = onOpenRun,
+        onDelete = { false },
+        focusRequester = cardFocusRequester,
+      ) { item, selected, divider ->
+        InboxRunRow(item, current, divider, selected, onOpenRun)
+      }
+    }
+  }
+}
+
+@Composable
+private fun HomeSection(title: String, count: Int?, action: @Composable () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    HomeSectionHeader(title, count, action)
+    content()
+  }
+}
+
+@Composable
+private fun <T> HomeCard(
+  rows: List<T>,
+  description: String,
+  keyOf: (T) -> Any,
+  titleOf: (T) -> String,
+  onOpen: (T) -> Unit,
+  onDelete: (T) -> Boolean,
+  focusRequester: FocusRequester? = null,
+  nextFocusRequester: FocusRequester? = null,
+  row: @Composable (item: T, selected: Boolean, divider: Boolean) -> Unit,
 ) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.md)
+  val interaction = remember { MutableInteractionSource() }
+  val focused by interaction.collectIsFocusedAsState()
+  val scroll = rememberScrollState()
+  var selectedIndex by remember { mutableIntStateOf(0) }
+  val lastIndex = rows.lastIndex
+  val selected = selectedIndex.coerceIn(0, lastIndex.coerceAtLeast(0))
+  val rowPx = with(LocalDensity.current) { 34.dp.roundToPx() }
+  val reducedMotion = LocalReducedMotion.current
+
+  LaunchedEffect(rows) { selectedIndex = selected }
+  LaunchedEffect(selected, focused) {
+    if (!focused) return@LaunchedEffect
+    nearestScrollTarget(selected * rowPx, (selected + 1) * rowPx, scroll.value, scroll.viewportSize)
+      ?.let { target ->
+        val clamped = target.coerceIn(0, scroll.maxValue)
+        if (reducedMotion) scroll.scrollTo(clamped) else scroll.animateScrollTo(clamped)
+      }
+  }
+
+  Column(
+    Modifier.fillMaxWidth().heightIn(max = 172.dp)
+      .background(Color.White.copy(alpha = .012f), shape).clip(shape)
+      .border(1.dp, colors.borderSubtle, shape)
+      .hoverable(interaction)
+      .onFocusChanged { if (it.isFocused) selectedIndex = 0 }
+      .onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return@onPreviewKeyEvent false
+        when (event.key) {
+          Key.DirectionDown -> {
+            if (lastIndex >= 0) selectedIndex = (selected + 1).coerceAtMost(lastIndex)
+            true
+          }
+          Key.DirectionUp -> {
+            if (lastIndex >= 0) selectedIndex = (selected - 1).coerceAtLeast(0)
+            true
+          }
+          Key.Enter, Key.NumPadEnter -> rows.getOrNull(selected)?.let { onOpen(it); true } ?: false
+          Key.Delete -> rows.getOrNull(selected)?.let(onDelete) ?: false
+          else -> false
+        }
+      }
+      .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+      .then(nextFocusRequester?.let { requester -> Modifier.focusProperties { next = requester } } ?: Modifier)
+      .sbFocusRing(interaction, shape)
+      .semantics {
+        contentDescription = description
+        collectionInfo = CollectionInfo(rowCount = rows.size, columnCount = 1)
+        if (focused) rows.getOrNull(selected)?.let { stateDescription = "${selected + 1} of ${rows.size}, ${titleOf(it)}" }
+      }
+      .focusable(interactionSource = interaction)
+      .padding(1.dp),
+  ) {
+    Column(Modifier.fillMaxWidth().verticalEdgeFade(scroll, hasOverflowRows = rows.size > 5).verticalScroll(scroll)) {
+      rows.forEachIndexed { index, item -> key(keyOf(item)) { row(item, focused && index == selected, index > 0) } }
+    }
+  }
+}
+
+private fun Modifier.verticalEdgeFade(scroll: androidx.compose.foundation.ScrollState, hasOverflowRows: Boolean): Modifier =
+  graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+      drawContent()
+      val edgePx = 24.dp.toPx().coerceAtMost(size.height)
+      if (hasOverflowRows && scroll.canScrollBackward) {
+        drawRect(
+          Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 0f, endY = edgePx),
+          size = Size(size.width, edgePx),
+          blendMode = BlendMode.DstIn,
+        )
+      }
+      if (hasOverflowRows && scroll.canScrollForward) {
+        drawRect(
+          Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = size.height - edgePx, endY = size.height),
+          topLeft = Offset(0f, size.height - edgePx),
+          size = Size(size.width, edgePx),
+          blendMode = BlendMode.DstIn,
+        )
+      }
+    }
+
+@Composable
+private fun rememberHomeNow(now: () -> Instant): Instant {
   val ticker = LocalUiTicker.current
-  var filter by remember { mutableStateOf(InboxFilter.All) }
-  var selectedIndex by remember(filter) { mutableIntStateOf(0) }
-  val cardInteraction = remember { MutableInteractionSource() }
-  val cardFocused by cardInteraction.collectIsFocusedAsState()
-  val cardHovered by cardInteraction.collectIsHoveredAsState()
   DisposableEffect(ticker) {
     ticker.retain()
     onDispose { ticker.release() }
   }
   val tick by ticker.now
-  val current = tick.let { now() }
-  val items = remember(needsYou, running, chats, selectedRoot, current, filter) {
-    inboxItems(needsYou, running, chats, selectedRoot, current, filter = filter)
-  }
-  val visibleItems = remember(items) { items.filter { it !is InboxItem.Group } }
-  val selected = selectedIndex.coerceIn(0, (visibleItems.size - 1).coerceAtLeast(0))
-  LaunchedEffect(visibleItems) { selectedIndex = selected }
-  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 22.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-      BasicText("Pick up where you left off", Modifier.semantics { heading() }, style = inboxTextStyle(12.sp).copy(fontWeight = FontWeight.Medium, color = colors.fgMuted))
-      InboxFilterControl(filter, needsYou.size, savedCount) { filter = it }
-    }
-    Column(
-      Modifier.fillMaxWidth().sbFocusRing(cardInteraction, shape).background(Color.White.copy(alpha = .012f), shape).clip(shape)
-        .border(1.dp, colors.borderSubtle, shape)
-        .hoverable(cardInteraction)
-        .semantics {
-          contentDescription = "Pick up where you left off"
-          val row = visibleItems.getOrNull(selected)
-          val title = when (row) {
-            is InboxItem.Run -> row.item.title
-            is InboxItem.Chat -> row.title.title
-            else -> null
-          }
-          stateDescription = if (title == null) "No items" else "${selected + 1} of ${visibleItems.size}, $title"
-        }
-        .onFocusChanged { if (it.isFocused) selectedIndex = 0 }
-        .onPreviewKeyEvent { event ->
-          if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return@onPreviewKeyEvent false
-          val currentSelection = selectedIndex.coerceIn(0, visibleItems.lastIndex.coerceAtLeast(0))
-          val row = visibleItems.getOrNull(currentSelection)
-          when (event.key) {
-            Key.DirectionDown -> { selectedIndex = (currentSelection + 1).coerceAtMost(visibleItems.lastIndex.coerceAtLeast(0)); true }
-            Key.DirectionUp -> { selectedIndex = (currentSelection - 1).coerceAtLeast(0); true }
-            Key.Enter, Key.NumPadEnter -> { row?.let { openInboxItem(it, onOpenRun, onResume) }; row != null }
-            Key.Delete -> if (row is InboxItem.Chat) { onDiscard(row.entry); true } else false
-            Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine -> {
-              val index = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine).indexOf(event.key)
-              val target = visibleItems.getOrNull(index) ?: return@onPreviewKeyEvent false
-              selectedIndex = index
-              openInboxItem(target, onOpenRun, onResume)
-              true
-            }
-            else -> false
-          }
-        }
-        .focusable(interactionSource = cardInteraction).padding(1.dp),
-    ) {
-      if (items.isEmpty()) {
-        BasicText("Nothing here. Start something below.", Modifier.padding(horizontal = 12.dp, vertical = 14.dp), style = inboxTextStyle(12.sp).copy(color = colors.fgFaint))
-      } else {
-        items.forEachIndexed { index, item ->
-          val previous = items.getOrNull(index - 1)
-          val rowIndex = visibleItems.indexOf(item)
-          val divider = index > 0 && item !is InboxItem.Group && previous !is InboxItem.Group
-          val selectedRow = cardFocused && selected == rowIndex
-          val shortcut = (rowIndex + 1).takeIf { it in 1..9 && (cardHovered || cardFocused) }
-          when (item) {
-            is InboxItem.Group -> key(item.day) { InboxGroupHeader(item.day) }
-            is InboxItem.Run -> key(item.item.id) { InboxRunRow(item, current, selectedRow, shortcut, divider, onOpenRun) }
-            is InboxItem.Chat -> key(item.entry.sessionId) { InboxChatRow(item, current, selectedRow, shortcut, divider, onResume, onDiscard) }
-          }
-        }
-      }
-    }
-    InboxHint(home, showAll, onShowAll, onShowAllWork)
-  }
+  return tick.let { now() }
 }
-
-private fun openInboxItem(item: InboxItem, onOpenRun: (WorkItem) -> Unit, onResume: (ChatHistoryEntry) -> Unit) {
-  when (item) {
-    is InboxItem.Run -> onOpenRun(item.item)
-    is InboxItem.Chat -> onResume(item.entry)
-    is InboxItem.Group -> Unit
-  }
-}
-
