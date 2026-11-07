@@ -23,16 +23,17 @@ data class CursorAcpLaunch(
   val cwd: String,
   val prompt: String,
   val model: String?,
-  val mode: String,
+  val mode: String?,
   val savedSession: String? = null,
   val images: List<CursorAcpImage> = emptyList(),
   val mcpDependency: CursorAcpMcpDependency = CursorAcpMcpDependency.Unspecified,
+  val provider: AcpProvider = AcpProvider.Cursor,
 ) {
   constructor(
     cwd: String,
     prompt: String,
     model: String?,
-    mode: String,
+    mode: String?,
     savedSession: String?,
     images: List<CursorAcpImage>,
   ) : this(cwd, prompt, model, mode, savedSession, images, CursorAcpMcpDependency.Unspecified)
@@ -76,6 +77,8 @@ class CursorAcpSession(
   private val record: (String) -> Unit,
 ) : ApprovalOwnerEffects {
   private val lock = Any()
+  private val providerName = launch.provider.name
+  private val seam = launch.provider.seam
   private val startedAt = clock.instant()
   private var expectedId = 1
   private var expectedMethod = K.INITIALIZE
@@ -100,14 +103,16 @@ class CursorAcpSession(
   fun bind(owner: ApprovalOwnerSession) {
     synchronized(lock) {
       check(permissions == null && !closed)
-      permissions = CursorAcpPermissions(owner, launch.cwd, ::write, onCard, ::stop, record)
+      permissions = CursorAcpPermissions(owner, launch.cwd, ::write, onCard, ::stop, record, launch.provider)
     }
   }
 
   fun start() {
-    cursorAcpDependencyRefusal(launch.mcpDependency)?.let {
-      record("seam=cursor_acp outcome=dependency_unsupported")
-      return stop(it)
+    if (launch.provider.mcpDeclarationRequired) {
+      cursorAcpDependencyRefusal(launch.mcpDependency)?.let {
+        record("seam=$seam outcome=dependency_unsupported")
+        return stop(it)
+      }
     }
     send(
       K.INITIALIZE,
@@ -127,30 +132,30 @@ class CursorAcpSession(
 
   fun observe(line: String) {
     if (outcome() != null) return
-    if (line.length > MAX_CAPTURE) return stop("Cursor sent an oversized ACP frame.")
+    if (line.length > MAX_CAPTURE) return stop("$providerName sent an oversized ACP frame.")
     val message =
       catchingNonCancellation { Json.parseToJsonElement(line) }.getOrNull() as? JsonObject
-        ?: return stop("Cursor sent a malformed ACP frame.")
-    if (message.text(K.JSONRPC) != "2.0") return stop("Cursor sent an incompatible JSON-RPC envelope.")
+        ?: return stop("$providerName sent a malformed ACP frame.")
+    if (message.text(K.JSONRPC) != "2.0") return stop("$providerName sent an incompatible JSON-RPC envelope.")
     val method = message.text(K.METHOD)
     when {
       method != null && message[K.ID] != null -> blocking(message, method)
       method == K.SESSION_UPDATE_METHOD -> updateMessage(message)
-      method != null -> record("seam=cursor_acp outcome=notification_ignored method=$method")
+      method != null -> record("seam=$seam outcome=notification_ignored method=$method")
       message[K.ID] == JsonPrimitive(expectedId) -> response(message)
-      else -> stop("Cursor returned an unexpected ACP response identity.")
+      else -> stop("$providerName returned an unexpected ACP response identity.")
     }
   }
 
   private fun updateMessage(message: JsonObject) {
-    val params = message.obj(K.PARAMS) ?: return stop("Cursor update has no parameters.")
+    val params = message.obj(K.PARAMS) ?: return stop("$providerName update has no parameters.")
     update(params)
   }
 
   private fun response(message: JsonObject) {
     val body =
       message.obj(K.RESULT)
-        ?: return stop("Cursor rejected $expectedMethod: ${message.obj(K.ERROR)?.text(K.MESSAGE).orEmpty()}")
+        ?: return stop("$providerName rejected $expectedMethod: ${message.obj(K.ERROR)?.text(K.MESSAGE).orEmpty()}")
     when (expectedMethod) {
       K.INITIALIZE -> initialize(body)
       K.AUTHENTICATE -> acquireSession()
@@ -161,7 +166,7 @@ class CursorAcpSession(
             it.text(K.ID) == pendingConfigId && it.text(K.CURRENT_VALUE) == pendingConfigValue
           }
         if (!acknowledged) {
-          stop("Cursor did not acknowledge the selected session configuration.")
+          stop("$providerName did not acknowledge the selected session configuration.")
         } else if (pendingConfigIsMode) {
           prompt()
         } else {
@@ -176,7 +181,7 @@ class CursorAcpSession(
       K.SESSION_SET_MODE -> prompt()
       K.SESSION_PROMPT -> {
         val reason = body.text(K.STOP_REASON)
-        val failure = providerFailure ?: if (reason == "end_turn") null else "Cursor prompt ended with $reason."
+        val failure = providerFailure ?: if (reason == "end_turn") null else "$providerName prompt ended with $reason."
         finish(failure)
       }
     }
@@ -184,24 +189,29 @@ class CursorAcpSession(
 
   private fun initialize(body: JsonObject) {
     if ((body[K.PROTOCOL_VERSION] as? JsonPrimitive)?.intOrNull != 1) {
-      return stop("Cursor ACP protocol version 1 is required; no prompt was sent.")
+      return stop("$providerName ACP protocol version 1 is required; no prompt was sent.")
     }
     capabilities = body.obj(K.AGENT_CAPABILITIES) ?: JsonObject(emptyMap())
     if (launch.savedSession != null && !capabilities.flag(K.LOAD_SESSION)) {
       return stop(
-        "Cursor cannot load the saved session. Start an explicit new chat; history " +
+        "$providerName cannot load the saved session. Start an explicit new chat; history " +
           "was not replaced.",
       )
     }
     if (launch.images.isNotEmpty() && capabilities.obj(K.PROMPT_CAPABILITIES)?.flag(K.IMAGE) != true) {
-      return stop("Cursor did not advertise image prompts; no prompt was sent.")
+      return stop("$providerName did not advertise image prompts; no prompt was sent.")
     }
+    login(body)
+  }
+
+  private fun login(body: JsonObject) {
+    val method = launch.provider.authMethodId ?: return acquireSession()
     val login =
       (body[K.AUTH_METHODS] as? JsonArray).orEmpty().any {
-        (it as? JsonObject)?.text(K.ID) == K.CURSOR_LOGIN
+        (it as? JsonObject)?.text(K.ID) == method
       }
-    if (!login) return stop("Cursor did not advertise cursor_login authentication; no prompt was sent.")
-    send(K.AUTHENTICATE, buildJsonObject { put(K.METHOD_ID, K.CURSOR_LOGIN) })
+    if (!login) return stop("$providerName did not advertise $method authentication; no prompt was sent.")
+    send(K.AUTHENTICATE, buildJsonObject { put(K.METHOD_ID, method) })
   }
 
   private fun acquireSession() {
@@ -219,12 +229,17 @@ class CursorAcpSession(
     val acquired = if (launch.savedSession == null) body.text(K.SESSION_ID) else launch.savedSession
     val returned = body.text(K.SESSION_ID)
     if (acquired.isNullOrBlank() || (returned != null && returned != acquired)) {
-      return stop("Cursor did not preserve the provider session; start an explicit new chat.")
+      return stop("$providerName did not preserve the provider session; start an explicit new chat.")
     }
     sessionId = acquired
     permissions?.bindSession(acquired)
     setup = body
-    if (!saveSession(acquired)) return stop("The Cursor provider session could not be saved; no prompt was sent.")
+    if (!saveSession(
+        acquired,
+      )
+    ) {
+      return stop("The $providerName provider session could not be saved; no prompt was sent.")
+    }
     selectModel()
   }
 
@@ -246,7 +261,7 @@ class CursorAcpSession(
   ) {
     if (!configValues(config[K.OPTIONS]).contains(requested)) {
       return stop(
-        "Cursor does not advertise the selected model/effort '$requested'; no " +
+        "$providerName does not advertise the selected model/effort '$requested'; no " +
           "prompt was sent.",
       )
     }
@@ -272,7 +287,7 @@ class CursorAcpSession(
     val offered = (models?.get(K.AVAILABLE_MODELS) as? JsonArray).orEmpty()
     if (offered.none { (it as? JsonObject)?.text(K.MODEL_ID) == requested }) {
       return stop(
-        "Cursor does not advertise the selected model/effort '$requested'; no " +
+        "$providerName does not advertise the selected model/effort '$requested'; no " +
           "prompt was sent.",
       )
     }
@@ -290,14 +305,19 @@ class CursorAcpSession(
   }
 
   private fun selectMode() {
+    val mode = launch.mode
+    if (mode == null) prompt() else selectMode(mode)
+  }
+
+  private fun selectMode(mode: String) {
     val config =
       (setup[K.CONFIG_OPTIONS] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
         .firstOrNull { it.text(K.CATEGORY) == "mode" }
     if (config != null) {
-      if (launch.mode !in configValues(config[K.OPTIONS])) return stop("Cursor does not advertise the requested mode.")
-      if (config.text(K.CURRENT_VALUE) == launch.mode) return prompt()
+      if (mode !in configValues(config[K.OPTIONS])) return stop("$providerName does not advertise the requested mode.")
+      if (config.text(K.CURRENT_VALUE) == mode) return prompt()
       pendingConfigId = config.text(K.ID)
-      pendingConfigValue = launch.mode
+      pendingConfigValue = mode
       pendingConfigIsMode = true
       return send(
         K.SESSION_SET_CONFIG,
@@ -310,14 +330,14 @@ class CursorAcpSession(
     }
     val modes = setup.obj(K.MODES)
     val offered = (modes?.get(K.AVAILABLE_MODES) as? JsonArray).orEmpty()
-    if (offered.none { (it as? JsonObject)?.text(K.ID) == launch.mode }) {
-      return stop("Cursor does not advertise the requested '${launch.mode}' mode; no prompt was sent.")
+    if (offered.none { (it as? JsonObject)?.text(K.ID) == mode }) {
+      return stop("$providerName does not advertise the requested '$mode' mode; no prompt was sent.")
     }
     send(
       K.SESSION_SET_MODE,
       buildJsonObject {
         put(K.SESSION_ID, sessionId)
-        put(K.MODE_ID, launch.mode)
+        put(K.MODE_ID, mode)
       },
     )
   }
@@ -353,21 +373,21 @@ class CursorAcpSession(
   private fun update(params: JsonObject) {
     if (params.text(K.SESSION_ID) != sessionId) return
     if (!ready) return
-    val update = params.obj(K.UPDATE) ?: return stop("Cursor sent a malformed session update.")
+    val update = params.obj(K.UPDATE) ?: return stop("$providerName sent a malformed session update.")
     when (update.text(K.SESSION_UPDATE)) {
       "agent_message_chunk" -> agentChunk(update)
       "tool_call", "tool_call_update" -> {
         permissions?.observeTool(update)
         onEvent(CursorAcpEvent.Tool(update))
       }
-      else -> record("seam=cursor_acp outcome=informational_update")
+      else -> record("seam=$seam outcome=informational_update")
     }
   }
 
   private fun agentChunk(update: JsonObject) {
-    val content = update.obj(K.CONTENT) ?: return stop("Cursor sent malformed assistant content.")
-    if (content.text(K.TYPE) != "text") return stop("Cursor sent unsupported assistant content.")
-    val chunk = content.text(K.TEXT) ?: return stop("Cursor sent malformed assistant text.")
+    val content = update.obj(K.CONTENT) ?: return stop("$providerName sent malformed assistant content.")
+    if (content.text(K.TYPE) != "text") return stop("$providerName sent unsupported assistant content.")
+    val chunk = content.text(K.TEXT) ?: return stop("$providerName sent malformed assistant text.")
     val overflow =
       synchronized(lock) {
         if (text.length + chunk.length > MAX_CAPTURE) {
@@ -380,7 +400,7 @@ class CursorAcpSession(
       }
     if (overflow) {
       stop(
-        "Cursor assistant output exceeded the capture limit.",
+        "$providerName assistant output exceeded the capture limit.",
       )
     } else {
       onEvent(CursorAcpEvent.Text(chunk))
@@ -392,16 +412,16 @@ class CursorAcpSession(
     method: String,
   ) {
     if (!ready || message.obj(K.PARAMS)?.text(K.SESSION_ID)?.let { it != sessionId } == true) {
-      return stop("Cursor sent a blocking request outside the active prompt/session.")
+      return stop("$providerName sent a blocking request outside the active prompt/session.")
     }
     if (method == K.REQUEST_PERMISSION) {
-      val owner = permissions ?: return stop("Cursor requested permission without a live operator channel.")
+      val owner = permissions ?: return stop("$providerName requested permission without a live operator channel.")
       owner.request(message)
       return
     }
     onEvent(CursorAcpEvent.Unsupported(method, message.toString()))
-    record("seam=cursor_acp outcome=unsupported_blocking method=$method")
-    val id = message[K.ID] ?: return stop("Cursor blocking request has no identity.")
+    record("seam=$seam outcome=unsupported_blocking method=$method")
+    val id = message[K.ID] ?: return stop("$providerName blocking request has no identity.")
     if (method == K.ASK_QUESTION || method == K.CREATE_PLAN) {
       write(
         buildJsonObject {
@@ -411,7 +431,7 @@ class CursorAcpSession(
         },
       )
     }
-    stop("Cursor requested unsupported interaction '$method'; it was not approved. ${message.obj(K.PARAMS)}")
+    stop("$providerName requested unsupported interaction '$method'; it was not approved. ${message.obj(K.PARAMS)}")
   }
 
   fun textSnapshot(): String = synchronized(lock) { text.toString() }
@@ -424,7 +444,7 @@ class CursorAcpSession(
 
   fun enforceOpening() {
     if (!ready && Duration.between(startedAt, clock.instant()) >= OPENING_TIMEOUT) {
-      stop("Cursor did not finish ACP setup in time; no prompt was sent.")
+      stop("$providerName did not finish ACP setup in time; no prompt was sent.")
     }
   }
 
@@ -432,12 +452,12 @@ class CursorAcpSession(
     permissions?.deliver(settled) ?: ApprovalDeliveryState.UNCERTAIN
 
   override fun stop(reason: String) {
-    record("seam=cursor_acp outcome=stopped")
+    record("seam=$seam outcome=stopped")
     finish(reason)
   }
 
   fun close() {
-    if (outcome() == null) stop("Cursor session was cancelled or disconnected before prompt completion.")
+    if (outcome() == null) stop("$providerName session was cancelled or disconnected before prompt completion.")
     permissions?.release()
   }
 
@@ -494,10 +514,10 @@ class CursorAcpSession(
             text.toString(),
             sessionId,
             model,
-            "Cursor response delivery is uncertain; it will not be replayed.",
+            "$providerName response delivery is uncertain; it will not be replayed.",
           )
       }
-      record("seam=cursor_acp outcome=uncertain_write")
+      record("seam=$seam outcome=uncertain_write")
     }
     return written
   }

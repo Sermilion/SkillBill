@@ -187,16 +187,3 @@ select an offered `allow_once` option; Cursor's remembered options remain unavai
 ACP does not supply team-dashboard MCP servers. Work requiring those servers is
 unsupported in this integration; no substitute server or permission is inferred.
 
-Junie remains selectable for historical content, but card-required chat and phase
-launches refuse before starting a process. The visible reason is that Junie ACP
-exists, but required permission-request coverage is unverified for this integration.
-ACP v1 is the documented stable reference and v2 is draft; neither is claimed as a
-negotiated Junie version. Enabling card-required execution requires Junie-specific
-authoritative permission semantics; a supported installed version and help output;
-an observed negotiated ACP version; exact permission request/response ids and
-options; safe denial, cancellation and provider-restriction behavior; and real-provider
-parity evidence at both chat and phase launch roots. The evidence must cover shell
-commands, file edits and tools, original request/session correlation, and prove
-provider restrictions remain effective without bypass flags. A new process must not
-inherit historical card authority. Until those prerequisites are met, no successful
-Junie approval adapter or automatic provider switch is claimed.

@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpEvent
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpImage
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
@@ -123,41 +124,46 @@ internal fun cursorAcpTurn(
   environment: Map<String, String>,
   request: ChatTurnRequest,
   saved: String?,
-  binding: CursorSessionBinding,
+  binding: CursorSessionBinding?,
   prompt: String,
+  provider: AcpProvider = AcpProvider.Cursor,
 ): Flow<ChatEvent> = channelFlow {
+  val cursor = provider == AcpProvider.Cursor
   val dependency = when (request.cursorMcpDependency) {
     CursorMcpDependency.Unspecified -> CursorAcpMcpDependency.Unspecified
     CursorMcpDependency.ProjectUserOnly -> CursorAcpMcpDependency.ProjectUserOnly
     CursorMcpDependency.TeamDashboardRequired -> CursorAcpMcpDependency.TeamDashboardRequired
   }
-  cursorAcpDependencyRefusal(dependency)?.let { reason ->
-    diagnostics.record("chat.cursor_mcp_dependency_refused")
-    send(ChatEvent.Failed(ChatFailure.AgentUnsupported, reason))
-    return@channelFlow
+  if (provider.mcpDeclarationRequired) {
+    cursorAcpDependencyRefusal(dependency)?.let { reason ->
+      diagnostics.record("chat.cursor_mcp_dependency_refused")
+      send(ChatEvent.Failed(ChatFailure.AgentUnsupported, reason))
+      return@channelFlow
+    }
   }
   val inputs = Channel<ChatProcessInput>(Channel.UNLIMITED) { it.written.complete(false) }
   val outputs = Channel<ChatProcessOutput>(Channel.UNLIMITED)
   val events = Channel<ChatEvent>(Channel.UNLIMITED)
   val readerRef = AtomicReference<kotlinx.coroutines.Job?>()
   var executable: String? = null
-  val aliases = skillbill.install.model.AGENT_LAUNCHER_CLIS[skillbill.install.model.SupportedAgent.CURSOR]
-    ?.executables.orEmpty()
+  val aliases = skillbill.install.model.AGENT_LAUNCHER_CLIS[
+    if (cursor) skillbill.install.model.SupportedAgent.CURSOR else skillbill.install.model.SupportedAgent.JUNIE,
+  ]?.executables.orEmpty()
   for (alias in aliases) {
-    val probe = ChatCommand(agentCommand(alias, listOf("acp", "--help"), shell),
+    val probe = ChatCommand(agentCommand(alias, provider.probeArguments, shell),
       request.scope.repositoryRoot, environment, "")
     var usable = false
     try {
       withTimeout(30_000) {
         probes.run(probe).collect { if (it is ChatProcessOutput.Exited && it.code == 0) usable = true }
       }
-    } catch (_: TimeoutCancellationException) { diagnostics.record("chat.cursor_acp_probe_timeout") }
+    } catch (_: TimeoutCancellationException) { diagnostics.record("chat.${provider.seam}_probe_timeout") }
     if (usable) { executable = alias; break }
-    diagnostics.record("chat.cursor_acp_alias_unavailable")
+    diagnostics.record("chat.${provider.seam}_alias_unavailable")
   }
   if (executable == null) {
     send(ChatEvent.Failed(ChatFailure.ApprovalUnsupported,
-      "No declared Cursor executable supplies ACP stdio. The chat was not started."))
+      "No declared ${provider.name} executable supplies ACP stdio. The chat was not started."))
     return@channelFlow
   }
   val protocol = CursorAcpSession(
@@ -165,17 +171,20 @@ internal fun cursorAcpTurn(
       cwd = request.scope.repositoryRoot,
       prompt = prompt,
       model = request.agent.model?.let { model ->
-        request.agent.effort?.takeIf { "[effort=" !in model }?.let { "$model[effort=$it]" } ?: model
+        request.agent.effort?.takeIf { cursor && "[effort=" !in model }?.let { "$model[effort=$it]" } ?: model
       },
-      mode = if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "agent",
+      mode = if (!cursor) null else if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "agent",
       savedSession = saved,
       images = request.images.map { CursorAcpImage(Base64.getEncoder().encodeToString(it.bytes), it.mediaType) },
       mcpDependency = dependency,
+      provider = provider,
     ),
     Clock.systemUTC(),
     writeLine = { inputs.writeAndAwaitBlocking(it) },
     saveSession = {
-      if (saved == null) {
+      if (binding == null) {
+        true
+      } else if (saved == null) {
         store.saveCursorSession(request.sessionId, it, binding)
       } else {
         store.agentSession(request.sessionId) == it && store.cursorSessionBinding(request.sessionId) == binding
@@ -188,26 +197,26 @@ internal fun cursorAcpTurn(
           val tool = event.update
           val id = tool.string("toolCallId")
           if (id != null) {
-            events.trySend(ChatEvent.ToolUse(ChatToolCall(id, tool.string("title") ?: "Cursor tool", tool.toString(), null)))
+            events.trySend(ChatEvent.ToolUse(ChatToolCall(id, tool.string("title") ?: "${provider.name} tool", tool.toString(), null)))
             if (tool.string("status") in setOf("completed", "failed")) {
               events.trySend(ChatEvent.ToolResult(id, tool.toString(), tool.string("status") == "failed"))
             }
           }
         }
         is CursorAcpEvent.Unsupported -> events.trySend(ChatEvent.TextDelta(
-          "\nUnsupported Cursor interaction ${event.method}:\n${event.payload}\n"))
+          "\nUnsupported ${provider.name} interaction ${event.method}:\n${event.payload}\n"))
       }
     },
     onCard = { events.trySend(ChatEvent.ApprovalRequested(it.toCard())) },
-    record = { diagnostics.record("chat.cursor_acp_diagnostic") },
+    record = { diagnostics.record("chat.${provider.seam}_diagnostic") },
   )
   val opening = authority.openCursor(
     chatOpenRequest(
       request.sessionId,
       request.scope.repositoryRoot,
-      "cursor",
+      provider.id,
       request.mode,
-      environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR] ?: environment["HOME"].orEmpty(),
+      environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR].takeIf { cursor } ?: environment["HOME"].orEmpty(),
     ),
     protocol,
   ) { inputs.close(); readerRef.get()?.cancel() }
@@ -216,7 +225,7 @@ internal fun cursorAcpTurn(
     return@channelFlow
   }
   val generation = (opening as CursorChatApprovalOpening.Opened).generation
-  val command = ChatCommand(agentCommand(executable, cursorAcpArguments(request.mode), shell), request.scope.repositoryRoot, environment, "")
+  val command = ChatCommand(agentCommand(executable, if (cursor) cursorAcpArguments(request.mode) else provider.acpArguments, shell), request.scope.repositoryRoot, environment, "")
   val reader = launch(start = CoroutineStart.LAZY) {
     try { live.openAcknowledged(command, inputs).collect { outputs.send(it) } }
     finally { outputs.close() }
@@ -230,13 +239,13 @@ internal fun cursorAcpTurn(
       is ChatProcessOutput.Line -> protocol.observe(output.text)
       is ChatProcessOutput.StdoutEnded -> {
         if (protocol.outcome() == null) {
-          val reason = output.readFailure?.let { "Cursor stdout read failed: $it" }
-            ?: "Cursor stdout disconnected."
+          val reason = output.readFailure?.let { "${provider.name} stdout read failed: $it" }
+            ?: "${provider.name} stdout disconnected."
           generation.stop(listOf(reason, output.stderrTail).filter(String::isNotBlank).joinToString("\n"))
         }
       }
       is ChatProcessOutput.Exited -> generation.stop(
-        "Cursor exited before prompt completion (${output.code}): ${output.stderrTail}",
+        "${provider.name} exited before prompt completion (${output.code}): ${output.stderrTail}",
       )
       is ChatProcessOutput.StartFailed -> generation.stop(output.message)
     }
@@ -261,9 +270,9 @@ internal fun cursorAcpTurn(
     protocol.close()
     val outcome = protocol.outcome()
     events.send(if (outcome?.failure == null && outcome != null) ChatEvent.Completed else
-      ChatEvent.Failed(ChatFailure.ProcessFailed, outcome?.failure ?: "Cursor disconnected before completion."))
+      ChatEvent.Failed(ChatFailure.ProcessFailed, outcome?.failure ?: "${provider.name} disconnected before completion."))
   } catch (_: TimeoutCancellationException) {
-    protocol.stop("Cursor did not complete ACP setup in time; no prompt was sent.")
+    protocol.stop("${provider.name} did not complete ACP setup in time; no prompt was sent.")
     events.send(ChatEvent.Failed(ChatFailure.ProcessFailed, protocol.outcome()?.failure))
   } catch (cancelled: CancellationException) {
     throw cancelled

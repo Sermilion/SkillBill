@@ -26,6 +26,7 @@ internal class CursorAcpPermissions(
   private val onCard: (ApprovalRequestRecord) -> Unit,
   private val stop: (String) -> Unit,
   private val record: (String) -> Unit,
+  private val provider: AcpProvider = AcpProvider.Cursor,
 ) {
   private val lock = Any()
   private var session: String? = null
@@ -43,7 +44,7 @@ internal class CursorAcpPermissions(
     val id = update.text(K.TOOL_CALL_ID) ?: return
     val complete = update.text(K.STATUS) in setOf("completed", "failed")
     synchronized(lock) {
-      if (tools.size >= LIMIT && id !in tools) return stop("Cursor exceeded tool retention capacity.")
+      if (tools.size >= LIMIT && id !in tools) return stop("${provider.name} exceeded tool retention capacity.")
       tools[id] = merge(tools[id], update)
     }
     if (complete) clear { it.toolId == id }
@@ -52,10 +53,10 @@ internal class CursorAcpPermissions(
   fun request(message: JsonObject) {
     val decoded =
       CursorPermissionRequests.decode(message, session)
-        ?: return stop("Cursor sent a malformed or mismatched permission request.")
+        ?: return stop("${provider.name} sent a malformed or mismatched permission request.")
     if (!admit(decoded.id, CanonicalJson.encode(message))) return
     val merged = synchronized(lock) { merge(tools[decoded.toolId], decoded.tool) }
-    val waiting = CursorPermissionRequests.build(owner.key, cwd, session, decoded, merged)
+    val waiting = CursorPermissionRequests.build(owner.key, cwd, decoded, merged, provider)
     synchronized(lock) { pending[decoded.id] = waiting }
     val ordinary = waiting.actionClass != ApprovalActionClass.PROVIDER_INTERACTION
     val registration =
@@ -70,7 +71,7 @@ internal class CursorAcpPermissions(
             null,
           ),
         )
-      }.getOrElse { return stop("Cursor approval registration failed: ${it.message.orEmpty()}") }
+      }.getOrElse { return stop("${provider.name} approval registration failed: ${it.message.orEmpty()}") }
     show(registration)
     val safeOption = waiting.options.any { it.kind in ONE_TIME_KINDS }
     if (!ordinary || !safeOption) {
@@ -90,11 +91,11 @@ internal class CursorAcpPermissions(
       val previous = consumed[id]
       when {
         previous != null -> {
-          if (previous != snapshot) stop("Cursor reused a permission id with changed content.")
+          if (previous != snapshot) stop("${provider.name} reused a permission id with changed content.")
           false
         }
         consumed.size >= LIMIT || released -> {
-          stop("Cursor approval capacity or lifetime ended.")
+          stop("${provider.name} approval capacity or lifetime ended.")
           false
         }
         else -> {
@@ -109,7 +110,8 @@ internal class CursorAcpPermissions(
       is ApprovalRegistrationResult.Registered -> onCard(registration.request)
       is ApprovalRegistrationResult.AutoAllowed -> onCard(registration.request)
       is ApprovalRegistrationResult.Refused -> onCard(registration.request)
-      ApprovalRegistrationResult.IdentityConflict -> stop("Cursor approval identity conflicted with retained content.")
+      ApprovalRegistrationResult.IdentityConflict ->
+        stop("${provider.name} approval identity conflicted with retained content.")
     }
   }
 
@@ -188,7 +190,9 @@ internal class CursorAcpPermissions(
 
   fun release() {
     if (synchronized(lock) { released }) return
-    catchingNonCancellation { owner.release() }.onFailure { record("seam=cursor_acp outcome=approval_release_failed") }
+    catchingNonCancellation {
+      owner.release()
+    }.onFailure { record("seam=${provider.seam} outcome=approval_release_failed") }
     synchronized(lock) {
       released = true
       pending.clear()

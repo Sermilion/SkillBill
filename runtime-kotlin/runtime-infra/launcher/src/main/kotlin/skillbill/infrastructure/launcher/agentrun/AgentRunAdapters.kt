@@ -9,6 +9,7 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.launcher.process.codex.CodexPhaseSession
 import skillbill.infrastructure.launcher.process.codex.CodexSessionChannel
 import skillbill.infrastructure.launcher.process.codex.CodexSessionLaunch
+import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpLaunch
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpMcpDependency
 import skillbill.infrastructure.launcher.process.cursor.CursorPhaseSession
@@ -156,8 +157,12 @@ internal class ProcessAgentRunAdapter(
         is LauncherResolution.Missing -> return unavailableLauncherFacts(request, built, resolution.message)
       }
     val process = processRequest(command, request)
-    if (command.approvalProtocol == AgentRunApprovalProtocol.CURSOR_ACP) {
-      return launchCursorSession(request, command, process, cursorDependency)
+    when (command.approvalProtocol) {
+      AgentRunApprovalProtocol.CURSOR_ACP ->
+        return launchAcpSession(request, command, process, cursorDependency, AcpProvider.Cursor)
+      AgentRunApprovalProtocol.JUNIE_ACP ->
+        return launchAcpSession(request, command, process, cursorDependency, AcpProvider.Junie)
+      else -> Unit
     }
     return launchOtherSession(request, command, process)
   }
@@ -403,24 +408,35 @@ internal class ProcessAgentRunAdapter(
           diagnostics = diagnostics,
         )
       }
-      AgentRunApprovalProtocol.CODEX_APP_SERVER, AgentRunApprovalProtocol.CURSOR_ACP -> null
+      AgentRunApprovalProtocol.CODEX_APP_SERVER,
+      AgentRunApprovalProtocol.CURSOR_ACP,
+      AgentRunApprovalProtocol.JUNIE_ACP,
+      -> null
       null -> refusedOpening("agent '${agent.id}' cannot host approval cards for this launch")
     }
   }
 
-  private fun launchCursorSession(
+  private fun launchAcpSession(
     request: SkillRunRequest,
     command: AgentRunCommand,
     process: AgentRunProcessRequest,
     dependency: CursorAcpMcpDependency,
+    provider: AcpProvider,
   ): AgentRunLaunchOutcome {
     val launch =
       CursorAcpLaunch(
         command.workingDirectory.toString(),
         requireNotNull(command.stdinText),
         command.sessionModel,
-        if (request.readOnlyPhase) "plan" else "agent",
+        if (provider != AcpProvider.Cursor) {
+          null
+        } else if (request.readOnlyPhase) {
+          "plan"
+        } else {
+          "agent"
+        },
         mcpDependency = dependency,
+        provider = provider,
       )
     val deadline = approvalEnclosingDeadline(clock, request.timeout)
     val result =
@@ -431,6 +447,7 @@ internal class ProcessAgentRunAdapter(
         diagnostics,
         executableLookup,
         commandBuilder.launcherCli,
+        provider,
       ) { openCursorSession(launch, request, command, deadline) }.run()
     return result.spawnDenied?.let {
       AgentRunLaunchDenied(
@@ -455,8 +472,14 @@ internal class ProcessAgentRunAdapter(
         "No approval authority is configured.",
       )
     val profile =
-      command.environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
-        ?: inheritedEnvironment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR] ?: userHome?.toString().orEmpty()
+      (
+        if (launch.provider == AcpProvider.Cursor) {
+          command.environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
+            ?: inheritedEnvironment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR]
+        } else {
+          null
+        }
+      ) ?: userHome?.toString().orEmpty()
     val openRequest =
       ApprovalOwnerOpenRequest(
         request.repoRoot,

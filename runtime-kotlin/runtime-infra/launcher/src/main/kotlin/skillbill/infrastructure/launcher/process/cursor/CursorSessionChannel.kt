@@ -21,6 +21,8 @@ internal class CursorSessionChannel(
   private val diagnostics: RuntimeDiagnostics,
 ) : AgentRunSessionChannel {
   private var writer: SerializedStdinWriter? = null
+  private val providerName = launch.provider.name
+  private val seam = launch.provider.seam
   private val buffer = StringBuilder()
   private val captureLock = Any()
   private val toolOutput = StringBuilder()
@@ -67,7 +69,7 @@ internal class CursorSessionChannel(
       }
       if (protocol.outcome() != null) return
       if (buffer.length + part.value.length > MAX_FRAME) {
-        protocol.stop("Cursor sent an oversized ACP frame.")
+        protocol.stop("$providerName sent an oversized ACP frame.")
         return
       }
       buffer.append(part.value)
@@ -92,7 +94,7 @@ internal class CursorSessionChannel(
   override fun capture(): AgentRunSessionCapture = freezeCapture()
 
   private fun toolUpdate(update: JsonObject) {
-    val record = "Cursor tool update: $update\n"
+    val record = "$providerName tool update: $update\n"
     val retained =
       synchronized(captureLock) {
         when {
@@ -111,8 +113,8 @@ internal class CursorSessionChannel(
     if (retained == null) {
       val truncated = synchronized(captureLock) { toolOutputTruncated }
       if (truncated) {
-        diagnostics.warning("seam=cursor_acp outcome=tool_capture_truncated")
-        protocol.stop("Cursor tool output exceeded the capture limit.")
+        diagnostics.warning("seam=$seam outcome=tool_capture_truncated")
+        protocol.stop("$providerName tool output exceeded the capture limit.")
       }
       return
     }
@@ -127,8 +129,8 @@ internal class CursorSessionChannel(
     catchingNonCancellation { output.write(stream, value) }
       .onFailure {
         synchronized(captureLock) { deliveryFailed = true }
-        diagnostics.warning("seam=cursor_acp outcome=${seam}_delivery_failed")
-        protocol.stop("Cursor $seam could not reach the phase output sink.")
+        diagnostics.warning("seam=$seam outcome=${seam}_delivery_failed")
+        protocol.stop("$providerName $seam could not reach the phase output sink.")
       }
   }
 

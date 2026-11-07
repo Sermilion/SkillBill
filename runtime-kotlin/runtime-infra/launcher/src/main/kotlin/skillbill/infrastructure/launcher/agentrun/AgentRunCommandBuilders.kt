@@ -45,6 +45,7 @@ internal enum class AgentRunApprovalProtocol {
   CLAUDE_HOST,
   CODEX_APP_SERVER,
   CURSOR_ACP,
+  JUNIE_ACP,
 }
 
 internal interface AgentRunCommandBuilder {

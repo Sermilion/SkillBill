@@ -23,6 +23,7 @@ internal class CursorPhaseSession(
   private val diagnostics: RuntimeDiagnostics,
   private val lookup: ExecutableLookup,
   private val cli: AgentLauncherCli,
+  private val provider: AcpProvider,
   private val open: () -> AgentRunApprovalOpenResult,
 ) {
   private val startedAt = clock.instant()
@@ -33,13 +34,13 @@ internal class CursorPhaseSession(
       val checked = probe(candidate, remaining)
       if (interrupted(checked)) return checked
       if (usable(checked)) return session(candidate)
-      diagnostics.warning("seam=cursor_acp outcome=alias_incompatible")
+      diagnostics.warning("seam=${provider.seam} outcome=alias_incompatible")
     }
-    diagnostics.warning("seam=cursor_acp outcome=unsupported")
+    diagnostics.warning("seam=${provider.seam} outcome=unsupported")
     return AgentRunProcessResult(
       null,
       "",
-      stderr = "No declared Cursor executable supplies ACP stdio.",
+      stderr = "No declared ${provider.name} executable supplies ACP stdio.",
       timedOut = false,
       interrupted = false,
       spawnFailed = true,
@@ -52,7 +53,11 @@ internal class CursorPhaseSession(
   ): AgentRunProcessResult =
     runner.run(
       remaining.copy(
-        launch = AgentRunProcessLaunchFields(listOf(candidate, "acp", "--help"), request.launch.workingDirectory),
+        launch =
+          AgentRunProcessLaunchFields(
+            listOf(candidate) + provider.probeArguments,
+            request.launch.workingDirectory,
+          ),
         probes = AgentRunProcessProbeFields(),
         approval = AgentRunProcessApprovalFields(),
         timing = remaining.timing.copy(timeout = remaining.timing.timeout?.coerceAtMost(PROBE_LIMIT) ?: PROBE_LIMIT),
@@ -72,7 +77,7 @@ internal class CursorPhaseSession(
       remaining.copy(
         launch =
           request.launch.copy(
-            command = listOf(executable, "acp"),
+            command = listOf(executable) + provider.acpArguments,
             stdinText = null,
             session = AgentRunApprovalChannelOpening { open() },
           ),
@@ -96,7 +101,7 @@ internal class CursorPhaseSession(
     AgentRunProcessResult(
       null,
       "",
-      stderr = "Cursor ACP admission exhausted the original deadline; no prompt was sent.",
+      stderr = "${provider.name} ACP admission exhausted the original deadline; no prompt was sent.",
       timedOut = true,
       interrupted = false,
       spawnFailed = false,

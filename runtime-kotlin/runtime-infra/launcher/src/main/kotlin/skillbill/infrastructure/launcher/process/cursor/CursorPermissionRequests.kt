@@ -31,6 +31,8 @@ internal data class CursorPermissionInput(
   val message: JsonObject,
 ) {
   val toolId: String get() = tool.text(K.TOOL_CALL_ID).orEmpty()
+
+  val session: String? get() = message.obj(K.PARAMS)?.text(K.SESSION_ID)
 }
 
 internal data class CursorPermissionOption(val id: String, val name: String, val kind: String)
@@ -91,9 +93,9 @@ internal object CursorPermissionRequests {
   fun build(
     key: ApprovalOwnerKey,
     cwd: String,
-    session: String?,
     decoded: CursorPermissionInput,
     merged: JsonObject,
+    provider: AcpProvider = AcpProvider.Cursor,
   ): CursorPendingPermission {
     val rawInput = merged[K.RAW_INPUT]?.takeUnless { it == JsonNull }
     val toolKind = merged.text(K.KIND)
@@ -122,20 +124,23 @@ internal object CursorPermissionRequests {
     val request =
       ApprovalRequestRecord(
         contractVersion = OPERATOR_APPROVAL_CONTRACT_VERSION,
-        approvalId = approvalId(key.processGeneration, decoded.id),
+        approvalId = approvalId(provider, key.processGeneration, decoded.id),
         repositoryIdentity = key.repositoryIdentity,
         checkoutRoot = cwd,
         runId = key.runId,
         processGeneration = key.processGeneration,
-        provider = "cursor",
+        provider = provider.id,
         providerRequestId = decoded.id,
-        providerSessionId = session,
-        title = merged.text(K.TITLE)?.takeIf(String::isNotBlank) ?: "Cursor permission request",
+        providerSessionId = decoded.session,
+        title = merged.text(K.TITLE)?.takeIf(String::isNotBlank) ?: "${provider.name} permission request",
         reason = null,
-        subject = input?.text(K.COMMAND) ?: input?.text(K.PATH) ?: actionKind.ifBlank { "Cursor tool request" },
+        subject =
+          input?.text(
+            K.COMMAND,
+          ) ?: input?.text(K.PATH) ?: actionKind.ifBlank { "${provider.name} tool request" },
         inputText = payload,
         options = decoded.options.map { ApprovalOption(it.id, it.name, cardKind(it.kind)) },
-        authorityScope = ApprovalAuthorityScope("", "cursor-acp-1", actionKind, "", "pending"),
+        authorityScope = ApprovalAuthorityScope("", "${provider.id}-acp-1", actionKind, "", "pending"),
         createdAt = "", deadlineAt = "", state = ApprovalState.PENDING, providerPayload = payload,
       )
     val actionClass =
@@ -164,6 +169,7 @@ internal object CursorPermissionRequests {
     }
 
   private fun approvalId(
+    provider: AcpProvider,
     generation: String,
     id: ApprovalProviderRequestId,
   ): String {
@@ -172,7 +178,10 @@ internal object CursorPermissionRequests {
         is ApprovalProviderRequestId.Text -> "s:${id.value}"
         is ApprovalProviderRequestId.Integer -> "i:${id.value}"
       }
-    return "cursor:$generation:" + Base64.getUrlEncoder().withoutPadding().encodeToString(typed.encodeToByteArray())
+    return "${provider.id}:$generation:" +
+      Base64.getUrlEncoder().withoutPadding().encodeToString(
+        typed.encodeToByteArray(),
+      )
   }
 
   private val ORDINARY_KINDS = setOf("read", "edit", "delete", "move", "search", "execute", "think")

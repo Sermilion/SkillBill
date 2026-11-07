@@ -16,14 +16,8 @@ import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 interface ChatTransport {
   val agentId: String
 
-  /**
-   * Whether this agent's chat answers permission requests through an operator approval card. A transport that cannot is
-   * refused before it starts, since its process would otherwise run with permission checks skipped.
-   */
+  /** Whether this agent's chat answers permission requests through an operator approval card. */
   val approvalCapable: Boolean get() = false
-
-  val approvalUnavailableReason: String get() =
-    "$agentId cannot host operator approval cards, so its chat was not started. Select a supported provider explicitly."
 
   fun run(request: ChatTurnRequest): Flow<ChatEvent>
 
