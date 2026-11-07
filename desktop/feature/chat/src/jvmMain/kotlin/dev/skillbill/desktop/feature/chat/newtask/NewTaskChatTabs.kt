@@ -265,7 +265,7 @@ private fun NewTaskChatTab(item: OpenChatItem, selected: Boolean, onClick: () ->
     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
   ) {
     NewTaskChatMarker(item.status)
-    BasicText(item.title, Modifier.weight(1f, fill = false), style = type.tSm.copy(color = titleColor, fontWeight = if (unread) FontWeight.Medium else type.tSm.fontWeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    BasicText(item.title, Modifier.weight(1f), style = type.tSm.copy(color = titleColor, fontWeight = if (unread) FontWeight.Medium else type.tSm.fontWeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
     Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { if (hovered || selected) TabCloseButton(item.title, onClose) }
   }
 }

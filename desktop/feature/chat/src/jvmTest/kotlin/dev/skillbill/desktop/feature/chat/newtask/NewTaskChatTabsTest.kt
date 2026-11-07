@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
@@ -97,6 +98,44 @@ class NewTaskChatTabsTest {
       assertEquals(lastTab.right.value + 2f, plus.left.value, 0.5f, "New chat sits one gap after the last tab")
       // Three 196dp tabs after the 8dp padding end at 600dp, so "+" spans 602..626dp; a weight(1f) tab row would push it to the strip's right edge.
       assertTrue(plus.right.value < 700f, "New chat must not be pushed to the far right")
+    } finally {
+      scope.backgroundScope.cancel()
+      scope.cancel()
+    }
+  }
+
+  @Test
+  fun `close control ends 4dp inside a short tab when selected or hovered`() = runComposeUiTest {
+    val scope = TestScope()
+    try {
+      val chats = scope.testNewTaskChats()
+      val first = chats.selected.value
+      val drafts = listOf(first, chats.newChat())
+      chats.select(first)
+      val items = drafts.mapIndexed { index, draft -> OpenChatItem(draft, "Chat $index", "repo-$index", "Claude", NewTaskChatStatus.Idle) }
+      setContent {
+        SkillBillTheme(reducedMotion = true) {
+          CompositionLocalProvider(LocalShellInput provides ShellInput()) {
+            Box(Modifier.width(1200.dp)) { NewTaskChatTabs(items, chats.selected.value, chats::select, chats::requestClose, chats::newChat) }
+          }
+        }
+      }
+      waitForIdle()
+      val tabs = onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
+      val selected = tabs[0].getBoundsInRoot()
+      val close = onNodeWithContentDescription("Close Chat 0", useUnmergedTree = true).getBoundsInRoot()
+      assertEquals(20f, close.right.value - close.left.value, 0.5f)
+      assertEquals(20f, close.bottom.value - close.top.value, 0.5f)
+      assertEquals(selected.right.value - 4f, close.right.value, 0.5f, "Close trailing edge is the tab's 4dp end padding")
+      onNodeWithContentDescription("Close Chat 1", useUnmergedTree = true).assertDoesNotExist()
+      val hoveredTab = tabs[1]
+      hoveredTab.performMouseInput { enter(center) }
+      waitForIdle()
+      val hovered = hoveredTab.getBoundsInRoot()
+      val hoveredClose = onNodeWithContentDescription("Close Chat 1", useUnmergedTree = true).getBoundsInRoot()
+      assertEquals(20f, hoveredClose.right.value - hoveredClose.left.value, 0.5f)
+      assertEquals(20f, hoveredClose.bottom.value - hoveredClose.top.value, 0.5f)
+      assertEquals(hovered.right.value - 4f, hoveredClose.right.value, 0.5f, "Hovered close trailing edge is the tab's 4dp end padding")
     } finally {
       scope.backgroundScope.cancel()
       scope.cancel()
