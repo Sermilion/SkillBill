@@ -25,6 +25,7 @@ import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.domain.model.QaPreviewState
 import dev.skillbill.desktop.feature.detail.generated.resources.Res
 import dev.skillbill.desktop.feature.detail.generated.resources.qa_preview_description
+import dev.skillbill.desktop.feature.detail.generated.resources.qa_preview_display_blank
 import dev.skillbill.desktop.feature.detail.generated.resources.qa_preview_ended
 import dev.skillbill.desktop.feature.detail.generated.resources.qa_preview_ended_detail
 import dev.skillbill.desktop.feature.detail.generated.resources.qa_preview_frame_incomplete
@@ -88,4 +89,5 @@ private fun waitingText(reason: QaPreviewState.Reason): StringResource = when (r
   QaPreviewState.Reason.UnsupportedFormat -> Res.string.qa_preview_format_unsupported
   QaPreviewState.Reason.LimitsExceeded -> Res.string.qa_preview_limits_exceeded
   QaPreviewState.Reason.ReadFailed -> Res.string.qa_preview_read_failed
+  QaPreviewState.Reason.BlankDisplay -> Res.string.qa_preview_display_blank
 }

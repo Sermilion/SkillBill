@@ -13,9 +13,10 @@ The first launch is slow because it builds `runtime-kotlin`.
 ## Desktop preview
 
 Open the execution's Details pane to watch its private desktop display. For a Goal,
-select the subtask running QA, or select Goal finish for final QA. The Desktop preview
-section shows Waiting until the selected invocation produces a framebuffer, Live while
-frames arrive, and Ended after QA closes. Closing the pane stops observation.
+select the subtask running QA, or select Goal finish and open its QA tab for final QA. The
+Desktop preview section shows Waiting until the selected invocation produces a framebuffer
+with something drawn on it, Live while frames arrive, and Ended after QA closes. An empty
+display paints one solid color, so a uniform frame stays Waiting. Closing the pane stops observation.
 Standalone QA uses the selected run in its history pager. Only desktop targets with
 a private file-backed Xvfb display supply frames. Earlier runs without preview metadata
 have no preview.

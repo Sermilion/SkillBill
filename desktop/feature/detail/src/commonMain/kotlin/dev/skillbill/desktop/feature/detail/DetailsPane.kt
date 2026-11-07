@@ -69,7 +69,7 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
         val sections = DetailSections(this, collapse, listState, assessmentOrder)
         if (detail != null) {
           sections.item(key = "inspector") { InspectorSection(item, detail, selected, onAction) }
-          if (state.qaPreviewVisible) {
+          if (state.qaPreviewVisible && (selected != SubtaskKey.GoalFinish || resultTab == "qa")) {
             previewRun?.let { run -> sections.item(key = "qa-preview") { QaPreview(run.invocationId, state.qaPreview) } }
           }
           if (selected == SubtaskKey.GoalFinish) {

@@ -12,4 +12,5 @@
     <string name="qa_preview_format_unsupported">This framebuffer format is not supported.</string>
     <string name="qa_preview_limits_exceeded">The framebuffer exceeds the preview limits.</string>
     <string name="qa_preview_read_failed">The framebuffer could not be read.</string>
+    <string name="qa_preview_display_blank">The display is running, but no app window has drawn on it yet.</string>
 </resources>

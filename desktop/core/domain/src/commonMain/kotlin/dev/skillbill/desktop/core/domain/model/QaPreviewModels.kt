@@ -15,7 +15,7 @@ sealed interface QaPreviewState {
   data class Live(val frame: QaPreviewFrame) : QaPreviewState
   data object Ended : QaPreviewState
 
-  enum class Reason { SourceUnavailable, InvalidSource, IncompleteFrame, UnsupportedFormat, LimitsExceeded, ReadFailed }
+  enum class Reason { SourceUnavailable, InvalidSource, IncompleteFrame, UnsupportedFormat, LimitsExceeded, ReadFailed, BlankDisplay }
 }
 
 data class GoalQaPreview(
