@@ -221,15 +221,25 @@ internal fun ApprovalCard.decisionLines(): List<String> = listOfNotNull(
     else -> null
   },
   ruleId?.let { "Rule $it" },
-  selectedOptionId?.let { id -> "Selected: ${options.firstOrNull { it.optionId == id }?.label ?: id}" },
+  selectedLabel()?.let { "Selected: $it" },
 )
+
+// Always allow answers with the one-time allow option plus a rule, so a rule decision names the rule, not that option.
+private fun ApprovalCard.selectedLabel(): String? = when (decisionSource) {
+  "operator_rule" -> alwaysAllowLabel(this)
+  "stored_rule" -> null
+  else -> selectedOptionId?.let { id -> options.firstOrNull { it.optionId == id }?.label ?: id }
+}
+
+private val ApprovalCard.decidedByRule: Boolean
+  get() = decisionSource == "operator_rule" || decisionSource == "stored_rule"
 
 /** One provider option of a card that can no longer be answered: full wrapping label, kind and whether it was chosen. */
 @Composable
 private fun ReadOnlyOption(card: ApprovalCard, option: ApprovalCardOption) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  val selected = option.optionId == card.selectedOptionId
+  val selected = option.optionId == card.selectedOptionId && !card.decidedByRule
   val suffix = buildString {
     append(" (${option.kind})")
     if (selected) append(" — selected")

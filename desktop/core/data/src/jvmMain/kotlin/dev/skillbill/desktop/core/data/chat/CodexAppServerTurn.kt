@@ -22,9 +22,10 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import skillbill.infrastructure.launcher.process.codex.CodexAppServerProtocol
+import skillbill.infrastructure.launcher.process.codex.CodexThreadOpening
 
 internal fun codexAppServerTurn(
   launcher: LiveChatProcessLauncher,
@@ -91,91 +92,30 @@ internal fun codexAppServerTurn(
   val rpc = CodexAppServerRpc(input, output, diagnostics, eventSink, approval)
   try {
     val (activeThread, activeTurn) = withTimeout(30_000) {
-    rpc.call("initialize", buildJsonObject {
-      put("capabilities", buildJsonObject { put("experimentalApi", true) })
-      put("clientInfo", buildJsonObject {
-        put("name", "skill-bill")
-        put("title", "Skill Bill")
-        put("version", "1.0.0")
-      })
-    }) { result ->
-      val identity = result.string("userAgent")
-      if (identity.isNullOrBlank() || !identity.contains("0.166.0")) {
-        throw CodexSessionFailure("The Codex app-server identity is incompatible with the supported 0.166.0 protocol.")
-      }
+    val settings = codexChatSettings(command, request)
+    rpc.call("initialize", CodexAppServerProtocol.initializeParams()) { result ->
+      CodexAppServerProtocol.identityRefusal(result)?.let { throw CodexSessionFailure(it) }
     }
-    if (!input.writeAndAwait(buildJsonObject { put("method", "initialized") }.toString())) {
+    if (!input.writeAndAwait(CodexAppServerProtocol.initializedNotification().toString())) {
       throw CodexSessionFailure("Codex initialization delivery is uncertain; it will not be replayed.")
     }
-    val threadMethod = if (savedThread == null) "thread/start" else "thread/resume"
-    val threadParams = buildJsonObject {
-      if (savedThread != null) put("threadId", savedThread)
-      put("cwd", command.workingDirectory)
-      request.agent.model?.let { put("model", it) }
-      if (request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly) put("sandbox", "read-only")
-    }
     var threadId: String? = null
-    try {
-      rpc.call(threadMethod, threadParams) { result ->
-        val thread = result.obj("thread")
-        val returnedId = thread?.string("id")
-        if (returnedId.isNullOrBlank()) throw CodexSessionFailure("Codex did not return a provider thread id.")
-        if (savedThread != null && returnedId != savedThread) {
-          throw CodexSessionFailure("Codex resumed a different provider thread.")
-        }
-        val effectiveModel = result.string("model")
-        val effectiveCwd = result.string("cwd")
-        if (request.agent.model != null && effectiveModel != request.agent.model) {
-          throw CodexSessionFailure("Codex did not apply the selected model; the turn was not started.")
-        }
-        if (effectiveCwd != command.workingDirectory) {
-          throw CodexSessionFailure("Codex opened the thread in a different checkout; the turn was not started.")
-        }
-        if (request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly &&
-          result.obj("sandbox")?.string("type") != "readOnly"
-        ) {
-          throw CodexSessionFailure("Codex did not confirm the read-only sandbox; the turn was not started.")
-        }
-        threadId = returnedId
-        if (savedThread == null && !saveThread(returnedId)) {
-          throw CodexSessionFailure("Could not save the Codex provider thread.")
-        }
+    rpc.call(CodexAppServerProtocol.threadMethod(savedThread), CodexAppServerProtocol.threadParams(settings, savedThread)) { result ->
+      val opened = when (val opening = CodexAppServerProtocol.threadOpening(result, settings, savedThread)) {
+        is CodexThreadOpening.Refused -> throw CodexSessionFailure(opening.reason)
+        is CodexThreadOpening.Opened -> opening.threadId
       }
-    } catch (failure: CodexSessionFailure) {
-      if (savedThread == null) throw failure
-      throw CodexSessionFailure(
-        "The saved Codex provider thread could not be resumed. Start an explicit new chat to continue. " +
-          failure.message.orEmpty(),
-      )
+      threadId = opened
+      if (savedThread == null && !saveThread(opened)) {
+        throw CodexSessionFailure("Could not save the Codex provider thread.")
+      }
     }
     val activeThread = requireNotNull(threadId)
-    val turnInput = buildJsonArray {
-      add(buildJsonObject { put("type", "text"); put("text", prompt) })
-      imagePaths.forEach { path -> add(buildJsonObject { put("type", "localImage"); put("path", path) }) }
-    }
+    val turnInput = listOf(CodexAppServerProtocol.textInput(prompt)) + imagePaths.map(CodexAppServerProtocol::localImageInput)
     var turnId: String? = null
-    rpc.call("turn/start", buildJsonObject {
-      put("threadId", activeThread)
-      put("input", turnInput)
-      request.agent.model?.let { put("model", it) }
-      request.agent.effort?.let { put("effort", it) }
-      put("cwd", command.workingDirectory)
-      put("sandboxPolicy", buildJsonObject {
-        if (request.mode == dev.skillbill.desktop.core.domain.model.ChatPermissionMode.ReadOnly) {
-          put("type", "readOnly")
-        } else {
-          put("type", "workspaceWrite")
-          put("writableRoots", JsonArray(listOf(JsonPrimitive(command.workingDirectory))))
-        }
-      })
-    }) { result ->
-      val turn = result.obj("turn")
+    rpc.call("turn/start", CodexAppServerProtocol.turnParams(settings, activeThread, turnInput)) { result ->
+      turnId = CodexAppServerProtocol.startedTurnId(result)
         ?: throw CodexSessionFailure("Codex returned a malformed turn/start response.")
-      turnId = turn.string("id")?.takeIf(String::isNotBlank)
-        ?: throw CodexSessionFailure("Codex did not return a provider turn id.")
-      if (turn.string("status").isNullOrBlank()) {
-        throw CodexSessionFailure("Codex did not return the started turn status.")
-      }
     }
     val activeTurn = requireNotNull(turnId)
     activeThread to activeTurn
@@ -341,9 +281,8 @@ private class CodexAppServerRpc(
 
   private suspend fun handleErrorNotification(message: JsonObject) {
     val params = message.obj("params") ?: message
-    val detail = providerError(params.obj("error"))
-      ?: params["error"]?.renderToolContent()?.takeIf(String::isNotBlank)
-      ?: "Codex reported an unspecified app-server error."
+    val detail = CodexAppServerProtocol.providerError(params.obj("error"), params["error"])
+      .ifBlank { "Codex reported an unspecified app-server error." }
     emit(ChatEvent.Notice(detail))
     val retryValue = params["willRetry"] ?: message["willRetry"]
     val retry = (retryValue as? JsonPrimitive)?.content == "true"
@@ -408,18 +347,7 @@ private class CodexAppServerRpc(
     ).joinToString("\n").ifBlank { item.string("status").orEmpty() }
   }
 
-  private fun providerError(error: JsonObject?): String? = error?.let { value ->
-    listOfNotNull(
-      value.string("message")?.takeIf(String::isNotBlank),
-      value["code"]?.renderToolContent()?.takeIf(String::isNotBlank),
-      value["additionalDetails"]?.renderToolContent()?.takeIf(String::isNotBlank),
-      value["codexErrorInfo"]?.renderToolContent()?.takeIf(String::isNotBlank),
-      value["data"]?.renderToolContent()?.takeIf(String::isNotBlank),
-    ).distinct().joinToString("\n").takeIf(String::isNotBlank)
-  }
-
-  private fun toolFailed(item: JsonObject): Boolean =
-    item.string("status") in setOf("failed", "declined") || (item.int("exitCode") ?: 0) != 0 || item.obj("error") != null
+  private fun toolFailed(item: JsonObject): Boolean = CodexAppServerProtocol.itemFailed(item)
 
   private suspend fun nextMessage(): JsonObject {
     while (true) {
@@ -450,6 +378,10 @@ private class CodexAppServerRpc(
     }
   }
 }
+
+/** Every detail of a provider error, or null when it carries none. */
+private fun providerError(error: JsonObject?): String? =
+  CodexAppServerProtocol.providerError(error).takeIf(String::isNotBlank)
 
 private class CodexSessionFailure(message: String) : Exception(message)
 

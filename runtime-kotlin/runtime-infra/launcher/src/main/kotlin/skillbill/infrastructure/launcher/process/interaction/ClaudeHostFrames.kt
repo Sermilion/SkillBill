@@ -18,37 +18,33 @@ import skillbill.error.core.catchingNonCancellation
 import java.nio.charset.StandardCharsets
 
 internal object ClaudeHostFrames {
-  fun initialize(requestId: String): ByteArray =
-    frame(
-      buildJsonObject {
-        put("type", "control_request")
-        put("request_id", requestId)
-        putJsonObject("request") { put("subtype", "initialize") }
-      },
-    )
+  fun initialize(requestId: String): JsonObject =
+    buildJsonObject {
+      put("type", "control_request")
+      put("request_id", requestId)
+      putJsonObject("request") { put("subtype", "initialize") }
+    }
 
-  fun userMessage(text: String): ByteArray =
-    frame(
-      buildJsonObject {
-        put("type", "user")
-        putJsonObject("message") {
-          put("role", "user")
-          putJsonArray("content") {
-            add(
-              buildJsonObject {
-                put("type", "text")
-                put("text", text)
-              },
-            )
-          }
+  fun userMessage(text: String): JsonObject =
+    buildJsonObject {
+      put("type", "user")
+      putJsonObject("message") {
+        put("role", "user")
+        putJsonArray("content") {
+          add(
+            buildJsonObject {
+              put("type", "text")
+              put("text", text)
+            },
+          )
         }
-      },
-    )
+      }
+    }
 
   fun allow(
     requestId: JsonElement,
     originalInput: JsonElement,
-  ): ByteArray =
+  ): JsonObject =
     controlResponse(requestId) {
       put("behavior", "allow")
       put("updatedInput", originalInput)
@@ -57,7 +53,7 @@ internal object ClaudeHostFrames {
   fun deny(
     requestId: JsonElement,
     message: String,
-  ): ByteArray =
+  ): JsonObject =
     controlResponse(requestId) {
       put("behavior", "deny")
       put("message", message)
@@ -66,35 +62,31 @@ internal object ClaudeHostFrames {
   fun unsupported(
     requestId: JsonElement,
     message: String,
-  ): ByteArray =
-    frame(
-      buildJsonObject {
-        put("type", "control_response")
-        putJsonObject("response") {
-          put("subtype", "error")
-          put("request_id", requestId)
-          put("error", message)
-        }
-      },
-    )
+  ): JsonObject =
+    buildJsonObject {
+      put("type", "control_response")
+      putJsonObject("response") {
+        put("subtype", "error")
+        put("request_id", requestId)
+        put("error", message)
+      }
+    }
 
   private fun controlResponse(
     requestId: JsonElement,
     body: JsonObjectBuilder.() -> Unit,
-  ): ByteArray =
-    frame(
-      buildJsonObject {
-        put("type", "control_response")
-        putJsonObject("response") {
-          put("subtype", "success")
-          put("request_id", requestId)
-          putJsonObject("response", body)
-        }
-      },
-    )
-
-  private fun frame(element: JsonElement): ByteArray = (element.toString() + "\n").toByteArray(StandardCharsets.UTF_8)
+  ): JsonObject =
+    buildJsonObject {
+      put("type", "control_response")
+      putJsonObject("response") {
+        put("subtype", "success")
+        put("request_id", requestId)
+        putJsonObject("response", body)
+      }
+    }
 }
+
+internal fun JsonObject.frameBytes(): ByteArray = (toString() + "\n").toByteArray(StandardCharsets.UTF_8)
 
 internal class PermissionFrame(
   val toolName: String,

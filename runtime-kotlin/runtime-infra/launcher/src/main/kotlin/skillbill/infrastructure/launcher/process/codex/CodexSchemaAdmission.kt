@@ -6,21 +6,55 @@ import java.io.IOException
 import java.nio.file.Path
 import skillbill.infrastructure.launcher.process.codex.CodexRpcKeys as K
 
-internal object CodexSchemaAdmission {
+fun codexVersionRefusal(versionOutput: String): String? {
+  val expected = Regex("(?:^|\\s)codex-cli ${Regex.escape(CODEX_PROTOCOL_VERSION)}(?:$|\\s)")
+  return if (expected.containsMatchIn(versionOutput.trim())) {
+    null
+  } else {
+    "The installed Codex CLI is incompatible with the supported $CODEX_PROTOCOL_VERSION app-server."
+  }
+}
+
+object CodexSchemaAdmission {
   private val mapper = ObjectMapper()
 
   fun inspect(
     directory: Path,
-    model: String?,
-    effort: String?,
-    workspaceRoots: Boolean,
-    readOnly: Boolean = false,
+    settings: CodexThreadSettings,
+    localImages: Boolean = false,
   ): String? =
     try {
-      inspectShapes(directory, model, effort, workspaceRoots, readOnly)
+      inspectShapes(directory, settings.model, settings.effort, settings.workspaceRoots.isNotEmpty(), settings.readOnly)
+        ?: inspectLocalImages(directory).takeIf { localImages }
+        ?: inspectAutoReview(directory).takeIf { settings.autoReview }
     } catch (failure: IOException) {
       "Could not read the installed Codex app-server schema: ${failure.message.orEmpty()}"
     }
+
+  private fun inspectLocalImages(directory: Path): String? {
+    val input = read(directory, "v2/TurnStartParams.json")
+    val variant =
+      input.path(S.DEFINITIONS).path("UserInput").path(S.ONE_OF).firstOrNull {
+        val types = it.path(S.PROPERTIES).path(K.TYPE).path(S.ENUM)
+        types.any { token -> token.asText() == CodexAppServerProtocol.LOCAL_IMAGE_TYPE }
+      }
+    val supported =
+      variant != null &&
+        variant.path(S.REQUIRED).map(JsonNode::asText).containsAll(setOf(K.TYPE, K.PATH)) &&
+        allows(variant.path(S.PROPERTIES).path(K.PATH), input, "string", false, emptySet())
+    return if (supported) null else "The installed Codex app-server protocol does not support local image inputs."
+  }
+
+  private fun inspectAutoReview(directory: Path): String? {
+    val supported =
+      listOf("v2/ThreadStartParams.json", "v2/TurnStartParams.json").all { file ->
+        val schema = read(directory, file)
+        val properties = schema.path(S.PROPERTIES)
+        enumTokens(properties.path(K.APPROVAL_POLICY), schema, emptySet()).contains(K.ON_REQUEST_POLICY) &&
+          enumTokens(properties.path(K.APPROVALS_REVIEWER), schema, emptySet()).contains(K.AUTO_REVIEW_REVIEWER)
+      }
+    return if (supported) null else "The installed Codex app-server cannot route approvals to its auto-review agent."
+  }
 
   private fun inspectShapes(
     directory: Path,

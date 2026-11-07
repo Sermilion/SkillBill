@@ -207,8 +207,9 @@ internal fun claudeArguments(request: ChatTurnRequest): List<String> = buildList
   addAll(listOf("--permission-prompts", "host"))
   addAll(listOf("--permission-prompt-tool", "stdio"))
   // The selected mode is enforced by the provider, not by prose: plan mode blocks edits and commands in read-only chat,
-  // and `manual` prompts for every tool in act chat. A user or project default mode never applies.
-  addAll(listOf("--permission-mode", if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "manual"))
+  // and `auto` in act chat lets the operator's auto-mode rules decide routine actions, so only the actions they leave
+  // undecided reach an approval card. A user or project default mode never applies.
+  addAll(listOf("--permission-mode", if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "auto"))
   addAll(listOf("--system-prompt-snapshot", "off"))
   // The process outlives a mode change, so the mode travels with each message instead of the system prompt.
   addAll(listOf("--append-system-prompt", scopeSystemPrompt(request.scope)))

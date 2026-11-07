@@ -56,25 +56,14 @@ internal class CodexPhaseSession(
     val executable = request.launch.command.first()
     val version = probe(listOf(executable, "--version"))
     if (!version.usable()) return version
-    val expected = Regex("(?:^|\\s)codex-cli ${Regex.escape(CODEX_PROTOCOL_VERSION)}(?:$|\\s)")
-    if (!expected.containsMatchIn(version.stdout.trim())) {
-      return refused(
-        "The installed Codex CLI is incompatible with the supported " +
-          "$CODEX_PROTOCOL_VERSION app-server.",
-      )
-    }
+    codexVersionRefusal(version.stdout)?.let { return refused(it) }
     val generated =
       probe(
         listOf(executable, "app-server", "generate-json-schema", "--experimental", "--out", "$directory"),
       )
     if (!generated.usable()) return generated
-    return CodexSchemaAdmission.inspect(
-      directory,
-      launch.model,
-      launch.effort,
-      launch.workspaceRoots.isNotEmpty(),
-      launch.readOnly,
-    )?.let(::refused)
+    val settings = CodexThreadSettings(launch.cwd, launch.model, launch.effort, launch.readOnly, launch.workspaceRoots)
+    return CodexSchemaAdmission.inspect(directory, settings)?.let(::refused)
   }
 
   private fun probe(command: List<String>): AgentRunProcessResult {

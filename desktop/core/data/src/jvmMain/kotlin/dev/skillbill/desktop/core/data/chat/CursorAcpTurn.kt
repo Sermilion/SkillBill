@@ -25,7 +25,6 @@ import kotlinx.coroutines.selects.SelectClause1
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import skillbill.approval.model.ApprovalExecutionMode
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.launcher.process.cursor.CursorAcpEvent
@@ -36,8 +35,6 @@ import skillbill.infrastructure.launcher.process.cursor.CursorAcpSession
 import skillbill.infrastructure.launcher.process.cursor.cursorAcpDependencyRefusal
 import skillbill.ports.approval.ApprovalOwnerEffects
 import skillbill.ports.approval.model.ApprovalDeliveryState
-import skillbill.ports.approval.model.ApprovalOwnerOpenRequest
-import java.nio.file.Path
 import java.time.Clock
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
@@ -204,20 +201,22 @@ internal fun cursorAcpTurn(
     onCard = { events.trySend(ChatEvent.ApprovalRequested(it.toCard())) },
     record = { diagnostics.record("chat.cursor_acp_diagnostic") },
   )
-  val opening = authority.openCursor(ApprovalOwnerOpenRequest(
-    checkoutRoot = Path.of(request.scope.repositoryRoot),
-    runId = request.sessionId,
-    provider = "cursor",
-    executionMode = if (request.mode == ChatPermissionMode.ReadOnly) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
-    profileIdentity = environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR] ?: environment["HOME"].orEmpty(),
-    enclosingDeadline = null,
-  ), protocol) { inputs.close(); readerRef.get()?.cancel() }
+  val opening = authority.openCursor(
+    chatOpenRequest(
+      request.sessionId,
+      request.scope.repositoryRoot,
+      "cursor",
+      request.mode,
+      environment[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR] ?: environment["HOME"].orEmpty(),
+    ),
+    protocol,
+  ) { inputs.close(); readerRef.get()?.cancel() }
   if (opening is CursorChatApprovalOpening.Refused) {
     send(ChatEvent.Failed(ChatFailure.ApprovalUnsupported, opening.reason))
     return@channelFlow
   }
   val generation = (opening as CursorChatApprovalOpening.Opened).generation
-  val command = ChatCommand(agentCommand(executable, listOf("acp"), shell), request.scope.repositoryRoot, environment, "")
+  val command = ChatCommand(agentCommand(executable, cursorAcpArguments(request.mode), shell), request.scope.repositoryRoot, environment, "")
   val reader = launch(start = CoroutineStart.LAZY) {
     try { live.openAcknowledged(command, inputs).collect { outputs.send(it) } }
     finally { outputs.close() }
@@ -285,3 +284,10 @@ internal fun cursorAcpTurn(
     }
   }
 }
+
+/**
+ * Act chat runs Cursor's Auto-review: its classifier runs routine tool calls itself, so only the calls it leaves
+ * undecided reach an approval card. Read-only chat stays in plan mode, which the session selects after it opens.
+ */
+internal fun cursorAcpArguments(mode: ChatPermissionMode): List<String> =
+  if (mode == ChatPermissionMode.ReadOnly) listOf("acp") else listOf("--auto-review", "acp")

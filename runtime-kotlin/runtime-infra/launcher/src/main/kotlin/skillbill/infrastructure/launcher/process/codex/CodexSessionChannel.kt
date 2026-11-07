@@ -1,12 +1,9 @@
 package skillbill.infrastructure.launcher.process.codex
 
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import skillbill.contracts.approval.ApprovalRequestRecord
 import skillbill.error.core.catchingNonCancellation
@@ -46,6 +43,8 @@ internal class CodexSessionChannel(
 ) : AgentRunSessionChannel, ApprovalOwnerEffects {
   private val settled = AtomicReference<AgentRunSessionOutcome?>()
   private val stopHandled = AtomicBoolean(false)
+  private val settings =
+    CodexThreadSettings(launch.cwd, launch.model, launch.effort, launch.readOnly, launch.workspaceRoots)
   private val approvals = CodexApprovalRequests(launch.cwd, ::write, {}, ::stop, diagnostics::warning)
   private var writer: SerializedStdinWriter? = null
   private var openingAt: Instant? = null
@@ -75,21 +74,7 @@ internal class CodexSessionChannel(
   override fun attach(process: Process): Boolean {
     writer = SerializedStdinWriter(process.outputStream)
     openingAt = clock.instant()
-    return sendRequest(
-      INITIALIZE_ID,
-      K.INITIALIZE_METHOD,
-      buildJsonObject {
-        put(K.CAPABILITIES, buildJsonObject { put(K.EXPERIMENTAL_API, true) })
-        put(
-          K.CLIENT_INFO,
-          buildJsonObject {
-            put(K.NAME, "skill-bill")
-            put(K.TITLE, "Skill Bill")
-            put(K.VERSION, "1.0.0")
-          },
-        )
-      },
-    )
+    return sendRequest(INITIALIZE_ID, K.INITIALIZE_METHOD, CodexAppServerProtocol.initializeParams())
   }
 
   override fun observe(chunk: String) {
@@ -137,7 +122,7 @@ internal class CodexSessionChannel(
   private fun response(message: JsonObject) {
     val result = message[K.RESULT] as? JsonObject
     if (result == null) {
-      val detail = providerError(message[K.ERROR] as? JsonObject, message[K.ERROR])
+      val detail = CodexAppServerProtocol.providerError(message[K.ERROR] as? JsonObject, message[K.ERROR])
       recordProviderDiagnostic(detail)
       val recovery =
         if (launch.savedThread != null && expectedResponse == THREAD_ID) {
@@ -159,101 +144,35 @@ internal class CodexSessionChannel(
   private fun serverRequest(message: JsonObject) = approvals.request(message)
 
   private fun initialize(result: JsonObject) {
-    val identity = result.text(K.USER_AGENT).orEmpty()
-    if (!Regex("(?:^|[/ ])${Regex.escape(CODEX_PROTOCOL_VERSION)}(?:$|[ )])").containsMatchIn(identity)) {
-      stop(
-        "Codex app-server identity is incompatible with the supported " +
-          "$CODEX_PROTOCOL_VERSION protocol.",
-      )
-      return
-    }
-    if (!write(buildJsonObject { put(K.METHOD, K.INITIALIZED) })) return
+    CodexAppServerProtocol.identityRefusal(result)?.let { return stop(it) }
+    if (!write(CodexAppServerProtocol.initializedNotification())) return
     expectedResponse = THREAD_ID
-    val method = if (launch.savedThread == null) K.THREAD_START_METHOD else K.THREAD_RESUME_METHOD
     sendRequest(
       THREAD_ID,
-      method,
-      buildJsonObject {
-        launch.savedThread?.let { put(K.THREAD_ID, it) }
-        put(K.CWD, launch.cwd)
-        if (launch.workspaceRoots.isNotEmpty()) {
-          val roots = (listOf(launch.cwd) + launch.workspaceRoots).distinct().map(::JsonPrimitive)
-          if (!launch.readOnly) put(K.WORKSPACE_ROOTS, JsonArray(roots))
-        }
-        launch.model?.let { put(K.MODEL, it) }
-        if (launch.readOnly) put(K.SANDBOX, K.READ_ONLY_SANDBOX)
-      },
+      CodexAppServerProtocol.threadMethod(launch.savedThread),
+      CodexAppServerProtocol.threadParams(settings, launch.savedThread),
     )
   }
 
   private fun openThread(result: JsonObject) {
-    val returned = (result[K.THREAD] as? JsonObject)?.text(K.ID)
-    val returnedModel = result.text(K.MODEL)
-    synchronized(captureLock) { effectiveModel = returnedModel }
-    val validIdentity = !returned.isNullOrBlank() && (launch.savedThread == null || returned == launch.savedThread)
-    val validSettings = preservesThreadSettings(result, returnedModel)
-    if (!validIdentity && launch.savedThread != null) {
-      stop(
-        "The saved Codex provider thread could not be resumed unchanged; start an " +
-          "explicit new session.",
-      )
-      return
-    }
-    if (!validIdentity || !validSettings) {
-      stop(
-        "Codex did not preserve the provider thread, selected model or checkout; " +
-          "the turn was not started.",
-      )
-      return
-    }
+    synchronized(captureLock) { effectiveModel = result.text(K.MODEL) }
+    val returned =
+      when (val opening = CodexAppServerProtocol.threadOpening(result, settings, launch.savedThread)) {
+        is CodexThreadOpening.Refused -> return stop(opening.reason)
+        is CodexThreadOpening.Opened -> opening.threadId
+      }
     synchronized(captureLock) { threadId = returned }
     expectedResponse = TURN_ID
     sendRequest(
       TURN_ID,
       K.TURN_START_METHOD,
-      buildJsonObject {
-        put(K.THREAD_ID, returned)
-        put(K.CWD, launch.cwd)
-        launch.model?.let { put(K.MODEL, it) }
-        launch.effort?.let { put(K.EFFORT, it) }
-        put(
-          K.SANDBOX_POLICY,
-          buildJsonObject {
-            put(K.TYPE, if (launch.readOnly) K.READ_ONLY_POLICY else K.WORKSPACE_WRITE_POLICY)
-            if (!launch.readOnly) {
-              val roots = (listOf(launch.cwd) + launch.workspaceRoots).distinct().map(::JsonPrimitive)
-              put(K.WRITABLE_ROOTS, JsonArray(roots))
-            }
-          },
-        )
-        put(
-          K.INPUT,
-          JsonArray(
-            listOf(
-              buildJsonObject {
-                put(K.TYPE, "text")
-                put(K.TEXT, launch.prompt)
-                put(K.TEXT_ELEMENTS, JsonArray(emptyList()))
-              },
-            ),
-          ),
-        )
-      },
+      CodexAppServerProtocol.turnParams(settings, returned, listOf(CodexAppServerProtocol.textInput(launch.prompt))),
     )
   }
 
-  private fun preservesThreadSettings(
-    result: JsonObject,
-    returnedModel: String?,
-  ): Boolean =
-    result.text(K.CWD) == launch.cwd && !returnedModel.isNullOrBlank() &&
-      (launch.model == null || returnedModel == launch.model) &&
-      (!launch.readOnly || result.obj(K.SANDBOX)?.text(K.TYPE) == K.READ_ONLY_POLICY)
-
   private fun openTurn(result: JsonObject) {
-    val turn = result[K.TURN] as? JsonObject
-    val returned = turn?.text(K.ID)
-    if (returned.isNullOrBlank() || turn.text(K.STATUS).isNullOrBlank()) {
+    val returned = CodexAppServerProtocol.startedTurnId(result)
+    if (returned == null) {
       stop(
         "Codex returned a malformed turn/start response; " +
           "delivery is uncertain and will not be replayed.",
@@ -317,7 +236,7 @@ internal class CodexSessionChannel(
     approvals.turnEnded(threadId.orEmpty(), turnId.orEmpty())
     val error = params.obj(K.TURN)?.obj(K.ERROR)
     val detail =
-      providerError(error, error?.get(K.DATA))
+      CodexAppServerProtocol.providerError(error, error?.get(K.DATA))
         .ifBlank { "Codex turn was interrupted or failed." }
     recordProviderDiagnostic(detail)
     providerFailure = providerFailure ?: detail
@@ -326,7 +245,7 @@ internal class CodexSessionChannel(
 
   private fun providerErrorNotification(message: JsonObject) {
     val params = message[K.PARAMS] as? JsonObject ?: message
-    val detail = providerError(params[K.ERROR] as? JsonObject, params[K.ERROR])
+    val detail = CodexAppServerProtocol.providerError(params[K.ERROR] as? JsonObject, params[K.ERROR])
     if (detail.isBlank()) return
     recordProviderDiagnostic(detail)
     if (params[K.WILL_RETRY]?.let { (it as? JsonPrimitive)?.content == "true" } == true) return
@@ -339,14 +258,13 @@ internal class CodexSessionChannel(
   }
 
   private fun failedItemDiagnostic(item: JsonObject): String? {
+    if (!CodexAppServerProtocol.itemFailed(item)) return null
     val status = item.text(K.STATUS)
     val error = item[K.ERROR] as? JsonObject
-    val exitCode = (item[K.EXIT_CODE] as? JsonPrimitive)?.intOrNull ?: 0
-    if (status !in setOf("failed", K.DECLINED) && error == null && exitCode == 0) return null
     val output = item[K.AGGREGATED_OUTPUT]?.takeUnless { it == JsonPrimitive("") }
     val actual =
       output?.renderDiagnostic()
-        ?: item[K.ERROR]?.let { providerError(error, it) }
+        ?: item[K.ERROR]?.let { CodexAppServerProtocol.providerError(error, it) }
         ?: item[K.RESULT]?.toString()
     return buildString {
       append("Codex item ").append(item.text(K.ID).orEmpty())
@@ -355,22 +273,6 @@ internal class CodexSessionChannel(
       if (isBlank()) append(item.toString())
     }
   }
-
-  private fun providerError(
-    error: JsonObject?,
-    raw: JsonElement?,
-  ): String =
-    buildList {
-      error?.text(K.MESSAGE)?.takeIf(String::isNotBlank)?.let(::add)
-      error?.get(K.CODE)?.renderDiagnostic()?.takeIf(String::isNotBlank)?.let(::add)
-      error?.get(K.ADDITIONAL_DETAILS)?.renderDiagnostic()?.takeIf(String::isNotBlank)?.let(::add)
-      error?.get(K.CODEX_ERROR_INFO)?.renderDiagnostic()?.takeIf(String::isNotBlank)?.let(::add)
-      error?.get(K.DATA)?.renderDiagnostic()?.takeIf(String::isNotBlank)?.let(::add)
-      raw?.takeIf { error == null }?.renderDiagnostic()?.takeIf(String::isNotBlank)?.let(::add)
-    }.distinct().joinToString("\n")
-
-  private fun JsonElement.renderDiagnostic(): String =
-    (this as? JsonPrimitive)?.takeIf { it.isString }?.content ?: toString()
 
   private fun recordProviderDiagnostic(detail: String) {
     if (detail.isBlank()) return
@@ -459,7 +361,7 @@ internal class CodexSessionChannel(
     val status = turn?.text(K.STATUS)
     val turnError = turn?.get(K.ERROR) as? JsonObject
     turnError?.let {
-      providerError(it, it[K.DATA]).takeIf(String::isNotBlank)?.let { detail ->
+      CodexAppServerProtocol.providerError(it, it[K.DATA]).takeIf(String::isNotBlank)?.let { detail ->
         recordProviderDiagnostic(detail)
         if (status == "completed") providerFailure = providerFailure ?: detail
       }
@@ -484,7 +386,7 @@ internal class CodexSessionChannel(
     error: JsonObject?,
     status: String?,
   ): String {
-    val detail = error?.let { providerError(it, it[K.DATA]) }.orEmpty()
+    val detail = error?.let { CodexAppServerProtocol.providerError(it, it[K.DATA]) }.orEmpty()
     return when {
       status == "failed" && CODEX_OUTPUT_EXHAUSTED in detail -> CODEX_OUTPUT_EXHAUSTED
       detail.isNotBlank() -> detail
