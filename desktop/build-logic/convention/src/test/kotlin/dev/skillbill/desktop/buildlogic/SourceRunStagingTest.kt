@@ -57,7 +57,10 @@ class SourceRunStagingTest {
           Path database = Path.of(System.getenv("SKILL_BILL_DB"));
           if (!Files.readString(database).equals("fixture data")) throw new IllegalStateException("Fixture was not seeded");
           Files.writeString(database, "scratch data");
-          Files.writeString(Path.of(args[0]), database + "\n" + System.getenv("TERM") + "\n" + System.getProperty("user.home"));
+          Files.writeString(Path.of(args[0]), String.join("\n",
+            database.toString(), System.getenv("TERM"), System.getProperty("user.home"),
+            System.getenv("TMPDIR"), System.getenv("TEMP"), System.getenv("TMP"),
+            System.getProperty("skiko.renderApi", ""), System.getenv("SKIKO_RENDER_API")));
         }
       }
       """.trimIndent(),
@@ -108,11 +111,24 @@ class SourceRunStagingTest {
     ).redirectErrorStream(true).redirectOutput(log).apply {
       environment()["SKILL_BILL_DB"] = operatorDatabase.absolutePath
       environment()["TERM"] = ""
+      environment()["SKIKO_RENDER_API"] = "SOFTWARE_FAST"
     }.start()
     assertEquals(0, process.waitFor(), log.readText())
     val home = fixture.resolve("app/build/source-run/home")
     val database = home.resolve(".skill-bill/review-metrics.db")
-    assertEquals(listOf(database.absolutePath, "dumb", home.absolutePath), report.readLines())
+    assertEquals(
+      listOf(
+        database.absolutePath,
+        "dumb",
+        home.absolutePath,
+        home.resolve("tmp").absolutePath,
+        home.resolve("tmp").absolutePath,
+        home.resolve("tmp").absolutePath,
+        if (System.getProperty("os.name").contains("linux", true)) "SOFTWARE_COMPAT" else "",
+        if (System.getProperty("os.name").contains("linux", true)) "SOFTWARE_COMPAT" else "SOFTWARE_FAST",
+      ),
+      report.readLines(),
+    )
     assertEquals("scratch data", database.readText())
     assertEquals("operator data", operatorDatabase.readText())
   }

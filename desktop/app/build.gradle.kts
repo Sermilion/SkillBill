@@ -185,9 +185,15 @@ afterEvaluate {
     environment("SKILL_BILL_RUNTIME_DIR", root.resolve("runtime").absolutePath)
     environment("SKILL_BILL_STATE_DIR", state.absolutePath)
     environment("SKILL_BILL_DB", state.resolve("review-metrics.db").absolutePath)
+    if (System.getProperty("os.name").contains("linux", true)) {
+      environment("SKIKO_RENDER_API", "SOFTWARE_COMPAT")
+    }
     mapOf(
       "HOME" to home,
       "USERPROFILE" to home,
+      "TMPDIR" to home.resolve("tmp"),
+      "TEMP" to home.resolve("tmp"),
+      "TMP" to home.resolve("tmp"),
       "APPDATA" to home.resolve("AppData/Roaming"),
       "LOCALAPPDATA" to home.resolve("AppData/Local"),
       "XDG_CONFIG_HOME" to home.resolve(".config"),
@@ -214,7 +220,11 @@ afterEvaluate {
         "-Duser.home=${home.absolutePath}",
         "-Djava.util.prefs.userRoot=${home.resolve("preferences").absolutePath}",
         "-Djava.io.tmpdir=${home.resolve("tmp").absolutePath}",
-      )
+      ) + if (System.getProperty("os.name").contains("linux", true)) {
+        listOf("-Dskiko.renderApi=SOFTWARE_COMPAT")
+      } else {
+        emptyList()
+      }
     }
   }
 }

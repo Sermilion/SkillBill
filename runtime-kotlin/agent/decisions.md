@@ -1,3 +1,13 @@
+## [2026-11-07] Compose desktop fixture generation in runtime-core
+Context: SKILL-514 needs real migrations and board projections, but runtime-core already depends on runtime-application.
+Decision: Keep the catalog and port-level writer in runtime-application test fixtures; compose RuntimeComponent in runtime-core test fixtures.
+Reason: Spec decision D2 preserves dependency direction while exercising production persistence and projection. Constructing RuntimeComponent in runtime-application would invert that dependency.
+
+## [2026-11-07] Advance workflow-state to 0.4 while retaining readable versions
+Context: SKILL-514 spec decision D4 authorizes persisted TASK_RUNTIME timed_out support, which changes the accepted workflow-state shape.
+Decision: Use workflow-state 0.4, accept timed_out as terminal for TASK_RUNTIME, and retain 0.1, 0.2 and 0.3 in the readable set.
+Reason: The shape change requires a new contract version. Readable-version normalization preserves existing rows, addressing the stale-row trap behind the earlier 0.3 pin. D4 limits this amendment to persisted timeout support, without changing timeout scheduling or other families' accepted statuses.
+
 ## [2026-11-06] Switch the main checkout to the goal branch after its worktree is removed
 Context: A goal's branch is checked out in its worktree. After removal the primary checkout can switch to it, but the operator may have uncommitted work or an operation in progress.
 Decision: Settlement runs a non-forcing checkout through GoalWorktreeResources.checkoutGoalBranch only for a removed or absent worktree. The adapter refuses on uncommitted tracked changes, an in-progress merge, rebase, am, cherry-pick or revert, or a missing local branch. The outcome and a capped detail are stored in the goal control payload; a refusal or failure is recorded, never raised, and never blocks the removal record.
@@ -408,6 +418,7 @@ Context: Pre-current workflow-state rows broke list, latest, work-list, IDE stat
 Decision: Leave the current const at "0.3". Add WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS beside it. The validator copies the wire map and replaces a readable contract_version with the current const before schema validate. Writes persist the current const for an older readable version.
 Reason: Bumping the const would make every existing 0.3 row stale again. The readable-set plus normalize-then-validate path mirrors FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS without a schema-shape change.
 Alternatives considered: Bumping to 0.4 was rejected because it recreates the stale-row problem this subtask exists to fix.
+Superseded by: Advance workflow-state to 0.4 while retaining readable versions (2026-11-07)
 
 ## [2026-10-09] Put 0.1 and 0.2 on the readable path; add no terminalize migration
 Context: Each pre-current workflow-state version had to join the readable set or be terminalized by a new named migration. Last DatabaseMigrationEntries version was 50.
