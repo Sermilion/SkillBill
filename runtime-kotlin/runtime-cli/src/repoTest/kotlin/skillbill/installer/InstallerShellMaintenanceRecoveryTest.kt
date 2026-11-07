@@ -27,7 +27,7 @@ class InstallerShellMaintenanceRecoveryTest {
       }
       val run = runUninstaller(wipe, preserveSource = true, goalContinuation = false)
       assertEquals(0, run.exitCode, run.output)
-      assertFalse(Files.exists(wipe.runtimeBin))
+      assertTrue(Files.exists(wipe.runtimeBin))
       assertTrue(Files.isRegularFile(wipe.stateDb))
       assertTrue(Files.exists(wipe.stateDb.resolveSibling("review-metrics.db-wal")))
     }

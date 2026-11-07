@@ -40,6 +40,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -320,6 +321,74 @@ class WorkActivityServiceTest {
         assertEquals(listOf(at(2), at(4)), phases.map { it.finishedAt })
         assertEquals(listOf(null, null), phases.map { it.model })
         assertEquals(listOf("codex", "codex"), phases.map { it.agent })
+      }
+    }
+  }
+
+  @Test
+  fun `a cursor attempt keeps its grok model and drops a borrowed codex model`() {
+    establishTemporarySchemaReadiness("activity-cursor-model").use { fixture ->
+      val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      database.read { unit ->
+        val entries =
+          listOf(
+            FeatureTaskRuntimePhaseLedgerEntry(
+              FeatureTaskRuntimePhaseLedgerAction.START,
+              0,
+              at(0),
+              "audit",
+              1,
+              "cursor",
+            ),
+            FeatureTaskRuntimePhaseLedgerEntry(
+              FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+              1,
+              at(1),
+              "audit",
+              1,
+              "cursor",
+            ),
+          )
+        val record =
+          FeatureTaskRuntimePhaseRecord(
+            "audit",
+            WorkflowStepStatus.COMPLETED,
+            1,
+            at(0),
+            finishedAt = at(1),
+            resolvedAgentId = "cursor",
+            launchedModel = "grok-4.7-high-fast",
+          )
+        val artifacts =
+          DurableWorkflowArtifacts.fromMap(
+            mapOf(
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label() to
+                mapOf(record.phaseId to record.asWorkflowArtifactEntry()),
+            ),
+          )
+        val workflows =
+          object : WorkflowStateRepository by unit.workflowStates {
+            override fun readFeatureTaskPhaseLedgerPage(
+              workflowId: String,
+              offset: Int,
+              limit: Int,
+            ) = FeatureTaskRuntimePhaseLedgerPage(entries, null)
+
+            override fun readFeatureTaskArtifacts(
+              workflowId: String,
+              families: Set<DurableWorkflowArtifactFamily>,
+            ) = artifacts
+          }
+        val reads =
+          object : UnitOfWork by unit {
+            override val workflowStates = workflows
+          }
+        val phases = ActivityPhaseReads().phases("child", reads)
+        assertEquals(listOf("grok-4.7-high-fast"), phases.map { it.model })
+        assertEquals(listOf("cursor"), phases.map { it.agent })
+        assertTrue(modelMatchesAgent("cursor", "cursor-grok-4.6-high"))
+        assertFalse(modelMatchesAgent("cursor", "gpt-6.1-sol"))
+        assertFalse(modelMatchesAgent("cursor", "claude-opus"))
       }
     }
   }

@@ -29,11 +29,13 @@ import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.launch.ReviewConversationIsolation
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Handler
@@ -164,6 +166,38 @@ class JvmAgentRunProcessRunnerTest {
     blocking.unblock()
     drain.joinAndFreeze()
     assertEquals(firstDigest, drain.capture().sha256)
+  }
+
+  @Test
+  fun `a sink that stalls delivery after the child exits does not cut the final stream event`() {
+    val sinkEntered = CountDownLatch(1)
+    val releaseSink = CountDownLatch(1)
+    val awaits = AtomicInteger()
+    val drain =
+      Utf8Drain(
+        input = ChunkedInputStream(listOf("{\"type\":\"assistant\"}\n", "{\"type\":\"result\"}\n")),
+        outputStream = AgentRunOutputStream.STDOUT,
+        outputSink =
+          AgentRunOutputSink { _, chunk ->
+            if (chunk.contains("assistant")) {
+              sinkEntered.countDown()
+              releaseSink.await()
+            }
+          },
+        onChunkRead = {},
+        awaitWorker = { worker, _ ->
+          if (awaits.incrementAndGet() == 1) {
+            sinkEntered.await()
+          } else {
+            releaseSink.countDown()
+            worker.join()
+          }
+        },
+      )
+    drain.start()
+
+    assertFalse(drain.joinAndFreeze())
+    assertEquals("{\"type\":\"assistant\"}\n{\"type\":\"result\"}\n", drain.capture().text)
   }
 
   @Test
@@ -490,6 +524,30 @@ class JvmAgentRunProcessRunnerTest {
     } finally {
       logger.removeHandler(handler)
     }
+  }
+}
+
+private class ChunkedInputStream(chunks: List<String>) : InputStream() {
+  private val pending = ArrayDeque(chunks.map { it.encodeToByteArray() })
+
+  @Volatile
+  private var closed = false
+
+  override fun read(): Int = throw UnsupportedOperationException("chunked reads only")
+
+  override fun read(
+    buffer: ByteArray,
+    offset: Int,
+    length: Int,
+  ): Int {
+    if (closed) throw IOException("stream closed")
+    val chunk = pending.removeFirstOrNull() ?: return -1
+    chunk.copyInto(buffer, offset)
+    return chunk.size
+  }
+
+  override fun close() {
+    closed = true
   }
 }
 

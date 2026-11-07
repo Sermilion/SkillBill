@@ -1,3 +1,9 @@
+## [2026-11-07] Keep live runtime trees across install replacement
+Context: A goal child JVM loads engine directive resources lazily. Pre-install `clear-state` and `activate_staged_runtime_pair` used `rm -rf` on `~/.skill-bill/runtime/runtime-cli`, which unlinked JARs still mapped by that JVM. A later `getResourceAsStream` then failed with `Missing directive resource`.
+Decision: Pre-install wipe no longer deletes `runtime/`. Activation renames each live tree into `runtime/retired/` before moving the staged tree into place, keeps the newest retired copy of each component, and restores the retired tree if the replacement `mv` fails.
+Reason: Rename keeps the old inodes readable through open JAR file descriptors. Unlink does not. New processes use the well-known live path; in-flight processes keep the generation they already opened.
+Alternatives considered: Eagerly loading every directive at startup still fails for later class loads after unlink. A current-symlink over generation directories is a larger launcher and desktop contract change.
+
 ## [2026-11-06] Switch the main checkout to the goal branch after its worktree is removed
 Context: A goal's branch is checked out in its worktree. After removal the primary checkout can switch to it, but the operator may have uncommitted work or an operation in progress.
 Decision: Settlement runs a non-forcing checkout through GoalWorktreeResources.checkoutGoalBranch only for a removed or absent worktree. The adapter refuses on uncommitted tracked changes, an in-progress merge, rebase, am, cherry-pick or revert, or a missing local branch. The outcome and a capped detail are stored in the goal control payload; a refusal or failure is recorded, never raised, and never blocks the removal record.

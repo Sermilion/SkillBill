@@ -86,12 +86,38 @@ class GoalRunnerStatusProjectionLivenessTest {
           testGoalRunnerStatusService(
             manifestStore = store,
             outcomeStore = RecordingOutcomeStore(),
+            clock = beforeLeaseExpiry,
             ports = GoalRunnerStatusTestPorts(workerSupervisor = supervisor),
           ).status(GoalRunnerStatusRequest(issueKey = "SKILL-56")),
         )
       assertEquals(expected, status.executionLiveness, inspection.toString())
     }
   }
+
+  @Test
+  fun `reused pid on an expired goal lease is idle so the goal can be resumed`() {
+    val store =
+      InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+        .apply { executionLeaseForTest = liveLease() }
+    val supervisor =
+      object : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
+        override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) =
+          FeatureTaskRuntimeProcessInspection.PidReused
+      }
+    val status =
+      requireNotNull(
+        testGoalRunnerStatusService(
+          manifestStore = store,
+          outcomeStore = RecordingOutcomeStore(),
+          clock = Clock.fixed(liveLease().expiresAtInstant.plusSeconds(1), ZoneOffset.UTC),
+          ports = GoalRunnerStatusTestPorts(workerSupervisor = supervisor),
+        ).status(GoalRunnerStatusRequest(issueKey = "SKILL-56")),
+      )
+
+    assertEquals(ExecutionLiveness.IDLE, status.executionLiveness)
+  }
+
+  private val beforeLeaseExpiry: Clock = Clock.fixed(liveLease().expiresAtInstant.minusSeconds(10), ZoneOffset.UTC)
 
   @Test
   fun `parked parent progress with goal finalization on monitor aligns liveness with current step`() {

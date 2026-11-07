@@ -7,18 +7,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
-import dev.skillbill.desktop.core.designsystem.component.Hint
+import dev.skillbill.desktop.core.designsystem.component.Callout
+import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.ReasonBlock
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
-import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
@@ -37,14 +39,16 @@ internal fun DetailSections.planDocument(
   val blockedIds = plan?.blockedSubtaskIds.orEmpty().ifEmpty { plan?.blockedSubtaskId?.let(::listOf).orEmpty() }
   if (blockedIds.isNotEmpty()) {
     this.item(key = "plan-blocked") {
-      Column(Modifier.padding(top = DocBlockGap), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Hint("${if (blockedIds.size == 1) "Subtask" else "Subtasks"} ${blockedIds.joinToString(", ")} ${if (blockedIds.size == 1) "needs" else "need"} ${if (view.decision != null) "your decision" else "attention"}", FeedbackTone.Warn, LucideIcons.alert)
-        blockedIds.forEach { id ->
-          val reason = plan?.units?.firstOrNull { it.subtaskId == id }?.blockedReason
-            ?: plan?.blockedReason?.takeIf { blockedIds.size == 1 }
-          reason?.takeIf(String::isNotBlank)?.let {
-            BasicText(if (blockedIds.size == 1) it else "Subtask $id: $it", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.stBlocked))
-          }
+      // The mock's blocked `.callout`, drawn with the same Callout the goal incident uses.
+      val title = "${if (blockedIds.size == 1) "Subtask" else "Subtasks"} ${blockedIds.joinToString(", ")} ${if (blockedIds.size == 1) "needs" else "need"} ${if (view.decision != null) "your decision" else "attention"}"
+      val reasons = blockedIds.mapNotNull { id ->
+        val reason = plan?.units?.firstOrNull { it.subtaskId == id }?.blockedReason
+          ?: plan?.blockedReason?.takeIf { blockedIds.size == 1 }
+        reason?.takeIf(String::isNotBlank)?.let { if (blockedIds.size == 1) it else "Subtask $id: $it" }
+      }
+      Callout(FeedbackTone.Warn, title, modifier = Modifier.padding(top = DocBlockGap).fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          reasons.forEach { ExpandableText(it, SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted, lineHeight = 1.5.em)) }
         }
       }
     }

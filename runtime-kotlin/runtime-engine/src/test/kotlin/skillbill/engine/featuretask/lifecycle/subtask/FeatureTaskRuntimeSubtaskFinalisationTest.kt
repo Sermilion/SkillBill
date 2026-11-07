@@ -772,6 +772,17 @@ class FeatureTaskRuntimeSubtaskFinalisationTest {
   private fun remoteBranchTip(remote: Path): String =
     git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/$branch")
 
+  private val noBackgroundMaintenanceGitConfig =
+    mapOf(
+      "GIT_CONFIG_COUNT" to "3",
+      "GIT_CONFIG_KEY_0" to "maintenance.auto",
+      "GIT_CONFIG_VALUE_0" to "false",
+      "GIT_CONFIG_KEY_1" to "gc.auto",
+      "GIT_CONFIG_VALUE_1" to "0",
+      "GIT_CONFIG_KEY_2" to "receive.autogc",
+      "GIT_CONFIG_VALUE_2" to "false",
+    )
+
   private fun git(
     repoRoot: Path,
     vararg args: String,
@@ -781,6 +792,7 @@ class FeatureTaskRuntimeSubtaskFinalisationTest {
         .redirectErrorStream(true)
     builder.environment()["GIT_CONFIG_GLOBAL"] = "/dev/null"
     builder.environment()["GIT_CONFIG_SYSTEM"] = "/dev/null"
+    builder.environment().putAll(noBackgroundMaintenanceGitConfig)
     val process = builder.start()
     val output = process.inputStream.bufferedReader().readText().trim()
 

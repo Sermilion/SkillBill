@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.audit.ValidateProbeCriterion
 import skillbill.engine.featuretask.model.audit.ValidateProbeScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTargets
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.error.shellcontent.invalidInteractionScenarioCatalog
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
@@ -34,19 +35,27 @@ internal object ValidateProbeActivation {
   private fun scopeOf(repair: AcceptanceCriterionRepairRunState?): ValidateProbeScope {
     val state = repair?.snapshot ?: return ValidateProbeScope(emptyList(), emptyList())
     val catalog = repair.binding?.interactionScenarios.orEmpty().associateBy { it.scenarioRef }
+    val pairs = AcceptanceCriterionInteractionTargets.sameFilePairs(state).associateBy { it.pairRef }
+    val repairedRefs = state.interactionTrace.repairedScenarioRefs
+    val repairedPairs =
+      repairedRefs.filterNot(catalog::containsKey).map { ref ->
+        pairs[ref] ?: throw invalidInteractionScenarioCatalog(
+          ref,
+          "repaired reference is missing from the bound scenario catalog and generated same-file pairs.",
+        )
+      }
+    val pairCriteria = repairedPairs.flatMap { listOf(it.firstRef, it.secondRef) }.toSet()
     return ValidateProbeScope(
-      repairedScenarios =
-        state.interactionTrace.repairedScenarioRefs.map { ref ->
-          catalog[ref] ?: throw invalidInteractionScenarioCatalog(
-            ref,
-            "repaired scenario is missing from the bound scenario catalog.",
-          )
-        },
+      repairedScenarios = repairedRefs.mapNotNull(catalog::get),
       requiredCriteria =
         state.criteria
-          .filter { it.validationObligation == AcceptanceCriterionValidationObligation.REQUIRED }
+          .filter {
+            it.validationObligation == AcceptanceCriterionValidationObligation.REQUIRED ||
+              it.canonicalRef in pairCriteria
+          }
           .sortedBy { it.ordinal }
           .map { ValidateProbeCriterion(it.canonicalRef, it.originalText) },
+      repairedPairs = repairedPairs,
     )
   }
 }
