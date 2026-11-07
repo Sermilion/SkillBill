@@ -44,9 +44,6 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
     indexed: Set<String>,
   ): WorkflowGitOperationResult {
     val (tracked, untracked) = stageable.partition { it in indexed }
-    // `git add` rejects any pathspec under an ignored directory, even for tracked files, so tracked
-    // paths are refreshed through update-index, which updates or removes index entries without
-    // consulting ignore rules.
     val trackedStaged = runBatched(repoRoot, listOf("update-index", "--remove", "--"), tracked)
     if (trackedStaged !is WorkflowGitOperationResult.Ok) return trackedStaged
     return runBatched(repoRoot, listOf("add", "--all", "--"), untracked)

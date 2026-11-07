@@ -31,6 +31,7 @@ object ValidationEvidencePayloadKeys {
   const val LAST_AGENT_UNFIXED_CRITERIA: String = "last_agent_unfixed_criteria"
   const val PENDING_EXTERNAL_OPERATION: String = "pending_external_operation"
   const val PENDING_EXTERNAL_CHECKPOINT: String = "pending_external_checkpoint"
+  const val PENDING_EXTERNAL_INTERRUPTED: String = "pending_external_interrupted"
   const val ACCEPTED_REPAIR_OUTPUTS: String = "accepted_repair_outputs"
   const val TRIAGE_DISPOSITION: String = "triage_disposition"
   const val REPAIR_TURN: String = "repair_turn"

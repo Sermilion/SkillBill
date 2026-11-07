@@ -33,6 +33,7 @@ import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
@@ -79,6 +80,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
   private val repoLocalConfig: RepoLocalConfigPort,
   private val diagnostics: RuntimeDiagnostics,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
+  private val shutdownHooks: ShutdownHookPort,
 ) {
   internal fun execute(
     cycle: ValidationGateCycleRequest,
@@ -218,7 +220,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     declaration: ValidationGateDeclaration,
     onGateRunCount: (Int) -> Unit,
   ): ValidationGateCycleResult {
-    val loaded = cycle.progressStore.load(cycle.progressKey)
+    val loaded = cycle.progressStore.load(cycle.progressKey)?.let { replayInterruptedDiscovery(cycle, declaration, it) }
     if (loaded?.pendingExternalOperation != null) {
       return terminalBlockedResult(
         "The outcome of '${loaded.pendingExternalOperation}' is unknown after interruption at checkpoint " +
@@ -365,6 +367,7 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
     val discoveryCheckpoint =
       cycle.repositoryCheckpointProvider()
         ?: return terminalBlockedResult("Required gate could not resolve the repository checkpoint before discovery.")
+    val discoveryOperation = commandIdentity(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY)
     persistProgress(
       state,
       ValidationGateProgressWrite(
@@ -374,10 +377,13 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
         repairsUsed = carriedGateRepairTurns(cycle),
         capturedTriagePlan = null,
       ),
-      pendingExternalOperation = commandIdentity(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY),
+      pendingExternalOperation = discoveryOperation,
       pendingExternalCheckpoint = discoveryCheckpoint,
     )
-    val discovery = runGate(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY)
+    val discovery =
+      GateCommandShutdownGuard(shutdownHooks, diagnostics) {
+        markPendingInterrupted(cycle, discoveryOperation)
+      }.run { runGate(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY) }
     val discoveryFindings = buildFindingsForRepairFromResult(discovery)
     recordGateProgress(
       state = state,
@@ -873,12 +879,37 @@ public class FeatureTaskRuntimeBuildGateCoordinator(
   private fun openFindingsFromState(state: BuildGateCycleState): List<ValidationGateFinding> =
     decodeBuildPersistedFindings(state.cycle.progressStore.load(state.cycle.progressKey)?.completeFindings.orEmpty())
 
+  private fun markPendingInterrupted(
+    cycle: ValidationGateCycleRequest,
+    operation: String,
+  ) {
+    val pending = cycle.progressStore.load(cycle.progressKey) ?: return
+    if (pending.pendingExternalOperation != operation || pending.pendingExternalInterrupted) return
+    cycle.progressStore.persist(cycle.progressKey, pending.copy(pendingExternalInterrupted = true))
+  }
+
+  private fun replayInterruptedDiscovery(
+    cycle: ValidationGateCycleRequest,
+    declaration: ValidationGateDeclaration,
+    loaded: FeatureTaskRuntimeValidationGateProgress,
+  ): FeatureTaskRuntimeValidationGateProgress {
+    val discovery = commandIdentity(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY)
+    if (!loaded.interruptedInitialDiscovery(cycle.commandFamily) || loaded.pendingExternalOperation != discovery) {
+      return loaded
+    }
+    return loaded.copy(
+      pendingExternalOperation = null,
+      pendingExternalCheckpoint = null,
+      pendingExternalInterrupted = false,
+    )
+  }
+
   private fun commandIdentity(
     cycle: ValidationGateCycleRequest,
     declaration: ValidationGateDeclaration,
     phase: ValidationGateCyclePhase,
   ): String =
-    "${cycle.commandFamily.name.lowercase()}:${phase.name.lowercase()}:" +
+    gateCommandIdentityPrefix(cycle.commandFamily, phase) +
       gateArgv(declaration, cycle.commandFamily, phase).joinToString(" ")
 
   private fun invalidRetainedTriage(reason: String): Nothing =
