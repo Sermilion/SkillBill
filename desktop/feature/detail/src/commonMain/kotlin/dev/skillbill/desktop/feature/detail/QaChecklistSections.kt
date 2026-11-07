@@ -42,6 +42,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbPulse
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.MetricCell
@@ -112,7 +113,7 @@ private fun qaStripCells(item: WorkItem, run: ExecutionInstance?, view: QaCheckl
       when (val nowTesting = view.nowTesting) {
         is QaNowTesting.Step -> {
           Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(nowTesting.caseId, Modifier.background(SkillBillTheme.colors.stActive.copy(alpha = .15f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.stActive))
+            SbTag(nowTesting.caseId, tone = SkillBillTheme.colors.stActive, mono = true)
             BasicText(nowTesting.caseTitle, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg), maxLines = 2)
           }
           Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

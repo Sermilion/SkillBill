@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -38,6 +39,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import dev.skillbill.desktop.core.designsystem.component.SbDivider
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
@@ -197,7 +199,7 @@ private fun QaUnblockItem(entry: QaUnblockEntry, index: Int, count: Int, onActio
         entry.tried?.let { QaField("Tried", it) }
         if (entry.evidencePaths.isNotEmpty() || entry.snippet != null) {
           QaEvidenceChips(entry.evidencePaths, entry.evidenceDirectory, onAction, mode) {
-            entry.snippet?.let { snippet -> QaChip("Copy for qa.md", LucideIcons.copy) { onAction(DetailAction.Copy(snippet)) } }
+            entry.snippet?.let { snippet -> SbTag("Copy for qa.md", icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(snippet)) }) }
           }
         }
       }
@@ -208,9 +210,9 @@ private fun QaUnblockItem(entry: QaUnblockEntry, index: Int, count: Int, onActio
 @Composable
 private fun QaUnblockOpen(onAction: (DetailAction) -> Unit) {
   Row(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) {
-    QaChip("Open qa.md", LucideIcons.external, description = "Open .skill-bill/phases/qa.md") {
+    SbTag("Open qa.md", Modifier.semantics { contentDescription = "Open .skill-bill/phases/qa.md" }, icon = LucideIcons.external, onClick = {
       onAction(DetailAction.OpenQaPhaseInstructions)
-    }
+    })
   }
 }
 
@@ -291,7 +293,7 @@ private fun QaEvidenceChips(paths: List<String>, directory: String?, onAction: (
     when (mode) {
       QaEvidenceMode.Invocation -> if (directory != null) paths.forEach { path -> EvidenceChip(path) { onAction(DetailAction.OpenQaEvidence(path, directory)) } }
       QaEvidenceMode.VerifyNamesOnly -> paths.forEach { path ->
-        BasicText(fileName(path), Modifier.background(SkillBillTheme.colors.bgHover, RoundedCornerShape(SkillBillRadius.xs)).padding(horizontal = 7.dp, vertical = 4.dp), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted))
+        SbTag(fileName(path))
       }
     }
     extra()
@@ -313,7 +315,7 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: Sect
         row.steps?.let { QaField("Steps", it) }
         if (hasEvidence || row.copySteps != null) {
           QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction, mode) {
-            row.copySteps?.let { steps -> QaChip("Copy steps", LucideIcons.copy) { onAction(DetailAction.Copy(steps)) } }
+            row.copySteps?.let { steps -> SbTag("Copy steps", icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(steps)) }) }
           }
         }
       }
@@ -343,7 +345,7 @@ private fun QaLeftItem(row: QaLeftRow, index: Int, count: Int, onAction: (Detail
     QaItemHead(LucideIcons.warn, colors.stBlocked, null, row.title, null, row.detail.takeIf { it.isNotBlank() }, null) {}
     row.copyText?.let { text ->
       Row(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) {
-        QaChip(row.copyLabel, LucideIcons.copy) { onAction(DetailAction.Copy(text)) }
+        SbTag(row.copyLabel, icon = LucideIcons.copy, onClick = { onAction(DetailAction.Copy(text)) })
       }
     }
   }
@@ -401,7 +403,7 @@ private fun QaReportItem(report: QaReportFold, reportPath: String?, state: Secti
     SbDivider()
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       ReportText(report.text)
-      reportPath?.let { path -> QaChip("Open report.md", LucideIcons.external) { onAction(DetailAction.OpenQaReport(path)) } }
+      reportPath?.let { path -> SbTag("Open report.md", icon = LucideIcons.external, onClick = { onAction(DetailAction.OpenQaReport(path)) }) }
     }
   }
 }

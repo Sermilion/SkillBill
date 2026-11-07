@@ -2,10 +2,7 @@ package dev.skillbill.desktop.feature.changes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.fadeIn
@@ -20,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,10 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -51,7 +48,7 @@ import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.toastInSpec
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.domain.model.ChangeStatus
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.DiffCommentsState
@@ -162,36 +159,20 @@ private fun SubtaskChips(chips: List<SubtaskChipUi>, onAction: (ChangesWindowAct
       maxLines = 1,
       softWrap = false,
     )
-    chips.forEach { chip -> SubtaskChip(chip) { onAction(ChangesWindowAction.NarrowToSubtask(chip.id)) } }
-  }
-}
-
-@Composable
-private fun SubtaskChip(chip: SubtaskChipUi, onClick: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  val interaction = remember { MutableInteractionSource() }
-  val hovered by interaction.collectIsHoveredAsState()
-  val shape = RoundedCornerShape(5.dp)
-  val hot = chip.selectable && hovered
-  val border = when {
-    hot -> colors.accent
-    chip.inScope -> colors.accent.copy(alpha = 0.4f)
-    else -> colors.borderStrong
-  }
-  val content = if (hot || chip.inScope) colors.accentText else colors.fg2
-  SbTooltip(chip.name) {
-    BasicText(
-      "${chip.id}",
-      Modifier.alpha(if (chip.selectable) 1f else 0.4f)
-        .then(if (chip.inScope) Modifier.background(colors.accentTint, shape) else Modifier)
-        .border(1.dp, border, shape)
-        .then(if (chip.selectable) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
-        .clickable(interaction, indication = null, enabled = chip.selectable, role = Role.Button, onClick = onClick)
-        .padding(horizontal = 6.dp, vertical = 3.dp),
-      style = changesMono(10.5f, FontWeight.Medium, content),
-      maxLines = 1,
-      softWrap = false,
-    )
+    chips.forEach { chip ->
+      val modifier = Modifier.alpha(if (chip.selectable) 1f else 0.4f).then(
+        if (chip.selectable) Modifier else Modifier.semantics(mergeDescendants = true) { role = Role.Button; disabled() },
+      )
+      SbTag(
+        "${chip.id}",
+        modifier = modifier,
+        mono = true,
+        outlined = !chip.inScope,
+        tone = if (chip.inScope) SkillBillTheme.colors.accent else null,
+        onClick = if (chip.selectable) ({ onAction(ChangesWindowAction.NarrowToSubtask(chip.id)) }) else null,
+        tooltip = chip.name,
+      )
+    }
   }
 }
 

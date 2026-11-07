@@ -36,6 +36,7 @@ import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
@@ -73,7 +74,7 @@ internal fun ActivityCard(
       }
       Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ActivityText(group.name, Modifier.weight(1f, fill = false), size = 12.5f, sans = true, weight = FontWeight.Medium, color = if (open) colors.fg else colors.fg2)
-        label?.let { ActivityTag(it, group.status == ActivityStatus.RUNNING) }
+        label?.let { SbTag(it, tone = if (group.status == ActivityStatus.RUNNING) colors.accentText else colors.stBlocked) }
       }
       ActivityTime(group.startedAt, now)
       val active = group.activeMilliseconds(now)
@@ -101,13 +102,6 @@ internal fun ActivityCard(
       if (entries.isEmpty() && group.before.isEmpty() && group.after.isEmpty()) ActivityText("No phases ran.", Modifier.padding(20.dp), sans = true, faint = true)
     }
   }
-}
-
-@Composable
-private fun ActivityTag(text: String, running: Boolean = false) {
-  val color = if (running) SkillBillTheme.colors.accentText else SkillBillTheme.colors.stBlocked
-  ActivityText(text, Modifier.background(color.copy(alpha = .12f), RoundedCornerShape(4.dp)).border(1.dp, color.copy(alpha = .35f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
-    size = 10f, weight = FontWeight.Medium, color = color)
 }
 
 @Composable

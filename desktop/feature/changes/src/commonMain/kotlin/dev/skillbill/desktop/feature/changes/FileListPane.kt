@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.changes
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +37,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
@@ -136,13 +135,7 @@ private fun FileRow(row: FileRowUi, selected: Boolean, onClick: () -> Unit) {
       )
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (row.touchCount >= 2) {
-          BasicText(
-            "×${row.touchCount}",
-            Modifier.border(1.dp, colors.border, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
-            style = changesMono(9.5f, FontWeight.Medium, colors.fgFaint),
-            maxLines = 1,
-            softWrap = false,
-          )
+          SbTag("×${row.touchCount}", outlined = true, mono = true)
         }
         if (file.binary) {
           BasicText("binary", style = changesMono(11f, FontWeight.Medium, colors.fgFaint), maxLines = 1, softWrap = false)

@@ -1,21 +1,14 @@
 package dev.skillbill.desktop.feature.chat
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import kotlin.time.Duration
@@ -36,13 +29,7 @@ internal fun ModeBadge(mode: ChatPermissionMode, pause: Boolean = false) {
     mode == ChatPermissionMode.Act -> "The agent may change files and the remote"
     else -> "The execution is running; changes can collide with it"
   }
-  SbTooltip(hint) {
-    BasicText(
-      text,
-      Modifier.background(tone.copy(alpha = .12f), RoundedCornerShape(SkillBillRadius.xs)).padding(horizontal = 6.dp, vertical = 1.dp),
-      style = SkillBillTheme.type.t2xs.copy(color = tone),
-    )
-  }
+  SbTag(text, tone = tone, tooltip = hint)
 }
 
 internal fun modeTone(mode: ChatPermissionMode, colors: SkillBillColors): Color =

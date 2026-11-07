@@ -75,6 +75,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.domain.model.Comment
@@ -139,7 +140,7 @@ internal fun DiffCommentThread(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Chip(thread.state.name, stateColor(thread.state, colors))
+          SbTag(thread.state.name, tone = stateColor(thread.state, colors))
           BasicText(thread.comments.firstOrNull()?.body?.lineSequence()?.firstOrNull().orEmpty(), Modifier.weight(1f), style = changesSans(11f, FontWeight.Normal, colors.fg2), maxLines = 1)
           BasicText("${(thread.comments.size - 1).coerceAtLeast(0)} replies", style = changesSans(10f, FontWeight.Normal, colors.fgMuted))
         }
@@ -159,9 +160,9 @@ internal fun DiffCommentThread(
             verticalArrangement = Arrangement.spacedBy(5.dp),
             itemVerticalAlignment = Alignment.CenterVertically,
           ) {
-            Chip(thread.state.name, stateColor(thread.state, colors))
-            if (thread.outdated) Chip("Outdated", colors.stFailed)
-            thread.severity?.let { Chip(it, severityColor(it, colors)) }
+            SbTag(thread.state.name, tone = stateColor(thread.state, colors))
+            if (thread.outdated) SbTag("Outdated", tone = colors.stFailed)
+            thread.severity?.let { SbTag(it, tone = severityColor(it, colors)) }
             thread.findingRef?.let { BasicText(it, style = changesMono(10f, FontWeight.Medium, colors.fgMuted)) }
           }
           if (thread.outdated && (thread.line != null || thread.anchorLineText != null)) {
@@ -253,7 +254,7 @@ private fun CommentRow(comment: Comment, sourceLabel: String?, now: Instant, bus
     ) { BasicText(if (agent) "✦" else "U", style = changesSans(10f, FontWeight.SemiBold, if (agent) colors.accentText else colors.fg2)) }
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        if (comment.author == CommentAuthor.Agent) comment.outcome?.let { Chip(it.name, outcomeColor(it, colors)) }
+        if (comment.author == CommentAuthor.Agent) comment.outcome?.let { SbTag(it.name, tone = outcomeColor(it, colors)) }
         BasicText(comment.agentId ?: if (agent) "Agent" else "You", style = changesSans(10.5f, FontWeight.SemiBold, colors.fg))
         sourceLabel?.let { BasicText(it, style = changesMono(9f, FontWeight.Normal, colors.fgMuted)) }
         BasicText(relativeTime(comment.createdAt, now), style = changesSans(9.5f, FontWeight.Normal, colors.fgFaint), maxLines = 1)
@@ -274,11 +275,6 @@ private fun relativeTime(createdAt: Instant, now: Instant): String {
     minutes < 1440 -> "${minutes / 60}h ago"
     else -> "${minutes / 1440}d ago"
   }
-}
-
-@Composable
-private fun Chip(label: String, color: Color) {
-  BasicText(label, Modifier.background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 3.dp), style = changesSans(9f, FontWeight.Medium, color), maxLines = 1)
 }
 
 @Composable

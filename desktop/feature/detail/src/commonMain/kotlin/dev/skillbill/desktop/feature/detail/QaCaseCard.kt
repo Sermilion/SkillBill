@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
@@ -41,6 +40,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
@@ -127,7 +127,7 @@ private fun QaStepRow(step: QaStepView, invocationDirectory: String?, onOpenFind
       }
       if (step.findingId != null || (invocationDirectory != null && step.evidence.isNotEmpty())) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          step.findingId?.let { FindingChip(it, onOpenFinding) }
+          step.findingId?.let { SbTag("Finding $it", tone = colors.stFailed, onClick = { onOpenFinding(it) }) }
           if (invocationDirectory != null) step.evidence.forEach { path -> EvidenceChip(path) { onAction(DetailAction.OpenQaEvidence(path, invocationDirectory)) } }
         }
       }
@@ -155,33 +155,7 @@ private fun StatusDescription(description: String, content: @Composable () -> Un
 }
 
 @Composable
-private fun FindingChip(id: String, onOpen: (String) -> Unit) {
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.xs)
-  BasicText(
-    "Finding $id",
-    Modifier.background(colors.stFailed.copy(alpha = .15f), shape).clickable(role = Role.Button, onClick = { onOpen(id) }).padding(horizontal = 8.dp, vertical = 2.dp),
-    style = SkillBillTheme.type.tSm.copy(color = colors.stFailed, fontWeight = FontWeight.SemiBold),
-  )
-}
-
-@Composable
 internal fun EvidenceChip(path: String, onOpen: () -> Unit) {
   val name = fileName(path)
-  QaChip(name, LucideIcons.file, "Open evidence $name", mono = true, onClick = onOpen)
-}
-
-@Composable
-internal fun QaChip(label: String, icon: ImageVector, description: String = label, mono: Boolean = false, onClick: () -> Unit) {
-  val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  Row(
-    Modifier.background(colors.bgRaised, RoundedCornerShape(SkillBillRadius.xs)).border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.xs))
-      .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description }
-      .padding(horizontal = 8.dp, vertical = 2.dp),
-    horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically,
-  ) {
-    SbIcon(icon, 12.dp)
-    BasicText(label, style = (if (mono) type.monoSm else type.tSm).copy(color = colors.fg2))
-  }
+  SbTag(name, Modifier.semantics { contentDescription = "Open evidence $name" }, mono = true, icon = LucideIcons.file, onClick = onOpen)
 }

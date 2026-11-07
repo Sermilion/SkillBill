@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -25,6 +24,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
@@ -32,8 +32,6 @@ import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
 import dev.skillbill.desktop.core.domain.model.RunningReviewPass
-
-private const val SEVERITY_TINT_ALPHA = .14f
 
 /** The Review caption with its pass count or running pass, then one block per completed pass. */
 @Composable
@@ -152,7 +150,11 @@ private fun InspectorFindingRow(index: Int, finding: ReviewReportFinding, modifi
     verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-      SeverityBadge(finding.severity)
+      SbTag(finding.severity, tone = when (finding.severity.lowercase()) {
+        "blocker" -> colors.stFailed
+        "major" -> colors.stBlocked
+        else -> null
+      })
       BasicText(
         finding.description,
         Modifier.weight(1f),
@@ -168,22 +170,6 @@ private fun InspectorFindingRow(index: Int, finding: ReviewReportFinding, modifi
       }
       if (meta.isNotEmpty()) BasicText(meta, style = type.tSm.copy(color = colors.fgMuted))
     }
-  }
-}
-
-@Composable
-private fun SeverityBadge(severity: String) {
-  val colors = SkillBillTheme.colors
-  val (text, background) = when (severity.lowercase()) {
-    "blocker" -> colors.stFailed to colors.stFailed.copy(alpha = SEVERITY_TINT_ALPHA)
-    "major" -> colors.stBlocked to colors.stBlocked.copy(alpha = SEVERITY_TINT_ALPHA)
-    else -> colors.fg2 to colors.bgOverlay
-  }
-  Box(
-    Modifier.height(18.dp).background(background, RoundedCornerShape(SkillBillRadius.xs)).padding(horizontal = 6.dp),
-    contentAlignment = Alignment.Center,
-  ) {
-    BasicText(severity, style = SkillBillTheme.type.tXs.copy(color = text), maxLines = 1, softWrap = false)
   }
 }
 

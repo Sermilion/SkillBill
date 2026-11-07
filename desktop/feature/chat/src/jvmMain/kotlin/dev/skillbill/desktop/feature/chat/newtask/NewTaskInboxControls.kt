@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.Kbd
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 
 @Composable
@@ -85,18 +85,18 @@ internal fun InboxHint(home: NewTaskHome.Returning?, showAll: Boolean, onShowAll
     verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-      InboxKeycap("1")
+      Kbd("1")
       BasicText("–", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
-      InboxKeycap("9")
+      Kbd("9")
       BasicText("open", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-      InboxKeycap("↑")
-      InboxKeycap("↓")
+      Kbd("↑")
+      Kbd("↓")
       BasicText("move", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-      InboxKeycap("Del")
+      Kbd("Del")
       BasicText("discard chat", style = inboxTextStyle(11.5.sp).copy(color = colors.fgFaint))
     }
     if (home != null) InboxHintLink(
@@ -105,17 +105,6 @@ internal fun InboxHint(home: NewTaskHome.Returning?, showAll: Boolean, onShowAll
     )
     if (showAll) InboxHintLink("Show all", onShowAll)
   }
-}
-
-@Composable
-private fun InboxKeycap(text: String) {
-  val colors = SkillBillTheme.colors
-  BasicText(
-    text,
-    Modifier.background(colors.bgInset, RoundedCornerShape(3.dp))
-      .border(1.dp, colors.border, RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
-    style = inboxTextStyle(10.5.sp, mono = true).copy(color = colors.fgMuted, lineHeight = 12.sp),
-  )
 }
 
 @Composable
