@@ -86,6 +86,33 @@ class SkillBillUninstallDestructiveSemanticsTest {
   }
 
   @Test
+  fun `pre-install wipe keeps the live runtime so a running JVM can still load jars`() {
+    val home = Files.createTempDirectory("skillbill-app-preinstall-home")
+    val stateRoot = home.resolve(".skill-bill")
+    val runtimeJar = stateRoot.resolve("runtime/runtime-cli/lib/runtime-engine.jar")
+    val installedSkills = stateRoot.resolve("installed-skills/skill-bill")
+    Files.createDirectories(runtimeJar.parent)
+    Files.createDirectories(installedSkills)
+    Files.writeString(runtimeJar, "live-runtime\n")
+    Files.writeString(installedSkills.resolve("SKILL.md"), "staged\n")
+    val service =
+      SkillBillUninstallService(
+        installAgentService = InstallAgentService(DestructiveSemanticsInstallAgentTargetPort),
+        installNativeAgentLinkPort = DestructiveSemanticsInstallNativeAgentLinkPort,
+        installMcpRegistrationPort = SucceedingMcpRegistrationPort,
+        uninstallFileSystem = LocalUninstallPathsPort(),
+        hostPlatform = DestructiveSemanticsHostPlatformPort,
+        diagnostics = NoopDestructiveSemanticsDiagnostics,
+      )
+
+    val result = service.clearInstallState(stateRoot, home, emptyMap(), preserveGeneratedOnly = true)
+
+    assertFalse(result.failed)
+    assertTrue(Files.exists(runtimeJar), "unlinking live JARs breaks later getResourceAsStream in the old JVM")
+    assertFalse(Files.exists(installedSkills))
+  }
+
+  @Test
   fun `T3-04 failed install state removal reports degradation instead of silent success`() {
     val home = Files.createTempDirectory("skillbill-app-uninstall-partial")
     val stateRoot = home.resolve(".skill-bill")
