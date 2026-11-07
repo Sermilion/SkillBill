@@ -1,3 +1,18 @@
+## [2026-11-07] SKILL-518 match plan detail design
+Areas: desktop/feature/detail, desktop/core/designsystem
+- MEDIUM feature. Standalone plans follow the mock's stage strip, merged Now block or blocked callout, Activity, Spec bundle, Transcript and Briefing order. Plan-local headers and the Blocked badge leave other run types unchanged.
+- PlanText provides reusable pure stage, output, path and Activity-summary derivations. Fan-out uses units, waves and activity when its stage record is pending; status copy uses recorded saved/total counts.
+- Activity has counted filters, Follow, sticky reached-stage headers, folded reads, expandable notes and retained file-opening targets. Stage clicks pause Follow and jump to the group; quiet or blocked runs omit the working tail.
+- Spec bundle combines parent files and subtask specs with wave labels and live writing, quiet, blocked and saved states. Parent paths resolve from the report, write activity or the first unit spec's directory.
+- Transcript replaces the output tail and Activity button with a newest-pinned three-line preview and expandable browsing. It prefers readable lines, falls back to raw lines, copies their original text and loads older pages only while expanded.
+- PlanBriefing is a reusable commonMain parser for saved setup, the digest handed to plan and per-stage UTF-8 sizes. Briefing opens as a teaser, retains exact raw text and falls back to raw rows when setup parsing fails.
+- Run-keyed PlanScreenState owns feed, filters, folds and navigation above the lazy list. Activity briefing links expand and scroll to the matching raw row through a screen-owned, replaceable reveal job.
+- SbSpinner gains reusable duration, track-alpha and arc-sweep options with existing defaults preserved; the design system adds a plug icon. Live clocks use the UI ticker, and animations respect reduced motion.
+- Runtime contracts and event sources are unchanged. Older runs cannot gain historical tool events; digest headings remain heuristic, and paths outside known roots remain absolute.
+- Not-started stage cells remain unclickable because the app has no generic toast action. The Now block uses the recorded agent id because no per-stage model name is available.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-06] SKILL-510 desktop QA Unblock card
 Areas: desktop/feature/detail; desktop/core/domain; desktop/core/data; runtime-engine work/verify; runtime-ports idestatus models; design/qa-results
 - MEDIUM feature. Goal, standalone and Verify QA results show capability remedies, attempted setup and evidence after untested work and before result folds. Entries appear for incomplete or skipped runs, or recorded untested work.
