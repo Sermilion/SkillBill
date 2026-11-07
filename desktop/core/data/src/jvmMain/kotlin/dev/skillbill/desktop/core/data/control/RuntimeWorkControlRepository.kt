@@ -31,12 +31,17 @@ import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import dev.skillbill.desktop.core.domain.model.NewTaskKind
 import dev.skillbill.desktop.core.domain.model.NewTaskStart
 import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
+import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
+import dev.skillbill.desktop.core.domain.settings.SettingsRejection
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
+import dev.skillbill.desktop.core.domain.qa.QaDevicePickKind
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -61,10 +66,14 @@ import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.engine.work.control.model.WorkControlAction
 import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
 import skillbill.engine.work.control.model.StandaloneCheckout
+import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
@@ -97,6 +106,7 @@ private val NO_SESSION = ReadProblem.Runtime("The database session is not open."
 @ContributesBinding(AppScope::class)
 class RuntimeWorkControlRepository(
   private val sessions: DatabaseSessionManager,
+  private val settings: AppSettingsRepository,
   private val launches: LaunchReservations,
   private val diagnostics: Diagnostics,
   appScope: ApplicationCoroutineScope,
@@ -127,6 +137,10 @@ class RuntimeWorkControlRepository(
 
   override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome {
     val session = currentSession(item) ?: return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
+    val qaDevice = if (item.kind == WorkKind.Goal || item.control.phaseId == SkeletonDefinition.QA.id) when (val result = readQaDevice()) {
+      is Outcome.Failure -> return ControlOutcome.Failed(ReadProblem.Runtime("Could not read the saved QA device selection."))
+      is Outcome.Success -> result.value
+    } else null
     if (launches.isReserved(item.launchKey)) return ControlOutcome.AlreadyLaunching
     val snapshot = when (val result = session.board.completeSnapshot(RESERVATION_BOARD)) {
       is Outcome.Failure -> return when {
@@ -151,13 +165,17 @@ class RuntimeWorkControlRepository(
     }
     return reserved(handle) {
       runControl(item, "control_launch") { runtime, target ->
-        runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId).toControlOutcome(ControlKind.LAUNCH, diagnostics)
+        runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId, qaDevice).toControlOutcome(ControlKind.LAUNCH, diagnostics)
       }
     }
   }
 
   override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome {
     val session = sessions.sessions.value ?: return ControlOutcome.Failed(NO_SESSION)
+    val qaDevice = when (val result = readQaDevice()) {
+      is Outcome.Failure -> return ControlOutcome.Failed(ReadProblem.Runtime("Could not read the saved QA device selection."))
+      is Outcome.Success -> result.value
+    }
     if (!sessionIsCurrent(session)) return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
     if (launches.isReserved(issueKey)) return ControlOutcome.AlreadyLaunching
     val identity = callInSession(
@@ -201,7 +219,7 @@ class RuntimeWorkControlRepository(
           ?: return@callInSession ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
         when (val result = runtime.databaseSession.transactionFenced(observation) {
           if (!sessionIsCurrent(session)) null
-          else runtime.workControlService.startGoal(Path.of(repoRoot), issueKey, agentId)
+          else runtime.workControlService.startGoal(Path.of(repoRoot), issueKey, agentId, qaDevice)
         }) {
           FencedTransactionResult.ChangedTarget -> ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
           is FencedTransactionResult.Committed -> result.value?.toControlOutcome(ControlKind.START_GOAL, diagnostics)
@@ -212,6 +230,10 @@ class RuntimeWorkControlRepository(
   }
 
   override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome {
+    val qaDevice = if (request.kind == NewTaskKind.Qa || request.kind == NewTaskKind.GoalRun) when (val result = readQaDevice()) {
+      is Outcome.Failure -> return NewTaskStartOutcome.Failed(ReadProblem.Runtime("Could not read the saved QA device selection."))
+      is Outcome.Success -> result.value
+    } else null
     val session = request.expectedDatabaseSessionId?.let(sessions::currentComponent)
       ?: return NewTaskStartOutcome.Refused("The database changed. Try again.")
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
@@ -223,7 +245,7 @@ class RuntimeWorkControlRepository(
       else NewTaskStartOutcome.Failed(readiness.error)
     when (request.kind) {
       NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor ->
-        return startStandaloneTask(request, session)
+        return startStandaloneTask(request, session, qaDevice)
       NewTaskKind.Verify, NewTaskKind.PrReviewFix ->
         return startOperationTask(request, session)
       NewTaskKind.GoalRun, NewTaskKind.PlanOnly -> Unit
@@ -298,7 +320,7 @@ class RuntimeWorkControlRepository(
                 ?: return@callInSession NewTaskStartOutcome.Refused("The database changed. Try again.")
               when (val result = runtime.databaseSession.transactionFenced(observation) {
                 if (!sessionIsCurrent(session)) null
-                else runtime.workControlService.startNewTask(Path.of(request.repoRoot), prepared, kind, request.agentId)
+                else runtime.workControlService.startNewTask(Path.of(request.repoRoot), prepared, kind, request.agentId, qaDevice)
               }) {
                 FencedTransactionResult.ChangedTarget -> NewTaskStartOutcome.Refused("The database changed. Try again.")
                 is FencedTransactionResult.Committed -> when (val started = result.value) {
@@ -333,7 +355,11 @@ class RuntimeWorkControlRepository(
     return NewTaskStartOutcome.Refused("Couldn't assign a free issue key. Try again.")
   }
 
-  private suspend fun startStandaloneTask(request: NewTaskStart, session: DatabaseSessionComponent): NewTaskStartOutcome {
+  private suspend fun startStandaloneTask(
+    request: NewTaskStart,
+    session: DatabaseSessionComponent,
+    qaDevice: QaNamedDevice?,
+  ): NewTaskStartOutcome {
     val phaseId = when (request.kind) {
       NewTaskKind.Review -> NewTaskActionKind.Review.wire
       NewTaskKind.Validation -> NewTaskActionKind.Validation.wire
@@ -345,13 +371,24 @@ class RuntimeWorkControlRepository(
     return startReservedStandalone(request, session, phaseId, settleOnStarted = true) { runtime ->
       runtime.workControlService.startStandalone(
         Path.of(request.repoRoot),
-        phaseId,
+        StandalonePhaseRequest(phaseId, request.target),
         request.agentId,
-        request.target,
         request.standaloneCheckout(),
+        if (request.kind == NewTaskKind.Qa) qaDevice else null,
       )
     }
   }
+
+  private suspend fun readQaDevice(): Outcome<QaNamedDevice?, SettingsRejection> =
+    when (val result = settings.readQaDevice()) {
+      is Outcome.Failure -> result
+      is Outcome.Success -> Outcome.Success(result.value?.toRuntimeDevice())
+    }
+
+  private fun QaDevicePick.toRuntimeDevice(): QaNamedDevice = QaNamedDevice(
+    if (kind == QaDevicePickKind.Serial) QaNamedDeviceKind.SERIAL else QaNamedDeviceKind.AVD,
+    value,
+  )
 
   private suspend fun startOperationTask(request: NewTaskStart, session: DatabaseSessionComponent): NewTaskStartOutcome {
     val operationId = when (request.kind) {

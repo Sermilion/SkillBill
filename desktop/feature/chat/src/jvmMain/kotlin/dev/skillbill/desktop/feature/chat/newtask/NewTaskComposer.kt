@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -45,6 +46,8 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 internal val COMPOSER_MAX_WIDTH = 728.dp
+private val COMPOSER_INPUT_MIN_HEIGHT = 64.dp
+private val COMPOSER_LINE_HEIGHT = 1.45.em
 
 internal const val PICKERS_DISABLED_BUSY = "Wait for the current reply to finish"
 internal const val PICKERS_DISABLED_STARTING = "Wait for the start to finish"
@@ -102,6 +105,8 @@ internal fun NewTaskComposer(state: NewTaskUiState, draft: NewTaskDraft, focus: 
         placeholder = if (chat != null) "Reply to the agent" else "Describe the work, or paste an issue key or spec path",
         multiline = true,
         onSubmit = { press(true) },
+        multilineMinHeight = COMPOSER_INPUT_MIN_HEIGHT,
+        lineHeight = COMPOSER_LINE_HEIGHT,
       )
       if (state.resumePickerOpen) {
         ResumePalette(

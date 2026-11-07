@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -51,6 +53,7 @@ import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
 import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 import dev.skillbill.desktop.feature.chat.chipText
 
@@ -60,6 +63,8 @@ internal data class OpenChatItem(
   val repositoryName: String?,
   val agentLabel: String,
   val status: NewTaskChatStatus,
+  /** True once the chat has a conversation, which is when Discard has a save to delete. */
+  val hasConversation: Boolean = false,
 )
 
 @Composable
@@ -70,7 +75,7 @@ internal fun rememberOpenChatItems(chats: NewTaskChats): List<OpenChatItem> {
       val chat by draft.chat.collectAsState()
       val transcript = chat?.thread?.transcript?.collectAsState()?.value.orEmpty()
       val status by remember(draft) { chats.status(draft) }.collectAsState(NewTaskChatStatus.Idle)
-      OpenChatItem(draft, newTaskChatTitle(transcript), draft.repository?.name, draft.selectedAgent?.let(::chipText) ?: draft.agentId.orEmpty(), status)
+      OpenChatItem(draft, newTaskChatTitle(transcript), draft.repository?.name, draft.selectedAgent?.let(::chipText) ?: draft.agentId.orEmpty(), status, chat != null)
     }
   }
 }
@@ -89,48 +94,55 @@ internal fun openChatStatusText(item: OpenChatItem): String = when (item.status)
 }
 
 @Composable
-internal fun OpenChatRow(item: OpenChatItem, selected: Boolean, onClick: () -> Unit, onClose: (() -> Unit)?) {
+internal fun OpenChatRow(item: OpenChatItem, selected: Boolean, onClick: () -> Unit, onClose: (() -> Unit)?, onDiscard: (() -> Unit)? = null) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  Row(
-    Modifier.fillMaxWidth().background(if (selected) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent, shape)
-      .hoverable(interaction).clickable(interaction, indication = null, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
-      .sbFocusRing(interaction, shape)
-      .semantics { role = Role.Button; this.selected = selected }.padding(horizontal = 8.dp, vertical = 6.dp),
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(6.dp),
-  ) {
-    NewTaskChatMarker(item.status)
-    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-      BasicText(item.title, style = type.tSm.copy(color = if (item.status == NewTaskChatStatus.NewReply) colors.fg else colors.fg2, fontWeight = if (item.status == NewTaskChatStatus.NewReply) FontWeight.Bold else FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis)
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-        item.repositoryName?.let {
-          BasicText(it, Modifier.weight(1f, fill = false), style = type.monoSm.copy(color = colors.fgFaint, fontSize = type.tXs.fontSize), maxLines = 1, overflow = TextOverflow.Ellipsis)
+  val menu = remember { ChatMenuAnchor() }
+  val focus = remember { FocusRequester() }
+  val hasMenu = onClose != null && onDiscard != null
+  Box {
+    Row(
+      Modifier.fillMaxWidth().background(if (selected) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent, shape)
+        .then(if (hasMenu) Modifier.focusRequester(focus).chatMenuTrigger(menu) else Modifier)
+        .hoverable(interaction).clickable(interaction, indication = null, onClick = onClick).pointerHoverIcon(PointerIcon.Hand)
+        .sbFocusRing(interaction, shape)
+        .semantics { role = Role.Button; this.selected = selected }.padding(horizontal = 8.dp, vertical = 6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      NewTaskChatMarker(item.status)
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        BasicText(item.title, style = type.tSm.copy(color = if (item.status == NewTaskChatStatus.NewReply) colors.fg else colors.fg2, fontWeight = if (item.status == NewTaskChatStatus.NewReply) FontWeight.Bold else FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+          item.repositoryName?.let {
+            BasicText(it, Modifier.weight(1f, fill = false), style = type.monoSm.copy(color = colors.fgFaint, fontSize = type.tXs.fontSize), maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+          if (item.repositoryName != null) BasicText("·", style = type.tXs.copy(color = colors.fgFaint), maxLines = 1)
+          val statusModifier = if (item.repositoryName != null) Modifier.weight(1f, fill = false) else Modifier
+          BasicText(openChatStatusText(item), statusModifier, style = type.tXs.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (item.repositoryName != null) BasicText("·", style = type.tXs.copy(color = colors.fgFaint), maxLines = 1)
-        val statusModifier = if (item.repositoryName != null) Modifier.weight(1f, fill = false) else Modifier
-        BasicText(openChatStatusText(item), statusModifier, style = type.tXs.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
-    }
-    if (onClose != null) {
-      Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-        if (hovered) {
-          val closeInteraction = remember { MutableInteractionSource() }
-          val closeHovered by closeInteraction.collectIsHoveredAsState()
-          val closeShape = RoundedCornerShape(SkillBillRadius.sm)
-          SbTooltip("Close", "$MOD_KEY W") {
-            Box(Modifier.size(16.dp).background(if (closeHovered) colors.bgHover else Color.Transparent, closeShape)
-              .hoverable(closeInteraction).clickable(closeInteraction, indication = null, onClick = onClose)
-              .sbFocusRing(closeInteraction, closeShape).semantics { contentDescription = "Close ${item.title}"; role = Role.Button }, contentAlignment = Alignment.Center) {
-              SbIcon(LucideIcons.x, SbIconSize.Xs)
+      if (onClose != null) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+          if (hovered) {
+            val closeInteraction = remember { MutableInteractionSource() }
+            val closeHovered by closeInteraction.collectIsHoveredAsState()
+            val closeShape = RoundedCornerShape(SkillBillRadius.sm)
+            SbTooltip("Close", "$MOD_KEY W") {
+              Box(Modifier.size(16.dp).background(if (closeHovered) colors.bgHover else Color.Transparent, closeShape)
+                .hoverable(closeInteraction).clickable(closeInteraction, indication = null, onClick = onClose)
+                .sbFocusRing(closeInteraction, closeShape).semantics { contentDescription = "Close ${item.title}"; role = Role.Button }, contentAlignment = Alignment.Center) {
+                SbIcon(LucideIcons.x, SbIconSize.Xs)
+              }
             }
           }
         }
       }
     }
+    if (onClose != null && onDiscard != null) NewTaskChatMenu(menu, item, onClose, onDiscard, focus)
   }
 }
 
@@ -138,7 +150,7 @@ internal fun OpenChatRow(item: OpenChatItem, selected: Boolean, onClick: () -> U
 @Composable
 internal fun NewTaskChatList(
   items: List<OpenChatItem>, selected: NewTaskDraft, onSelect: (NewTaskDraft) -> Unit,
-  onNewChat: () -> Unit, onClose: (NewTaskDraft) -> Unit, modifier: Modifier = Modifier,
+  onNewChat: () -> Unit, onClose: (NewTaskDraft) -> Unit, onDiscard: (NewTaskDraft) -> Unit, modifier: Modifier = Modifier,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
@@ -156,13 +168,15 @@ internal fun NewTaskChatList(
   Column(modifier.width(248.dp).fillMaxHeight().background(colors.bgFrame).drawBehind {
     drawLine(colors.borderSubtle, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx())
   }) {
-    Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-      BasicText("Open chats · ${items.size}", style = type.tXs.copy(color = colors.fgFaint))
+    Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      // New task has no view header, so the rail carries the sidebar toggle while the sidebar is a drawer.
+      LocalSidebarToggle.current?.let { SbIconButton(LucideIcons.panelLeft, "Toggle sidebar", it, size = SbControlSize.Small, shortcut = "[") }
+      BasicText("Open chats · ${items.size}", Modifier.weight(1f), style = type.tXs.copy(color = colors.fgFaint))
       SbIconButton(LucideIcons.plus, "New chat", onNewChat, size = SbControlSize.Small, shortcut = "$MOD_KEY T")
     }
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(2.dp)) {
       items(items, key = { it.draft }) { item ->
-        OpenChatRow(item, item.draft === selected, onClick = { onSelect(item.draft) }, onClose = { onClose(item.draft) })
+        OpenChatRow(item, item.draft === selected, onClick = { onSelect(item.draft) }, onClose = { onClose(item.draft) }, onDiscard = { onDiscard(item.draft) })
       }
     }
     Column(Modifier.fillMaxWidth().drawBehind { drawLine(colors.borderSubtle, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

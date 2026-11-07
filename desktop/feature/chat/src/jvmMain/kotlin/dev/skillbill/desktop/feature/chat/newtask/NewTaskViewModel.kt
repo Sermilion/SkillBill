@@ -60,6 +60,7 @@ data class NewTaskUiState(
   val branchRead: BranchReadState = BranchReadState.Idle,
   val repositoryPicks: Int = 0,
   val newTaskChatLayout: NewTaskChatLayout = NewTaskChatLayout.DEFAULT,
+  val qaDeviceName: String? = null,
 )
 
 sealed interface NewTaskAction {
@@ -75,7 +76,6 @@ sealed interface NewTaskAction {
   data object Send : NewTaskAction
   data object Stop : NewTaskAction
   data object SendNow : NewTaskAction
-  data object Discard : NewTaskAction
   data object NewChat : NewTaskAction
   data object DismissResume : NewTaskAction
   data class ResumeDraft(val entry: ChatHistoryEntry) : NewTaskAction
@@ -113,6 +113,10 @@ class NewTaskViewModel(
     settings.settings.map { it.newTaskChatLayout }.distinctUntilChanged()
       .onEach { layout -> mutableState.update { it.copy(newTaskChatLayout = layout) } }
       .catch { diagnostics.record("desktop_new_task_chat_layout_unavailable") }
+      .launchIn(viewModelScope)
+    settings.settings.map { it.qaDevice?.displayName }.distinctUntilChanged()
+      .onEach { name -> mutableState.update { it.copy(qaDeviceName = name) } }
+      .catch { diagnostics.record("desktop_qa_device_pick_unavailable") }
       .launchIn(viewModelScope)
     val first = draft
     readBranches(first)
@@ -158,7 +162,6 @@ class NewTaskViewModel(
       NewTaskAction.Send -> send(target)
       NewTaskAction.Stop -> target.stop()
       NewTaskAction.SendNow -> target.sendNow()
-      NewTaskAction.Discard -> chats.discard(target)
       NewTaskAction.NewChat -> chats.newChat()
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
       is NewTaskAction.DiscardDraft -> chats.discardSaved(action.entry)

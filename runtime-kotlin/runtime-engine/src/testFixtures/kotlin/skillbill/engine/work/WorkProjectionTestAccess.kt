@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.engine.work.control.goalStartRefusal
@@ -49,9 +50,11 @@ fun WorkRunActions.startGoalForTest(
   repoRoot: Path,
   issueKey: String,
   agentId: String?,
-) = startGoal(repoRoot, issueKey, agentId)
+  qaDevice: QaNamedDevice? = null,
+) = startGoal(repoRoot, issueKey, agentId, qaDevice)
 
 fun WorkRunActions.launchForTest(
   target: WorkRunTarget,
   agentId: String?,
-) = launch(target, agentId)
+  qaDevice: QaNamedDevice? = null,
+) = launch(target, agentId, qaDevice)

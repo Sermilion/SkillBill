@@ -113,7 +113,8 @@ class NewTaskViewModelTest {
     runCurrent()
 
     assertEquals(NewTaskChatLayout.Tabs, model.state.value.newTaskChatLayout)
-    assertEquals(listOf("desktop_new_task_chat_layout_unavailable"), diagnostics.categories)
+    assertEquals(null, model.state.value.qaDeviceName)
+    assertEquals(listOf("desktop_new_task_chat_layout_unavailable", "desktop_qa_device_pick_unavailable"), diagnostics.categories)
     model.viewModelScope.cancel()
   }
 
@@ -295,7 +296,7 @@ class NewTaskViewModelTest {
     val running = workItem("SKILL-1")
     board.state.value = loadedBoard(mapOf(BoardSectionKind.Goals to listOf(running)))
     advanceUntilIdle()
-    assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0, runningItems = listOf(running)), model.state.value.home)
+    assertEquals(NewTaskHome.Returning(emptyList(), running = 0, finished = 0), model.state.value.home)
     model.viewModelScope.cancel()
   }
 

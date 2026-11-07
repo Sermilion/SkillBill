@@ -182,7 +182,6 @@ internal fun removeInstallState(
   val retainedPaths = options.retainedPaths
   if (options.preserveGeneratedOnly) {
     listOf(
-      "runtime",
       "installed-skills",
       ".candidate-source",
       "native-agent-link-inventory.json",

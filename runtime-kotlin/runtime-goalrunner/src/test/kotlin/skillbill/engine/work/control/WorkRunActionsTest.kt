@@ -6,6 +6,8 @@ import org.junit.jupiter.params.provider.ValueSource
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testProjectStore
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.goal.GoalNewWorkAdmission
 import skillbill.engine.goal.GoalNewWorkAdmissionPort
 import skillbill.engine.goal.GoalPreflightGateBlock
@@ -197,7 +199,15 @@ class WorkRunActionsTest {
       )
       val actions = workRunActions(database, status, goals, launcher)
 
-      assertEquals(WorkControlResult.Accepted, actions.launchForTest(target(), "codex"))
+      assertEquals(
+        WorkControlResult.Accepted,
+        actions.launchForTest(target(), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123")),
+      )
+      assertTrue(
+        (launches.single().kind as WorkRunLaunchKind.RuntimeCommand).arguments.containsAll(
+          listOf("--qa-device", "serial:R58M123"),
+        ),
+      )
 
       database.read { unit ->
         canceled.forEach { prior ->
@@ -229,7 +239,7 @@ class WorkRunActionsTest {
         object : WorkRunLauncher {
           override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
             launches += request
-            return if (launches.size == 1) {
+            return if (launches.count { it.ownershipKey == request.ownershipKey } == 1) {
               WorkRunLaunchResult.Started(root.resolve("goal.log"))
             } else {
               WorkRunLaunchResult.Refused("A run is already starting or running for this work.")
@@ -269,6 +279,29 @@ class WorkRunActionsTest {
       assertEquals(
         WorkControlResult.LaunchFailed("A run is already starting or running for this work."),
         actions.startGoalForTest(root, "SKILL-901", "codex"),
+      )
+      assertEquals(
+        WorkControlResult.Accepted,
+        actions.startGoalForTest(
+          root,
+          "SKILL-902",
+          "codex",
+          QaNamedDevice(QaNamedDeviceKind.AVD, "Pixel_8_API_35"),
+        ),
+      )
+      assertEquals(
+        listOf(
+          "goal",
+          "SKILL-902",
+          "--agent",
+          "codex",
+          "--qa-device",
+          "avd:Pixel_8_API_35",
+          "--repo-root",
+          root.toString(),
+          "--no-live-output",
+        ),
+        (launches.last().kind as WorkRunLaunchKind.RuntimeCommand).arguments,
       )
     }
   }

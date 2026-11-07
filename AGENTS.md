@@ -88,7 +88,7 @@ No timing-based tests. Tests must not depend on wall-clock time or thread schedu
 
 ## Desktop QA
 
-QA of this repository's desktop app launches with `cd desktop && ./gradlew :app:runFromSource`. The task builds same-checkout `runtime-cli` and uses a scratch home under `desktop/app/build/source-run/`. `:app:run` reports the runtime as unavailable unless the installed runtime matches the checkout. QA must not point the app at `~/.skill-bill`. See `desktop/QA.md`.
+QA launches with `cd desktop && ./gradlew :app:runFromSource`. It builds the same-checkout runtime, prepares matching build identities and uses a scratch home under `desktop/app/build/source-run/`. Keep QA state in the scratch paths documented in `desktop/QA.md`; never point QA at the operator's installed runtime.
 
 ## Comments
 

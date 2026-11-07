@@ -202,6 +202,7 @@ data class GoalRunnerStopReport(
   val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
   val failureCode: String? = null,
   val recoveryCommand: String? = null,
+  val failurePhaseId: String? = null,
 )
 
 enum class GoalPullRequestStatus(val wireValue: String) {

@@ -87,6 +87,7 @@ internal class ProcessAgentRunAdapter(
         "spawnFailed=${result.spawnFailed}, processStarted=${result.processStarted}."
     }
     val normalizedStdout = decoded.text
+    val stdoutTruncated = result.stdoutTruncated || (result.outputCaptureIncomplete && normalizedStdout.isBlank())
     val decodedBodyBytes =
       if (normalizedStdout == result.stdout) {
         result.stdoutBytes
@@ -107,9 +108,9 @@ internal class ProcessAgentRunAdapter(
       liveness = result.liveness,
       processStarted = result.processStarted,
       mcpStartupObserved = result.mcpStartupObserved,
-      stdoutTruncated = result.stdoutTruncated,
-      stdoutByteSize = if (result.stdoutTruncated) result.stdoutByteSize else decodedBodyBytes.size.toLong(),
-      stdoutSha256 = if (result.stdoutTruncated) result.stdoutSha256 else launcherSha256Hex(decodedBodyBytes),
+      stdoutTruncated = stdoutTruncated,
+      stdoutByteSize = if (stdoutTruncated) result.stdoutByteSize else decodedBodyBytes.size.toLong(),
+      stdoutSha256 = if (stdoutTruncated) result.stdoutSha256 else launcherSha256Hex(decodedBodyBytes),
       childSessionPath = command.workingDirectory.toString(),
       childSessionId = childSessionId(agent, request, command.workingDirectory),
       assistantEventCount = decoded.assistantEventCount,

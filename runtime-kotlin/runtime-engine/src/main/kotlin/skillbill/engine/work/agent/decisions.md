@@ -1,3 +1,8 @@
+## [2026-11-07] Show a Cursor grok launch on the activity model list
+Context: Activity keeps a phase model only when the id belongs to the attempt's agent. Claude matches `claude*`, Codex matches `gpt*`, and every other agent was dropped. A Cursor audit attempt records `grok-4.7-high-fast`, and the execution matrix records `cursor-grok-*`.
+Decision: A Cursor attempt keeps a model that starts with `grok` or `cursor-`. A `gpt*` or `claude*` id on that attempt stays hidden.
+Reason: Those prefixes are the Cursor model ids the runtime stores. A Codex or Claude id on a Cursor attempt is a borrowed model, which the activity list already refuses for the other agents.
+
 ## [2026-11-06] Derive standalone plan settlement from phase records
 Context: Planning seeds subtask spec files before units finish. Goal planning also requires a details hash for its progress calculation.
 Decision: Standalone detail treats a completed unit with a nonblank output artifact as saved and filters seeded spec paths by those units. Goal planning retains its settlement rule.

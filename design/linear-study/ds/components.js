@@ -87,6 +87,28 @@
     keyboard: '<path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/>',
     layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
     shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+    image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+    message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+    chevronsUpDown: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+    phone: '<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>',
+    emulator: '<path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/>',
+    devices: '<rect width="10" height="14" x="3" y="8" rx="2"/><path d="M5 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-2.4"/><path d="M8 18h.01"/>',
+    wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
+    minus: '<path d="M5 12h14"/>',
+    gap: '<circle cx="12" cy="12" r="8" stroke-dasharray="3 3.2"/>',
+    /* QA results glyphs, drawn as design/qa-results draws them: an open finding, something left behind, a report or run
+     * details row, and the check, file, image, copy and open marks on its rows and chips. */
+    qaBug: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16h.01"/>',
+    qaLeft: '<path d="M12 4l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
+    qaDoc: '<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+    qaCheck: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    qaFile: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+    qaImage: '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M20 16l-5-5-8 8"/>',
+    qaCopy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+    qaOpen: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+    star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+    flag: '<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>',
   };
   function Icon(name, size) {
     track('Icon');
@@ -160,7 +182,7 @@
     track('Button');
     const v = o.variant || 'secondary';
     const cls = cx('sb-btn', v !== 'secondary' && 'sb-btn--' + v, o.size === 'sm' && 'sb-btn--sm');
-    return `<button type="button" class="${cls}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${tipAttrs(o.tip, o.tipKbd)}${o.id ? ` id="${esc(o.id)}"` : ''}>${o.icon ? Icon(o.icon) : ''}${o.label ? `<span>${esc(o.label)}</span>` : ''}${o.kbd ? Kbd(o.kbd) : ''}</button>`;
+    return `<button type="button" class="${cls}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${tipAttrs(o.tip, o.tipKbd)}${o.id ? ` id="${esc(o.id)}"` : ''}>${o.icon ? Icon(o.icon) : ''}${o.label ? `<span>${esc(o.label)}</span>` : ''}${o.count != null ? `<span class="sb-btn-n">${esc(o.count)}</span>` : ''}${o.kbd ? Kbd(o.kbd) : ''}</button>`;
   }
   function IconButton(o) {
     track('IconButton');
@@ -192,7 +214,7 @@
   }
   function Avatar(o) {
     track('Avatar');
-    return `<span class="${cx('sb-avatar', o.size === 'sm' && 'sb-avatar--sm')}" style="--c:${o.color}"${tipAttrs(o.tip || o.name)}>${esc(o.initials || (o.name || '?').slice(0, 1).toUpperCase())}</span>`;
+    return `<span class="${cx('sb-avatar', o.size === 'sm' && 'sb-avatar--sm', o.solid && 'sb-avatar--solid')}" style="--c:${o.color}"${tipAttrs(o.tip || o.name)}>${esc(o.initials || (o.name || '?').slice(0, 1).toUpperCase())}</span>`;
   }
 
   /* ---------- Progress ---------- */
@@ -215,7 +237,7 @@
   /* ---------- Segmented, ViewTabs ---------- */
   function Segmented(o) {
     track('Segmented');
-    return `<div class="sb-seg" role="tablist">${o.items.map((it) => `<button type="button" role="tab" class="${it.id === o.value ? 'on' : ''}"${act(o.act, it.id)}${it.disabled ? ' disabled' : ''}${tipAttrs(it.tip)}>${it.icon ? Icon(it.icon, 'sm') : ''}${esc(it.label)}</button>`).join('')}</div>`;
+    return `<div class="sb-seg" role="tablist">${o.items.map((it) => `<button type="button" role="tab" aria-selected="${it.id === o.value}" class="${it.id === o.value ? 'on' : ''}"${act(o.act, it.arg == null ? it.id : it.arg)}${it.disabled ? ' disabled' : ''}${tipAttrs(it.tip)}>${it.icon ? Icon(it.icon, 'sm') : ''}${esc(it.label)}</button>`).join('')}</div>`;
   }
   function ViewTabs(o) {
     track('ViewTabs');
@@ -227,9 +249,11 @@
     track('Toggle');
     return `<button type="button" role="switch" aria-checked="${!!o.on}" class="${cx('sb-toggle', o.on && 'on')}"${act(o.act, o.arg)}${o.label ? ` aria-label="${esc(o.label)}"` : ''}></button>`;
   }
+  /* `mixed` (part of a group selected) shows a dash; `disabled` (a marked criterion) draws a dashed box, with a faint dash
+   * when `marked`. */
   function Checkbox(o) {
     track('Checkbox');
-    return `<button type="button" role="checkbox" aria-checked="${!!o.on}" class="${cx('sb-check', o.on && 'on')}"${act(o.act, o.arg)}${o.label ? ` aria-label="${esc(o.label)}"` : ''}>${o.on ? Icon('check') : ''}</button>`;
+    return `<button type="button" role="checkbox" aria-checked="${o.mixed ? 'mixed' : !!o.on}" class="${cx('sb-check', (o.on || o.mixed) && 'on', o.disabled && 'is-off')}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${o.label ? ` aria-label="${esc(o.label)}"` : ''}${o.tip ? ` data-tip="${esc(o.tip)}"` : ''}>${o.mixed || o.marked ? Icon('minus') : o.on ? Icon('check') : ''}</button>`;
   }
 
   /* ---------- Input, Field ---------- */
@@ -265,7 +289,10 @@
   /* ---------- Menu ---------- */
   function MenuItem(o) {
     track('MenuItem');
-    return `<button type="button" class="${cx('sb-menu-item', o.hl && 'hl', o.danger && 'is-danger')}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${o.idx != null ? ` data-idx="${o.idx}"` : ''}>${o.lead || (o.icon ? Icon(o.icon) : '')}<span class="trunc">${o.html || esc(o.label)}</span>${o.end || o.kbd || o.checked ? `<span class="end">${o.end || ''}${o.checked ? Icon('check', 'sm') : ''}${o.kbd ? Kbd(o.kbd) : ''}</span>` : ''}</button>`;
+    /* `sub` is a second line under the label: why the item is off, or the path an item acts on. `key` is the letter that
+     * runs it while the menu has focus (main.js menuKeys). */
+    const label = o.sub ? `<span class="sb-menu-tx"><span class="trunc">${o.html || esc(o.label)}</span><small>${esc(o.sub)}</small></span>` : `<span class="trunc">${o.html || esc(o.label)}</span>`;
+    return `<button type="button" class="${cx('sb-menu-item', o.hl && 'hl', o.danger && 'is-danger', o.sub && 'has-sub')}"${act(o.act, o.arg)}${o.disabled ? ' disabled' : ''}${o.idx != null ? ` data-idx="${o.idx}"` : ''}${o.key ? ` data-key="${esc(o.key)}"` : ''}>${o.lead || (o.icon ? Icon(o.icon) : '')}${label}${o.end || o.kbd || o.checked ? `<span class="end">${o.end || ''}${o.checked ? Icon('check', 'sm') : ''}${o.kbd ? Kbd(o.kbd) : ''}</span>` : ''}</button>`;
   }
   function Menu(o) {
     track('Menu');
@@ -278,7 +305,8 @@
   }
   function Popover(o) {
     track('Popover');
-    return `<div class="sb-layer" data-act="layer-close"></div><div class="sb-pop" role="menu" style="left:${o.x}px;top:${o.y}px${o.width ? `;width:${o.width}px` : ''}" data-pop>${o.body}</div>`;
+    /* `flush` drops the 4px padding and the 340px cap for panels that lay out their own content (repository picker, queue). */
+    return `<div class="sb-layer" data-act="layer-close"></div><div class="${cx('sb-pop', o.flush && 'sb-pop--flush', o.cls)}" role="${o.role || 'menu'}" style="left:${o.x}px;top:${o.y}px${o.width ? `;width:${o.width}px` : ''}" data-pop>${o.body}</div>`;
   }
 
   /* ---------- Command palette ---------- */
@@ -331,7 +359,8 @@
   function Callout(o) {
     track('Callout');
     const [c, ic] = TONES[o.tone || 'info'];
-    return `<div class="sb-callout" style="--c:${c}">${Icon(o.icon || ic)}<div class="sb-callout-tx">${o.title ? `<div class="sb-callout-ti">${esc(o.title)}</div>` : ''}${o.body ? `<div class="sb-callout-bd">${o.body}</div>` : ''}${o.actions ? `<div class="sb-callout-ac">${join(o.actions)}</div>` : ''}</div></div>`;
+    /* `tinted` sets the title in the tone color (a blocked plan run's "Subtask 4 needs your decision"). */
+    return `<div class="sb-callout" style="--c:${c}">${Icon(o.icon || ic)}<div class="sb-callout-tx">${o.title ? `<div class="${cx('sb-callout-ti', o.tinted && 'is-tinted')}">${esc(o.title)}</div>` : ''}${o.body ? `<div class="sb-callout-bd">${o.body}</div>` : ''}${o.actions ? `<div class="sb-callout-ac">${join(o.actions)}</div>` : ''}</div></div>`;
   }
   function Hint(o) {
     track('Hint');
@@ -362,7 +391,25 @@
   }
   function Sidebar(o) {
     track('Sidebar');
-    return `<nav class="sb-side" aria-label="Main">${o.top}${join(o.items)}<div class="sb-side-foot">${join(o.footer)}</div></nav>`;
+    return `<nav class="sb-side" aria-label="Main">${o.top}<div class="sb-side-items" data-scroll="sidebar">${join(o.items)}</div><div class="sb-side-foot">${join(o.footer)}</div></nav>`;
+  }
+
+  function UsageWindow(o) {
+    track('UsageWindow');
+    const known = Number.isFinite(o.remaining);
+    const tone = !known || o.stale ? 'muted' : o.remaining === 0 ? 'empty' : o.remaining <= 15 ? 'low' : 'normal';
+    return `<span class="sb-usage-window is-${tone}"><span class="sb-usage-line"><span>${esc(o.label)}</span><b>${known ? esc(o.remaining) + '% left' : esc(o.loading ? 'Checking' : 'Unavailable')}</b></span><span class="sb-usage-track"${known ? ` role="meter" aria-label="${esc(o.label + (o.stale ? ', last known remaining allowance' : ', remaining allowance'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${o.remaining}"` : ' aria-hidden="true"'}>${known ? `<i style="width:${Math.min(100, Math.max(0, o.remaining))}%"></i>` : ''}</span>${o.reset ? `<span class="sb-usage-reset">${esc(o.reset)}</span>` : ''}</span>`;
+  }
+
+  function UsageCard(o) {
+    track('UsageCard');
+    return `<button type="button" id="${esc(o.id || 'usage-card')}" class="sb-usage-card"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}" aria-label="${esc(o.provider + ' usage limits, ' + o.status + (o.context ? ', following ' + o.context.toLowerCase() : '') + '. View details')}"><span class="sb-usage-heading"><span>Usage limits</span>${o.context ? `<span class="sb-usage-context">${esc(o.context)}</span>` : ''}${Icon('chevronRight', 'xs')}</span><span class="sb-usage-provider"><b>${esc(o.provider)}</b><span class="${o.tone ? 'is-' + esc(o.tone) : ''}">${esc(o.status)}</span></span>${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}<span class="sb-usage-note">${esc(o.note)}</span></button>`;
+  }
+
+  function UsagePanel(o) {
+    track('UsagePanel');
+    const id = esc(o.id || 'usage');
+    return `<section class="sb-usage-panel" aria-labelledby="${id}-title"><div class="sb-usage-panel-head"><b id="${id}-title">Usage limits</b>${IconButton({ icon: 'x', label: 'Close usage details', act: 'usage-close', id: id + '-close', size: 'sm' })}</div><div class="sb-usage-tabs" role="group" aria-label="Provider">${o.providers.map((p) => `<button type="button" id="${id}-provider-${esc(p)}"${act('usage-provider', p)} aria-pressed="${o.provider === p}"${o.context && o.provider !== p ? ' disabled' : ''} class="${o.provider === p ? 'on' : ''}">${esc(p)}</button>`).join('')}</div><div class="sb-usage-panel-body">${o.context ? `<p class="sb-usage-following">Following ${esc(o.context.toLowerCase())}</p>` : ''}<div class="sb-usage-account"><b>${esc(o.provider)}</b><span>${esc(o.account)}</span></div>${o.message ? `<p class="sb-usage-message" role="status">${esc(o.message)}</p>` : ''}${join(o.windows.map((w) => UsageWindow(Object.assign({}, w, { stale: o.stale, loading: o.loading }))))}</div><div class="sb-usage-panel-foot"><span>${esc(o.note)}</span>${Button({ icon: 'refresh', label: 'Refresh', act: 'usage-refresh', size: 'sm', variant: 'ghost', disabled: o.loading })}</div><div class="sb-usage-sample">Sample data for design review</div></section>`;
   }
   function WorkspaceSwitcher(o) {
     track('WorkspaceSwitcher');
@@ -403,15 +450,17 @@
     track('DocHeader');
     return `<div class="sb-doc-hd">${o.eyebrow ? `<div class="l-row g-2 l-wrap">${join(o.eyebrow)}</div>` : ''}<h1 class="sb-doc-ti">${esc(o.title)}</h1>${o.sub ? `<div class="sb-doc-sub">${o.sub}</div>` : ''}${o.actions ? `<div class="l-row g-2 l-wrap">${join(o.actions)}</div>` : ''}</div>`;
   }
-  /* With `toggle` (an action) the title, count and a faint chevron form one button that collapses the body; the end slot stays. */
+  /* With `toggle` (an action) the title, count and a faint chevron form one button that collapses the body; the end slot stays.
+   * `peek` shows under the header while collapsed instead of nothing (a plan run's Briefing teaser). */
   function Section(o) {
     track('Section');
     const id = o.id ? ` id="${esc(o.id)}"` : '';
-    const head = `<span>${esc(o.title)}</span>${o.count != null ? `<span class="n">${o.count}</span>` : ''}`;
+    /* `badge` (HTML) follows the title, before the chevron: the QA verdict. `cls` scopes a section's own metrics. */
+    const head = `<span>${esc(o.title)}</span>${o.count != null ? `<span class="n">${o.count}</span>` : ''}${o.badge || ''}`;
     const title = o.toggle
       ? `<button type="button" class="sb-sec-tg" aria-expanded="${!o.collapsed}"${act(o.toggle, o.arg)}>${head}${Icon(o.collapsed ? 'chevronRight' : 'chevronDown')}</button>`
       : head;
-    return `<section class="sb-sec"${id}><div class="sb-sec-hd">${o.lead || ''}${title}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>${o.collapsed ? '' : o.body}</section>`;
+    return `<section class="${cx('sb-sec', o.cls)}"${id}><div class="sb-sec-hd">${o.lead || ''}${title}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>${o.collapsed ? (o.peek || '') : o.body}</section>`;
   }
   function Box(children) { track('Box'); return `<div class="sb-box">${join(children)}</div>`; }
   function MetricStrip(items) {
@@ -468,10 +517,16 @@
   }
 
   /* ---------- Spec tree ---------- */
+  /* `toggle` ({ act, arg, label }) makes the caret its own button that expands the row while a click on the row selects it.
+   * `trail` ends the row: a count that gives way to hover-only buttons (`.hover-only`) on hover and on the selected row.
+   * `ctx` opens a menu on right-click; `path` names the row for keyboard moves. */
   function TreeRow(o) {
     track('TreeRow');
-    const caret = o.expandable ? `<span class="caret">${Icon('chevronRight')}</span>` : '<span class="caret"></span>';
-    return `<div class="${cx('sb-tree-row', o.open && 'open', o.focus && 'focus', o.file && 'is-file', o.muted && 'is-muted')}" style="--lvl:${o.level || 0}"${act(o.act, o.arg)} data-row="${o.rowIdx}">${caret}${o.lead}${o.id ? IdTag(o.id) : ''}<b>${esc(o.title)}</b>${join(o.meta)}</div>`;
+    const caret = o.toggle
+      ? `<button type="button" class="caret"${act(o.toggle.act, o.toggle.arg)} aria-label="${esc(o.toggle.label)}" tabindex="-1">${Icon('chevronRight')}</button>`
+      : `<span class="caret">${o.expandable ? Icon('chevronRight') : ''}</span>`;
+    const tree = o.path != null ? ` role="treeitem" aria-selected="${!!o.focus}"${o.expandable || o.toggle ? ` aria-expanded="${!!o.open}"` : ''} data-path="${esc(o.path)}"` : '';
+    return `<div class="${cx('sb-tree-row', o.open && 'open', o.focus && 'focus', o.file && 'is-file', o.muted && 'is-muted', o.child && 'is-child')}" style="--lvl:${o.level || 0}"${act(o.act, o.arg)} data-row="${o.rowIdx}"${o.ctx ? ` data-ctx="${esc(o.ctx)}"` : ''}${tree}>${caret}${o.lead}${o.id ? IdTag(o.id) : ''}<b${o.tip ? ` title="${esc(o.tip)}"` : ''}>${esc(o.title)}</b>${join(o.meta)}${o.trail != null ? `<span class="trail">${o.trail}</span>` : ''}</div>`;
   }
 
   /* ---------- Settings ---------- */
@@ -521,10 +576,10 @@
   }
 
   /* ---------- Reason block: long runtime text with copy ---------- */
-  /* An ExpandableText under a label and Copy reason. `act`/`arg` toggle `open`. */
+  /* An ExpandableText under a label and Copy reason (`copyLabel` renames it: Copy intake). `act`/`arg` toggle `open`. */
   function ReasonBlock(o) {
     track('ReasonBlock');
-    return `<div class="sb-reason" style="--c:${o.color || 'var(--fg-faint)'}"><div class="sb-reason-hd"><span>${esc(o.label)}</span>${IconButton({ icon: 'copy', label: 'Copy reason', act: 'copy', arg: o.text, size: 'sm' })}</div>${ExpandableText({ text: o.text, cls: 'sb-reason-tx', open: o.open, act: o.act, arg: o.arg })}</div>`;
+    return `<div class="sb-reason" style="--c:${o.color || 'var(--fg-faint)'}"><div class="sb-reason-hd"><span>${esc(o.label)}</span>${IconButton({ icon: 'copy', label: o.copyLabel || 'Copy reason', act: 'copy', arg: o.text, size: 'sm' })}</div>${ExpandableText({ text: o.text, cls: 'sb-reason-tx', open: o.open, act: o.act, arg: o.arg })}</div>`;
   }
 
   /* ---------- Checklist: prerequisites the operator confirms ---------- */
@@ -533,11 +588,16 @@
     return `<div class="sb-checklist">${o.items.map((it) => `<div class="sb-checklist-row">${Checkbox({ on: it.checked, act: o.act, arg: it.id, label: it.text })}<span>${esc(it.text)}</span></div>`).join('')}</div>`;
   }
 
-  /* ---------- Finding row: review, QA and assessment findings ---------- */
+  /* ---------- Finding row: review and assessment findings ---------- */
   const SEVERITY = { Blocker: 'var(--st-failed)', Major: 'var(--st-blocked)', Minor: 'var(--fg-faint)', High: 'var(--st-failed)', Medium: 'var(--st-blocked)', Low: 'var(--fg-faint)' };
+  /* "Same code as F-001, #3 · File.kt:87": two fixable items point at one file and line, so one agent should get both. */
+  const overlap = (html) => (html ? `<span class="sb-overlap">${Icon('link', 'xs')}${html}</span>` : '');
+  /* `sevColor` colors a severity word the map does not know (a test verdict, PASS). With fix selection, `lead` holds the
+   * checkbox, `end` the Chat or Goal switch, `hint` the shared-code line and `chips` the file chips under the meta. */
   function FindingRow(o) {
     track('FindingRow');
-    return `<div class="${cx('sb-finding', o.compact && 'sb-finding--compact')}">${o.severity ? `<span class="sb-finding-sev" style="--c:${SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.refHtml || (o.ref ? IdTag(o.ref) : '')}<div class="sb-finding-tx">${ExpandableText({ text: o.title, cls: 'sb-finding-ti' })}${o.meta ? (o.compact ? `<span>${o.meta}</span>` : ExpandableText({ html: o.meta, cls: 'sb-finding-mt' })) : ''}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}</div>`;
+    const chips = (o.chips || []).filter(Boolean);
+    return `<div class="${cx('sb-finding', o.compact && 'sb-finding--compact', o.lead != null && 'has-lead')}">${o.lead != null ? `<span class="sb-finding-sel">${o.lead}</span>` : ''}${o.severity ? `<span class="sb-finding-sev" style="--c:${o.sevColor || SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.refHtml || (o.ref ? IdTag(o.ref) : '')}<div class="sb-finding-tx">${ExpandableText({ text: o.title, cls: 'sb-finding-ti' })}${o.meta ? (o.compact ? `<span>${o.meta}</span>` : ExpandableText({ html: o.meta, cls: 'sb-finding-mt' })) : ''}${chips.length ? `<div class="sb-qchips">${chips.join('')}</div>` : ''}${overlap(o.hint)}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}${o.end ? `<span class="sb-finding-end">${o.end}</span>` : ''}</div>`;
   }
 
   /* ---------- Activity feed: one line per recorded event, oldest first, icons joined by a connector ---------- */
@@ -568,10 +628,11 @@
     const shown = String(o.ref).startsWith(o.kind + ':') ? String(o.ref).slice(o.kind.length + 1) : o.ref;
     return `<div class="sb-evi">${ShortId({ value: o.ref, shown, label: 'reference' })}${ExpandableText({ text: o.summary, cls: 'sb-evi-tx' })}<span class="sb-evi-kind">${esc(o.kind)}</span></div>`;
   }
-  /* The faint caption as a toggle: "Evidence · N" and a chevron. */
+  /* The faint caption as a toggle: "Evidence · N" and a chevron. Also Non-goals, Technical constraints and Rollout under a
+   * Verify run's criteria; without `count` it reads the label alone. */
   function EvidenceToggle(o) {
     track('EvidenceToggle');
-    return `<button type="button" class="sb-disc" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${esc(o.label)} · ${o.count}${Icon(o.open ? 'chevronDown' : 'chevronRight')}</button>`;
+    return `<button type="button" class="sb-disc" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${esc(o.label)}${o.count != null ? ` · ${o.count}` : ''}${Icon(o.open ? 'chevronDown' : 'chevronRight')}</button>`;
   }
 
   /* ---------- Terminal pane ---------- */
@@ -590,15 +651,738 @@
     return `<div class="sb-tray"><div class="sb-tray-hd">${BrandMark(18)}<span>Skill Bill</span></div><div class="sb-tray-stats">${o.stats.map((x) => `<div><b style="color:${x.color || 'var(--fg)'}">${esc(x.value)}</b><span>${esc(x.label)}</span></div>`).join('')}</div><div class="sb-tray-tabs">${o.tabs}</div><div class="sb-tray-body">${join(o.rows)}</div><div class="sb-tray-ft">${join(o.footer)}</div></div>`;
   }
 
+  /* ---------- New task: open chats, transcript, composer, home, pickers ---------- */
+  /* A chat's state in a 14px slot: 'replying' spins, 'unread' is an amber dot (a reply arrived while the tab was not shown). */
+  function ChatStatusMark(status) {
+    track('ChatStatusMark');
+    if (status === 'replying') return `<span class="sb-cmark" role="img" aria-label="Replying"><span class="spin"></span></span>`;
+    if (status === 'unread') return `<span class="sb-cmark" role="img" aria-label="New reply"><span class="dot"></span></span>`;
+    return '<span class="sb-cmark"></span>';
+  }
+  /* The open chats as tabs: { tabs: [{ id, label, status, on, tip }], count }. The strip is the top of the New task screen, so
+   * it leads with the sidebar toggle while the sidebar is a drawer. Tabs round on top and the selected one joins the panel.
+   * Right-click, Shift+F10 or the menu key on a tab opens Close and Discard. "+" follows the last tab. The count button at the
+   * far right shows only while tabs are clipped (main.js fitChatTabs) and carries a mark when a clipped tab is replying or has a
+   * new reply. */
+  function ChatTabs(o) {
+    track('ChatTabs');
+    const tabs = o.tabs.map((t) => `<div class="${cx('sb-ctab', t.on && 'on', t.status === 'unread' && 'unread')}" role="tab" tabindex="0" aria-selected="${!!t.on}" aria-haspopup="menu" data-act="chat-select" data-arg="${esc(t.id)}" data-tab="${esc(t.id)}" data-ctx="chat:${esc(t.id)}" data-status="${esc(t.status || '')}"${tipAttrs(t.tip || t.label)}>${ChatStatusMark(t.status)}<span class="label">${esc(t.label)}</span>${IconButton({ icon: 'x', label: `Close ${t.label}`, kbd: '⌘ W', act: 'chat-close', arg: t.id, size: 'sm' })}</div>`).join('');
+    return `<div class="sb-ctabs" role="tablist" aria-label="Open chats">${IconButton({ icon: 'panelLeft', label: 'Toggle sidebar', kbd: '[', act: 'toggle-side', cls: 'sb-side-toggle' })}<div class="sb-ctabs-scroll" data-ctabs>${tabs}</div>${IconButton({ icon: 'plus', label: 'New chat', kbd: '⌘ T', act: 'chat-new', size: 'sm' })}<button type="button" class="sb-ctabs-more" data-act="chat-menu" data-ctabs-more hidden aria-label="All ${o.count} open chats" data-tip="All open chats">${ChatStatusMark(null)}${o.count}${Icon('chevronDown', 'sm')}</button></div>`;
+  }
+  /* A suggested next step: an action the agent offered (the first is `primary`), or a quick start under an empty composer.
+   * `note` trails the label in faint text ("QA my branch on Pixel 8 Pro" once a QA device is picked). */
+  function SuggestionChip(o) {
+    track('SuggestionChip');
+    return `<button type="button" class="${cx('sb-suggest', o.primary && 'is-primary')}"${act(o.act, o.arg)}>${o.icon ? Icon(o.icon, 'sm') : ''}${esc(o.label)}${o.note ? ` <span class="note">${esc(o.note)}</span>` : ''}</button>`;
+  }
+  /* One transcript entry. role 'operator' is a right-aligned bubble, 'agent' reads under the agent's Avatar and name with its
+   * suggested actions, 'notice' is a centered faint line ("Stopped."). `streaming` adds a caret; main.js writes the growing text
+   * into [data-stream] without a re-render. */
+  function ChatMessage(o) {
+    track('ChatMessage');
+    if (o.role === 'notice') return `<div class="sb-msg-notice">${esc(o.text)}</div>`;
+    if (o.role === 'operator') return `<div class="sb-msg sb-msg--you"><span class="sb-msg-tx">${o.images ? `<span class="sb-msg-att">${o.images}</span>` : ''}${esc(o.text)}</span></div>`;
+    const text = o.streaming ? `<span data-stream="${esc(o.streamId)}">${esc(o.text)}</span><span class="sb-caret"></span>` : esc(o.text);
+    return `<div class="sb-msg"><span class="sb-msg-who">${o.avatar || ''}${esc(o.agent)}</span><span class="sb-msg-tx">${text}</span>${o.actions && o.actions.length ? `<div class="sb-suggests">${join(o.actions)}</div>` : ''}</div>`;
+  }
+  /* The selected chat's messages in a 728px column that starts at the bottom and stays pinned there while replies stream. */
+  function ChatTranscript(o) {
+    track('ChatTranscript');
+    return `<div class="sb-chat-tr" data-scroll="${esc(o.scroll)}" data-pin><div class="sb-chat-col">${join(o.messages)}</div></div>`;
+  }
+  /* A rounded composer pill. With `act` it is a button that opens a popup (`expanded`); without, plain text. Mono by default
+   * for repository, branch and model; `sans` for counts ("3 messages queued"). `need` marks a choice still to make. */
+  function ChatPill(o) {
+    track('ChatPill');
+    const inner = `${o.lead || (o.icon ? Icon(o.icon, 'xs') : '')}<span class="tx">${o.html != null ? o.html : esc(o.text)}</span>${o.chevron ? `<span class="chev">${Icon(o.chevron, 'xs')}</span>` : ''}`;
+    const cls = cx('sb-cpill', o.sans && 'sb-cpill--sans', o.need && 'is-need');
+    if (!o.act) return `<span class="${cls}"${o.tip ? ` title="${esc(o.tip)}"` : ''}>${inner}</span>`;
+    return `<button type="button" class="${cls}"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}"${o.id ? ` id="${esc(o.id)}"` : ''}${o.disabled ? ' disabled' : ''}${tipAttrs(o.tip)}>${inner}</button>`;
+  }
+  /* The input dock under the chat: optional quick starts (with an optional faint `hint` line under them), the textarea, the
+   * queue slot, then pills on the left and Stop and Send on the right. Enter sends, Shift+Enter starts a new line (main.js). */
+  function Composer(o) {
+    track('Composer');
+    return `<div class="sb-dock"><div class="sb-composer">${o.chips && o.chips.length ? `<div class="sb-suggests">${join(o.chips)}</div>${o.hint ? `<span class="sb-suggests-hint">${esc(o.hint)}</span>` : ''}` : ''}<textarea class="sb-composer-in" id="${esc(o.id)}" data-input="composer" data-chat="${esc(o.chatId)}" aria-label="${esc(o.label)}" placeholder="${esc(o.placeholder)}" spellcheck="false">${esc(o.value || '')}</textarea>${o.queue || ''}<div class="sb-composer-ft">${join(o.pills)}<span class="l-grow"></span>${join(o.actions)}</div></div></div>`;
+  }
+  /* The seven steps a goal run takes, with a sweep along the line. */
+  function StepLine(steps) {
+    track('StepLine');
+    return `<div class="sb-steps" style="--n:${steps.length}" aria-label="Steps: ${esc(steps.join(', '))}"><span class="sb-steps-sweep"></span>${steps.map((s) => `<div class="sb-steps-st"><i></i><span>${esc(s)}</span></div>`).join('')}</div>`;
+  }
+  /* The empty chat's home: a 720px column centered in the space above the composer. */
+  function NewTaskHome(o) {
+    track('NewTaskHome');
+    return `<div class="sb-home" data-scroll="${esc(o.scroll || 'nt-home')}"><div class="sb-home-col">${join(o.children)}</div></div>`;
+  }
+  /* A home list (Recent chats, Needs you). Five 34px rows show, then it scrolls and the edge with more rows fades
+   * (main.js fitInbox). With focus, ↑/↓ select, Enter opens and Del discards a saved chat. */
+  function InboxList(o) {
+    track('InboxList');
+    return `<div class="sb-inbox" id="${esc(o.id)}" role="listbox" tabindex="0" aria-label="${esc(o.label)}" data-inbox data-zone="${esc(o.id)}">${join(o.rows)}</div>`;
+  }
+  /* One home row: a saved chat (chat or image glyph, title, screenshot name, open and repository badges, age; × discards a
+   * chat that is not open) or a blocked run (`need`: orange edge, key, reason, step). */
+  function InboxRow(o) {
+    track('InboxRow');
+    const discard = o.discard ? IconButton({ icon: 'x', label: o.discard.label, act: o.discard.act, arg: o.discard.arg, size: 'sm' }) : '';
+    return `<div class="${cx('sb-inbox-row', o.need && 'is-need', o.selected && 'sel')}" role="option" aria-selected="${!!o.selected}"${act(o.act, o.arg)}>
+      <span class="${cx('ic', o.tone && 'is-' + o.tone)}">${Icon(o.icon || 'message', 'sm')}</span>${o.key ? `<span class="key">${esc(o.key)}</span>` : ''}
+      <span class="ti"><b>${esc(o.title)}</b>${o.sub ? `<span class="${o.subMono ? 'mono' : ''}">${esc(o.sub)}</span>` : ''}</span>${join(o.badges)}
+      <span class="${cx('end', discard && 'can-x')}"><span class="t tnum">${esc(o.time || '')}</span>${discard}</span></div>`;
+  }
+  /* A search field flush with the top of a popup or palette. `pick` names the list its arrow keys move; `end` is a scope pill. */
+  function FilterBar(o) {
+    track('FilterBar');
+    return `<div class="${cx('sb-fbar', o.large && 'sb-fbar--lg')}">${Icon('search', 'sm')}<input class="sb-fbar-in" id="${esc(o.id)}" value="${esc(o.value || '')}" placeholder="${esc(o.placeholder)}" aria-label="${esc(o.label || o.placeholder)}"${o.input ? ` data-input="${esc(o.input)}"` : ''}${o.pick ? ` data-pick="${esc(o.pick)}"` : ''} autocomplete="off" spellcheck="false">${o.end || ''}</div>`;
+  }
+  /* The repository and base branch popup over the composer: two columns, each { title, filter (FilterBar), id, pick, rows
+   * (MenuItems), focusable (a list without a filter takes focus itself), message { title, body }, loading, problem, foot }. */
+  function pickerColumn(c) {
+    const body = c.loading
+      ? [62, 78, 54, 70].map((w) => `<div class="sb-tpick-skel"><i style="width:${w}%"></i></div>`).join('')
+      : c.message ? `<div class="sb-tpick-msg"><b>${esc(c.message.title)}</b>${esc(c.message.body)}</div>` : join(c.rows);
+    return `<div class="sb-tpick-col"><div class="sb-tpick-hd">${esc(c.title)}</div>${c.filter || ''}<div class="sb-tpick-list" id="${esc(c.id)}" role="listbox" aria-label="${esc(c.label || c.title)}"${c.focusable ? ` tabindex="0" data-zone="${esc(c.id)}" data-pick="${esc(c.pick)}"` : ''}${c.loading ? ' aria-busy="true"' : ''}>${body}</div>${c.problem ? `<div class="sb-tpick-problem">${c.problem}</div>` : ''}${c.foot ? `<div class="sb-tpick-foot">${c.foot}</div>` : ''}</div>`;
+  }
+  function TargetPicker(o) {
+    track('TargetPicker');
+    return `<section class="sb-tpick" aria-label="Repository and base branch">${pickerColumn(o.repo)}${pickerColumn(o.branch)}</section>`;
+  }
+  /* One queued message: its place in the send order (the first is Next), two lines of text, tags, and × to remove it. */
+  function QueuedRow(o) {
+    track('QueuedRow');
+    const tags = [o.next ? Label({ text: 'Next', color: 'var(--accent)', tint: true, dot: false }) : '', o.images ? Label({ text: `${o.images} ${o.images === 1 ? 'image' : 'images'}`, icon: 'image', dot: false }) : '', o.action ? Label({ text: 'Action', icon: 'zap', dot: false }) : ''].filter(Boolean);
+    return `<div class="${cx('sb-qrow', o.next && 'is-next', o.kb && 'kb')}" role="option" aria-selected="${!!o.kb}" data-qi="${o.index}"><span class="sb-qrow-n">${o.index + 1}</span><span class="sb-qrow-bd"><span class="tx">${esc(o.text)}</span>${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}</span>${IconButton({ icon: 'x', label: `Remove queued message ${o.index + 1}`, kbd: 'Del', act: o.act, arg: o.arg, size: 'sm' })}</div>`;
+  }
+  /* The queue behind the "N messages queued" pill, in send order. Clear all asks once more ("Remove all 3?"); a removal keeps
+   * Undo for 5 seconds. */
+  function QueuePanel(o) {
+    track('QueuePanel');
+    const clear = o.count > 1 ? Button({ label: o.clearArmed ? `Remove all ${o.count}?` : 'Clear all', variant: o.clearArmed ? 'danger' : 'ghost', size: 'sm', act: 'q-clear' }) : '';
+    return `<div class="sb-queue" aria-label="Queued messages"><div class="sb-queue-hd"><b>Queued</b><span class="n">${o.count}</span><span class="l-grow"></span>${clear}</div>
+      <div class="sb-queue-list" id="queue-list" role="listbox" tabindex="-1" aria-label="Queued messages" data-zone="queue">${join(o.rows)}</div>
+      ${o.undo ? `<div class="sb-queue-undo" role="status"><span>${esc(o.undo)}</span><span class="l-grow"></span>${Button({ label: 'Undo', variant: 'ghost', size: 'sm', act: 'q-undo', kbd: '⌘ Z' })}</div>` : ''}
+      <div class="sb-queue-ft"><span>Sends in order when the current reply ends</span><span class="l-grow"></span>${Kbd('↑ ↓ Del')}</div></div>`;
+  }
+  /* One saved chat in the resume palette: title with screenshot and CLI glyphs and the filter match in amber, age, then branch
+   * and agent. Click selects it, a double click resumes it. */
+  function ResumeRow(o) {
+    track('ResumeRow');
+    return `<div class="${cx('sb-rrow', o.active && 'active')}" id="resume-${o.index}" role="option" aria-selected="${!!o.active}" data-act="resume-pick" data-arg="${o.index}"${o.tip ? ` title="${esc(o.tip)}"` : ''}>
+      <div class="sb-rrow-ti">${o.cli ? Icon('terminal', 'xs') : ''}${o.images ? Icon('image', 'xs') : ''}<b>${o.titleHtml}</b>${o.images > 1 ? `<span class="more">+${o.images - 1}</span>` : ''}<span class="when tnum">${esc(o.when)}</span></div>
+      <div class="sb-rrow-sub">${o.branch ? `<span class="mono">${o.branchHtml || esc(o.branch)}</span><span>·</span>` : ''}<i class="sb-dot" style="--c:${o.agentColor}"></i><span>${o.agentHtml || esc(o.agent)}</span></div></div>`;
+  }
+  /* /resume: a centered palette. Filter bar with the scope (the composer's repository) across the top, saved chats grouped by
+   * day on the left, the selected chat's latest messages on the right, keys and the count in the footer. */
+  function ResumePalette(o) {
+    track('ResumePalette');
+    const list = o.empty
+      ? `<div class="sb-resume-note"><b>${esc(o.empty.title)}</b><span>${esc(o.empty.body)}</span></div>`
+      : o.groups.map((g) => `<div class="sb-resume-group" role="presentation">${esc(g.label)}</div>${join(g.rows)}`).join('') + (o.more ? `<div class="sb-resume-more">${o.more}</div>` : '');
+    const p = o.preview;
+    const lines = !p ? '' : p.cli
+      ? `<div class="sb-resume-cli">${Icon('terminal', 'sm')}<span>${esc(`This session lives in the ${p.cli} CLI. Its messages load when you resume it.`)}</span></div>`
+      : p.lines.map((l) => `<div class="${cx('sb-resume-line', l.you && 'you')}"><span class="who">${esc(l.who)}</span>${(l.images || []).map((f) => ChatPill({ icon: 'image', text: f })).join('')}${l.text ? `<p>${esc(l.text)}</p>` : ''}</div>`).join('');
+    const preview = p
+      ? `<div class="sb-resume-pv-hd"><h2>${esc(p.title)}</h2>${PropertyList(p.facts)}</div><div class="sb-resume-pv-lines" data-scroll="resume-pv">${lines}</div>`
+      : `<div class="sb-resume-note"><span>Pick a chat to see its latest messages.</span></div>`;
+    return `<div class="sb-modal-layer" data-act="resume-close-self"><div class="sb-resume" role="dialog" aria-modal="true" aria-label="Resume a chat">
+      ${o.filter}
+      <div class="sb-resume-body"><div class="sb-resume-list" id="resume-list" role="listbox" aria-label="Saved chats" data-scroll="resume">${list}</div>
+        <div class="sb-resume-pv">${preview}<div class="sb-resume-pv-ft">${Button({ label: 'Cancel', size: 'sm', act: 'resume-close' })}${Button({ label: 'Resume', variant: 'primary', size: 'sm', act: 'resume-open', disabled: !p })}</div></div></div>
+      <div class="sb-resume-ft">${Kbd('↑ ↓')}<span>move</span>${Kbd('↵')}<span>resume</span>${Kbd('esc')}<span>close</span><span class="l-grow"></span><span class="tnum">${esc(o.count)}</span></div>
+    </div></div>`;
+  }
+
+  /* ---------- QA results: what the operator reads first in a QA report ---------- */
+  const QA_TONE = { failed: 'var(--st-failed)', blocked: 'var(--st-blocked)', done: 'var(--st-done)', faint: 'var(--fg-muted)' };
+  /* The verdict in the QA section's end slot: an 8px dot and the word in the tone color. */
+  function QaVerdict(o) {
+    track('QaVerdict');
+    return `<span class="sb-qav" style="--c:${QA_TONE[o.tone] || QA_TONE.faint}"><i></i>${esc(o.word)}</span>`;
+  }
+  /* A 24px chip under a QA row: an evidence file (`mono`, the file name with the full path in the tooltip), Copy steps,
+   * Copy pid, Copy for qa.md, Open qa.md or Open report.md. */
+  function QaChip(o) {
+    track('QaChip');
+    const inner = `${Icon(o.icon || 'copy', 'xs')}<span>${esc(o.label)}</span>`;
+    /* Without `act` the chip only names a file (a Verify run's QA evidence: its directory is not stored, so nothing opens). */
+    if (!o.act) return `<span class="${cx('sb-qchip', o.mono && 'is-file', 'is-static')}"${o.tip ? tipAttrs(o.tip) : ''}>${inner}</span>`;
+    return `<button type="button" class="${cx('sb-qchip', o.mono && 'is-file')}"${act(o.act, o.arg)}${o.tip ? tipAttrs(o.tip) : ''}>${inner}</button>`;
+  }
+  /* One row in a QA group: an open finding, something left behind, an untested area or an Unblock entry. The head has a 14px
+   * glyph in the tone color, the ref (QA-1) in mono, the title, the state word and a summary `line` (HTML the caller
+   * escaped). With `act` the head is a button that opens the body (`fields` [label, html] then `chips`) and the summary
+   * folds to two lines while closed. Without `act` the row is static and its body always shows. */
+  /* Fix selection (a Verify run's criteria and QA findings) adds a column on each side: `lead` (the checkbox) and `end` (the
+   * Chat or Goal switch); `hint` is the shared-code line under the summary and `extra` (HTML) closes the body (marks). */
+  function QaItem(o) {
+    track('QaItem');
+    const btn = !!o.act;
+    const head = `${Icon(o.glyph || 'alert', 'sm')}<span class="ti">${o.ref ? `<span class="ref">${esc(o.ref)}</span>` : ''}${esc(o.title)}</span><span class="st">${o.state ? `<span>${esc(o.state)}</span>` : ''}${btn ? Icon('chevronRight', 'xs') : ''}</span>${o.line ? `<span class="ln">${o.line}</span>` : ''}${o.hint ? `<span class="ln">${overlap(o.hint)}</span>` : ''}`;
+    const fields = (o.fields || []).filter((f) => f[1]).map(([label, html]) => `<div class="sb-qitem-fd"><span>${esc(label)}</span><div>${html}</div></div>`).join('');
+    const chips = (o.chips || []).filter(Boolean);
+    const body = (!btn || o.open) && (fields || chips.length || o.extra) ? `<div class="sb-qitem-bd">${fields}${chips.length ? `<div class="sb-qchips">${chips.join('')}</div>` : ''}${o.extra || ''}</div>` : '';
+    const sel = o.lead != null || o.end != null;
+    return `<div class="${cx('sb-qitem', btn && 'is-btn', sel && 'sb-qitem--sel')}" style="--c:${QA_TONE[o.tone] || QA_TONE.faint}"${o.id ? ` id="${esc(o.id)}"` : ''}>${sel ? `<div class="sb-qitem-lead">${o.lead || ''}</div>` : ''}${btn ? `<button type="button" class="sb-qitem-hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${head}</button>` : `<div class="sb-qitem-hd">${head}</div>`}${sel ? `<div class="sb-qitem-end">${o.end || ''}</div>` : ''}${body}</div>`;
+  }
+  /* A folded row in the box under the groups: Fixed by QA, Passed, Run details, Full report. Closed it shows the label and a
+   * one-line preview; open, the preview hides and `rows` ({ title, html, chips }) or `body` show under a rule. `before`
+   * (HTML) sits above the head while closed: the first paragraph of a report that has no tagged checks. */
+  /* Also a validation report's parts (Checks run, Risk): `count` ("3 items") sits before the chevron and `flag` marks a part
+   * the report flags to read with an orange edge and glyph. `id` lets the flag strip scroll to it. */
+  function QaFold(o) {
+    track('QaFold');
+    const rows = o.rows ? `<div class="sb-qfold-rows">${o.rows.map((r) => `<div class="sb-qfold-row"><b>${esc(r.title)}</b>${r.html || ''}${r.chips && r.chips.length ? `<div class="sb-qchips">${join(r.chips)}</div>` : ''}</div>`).join('')}</div>` : `<div class="sb-qfold-bd">${o.body || ''}${(o.chips || []).length ? `<div class="sb-qchips">${join(o.chips)}</div>` : ''}</div>`;
+    return `<div class="${cx('sb-qfold', o.flag && 'is-flag', o.count && 'has-cnt')}" style="--c:${o.flag ? QA_TONE.blocked : QA_TONE[o.tone] || 'var(--fg-faint)'}"${o.id ? ` id="${esc(o.id)}"` : ''}>${!o.open && o.before ? `<div class="sb-qfold-pre">${o.before}</div>` : ''}<button type="button" class="sb-qfold-hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${Icon(o.icon || (o.flag ? 'warn' : 'qaCheck'), 'sm')}<b>${esc(o.label)}</b><span class="pv">${o.open ? '' : esc(o.preview || '')}</span>${o.count ? `<span class="cnt">${esc(o.count)}</span>` : ''}${Icon('chevronRight', 'sm')}</button>${o.open ? rows : ''}</div>`;
+  }
+  /* The QA results block, read top down: the sentence, the groups that need the reader (Needs you, Left behind, Not tested,
+   * Unblock), each a labelled Box of QaItems with an optional `head` (Select all in a Verify run) and `foot`, then one Box of
+   * QaFolds and the faint targets line. */
+  function QaResults(o) {
+    track('QaResults');
+    const groups = (o.groups || []).filter((g) => g.items.length).map((g) => `<div class="sb-qgrp"><h3>${esc(g.label)}<span class="n">${g.items.length}</span></h3><div class="sb-box">${g.head ? `<div class="sb-qgrp-hd">${g.head}</div>` : ''}${join(g.items)}${g.foot ? `<div class="sb-qgrp-ft">${g.foot}</div>` : ''}</div></div>`).join('');
+    const folds = (o.folds || []).filter(Boolean);
+    /* targets: [kind, word] pairs, the kind in fg-muted ("Desktop" incomplete, capability missing), split by dots. */
+    const targets = (o.targets || []).map(([kind, word]) => `<span><b>${esc(kind)}</b> ${esc(word)}</span>`).join('<span>·</span>');
+    return `<div class="sb-qa"><p class="sb-qa-st">${esc(o.sentence)}</p>${groups}${folds.length ? `<div class="sb-box sb-qfolds">${folds.join('')}</div>` : ''}${targets ? `<div class="sb-qa-tg">${targets}</div>` : ''}</div>`;
+  }
+  /* An agent report as text: headings, paragraphs, bullet and numbered lists (an item indented two or more spaces nests
+   * under the one before; an indented plain line continues it), fenced blocks, `code` and **bold**. A path under a home or
+   * temp directory shows as its file name, with the full path in the tooltip. Each plain line is its own paragraph. */
+  function ReportText(text) {
+    track('ReportText');
+    const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(?:\/home\/|\/Users\/|\/tmp\/|~\/)[^\s`"'<>(),;&]*/g, (m) => {
+      const p = m.replace(/[.:!?]+$/, '');
+      return `<span class="file" title="${p}">${p.replace(/\/+$/, '').split('/').pop()}</span>${m.slice(p.length)}`;
+    });
+    const out = [];
+    let list = null, fence = null;
+    const flush = () => { if (list) { out.push(`<${list.tag}>${list.items.map((i) => `<li>${inline(i.text)}${i.sub.length ? `<ul>${i.sub.map((x) => `<li>${inline(x)}</li>`).join('')}</ul>` : ''}</li>`).join('')}</${list.tag}>`); list = null; } };
+    String(text || '').split('\n').forEach((raw) => {
+      if (fence) { if (/^\s*```/.test(raw)) { out.push(`<pre>${esc(fence.join('\n'))}</pre>`); fence = null; } else fence.push(raw); return; }
+      const line = raw.trim();
+      if (line.startsWith('```')) { flush(); fence = []; return; }
+      if (!line) return flush();
+      if (/^#+\s/.test(line)) { flush(); out.push(`<h4>${inline(line.replace(/^#+\s*/, ''))}</h4>`); return; }
+      const m = raw.match(/^(\s*)(\d+[.)]|[-*])\s+(.*)$/);
+      if (m) {
+        if (m[1].length >= 2 && list) { list.items[list.items.length - 1].sub.push(m[3]); return; }
+        const tag = /\d/.test(m[2]) ? 'ol' : 'ul';
+        if (list && list.tag !== tag) flush();
+        list = list || { tag, items: [] };
+        list.items.push({ text: m[3], sub: [] });
+        return;
+      }
+      if (list && /^\s/.test(raw)) { const last = list.items[list.items.length - 1]; if (last.sub.length) last.sub[last.sub.length - 1] += ' ' + line; else last.text += ' ' + line; return; }
+      flush(); out.push(`<p>${inline(line)}</p>`);
+    });
+    if (fence) out.push(`<pre>${esc(fence.join('\n'))}</pre>`);
+    flush();
+    return `<div class="sb-report">${out.join('')}</div>`;
+  }
+
+  /* ---------- Run outcome: the card a validation or Verify run opens with, and the parts under it ---------- */
+  const RUN_TONE = { done: 'var(--st-done)', active: 'var(--st-active)', blocked: 'var(--st-blocked)', failed: 'var(--st-failed)', neutral: 'var(--fg-2)', faint: 'var(--fg-faint)', accent: 'var(--accent-text)' };
+  /* A bar split into segments. `segs` [{ n, tone }] grow by n (a Verify score: green fine, amber needs a look, red blocking,
+   * in that order); `equal` draws one 5px segment per check instead, where a running check breathes and a skipped one is
+   * hatched. With no segment it draws the empty track, so bars in a row stay aligned. Tones: done, blocked, failed, active,
+   * skipped, pending, faint. */
+  function SegmentBar(o) {
+    track('SegmentBar');
+    const segs = (o.segs || []).filter((x) => x.n > 0);
+    return `<div class="${cx('sb-segbar', o.equal && 'is-equal', !segs.length && 'is-empty')}" role="img" aria-label="${esc(o.label || (segs.length ? 'Score breakdown' : 'No score recorded'))}">${segs.map((x) => `<i class="is-${esc(x.tone)}" style="flex:${x.n}"></i>`).join('')}</div>`;
+  }
+  /* Counts after colored dots: "6 passed · 1 running · 1 pending", then an optional plain `note` ("2 failed attempts fixed"). */
+  function CheckTally(o) {
+    track('CheckTally');
+    return `<div class="sb-tally">${o.items.map((x) => `<span style="--c:${x.color}"><i></i>${x.n} ${esc(x.word)}</span>`).join('')}${o.note ? `<span>${esc(o.note)}</span>` : ''}</div>`;
+  }
+  /* The card under a validation or Verify run's header. A 3px edge and a 32px round glyph in the tone (`live` pulses it), a
+   * faint `label` line (HTML: "<b>Finished</b> · agent's summary below"), then either `verdict` (16px/600 in the tone: the
+   * Verify verdict or step) or `head` (15px: the agent's first sentence), `text`, the running check's `cmd` ({ dir, cmd,
+   * clock }), the agent `signal` line and `extra` (a CheckTally and SegmentBar). `when` ({ value, note }) sits top right.
+   * `cells` ({ key, value, sub, bar, act, arg, tip }) form the strip under it; with `act` a cell is a button that jumps to
+   * its evidence. */
+  function RunOutcome(o) {
+    track('RunOutcome');
+    const cells = (o.cells || []).length ? `<div class="sb-out-cells">${o.cells.map((x) => {
+      const inner = `<span class="k">${esc(x.key)}</span><b class="v">${x.value}</b>${x.sub != null ? `<span class="s">${x.sub}</span>` : ''}${x.bar ? SegmentBar(x.bar) : ''}`;
+      return x.act ? `<button type="button" class="sb-out-cell is-btn"${act(x.act, x.arg)}${tipAttrs(x.tip)}>${inner}</button>` : `<div class="sb-out-cell">${inner}</div>`;
+    }).join('')}</div>` : '';
+    const cmd = o.cmd ? `<div class="sb-out-cmd">${o.cmd.dir && o.cmd.dir !== '.' ? `<span>${esc(o.cmd.dir)}</span>` : ''}<code>${esc(o.cmd.cmd)}</code>${o.cmd.clock || ''}</div>` : '';
+    return `<section class="sb-out" style="--c:${RUN_TONE[o.tone] || RUN_TONE.faint}" aria-label="${esc(o.aria || 'Outcome')}">
+      <div class="sb-out-top"><span class="${cx('sb-out-ic', o.live && 'is-live')}">${Icon(o.icon || 'info')}</span>
+        <div class="sb-out-main">${o.label ? `<div class="sb-out-lb">${o.label}</div>` : ''}${o.verdict ? `<div class="${cx('sb-out-verdict', o.plain && 'is-plain')}">${esc(o.verdict)}</div>` : ''}${o.head ? `<p class="sb-out-hd">${o.head}</p>` : ''}${o.text ? `<p class="sb-out-tx">${o.text}</p>` : ''}${cmd}${o.signal ? `<div class="sb-out-sig"><i></i><span>${esc(o.signal)}</span></div>` : ''}${join(o.extra)}${o.note ? `<p class="sb-out-note">${Icon('info', 'xs')}<span>${esc(o.note)}</span></p>` : ''}</div>
+        ${o.when ? `<div class="sb-out-when"><b class="tnum">${o.when.value}</b>${esc(o.when.note || '')}</div>` : ''}</div>${cells}</section>`;
+  }
+  /* One check a validation agent reported: a 13px glyph in the state color (a spinner while it runs, a ring while it
+   * waits), the name, the working directory and command in faint mono, the reason inline for a blocked or skipped check,
+   * then "attempt N" after a retry, the total time, the state word and, when it has more than one attempt or a note, a
+   * chevron. Open, it lists every attempt: number, time, outcome, exit code, duration and the agent's note. */
+  const CHECK = { passed: ['Passed', 'check', 'var(--st-done)'], failed: ['Failed', 'x', 'var(--st-failed)'], blocked: ['Blocked', 'warn', 'var(--st-blocked)'], skipped: ['Skipped', 'minus', 'var(--fg-faint)'], running: ['Running', null, 'var(--st-active)'], pending: ['Pending', null, 'var(--fg-faint)'] };
+  function CheckRow(o) {
+    track('CheckRow');
+    const [word, icon, color] = CHECK[o.state] || CHECK.pending;
+    const glyph = o.state === 'running' ? '<span class="spin" role="img" aria-label="Running"></span>' : icon ? `<span class="ic" style="--c:${color}">${Icon(icon)}</span>` : '<span class="ring" role="img" aria-label="Pending"></span>';
+    const side = `<span class="sb-chk-side">${o.attempt ? `<span class="att">attempt ${o.attempt}</span>` : ''}<span>${o.time || ''}</span><span class="w">${word}</span>${o.act ? Icon('chevronRight', 'xs') : '<span class="sp"></span>'}</span>`;
+    const head = `<span class="gl">${glyph}</span><span class="bd"><span class="nm">${esc(o.name)}</span><span class="cmd">${o.dir && o.dir !== '.' ? `<span class="dir">${esc(o.dir)}</span> ` : ''}${esc(o.cmd)}</span>${o.reason ? `<span class="why">${o.reason}</span>` : ''}</span>${side}`;
+    const atts = o.act && o.open ? `<div class="sb-chk-atts">${o.attempts.map((x) => `<div class="sb-chk-att"><span class="no">#${x.n}</span><span>${esc(x.at)}</span><span style="color:${(CHECK[x.outcome] || CHECK.pending)[2]}">${(CHECK[x.outcome] || CHECK.pending)[0]}</span><span>${x.exit == null ? '' : 'exit ' + x.exit}</span><span>${x.time || ''}</span>${x.note ? `<span class="note">${x.note}</span>` : ''}</div>`).join('')}</div>` : '';
+    return `<div class="${cx('sb-chk', 'is-' + o.state)}" style="--c:${color}">${o.act ? `<button type="button" class="sb-chk-hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${head}</button>` : `<div class="sb-chk-hd">${head}</div>`}${atts}</div>`;
+  }
+  /* A Verify run's steps on a rail. Each step: an 18px node (done, warn, bad, skip, stop, wait, run, pend), its number and
+   * name, "attempt N" and a chevron when it has a receipt, then a summary line of { text, tone, mono } parts. A step with
+   * `act` opens its receipt (`body`) in a raised card. */
+  const NODE_GLYPH = { done: 'check', warn: 'warn', bad: 'x', skip: 'minus', stop: 'pause', wait: 'alert', cut: 'x' };
+  function StepTimeline(o) {
+    track('StepTimeline');
+    return `<ol class="sb-vsteps">${o.steps.map((x) => {
+      const btn = !!x.act;
+      const sum = (x.sum || []).filter(Boolean).map((p) => `<span class="${cx(p.tone && 'is-' + p.tone, p.mono && 'mono')}">${esc(p.text)}</span>`).join('');
+      const head = `<span class="nm"><span class="ix">${x.index}</span>${esc(x.name)}</span><span class="sd">${x.attempt ? `attempt ${x.attempt}` : ''}${btn ? Icon('chevronRight', 'xs') : ''}</span>${sum ? `<span class="sm">${sum}</span>` : ''}`;
+      return `<li class="${cx('sb-vstep', 'is-' + x.node, x.open && 'open')}"${x.id ? ` id="${esc(x.id)}"` : ''}><span class="rail"><span class="node">${NODE_GLYPH[x.node] ? Icon(NODE_GLYPH[x.node]) : ''}</span></span><div class="card">${btn ? `<button type="button" class="hd" aria-expanded="${!!x.open}"${act(x.act, x.arg)}>${head}</button>` : `<div class="hd">${head}</div>`}${x.open && x.body ? `<div class="bd">${x.body}</div>` : ''}</div></li>`;
+    }).join('')}</ol>`;
+  }
+  /* What a Verify run's change does, above its outcome card: a faint label (and `note`), then the text. `oneLine` keeps an
+   * unfinished run's intent (its first criterion) to one line with the full text in the tooltip; `foot` follows. */
+  function WorkSummary(o) {
+    track('WorkSummary');
+    return `<section class="sb-wsum" aria-label="${esc(o.label)}"><div class="sb-wsum-lb">${esc(o.label)}${o.note ? `<span>· ${esc(o.note)}</span>` : ''}</div><p class="${cx('sb-wsum-tx', o.oneLine && 'is-one')}"${o.oneLine && o.tip ? ` title="${esc(o.tip)}"` : ''}>${o.html}</p>${o.foot ? `<div class="sb-wsum-ft">${esc(o.foot)}</div>` : ''}</section>`;
+  }
+  /* "Select all N" as the first row of a selectable list: one checkbox for the whole group, mixed while part is selected.
+   * `boxed` pads it as the first row inside a Box; `rule` draws a hairline under it (a receipt's findings and tests); `note`
+   * trails it ("Keep rows are left out"). */
+  function SelectAll(o) {
+    track('SelectAll');
+    const on = o.state === 'on', mixed = o.state === 'mixed';
+    return `<div class="${cx('sb-selall', o.boxed && 'is-boxed', o.rule && 'is-rule')}"><button type="button" class="sb-selall-btn" role="checkbox" aria-checked="${mixed ? 'mixed' : on}"${act(o.act, o.arg)}><span class="${cx('sb-check', (on || mixed) && 'on')}">${mixed ? Icon('minus') : on ? Icon('check') : ''}</span>Select all<span class="n">${o.count}</span></button>${o.note ? `<span class="note">${esc(o.note)}</span>` : ''}</div>`;
+  }
+  /* The bar that sticks to the bottom of the document while items are selected for fixing: "N selected", their labels, the
+   * shared-file note, then the actions (Fix N in chat, Start goal with N, Clear). */
+  function SelectionBar(o) {
+    track('SelectionBar');
+    return `<div class="sb-selbar" role="region" aria-label="${esc(o.label || 'Selected')}"><div class="sb-selbar-tx"><b>${esc(o.title)}</b>${o.sub ? `<span class="sub">${esc(o.sub)}</span>` : ''}${o.note ? `<span class="note">${Icon('link', 'xs')}<span>${o.note}</span></span>` : ''}</div><div class="sb-selbar-ac">${join(o.actions)}</div></div>`;
+  }
+
+  /* ---------- Validation run document (design/validation-run) ---------- */
+  /* The column a validation run renders in. It takes the Verify column's metrics (VerifyDoc: header rhythm, 12px buttons,
+   * bordered boxes, the outcome card at a 1.45 line height) and sets the outcome card to the validation design: label 2px
+   * above the head, text 6px under it at 1.55, the signal 8px, the tally 6px and the check bar 12px below. The flag
+   * strip sits 12px under the card; each section 24px under the last. */
+  function ValidationDoc(children) { track('ValidationDoc'); return `<div class="sb-vdoc sb-valdoc">${join(children)}</div>`; }
+  /* The strip under a validation card when the report flags parts to read: a warning glyph, "The report flags N things
+   * to read" and one button per flagged part (`jumps`: { label, act, arg }) that opens the part and scrolls to it. */
+  function FlagStrip(o) {
+    track('FlagStrip');
+    return `<div class="sb-flagged" role="note">${Icon('warn', 'sm')}<div class="mn"><b>${esc(o.title)}</b><div class="jumps">${o.jumps.map((j) => `<button type="button" class="jump"${act(j.act, j.arg)}>${esc(j.label)}</button>`).join('')}</div></div></div>`;
+  }
+  /* A 16px tag in the tone's color on a 14% tint: "reported by the agent" beside the Checks title. Tones as Badge. */
+  function Tag(o) { track('Tag'); return `<span class="sb-tag" style="--c:${VTONE[o.tone] || o.color || VTONE.faint}">${esc(o.text)}</span>`; }
+  /* Text that acts like a link: 11.5px in the accent, underlined on hover. Expand all and Collapse all on a report. */
+  function LinkButton(o) { track('LinkButton'); return `<button type="button" class="sb-linkbtn"${act(o.act, o.arg)}>${esc(o.label)}</button>`; }
+  /* One faint line inside a Box that holds a section's place: "Waiting for the agent to list its checks." */
+  function BoxNote(o) { track('BoxNote'); return `<div class="sb-boxnote">${esc(o.text)}</div>`; }
+  /* The text of a report part: consecutive lines join into a paragraph, numbered and bullet lists (an item indented two or
+   * more spaces nests under the one before; an indented plain line continues it), `code` and **bold**. */
+  function partText(text) {
+    const inline = (x) => esc(x).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    let html = '', para = [], list = null;
+    const flushPara = () => { if (para.length) { html += `<p>${inline(para.join(' '))}</p>`; para = []; } };
+    const flushList = () => { if (list) { html += `<${list.tag}>${list.items.map((i) => `<li>${inline(i.text)}${i.sub.length ? `<ul>${i.sub.map((x) => `<li>${inline(x)}</li>`).join('')}</ul>` : ''}</li>`).join('')}</${list.tag}>`; list = null; } };
+    String(text || '').split('\n').forEach((raw) => {
+      const m = raw.match(/^(\s*)(\d+\.|[-*])\s+(.*)$/);
+      if (!raw.trim()) return flushPara();
+      if (m) {
+        flushPara();
+        if (m[1].length >= 2 && list) { list.items[list.items.length - 1].sub.push(m[3]); return; }
+        const tag = /\d/.test(m[2]) ? 'ol' : 'ul';
+        if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
+        list.items.push({ text: m[3], sub: [] });
+      } else if (list && /^\s+/.test(raw)) {
+        const last = list.items[list.items.length - 1];
+        if (last.sub.length) last.sub[last.sub.length - 1] += ' ' + raw.trim(); else last.text += ' ' + raw.trim();
+      } else { flushList(); para.push(raw.trim()); }
+    });
+    flushPara(); flushList();
+    return html;
+  }
+  /* One part of a validation report, a row in a Box: a chevron, the part's title (`html`), a one-line `preview` and the
+   * item `count`. `flag` draws a 2px orange edge on a part the report flags. Open, the preview hides and `text` shows
+   * as paragraphs and lists. `id` lets the flag strip scroll to it. */
+  function ReportPart(o) {
+    track('ReportPart');
+    return `<div class="${cx('sb-vpart', o.flag && 'is-flag')}"${o.id ? ` id="${esc(o.id)}"` : ''}><button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${Icon('chevronRight', 'xs')}<span class="lb">${o.html != null ? o.html : esc(o.title)}</span><span class="pv">${esc(o.preview || '')}</span><span class="cnt">${esc(o.count || '')}</span></button>${o.open ? `<div class="bd">${partText(o.text)}</div>` : ''}</div>`;
+  }
+  /* One validation run on the same branch, a row in a Box: an 8px dot in the state color, the run number, its line ("this
+   * run" after the current one, which sits on the selected tint), then the agent, start, active time and the state word.
+   * With `act` the row opens that run. */
+  function BranchRun(o) {
+    track('BranchRun');
+    const inner = `<span class="dot" style="--c:${o.color}"></span><span class="seq">#${esc(o.seq)}</span><span class="ln">${esc(o.line)}${o.current ? '<span class="here">this run</span>' : ''}</span><span class="sd"><span>${esc(o.agent)}</span><span>${esc(o.started)}</span><span>${esc(o.time)}</span><span class="st" style="color:${o.color}">${esc(o.word)}</span></span>`;
+    return `<button type="button" class="${cx('sb-vrun', o.current && 'is-cur')}"${o.current ? ' aria-current="true"' : ''}${act(o.act, o.arg)}>${inner}</button>`;
+  }
+
+  /* ---------- Verify run document (design/verify-run) ---------- */
+  /* The column a Verify run renders in. It keeps the mock's rhythm (header lines 8, 6 and 12px apart, the summary and the
+   * outcome card 20px below, each section 24px below the last) instead of the document's 28px gap, and sets the shared parts
+   * it holds (Button, Checkbox, Box, Segmented, RunOutcome) to the mock's metrics. */
+  function VerifyDoc(children) { track('VerifyDoc'); return `<div class="sb-vdoc">${join(children)}</div>`; }
+  const VTONE = { done: 'var(--st-done)', failed: 'var(--st-failed)', blocked: 'var(--st-blocked)', active: 'var(--st-active)', accent: 'var(--accent-text)', neutral: 'var(--fg-2)', faint: 'var(--fg-faint)' };
+  /* The head of a Verify run: the status pill (a dot in the state's color), the issue key in mono and the Verify pill; the
+   * 20px title; one line of facts, each a 12px glyph and its text (`mono` for the repository, branch and range, `link` in
+   * the accent for an issue URL, `act` makes the text a button); the run controls; then `after` (the superseded Banner,
+   * the Intake Fold). A validation run adds `pills` ({ word, tone }: the fresh pill) after the kind and sets the title as
+   * `html` ("Validation on" and the branch in code). */
+  function VerifyHeader(o) {
+    track('VerifyHeader');
+    const meta = (o.meta || []).filter(Boolean).map((m) => {
+      const text = `<span class="${cx(m.mono && 'mono')}">${esc(m.text)}</span>`;
+      const inner = m.act ? `<button type="button" class="${cx('mi', m.link && 'is-link')}"${act(m.act, m.arg)}${tipAttrs(m.tip)}>${text}</button>` : text;
+      return `<span class="it"${!m.act && m.tip ? ` title="${esc(m.tip)}"` : ''}>${Icon(m.icon, 'xs')}${inner}</span>`;
+    }).join('');
+    return `<header class="sb-vhd"><div class="chips"><span class="sb-vpill" style="--c:${VTONE[o.status.tone] || VTONE.faint}"><i></i><span>${esc(o.status.word)}</span></span><span class="key">${esc(o.key)}</span><span class="sb-vpill">${esc(o.kind || 'Verify')}</span>${(o.pills || []).filter(Boolean).map((x) => `<span class="sb-vpill"${x.tone ? ` style="--c:${VTONE[x.tone] || VTONE.faint}"` : ''}>${x.tone ? '<i></i>' : ''}<span>${esc(x.word)}</span></span>`).join('')}</div><h1 class="ti">${o.html != null ? o.html : esc(o.title)}</h1><div class="meta">${meta}</div>${o.actions ? `<div class="ac">${join(o.actions)}</div>` : ''}${join(o.after)}</header>`;
+  }
+  /* A tinted line: a 14px glyph, the bold `title` and the `body` as one paragraph, `actions` on the right. A superseded
+   * Verify run says a newer run replaced it. */
+  function Banner(o) {
+    track('Banner');
+    return `<div class="sb-banner">${Icon(o.icon || 'info', 'sm')}<div class="tx">${o.title ? `<b>${esc(o.title)}</b> ` : ''}${esc(o.body || '')}</div>${o.actions ? join(o.actions) : ''}</div>`;
+  }
+  /* A quiet disclosure: a chevron, the 12px label and a faint `count` or `note`. `strong` sets the label in fg 500 (Activity).
+   * Open, it shows `items` (HTML) as a list or `body` (`inset` indents it under the label). Folds that follow each other
+   * close up. Intake, Non-goals, Technical
+   * constraints, Rollout and Activity in a Verify run. */
+  function Fold(o) {
+    track('Fold');
+    const body = !o.open ? '' : o.items ? `<ul>${o.items.map((x) => `<li>${x}</li>`).join('')}</ul>` : `<div class="${cx('bd', o.inset && 'is-inset')}">${o.body || ''}</div>`;
+    return `<div class="sb-vfold"${o.id ? ` id="${esc(o.id)}"` : ''}><button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${Icon('chevronRight', 'xs')}<span class="${cx('lb', o.strong && 'is-strong')}">${esc(o.label)}</span>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.note ? `<span class="n">${esc(o.note)}</span>` : ''}</button>${body}</div>`;
+  }
+  /* Text as the agent or the operator wrote it, on an inset with a 2px rule: the free-text intake, or what criteria
+   * extraction returned when it found no numbered criteria. Keeps line breaks. */
+  function Quote(o) { track('Quote'); return `<p class="sb-quote">${o.html != null ? o.html : esc(o.text)}</p>`; }
+  /* A section of a Verify run: the 13px title, a faint count, an `end` slot (the criteria filter), an optional `sub` line,
+   * then the body. It never collapses. Without `title` it only spaces its body (Activity). */
+  function VerifySection(o) {
+    track('VerifySection');
+    const hd = o.title ? `<div class="hd"><h2>${esc(o.title)}</h2>${o.count != null ? `<span class="n">${esc(o.count)}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>` : '';
+    return `<section class="sb-vsec"${o.id ? ` id="${esc(o.id)}"` : ''}>${hd}${o.sub ? `<p class="sub">${esc(o.sub)}</p>` : ''}${join(o.body)}</section>`;
+  }
+  /* An 18px tag in mono capitals on a 14% tint of its tone: a criterion grade (Met, Partial, Missing, To confirm, Not
+   * audited, a mark), a finding's severity, a test verdict, a plan line. Tones: done, blocked, failed, accent, faint. */
+  function Badge(o) { track('Badge'); return `<span class="sb-badge" style="--c:${VTONE[o.tone] || VTONE.faint}">${esc(o.text)}</span>`; }
+  /* One acceptance criterion: its number, the text (two lines while closed), the Badge and a chevron; open, `body`. With
+   * `select` it gains a checkbox column (`lead`) and a 104px column for the Chat or Goal switch (`end`); `hint` is the
+   * shared-code line under the text. `empty` draws one muted line instead ("Nothing in this filter."). */
+  function CriterionRow(o) {
+    track('CriterionRow');
+    if (o.empty) return `<div class="sb-crit"><div class="hd is-empty"><span></span><span class="t-muted">${esc(o.empty)}</span></div></div>`;
+    const head = `<button type="button" class="hd" aria-expanded="${!!o.open}"${act(o.act, o.arg)}><span class="num">${esc(o.n)}</span><span class="ti">${o.html}</span><span class="sd">${Badge(o.badge)}${Icon('chevronRight', 'xs')}</span>${overlap(o.hint)}</button>`;
+    return `<div class="${cx('sb-crit', o.select && 'is-sel')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${o.select ? `<div class="lead">${o.lead || ''}</div>` : ''}${head}${o.select ? `<div class="end">${o.end || ''}</div>` : ''}${o.open ? `<div class="bd">${o.body || ''}</div>` : ''}</div>`;
+  }
+  /* A faint 11.5px label over its text (`html`) or its FileChips (`chips`): Evidence, What's missing, Not found, Expected,
+   * Steps. */
+  function FieldText(o) { track('FieldText'); return `<div class="sb-ftx"><div class="lb">${esc(o.label)}</div>${o.chips ? FileChips(o.chips) : o.html}</div>`; }
+  /* The line under a gap criterion that takes it out of fixes: "Not a code gap here?" with Not in this repo and Spec
+   * question, or what the mark means and Clear mark. */
+  function MarkRow(o) { track('MarkRow'); return `<div class="sb-marks"><span>${esc(o.text)}</span>${join(o.actions)}</div>`; }
+  /* A 22px chip naming a file in mono: criterion evidence, a finding's file, a test's files, QA evidence (with `icon`). With
+   * `act` it is a button. */
+  function FileChip(o) {
+    track('FileChip');
+    const inner = `${o.icon ? Icon(o.icon, 'xs') : ''}${esc(o.label)}`;
+    return o.act ? `<button type="button" class="sb-fchip"${act(o.act, o.arg)}${tipAttrs(o.tip)}>${inner}</button>` : `<span class="sb-fchip is-static"${o.tip ? ` title="${esc(o.tip)}"` : ''}>${inner}</span>`;
+  }
+  /* FileChips in a wrapping row, 4px apart. */
+  function FileChips(chips) { track('FileChips'); return `<div class="sb-fchips">${join(chips)}</div>`; }
+  /* "Chat" or "Goal" for one selected item: how its fix runs. 18px buttons in an inset. */
+  function RouteSwitch(o) {
+    track('RouteSwitch');
+    return `<span class="sb-route" role="group" aria-label="Fix with">${o.items.map((it) => `<button type="button" aria-pressed="${it.id === o.value}"${act(o.act, it.id)}${tipAttrs(it.tip)}>${esc(it.label)}</button>`).join('')}</span>`;
+  }
+  /* A review finding in the Code review receipt: the severity Badge; the ref, the file chip, the specialist and confidence
+   * in faint mono with the Chat or Goal switch (`end`) at the right; the description in two lines that opens in place on a
+   * click. Selection adds the checkbox (`lead`) and the shared-code `hint`. */
+  function ReceiptFinding(o) {
+    track('ReceiptFinding');
+    const sel = o.lead != null;
+    return `<div class="${cx('sb-rfind', sel && 'is-sel')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${sel ? `<span class="cb">${o.lead}</span>` : ''}${Badge(o.badge)}<div class="loc"><span class="ref">${esc(o.ref)}</span>${o.chip || ''}${(o.meta || []).filter(Boolean).map((m) => `<span>${esc(m)}</span>`).join('')}${o.end ? `<span class="end">${o.end}</span>` : ''}</div><button type="button" class="${cx('desc', o.open && 'is-open')}" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${o.html}</button>${overlap(o.hint)}</div>`;
+  }
+  /* One row of the unit test value table: the verdict Badge in a 74px column; the area, its first two file chips (and "+N")
+   * and the Chat or Goal switch; why, then "→" and the action. Selection adds the checkbox column (empty for Keep rows). */
+  function TestValueRow(o) {
+    track('TestValueRow');
+    const sel = o.lead != null, files = (o.files || []).filter(Boolean);
+    return `<div class="${cx('sb-tval', sel && 'is-sel')}">${sel ? `<span class="cb">${o.lead}</span>` : ''}<span>${Badge(o.badge)}</span><div class="wl"><span class="what">${esc(o.area)}</span><span class="fl">${files.slice(0, 2).join('')}${files.length > 2 ? `<span class="more">+${files.length - 2}</span>` : ''}</span>${o.end ? `<span class="end">${o.end}</span>` : ''}</div><div class="why">${o.why}</div><div class="act">→ ${o.action}</div>${overlap(o.hint)}</div>`;
+  }
+  /* Badge and text lines in a 74px grid: the test value plan (Keep, Rewrite, Delete, Add). */
+  function BadgeGrid(rows) { track('BadgeGrid'); return `<div class="sb-bgrid">${rows.map((r) => `${Badge(r.badge)}<span>${r.html}</span>`).join('')}</div>`; }
+  /* A faint 11.5px caption with a hairline to the right edge: Plan. */
+  function MiniRule(text) { track('MiniRule'); return `<div class="sb-mrule">${esc(text)}</div>`; }
+  /* Label and value pairs in a 112px label column: a step's inputs, the flag audit. [label, value, mono]. */
+  function KeyValues(rows) { track('KeyValues'); return `<dl class="sb-kv">${rows.map(([k, v, mono]) => `<dt>${esc(k)}</dt><dd class="${cx(mono && 'mono')}">${esc(v)}</dd>`).join('')}</dl>`; }
+  /* Checks as lines, each a green check or a red cross and its text: the flag audit. */
+  function CheckLines(items) { track('CheckLines'); return `<div class="sb-chks">${items.map((c) => `<div class="it"><span style="--c:${c.ok ? 'var(--st-done)' : 'var(--st-failed)'}">${Icon(c.ok ? 'check' : 'x', 'xs')}</span>${esc(c.text)}</div>`).join('')}</div>`; }
+  /* Changed files per directory: the path, a 6px bar against the largest and the count. Past `max` (7) one faint line sums
+   * the rest. */
+  function DirBars(o) {
+    track('DirBars');
+    const cap = o.max || 7, top = o.rows[0] ? o.rows[0][1] : 1, rest = o.rows.slice(cap);
+    const rows = o.rows.slice(0, cap).map(([d, n]) => `<div class="it"><span class="p">${esc(d)}</span><span class="tr"><i style="width:${(n / top) * 100}%"></i></span><span class="c">${n}</span></div>`).join('');
+    return `<div class="sb-dirs">${rows}${rest.length ? `<div class="it"><span class="p">${rest.length} more directories</span><span></span><span class="c">${rest.reduce((t, d) => t + d[1], 0)}</span></div>` : ''}</div>`;
+  }
+  /* Text in the accent that acts: Show the criteria, Show the graded criteria. */
+  function TextLink(o) { track('TextLink'); return `<button type="button" class="sb-tlink"${act(o.act, o.arg)}>${esc(o.label)}</button>`; }
+  /* The QA report as text: ## headings, paragraphs and "- " lists with `code` and **bold**; a QA evidence path shows as its
+   * file name in code. */
+  function qaReport(text) {
+    const inl = (x) => esc(x).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/~\/\.skill-bill\/qa\/[^\s,<]+/g, (p) => `<code>${p.split('/').pop()}</code>`);
+    const out = [];
+    let list = null;
+    const flush = () => { if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; } };
+    String(text || '').split('\n').forEach((raw) => {
+      const line = raw.trim();
+      if (!line) return flush();
+      if (line.startsWith('#')) { flush(); out.push(`<h3>${inl(line.replace(/^#+\s*/, ''))}</h3>`); return; }
+      if (line.startsWith('- ')) { (list = list || []).push(`<li>${inl(line.slice(2))}</li>`); return; }
+      flush(); out.push(`<p>${inl(line)}</p>`);
+    });
+    flush();
+    return `<div class="rp">${out.join('')}</div>`;
+  }
+  /* A Verify run's QA step, read top down: the verdict (dot and word in the tone), the sentence from counts, Needs you (`head`
+   * holds Select all; each open finding a glyph, ref and title, Open and a chevron, and what QA observed in two lines; open,
+   * `body`), Not tested (a dashed glyph, the title and detail), one box of folds (Passed lists each check with its evidence
+   * chips; Full report renders `report.text`; each shows a one-line preview that hides while open) and the faint targets
+   * line. Selection adds a checkbox column (`lead`) and a Chat or Goal column (`end`) to each finding. */
+  function VerifyQa(o) {
+    track('VerifyQa');
+    const finding = (f) => {
+      const sel = f.lead != null;
+      return `<div class="${cx('it', sel && 'is-sel')}"${f.id ? ` id="${esc(f.id)}"` : ''}>${sel ? `<div class="lead">${f.lead}</div>` : ''}<button type="button" class="ih" aria-expanded="${!!f.open}"${act(f.act, f.arg)}><span class="gl" style="--c:var(--st-failed)">${Icon('alert', 'sm')}</span><span class="ti"><span class="ref">${esc(f.ref)}</span>${esc(f.title)}</span><span class="st">Open${Icon('chevronRight', 'xs')}</span>${f.line ? `<span class="ln">${f.line}</span>` : ''}</button>${sel ? `<div class="end">${f.end || ''}</div>` : ''}${f.open ? `<div class="ib">${f.body || ''}</div>` : ''}</div>`;
+    };
+    const gap = (g) => `<div class="it"><div class="ih"><span class="gl" style="--c:var(--st-blocked)">${Icon('gap', 'sm')}</span><span class="ti">${esc(g.title)}</span><span></span>${g.html ? `<span class="ln is-full">${g.html}</span>` : ''}</div></div>`;
+    const fold = (x, icon, tone, label, preview, body) => `<div class="it"><button type="button" class="qf" aria-expanded="${!!x.open}"${act(x.act, x.arg)}><span style="--c:${tone}">${Icon(icon, 'sm')}</span><span class="lb">${esc(label)}</span><span class="pv">${esc(preview)}</span>${Icon('chevronRight', 'xs')}</button>${x.open ? body() : ''}</div>`;
+    const group = (label, inner, head) => `<div><div class="gh">${esc(label)}<span class="n">${inner.length}</span></div><div class="sb-box">${head || ''}${inner.join('')}</div></div>`;
+    const parts = [`<div class="vd" style="--c:${VTONE[o.tone] || VTONE.faint}"><i></i>${esc(o.word)}</div><p class="sn">${esc(o.sentence)}</p>`];
+    if ((o.needs || []).length) parts.push(group('Needs you', o.needs.map(finding), o.head));
+    if ((o.gaps || []).length) parts.push(group('Not tested', o.gaps.map(gap)));
+    const folds = [
+      o.passed && o.passed.rows.length && fold(o.passed, 'check', 'var(--st-done)', `Passed · ${o.passed.rows.length}`, o.passed.rows.map((r) => r.title).join(', '),
+        () => `<div class="sl">${o.passed.rows.map((r) => `<div class="sub"><b>${esc(r.title)}</b>${r.html || ''}${(r.chips || []).length ? FileChips(r.chips) : ''}</div>`).join('')}</div>`),
+      o.report && fold(o.report, 'fileText', 'var(--fg-faint)', 'Full report', o.report.preview || "Isolation, cleanup and the agent's notes", () => qaReport(o.report.text)),
+    ].filter(Boolean);
+    if (folds.length) parts.push(`<div class="sb-box">${folds.join('')}</div>`);
+    if ((o.targets || []).length) parts.push(`<div class="tg">${o.targets.join('<span>·</span>')}</div>`);
+    return `<div class="sb-vqa">${parts.join('')}</div>`;
+  }
+
+  /* ---------- QA device: the sidebar footer switcher and its popup ---------- */
+  const PIP = { ready: 'var(--st-done)', warn: 'var(--st-blocked)', off: 'var(--fg-faint)', err: 'var(--st-failed)' };
+  /* The last row of the sidebar: the device glyph with a state pip (ready, warn, off, err), the device name (mono for an AVD)
+   * over one faint line, and an up-down chevron. It opens DevicePanel above itself. */
+  function DeviceSwitcher(o) {
+    track('DeviceSwitcher');
+    return `<button type="button" class="sb-devsw" id="${esc(o.id || 'qa-device')}"${act(o.act, o.arg)} aria-haspopup="dialog" aria-expanded="${!!o.expanded}" data-tip="QA device" aria-label="${esc(`QA device: ${o.title}, ${o.sub}`)}"><span class="gl">${Icon(o.icon || 'phone', 'sm')}<i style="--c:${PIP[o.pip] || PIP.off}"></i></span><span class="tx"><b class="${o.mono ? 'mono' : ''}">${esc(o.title)}</b><span>${esc(o.sub)}</span></span>${Icon('chevronsUpDown', 'xs')}</button>`;
+  }
+  /* One device in the popup: glyph, name (mono for an AVD), a facts line (state dot and word, transport, Android version),
+   * an optional `fix` line, and a tick on the selected one. A `disabled` device (unauthorized, offline, held by another run)
+   * shows but cannot be picked. `kb` is the keyboard highlight. */
+  function DeviceOption(o) {
+    track('DeviceOption');
+    const facts = [o.state ? `<span class="${cx('st', o.state.lease && 'is-lease')}"><i class="sb-dot" style="--c:${o.state.color}"></i>${esc(o.state.text)}</span>` : '', ...(o.facts || []).map((f) => `<span>${f.icon ? Icon(f.icon, 'xs') : ''}${esc(f.text)}</span>`)].filter(Boolean).join('<span class="sep">·</span>');
+    return `<div class="${cx('sb-devopt', o.kb && 'kb', o.disabled && 'is-off')}" role="option" aria-selected="${!!o.selected}" aria-disabled="${!!o.disabled}" data-dev="${o.index}"${o.disabled ? '' : act(o.act, o.arg)}>${Icon(o.icon || 'phone', 'sm')}<span class="bd"><span class="${cx('nm', o.mono && 'mono')}">${esc(o.name)}</span><span class="mt">${facts}</span>${o.fix ? `<span class="fx">${esc(o.fix)}</span>` : ''}</span><span class="tk">${o.selected ? Icon('check', 'sm') : ''}</span></div>`;
+  }
+  /* The popup: "QA device", the connected count and Refresh (R; spins while `checking`), then `lead` (Let QA choose), a rule
+   * and the groups ({ head, rows, empty }), or a `problem` ({ title, html }) when adb is missing; the footer says when the
+   * list was read and shows the keys. */
+  function DevicePanel(o) {
+    track('DevicePanel');
+    const body = o.problem
+      ? `<div class="sb-devpop-msg"><b>${esc(o.problem.title)}</b><span>${o.problem.html}</span></div>`
+      : `${o.lead || ''}<div class="sb-menu-sep"></div>${(o.groups || []).map((g) => `<div class="sb-devpop-grp" role="presentation">${esc(g.head)}</div>${g.rows.length ? join(g.rows) : `<div class="sb-devpop-empty">${esc(g.empty)}</div>`}`).join('')}`;
+    return `<div class="sb-devpop" aria-label="QA device"><div class="sb-devpop-hd"><b>QA device</b>${o.sub ? `<span class="n">${esc(o.sub)}</span>` : ''}<span class="l-grow"></span>${IconButton({ icon: 'refresh', label: 'Refresh', kbd: 'R', act: o.refreshAct || 'dev-refresh', size: 'sm', cls: o.checking ? 'is-spinning' : '' })}</div>
+      <div class="sb-devpop-list" id="device-list" role="listbox" tabindex="-1" aria-label="Devices" data-zone="devices">${body}</div>
+      <div class="sb-devpop-ft"><span>${o.checking ? 'Checking…' : 'Checked just now'}</span><span class="l-grow"></span>${Kbd('↑ ↓ ↵')}</div></div>`;
+  }
+
+  /* ---------- Plan run: a standalone plan phase (design/plan-detail; desktop PlanStatus, PlanNowCard, PlanActivity, PlanSubtasks) ---------- */
+  /* One glyph per stage or unit state: queued (dashed ring), now (green spinner), quiet (slow orange spinner), done (green
+   * check), blocked (orange warning). */
+  function planGlyph(state) {
+    if (state === 'done') return `<span class="sb-pgl-ic is-done">${Icon('check', 'xs')}</span>`;
+    if (state === 'blocked') return `<span class="sb-pgl-ic is-blocked">${Icon('warn', 'xs')}</span>`;
+    return `<span class="${cx('sb-pgl', 'is-' + (state || 'queued'))}"></span>`;
+  }
+  /* The plan's three stages, the only place that shows stage status and time. A cell is a button that scrolls Activity to
+   * that stage. stages: [{ label, id, state (done, now, quiet, blocked, queued), time (HTML), act, arg, tip }]. */
+  function StageStrip(o) {
+    track('StageStrip');
+    return `<div class="sb-stages">${o.stages.map((x) => `<button type="button" class="${cx('sb-stage', 'is-' + x.state)}"${act(x.act, x.arg)} title="${esc(x.tip || '')}"><span class="top">${planGlyph(x.state)}<span class="trunc">${esc(x.label)}</span></span><span class="bot">${esc(x.id)}<span class="tm">${x.time || ''}</span></span></button>`).join('')}</div>`;
+  }
+  /* "What now" and "is it alive" in one block: the status sentence, the latest step (`step` HTML after a 24px tile with
+   * `icon`) and the pulse line. Tone `live` is green, `quiet` orange once the agent stops producing output, `plain` drops
+   * the frame for a finished plan. pulse: [{ html, beat, quiet }]; a beat leads with a breathing dot. */
+  function PlanNow(o) {
+    track('PlanNow');
+    const pulse = (o.pulse || []).map((p) => `<span class="${cx(p.beat && 'beat', p.quiet && 'is-quiet')}">${p.beat ? `<span>${p.html}</span>` : p.html}</span>`).join('');
+    return `<section class="${cx('sb-now', 'is-' + (o.tone || 'live'))}" aria-label="Now"><div class="sb-now-st">${esc(o.sentence)}</div>${o.step ? `<div class="sb-now-step"><span class="g">${Icon(o.icon || 'bot', 'xs')}</span><span class="what">${o.step}</span></div>` : ''}<div class="sb-now-pulse">${pulse}</div></section>`;
+  }
+  /* Activity's tools in the section header: All, Files, Commands and Notes with counts, then Follow (green while on). */
+  /* `tools` ({ icon, label, act, arg }) are plain ghost buttons in the same style: Copy on the Transcript. */
+  function FeedFilter(o) {
+    track('FeedFilter');
+    const seg = o.items ? `<span class="seg" role="group" aria-label="Filter">${o.items.map((x) => `<button type="button"${act(o.act, x.arg)} aria-pressed="${x.id === o.value}">${esc(x.label)}${x.count != null ? ` <span class="n">${x.count}</span>` : ''}</button>`).join('')}</span>` : '';
+    const follow = o.follow ? `<button type="button" class="ghost"${act(o.follow.act, o.follow.arg)} aria-pressed="${!!o.follow.on}">${Icon('arrowDown', 'xs')}Follow</button>` : '';
+    const tools = (o.tools || []).map((t) => `<button type="button" class="ghost"${act(t.act, t.arg)}>${Icon(t.icon, 'xs')}${esc(t.label)}</button>`).join('');
+    return `<span class="sb-ffilter">${seg}${follow}${tools}</span>`;
+  }
+  /* The plan's Activity: a ten-row window that scrolls inside and follows the newest row (main.js fitPlanFeeds). One sticky
+   * header per stage reached (name, id, counts; a click folds it), then a row per event: time, kind glyph, text, duration.
+   * rows: { time, kind, unit, verb, text, file { label, act, arg }, link { label, act, arg }, kids, dur, live }. A note or a
+   * row with more files opens in place. `tail` ({ text, quiet }) closes a running feed; Jump to latest shows while the reader
+   * scrolled up. */
+  const FEED_GLYPH = { read: 'fileText', write: 'pencil', search: 'search', cmd: 'terminal', note: 'message', mcp: 'link', phase: 'play', err: 'warn' };
+  function PlanFeed(o) {
+    track('PlanFeed');
+    const row = (r) => {
+      const exp = r.kind === 'note' || (r.kids && r.kids.length);
+      let x = r.unit ? `<span class="unit">#${esc(r.unit)}</span>` : '';
+      if (r.kind === 'note') x += `<span class="prose">${esc(r.text)}</span>`;
+      else if (r.kind === 'phase') x += `${esc(r.verb)}${r.text ? ` <span class="verb">· ${esc(r.text)}</span>` : ''}`;
+      else if (r.kind === 'err') x += `${esc(r.verb)} <span class="verb">· ${esc(r.text)}</span>`;
+      else x += `<span class="verb">${esc(r.verb)}</span> ${r.file ? `<button type="button" class="file"${act(r.file.act, r.file.arg)}>${esc(r.file.label)}</button>` : `<code>${esc(r.text)}</code>`}`;
+      if (r.link) x += `<button type="button" class="link"${act(r.link.act, r.link.arg)}>${esc(r.link.label)}</button>`;
+      if (r.kids && r.kids.length) x += ` <span class="more">+${r.kids.length} more files</span><span class="kids">${r.kids.map((k) => `<code>${esc(k)}</code>`).join('')}</span>`;
+      return `<div class="${cx('sb-pev', 'is-' + r.kind, r.live && 'is-live', exp && 'is-exp')}"${exp ? ' data-act="plan-ev"' : ''}><span class="ts">${esc(r.time)}</span><span class="k">${Icon(FEED_GLYPH[r.kind] || 'info', 'xs')}</span><span class="x">${x}</span><span class="dur">${esc(r.dur || '')}</span></div>`;
+    };
+    const groups = o.groups.map((g) => `<button type="button" class="${cx('sb-pgrp', g.shut && 'shut')}" id="${esc(g.anchor)}"${act(g.act, g.arg)} aria-expanded="${!g.shut}">${Icon('chevronDown', 'xs')}<span class="name">${esc(g.label)}</span><span class="id">${esc(g.id)}</span><span class="sum">${esc(g.sum || '')}</span></button>${g.shut ? '' : g.rows.map(row).join('')}`).join('');
+    const tail = o.tail ? `<div class="sb-ptail">${o.tail.quiet ? '' : '<span class="dots"><i></i><i></i><i></i></span>'}${esc(o.tail.text)}</div>` : '';
+    return `<div class="sb-pfeed-wrap"><div class="sb-pfeed" data-planfeed="${esc(o.id)}" data-scroll="pfeed-${esc(o.id)}">${groups}${tail}</div><button type="button" class="sb-pjump"${act(o.jump, o.id)}${o.follow ? ' hidden' : ''}>${Icon('arrowDown', 'xs')}Jump to latest</button></div>`;
+  }
+  /* A faint caption row inside a Box: "SUBTASK SPECS · WAVE 1 OF 2", "RUN SETUP · SAME IN EVERY STAGE". */
+  function BoxHead(text) { track('BoxHead'); return `<div class="sb-boxhd">${esc(text)}</div>`; }
+  /* Every file the plan writes: the parent files, then one row per subtask spec under `head`, or `empty` with two ghost bars
+   * before the work is split. rows: { state, num, title, file (mono), side (HTML), line (HTML), why (an orange block reason),
+   * act, arg, tip }. A row with `act` (a saved file) is a button that opens it. */
+  function PlanBundle(o) {
+    track('PlanBundle');
+    const row = (r) => {
+      const inner = `<span class="gl">${planGlyph(r.state)}</span><span class="ti">${r.num != null ? `<span class="ref">${esc(r.num)}</span>` : ''}${esc(r.title)}</span><span class="sd">${r.side || ''}</span>${r.line ? `<span class="ln"><span class="${r.why ? 'why' : 'out'}">${r.line}</span></span>` : ''}`;
+      const cls = cx('sb-pun', r.file && 'is-file', 'is-' + r.state);
+      return `<div class="sb-pun-it">${r.act ? `<button type="button" class="${cls}"${act(r.act, r.arg)}${r.tip ? ` title="${esc(r.tip)}"` : ''}>${inner}</button>` : `<div class="${cls}">${inner}</div>`}</div>`;
+    };
+    const units = o.units ? BoxHead(o.head) + o.units.map(row).join('') : `<div class="sb-pbundle-empty"><span>${esc(o.empty)}</span><i style="width:72%"></i><i style="width:58%"></i></div>`;
+    return `<div class="sb-box sb-pbundle">${o.files.map(row).join('')}${units}</div>`;
+  }
+  /* Raw agent output in mono. `short` is a three-line window, `long` 340px; both start at the newest line (data-pin) and close
+   * with Expand / Show less. `raw` is a briefing's exact text, 220px from the top, with `note` and Copy under it. */
+  function Transcript(o) {
+    track('Transcript');
+    const size = o.size || 'short';
+    const lines = o.lines.map(([t, l]) => `<div>${t ? `<span class="t">${esc(t)}</span>` : ''}${esc(l) || ' '}</div>`).join('');
+    const foot = size === 'raw'
+      ? `<div class="sb-tx-bar"><span>${esc(o.note || '')}</span>${o.copy != null ? `<button type="button" class="sb-tx-ghost"${act('copy', o.copy)}>${Icon('copy', 'xs')}Copy</button>` : ''}</div>`
+      : `<button type="button" class="sb-tx-more"${act(o.act, o.arg)}>${Icon('chevronDown', 'xs')}${size === 'long' ? 'Show less' : 'Expand'}</button>`;
+    return `<div class="${cx('sb-tx', 'is-' + size)}"><div class="sb-tx-lines"${o.scroll ? ` data-scroll="${esc(o.scroll)}"${size === 'raw' ? '' : ' data-pin'}` : ''}>${lines}</div>${foot}</div>`;
+  }
+  /* Labelled facts with wrapping values, 96px label column: a briefing's run setup. rows: { label, html, faint, file
+   * { label, act, arg }, list [[id, text]] }. */
+  function FactList(o) {
+    track('FactList');
+    const val = (r) => (r.list ? `<ol>${r.list.map(([id, t]) => `<li><span class="id">${esc(id)}</span><span>${esc(t)}</span></li>`).join('')}</ol>` : r.file ? `<button type="button" class="file"${act(r.file.act, r.file.arg)}>${esc(r.file.label)}</button>` : r.html);
+    return `<div class="sb-facts"><dl>${o.rows.filter(Boolean).map((r) => `<dt>${esc(r.label)}</dt><dd class="${r.faint ? 'faint' : ''}">${val(r)}</dd>`).join('')}</dl></div>`;
+  }
+  /* A folded part of a briefing: a chevron, the name (`mono` for a stage id), a one-line preview that hides while open, and
+   * `meta` (a size). `off` draws a row that cannot open (a stage without a saved briefing). `body` shows open. */
+  function BriefFold(o) {
+    track('BriefFold');
+    if (o.off) return `<div class="sb-bfold is-off"><span></span><span class="${cx('name', o.mono && 'mono')}">${esc(o.label)}</span><span class="pv">${esc(o.preview || '')}</span><span class="meta"></span></div>`;
+    return `<button type="button" class="sb-bfold"${o.id ? ` id="${esc(o.id)}"` : ''}${act(o.act, o.arg)} aria-expanded="${!!o.open}">${Icon('chevronDown', 'xs')}<span class="${cx('name', o.mono && 'mono')}">${esc(o.label)}</span><span class="pv">${esc(o.preview || '')}</span><span class="meta">${esc(o.meta || '')}</span></button>${o.open && o.body ? o.body : ''}`;
+  }
+  /* A bulleted list under an open BriefFold: the items of one digest heading. */
+  /* A string instead of items is a faint note in the same place (the digest before preplan finishes). */
+  function BriefBody(items) { track('BriefBody'); return typeof items === 'string' ? `<div class="sb-bbody is-note">${esc(items)}</div>` : `<div class="sb-bbody"><ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul></div>`; }
+  /* Briefing, collapsed: one bar per stage scaled by briefing size and split into run setup and preplan digest, three digest
+   * lines (verified code, top risk, what was not read), the run setup as pills, a fade and the call to read more. The whole
+   * card expands the section. flow: [{ label, size, setup, digest (fractions), none (text) }]; legend: [{ text, cls }];
+   * facts: [{ icon, tone (code, risk), key, html }]; pills: [{ text, strong }]. */
+  function BriefingTeaser(o) {
+    track('BriefingTeaser');
+    const flow = o.flow.map((f) => `<span class="${cx('st', f.none && 'none')}"><span class="lab">${esc(f.label)}<span class="kb">${esc(f.none || f.size)}</span></span><span class="${cx('bar', f.none && 'empty')}">${f.none ? '' : `<i class="setup" style="width:${(f.setup * 100).toFixed(1)}%"></i>${f.digest ? `<i class="dig" style="width:${(f.digest * 100).toFixed(1)}%"></i>` : ''}`}</span></span>`).join('');
+    return `<button type="button" class="sb-brief"${act(o.act, o.arg)} aria-label="Expand briefing"><span class="flow">${flow}</span><span class="legend">${o.legend.map((l) => `<span><i class="${l.cls}"></i>${esc(l.text)}</span>`).join('')}</span><span class="facts">${o.facts.map((f) => `<span class="${cx('f', f.tone && 'is-' + f.tone)}">${Icon(f.icon, 'xs')}<span>${f.key ? `<span class="k">${esc(f.key)}</span> ` : ''}${f.html}</span></span>`).join('')}</span><span class="pills">${o.pills.map((p) => `<span class="${cx('pill', p.strong && 'strong')}">${esc(p.text)}</span>`).join('')}</span><span class="fade"></span><span class="cta">${Icon('chevronDown', 'xs')}${esc(o.cta)}</span></button>`;
+  }
+
+  /* ---------- Specs pane (design/specs-panel, variant A; desktop SpecSelectionBar) ---------- */
+  /* The selected spec docked at the bottom of the Specs pane: key, title, progress and the favorite star; the status and agent
+   * pills, the actions button and the one primary action the runtime allows; then a note (the pause notice, or the reason
+   * run controls are off). notes: [{ text, tone (error) }]. */
+  function SpecBar(o) {
+    track('SpecBar');
+    return `<section class="sb-specbar" role="region" aria-label="${esc(o.key)} controls"><div class="ln"><span class="key">${esc(o.key)}</span><b title="${esc(o.title)}">${esc(o.title)}</b>${o.count ? `<span class="n">${esc(o.count)}</span>` : ''}${o.star || ''}</div><div class="ln">${join(o.pills)}<span class="l-grow"></span>${join(o.actions)}</div>${(o.notes || []).map((n) => `<div class="${cx('note', n.tone && 'is-' + n.tone)}">${esc(n.text)}</div>`).join('')}</section>`;
+  }
+  /* A property as a 26px pill: the status (StatusIcon and word) or the agent (Avatar and name). With `act` it is a button
+   * with a chevron that opens a menu; `need` marks a choice still to make ("Choose agent"). */
+  function PropPill(o) {
+    track('PropPill');
+    const inner = `${o.lead || ''}<span>${esc(o.text)}</span>`;
+    if (!o.act) return `<span class="sb-ppill is-static" title="${esc(o.tip || '')}">${inner}</span>`;
+    return `<button type="button" class="${cx('sb-ppill', o.need && 'is-need')}"${act(o.act, o.arg)} aria-haspopup="menu" aria-expanded="${!!o.expanded}" title="${esc(o.tip || '')}"${o.id ? ` id="${esc(o.id)}"` : ''}>${inner}${Icon('chevronDown', 'xs')}</button>`;
+  }
+
+  /* ---------- Build indicator ----------
+   * A build is a build tool command the runtime found in the run's agent process tree, matched against the repository's
+   * platform pack: { state: running | passed | failed, cmd, short, kind, tool, ms, usual, t0, pid, started, exit, ago, prev }.
+   * `usual` is the median of the same command's last five runs in the repository; null before there is history. */
+  const buildSlow = (b) => b.state === 'running' && b.usual && b.ms > b.usual;
+  const buildTone = (b) => (b.state === 'failed' ? 'is-failed' : buildSlow(b) ? 'is-slow' : '');
+  const buildClock = (b) => (b.state === 'running' ? Clock({ ms: b.ms, t0: b.t0, live: true, secs: true }) : `<span class="tnum">${fmtDur(b.ms, true)}</span>`);
+  /* Work row meta: shows while a build runs (spinner, short command, ticking time) or after it failed. A passed build stays
+   * in the run document. Orange once the build runs past its usual time. */
+  function BuildChip(b) {
+    track('BuildChip');
+    if (b.state === 'failed') return `<span class="sb-build-chip is-failed" data-tip="${esc(b.cmd + ' exited ' + b.exit + ' after ' + fmtDur(b.ms, true))}">${Icon('x', 'xs')}${esc(b.short)}<span class="tnum">failed</span></span>`;
+    const tip = `${b.cmd} · ${b.kind}${b.usual ? ' · usually ' + fmtDur(b.usual, true) : ''}`;
+    return `<span class="${cx('sb-build-chip', buildTone(b))}" data-tip="${esc(tip)}"><span class="sb-build-spin" aria-hidden="true"></span>${esc(b.short)}${buildClock(b)}</span>`;
+  }
+  /* Run document, right under the header: Building, Build passed or Build failed, the full command, the time with the usual
+   * time or how far over it, a bar against the usual time while it runs, then project type, tool, pid, start, exit code and
+   * the previous build of the same command. */
+  function BuildStrip(b) {
+    track('BuildStrip');
+    const running = b.state === 'running';
+    const lead = running ? `<span class="sb-build-spin" role="img" aria-label="Running"></span>` : StatusIcon(b.state === 'passed' ? 'done' : 'failed');
+    const word = running ? 'Building' : b.state === 'passed' ? 'Build passed' : 'Build failed';
+    let sub;
+    if (running && b.usual) sub = buildSlow(b) ? `<small class="over">${fmtDur(b.ms - b.usual, true)} over usual</small>` : `<small>usually ${fmtDur(b.usual, true)}</small>`;
+    else if (running) sub = '<small>first run, no usual time yet</small>';
+    else sub = `<small>finished ${esc(b.ago)}</small>`;
+    const bar = running && b.usual ? `<div class="sb-build-track" aria-hidden="true"><i data-bar-ms="${b.ms}" data-bar-t0="${b.t0}" data-bar-of="${b.usual}" style="width:${Math.min(100, (b.ms / b.usual) * 100)}%"></i></div>` : '';
+    const meta = [`<b>${esc(b.kind)}</b>`, esc(b.tool), `pid ${esc(b.pid)}`, `started ${esc(b.started)}`];
+    if (!running) meta.push(`exit ${esc(b.exit)}`);
+    if (b.prev) meta.push(`previous ${StatusIcon(b.prev[0])} ${esc(b.prev[1])}, ${esc(b.prev[2])}`);
+    return `<div class="${cx('sb-build', buildTone(b))}" role="status" aria-live="polite">
+      <div class="sb-build-top">${lead}<span class="sb-build-word">${word}</span><code class="sb-build-cmd" title="${esc(b.cmd)}">${esc(b.cmd)}</code><span class="sb-build-time">${buildClock(b)}${sub}</span></div>
+      ${bar}<div class="sb-build-meta">${meta.join('<span>·</span>')}</div></div>`;
+  }
+
   window.SB = {
     esc, cx, join, fmtDur, fmtAgo, shortId, shortPath, SUB_VERB: VERB, track, inScope, usage, STATES, ICONS: Object.keys(P),
     Icon, BrandMark, StatusIcon, Kbd, Button, IconButton, Tooltip, IdTag, ShortId, StaleIndicator, Label, Avatar,
     ProgressRing, Clock, Segmented, ViewTabs, Toggle, Checkbox, Input, Field,
     PropertyList, MenuItem, Menu, Popover, CommandPalette, CommandList, Dialog, Ledger, ShortcutGrid,
-    Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher,
+    Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher, UsageWindow, UsageCard, UsagePanel,
     ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, ExpandableText, foldButton, Checklist, FindingRow, EvidenceRow, EvidenceToggle, TerminalPane,
     DocHeader, Section, Box, MetricStrip, SubtaskRow, SubtaskList, SubtaskChip, SubtaskInspector, PhasePipeline,
     PaneSection, Breakdown, ActivityFeed, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
+    ChatStatusMark, ChatTabs, SuggestionChip, ChatMessage, ChatTranscript, ChatPill, Composer, StepLine, NewTaskHome,
+    InboxList, InboxRow, FilterBar, TargetPicker, QueuedRow, QueuePanel, ResumeRow, ResumePalette,
+    QaVerdict, QaChip, QaItem, QaFold, QaResults, ReportText, DeviceSwitcher, DeviceOption, DevicePanel,
+    SegmentBar, CheckTally, RunOutcome, CheckRow, StepTimeline, WorkSummary, SelectAll, SelectionBar,
+    ValidationDoc, FlagStrip, Tag, LinkButton, BoxNote, ReportPart, BranchRun,
+    VerifyDoc, VerifyHeader, Banner, Fold, Quote, VerifySection, Badge, CriterionRow, FieldText, MarkRow, FileChip, FileChips, RouteSwitch,
+    ReceiptFinding, TestValueRow, BadgeGrid, MiniRule, KeyValues, CheckLines, DirBars, TextLink, VerifyQa,
+    StageStrip, PlanNow, FeedFilter, PlanFeed, BoxHead, PlanBundle, Transcript, FactList, BriefFold, BriefBody, BriefingTeaser, SpecBar, PropPill,
+    BuildChip, BuildStrip,
   };
 })();

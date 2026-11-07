@@ -98,6 +98,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitPause
 
 private abstract class FeatureTaskRuntimeRunLoopAgentStepBinding(
   protected val environment: PhaseAttemptLaunchCollaborationScope,
@@ -177,7 +178,17 @@ private abstract class FeatureTaskRuntimeRunLoopAgentStepBinding(
 
   override fun nextGateIteration(): Int =
     environment.progress.phase(run.phaseId).record
-      ?.takeIf { it.status == WorkflowStepStatus.RUNNING }
+      ?.takeIf { record ->
+        record.status == WorkflowStepStatus.RUNNING ||
+          (
+            environment.request.goalQualityAutomaticRecovery &&
+              (acceptedOwner.stepDescriptor(run.phaseId).family as? PhaseBindingFamily.QualityGate)?.operation is
+                PhaseQualityGateOperation.PackGate &&
+              record.status == WorkflowStepStatus.PAUSED &&
+              record.finishedAt == null &&
+              FeatureTaskRuntimeProviderLimitPause.isProviderLimitPauseReason(record.blockedReason.orEmpty())
+          )
+      }
       ?.attemptCount
       ?: nextStepIteration()
 

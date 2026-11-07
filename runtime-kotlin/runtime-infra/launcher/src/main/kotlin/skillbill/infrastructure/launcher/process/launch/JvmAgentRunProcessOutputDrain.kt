@@ -92,11 +92,14 @@ internal class Utf8Drain(
   internal val outputSink: AgentRunOutputSink,
   internal val onChunkRead: (String) -> Unit,
   private val flushOutputStreamOnEnd: Boolean = false,
+  private val awaitWorker: (Thread, Long) -> Unit = { worker, millis -> worker.join(millis) },
 ) {
   private val output = ByteArrayOutputStream(INITIAL_OUTPUT_BUFFER_BYTES)
 
   internal var totalByteSize = 0L
   internal val digest = newLauncherSha256Digest()
+
+  @Volatile internal var delivering = false
 
   @Volatile private var workerCompleted = false
 
@@ -130,6 +133,7 @@ internal class Utf8Drain(
                   } else {
                     totalByteSize += read
                     digest.update(buffer, 0, read)
+                    output.write(buffer, 0, read)
                     false
                   }
                 }
@@ -138,10 +142,6 @@ internal class Utf8Drain(
               carry.flip()
               decodeAvailable(decoded) { decoder.decode(carry, decoded, false) }
               carry.compact()
-
-              synchronized(stateLock) {
-                if (!frozen) output.write(buffer, 0, read)
-              }
             }
             if (frozen) return@use
             carry.flip()
@@ -184,19 +184,32 @@ internal class Utf8Drain(
   }
 
   fun joinAndFreeze(): Boolean {
-    worker.join(DRAIN_JOIN_TIMEOUT_MILLIS)
+    awaitDelivery()
     var incomplete = workerFailure != null || !workerCompleted || worker.isAlive
     if (worker.isAlive) {
       try {
         input.close()
       } catch (_: IOException) {
       }
-      worker.join(DRAIN_JOIN_TIMEOUT_MILLIS)
+      awaitWorker(worker, DRAIN_JOIN_TIMEOUT_MILLIS)
       incomplete = workerFailure != null || !workerCompleted || worker.isAlive
     }
     freezeCapture(incomplete)
     return incomplete
   }
+
+  private fun awaitDelivery() {
+    var waitedMillis = 0L
+    while (true) {
+      val bytesBefore = readByteCount()
+      awaitWorker(worker, DRAIN_JOIN_TIMEOUT_MILLIS)
+      waitedMillis += DRAIN_JOIN_TIMEOUT_MILLIS
+      val stillDraining = delivering || readByteCount() != bytesBefore
+      if (!worker.isAlive || !stillDraining || waitedMillis >= DRAIN_DELIVERY_GRACE_MILLIS) return
+    }
+  }
+
+  private fun readByteCount(): Long = synchronized(stateLock) { totalByteSize }
 
   fun capture(): Utf8DrainCapture =
     frozenCapture ?: freezeCapture(incomplete = workerFailure != null || !workerCompleted)
@@ -232,16 +245,21 @@ internal fun Utf8Drain.decodeAvailable(
   decoded: CharBuffer,
   decode: () -> CoderResult,
 ) {
-  while (true) {
-    val result = decode()
-    decoded.flip()
-    if (decoded.hasRemaining()) {
-      val chunk = decoded.toString()
-      onChunkRead(chunk)
-      outputSink.write(outputStream, chunk)
+  delivering = true
+  try {
+    while (true) {
+      val result = decode()
+      decoded.flip()
+      if (decoded.hasRemaining()) {
+        val chunk = decoded.toString()
+        onChunkRead(chunk)
+        outputSink.write(outputStream, chunk)
+      }
+      decoded.clear()
+      if (!result.isOverflow) return
     }
-    decoded.clear()
-    if (!result.isOverflow) return
+  } finally {
+    delivering = false
   }
 }
 
@@ -275,6 +293,7 @@ internal const val DEFAULT_DRAIN_BUFFER_BYTES = 8192
 internal const val UTF8_MAX_BYTES_PER_CODE_POINT = 4
 internal const val INITIAL_OUTPUT_BUFFER_BYTES = DEFAULT_DRAIN_BUFFER_BYTES
 internal const val DRAIN_JOIN_TIMEOUT_MILLIS = 1_000L
+internal const val DRAIN_DELIVERY_GRACE_MILLIS = 60_000L
 internal const val MIN_TIMEOUT_MILLIS = 1L
 internal const val MIN_TIMEOUT_NANOS = 1L
 internal const val PROGRESS_POLL_INTERVAL_MILLIS = 250L
