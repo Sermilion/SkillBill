@@ -7,9 +7,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -22,7 +20,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -34,16 +31,15 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -89,10 +85,9 @@ internal fun InboxSection(
   val selected = selectedIndex.coerceIn(0, (visibleItems.size - 1).coerceAtLeast(0))
   LaunchedEffect(visibleItems) { selectedIndex = selected }
   Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 22.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-      BasicText("Pick up where you left off", Modifier.semantics { heading() }, style = inboxTextStyle(12.sp).copy(fontWeight = FontWeight.Medium, color = colors.fgMuted))
+    GroupLabel("Pick up where you left off", end = {
       InboxFilterControl(filter, needsYou.size, savedCount) { filter = it }
-    }
+    })
     SbBox(
       Modifier.sbFocusRing(cardInteraction, shape)
         .hoverable(cardInteraction)

@@ -38,13 +38,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.dataColorFor
+import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.math.max
@@ -55,12 +55,7 @@ import kotlin.time.Instant
 @Composable
 internal fun InboxGroupHeader(day: InboxDay) {
   val colors = SkillBillTheme.colors
-  Box(
-    Modifier.fillMaxWidth().height(26.dp).background(colors.bgPanel).padding(start = 12.dp, end = 12.dp, bottom = 4.dp),
-    contentAlignment = Alignment.BottomStart,
-  ) {
-    BasicText(day.label.uppercase(), style = inboxTextStyle(10.5.sp).copy(color = colors.fgFaint, letterSpacing = .04.em))
-  }
+  GroupLabel(day.label, Modifier.background(colors.bgPanel))
 }
 
 @Composable

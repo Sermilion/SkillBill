@@ -28,10 +28,8 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
@@ -41,6 +39,7 @@ import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
@@ -56,25 +55,33 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
       BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     }
     if (view.open.isNotEmpty()) {
-      item(key = "$key-open-label") { QaGroupLabel("Needs you", view.open.size) }
+      item(key = "$key-open-label") {
+        GroupLabel("Needs you", count = view.open.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
       view.open.forEachIndexed { index, row ->
         item(key = qaFindingRowKey(row.id)) { QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode) }
       }
     }
     if (view.left.isNotEmpty()) {
-      item(key = "$key-left-label") { QaGroupLabel("Left behind", view.left.size) }
+      item(key = "$key-left-label") {
+        GroupLabel("Left behind", count = view.left.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
       view.left.forEachIndexed { index, row ->
         item(key = "$key-left-$index") { QaLeftItem(row, index, view.left.size, onAction) }
       }
     }
     if (view.notTested.isNotEmpty()) {
-      item(key = "$key-gap-label") { QaGroupLabel("Not tested", view.notTested.size) }
+      item(key = "$key-gap-label") {
+        GroupLabel("Not tested", count = view.notTested.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
       view.notTested.forEachIndexed { index, row ->
         item(key = "$key-gap-$index") { QaGapItem(row, index, view.notTested.size, state, "$base:g:$index", onAction, view.evidenceMode) }
       }
     }
     if (view.unblock.isNotEmpty()) {
-      item(key = "$key-unblock-label") { QaGroupLabel("Unblock", view.unblock.size) }
+      item(key = "$key-unblock-label") {
+        GroupLabel("Unblock", count = view.unblock.size.toString(), modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+      }
       view.unblock.forEachIndexed { index, entry ->
         item(key = "$key-unblock-$index") { QaUnblockItem(entry, index, view.unblock.size, onAction, view.evidenceMode) }
       }
@@ -117,22 +124,38 @@ internal fun QaResultsContent(
     } else BasicText(view.sentence, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg))
     if (view.open.isNotEmpty()) {
       beforeFindings()
-      QaGroupLabel("Needs you", view.open.size)
+      GroupLabel(
+        "Needs you",
+        count = view.open.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
       view.open.forEachIndexed { index, row ->
         QaFindingItem(row, index, view.open.size, state, "$base:f:${row.id}", onAction, view.evidenceMode)
         findingExtra(row)
       }
     }
     if (view.left.isNotEmpty()) {
-      QaGroupLabel("Left behind", view.left.size)
+      GroupLabel(
+        "Left behind",
+        count = view.left.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
       view.left.forEachIndexed { index, row -> QaLeftItem(row, index, view.left.size, onAction) }
     }
     if (view.notTested.isNotEmpty()) {
-      QaGroupLabel("Not tested", view.notTested.size)
+      GroupLabel(
+        "Not tested",
+        count = view.notTested.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
       view.notTested.forEachIndexed { index, row -> QaGapItem(row, index, view.notTested.size, state, "$base:g:$index", onAction, view.evidenceMode) }
     }
     if (view.unblock.isNotEmpty()) {
-      QaGroupLabel("Unblock", view.unblock.size)
+      GroupLabel(
+        "Unblock",
+        count = view.unblock.size.toString(),
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+      )
       view.unblock.forEachIndexed { index, entry -> QaUnblockItem(entry, index, view.unblock.size, onAction, view.evidenceMode) }
       QaUnblockOpen(onAction)
     }
@@ -177,15 +200,6 @@ private fun QaVerdictMark(view: QaResultsView) {
   }
   StatusDot(color, Modifier.clearAndSetSemantics { })
   BasicText(view.word, style = SkillBillTheme.type.tSmMedium.copy(color = color), maxLines = 1)
-}
-
-@Composable
-private fun QaGroupLabel(label: String, count: Int) {
-  val colors = SkillBillTheme.colors
-  Row(Modifier.padding(top = 16.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText(label, Modifier.semantics { heading() }, style = SkillBillTheme.type.tXs.copy(color = colors.fgMuted))
-    BasicText(count.toString(), style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal))
-  }
 }
 
 @Composable

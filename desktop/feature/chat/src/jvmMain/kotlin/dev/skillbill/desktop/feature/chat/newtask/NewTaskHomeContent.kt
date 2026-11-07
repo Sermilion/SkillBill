@@ -28,8 +28,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
@@ -37,6 +35,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
 
 private val SECTION_SPACING = 8.dp
 
@@ -62,7 +61,7 @@ internal fun ExamplesSection(readiness: ReadinessLine?, onExample: (String) -> U
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SECTION_SPACING)) {
-    SectionLabel("Try one of these")
+    GroupLabel("Try one of these")
     Column {
       EXAMPLE_TASKS.forEach { example ->
         HomeRow({ onExample(example.fill) }, Modifier.heightIn(min = SkillBillSize.row)) {
@@ -94,11 +93,6 @@ internal fun NewTaskChips(onStart: ((String, String?) -> Unit)?, modifier: Modif
       SbButton(label, { onStart?.invoke(kind, null) }, size = SbControlSize.Small, enabled = onStart != null)
     }
   }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-  BasicText(text, Modifier.semantics { heading() }, style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fgMuted))
 }
 
 @Composable

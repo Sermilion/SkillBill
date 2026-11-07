@@ -32,12 +32,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.SbTag
+import dev.skillbill.desktop.core.designsystem.component.SbTooltip
+import dev.skillbill.desktop.core.designsystem.detail.GroupLabel
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
@@ -65,7 +65,13 @@ internal fun FileListPane(state: ChangesWindowUiState, onAction: (ChangesWindowA
         state.groups.isEmpty() -> PaneMessage("No files match the filter.")
         else -> LazyColumn(state = listState, contentPadding = PaddingValues(vertical = 6.dp)) {
           state.groups.forEach { group ->
-            item(key = "g:${group.module}") { GroupHeader(group) }
+            item(key = "g:${group.module}") {
+              GroupLabel(
+                group.module,
+                Modifier.padding(start = 14.dp, end = 14.dp),
+                end = { AddCount(group.insertions); DelCount(group.deletions) },
+              )
+            }
             items(group.rows, key = { "f:${it.file.status}:${it.file.path}" }) { row ->
               FileRow(row, selected = state.selectedPath == row.file.path) { onAction(ChangesWindowAction.SelectFile(row.file.path)) }
             }
@@ -73,25 +79,6 @@ internal fun FileListPane(state: ChangesWindowUiState, onAction: (ChangesWindowA
         }
       }
     }
-  }
-}
-
-@Composable
-private fun GroupHeader(group: FileGroupUi) {
-  Row(
-    Modifier.fillMaxWidth().height(29.dp).padding(start = 14.dp, top = 6.dp, end = 14.dp),
-    horizontalArrangement = Arrangement.spacedBy(4.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    BasicText(
-      group.module.uppercase(),
-      Modifier.weight(1f),
-      style = changesMono(9.5f, FontWeight.SemiBold, SkillBillTheme.colors.fgFaint).copy(letterSpacing = 0.1.em),
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-    AddCount(group.insertions)
-    DelCount(group.deletions)
   }
 }
 
