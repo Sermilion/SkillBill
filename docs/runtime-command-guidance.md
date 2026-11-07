@@ -145,6 +145,11 @@ agent-backed QA or validation step, before the step recorded its outcome. The
 command retires the unsettled quality execution, and the next goal run admits a
 fresh one.
 
+A goal run resumes an interrupted first validation attempt by itself, without
+this command, when that attempt recorded no outcome, accepted no output, and
+the repository contents still match the fingerprint recorded when QA settled.
+Any other interrupted mutating step keeps the block.
+
 The command refuses while a runner holds the goal, and when the parent has
 neither ambiguous nor unsettled quality state. It does not change subtasks,
 child workflows, specs or commits.
