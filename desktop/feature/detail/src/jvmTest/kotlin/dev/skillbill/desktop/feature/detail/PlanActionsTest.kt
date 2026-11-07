@@ -23,6 +23,7 @@ import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
 import dev.skillbill.desktop.core.domain.model.PlannedSubtask
 import dev.skillbill.desktop.core.domain.model.StandalonePlanProgress
+import dev.skillbill.desktop.core.domain.model.StandalonePlanStage
 import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.WorkKind
@@ -143,7 +144,8 @@ class PlanActionsTest {
     val base = workItem("plan-invocation", kind = WorkKind.Goal)
     val item = base.copy(issueKey = "OAC-86", standaloneExecution = true, running = false, lifecycle = Lifecycle.Terminal,
       finishedAt = epoch, control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"))
-    val detail = emptyDetail.copy(executionHistory = listOf(planExecution(report)), standalonePlan = completedPlan(report))
+    val plan = completedPlan(report).copy(stages = listOf(StandalonePlanStage("preplan", null, null, null, "completed")))
+    val detail = emptyDetail.copy(executionHistory = listOf(planExecution(report)), standalonePlan = plan)
     val state = DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch)
     setContent { SkillBillTheme(reducedMotion = true) {
       DetailScreen(state, DetailScreenHost(false, "Ctrl I", {})) {}

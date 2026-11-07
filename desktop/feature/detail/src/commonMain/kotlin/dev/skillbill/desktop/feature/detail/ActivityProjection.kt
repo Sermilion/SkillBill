@@ -1,5 +1,9 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import dev.skillbill.desktop.core.designsystem.SkillBillColors
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ActivityBlock
 import dev.skillbill.desktop.core.domain.model.ActivityBlockKind
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
@@ -206,7 +210,7 @@ internal fun planActivityRows(events: List<PlanActivityEvent>, filter: PlanActiv
 }
 
 internal fun planActivityVerb(event: PlanActivityEvent): String = if (event.state == "failed") {
-  when (event.kind) { "read" -> "Read failed"; "write" -> "Write failed"; "search" -> "Search failed"; "command" -> "Command failed"; "mcp", "tool" -> "Tool failed"; else -> "" }
+  when (event.kind) { "read" -> "Read failed"; "write" -> "Write failed"; "search" -> "Search failed"; "command" -> "Command failed"; "mcp", "tool" -> "Tool failed"; "error" -> if (event.key.startsWith("incident-")) "Blocked" else "Error"; else -> "" }
 } else when (event.kind) {
   "read" -> if (event.state == "started") "Reading" else "Read"
   "write" -> if (event.state == "started") "Writing" else "Wrote"
@@ -214,5 +218,31 @@ internal fun planActivityVerb(event: PlanActivityEvent): String = if (event.stat
   "command" -> if (event.state == "started") "Running" else "Ran"
   "mcp" -> if (event.state == "started") "Calling" else "Called"
   "tool" -> "Tool"
+  "error" -> if (event.key.startsWith("incident-")) "Blocked" else "Error"
   else -> ""
 }
+
+internal fun planActivityGlyph(event: PlanActivityEvent): ImageVector = when {
+  event.state == "failed" || event.kind == "error" -> LucideIcons.warn
+  event.kind == "write" -> LucideIcons.pencil
+  event.kind == "read" -> LucideIcons.file
+  event.kind == "search" -> LucideIcons.search
+  event.kind == "command" || event.kind == "tool" -> LucideIcons.terminal
+  event.kind == "mcp" -> LucideIcons.plug
+  event.kind == "phase" -> LucideIcons.play
+  else -> LucideIcons.messageSquare
+}
+
+internal fun planActivityTone(event: PlanActivityEvent, colors: SkillBillColors): Color = when {
+  event.state == "failed" || event.kind == "error" -> colors.stBlocked
+  event.kind == "write" -> colors.stDone
+  event.kind == "command" || event.kind == "tool" -> colors.data3
+  event.kind == "mcp" -> colors.data2
+  event.kind == "phase" -> colors.stActive
+  else -> colors.fgFaint
+}
+
+internal fun planActivityNewestKey(events: List<PlanActivityEvent>): String? = events.withIndex()
+  .filter { it.value.at != null }
+  .maxWithOrNull(compareBy<IndexedValue<PlanActivityEvent>> { it.value.at }.thenBy { it.index })
+  ?.value?.key

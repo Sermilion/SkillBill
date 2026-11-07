@@ -1,14 +1,21 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.UiTicker
@@ -40,6 +47,35 @@ class PlanActivityTest {
   }
 
   @Test
+  fun `search and command rows retain their subject when a path is present`() = runComposeUiTest {
+    val search = PlanActivityEvent("search", epoch, "TODO", kind = "search", path = "src/Plan.kt")
+    val command = PlanActivityEvent("command", epoch, "git status", kind = "command", path = "/checkout")
+    setContent { SkillBillTheme(reducedMotion = true) {
+      Column {
+        PlanActivityRow(search)
+        PlanActivityRow(command)
+      }
+    } }
+
+    onNodeWithText("Searched TODO").assertExists()
+    onNodeWithText("Ran git status").assertExists()
+  }
+
+  @Test
+  fun `filters and follow remain reachable in a narrow activity panel`() = runComposeUiTest {
+    val item = workItem("plan", kind = WorkKind.Phase)
+    setContent { SkillBillTheme(reducedMotion = true) {
+      Box(Modifier.width(240.dp)) {
+        PlanActivityPanel(item, emptyDetail, rememberSectionCollapse(), rememberPlanScreenState(item.id)) {}
+      }
+    } }
+
+    onNodeWithText("Notes").assertIsDisplayed().performClick().assertIsSelected()
+    onNodeWithText("Follow").assertIsDisplayed().performClick()
+    onNodeWithText("Jump to latest").assertIsDisplayed()
+  }
+
+  @Test
   fun `scrolling up pauses follow and jump to latest restores it`() = runComposeUiTest {
     val item = workItem("plan", kind = WorkKind.Phase)
     val events = (1..40).map { id ->
@@ -56,6 +92,22 @@ class PlanActivityTest {
     onNodeWithText("Jump to latest").assertDoesNotExist()
     onNodeWithText("Notes").performClick()
     onNodeWithText("Planning note 40").assertExists()
+  }
+
+  @Test
+  fun `tail shows only while the live run is not quiet`() = runComposeUiTest {
+    val base = workItem("plan", kind = WorkKind.Phase)
+    val item = base.copy(running = true)
+    val event = PlanAgentActivity("note-1", "plan_subtasks", "note", "Planning", epoch + 390.seconds, epoch + 390.seconds, "claude", null, "completed", null, null, null)
+    val detail = mutableStateOf(emptyDetail.copy(planActivity = listOf(event), observedAt = epoch + 400.seconds, planOutputUpdatedAt = epoch + 390.seconds))
+    setContent { SkillBillTheme(reducedMotion = true) {
+      PlanActivityPanel(item, detail.value, rememberSectionCollapse(), rememberPlanScreenState(item.id)) {}
+    } }
+
+    onNodeWithText("Agent is working").assertExists()
+    runOnIdle { detail.value = detail.value.copy(planOutputUpdatedAt = epoch + 99.seconds) }
+    waitForIdle()
+    onNodeWithText("Agent is working").assertDoesNotExist()
   }
 
   @Test
