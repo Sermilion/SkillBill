@@ -2,6 +2,7 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.execution.launchArguments
 import skillbill.engine.featuretask.phaserun.monitor.MONITOR_BRANCH_PREFIX
@@ -258,7 +259,7 @@ public class WorkRunActions(
     agent: String,
     qaDevice: QaNamedDevice?,
   ): List<String>? {
-    if (phase != null) return phaseArguments(phase, agent)
+    if (phase != null) return phaseArguments(phase, agent, qaDevice)
     if (item.snapshot.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY) return null
     val issue = item.snapshot.issueKey ?: return null
     val workflow = item.snapshot.workflowId?.let { unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it) }
@@ -281,14 +282,15 @@ public class WorkRunActions(
   private fun phaseArguments(
     phase: StandalonePhaseStatusRecord,
     agent: String,
+    qaDevice: QaNamedDevice?,
   ): List<String>? {
     phase.monitorTarget?.let { target ->
       val selector = target.branchRef?.let { "$MONITOR_BRANCH_PREFIX$it" } ?: target.pullRequestUrl
       return listOf("phase", phase.phaseId, selector, "--agent", agent)
     }
-    phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent) }
+    phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent, qaDevice) }
     return when {
-      phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { goalArguments(it, agent) }
+      phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { goalArguments(it, agent, qaDevice) }
       phase.workflowId != null && phase.phaseId == SkeletonDefinition.PLAN.id ->
         phase.issueKey?.let { listOf("phase", "plan", it, "--agent", agent) }
       phase.phaseId in
@@ -307,6 +309,7 @@ public class WorkRunActions(
     phase: StandalonePhaseStatusRecord,
     saved: List<String>,
     agent: String,
+    qaDevice: QaNamedDevice?,
   ): List<String>? {
     val prefix =
       when (phase.launchScope) {
@@ -314,11 +317,32 @@ public class WorkRunActions(
         IdeStatusLaunchScope.GOAL -> listOf("goal")
       }
     if (saved.take(prefix.size) != prefix) return null
-    val agentFlag = saved.indexOf("--agent")
-    return if (agentFlag >= 0 && agentFlag + 1 < saved.size) {
-      saved.toMutableList().apply { this[agentFlag + 1] = agent }
+    val currentArguments =
+      if (phase.launchScope == IdeStatusLaunchScope.GOAL || phase.phaseId == SkeletonDefinition.QA.id) {
+        saved.withoutQaDevice() + qaDevice.launchArguments()
+      } else {
+        saved
+      }
+    val agentFlag = currentArguments.indexOf("--agent")
+    return if (agentFlag >= 0 && agentFlag + 1 < currentArguments.size) {
+      currentArguments.toMutableList().apply { this[agentFlag + 1] = agent }
     } else {
-      saved + listOf("--agent", agent)
+      currentArguments + listOf("--agent", agent)
+    }
+  }
+
+  private fun List<String>.withoutQaDevice(): List<String> {
+    val arguments = this
+    return buildList {
+      var index = 0
+      while (index < arguments.size) {
+        if (arguments[index] == QA_DEVICE_FLAG) {
+          index += if (index + 1 < arguments.size) 2 else 1
+        } else {
+          add(arguments[index])
+          index++
+        }
+      }
     }
   }
 

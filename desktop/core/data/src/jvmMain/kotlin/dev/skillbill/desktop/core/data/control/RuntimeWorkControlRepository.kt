@@ -68,6 +68,7 @@ import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.engine.work.control.model.WorkControlAction
 import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
@@ -136,7 +137,7 @@ class RuntimeWorkControlRepository(
 
   override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome {
     val session = currentSession(item) ?: return ControlOutcome.Refused(ControlRejection.CHANGED_TARGET, null)
-    val qaDevice = if (item.kind == WorkKind.Goal) when (val result = readQaDevice()) {
+    val qaDevice = if (item.kind == WorkKind.Goal || item.control.phaseId == SkeletonDefinition.QA.id) when (val result = readQaDevice()) {
       is Outcome.Failure -> return ControlOutcome.Failed(ReadProblem.Runtime("Could not read the saved QA device selection."))
       is Outcome.Success -> result.value
     } else null
