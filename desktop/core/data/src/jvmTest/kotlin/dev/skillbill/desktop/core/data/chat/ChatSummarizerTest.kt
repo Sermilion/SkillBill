@@ -94,7 +94,13 @@ class ChatSummarizerTest {
     val summarizer = summarizer()
     store.saveChat(entry("s1", "claude", 1))
     reply = { command -> agentReply(command, "\n- \"Fixes the flaky upload test.\"\nMore text") }
-    during = { store.saveChat(entry("s1", "claude", 2)) }
+    during = {
+      val nextTurn = entry("s1", "claude", 2)
+      store.saveChat(nextTurn.copy(lines = nextTurn.lines + listOf(
+        ChatHistoryLine(ChatHistoryRole.Operator, "what changed?"),
+        ChatHistoryLine(ChatHistoryRole.Agent, "The deployment is fixed."),
+      )))
+    }
     val updates = mutableListOf<String>()
     backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) { summarizer.updates.collect { updates += it } }
 
@@ -174,7 +180,11 @@ class ChatSummarizerTest {
 
     summarizer.start()
     runCurrent()
-    store.saveChat(entry("s1", "claude", 5))
+    val nextTurn = entry("s1", "claude", 5)
+    store.saveChat(nextTurn.copy(lines = nextTurn.lines + listOf(
+      ChatHistoryLine(ChatHistoryRole.Operator, "what changed?"),
+      ChatHistoryLine(ChatHistoryRole.Agent, "The deployment is fixed."),
+    )))
     summarizer.start()
     runCurrent()
 

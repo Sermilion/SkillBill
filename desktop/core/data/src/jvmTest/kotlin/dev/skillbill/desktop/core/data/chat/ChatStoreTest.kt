@@ -236,7 +236,11 @@ class ChatStoreTest {
     assertEquals(null, store.staleForSummary("old"))
     assertEquals(listOf("new"), store.staleSummaries(5).map { it.sessionId })
 
-    store.saveChat(entry("old", 3))
+    val nextTurn = entry("old", 3)
+    store.saveChat(nextTurn.copy(lines = nextTurn.lines + listOf(
+      ChatHistoryLine(ChatHistoryRole.Operator, "what changed?"),
+      ChatHistoryLine(ChatHistoryRole.Agent, "The deployment is fixed."),
+    )))
 
     assertEquals("old", store.staleForSummary("old")?.sessionId)
     assertEquals(listOf("old"), store.staleSummaries(1).map { it.sessionId })

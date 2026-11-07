@@ -1,3 +1,28 @@
+## [2026-11-07] Keep summary writes separate and stamp the summarized snapshot
+Context: Conversation saves rewrite the chat file, and a new turn or discard can happen while a background summary runs.
+Decision: saveChat preserves stored summary fields and ignores the entry's summary. Only saveSummary changes them, under the store lock on an existing file, with the snapshot's updated_at as summary_source_updated_at_ms and no change to the stored updated_at.
+Reason: Ordinary saves must not erase summaries. Stamping a newer stored time would mark old content current; preserving updated_at keeps Recent chats order, and refusing a missing file prevents a discarded chat from reappearing.
+Revisit when: Other callers need to edit or clear summaries, or summaries must incorporate turns saved during a call.
+
+## [2026-11-07] Recover stale summaries at startup instead of tray quit
+Context: Tray Quit exits without closing chats, and the shutdown hook signals live agent processes, so a summary started at quit would die.
+Decision: Start one app-scoped serial queue and sweep at most 20 stale chats, newest first, once at launch. Chat close, leaving an idle chat and window close request summaries; per-reply saves and hiding the pane do not.
+Reason: Persisted staleness lets the next launch recover unfinished work without delaying quit or racing process shutdown. App scope lets window-close requests finish while hidden to the tray, and the startup cap bounds agent spend after a long gap.
+Revisit when: Quit can wait for background work, or the newest-20 cap leaves needed summaries missing.
+
+## [2026-11-07] Restrict summary calls and use an explicit cheap-model map
+Context: Saved transcripts are untrusted input, and summary calls bill the chat's own agent account.
+Decision: Run separate one-shot commands outside repositories with Claude haiku, Codex gpt-6-luna or Cursor gpt-5.4-nano-none. Use tool-less, read-only or ask-mode arguments, omit session-resume and permission-bypass flags, and skip unmapped agents with chat.summary_unsupported_agent.
+Reason: Transcript instructions must not gain tool or write authority or disturb the chat's resume state. Junie has no confirmed cheap model, so guessing could select an expensive model or fail.
+Alternatives considered: Reusing ChatTransport.run would carry the chat's full permissions and save agent session state.
+Revisit when: Agent models or CLI flags change, or a cheap Junie model is confirmed.
+
+## [2026-11-07] Use a stationary ellipsis for summaries under reduced motion
+Context: Summary rows must scroll sideways when text overflows, while the app also supports LocalReducedMotion.
+Decision: SbMarqueeText applies continuous basicMarquee only when reduced motion is off. Reduced motion renders one stationary ellipsized line; fallback titles retain their existing rendering.
+Reason: Following the existing reduced-motion gate avoids scrolling for operators who disable motion and still leaves readable truncated text.
+Revisit when: The design calls for wrapping or another overflow treatment under reduced motion.
+
 ## [2026-11-07] Keep QA discovery explicit and picks owned by settings
 Context: The sidebar and New Task chip display the same persisted pick while device availability and leases can change independently.
 Decision: AppSettingsRepository owns the pick. Window-scoped QaDevicePickerState owns cancellable discovery on open and explicit refresh. Preserve a missing pick and match an AVD pick to its running emulator.
