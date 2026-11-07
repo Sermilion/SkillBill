@@ -94,6 +94,15 @@ lane_conditions:
 qa_capability:
   platforms: [ios]
   guidance_file: qa/ios-qa.md
+build_tools:
+  - executable: xcodebuild
+    tool: Xcode
+    project_kind: iOS
+    short_subcommand: false
+    version_source: xcode_app
+  - executable: swift
+    tool: SwiftPM
+    project_kind: iOS
 validation_gate:
   full_gate_command:
     - swift

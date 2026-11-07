@@ -169,6 +169,7 @@ object RuntimeModuleCatalog {
 
   val declaredSubsystemPackages: List<String> =
     listOf(
+      "skillbill.agent.buildrun",
       "skillbill.agent.model",
       "skillbill.agentaddon",
       "skillbill.application",

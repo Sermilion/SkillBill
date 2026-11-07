@@ -251,9 +251,34 @@ data class PlatformManifest(
   val featureAddonUsage: List<FeatureAddonUsage> = emptyList(),
   val customFields: CustomFieldMap = CustomFieldMap.EMPTY,
   val requiredRubricCompanions: Map<String, List<String>> = emptyMap(),
+  val buildTools: List<BuildToolDeclaration> = emptyList(),
 ) {
   val routedSkillName: String? = declaredFiles.baseline?.let { "bill-$slug-code-review" }
 }
+
+enum class BuildToolVersionSource(val wireValue: String) {
+  GRADLE_WRAPPER("gradle_wrapper"),
+  PACKAGE_MANAGER("package_manager"),
+  GO_MOD("go_mod"),
+  XCODE_APP("xcode_app"),
+  ;
+
+  companion object {
+    fun fromWireValue(value: String): BuildToolVersionSource? = entries.firstOrNull { it.wireValue == value }
+  }
+}
+
+data class BuildToolDeclaration(
+  val executable: String,
+  val displayExecutable: String,
+  val tool: String,
+  val projectKind: String,
+  val processMarkers: List<String> = emptyList(),
+  val projectMarkers: List<String> = emptyList(),
+  val shortSkip: List<String> = emptyList(),
+  val shortSubcommand: Boolean = true,
+  val versionSource: BuildToolVersionSource? = null,
+)
 
 data class BaselineReviewCatalog(
   val packs: List<BaselineReviewPackEntry>,

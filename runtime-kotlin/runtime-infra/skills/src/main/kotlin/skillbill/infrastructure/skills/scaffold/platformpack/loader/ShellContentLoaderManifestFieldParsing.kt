@@ -3,6 +3,8 @@ package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
 import skillbill.infrastructure.skills.scaffold.rendering.defaultAreaFocus
 import skillbill.ports.repository.toFileLocation
+import skillbill.scaffold.model.BuildToolDeclaration
+import skillbill.scaffold.model.BuildToolVersionSource
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.CodeReviewComposition
 import skillbill.scaffold.model.CodeReviewCompositionMode
@@ -266,3 +268,88 @@ internal fun parseOptionalString(
   manifest[key]?.let {
     it as? String ?: invalidManifestSchema("Platform pack '$slug': '$key' must be a string when provided.")
   }
+
+internal fun parseBuildTools(
+  manifest: Map<*, *>,
+  slug: String,
+): List<BuildToolDeclaration> {
+  val raw = manifest["build_tools"] ?: return emptyList()
+  val entries =
+    raw as? List<*> ?: invalidManifestSchema("Platform pack '$slug': 'build_tools' must be a list.")
+  val declarations = entries.mapIndexed { index, entry -> parseBuildTool(slug, index, entry) }
+  declarations.groupBy(BuildToolDeclaration::executable).filterValues { it.size > 1 }.keys.firstOrNull()?.let {
+    invalidManifestSchema("Platform pack '$slug': 'build_tools' repeats executable '$it'.")
+  }
+  return declarations
+}
+
+private fun parseBuildTool(
+  slug: String,
+  index: Int,
+  raw: Any?,
+): BuildToolDeclaration {
+  val prefix = "build_tools[$index]"
+  val entry = raw as? Map<*, *> ?: invalidManifestSchema("Platform pack '$slug': '$prefix' must be a mapping.")
+  val executable = requireStringInMap(slug, entry, "$prefix.executable", "executable")
+  val display =
+    entry["display_executable"]?.let {
+      requireStringInMap(slug, entry, "$prefix.display_executable", "display_executable")
+    }
+  val shortSubcommand =
+    entry["short_subcommand"]?.let {
+      it as? Boolean
+        ?: invalidManifestSchema("Platform pack '$slug': '$prefix.short_subcommand' must be a boolean.")
+    }
+  val versionSource =
+    entry["version_source"]?.let {
+      (it as? String)?.let(BuildToolVersionSource::fromWireValue)
+        ?: invalidManifestSchema("Platform pack '$slug': '$prefix.version_source' has unsupported value '$it'.")
+    }
+  return BuildToolDeclaration(
+    executable = executable,
+    displayExecutable = display ?: executable,
+    tool = requireStringInMap(slug, entry, "$prefix.tool", "tool"),
+    projectKind = requireStringInMap(slug, entry, "$prefix.project_kind", "project_kind"),
+    processMarkers = parseBuildToolList(slug, entry, prefix, "process_markers"),
+    projectMarkers =
+      parseBuildToolList(slug, entry, prefix, "project_markers").onEach { marker ->
+        requireRelativeProjectMarker(slug, prefix, marker)
+      },
+    shortSkip = parseBuildToolList(slug, entry, prefix, "short_skip"),
+    shortSubcommand = shortSubcommand ?: true,
+    versionSource = versionSource,
+  )
+}
+
+private fun parseBuildToolList(
+  slug: String,
+  entry: Map<*, *>,
+  prefix: String,
+  key: String,
+): List<String> {
+  val raw = entry[key] ?: return emptyList()
+  val values = raw as? List<*> ?: invalidManifestSchema("Platform pack '$slug': '$prefix.$key' must be a list.")
+  return values.mapIndexed { index, value ->
+    (value as? String)?.takeIf(String::isNotBlank)
+      ?: invalidManifestSchema("Platform pack '$slug': '$prefix.$key[$index]' must be a non-blank string.")
+  }
+}
+
+private fun requireRelativeProjectMarker(
+  slug: String,
+  prefix: String,
+  marker: String,
+) {
+  val absolute =
+    marker.startsWith("/") ||
+      marker.startsWith("\\") ||
+      WINDOWS_DRIVE_PREFIX.containsMatchIn(marker)
+  val escapes = marker.split('/', '\\').any { it == ".." }
+  if (absolute || escapes) {
+    invalidManifestSchema(
+      "Platform pack '$slug': '$prefix.project_markers' entry '$marker' must be a repository-relative path.",
+    )
+  }
+}
+
+private val WINDOWS_DRIVE_PREFIX = Regex("^[A-Za-z]:")
