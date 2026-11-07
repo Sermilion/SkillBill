@@ -1,3 +1,18 @@
+## [2026-11-07] SKILL-525 background chat summaries with marquee
+Areas: desktop/app, desktop/core/data chat, desktop/core/domain, desktop/core/designsystem, desktop/core/testing, desktop/feature/chat and its newtask package
+- MEDIUM feature. Recent chats and /resume rows prefer a saved one-sentence summary, retain their existing title fallback and image suffix, and match summaries in the resume palette filter. Open tabs, transcript headers and chat search keep their titles.
+- Closing chats, leaving an idle chat and closing the window request summaries. Per-reply saves and hiding the pane do not. Summary update events refresh Recent chats; startup queues at most 20 stale chats, newest first, to recover work left by quit.
+- ChatSummarizer is an app-scoped sequential queue with pending-request deduplication, a staleness read before each call, a 120-second timeout and diagnosed failures that leave the worker running. reusable
+- One-shot calls use the chat's agent and account with Claude haiku, Codex gpt-6-luna or Cursor gpt-5.4-nano-none. They run outside repositories with tool-less, read-only or ask-mode arguments and bypass ChatTransport so chat resume state stays unchanged.
+- ChatStore adds optional summary and summary_source_updated_at_ms keys without migration. Conversation saves preserve both and retain updated_at for unchanged lines. The dedicated writer updates existing records only, preserves ordering and stamps the summarized snapshot so newer turns remain stale.
+- SbMarqueeText is a reusable single-line String or AnnotatedString component. Overflowing summaries scroll continuously; LocalReducedMotion selects a stationary ellipsis. Fallback titles keep their existing ellipsis, and the palette preview uses two lines without a marquee.
+- Transcript input keeps the first operator line and newest operator/agent lines within 12,000 characters, with 2,000 per line. Output takes the first nonblank line, strips markers and quotes, and cuts at a word within 200 characters.
+- QA repairs append an actual operator/agent turn before stale-summary assertions in ChatStoreTest and ChatSummarizerTest. A timestamp-only resave no longer represents a changed conversation.
+- DesktopLauncher defaults Skiko to SOFTWARE on Linux before Compose starts and honors explicit skiko.renderApi and SKIKO_RENDER_API overrides.
+- Limits: Junie and unmapped agents receive no summary; CLI sessions the app never saved keep fallback titles. Live summary QA needs an installed agent, which the isolated home lacks. The store format and repository API additions preserve existing callers.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-11-07] SKILL-521 live desktop QA preview
 Areas: desktop/core/data, desktop/core/domain, desktop/feature/detail, platform-packs/kmp/qa, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-goalrunner
 - MEDIUM feature. The existing details pane shows a watch-only preview for the selected standalone desktop QA execution, with Waiting, Live and Ended states, invocation identity and accessible status text.

@@ -628,6 +628,46 @@ class ChatWorkspaceTest {
     assertTrue(phaseSession.job.isActive)
   }
 
+  // Summarizing on every reply bills the operator per turn; missing the switch or close leaves rows on fallback titles.
+  @Test
+  fun `switching away from an idle chat and closing one request summaries and a finished turn does not`() = runTest {
+    val goal = workItem("SKILL-1")
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
+    val workspace = workspace()
+
+    workspace.open(goal)
+    workspace.open(phase)
+    runCurrent()
+    assertEquals(emptyList(), chat.summaryRequests)
+
+    workspace.activate(goal.id)
+    val goalSessionId = workspace.session(goal.id)!!.sessionId
+    workspace.close(goal.id)
+    runCurrent()
+
+    assertEquals(listOf(workspace.session(phase.id)!!.sessionId, goalSessionId), chat.summaryRequests)
+  }
+
+  // Summarizing a chat mid-turn bills a summary of half a reply and leaves the finished chat stale.
+  @Test
+  fun `switching away from a busy chat requests no summary`() = runTest {
+    val goal = workItem("SKILL-1")
+    val phase = workItem("phase-1", kind = WorkKind.Phase)
+    details.details = mapOf(goal.id to flowOf(loaded(goal)), phase.id to flowOf(loaded(phase)))
+    chat.events = { flow<ChatEvent> { awaitCancellation() } }
+    val workspace = workspace()
+
+    workspace.open(goal)
+    workspace.open(phase)
+    runCurrent()
+    workspace.activate(goal.id)
+    runCurrent()
+
+    assertTrue(workspace.session(phase.id)!!.busyState.value)
+    assertEquals(emptyList(), chat.summaryRequests)
+  }
+
   @Test
   fun `a further chat on the same execution skips the opening turn, answers on its own session, and closes alone`() = runTest {
     val goal = workItem("SKILL-1")

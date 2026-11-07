@@ -55,6 +55,7 @@ class AgentSessionCatalog(
       ChatHistoryEntry(
         session.id, saved?.executionId, agent, session.updatedAt,
         saved?.title ?: session.title ?: "${session.agentId} session", saved?.lines.orEmpty(),
+        summary = saved?.summary,
       )
     }
     val appOnly = store.savedChats(executionId).filter { it.agent.agentId !in sessionStoreAgents && it.sessionId !in excluded }

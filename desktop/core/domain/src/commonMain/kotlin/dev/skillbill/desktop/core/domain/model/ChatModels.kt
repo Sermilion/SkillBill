@@ -131,4 +131,5 @@ data class ChatHistoryEntry(
   val title: String,
   val lines: List<ChatHistoryLine>,
   val newTask: ChatNewTaskContext? = null,
+  val summary: String? = null,
 )

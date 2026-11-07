@@ -75,6 +75,7 @@ class NewTaskChatsTest {
 
     val b = chats.newChat()
     assertSame(b, chats.selected.value)
+    assertEquals(emptyList(), chat.summaryRequests)
     assertEquals(listOf(a, b), chats.open.value)
     assertEquals(NewTaskRepository(root, "repo"), b.repository)
     assertEquals("main", b.baseBranch)
@@ -129,6 +130,7 @@ class NewTaskChatsTest {
     assertTrue(chat.saved.getValue(sessionId).lines.any { it.text == "partial" })
     assertEquals(listOf(b), chats.open.value)
     assertSame(b, chats.selected.value)
+    assertEquals(listOf(sessionId), chat.summaryRequests.distinct())
     val reopen = toasts.host.toasts.single().data.actions.single()
     assertEquals("Reopen", reopen.label)
 
@@ -190,6 +192,29 @@ class NewTaskChatsTest {
     assertSame(c, chats.selected.value)
     runCurrent()
     assertEquals(emptyList(), chat.ended)
+  }
+
+  // Leaving an idle chat without a summary request leaves its row on the fallback title; a missed update keeps it stale on screen.
+  @Test
+  fun `leaving an idle chat requests its summary and a written summary reloads Recent chats`() = runTest {
+    val chat = FakeExecutionChatRepository()
+    chat.events = { flowOf(ChatEvent.Completed) }
+    val chats = testNewTaskChats(chat)
+    val a = chats.selected.value.ready()
+    a.text = "build export"
+    a.send()
+    runCurrent()
+
+    chats.newChat()
+
+    assertEquals(listOf(checkNotNull(a.chat.value).sessionId), chat.summaryRequests)
+
+    chat.saved["saved-z"] = entry("saved-z")
+    chat.summaryUpdateEvents.emit("saved-z")
+    runCurrent()
+
+    assertTrue(chats.saved.value.any { it.sessionId == "saved-z" })
+    a.close()
   }
 
   private fun NewTaskDraft.ready(): NewTaskDraft = apply {
