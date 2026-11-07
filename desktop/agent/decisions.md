@@ -1,3 +1,18 @@
+## [2026-11-07] Bind preview lifetime to the visible selected QA execution
+Context: Historical runs can retain framebuffer files, concurrent runs can be active, and a detail ViewModel can survive route disposal.
+Decision: Derive the request from the selected standalone desktop QA execution and current database session. Require visible route and pane authorization, clear frames on request changes, cancel the former observer and reject late generations. Terminal selections never read a source.
+Reason: File presence and ViewModel lifetime do not establish that the operator is viewing an active run. The selected execution and current visibility must authorize every published frame.
+
+## [2026-11-07] Confine framebuffer opens through directory handles
+Context: Preview reads must remain inside the selected invocation even if a path changes between validation and opening.
+Decision: Traverse the invocation and fixed preview child through scoped SecureDirectoryStream handles, reject symlinks and open the final regular file read-only without following links. Refuse the source when secure directory streams are unavailable.
+Reason: Path-string validation alone cannot confine the actual open. Directory-relative handles preserve that boundary during path replacement and close on every exit.
+
+## [2026-11-07] Use only the invocation-owned private framebuffer
+Context: QA can use an existing display when private capture is unavailable, but preview must never expose the operator's visible display.
+Decision: Capture only the registered owner-only live-preview child through private Xvfb -fbdir. Registration refusal disables capture. Reuse the existing resource registry and stop producer processes before releasing the child.
+Reason: Exact invocation ownership isolates concurrent runs and preserves retained-resource and cancellation cleanup behavior. Existing-display QA fallback supplies no authorized preview source.
+
 ## [2026-11-06] Save the chat width after a drag settles and flush it on window close
 Context: Dragging the chat divider changes the width many times per second. Writing each value to DataStore is wasteful, and a width changed just before quitting could be lost.
 Decision: ChatPaneWidth updates its state flow immediately and saves through AppSettingsRepository.setChatWidthDp after a 300 ms pause. Closing the window cancels the pending timer and writes the last value once, bounded by a one-second timeout. A rejected write is dropped, not retried. The width is clamped to 360 to 2000 dp on write and again on read.

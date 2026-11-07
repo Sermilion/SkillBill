@@ -1,3 +1,17 @@
+## [2026-11-07] SKILL-521 live desktop QA preview
+Areas: desktop/core/data, desktop/core/domain, desktop/feature/detail, platform-packs/kmp/qa, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-goalrunner
+- MEDIUM feature. The existing details pane shows a watch-only preview for the selected standalone desktop QA execution, with Waiting, Live and Ended states, invocation identity and accessible status text.
+- KMP QA guidance registers an owner-only live-preview child before private Xvfb capture. Registration refusal disables capture and retains limitation evidence. Cleanup stops registered producers before releasing the child through the existing resource registry.
+- QaPreviewRequest, QaPreviewFrame and the cold QaPreviewRepository flow are reusable domain components without filesystem or Compose types. JVM data owns snapshot reads and decoding; the detail feature owns image conversion.
+- QaPreviewSource confines read-only, no-follow opens of live-preview/Xvfb_screen0 through scoped SecureDirectoryStream handles. The bounded XWD v7 decoder checks offsets, masks, stride and allocation limits, accepts both pixel byte orders and returns opaque ARGB.
+- Each observer reads one bounded snapshot at a time and waits 250 milliseconds after an attempt. Degraded-reason transitions emit bounded diagnostic categories. Rejected frames clear the image; later valid frames can recover.
+- DetailViewModel keys observation by database session, work, selected invocation, directory and liveness. Mandatory route and pane visibility wiring cancels hidden collection; generation checks reject late frames. Terminal selections are Ended without source reads.
+- Adjacent runtime helper refactoring preserves execution projection behavior. Removed non-interface KDoc rationale remains in runtime-kotlin/agent/decisions.md.
+- Limits: private file-backed Xvfb, SecureDirectoryStream support and the supported XWD format are required. Ambient displays, goal QA and legacy runs without that source supply no preview. Frames may tear during repaint. No database or command-contract change.
+- Finalization reports environment_unavailable for QA or validation; this entry establishes no live-QA or validation pass.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented for the parent; 5/5 implemented for subtask 1
+
 ## [2026-11-06] SKILL-513 docked, resizable chat pane with persisted width
 Areas: desktop/app, desktop/core/datastore, desktop/core/domain, desktop/core/testing, desktop/core/ui, desktop/feature/chat
 - Chat is a docked right pane in the work area, not a floating overlay. It takes the shared right slot while open outside Settings; otherwise the specs pane keeps its rule. WorkArea takes an optional right width.
