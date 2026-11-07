@@ -2500,6 +2500,7 @@ private val expectedMigrationDefinitions =
     105 to "record-validation-check-events",
     106 to "record-standalone-plan-output-history",
     107 to "record-structured-plan-activity",
+    108 to "record-agent-build-runs",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

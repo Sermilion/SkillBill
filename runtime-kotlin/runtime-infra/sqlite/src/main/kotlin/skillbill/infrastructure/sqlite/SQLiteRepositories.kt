@@ -5,6 +5,7 @@ import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteProductReportRepository
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.SqliteAgentBuildRunStore
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.validationcheck.VALIDATION_CHECK_EVENTS_TABLE
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.diagnostics.FileRejectedOutputDiagnosticPermissions
@@ -58,6 +59,7 @@ import skillbill.ports.goalrunner.model.GoalArchiveOwnedSnapshot
 import skillbill.ports.goalrunner.model.GoalArchiveOwnedTables
 import skillbill.ports.goalrunner.model.GoalArchiveTableRow
 import skillbill.ports.idestatus.AgentActivityStampRepository
+import skillbill.ports.idestatus.AgentBuildRunRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
@@ -145,6 +147,8 @@ internal class SQLiteUnitOfWork(
     AgentActivityStampStore(connection)
   override val worktreeEditJournal: WorktreeEditJournalRepository =
     WorktreeEditJournalStore(connection)
+  override val agentBuildRuns: AgentBuildRunRepository =
+    SqliteAgentBuildRunStore(connection, diagnostics, transactionActive)
   override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
     StandalonePhaseStatusStore(connection, clock, diagnostics, transactionActive)
   override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =

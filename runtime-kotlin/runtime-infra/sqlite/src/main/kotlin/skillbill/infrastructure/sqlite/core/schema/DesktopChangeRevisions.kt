@@ -354,6 +354,14 @@ private val DESKTOP_CHANGE_TABLES =
       keys = column("invocation_id"),
       installedLater = true,
     ),
+    DesktopChangeTable(
+      AgentBuildRunsKeys.TABLE,
+      DesktopReadSchema.TOPICS,
+      keys = { row ->
+        "SELECT COALESCE($row.${AgentBuildRunsKeys.PARENT_RUN_ID}, $row.${AgentBuildRunsKeys.RUN_ID}) AS k"
+      },
+      installedLater = true,
+    ),
   )
 
 internal fun installWorkBoardChangeTriggers(connection: Connection) {

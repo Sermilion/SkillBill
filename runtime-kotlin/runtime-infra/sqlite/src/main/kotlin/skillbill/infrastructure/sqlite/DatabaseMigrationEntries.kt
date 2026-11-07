@@ -26,6 +26,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationCo
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.buildrun.recordAgentBuildRuns
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
@@ -1004,4 +1005,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 107,
       name = "record-structured-plan-activity",
       operation = { connection -> StandalonePhaseStatusMigration.createStructuredActivity(connection) },
+    ) +
+    DatabaseMigration(
+      version = 108,
+      name = "record-agent-build-runs",
+      operation = ::recordAgentBuildRuns,
     )
