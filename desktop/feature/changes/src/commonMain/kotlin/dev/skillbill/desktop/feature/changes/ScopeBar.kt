@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
@@ -20,7 +22,6 @@ import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.filesLabel
 import dev.skillbill.desktop.core.ui.changes.timelineProblemText
-import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 
 /** The scope label and commit range; for a subtask range the previous, next and Show all links; the visible files' totals. */
 @Composable
@@ -30,7 +31,7 @@ internal fun ScopeBar(state: ChangesWindowUiState, onAction: (ChangesWindowActio
   val visible = state.visibleFiles
   val mono = changesMono(11.5f, FontWeight.Normal, colors.fgMuted)
   Row(
-    Modifier.fillMaxWidth().height(29.dp).hairlineBottom(colors.border).padding(horizontal = 14.dp),
+    Modifier.fillMaxWidth().height(29.dp).hairline(Edge.Bottom, colors.border).padding(horizontal = 14.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

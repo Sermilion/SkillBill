@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +43,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.sbPulse
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
@@ -100,25 +100,25 @@ private fun QaStatusStrip(item: WorkItem, run: ExecutionInstance?, view: QaCheck
   if (LocalShellLayout.current.drawerMode) {
     Column(modifier.then(frame)) {
       QaNowTestingCell(view, Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(Modifier.fillMaxWidth().height(1.dp))
+      StripDivider(vertical = false)
       QaProgressCell(view, Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(Modifier.fillMaxWidth().height(1.dp))
+      StripDivider(vertical = false)
       QaElapsedCell(item, run, view, Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp))
     }
   } else {
     Row(modifier.then(frame).height(IntrinsicSize.Min)) {
       QaNowTestingCell(view, Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 14.dp))
+      StripDivider(vertical = true, modifier = Modifier.padding(vertical = 14.dp))
       QaProgressCell(view, Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 18.dp))
-      StripDivider(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 14.dp))
+      StripDivider(vertical = true, modifier = Modifier.padding(vertical = 14.dp))
       QaElapsedCell(item, run, view, Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 18.dp))
     }
   }
 }
 
 @Composable
-private fun StripDivider(modifier: Modifier) {
-  Box(modifier.background(SkillBillTheme.colors.borderSubtle))
+private fun StripDivider(vertical: Boolean, modifier: Modifier = Modifier) {
+  SbDivider(modifier, vertical = vertical, color = SkillBillTheme.colors.borderSubtle)
 }
 
 @Composable

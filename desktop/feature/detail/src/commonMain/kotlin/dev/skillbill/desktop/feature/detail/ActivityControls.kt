@@ -12,7 +12,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
@@ -114,6 +114,6 @@ internal fun ActivityDot(status: ActivityStatus, modifier: Modifier = Modifier) 
 internal fun ActivityWait(milliseconds: Long) {
   Row(Modifier.fillMaxWidth().padding(start = 60.dp, top = 7.dp, bottom = 7.dp)) {
     ActivityText("idle ${activityDuration(milliseconds)}", faint = true)
-    Box(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp).height(1.dp).background(SkillBillTheme.colors.border))
+    SbDivider(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp), color = SkillBillTheme.colors.border)
   }
 }

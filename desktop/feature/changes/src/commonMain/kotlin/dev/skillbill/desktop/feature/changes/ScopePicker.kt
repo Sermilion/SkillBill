@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
@@ -73,8 +75,6 @@ import dev.skillbill.desktop.core.ui.changes.commitTag
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import dev.skillbill.desktop.core.ui.changes.filesLabel
-import dev.skillbill.desktop.core.ui.changes.hairlineBottom
-import dev.skillbill.desktop.core.ui.changes.hairlineTop
 
 private val PICKER_WIDTH = 520.dp
 private val PICKER_LIST_MAX = 380.dp
@@ -207,7 +207,7 @@ private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
         { onAction(ChangesWindowAction.PickerQuery(it)) },
         Modifier.fillMaxWidth().height(38.dp).focusRequester(search),
         singleLine = true, textStyle = style, cursorBrush = SolidColor(colors.fg),
-        decorationBox = { field -> Box(Modifier.fillMaxWidth().hairlineBottom(colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+        decorationBox = { field -> Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
           if (state.pickerQuery.isEmpty()) BasicText("Filter commits by subject, SHA or subtask", style = style.copy(color = colors.fgFaint), maxLines = 1, softWrap = false)
           field()
         } },
@@ -258,7 +258,7 @@ private fun PickerSearch(value: String, onChange: (String) -> Unit, focus: Focus
     textStyle = style,
     cursorBrush = SolidColor(colors.fg),
     decorationBox = { field ->
-      Box(Modifier.fillMaxWidth().hairlineBottom(colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+      Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.border).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
         if (value.isEmpty()) BasicText("Filter subtasks by name or number", style = style.copy(color = colors.fgFaint), maxLines = 1, softWrap = false)
         field()
       }
@@ -327,7 +327,7 @@ private fun PickerFooter(label: String, onShowAll: () -> Unit) {
   val colors = SkillBillTheme.colors
   val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
   Row(
-    Modifier.fillMaxWidth().height(28.5.dp).hairlineTop(colors.border).padding(horizontal = 12.dp),
+    Modifier.fillMaxWidth().height(28.5.dp).hairline(Edge.Top, colors.border).padding(horizontal = 12.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

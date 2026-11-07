@@ -46,6 +46,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.toastInSpec
@@ -58,7 +60,6 @@ import dev.skillbill.desktop.core.ui.changes.ChangesButton
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
-import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 import dev.skillbill.desktop.core.ui.diff.DiffWordHighlight
 
 @Composable
@@ -75,7 +76,7 @@ internal fun DiffPane(state: ChangesWindowUiState, onAction: (ChangesWindowActio
       is DiffPaneUi.Shown -> diff.file
     }
     Column(
-      Modifier.fillMaxWidth().background(colors.bgPanel).hairlineBottom(colors.border).padding(horizontal = 14.dp, vertical = 10.dp),
+      Modifier.fillMaxWidth().background(colors.bgPanel).hairline(Edge.Bottom, colors.border).padding(horizontal = 14.dp, vertical = 10.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       if (file == null) {

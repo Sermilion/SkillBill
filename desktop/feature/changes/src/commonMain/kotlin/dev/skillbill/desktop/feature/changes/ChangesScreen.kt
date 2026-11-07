@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
@@ -48,8 +50,6 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.ui.changes.SubtaskStrip
 import dev.skillbill.desktop.core.ui.changes.CommitStrip
 import dev.skillbill.desktop.core.ui.changes.changesSans
-import dev.skillbill.desktop.core.ui.changes.hairlineBottom
-import dev.skillbill.desktop.core.ui.changes.hairlineTop
 import dev.skillbill.desktop.core.ui.diff.DiffWordHighlight
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 
@@ -129,7 +129,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
         if (state.view == ChangesView.Commits && state.commits.isEmpty()) {
           Box(Modifier.fillMaxWidth().padding(vertical = 18.dp), contentAlignment = Alignment.Center) { Hint("No commits on this branch yet.") }
         } else if (state.view == ChangesView.Commits) {
-          Box(Modifier.fillMaxWidth().background(colors.bgPanel).hairlineBottom(colors.border).padding(horizontal = 14.dp, vertical = 8.dp)) {
+          Box(Modifier.fillMaxWidth().background(colors.bgPanel).hairline(Edge.Bottom, colors.border).padding(horizontal = 14.dp, vertical = 8.dp)) {
             CommitStrip(
               state.commits,
               state.commitStats,
@@ -141,7 +141,7 @@ fun ChangesScreen(viewModel: ChangesWindowViewModel, keys: ChangesWindowKeys, on
         } else if (state.subtasksAvailable) {
           val range = (state.scope as? ChangeScope.Subtasks)?.let { it.from..it.to }
           Box(
-            Modifier.fillMaxWidth().background(colors.bgPanel).hairlineBottom(colors.border)
+            Modifier.fillMaxWidth().background(colors.bgPanel).hairline(Edge.Bottom, colors.border)
               .padding(start = 14.dp, top = 4.dp, end = 14.dp, bottom = 10.dp),
           ) {
             SubtaskStrip(
@@ -177,7 +177,7 @@ private fun ChangesFooter(subtasksAvailable: Boolean, view: ChangesView, canAuth
   val colors = SkillBillTheme.colors
   val text = changesSans(11f, FontWeight.Normal, colors.fgFaint)
   Row(
-    Modifier.fillMaxWidth().height(26.dp).background(colors.bgPanel).hairlineTop(colors.border).padding(horizontal = 14.dp),
+    Modifier.fillMaxWidth().height(26.dp).background(colors.bgPanel).hairline(Edge.Top, colors.border).padding(horizontal = 14.dp),
     horizontalArrangement = Arrangement.spacedBy(14.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -229,7 +229,7 @@ fun ChangesWindowFrame(title: String, closeAtStart: Boolean, onClose: () -> Unit
       .semantics { paneTitle = title },
   ) {
     Row(
-      Modifier.fillMaxWidth().height(38.dp).background(colors.bgInset).hairlineBottom(colors.border).padding(horizontal = 8.dp),
+      Modifier.fillMaxWidth().height(38.dp).background(colors.bgInset).hairline(Edge.Bottom, colors.border).padding(horizontal = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(10.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {

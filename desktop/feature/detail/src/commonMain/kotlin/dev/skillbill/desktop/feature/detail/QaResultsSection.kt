@@ -39,6 +39,7 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
@@ -84,7 +85,7 @@ internal fun DetailSections.qaResultsSection(key: String, title: String, view: Q
       folds.forEachIndexed { index, fold ->
         item(key = "$key-fold-$index") {
           Column(Modifier.fillMaxWidth().sbBoxSegment(index, folds.size)) {
-            if (index > 0) QaRowRule()
+            if (index > 0) SbDivider()
             fold()
           }
         }
@@ -139,7 +140,7 @@ internal fun QaResultsContent(
       Spacer(Modifier.height(16.dp))
       folds.forEachIndexed { index, fold ->
         Column(Modifier.fillMaxWidth().sbBoxSegment(index, folds.size)) {
-          if (index > 0) QaRowRule()
+          if (index > 0) SbDivider()
           fold()
         }
       }
@@ -187,14 +188,9 @@ private fun QaGroupLabel(label: String, count: Int) {
 }
 
 @Composable
-private fun QaRowRule() {
-  Box(Modifier.fillMaxWidth().height(1.dp).background(SkillBillTheme.colors.borderSubtle))
-}
-
-@Composable
 private fun QaUnblockItem(entry: QaUnblockEntry, index: Int, count: Int, onAction: (DetailAction) -> Unit, mode: QaEvidenceMode) {
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    if (index > 0) QaRowRule()
+    if (index > 0) SbDivider()
     QaItemHead(LucideIcons.warn, SkillBillTheme.colors.stBlocked, null, entry.capability, null, entry.target?.let { "Target: $it" }, null) {}
     if (entry.remedy != null || entry.tried != null || entry.evidencePaths.isNotEmpty() || entry.snippet != null) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -310,7 +306,7 @@ private fun QaFindingItem(row: QaFindingRow, index: Int, count: Int, state: Sect
   val expandable = row.expected != null || row.steps != null || hasEvidence
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    if (index > 0) QaRowRule()
+    if (index > 0) SbDivider()
     QaItemHead(LucideIcons.alert, colors.stFailed, row.id, row.title, row.state, row.observed, open.takeIf { expandable }) { state.toggle(part, default = true) }
     if (open) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -332,7 +328,7 @@ private fun QaGapItem(row: QaDetailRow, index: Int, count: Int, state: SectionCo
   val expandable = row.evidencePaths.isNotEmpty() && (row.evidenceDirectory != null || mode == QaEvidenceMode.VerifyNamesOnly)
   val open = expandable && !state.isCollapsed(part, default = true)
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    if (index > 0) QaRowRule()
+    if (index > 0) SbDivider()
     QaItemHead(LucideIcons.info, colors.stBlocked, null, row.title, null, row.detail.takeIf { it.isNotBlank() }, open.takeIf { expandable }) { state.toggle(part, default = true) }
     if (open) {
       Column(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) { QaEvidenceChips(row.evidencePaths, row.evidenceDirectory, onAction, mode) }
@@ -344,7 +340,7 @@ private fun QaGapItem(row: QaDetailRow, index: Int, count: Int, state: SectionCo
 private fun QaLeftItem(row: QaLeftRow, index: Int, count: Int, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   Column(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    if (index > 0) QaRowRule()
+    if (index > 0) SbDivider()
     QaItemHead(LucideIcons.warn, colors.stBlocked, null, row.title, null, row.detail.takeIf { it.isNotBlank() }, null) {}
     row.copyText?.let { text ->
       Row(Modifier.padding(start = 34.dp, end = 12.dp, bottom = 12.dp)) {
@@ -377,7 +373,7 @@ private fun QaListFoldItem(fold: QaListFold, state: SectionCollapse, part: Strin
   val open = !state.isCollapsed(part, default = true)
   QaFoldHead("${fold.label} · ${fold.rows.size}", fold.preview, LucideIcons.check, colors.stDone, open) { state.toggle(part, default = true) }
   if (open) {
-    QaRowRule()
+    SbDivider()
     Column(Modifier.padding(start = 34.dp, end = 12.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       fold.rows.forEach { row ->
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -398,12 +394,12 @@ private fun QaReportItem(report: QaReportFold, reportPath: String?, state: Secti
   if (!open) {
     report.firstParagraph?.let {
       BasicText(rememberRuntimeText(it), Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fg2))
-      QaRowRule()
+      SbDivider()
     }
   }
   QaFoldHead("Full report", report.preview, LucideIcons.fileText, colors.fgFaint, open) { state.toggle(part, default = true) }
   if (open) {
-    QaRowRule()
+    SbDivider()
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       ReportText(report.text)
       reportPath?.let { path -> QaChip("Open report.md", LucideIcons.external) { onAction(DetailAction.OpenQaReport(path)) } }

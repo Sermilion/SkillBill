@@ -31,6 +31,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
@@ -43,7 +45,6 @@ import dev.skillbill.desktop.core.domain.model.ActivityFact
 import dev.skillbill.desktop.core.domain.model.ActivityGroup
 import dev.skillbill.desktop.core.domain.model.ActivityPhase
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
-import dev.skillbill.desktop.core.ui.changes.hairlineTop
 import kotlin.time.Instant
 
 @Composable
@@ -83,7 +84,7 @@ internal fun ActivityCard(
       val agents = (group.phases.mapNotNull { it.agent } + (group.before + group.after).mapNotNull { it.agent }).distinct()
       ActivityText(agents.joinToString(" + "), Modifier.width(104.dp), faint = true)
     }
-    if (open) Column(Modifier.fillMaxWidth().hairlineTop(colors.border)) {
+    if (open) Column(Modifier.fillMaxWidth().hairline(Edge.Top, colors.border)) {
       val entries = remember(group) { activityEntries(group) }
       group.before.forEach { ActivityFactRow(it, now) }
       entries.forEach { entry -> when (entry) {
@@ -141,7 +142,7 @@ private fun ActivityPhaseRow(
   val toggle = if (onToggle != null) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
     .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
     .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse loop" else "Expand loop", onClick = onToggle) else Modifier
-  Column(Modifier.fillMaxWidth().hairlineTop(colors.borderSubtle).then(toggle).padding(horizontal = 12.dp, vertical = 7.dp)) {
+  Column(Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).then(toggle).padding(horizontal = 12.dp, vertical = 7.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(phase.finishedAt ?: phase.startedAt, now)
       ActivityDot(if (running) ActivityStatus.RUNNING else ActivityStatus.COMPLETE)
@@ -179,7 +180,7 @@ internal fun ActivityBlockRow(
   val expand = if (expanded || truncated) Modifier.sbFocusRing(source, RoundedCornerShape(0.dp))
     .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
     .clickable(source, null, role = Role.Button, onClickLabel = if (expanded) "Collapse block" else "Read full block") { expanded = !expanded } else Modifier
-  Column(Modifier.fillMaxWidth().then(expand).background(colors.stBlocked.copy(alpha = .07f)).drawBehind { drawLine(colors.stBlocked, Offset.Zero, Offset(0f, size.height), 3.dp.toPx()) }.hairlineTop(colors.borderSubtle).padding(horizontal = 12.dp, vertical = 9.dp)) {
+  Column(Modifier.fillMaxWidth().then(expand).background(colors.stBlocked.copy(alpha = .07f)).drawBehind { drawLine(colors.stBlocked, Offset.Zero, Offset(0f, size.height), 3.dp.toPx()) }.hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 9.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(block.at, now)
       ActivityDot(ActivityStatus.BLOCKED)
@@ -224,7 +225,7 @@ private fun ActivityExpandable(text: String, lines: Int, modifier: Modifier) {
 @Composable
 private fun ActivityFactRow(fact: ActivityFact, now: Instant) {
   val colors = SkillBillTheme.colors
-  Column(Modifier.fillMaxWidth().hairlineTop(colors.borderSubtle).padding(horizontal = 12.dp, vertical = 7.dp)) {
+  Column(Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 7.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       ActivityTime(fact.at, now)
       ActivityDot(if (fact.running) ActivityStatus.RUNNING else ActivityStatus.COMPLETE)

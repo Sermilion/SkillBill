@@ -50,6 +50,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.domain.model.ChangedFile
 import dev.skillbill.desktop.core.domain.model.FileDiffState
@@ -61,7 +63,6 @@ import dev.skillbill.desktop.core.ui.diff.DiffWordHighlight
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
-import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 import dev.skillbill.desktop.core.ui.diff.DiffHorizontalScroll
 import dev.skillbill.desktop.core.ui.diff.diffRows
 import dev.skillbill.desktop.core.ui.diff.fileDiffNotice
@@ -280,7 +281,7 @@ internal fun fileAt(starts: IntArray, item: Int): Int {
 private fun FileSeparator(file: ChangedFile, onComment: (() -> Unit)?) {
   val colors = SkillBillTheme.colors
   Row(
-    Modifier.fillMaxWidth().height(38.dp).background(colors.bgPanel).hairlineBottom(colors.border).padding(horizontal = 14.dp),
+    Modifier.fillMaxWidth().height(38.dp).background(colors.bgPanel).hairline(Edge.Bottom, colors.border).padding(horizontal = 14.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

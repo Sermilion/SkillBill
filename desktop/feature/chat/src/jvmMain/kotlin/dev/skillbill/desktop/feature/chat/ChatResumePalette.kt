@@ -39,11 +39,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -62,6 +60,8 @@ import androidx.compose.ui.window.DialogProperties
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.Kbd
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
@@ -117,7 +117,7 @@ internal fun ResumePalette(
           active = (selected + step).coerceAtMost(listing.shown.lastIndex).coerceAtLeast(0)
         }, onSubmit = resume)
         Row(Modifier.weight(1f).fillMaxWidth()) {
-          Box(Modifier.weight(1f).fillMaxHeight().edge(colors.borderSubtle, right = true)) {
+          Box(Modifier.weight(1f).fillMaxHeight().hairline(Edge.End, colors.borderSubtle)) {
             ResumeList(choices.isEmpty(), listing, query, showAll, selected, now, zone, branchOf, onShowAll = { showAll = true }, onActivate = { active = it }, onResume = onResume)
           }
           Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -138,7 +138,7 @@ private fun FilterBar(query: String, scope: ResumeScope, onQuery: (String) -> Un
   LaunchedEffect(Unit) { focus.requestFocus() }
   val placeholder = if (scope.worktree) "Filter chats in this worktree" else "Filter by title, branch or agent"
   Row(
-    Modifier.fillMaxWidth().height(44.dp).edge(colors.borderSubtle, bottom = true).padding(horizontal = 14.dp),
+    Modifier.fillMaxWidth().height(44.dp).hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 14.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -278,7 +278,7 @@ private fun ResumePreview(entry: ChatHistoryEntry?, now: Instant, branchOf: (Cha
           BasicText("Pick a chat to see its latest messages.", style = type.tSm.copy(color = colors.fgFaint))
         }
       } else {
-        Column(Modifier.fillMaxWidth().edge(colors.borderSubtle, bottom = true).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           BasicText(resumeTitle(entry).text, style = type.tMd.copy(color = colors.fg, fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
           branchOf(entry)?.let { PreviewFact("Branch") { BasicText(it, style = type.monoSm.copy(color = colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
           PreviewFact("Agent") { BasicText("${agentName(entry.agent)} · ${savedAgo(entry.updatedAt, now)}", style = type.tXs.copy(color = colors.fgMuted)) }
@@ -303,7 +303,7 @@ private fun ResumePreview(entry: ChatHistoryEntry?, now: Instant, branchOf: (Cha
       }
     }
     Row(
-      Modifier.fillMaxWidth().edge(colors.borderSubtle, top = true).padding(horizontal = 12.dp, vertical = 10.dp),
+      Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 10.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
     ) {
       SbButton("Cancel", onDismiss, size = SbControlSize.Small)
@@ -335,7 +335,7 @@ private fun PaletteFooter(count: String) {
   val colors = SkillBillTheme.colors
   val hint = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint)
   Row(
-    Modifier.fillMaxWidth().height(30.dp).edge(colors.borderSubtle, top = true).padding(horizontal = 12.dp),
+    Modifier.fillMaxWidth().height(30.dp).hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 12.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -346,12 +346,4 @@ private fun PaletteFooter(count: String) {
     Spacer(Modifier.weight(1f))
     BasicText(count, style = hint)
   }
-}
-
-/** Draws a 1 dp line on the chosen edges, inside the bounds. */
-private fun Modifier.edge(color: Color, top: Boolean = false, right: Boolean = false, bottom: Boolean = false): Modifier = drawBehind {
-  val stroke = 1.dp.toPx()
-  if (top) drawLine(color, Offset(0f, stroke / 2), Offset(size.width, stroke / 2), stroke)
-  if (bottom) drawLine(color, Offset(0f, size.height - stroke / 2), Offset(size.width, size.height - stroke / 2), stroke)
-  if (right) drawLine(color, Offset(size.width - stroke / 2, 0f), Offset(size.width - stroke / 2, size.height), stroke)
 }

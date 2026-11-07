@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
@@ -57,7 +59,6 @@ import dev.skillbill.desktop.core.domain.model.availableScopes
 import dev.skillbill.desktop.core.ui.changes.ScopeStateDot
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
-import dev.skillbill.desktop.core.ui.changes.hairlineBottom
 
 private val CONTROL_SHAPE = RoundedCornerShape(7.dp)
 
@@ -73,7 +74,7 @@ internal fun ScopeToolbar(
   val colors = SkillBillTheme.colors
   Row(
     Modifier.fillMaxWidth().background(colors.bgPanel)
-      .then(if (state.subtasksAvailable) Modifier else Modifier.hairlineBottom(colors.border))
+      .then(if (state.subtasksAvailable) Modifier else Modifier.hairline(Edge.Bottom, colors.border))
       .padding(horizontal = 14.dp, vertical = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,

@@ -20,12 +20,12 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.FindingRow
 import dev.skillbill.desktop.core.designsystem.component.Hint
@@ -59,7 +59,7 @@ internal fun LazyListScope.pageFooter(list: DetailList, state: DetailUiState, on
   val loaded = state.sections as? SectionsUi.Loaded ?: return
   if (list !in loaded.moreLists) return
   item(key = "more-${list.name}") {
-    val frame = if (inBox) Modifier.fillMaxWidth().sbBoxSegment(1, 3).bottomRule(SkillBillTheme.colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp) else Modifier
+    val frame = if (inBox) Modifier.fillMaxWidth().sbBoxSegment(1, 3).hairline(Edge.Bottom, SkillBillTheme.colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp) else Modifier
     PageFooter(list, state, onAction, frame)
   }
 }
@@ -80,12 +80,6 @@ private fun PageFooter(list: DetailList, state: DetailUiState, onAction: (Detail
       Hint("Loading more")
     }
   }
-}
-
-/** The `.sb-sub` bottom rule for a footer that sits between subtask rows. */
-private fun Modifier.bottomRule(color: Color) = drawBehind {
-  val stroke = 1.dp.toPx()
-  drawLine(color, Offset(0f, size.height - stroke / 2), Offset(size.width, size.height - stroke / 2), stroke)
 }
 
 /** A [FindingRow] as one row of a `.sb-box`: side borders, the box's top and bottom on the ends, a rule between rows. */
@@ -197,7 +191,7 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
           },
         )
       }
-      PageFooter(DetailList.Subtasks, state, onAction, Modifier.fillMaxWidth().bottomRule(colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp))
+      PageFooter(DetailList.Subtasks, state, onAction, Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp))
       SubtaskRow(
         modifier = revealModifier(SubtaskKey.GoalFinish),
         number = "··",

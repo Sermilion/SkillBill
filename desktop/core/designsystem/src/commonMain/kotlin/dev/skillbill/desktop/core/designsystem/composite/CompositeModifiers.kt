@@ -14,9 +14,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
-internal enum class Edge { Top, Bottom, Start, End }
+/** Edges for a 1dp rule drawn inside modifier bounds, with Start and End following layout direction. */
+enum class Edge { Top, Bottom, Start, End }
 
-internal fun Modifier.hairline(edge: Edge, color: Color) = drawBehind {
+/** Draws a 1dp rule inside modifier bounds on [edge]. */
+fun Modifier.hairline(edge: Edge, color: Color): Modifier = drawBehind {
   val stroke = 1.dp.toPx()
   val half = stroke / 2
   val rtl = layoutDirection == LayoutDirection.Rtl

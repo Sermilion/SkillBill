@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -72,7 +73,7 @@ internal fun QaCaseCard(case: QaCaseView, invocationDirectory: String?, onOpenFi
       }
     }
     if (case.open) {
-      Box(Modifier.fillMaxWidth().heightIn(min = 1.dp).background(colors.borderSubtle))
+      SbDivider(color = colors.borderSubtle)
       Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         case.steps.forEach { step -> QaStepRow(step, invocationDirectory, onOpenFinding, onAction) }
       }

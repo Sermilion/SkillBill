@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -144,7 +145,7 @@ internal fun NewTaskRepositoryPickerContent(
     val leftWidth = max(LEFT_COLUMN_FLOOR, maxWidth / 3)
     Row(Modifier.fillMaxWidth().height(PICKER_HEIGHT)) {
       RepositoryColumn(state, draft, Modifier.width(leftWidth).fillMaxHeight(), repositoryFilterFocus, onAction)
-      Box(Modifier.width(1.dp).fillMaxHeight().background(colors.borderSubtle))
+      SbDivider(vertical = true)
       Column(
         branchPicker.weight(1f).fillMaxHeight().padding(10.dp),
       ) {

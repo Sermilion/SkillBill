@@ -35,8 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -48,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -163,7 +163,7 @@ internal fun ChatToolRow(tool: ChatToolEntry) {
     expanded -> colors.fg2
     else -> colors.fgMuted
   }
-  Column(Modifier.fillMaxWidth().background(if (expanded) colors.bgInset else Color.Transparent).dividerAbove(colors.borderSubtle)) {
+  Column(Modifier.fillMaxWidth().background(if (expanded) colors.bgInset else Color.Transparent).hairline(Edge.Top, colors.borderSubtle)) {
     Row(
       Modifier.fillMaxWidth()
         .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
@@ -232,9 +232,6 @@ private fun OutputBox(error: Boolean = false, content: @Composable () -> Unit) {
   ) { content() }
 }
 
-private fun Modifier.dividerAbove(color: Color) = drawBehind {
-  drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx())
-}
 
 internal fun groupTitle(tools: List<ChatToolEntry>): String {
   val running = tools.any { it.result == null }

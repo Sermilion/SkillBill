@@ -36,11 +36,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.ui.changes.AddCount
 import dev.skillbill.desktop.core.ui.changes.DelCount
 import dev.skillbill.desktop.core.ui.changes.changesMono
-import dev.skillbill.desktop.core.ui.changes.hairlineEnd
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 
 @Composable
@@ -53,7 +54,7 @@ internal fun FileListPane(state: ChangesWindowUiState, onAction: (ChangesWindowA
     val shown = listState.layoutInfo.visibleItemsInfo
     if (shown.none { it.index == index && it.offset >= 0 && it.offset + it.size <= listState.layoutInfo.viewportEndOffset }) listState.scrollToItem(index)
   }
-  Box(modifier.background(colors.bgSidePane).hairlineEnd(colors.border)) {
+  Box(modifier.background(colors.bgSidePane).hairline(Edge.End, colors.border)) {
     when (val list = state.list) {
       ScopeListUi.Loading -> PaneMessage("Loading changes")
       is ScopeListUi.BaseUnavailable -> PaneMessage("Base commit unavailable: ${list.reason}")
