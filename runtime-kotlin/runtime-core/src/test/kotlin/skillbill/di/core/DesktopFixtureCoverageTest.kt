@@ -2,6 +2,9 @@ package skillbill.di.core
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.application.DesktopFixtureCatalog
+import skillbill.engine.specbrowser.model.SpecBrowserNode
+import skillbill.engine.specbrowser.model.SpecBrowserStatus
+import skillbill.engine.specbrowser.model.SpecBundleDeletion
 import skillbill.engine.specbrowser.model.SpecBundleRunState
 import skillbill.idestatus.model.IdeStatusDisplayGroup
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -28,6 +31,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -37,19 +41,28 @@ class DesktopFixtureCoverageTest {
     @TempDir directory: Path,
   ) {
     val temporaryDirectory = directory.toRealPath()
-    val checkoutRoot = CanonicalRepositoryRoot.canonicalPath(repoRootFromTest())
+    val primaryCheckout = CanonicalRepositoryRoot.primaryRepositoryRoot(repoRootFromTest())
+    val linkedCheckout = temporaryDirectory.resolve("linked-checkout")
+    git(primaryCheckout, "worktree", "add", "-q", "--detach", linkedCheckout.toString(), "HEAD")
+    val checkoutRoot = CanonicalRepositoryRoot.canonicalPath(linkedCheckout)
     val home = temporaryDirectory.resolve("fixture-home")
-    writeDesktopFixture(
-      home,
-      checkoutRoot,
-      hostEnvironment = mapOf("HOME" to temporaryDirectory.resolve("unrelated-home").toString()),
-    )
-    val runtime = openRuntime(home, checkoutRoot)
-    assertWorkflowStatuses(runtime)
-    assertPersistedRows(runtime)
-    assertDerivedEnumCoverage(runtime)
-    assertBundleStates(runtime, checkoutRoot)
-    assertOperatorHomeGuard(temporaryDirectory, checkoutRoot)
+    try {
+      val fixture =
+        writeDesktopFixture(
+          home,
+          checkoutRoot,
+          hostEnvironment = mapOf("HOME" to temporaryDirectory.resolve("unrelated-home").toString()),
+        )
+      val runtime = openRuntime(home, checkoutRoot)
+      assertWorkflowStatuses(runtime)
+      assertPersistedRows(runtime)
+      assertDerivedEnumCoverage(runtime)
+      assertBundleStates(runtime, fixture.projectId, checkoutRoot, primaryCheckout)
+      assertGoalRepositoryIdentities(runtime, checkoutRoot)
+      assertOperatorHomeGuard(temporaryDirectory, checkoutRoot)
+    } finally {
+      git(primaryCheckout, "worktree", "remove", "--force", linkedCheckout.toString())
+    }
   }
 
   private fun openRuntime(
@@ -209,19 +222,91 @@ class DesktopFixtureCoverageTest {
 
   private fun assertBundleStates(
     runtime: RuntimeComponent,
-    checkoutRoot: Path,
+    projectId: String,
+    linkedCheckout: Path,
+    primaryCheckout: Path,
   ) {
-    val projectId = runtime.projectStorePort.resolve(checkoutRoot).projectId
-    val bundleStates =
-      DesktopFixtureCatalog.bundles.associate { bundle ->
-        bundle.directory to
-          runtime.specBrowserService.control(projectId, bundle.directory, checkoutRoot).runState.name
+    val project = assertNotNull(runtime.specBrowserService.projects().singleOrNull { it.projectId == projectId })
+    assertNotNull(project.repoRoot)
+    val preferredRoots = listOf(null, primaryCheckout, linkedCheckout)
+    preferredRoots.forEach { preferredRoot ->
+      val snapshot = runtime.specBrowserService.snapshot(projectId, preferredRoot)
+      val bundles = specBundles(snapshot.roots).associateBy { it.name }
+      val expectedStatuses =
+        DesktopFixtureCatalog.bundles.associate { bundle ->
+          bundle.directory to
+            when (bundle.expectedRunState) {
+              "RUNNING" -> SpecBrowserStatus.RUNNING
+              "PAUSE_REQUESTED" -> SpecBrowserStatus.PAUSING
+              "PAUSED" ->
+                if (bundle.goalId == "goal-idle") SpecBrowserStatus.PENDING else SpecBrowserStatus.PAUSED
+              "BLOCKED" -> SpecBrowserStatus.BLOCKED
+              "CANCELED" -> SpecBrowserStatus.CANCELED
+              "COMPLETE" -> SpecBrowserStatus.COMPLETE
+              else -> SpecBrowserStatus.PENDING
+            }
+        }
+      assertEquals(expectedStatuses, bundles.mapValues { it.value.status })
+      val bundleStates =
+        DesktopFixtureCatalog.bundles.associate { bundle ->
+          bundle.directory to
+            runtime.specBrowserService.control(projectId, bundle.directory, preferredRoot).runState.name
+        }
+      assertEquals(DesktopFixtureCatalog.bundles.associate { it.directory to it.expectedRunState }, bundleStates)
+      assertTrue(SpecBundleRunState.entries.all { it.name in bundleStates.values })
+      DesktopFixtureCatalog.bundles.filter { it.goalId != null }.forEach { bundle ->
+        val control = runtime.specBrowserService.control(projectId, bundle.directory, preferredRoot)
+        assertEquals("fixture-${bundle.goalId}", control.workflowId)
+        assertEquals(CanonicalRepositoryRoot.primaryRepositoryIdentity(linkedCheckout), control.repositoryIdentity)
       }
-    assertEquals(
-      DesktopFixtureCatalog.bundles.associate { it.directory to it.expectedRunState },
-      bundleStates,
-    )
-    assertTrue(SpecBundleRunState.entries.all { it.name in bundleStates.values })
+      listOf("QAFIX-101-running", "QAFIX-102-pause-requested").forEach { directory ->
+        assertIs<SpecBundleDeletion.Refused>(
+          runtime.specBrowserService.deleteBundle(projectId, directory, preferredRoot),
+        )
+      }
+    }
+  }
+
+  private fun assertGoalRepositoryIdentities(
+    runtime: RuntimeComponent,
+    linkedCheckout: Path,
+  ) {
+    val checkoutIdentity = CanonicalRepositoryRoot.repositoryIdentity(linkedCheckout)
+    val goalIdentity = CanonicalRepositoryRoot.primaryRepositoryIdentity(linkedCheckout)
+    runtime.databaseSession.transaction { unit ->
+      DesktopFixtureCatalog.standalone.forEach { case ->
+        val row = assertNotNull(unit.standalonePhaseStatuses.readByInvocation("fixture-${case.id}"))
+        assertEquals(checkoutIdentity, row.repositoryIdentity)
+      }
+      DesktopFixtureCatalog.goals.forEach { case ->
+        val parentId = "fixture-${case.id}"
+        val childIdentity = assertNotNull(unit.workflowStates.getFeatureTaskExecutionIdentity("$parentId-child"))
+        assertEquals(goalIdentity, childIdentity.repositoryIdentity)
+        assertEquals(goalIdentity, unit.goalRunnerControls.controlState(parentId).repositoryIdentity)
+      }
+    }
+  }
+
+  private fun specBundles(nodes: List<SpecBrowserNode>): List<SpecBrowserNode.Bundle> =
+    nodes.flatMap { node ->
+      when (node) {
+        is SpecBrowserNode.Bundle -> listOf(node) + specBundles(node.children)
+        is SpecBrowserNode.Folder -> specBundles(node.children)
+        is SpecBrowserNode.File -> emptyList()
+      }
+    }
+
+  private fun git(
+    repository: Path,
+    vararg arguments: String,
+  ): String {
+    val process =
+      ProcessBuilder("git", "-C", repository.toString(), *arguments)
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    assertEquals(0, process.waitFor(), output)
+    return output.trim()
   }
 
   private fun assertOperatorHomeGuard(

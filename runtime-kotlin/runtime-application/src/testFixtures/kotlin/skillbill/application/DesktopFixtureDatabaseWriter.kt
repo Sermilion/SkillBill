@@ -80,7 +80,8 @@ class DesktopFixtureDatabaseWriter(
       FixturePersistence(
         now = clock.instant(),
         checkout = root,
-        repositoryIdentity = CanonicalRepositoryRoot.repositoryIdentity(root),
+        checkoutRepositoryIdentity = CanonicalRepositoryRoot.repositoryIdentity(root),
+        goalRepositoryIdentity = CanonicalRepositoryRoot.primaryRepositoryIdentity(root),
         owner =
           JdkFeatureTaskRuntimeWorkerSupervisor(JdkRuntimeDiagnostics(), JdkHostPlatformPort).currentProcess(),
         completionPlan = completionPlan,
@@ -119,7 +120,7 @@ class DesktopFixtureDatabaseWriter(
       FeatureTaskExecutionIdentity(
         id,
         issueKey,
-        persistence.repositoryIdentity,
+        persistence.checkoutRepositoryIdentity,
         ".feature-specs/$issueKey/spec.md",
         FeatureTaskWorkflowMode.RUNTIME,
         FeatureTaskRouteScope.STANDALONE,
@@ -172,7 +173,7 @@ class DesktopFixtureDatabaseWriter(
       FeatureTaskExecutionIdentity(
         childId,
         case.issueKey,
-        persistence.repositoryIdentity,
+        persistence.goalRepositoryIdentity,
         specReference(case.bundleDirectory, "spec_subtask_1.md"),
         FeatureTaskWorkflowMode.RUNTIME,
         FeatureTaskRouteScope.GOAL_CHILD,
@@ -212,7 +213,7 @@ class DesktopFixtureDatabaseWriter(
         paused = case.paused,
         pauseReason = if (case.paused) GOAL_PAUSE_REASON_OPERATOR_REQUEST else null,
         pausedAt = if (case.paused) now.toString() else null,
-        repositoryIdentity = persistence.repositoryIdentity,
+        repositoryIdentity = persistence.goalRepositoryIdentity,
         executionLease = lease,
         goalCompletedAt = now.toString().takeIf { kind.completed },
         goalBlockedReason = "Desktop fixture ${case.id}".takeIf { kind.stopped },
@@ -342,7 +343,7 @@ class DesktopFixtureDatabaseWriter(
     val record =
       unit.standalonePhaseStatuses.register(
         StandalonePhaseStatusRegistration(
-          repositoryIdentity = persistence.repositoryIdentity,
+          repositoryIdentity = persistence.checkoutRepositoryIdentity,
           branchCorrelation = "desktop-fixture",
           issueKey = "${DesktopFixtureCatalog.ISSUE_PREFIX}-130",
           workflowId = null,
@@ -653,7 +654,8 @@ class DesktopFixtureDatabaseWriter(
 private data class FixturePersistence(
   val now: Instant,
   val checkout: Path,
-  val repositoryIdentity: String,
+  val checkoutRepositoryIdentity: String,
+  val goalRepositoryIdentity: String,
   val owner: FeatureTaskRuntimeProcessIdentity,
   val completionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
   val completionCommitSha: String,
