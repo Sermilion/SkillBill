@@ -177,11 +177,50 @@ class ChatOperationCardTest {
 
     coordinator.actions(thread).onAdjust(stale.token)
     runCurrent()
+    assertEquals(emptyList(), controls.newTaskRequests)
+    assertEquals(true, thread.transcript.value.filterIsInstance<ChatMessage.Agent>().last().text.contains("How would you like"))
+    assertEquals(true, coordinator.submitAdjustment(thread, "Only review the first thread"))
+    runCurrent()
 
     val sent = controls.newTaskRequests.single()
+    assertEquals("Only review the first thread", sent.proposalChanges)
     assertNull(sent.confirmation)
     assertEquals("SKILL-453", sent.target)
     assertEquals("feature/skill-453", sent.branch)
+  }
+
+  @Test
+  fun `verify adjustment asks for changes and publishes a fresh card without confirming it`() = runTest {
+    val original = verify()
+    val updated = original.copy(token = "revised-token", launchId = "revised-launch", summary = "Revised criteria")
+    val controls = FakeWorkControlRepository().apply {
+      operationCards[original.launchId] = original
+      operationCards[updated.launchId] = updated
+      newTaskOutcome = NewTaskStartOutcome.AwaitingConfirmation("SKILL-1", NewTaskKind.Verify, updated.launchId)
+    }
+    val request = NewTaskStart("/repo", "", null, "codex", NewTaskKind.Verify, null, null, target = "spec:/repo/spec.md")
+    val coordinator = OperationCardCoordinator(controls, backgroundScope, { request })
+    coordinator.remember(original.launchId, request)
+    val thread = ChatThread(Clock.System)
+    thread.showOperationCard(original)
+
+    coordinator.actions(thread).onAdjust(original.token)
+    runCurrent()
+    assertEquals(emptyList(), controls.newTaskRequests)
+
+    coordinator.submitAdjustment(thread, "Exclude deployment and add accessibility coverage")
+    runCurrent()
+
+    val sent = controls.newTaskRequests.single()
+    assertEquals(request.target, sent.target)
+    assertEquals("Exclude deployment and add accessibility coverage", sent.proposalChanges)
+    assertNull(sent.confirmation)
+    assertEquals("Revised criteria", thread.operationCard(updated.token)?.card?.summary)
+
+    coordinator.actions(thread).onConfirm(updated.token)
+    runCurrent()
+    assertEquals(updated.token, controls.newTaskRequests.last().confirmation?.token)
+    assertEquals(2, controls.newTaskRequests.size)
   }
 
   @Test

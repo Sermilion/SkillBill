@@ -1,7 +1,6 @@
 package skillbill.infrastructure.launcher.process.codex
 
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import skillbill.approval.model.ApprovalProviderDisposition
@@ -89,23 +88,20 @@ class CodexSessionChannelTest {
       assertEquals("worker-model", turn.getValue("model").jsonPrimitive.content)
       assertEquals("high", turn.getValue("effort").jsonPrimitive.content)
       assertContains(turn.getValue("input").toString(), "scoped briefing")
-      assertFalse("approvalPolicy" in turn)
+      assertEquals("never", turn.getValue("approvalPolicy").jsonPrimitive.content)
       val sandbox = turn.getValue("sandboxPolicy").jsonObject
-      assertEquals("workspaceWrite", sandbox.getValue("type").jsonPrimitive.content)
-      assertEquals(
-        listOf("/checkout", "/qa"),
-        sandbox.getValue("writableRoots").jsonArray.map { it.jsonPrimitive.content },
-      )
+      assertEquals("dangerFullAccess", sandbox.getValue("type").jsonPrimitive.content)
+      assertFalse("writableRoots" in sandbox)
     } finally {
       channel.finish()
     }
   }
 
   @Test
-  fun `read only turns require the provider to confirm a read only policy object`() {
-    for (policy in listOf("readOnly", "workspaceWrite")) {
+  fun `turns require the provider to acknowledge bypass instead of retaining a restricted policy`() {
+    for (policy in listOf("dangerFullAccess", "readOnly", "workspaceWrite")) {
       val process = SessionProcess()
-      val channel = channel(readOnly = true)
+      val channel = channel()
       try {
         assertTrue(channel.attach(process))
         channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/0.166.0 (test)"}}""" + "\n")
@@ -117,13 +113,13 @@ class CodexSessionChannelTest {
           process.stdin.toString().lineSequence().filter(String::isNotBlank)
             .map { Json.parseToJsonElement(it).jsonObject }.toList()
         val thread = frames[2].getValue("params").jsonObject
-        assertEquals("read-only", thread.getValue("sandbox").jsonPrimitive.content)
-        assertFalse("runtimeWorkspaceRoots" in thread)
+        assertEquals("danger-full-access", thread.getValue("sandbox").jsonPrimitive.content)
+        assertContains(thread.getValue("runtimeWorkspaceRoots").toString(), "/qa")
         val turn = frames.singleOrNull { it.getValue("method").jsonPrimitive.content == "turn/start" }
-        assertEquals(policy == "readOnly", turn != null)
+        assertEquals(policy == "dangerFullAccess", turn != null)
         if (turn != null) {
           val sandbox = turn.getValue("params").jsonObject.getValue("sandboxPolicy").jsonObject
-          assertEquals("readOnly", sandbox.getValue("type").jsonPrimitive.content)
+          assertEquals("dangerFullAccess", sandbox.getValue("type").jsonPrimitive.content)
           assertFalse("writableRoots" in sandbox)
           assertNull(channel.outcome())
         } else {
@@ -234,26 +230,24 @@ class CodexSessionChannelTest {
     }
   }
 
-  private fun channel(
-    savedThread: String? = null,
-    readOnly: Boolean = false,
-  ) = CodexSessionChannel(
-    CodexSessionLaunch(
-      "scoped briefing",
-      "/checkout",
-      "worker-model",
-      "high",
-      savedThread,
-      AgentRunOutputSink.NONE,
-      listOf("/qa"),
-      readOnly = readOnly,
-    ),
-    Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
-    NoopRuntimeDiagnostics,
-  )
+  private fun channel(savedThread: String? = null) =
+    CodexSessionChannel(
+      CodexSessionLaunch(
+        "scoped briefing",
+        "/checkout",
+        "worker-model",
+        "high",
+        savedThread,
+        AgentRunOutputSink.NONE,
+        listOf("/qa"),
+      ),
+      Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
+      NoopRuntimeDiagnostics,
+    )
 
   private fun threadResponse() =
-    """{"id":2,"result":{"thread":{"id":"thread-1"},"model":"worker-model","cwd":"/checkout"}}""" + "\n"
+    """{"id":2,"result":{"thread":{"id":"thread-1"},"model":"worker-model",""" +
+      """"cwd":"/checkout","sandbox":{"type":"dangerFullAccess"}}}""" + "\n"
 
   private fun item(
     text: String,

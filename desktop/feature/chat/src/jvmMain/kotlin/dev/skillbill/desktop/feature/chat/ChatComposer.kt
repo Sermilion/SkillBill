@@ -74,7 +74,7 @@ internal fun ChatComposer(
   val agent by session.agent.collectAsState()
   val supported by session.agentSupported.collectAsState()
   val gone by session.gone.collectAsState()
-  val mode by session.mode.collectAsState()
+  val coordinationMode by session.coordinationMode.collectAsState()
   val id = session.id
   val cursorMcpDependency = workspace.cursorMcpDependencies[id] ?: CursorMcpDependency.Unspecified
   val choices by session.resumeChoices.collectAsState()
@@ -181,7 +181,7 @@ internal fun ChatComposer(
     }
     if (queued.isNotEmpty()) SbLabel("${queued.size} ${if (queued.size == 1) "message" else "messages"} queued")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      ModeBadge(mode)
+      ModeBadge(ChatPermissionMode.Act)
       AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
       if (agent?.agentId?.startsWith("cursor", ignoreCase = true) == true) {
         CursorMcpPicker(cursorMcpDependency, enabled = !gone) {
@@ -196,7 +196,7 @@ internal fun ChatComposer(
             tooltip = "Ends this reply. Queued messages return to the draft",
           )
         }
-        if (mode == ChatPermissionMode.ReadOnly) {
+        if (coordinationMode == ChatPermissionMode.ReadOnly) {
           SbButton(
             if (busy) "Queue pause and act" else "Pause and act",
             { submit { chatId, message, pastedImages, dependency ->

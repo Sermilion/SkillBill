@@ -1,3 +1,13 @@
+## [2026-11-07] Ask for proposal changes before replacing an operation card
+Context: Adjust immediately reran the original verify or pr-review-fix request, giving the operator no chance to explain the intended revision.
+Decision: Adjust asks a question in the current chat. Its next reply starts a replacement proposal using the original launch settings and separate revision instructions; the replacement still needs an explicit Confirm click.
+Reason: The operator expects to describe the changes before seeing another confirmation card. Repeating the original request cannot express that revision.
+
+## [2026-11-07] Start operator chats in Act independently of execution lifecycle
+Context: Chats attached to active executions inherited ReadOnly permissions, preventing ordinary edit and QA requests from being approved.
+Decision: Launch opening and follow-up operator chat turns in Act for every agent. Execution lifecycle only coordinates optional pause-and-act actions. Permission cards represent structured harness permission requests; ordinary questions use the question UI or prose.
+Reason: Operators use chat to act on repository work. A running execution must not silently turn that chat into a read-only session, and an agent asking a question must not manufacture a tool permission request.
+
 ## [2026-11-07] Keep summary writes separate and stamp the summarized snapshot
 Context: Conversation saves rewrite the chat file, and a new turn or discard can happen while a background summary runs.
 Decision: saveChat preserves stored summary fields and ignores the entry's summary. Only saveSummary changes them, under the store lock on an existing file, with the snapshot's updated_at as summary_source_updated_at_ms and no change to the stored updated_at.
@@ -478,3 +488,15 @@ Reason: The application toast stack has a fixed 5-second lifetime and appears ou
 Context: Chat prompt rules made ordinary requests wait for action buttons, issue-key acceptance or a pause even though the chat transports expose the execution agent's tools.
 Decision: New-task and execution chat prompts carry repository or execution context and optional action-button formatting. They permit direct shell, CLI, MCP, Git, gh and file-edit requests without adding chat-specific approval steps, key-confirmation gates, execution-only scope limits or mode-dependent instructions. ReadOnly and Act remain UI coordination metadata for optional pause-and-act actions; transports no longer inject them into prompts or operator messages. Provider launch permissions and runtime command contracts retain their own owners.
 Reason: Conversation context and button formatting must not reduce what the operator can ask the chat agent to do. This supersedes earlier decisions that used chat mode to select prompt guidance or required button-only launches.
+
+## [2026-11-07] Route interactive Codex approvals to operator cards
+Context: Act chat explicitly selected `auto_review`, so commands could be approved without a card or denied for lacking specific authorization before the operator could review their payload.
+Decision: Use `on-request` with `approvalsReviewer: user` for Act chat thread start, resume and turn start. Admit these fields against the installed schema for all three methods. Keep other runtime callers on their existing settings.
+Reason: Provider approval requests must reach the existing live card broker before execution. This uses the provider's human-review protocol rather than interpreting rejection text, replaying a denied action or bypassing managed restrictions.
+Superseded by: Default all provider launches to native permission bypass (2026-11-07)
+
+## [2026-11-07] Keep Cursor and Junie chat on interactive ACP permissions
+Context: Cursor Act chat added `--auto-review`, which let the provider decide tool requests before the operator-card broker saw them. Junie already used its standard `--acp` command.
+Decision: Both chat transports launch the provider's standard ACP arguments. Remove Cursor's automatic-review argument override. Verify that publishing requests from either provider produce full pending cards and send no permission response until an operator decision is delivered.
+Reason: Interactive permission decisions belong to the operator. Retain provider-issued options, session identity checks, read-only mode and unsupported-interaction handling.
+Superseded by: Default all provider launches to native permission bypass (2026-11-07)

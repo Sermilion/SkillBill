@@ -73,7 +73,7 @@ fun ChatPane(workspace: ChatWorkspace) {
       } else {
         key(session) {
           val gone by session.gone.collectAsState()
-          val mode by session.mode.collectAsState()
+          val coordinationMode by session.coordinationMode.collectAsState()
           val approvalLive by session.approvalLive.collectAsState()
           val approvals = ChatApprovalActions(
             live = approvalLive,
@@ -86,7 +86,7 @@ fun ChatPane(workspace: ChatWorkspace) {
             ChatTranscript(
               session.thread,
               gone,
-              mode,
+              coordinationMode,
               Modifier.weight(1f),
               approvals = approvals,
               operationCards = workspace.operationCardActions(session.id),

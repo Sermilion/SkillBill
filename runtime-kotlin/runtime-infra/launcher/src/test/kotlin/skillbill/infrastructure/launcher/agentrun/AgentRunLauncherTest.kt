@@ -118,7 +118,10 @@ class HeadlessAgentRunAdapterTest {
 
     val captured = runner.requests.last()
     assertEquals("agent", captured.launch.command.first())
-    assertEquals(listOf("agent", "acp"), captured.launch.command)
+    assertEquals(
+      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      captured.launch.command,
+    )
   }
 
   @Test

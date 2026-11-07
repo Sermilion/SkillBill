@@ -24,9 +24,8 @@ object CodexSchemaAdmission {
     localImages: Boolean = false,
   ): String? =
     try {
-      inspectShapes(directory, settings.model, settings.effort, settings.workspaceRoots.isNotEmpty(), settings.readOnly)
+      inspectShapes(directory, settings.model, settings.effort, settings.workspaceRoots.isNotEmpty())
         ?: inspectLocalImages(directory).takeIf { localImages }
-        ?: inspectAutoReview(directory).takeIf { settings.autoReview }
     } catch (failure: IOException) {
       "Could not read the installed Codex app-server schema: ${failure.message.orEmpty()}"
     }
@@ -45,35 +44,24 @@ object CodexSchemaAdmission {
     return if (supported) null else "The installed Codex app-server protocol does not support local image inputs."
   }
 
-  private fun inspectAutoReview(directory: Path): String? {
-    val supported =
-      listOf("v2/ThreadStartParams.json", "v2/TurnStartParams.json").all { file ->
-        val schema = read(directory, file)
-        val properties = schema.path(S.PROPERTIES)
-        enumTokens(properties.path(K.APPROVAL_POLICY), schema, emptySet()).contains(K.ON_REQUEST_POLICY) &&
-          enumTokens(properties.path(K.APPROVALS_REVIEWER), schema, emptySet()).contains(K.AUTO_REVIEW_REVIEWER)
-      }
-    return if (supported) null else "The installed Codex app-server cannot route approvals to its auto-review agent."
-  }
-
   private fun inspectShapes(
     directory: Path,
     model: String?,
     effort: String?,
     workspaceRoots: Boolean,
-    readOnly: Boolean,
   ): String? {
     val outgoing =
       listOfNotNull(
         K.CWD,
         K.MODEL.takeIf { model != null },
-        K.WORKSPACE_ROOTS.takeIf { workspaceRoots && !readOnly },
-        K.SANDBOX.takeIf { readOnly },
+        K.WORKSPACE_ROOTS.takeIf { workspaceRoots },
+        K.SANDBOX,
+        K.APPROVAL_POLICY,
       ).toSet()
     val turnFields =
       (outgoing - setOf(K.WORKSPACE_ROOTS, K.SANDBOX)) + setOf(K.THREAD_ID, K.INPUT) +
         listOfNotNull(K.EFFORT.takeIf { effort != null }, K.SANDBOX_POLICY)
-    val projections = sessionShapes(outgoing, turnFields, readOnly) + approvalShapes()
+    val projections = sessionShapes(outgoing, turnFields) + approvalShapes()
     for (shape in projections) {
       val schema = read(directory, shape.file)
       if (!acceptsShape(schema, shape)) {
@@ -87,45 +75,39 @@ object CodexSchemaAdmission {
         return "The installed Codex app-server has incompatible method bindings in $file."
       }
     }
-    if (!sandboxPoliciesCompatible(directory, readOnly)) {
-      return "The installed Codex app-server does not support the required read-only sandbox shapes."
+    if (!sandboxPoliciesCompatible(directory)) {
+      return "The installed Codex app-server does not support the required bypass permission shapes."
     }
     return inspectInitialization(
       directory,
     ) ?: inspectNested(directory) ?: inspectApprovalDecisions(directory) ?: CodexRefusalSchema.inspect(directory)
   }
 
-  private fun sandboxPoliciesCompatible(
-    directory: Path,
-    readOnly: Boolean,
-  ): Boolean {
-    val start = read(directory, "v2/ThreadStartParams.json")
-    val resume = read(directory, "v2/ThreadResumeParams.json")
+  private fun sandboxPoliciesCompatible(directory: Path): Boolean {
+    val openings = listOf("v2/ThreadStartParams.json", "v2/ThreadResumeParams.json")
     val turn = read(directory, "v2/TurnStartParams.json")
-    val startSandbox = start.path(S.PROPERTIES).path(K.SANDBOX)
-    val resumeSandbox = resume.path(S.PROPERTIES).path(K.SANDBOX)
-    val policy = turn.path(S.PROPERTIES).path(K.SANDBOX_POLICY)
+    val requests = openings.map { read(directory, it) } + listOf(turn)
+    val policies =
+      requests.all { schema ->
+        enumTokens(schema.path(S.PROPERTIES).path(K.APPROVAL_POLICY), schema, emptySet()).contains(K.NEVER_POLICY)
+      }
+    val sandboxes =
+      openings.all { file ->
+        val schema = read(directory, file)
+        enumTokens(schema.path(S.PROPERTIES).path(K.SANDBOX), schema, emptySet()).contains(K.BYPASS_SANDBOX)
+      }
     val responses =
-      listOf("v2/ThreadStartResponse.json", "v2/ThreadResumeResponse.json")
-        .map { file -> read(directory, file).let { it.path(S.PROPERTIES).path(K.SANDBOX) to it } }
-    return (
-      !readOnly ||
-        listOf(startSandbox to start, resumeSandbox to resume).all { (sandbox, root) ->
-          enumTokens(sandbox, root, emptySet()).contains(K.READ_ONLY_SANDBOX)
-        }
-    ) && (
-      !readOnly ||
-        responses.all { (sandbox, root) ->
-          enumTokens(sandbox, root, emptySet()).contains(K.READ_ONLY_POLICY)
-        }
-    ) && enumTokens(policy, turn, emptySet()).contains(K.WORKSPACE_WRITE_POLICY) &&
-      (!readOnly || enumTokens(policy, turn, emptySet()).contains(K.READ_ONLY_POLICY))
+      listOf("v2/ThreadStartResponse.json", "v2/ThreadResumeResponse.json").all { file ->
+        val schema = read(directory, file)
+        enumTokens(schema.path(S.PROPERTIES).path(K.SANDBOX), schema, emptySet()).contains(K.BYPASS_POLICY)
+      }
+    return policies && sandboxes && responses &&
+      enumTokens(turn.path(S.PROPERTIES).path(K.SANDBOX_POLICY), turn, emptySet()).contains(K.BYPASS_POLICY)
   }
 
   private fun sessionShapes(
     outgoing: Set<String>,
     turnFields: Set<String>,
-    readOnly: Boolean,
   ): List<Shape> =
     listOf(
       Shape(
@@ -136,19 +118,18 @@ object CodexSchemaAdmission {
       Shape("v1/InitializeResponse.json", mapOf(K.USER_AGENT to "string")),
       Shape(
         "v2/ThreadStartParams.json",
-        threadRequestFields + listOfNotNull(K.SANDBOX.takeIf { readOnly }?.let { it to "string" }),
+        threadRequestFields,
         outgoing,
-        threadRequestFields.keys + listOfNotNull(K.SANDBOX.takeIf { readOnly }),
+        threadRequestFields.keys,
       ),
       Shape(
         "v2/ThreadResumeParams.json",
-        threadRequestFields +
-          listOfNotNull(K.SANDBOX.takeIf { readOnly }?.let { it to "string" }) + (K.THREAD_ID to "string"),
+        threadRequestFields + (K.THREAD_ID to "string"),
         outgoing + K.THREAD_ID,
-        threadRequestFields.keys + listOfNotNull(K.SANDBOX.takeIf { readOnly }),
+        threadRequestFields.keys,
       ),
-      Shape("v2/ThreadStartResponse.json", threadResponseFields(readOnly)),
-      Shape("v2/ThreadResumeResponse.json", threadResponseFields(readOnly)),
+      Shape("v2/ThreadStartResponse.json", threadResponseFields()),
+      Shape("v2/ThreadResumeResponse.json", threadResponseFields()),
       Shape(
         "v2/TurnStartParams.json",
         (turnFields + setOf(K.MODEL, K.EFFORT)).associateWith {
@@ -476,14 +457,17 @@ object CodexSchemaAdmission {
       K.CWD to "string",
       K.MODEL to "string",
       K.WORKSPACE_ROOTS to "array",
+      K.SANDBOX to "string",
+      K.APPROVAL_POLICY to "string",
     )
 
-  private fun threadResponseFields(readOnly: Boolean) =
+  private fun threadResponseFields() =
     mapOf(
       K.THREAD to "object",
       K.CWD to "string",
       K.MODEL to "string",
-    ) + listOfNotNull(K.SANDBOX.takeIf { readOnly }?.let { it to "object" })
+      K.SANDBOX to "object",
+    )
 
   private val deltaFields =
     mapOf(

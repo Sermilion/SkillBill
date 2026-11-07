@@ -278,7 +278,7 @@ private fun claudePermissionArguments(
   runtimeMcpBin: Path?,
 ): List<String> =
   if (hosted) {
-    listOf("--permission-prompts", "host", "--permission-mode", "manual") +
+    listOf("--permission-prompts", "host", "--dangerously-skip-permissions") +
       claudeRuntimeSettlementToolArguments(request, runtimeMcpBin)
   } else {
     listOf("--dangerously-skip-permissions")
@@ -361,8 +361,7 @@ internal class CodexAgentRunCommandBuilder(
             }
             add("--skip-git-repo-check")
             add("--ignore-user-config")
-            add("--sandbox")
-            add("read-only")
+            add("--dangerously-bypass-approvals-and-sandbox")
             add("--config")
             add("shell_environment_policy.inherit=none")
             add("--config")

@@ -157,6 +157,10 @@ class NewTaskDraft internal constructor(
   private fun sendTurn(submitted: String, action: ChatSuggestedAction?, cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified) {
     val current = chatState.value ?: open(UUID.randomUUID().toString(), checkNotNull(repository).root, baseBranch.ifBlank { null }, checkNotNull(selectedAgent))
     offerState.value = offerState.value.copy(prefixKind = null, choices = emptyList(), action = null, started = null)
+    if (action == null && cards.submitAdjustment(current.thread, submitted)) {
+      if (text == submitted) text = ""
+      return
+    }
     current.send(
       submitted,
       action,

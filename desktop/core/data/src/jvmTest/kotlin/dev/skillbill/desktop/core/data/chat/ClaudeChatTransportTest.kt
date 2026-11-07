@@ -25,12 +25,13 @@ class ClaudeChatTransportTest {
     assertFalse("--model" in next || "--effort" in next || "--session-id" in next)
     assertEquals("session-1", next[next.indexOf("--resume") + 1])
     assertFalse(next.last().contains("Pause and act"))
-    assertEquals("auto", first[first.indexOf("--permission-mode") + 1])
-    assertEquals("plan", next[next.indexOf("--permission-mode") + 1])
+
     for (arguments in listOf(first, next)) {
       assertEquals("host", arguments[arguments.indexOf("--permission-prompts") + 1])
       assertEquals("stdio", arguments[arguments.indexOf("--permission-prompt-tool") + 1])
-      val bypassing = setOf("--dangerously-skip-permissions", "--restricted", "--tools", "--allowedTools")
+      assertTrue("--dangerously-skip-permissions" in arguments)
+      assertFalse("--permission-mode" in arguments)
+      val bypassing = setOf("--restricted", "--tools", "--allowedTools")
       assertTrue(arguments.none { it in bypassing || it == "operator prompt" })
     }
 

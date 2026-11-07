@@ -1,6 +1,8 @@
 package skillbill.infrastructure.launcher.process.cursor
 
 internal object CursorAcpKeys {
+  const val BRAVE_MODE = "brave_mode"
+  const val BRAVE_ON = "on"
   const val JSONRPC = "jsonrpc"
   const val ID = "id"
   const val METHOD = "method"

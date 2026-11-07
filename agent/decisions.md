@@ -1,8 +1,15 @@
+## [2026-11-07] Default all provider launches to native permission bypass
+Context: The operator explicitly restored the previous global bypass behavior after testing SKILL-453, and requested it as the default for every agent and launch surface.
+Decision: Claude skips permission checks; Codex requests never approvals and full access on thread start, resume and turns; Cursor uses force, trust, MCP approval and a disabled sandbox; Junie ACP enables Brave mode before prompting. Existing headless Junie review execution remains autonomous.
+Reason: Operators want agents to act by default without adding sandbox approval steps. Keep the broker and cards for genuine residual harness permission requests, and keep operation proposal confirmation separate from tool permissions.
+Revisit when: The operator requests a selectable restrictive launch policy.
+
 ## [2026-11-07] SKILL-453 operator approvals are broker-owned and host-controlled
 Context: Chat previously ran agents with execution permissions and relied on prompt guidance for ReadOnly behavior.
 Decision: Only an operator decision persisted by ApprovalBroker can authorize tool execution. Claude uses host permission prompts without a bypass; unsupported approval paths refuse before launch.
 Reason: The operator needs enforceable control over tool execution, and provider restrictions must remain authoritative.
 Alternatives considered: Agent prose, suggested actions, and agent-authored tokens cannot grant consent; forced execution is not an approval fallback.
+Superseded by: Default all provider launches to native permission bypass (2026-11-07)
 
 ## [2026-11-02] Admit desktop chat intake through the runtime before launch
 Context: New-task chat starts need goal intake and issue-key rules, while concurrent starts and database switches can invalidate a prepared launch.

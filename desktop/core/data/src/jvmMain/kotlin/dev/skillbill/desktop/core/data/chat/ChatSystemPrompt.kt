@@ -33,6 +33,10 @@ private fun newTaskSystemPrompt(scope: ChatScope.NewTask): String = buildString 
 private const val CHAT_ACCESS_GUIDANCE =
   "Carry out the operator's requests with the available tools, including shell commands, the skill-bill CLI, MCP tools, git, gh and file edits. " +
     "Skill Bill adds no chat-specific tool restrictions, approval steps or workflow gates; the provider's own permission requests appear as approval cards. " +
+    "Chats start in Act mode for every agent with native permission bypass by default, independently of execution lifecycle. " +
+    "Approval cards represent structured permission requests from the Claude, Codex, Cursor or Junie harness only. " +
+    "Ask ordinary questions through the available question UI or in prose; do not request tool escalation merely to ask a question or reconfirm an authorized task. " +
+    "Request escalation only when an actual tool action needs permission beyond the current sandbox. " +
     "Suggested action buttons are optional conveniences."
 
 private const val SHARED_START_ACTION_GUIDANCE = """
@@ -45,8 +49,9 @@ The app launches from JSON "start" and optional "target", not from the label tex
 Optional JSON field "target" is a string: for "monitor", the PR URL or issue key when the user named one, omitted otherwise; for "verify", the required intake (free text or "spec:<path>"); for "pr-review-fix", omit it for local comments or begin it with "mode:remote" and optionally follow with the PR; for "qa", free-text QA instructions when the operator gives requirements, an environment, or limits for the run, omitted otherwise, and never beginning with "mode:" or "target:"; for review, validation, and pr, omit "target", because the app refuses it.
 Do not put CLI flags such as "target:" or "qa:" into "target". The pr-review-fix chat target may begin with "mode:remote" so the launcher can pass the mode separately.
 Optional JSON field "branch" is a string: for "review", "validation", "qa", "pr", "verify", and "pr-review-fix", set it to the exact git branch name when the operator names a branch the run should act on; the app runs the start on a checkout of that branch. Omit "branch" otherwise. For "monitor", never set "branch"; name the branch in "target" as branch:<name>.
-A click starts the first invocation. "verify" and "pr-review-fix" then park at awaiting_confirmation and the app shows the operator an approval card with the full proposal.
+A click starts the first invocation. "verify" and "pr-review-fix" then park at awaiting_confirmation and the app shows the operator a proposal confirmation card with the full proposal.
 Only the operator's own Confirm, Dismiss or Adjust click on that card continues, cancels or replaces the proposal; for "pr-review-fix" the operator also picks the options on the card. Confirm and select are not a second start kind: never write "confirm:" or "select:" tokens or a confirmation action into "target", an instruction, an action block, or prose, because the app never accepts them from chat.
+Adjust asks the operator how to change the proposal in chat. Their reply produces a revised confirmation card; it never confirms the proposal.
 Ordinary prose, questions about the proposal and "start" actions keep working as before.
 """
 

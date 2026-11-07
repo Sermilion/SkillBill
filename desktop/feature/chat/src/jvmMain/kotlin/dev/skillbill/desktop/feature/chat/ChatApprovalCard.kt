@@ -80,8 +80,7 @@ internal fun ChatMessage.Approval.controlsOffReason(live: Boolean): String? = wh
 internal fun ApprovalCard.outcomeText(): String = when (state) {
   "pending" -> "Waiting for your answer"
   "allowed" -> when (decisionSource) {
-    "operator_rule" -> "Allowed, and always allowed for this repository"
-    "stored_rule" -> "Allowed by a saved rule"
+    "operator_rule", "stored_rule" -> "Always allowed"
     else -> "Allowed once"
   }
   "denied" -> "Denied"
@@ -109,6 +108,16 @@ internal fun ChatApprovalCard(message: ChatMessage.Approval, actions: ChatApprov
   val shape = RoundedCornerShape(SkillBillRadius.md)
   val offReason = message.controlsOffReason(actions?.live == true)
   val outcome = card.outcomeText()
+  val shieldColor = when {
+    card.state == "allowed" -> colors.stDone
+    card.isPending -> colors.accentText
+    else -> colors.fgMuted
+  }
+  val outcomeColor = when {
+    card.state == "allowed" && card.decidedByRule -> colors.stDone
+    card.state == "allowed" || card.isPending -> colors.accentText
+    else -> colors.fgMuted
+  }
   val decision = if (card.isPending) emptyList() else card.decisionLines()
   var expanded by rememberSaveable(card.key) { mutableStateOf(false) }
   Column(
@@ -123,12 +132,12 @@ internal fun ChatApprovalCard(message: ChatMessage.Approval, actions: ChatApprov
     verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-      CompositionLocalProvider(LocalContentColor provides if (card.isPending) colors.accentText else colors.fgMuted) {
-        SbIcon(LucideIcons.shield, SbIconSize.Md)
+      CompositionLocalProvider(LocalContentColor provides shieldColor) {
+        SbIcon(LucideIcons.shield, SbIconSize.Md, contentDescription = "Permission status")
       }
       BasicText(card.title, Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    BasicText(outcome, style = type.tSm.copy(color = if (card.isPending) colors.accentText else colors.fgMuted))
+    BasicText(outcome, style = type.tSm.copy(color = outcomeColor))
     ApprovalScrollText(card.reason?.takeIf { it.isNotBlank() } ?: card.subject, type.tSm.copy(color = colors.fg2))
     if (card.isPending) ApprovalControls(message, actions, offReason)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -216,7 +225,7 @@ private fun ApprovalControls(message: ChatMessage.Approval, actions: ChatApprova
       if (allowOption != null) {
         SbButton(
           label = "Always allow",
-          tooltip = alwaysAllowLabel(card) + ": this exact action only",
+          tooltip = grants?.alwaysAllowUnavailable ?: (alwaysAllowLabel(card) + ": this exact action only"),
           onClick = { actions?.onDecide(card.key, allowOption.optionId, true) },
           size = SbControlSize.Small,
           enabled = enabled && grants?.alwaysAllowUnavailable == null,
@@ -225,8 +234,12 @@ private fun ApprovalControls(message: ChatMessage.Approval, actions: ChatApprova
       SbButton(label = "Dismiss", onClick = { actions?.onDismiss(card.key) }, variant = SbButtonVariant.Ghost,
         size = SbControlSize.Small, enabled = enabled)
     }
-    val note = offReason ?: grants?.oneTimeUnavailable?.let { "Allowing is unavailable: $it" }
-    note?.let { ApprovalScrollText(it, SkillBillTheme.type.tSm.copy(color = colors.fgMuted)) }
+    val notes = if (offReason != null) listOf(offReason) else listOfNotNull(
+      grants?.oneTimeUnavailable?.let { "Allowing is unavailable: $it" },
+      grants?.alwaysAllowUnavailable?.takeIf { allowOption != null && it != grants?.oneTimeUnavailable }
+        ?.let { "Always allow is unavailable: $it" },
+    )
+    notes.forEach { ApprovalScrollText(it, SkillBillTheme.type.tSm.copy(color = colors.fgMuted)) }
   }
 }
 

@@ -313,6 +313,27 @@ launches, issue-key acceptance in chat and pause-and-act are not prerequisites
 for direct tool use. Optional start buttons still use the desktop intake path
 below; runtime commands retain their own contracts.
 
+All provider launches default to native permission bypass, including execution
+and new-task chats, workflow phases, review workers and background summaries.
+Claude uses `--dangerously-skip-permissions`. Codex app-server explicitly sends
+`approvalPolicy: never` with `danger-full-access` on thread start and resume,
+and `dangerFullAccess` on each turn; one-shot Codex launches use
+`--dangerously-bypass-approvals-and-sandbox`. Cursor uses `--force`, `--trust`,
+`--approve-mcps` and `--sandbox disabled`, including ACP launches. Junie ACP
+sets `brave_mode` to enabled and requires acknowledgement before prompting;
+its existing headless review path remains autonomous. This policy supersedes
+the earlier default of routing every eligible permission prompt to the operator.
+Read-only phase instructions still constrain the requested work; they do not
+select a restrictive provider sandbox by default.
+
+The broker remains connected for genuine permission requests a harness still
+emits. These requests retain their provider identity and wait for the operator's
+card decision. Ordinary chat questions use the question UI or prose and never
+manufacture a permission request. Bypass does not confirm parked `verify` or
+`pr-review-fix` proposals; their operator confirmation cards retain their own
+contracts. Provider-managed restrictions remain authoritative, and an action
+rejected by the provider is never replayed automatically.
+
 Issue-key allocation has two owners. The dispatcher prose in
 `skills/skill-bill/content.md` handles terminal intake, and
 `NewTaskIssueKeyAllocator` handles desktop intake. Both inspect local spec

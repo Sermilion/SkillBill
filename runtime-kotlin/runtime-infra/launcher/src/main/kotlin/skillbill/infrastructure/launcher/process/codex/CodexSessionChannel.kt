@@ -33,7 +33,6 @@ internal data class CodexSessionLaunch(
   val savedThread: String?,
   val outputSink: AgentRunOutputSink,
   val workspaceRoots: List<String> = emptyList(),
-  val readOnly: Boolean = false,
 )
 
 internal class CodexSessionChannel(
@@ -44,7 +43,7 @@ internal class CodexSessionChannel(
   private val settled = AtomicReference<AgentRunSessionOutcome?>()
   private val stopHandled = AtomicBoolean(false)
   private val settings =
-    CodexThreadSettings(launch.cwd, launch.model, launch.effort, launch.readOnly, launch.workspaceRoots)
+    CodexThreadSettings(launch.cwd, launch.model, launch.effort, launch.workspaceRoots)
   private val approvals = CodexApprovalRequests(launch.cwd, ::write, {}, ::stop, diagnostics::warning)
   private var writer: SerializedStdinWriter? = null
   private var openingAt: Instant? = null

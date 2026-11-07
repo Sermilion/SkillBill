@@ -74,8 +74,8 @@ internal fun assertCodexGovernedLaunch(command: List<String>) {
   governedOperations.forEach { operation ->
     assertTrue("$mcpTomlServer.tools.$operation.approval_mode=\"approve\"" in configValues)
   }
-  assertEquals("read-only", command[command.indexOf("--sandbox") + 1])
-  assertTrue("--dangerously-bypass-approvals-and-sandbox" !in command)
+  assertTrue("--dangerously-bypass-approvals-and-sandbox" in command)
+  assertTrue("--sandbox" !in command)
   assertTrue(configValues.any { it.startsWith(mcpTomlServer) && it.contains("enabled_tools=") })
   assertTrue(
     configValues.any { value ->

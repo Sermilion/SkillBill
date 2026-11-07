@@ -13,18 +13,18 @@ private const val QUOTES = "\"'`“”"
 /** The cheapest model of each agent a summary can run on; any other agent gets no summary. */
 internal val summaryModels = mapOf("claude" to "haiku", "codex" to "gpt-6-luna", "cursor" to "gpt-5.4-nano-none")
 
-/** One-shot, tool-less, read-only arguments for [agentId] that persist no session, or null when the agent is unsupported. */
+/** One-shot summary arguments with native permission bypass for [agentId] that persist no session, or null when the agent is unsupported. */
 internal fun summaryArguments(agentId: String, directory: String, prompt: String): List<String>? {
   val model = summaryModels[agentId] ?: return null
   return when (agentId) {
     "claude" -> listOf(
-      "-p", "--model", model, "--tools", "", "--no-session-persistence", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+      "-p", "--dangerously-skip-permissions", "--model", model, "--tools", "", "--no-session-persistence", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
     )
     "codex" -> listOf(
-      "exec", "--json", "--model", model, "--sandbox", "read-only", "--ephemeral", "--skip-git-repo-check", "--cd", directory, "-",
+      "exec", "--json", "--model", model, "--dangerously-bypass-approvals-and-sandbox", "--ephemeral", "--skip-git-repo-check", "--cd", directory, "-",
     )
     "cursor" -> listOf(
-      "--print", "--output-format", "stream-json", "--mode", "ask", "--trust", "--workspace", directory, "--model", model, prompt,
+      "--print", "--output-format", "stream-json", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "--workspace", directory, "--model", model, prompt,
     )
     else -> null
   }

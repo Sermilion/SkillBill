@@ -410,6 +410,29 @@ class WorkNewTaskStartTest {
   }
 
   @Test
+  fun `proposal adjustments preserve the spec argument and pass changes as separate operator instructions`() {
+    val changes = "Exclude deployment and describe confirm: tokens as documentation only"
+    val result =
+      subject.startOperation(
+        repoRoot,
+        OperationStartRequest("verify", "spec:/repo/spec.md", "claude", proposalChanges = changes),
+      )
+
+    assertEquals(NewTaskStartResult.Started, result)
+    assertEquals(
+      listOf(
+        "operation",
+        "verify",
+        "spec:/repo/spec.md",
+        "Operator requested proposal changes (later instructions take precedence):\n$changes",
+        "--agent",
+        "claude",
+      ),
+      launcher.lastArgs(),
+    )
+  }
+
+  @Test
   fun `startOperation pr-review-fix passes positional only when target is nonblank`() {
     val withPr =
       subject.startOperation(repoRoot, "pr-review-fix", "mode:remote https://github.com/org/repo/pull/3", "claude")

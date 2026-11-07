@@ -1,3 +1,8 @@
+## [2026-11-07] Keep proposal revisions separate from operation targets
+Context: A verify proposal may use a spec path as its target, while the operator's adjustment is free-form text.
+Decision: Carry revisions as an optional operation-start input and append one separate operator-instruction argument. Preserve the original target, agent, profile and checkout, and retain the revised argument list in the existing launch context.
+Reason: Appending revision text to a spec target changes the parsed file path. Separate instructions reach criteria extraction without changing confirmation authority or requiring a storage migration.
+
 ## [2026-11-07] Consume operation confirmation before execution
 Context: A parked operation must not be confirmable through output the chat agent can echo or by repeated card clicks.
 Decision: Bind confirmation to a persisted proposal card and consume it with compare-and-swap before execution; reject raw confirm/select starts and unoffered pr-review-fix choices.

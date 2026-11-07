@@ -171,6 +171,7 @@ data class NewTaskStart(
   val checkoutRoot: String? = null,
   val confirmation: OperationCardConfirmation? = null,
   val profile: String? = null,
+  val proposalChanges: String? = null,
 )
 
 fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {

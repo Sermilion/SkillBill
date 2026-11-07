@@ -62,7 +62,7 @@ internal class CodexPhaseSession(
         listOf(executable, "app-server", "generate-json-schema", "--experimental", "--out", "$directory"),
       )
     if (!generated.usable()) return generated
-    val settings = CodexThreadSettings(launch.cwd, launch.model, launch.effort, launch.readOnly, launch.workspaceRoots)
+    val settings = CodexThreadSettings(launch.cwd, launch.model, launch.effort, launch.workspaceRoots)
     return CodexSchemaAdmission.inspect(directory, settings)?.let(::refused)
   }
 

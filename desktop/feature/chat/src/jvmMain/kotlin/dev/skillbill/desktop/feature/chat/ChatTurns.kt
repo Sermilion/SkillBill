@@ -56,8 +56,8 @@ internal fun removedWorktreeNotice(root: String, result: SessionMoveResult?): St
   return "$REMOVED_WORKTREE_CHAT_NOTICE $root. $sentence"
 }
 
-/** The one mode rule: a running or active execution is only read; anything else may be acted on. */
-internal fun modeFor(header: WorkItem): ChatPermissionMode =
+/** Coordinates optional pause actions with execution state; provider chat turns always use Act. */
+internal fun coordinationModeFor(header: WorkItem): ChatPermissionMode =
   if (header.running || header.lifecycle == Lifecycle.Active) ChatPermissionMode.ReadOnly else ChatPermissionMode.Act
 
 /** The directory an execution's agent runs in: its checkout while that directory exists, else the repository root. */
@@ -95,7 +95,7 @@ internal class ChatTurns(
     val header = state?.header ?: session.item
     session.item = header
     followRoot(session)
-    session.modeState.value = modeFor(header)
+    session.coordinationModeState.value = coordinationModeFor(header)
     if (sections is DetailSections.Loaded) return ExecutionRead(header, sections.detail, sections.runOptions)
     session.append(ChatMessage.Notice(UNREADABLE_NOTICE))
     return ExecutionRead(header, null, null)
@@ -166,7 +166,6 @@ internal class ChatTurns(
   suspend fun turn(
     session: ChatSession,
     read: ExecutionRead,
-    mode: ChatPermissionMode,
     text: String,
     prefix: String? = null,
     images: List<ChatImage> = emptyList(),
@@ -180,7 +179,7 @@ internal class ChatTurns(
     val delivered = session.delivered
     val context = if (session.started && delivered != null) diff(delivered, current).render() else current.render()
     val prompt = listOfNotNull(prefix, context, text.takeIf { it.isNotBlank() }).joinToString("\n\n")
-    return stream(session, agent, read.header, mode, prompt, current, images, cursorMcpDependency)
+    return stream(session, agent, read.header, prompt, current, images, cursorMcpDependency)
   }
 
   /** Resolves the session's agent without a turn, so a chat that skips the opening turn can still be sent to. */
@@ -200,7 +199,6 @@ internal class ChatTurns(
     session: ChatSession,
     agent: ChatAgent,
     header: WorkItem,
-    mode: ChatPermissionMode,
     prompt: String,
     sent: ExecutionSnapshot,
     images: List<ChatImage>,
@@ -208,7 +206,7 @@ internal class ChatTurns(
   ): Boolean {
     val root = header.workingRoot()
     val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, root)
-    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt, images, cursorMcpDependency)
+    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, ChatPermissionMode.Act, prompt, images, cursorMcpDependency)
     var delivered = false
     try {
       chat.send(request).collect { event ->

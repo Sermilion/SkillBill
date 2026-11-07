@@ -6,7 +6,6 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.SelectedAgentHomes
 import dev.skillbill.desktop.core.domain.model.ChatEvent
-import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.CoroutineStart
@@ -210,10 +209,7 @@ internal fun claudeArguments(request: ChatTurnRequest): List<String> = buildList
   // approval card. Without the stdio prompt tool the CLI has no host handler and denies every prompt with its ask reason.
   addAll(listOf("--permission-prompts", "host"))
   addAll(listOf("--permission-prompt-tool", "stdio"))
-  // The selected mode is enforced by the provider, not by prose: plan mode blocks edits and commands in read-only chat,
-  // and `auto` in act chat lets the operator's auto-mode rules decide routine actions, so only the actions they leave
-  // undecided reach an approval card. A user or project default mode never applies.
-  addAll(listOf("--permission-mode", if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "auto"))
+  add("--dangerously-skip-permissions")
   addAll(listOf("--system-prompt-snapshot", "off"))
   addAll(listOf("--append-system-prompt", scopeSystemPrompt(request.scope)))
 }

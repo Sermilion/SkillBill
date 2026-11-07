@@ -6,7 +6,6 @@ import dev.skillbill.desktop.core.data.approval.SessionApprovalGenerations
 import dev.skillbill.desktop.core.data.approval.toCard
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
-import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
@@ -175,7 +174,7 @@ internal fun cursorAcpTurn(
       model = request.agent.model?.let { model ->
         request.agent.effort?.takeIf { cursor && "[effort=" !in model }?.let { "$model[effort=$it]" } ?: model
       },
-      mode = if (!cursor) null else if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "agent",
+      mode = if (cursor) "agent" else null,
       savedSession = saved,
       images = request.images.map { CursorAcpImage(Base64.getEncoder().encodeToString(it.bytes), it.mediaType) },
       mcpDependency = dependency,
@@ -232,7 +231,7 @@ internal fun cursorAcpTurn(
     return@channelFlow
   }
   val generation = (opening as CursorChatApprovalOpening.Opened).generation
-  val command = ChatCommand(agentCommand(executable, if (cursor) cursorAcpArguments(request.mode) else provider.acpArguments, shell), request.scope.repositoryRoot, environment, "")
+  val command = ChatCommand(agentCommand(executable, provider.acpArguments, shell), request.scope.repositoryRoot, environment, "")
   val reader = launch(start = CoroutineStart.LAZY) {
     try { live.openAcknowledged(command, inputs).collect { outputs.send(it) } }
     finally { outputs.close() }
@@ -300,10 +299,3 @@ internal fun cursorAcpTurn(
     }
   }
 }
-
-/**
- * Act chat runs Cursor's Auto-review: its classifier runs routine tool calls itself, so only the calls it leaves
- * undecided reach an approval card. Read-only chat stays in plan mode, which the session selects after it opens.
- */
-internal fun cursorAcpArguments(mode: ChatPermissionMode): List<String> =
-  if (mode == ChatPermissionMode.ReadOnly) listOf("acp") else listOf("--auto-review", "acp")

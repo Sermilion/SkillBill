@@ -246,7 +246,7 @@ class ChatWorkspace(
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
       if (opening) {
-        turns.turn(session, read, modeFor(read.header), openingInstruction(classify(read.header)))
+        turns.turn(session, read, openingInstruction(classify(read.header)))
       } else {
         turns.prepare(session, read)
       }
@@ -354,7 +354,7 @@ class ChatWorkspace(
 
   private fun executeStartAction(session: ChatSession, action: ChatSuggestedAction, start: NewTaskActionKind, keyChoice: String? = null) {
     session.prefixChoiceState.value = null
-    if (modeFor(session.item) == ChatPermissionMode.ReadOnly) {
+    if (coordinationModeFor(session.item) == ChatPermissionMode.ReadOnly) {
       val name = session.item.issueKey ?: session.item.id
       session.append(ChatMessage.Notice("Start for $name waits until this execution is not running."))
       return
@@ -420,7 +420,7 @@ class ChatWorkspace(
     session.stoppableState.value = true
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
-      if (!turns.turn(session, read, modeFor(read.header), text, images = images, cursorMcpDependency = cursorMcpDependency)) {
+      if (!turns.turn(session, read, text, images = images, cursorMcpDependency = cursorMcpDependency)) {
         restoreDraft(session.id, text, images, cursorMcpDependency)
       }
     }
@@ -481,8 +481,8 @@ class ChatWorkspace(
     session.stoppableState.value = true
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
-      if (modeFor(read.header) == ChatPermissionMode.Act) {
-        if (!turns.turn(session, read, ChatPermissionMode.Act, text, images = images, cursorMcpDependency = cursorMcpDependency)) {
+      if (coordinationModeFor(read.header) == ChatPermissionMode.Act) {
+        if (!turns.turn(session, read, text, images = images, cursorMcpDependency = cursorMcpDependency)) {
           restoreDraft(session.id, text, images, cursorMcpDependency)
         }
         return@launchTurn
@@ -517,7 +517,6 @@ class ChatWorkspace(
       if (!turns.turn(
         session,
         stoppedRead,
-        ChatPermissionMode.Act,
         text,
         prefix = ACT_PREFIX,
         images = images,
@@ -671,6 +670,7 @@ class ChatWorkspace(
   private fun drainQueue(session: ChatSession) {
     if (!session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return
     val message = session.thread.takeQueuedMessage() ?: return
+    if (message.action == null && cards(session).submitAdjustment(session.thread, message.text)) return
     session.busyState.value = true
     session.append(ChatMessage.Operator(message.text, message.action, message.images))
     if (message.pauseAndAct) pauseAndAct(session, message.text, message.images, message.cursorMcpDependency) else send(session, message.text, message.images, message.cursorMcpDependency)
@@ -712,7 +712,7 @@ class ChatWorkspace(
   private suspend fun awaitExecutionStopped(header: WorkItem, deadline: Instant): DetailState? =
     withTimeoutOrNull((deadline - clock.now()).coerceAtLeast(Duration.ZERO)) {
       details.observe(header).firstOrNull {
-        it.sections is DetailSections.Gone || (it.sections !is DetailSections.Pending && modeFor(it.header) == ChatPermissionMode.Act)
+        it.sections is DetailSections.Gone || (it.sections !is DetailSections.Pending && coordinationModeFor(it.header) == ChatPermissionMode.Act)
       }
     }
 
@@ -751,7 +751,7 @@ class ChatWorkspace(
       val outcome = controls.launch(current ?: header, current?.agentId ?: header.agentId)
       if (outcome is ControlOutcome.Refused || outcome is ControlOutcome.Failed) {
         val after = turns.freshRead(header)?.takeIf { it.sections !is DetailSections.Gone }?.header
-        if (after != null && modeFor(after) == ChatPermissionMode.ReadOnly) {
+        if (after != null && coordinationModeFor(after) == ChatPermissionMode.ReadOnly) {
           sessions[id]?.append(ChatMessage.Notice(ALREADY_RUNNING_NOTICE))
         } else {
           sessions[id]?.append(
@@ -778,7 +778,7 @@ class ChatWorkspace(
   // True, after noting why, when the execution is already running or finished, so the app must not relaunch it.
   private fun skipRelaunch(id: String, current: WorkItem): Boolean {
     val notice = when {
-      modeFor(current) == ChatPermissionMode.ReadOnly -> ALREADY_RUNNING_NOTICE
+      coordinationModeFor(current) == ChatPermissionMode.ReadOnly -> ALREADY_RUNNING_NOTICE
       current.lifecycle == Lifecycle.Terminal -> "The execution finished during this turn; the app did not relaunch it."
       else -> return false
     }
@@ -907,7 +907,7 @@ class ChatWorkspace(
             if (it.turnJob == null) turns.followRoot(it)
             val title = state.header.issueKey ?: state.header.title
             tabState.update { s -> s.copy(tabs = s.tabs.map { t -> if (t.executionId == it.item.id) t.copy(title = title) else t }) }
-            it.modeState.value = modeFor(state.header)
+            it.coordinationModeState.value = coordinationModeFor(state.header)
           }
         }
       }

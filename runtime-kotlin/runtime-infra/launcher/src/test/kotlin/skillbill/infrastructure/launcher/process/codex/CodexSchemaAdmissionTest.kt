@@ -16,8 +16,6 @@ class CodexSchemaAdmissionTest {
       writeCodexSchemaFixture(directory)
       assertNull(CodexSchemaAdmission.inspect(directory, WORKER))
       assertNull(CodexSchemaAdmission.inspect(directory, PLAIN))
-      assertNull(CodexSchemaAdmission.inspect(directory, WORKER.copy(readOnly = true)))
-      assertNull(CodexSchemaAdmission.inspect(directory, PLAIN.copy(autoReview = true)))
       val file = directory.resolve("v2/ThreadStartParams.json")
       val mapper = ObjectMapper()
       val schema = mapper.readTree(file.toFile())
@@ -35,7 +33,7 @@ class CodexSchemaAdmissionTest {
     val directory = Files.createTempDirectory("codex-schema-images")
     try {
       writeCodexSchemaFixture(directory)
-      assertNull(CodexSchemaAdmission.inspect(directory, PLAIN.copy(readOnly = true), localImages = true))
+      assertNull(CodexSchemaAdmission.inspect(directory, PLAIN, localImages = true))
       val file = directory.resolve("v2/TurnStartParams.json")
       val mapper = ObjectMapper()
       val schema = mapper.readTree(file.toFile())
@@ -54,6 +52,28 @@ class CodexSchemaAdmissionTest {
   }
 
   @Test
+  fun `bypass refuses a schema without never approvals on any opening or turn`() {
+    val directory = Files.createTempDirectory("codex-schema-bypass")
+    val mapper = ObjectMapper()
+    try {
+      for (name in listOf("ThreadStartParams", "ThreadResumeParams", "TurnStartParams")) {
+        writeCodexSchemaFixture(directory)
+        val file = directory.resolve("v2/$name.json")
+        val schema = mapper.readTree(file.toFile())
+        val approval = schema.path("properties").path("approvalPolicy") as ObjectNode
+        approval.removeAll()
+        approval.put("type", "string")
+        approval.set<ArrayNode>("enum", mapper.createArrayNode().add("on-request"))
+        mapper.writeValue(file.toFile(), schema)
+
+        assertNotNull(CodexSchemaAdmission.inspect(directory, PLAIN), name)
+      }
+    } finally {
+      directory.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `only the supported codex-cli version is admitted`() {
     assertNull(codexVersionRefusal("codex-cli $CODEX_PROTOCOL_VERSION\n"))
     assertNotNull(codexVersionRefusal("codex-cli 0.165.0"))
@@ -62,7 +82,7 @@ class CodexSchemaAdmissionTest {
 
   private companion object {
     val WORKER =
-      CodexThreadSettings("/work", "worker-model", "high", readOnly = false, workspaceRoots = listOf("/extra"))
-    val PLAIN = CodexThreadSettings("/work", null, null, readOnly = false)
+      CodexThreadSettings("/work", "worker-model", "high", workspaceRoots = listOf("/extra"))
+    val PLAIN = CodexThreadSettings("/work", null, null)
   }
 }

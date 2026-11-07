@@ -3,7 +3,6 @@ package skillbill.infrastructure.launcher.process.codex
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
@@ -14,9 +13,7 @@ data class CodexThreadSettings(
   val cwd: String,
   val model: String?,
   val effort: String?,
-  val readOnly: Boolean,
   val workspaceRoots: List<String> = emptyList(),
-  val autoReview: Boolean = false,
 )
 
 sealed interface CodexThreadOpening {
@@ -61,10 +58,10 @@ object CodexAppServerProtocol {
     buildJsonObject {
       savedThread?.let { put(K.THREAD_ID, it) }
       put(K.CWD, settings.cwd)
-      if (settings.workspaceRoots.isNotEmpty() && !settings.readOnly) put(K.WORKSPACE_ROOTS, settings.roots())
+      if (settings.workspaceRoots.isNotEmpty()) put(K.WORKSPACE_ROOTS, settings.roots())
       settings.model?.let { put(K.MODEL, it) }
-      if (settings.readOnly) put(K.SANDBOX, K.READ_ONLY_SANDBOX)
-      putReview(settings)
+      put(K.SANDBOX, K.BYPASS_SANDBOX)
+      put(K.APPROVAL_POLICY, K.NEVER_POLICY)
     }
 
   fun threadOpening(
@@ -78,7 +75,7 @@ object CodexAppServerProtocol {
     val validSettings =
       result.text(K.CWD) == settings.cwd && !returnedModel.isNullOrBlank() &&
         (settings.model == null || returnedModel == settings.model) &&
-        (!settings.readOnly || result.obj(K.SANDBOX)?.text(K.TYPE) == K.READ_ONLY_POLICY)
+        result.obj(K.SANDBOX)?.text(K.TYPE) == K.BYPASS_POLICY
     return when {
       !validIdentity && savedThread != null ->
         CodexThreadOpening.Refused(
@@ -105,19 +102,12 @@ object CodexAppServerProtocol {
       put(
         K.SANDBOX_POLICY,
         buildJsonObject {
-          put(K.TYPE, if (settings.readOnly) K.READ_ONLY_POLICY else K.WORKSPACE_WRITE_POLICY)
-          if (!settings.readOnly) put(K.WRITABLE_ROOTS, settings.roots())
+          put(K.TYPE, K.BYPASS_POLICY)
         },
       )
       put(K.INPUT, JsonArray(input))
-      putReview(settings)
+      put(K.APPROVAL_POLICY, K.NEVER_POLICY)
     }
-
-  private fun JsonObjectBuilder.putReview(settings: CodexThreadSettings) {
-    if (!settings.autoReview) return
-    put(K.APPROVAL_POLICY, K.ON_REQUEST_POLICY)
-    put(K.APPROVALS_REVIEWER, K.AUTO_REVIEW_REVIEWER)
-  }
 
   fun textInput(text: String): JsonObject =
     buildJsonObject {

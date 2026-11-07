@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import skillbill.infrastructure.launcher.process.cursor.AcpProvider
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
@@ -89,10 +90,12 @@ internal class CursorAgentRunCommandBuilder(
     buildList {
       add("agent")
       if (!isReviewLaunch) {
-        add("acp")
+        addAll(AcpProvider.Cursor.acpArguments)
         return@buildList
       }
       add("--print")
+      add("--sandbox")
+      add("disabled")
 
       if (isReviewLaunch) {
         add("--force")

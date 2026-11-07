@@ -32,6 +32,7 @@ internal class OperationCardCoordinator(
 ) {
   private val requests = ConcurrentHashMap<String, NewTaskStart>()
   private val observations = ConcurrentHashMap<String, Job>()
+  private val pendingAdjustments = ConcurrentHashMap<ChatThread, String>()
   private val outstanding = ConcurrentHashMap<ChatThread, Int>()
 
   fun hasOutstanding(thread: ChatThread): Boolean = outstanding.containsKey(thread)
@@ -114,7 +115,7 @@ internal class OperationCardCoordinator(
       onConfirm = { token -> confirm(thread, token) },
       onDismiss = { token -> dismiss(thread, token) },
       onAdjust = { token -> adjust(thread, token) },
-      canAdjust = { token -> thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true },
+      canAdjust = { token -> !thread.busy.value && thread.operationCard(token)?.card?.launchId?.let(requests::containsKey) == true },
     )
 
   private fun confirm(thread: ChatThread, token: String) {
@@ -131,6 +132,7 @@ internal class OperationCardCoordinator(
     }
     val selection = message.selectionWire()
     thread.beginOperationDecision(token, OperationCardDecision.Confirm) ?: return
+    pendingAdjustments.remove(thread)
     val finish = track(thread)
     scope.launch {
       var refusal: String? = null
@@ -161,6 +163,7 @@ internal class OperationCardCoordinator(
 
   private fun dismiss(thread: ChatThread, token: String) {
     thread.beginOperationDecision(token, OperationCardDecision.Dismiss) ?: return
+    pendingAdjustments.remove(thread)
     val finish = track(thread)
     scope.launch {
       var refusal: String? = null
@@ -182,17 +185,47 @@ internal class OperationCardCoordinator(
 
   private fun adjust(thread: ChatThread, token: String) {
     val message = thread.operationCard(token) ?: return
-    val request = requests[message.card.launchId]
-      ?: return thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT).also {
-        scope.launch { persistOrWarn(thread) }
-      }
+    if (!requests.containsKey(message.card.launchId)) {
+      thread.operationCardSubmitting(token, false, ADJUST_UNAVAILABLE_TEXT)
+      scope.launch { persistOrWarn(thread) }
+      return
+    }
     thread.beginOperationDecision(token, OperationCardDecision.Adjust) ?: return
+    thread.operationCardSubmitting(token, false)
+    if (pendingAdjustments.put(thread, token) == token) return
+    thread.append(ChatMessage.Agent(
+      "How would you like to change this ${message.card.operationId} proposal? Reply in chat; I will prepare a revised proposal for you to confirm.",
+      streaming = false,
+      tools = emptyList(),
+    ))
+    scope.launch { persistOrWarn(thread) }
+  }
+
+  fun submitAdjustment(thread: ChatThread, text: String): Boolean {
+    if (text.isBlank()) return false
+    val token = pendingAdjustments.remove(thread) ?: return false
+    val message = thread.operationCard(token) ?: return false
+    val request = requests[message.card.launchId] ?: return false
+    thread.append(ChatMessage.Operator(text))
+    if (thread.beginOperationDecision(token, OperationCardDecision.Adjust) == null) {
+      thread.append(ChatMessage.Notice("This proposal is no longer awaiting changes; start a new proposal from chat."))
+      scope.launch { persistOrWarn(thread) }
+      return true
+    }
+    val replacement = request.copy(
+      confirmation = null,
+      proposalChanges = listOfNotNull(request.proposalChanges, text.trim()).joinToString("\n\n"),
+    )
+    thread.append(ChatMessage.Notice("Updating the ${message.card.operationId} proposal…"))
     val finish = track(thread)
     scope.launch {
       var failure: String? = null
       try {
-        val outcome = controls.startNewTask(request)
-        failure = follow(thread, outcome, null, request)
+        if (!historyChanged(thread)) {
+          failure = HISTORY_SAVE_FAILED_TEXT
+          return@launch
+        }
+        failure = follow(thread, controls.startNewTask(replacement), null, replacement)
       } finally {
         withContext(NonCancellable) {
           try {
@@ -205,6 +238,7 @@ internal class OperationCardCoordinator(
         }
       }
     }
+    return true
   }
 
   /**
@@ -219,7 +253,9 @@ internal class OperationCardCoordinator(
         val launchId = outcome.launchId
         if (replacement != null && launchId != null) {
           remember(launchId, replacement)
-          if (failure == null) show(thread, launchId)
+          if (failure == null && !show(thread, launchId)) {
+            thread.append(ChatMessage.Notice("The operation finished without a replacement proposal."))
+          }
         }
         failure
       }

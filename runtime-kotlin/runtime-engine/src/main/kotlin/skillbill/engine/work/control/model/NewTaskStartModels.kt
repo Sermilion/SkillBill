@@ -56,6 +56,7 @@ public data class OperationStartRequest(
   public val profile: String? = null,
   public val checkout: StandaloneCheckout = StandaloneCheckout(),
   public val confirmation: OperatorConfirmation? = null,
+  public val proposalChanges: String? = null,
 )
 
 public data class OperatorConfirmation(

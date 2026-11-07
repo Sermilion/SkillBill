@@ -256,6 +256,10 @@ public class WorkNewTaskStart(
     return when {
       operationId !in STANDALONE_OPERATIONS ->
         NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
+      confirmation != null && request.proposalChanges != null ->
+        NewTaskStartResult.Refused("An operation confirmation cannot change its proposal.")
+      request.proposalChanges.orEmpty().toByteArray(Charsets.UTF_8).size > MAX_INTAKE_BYTES ->
+        NewTaskStartResult.Refused("Proposal changes are too long. Shorten them to under $MAX_INTAKE_BYTES bytes.")
       confirmation != null -> confirmOperation(repoRoot, operationId, confirmation)
       else -> proposalTargetRefusal(operationId, request.target) ?: startProposal(repoRoot, request)
     }
@@ -300,6 +304,7 @@ public class WorkNewTaskStart(
         BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, holderId),
         launchId,
         profile,
+        proposalChanges = request.proposalChanges,
       )
     return launchStandaloneCommand(repoRoot, run, request.target, request.agentId, request.checkout)
   }
@@ -455,15 +460,21 @@ public class WorkNewTaskStart(
     target: String?,
   ): StandaloneArguments {
     val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
+    val changes =
+      listOfNotNull(
+        run.proposalChanges?.trim()?.takeIf(String::isNotBlank)?.let {
+          "Operator requested proposal changes (later instructions take precedence):\n$it"
+        },
+      )
     val splitPrReviewMode =
       PR_REVIEW_FIX_MODE_TARGET.matchEntire(launchTarget.orEmpty())
         ?.takeIf { run.verb == "operation" && run.name == OperationCardOperationIds.PR_REVIEW_FIX }
-        ?: return StandaloneArguments(launchTarget, launchTarget, listOfNotNull(launchTarget))
+        ?: return StandaloneArguments(launchTarget, launchTarget, listOfNotNull(launchTarget) + changes)
     val argvTarget = splitPrReviewMode.groupValues[2].trim().takeIf(String::isNotBlank)
     return StandaloneArguments(
       launchTarget,
       argvTarget,
-      listOfNotNull("mode:${splitPrReviewMode.groupValues[1]}", argvTarget),
+      listOfNotNull("mode:${splitPrReviewMode.groupValues[1]}", argvTarget) + changes,
     )
   }
 
@@ -745,6 +756,7 @@ public class WorkNewTaskStart(
     val launchId: String? = null,
     val profile: String? = null,
     val qaDevice: QaNamedDevice? = null,
+    val proposalChanges: String? = null,
   )
 
   private data class OperationBinding(

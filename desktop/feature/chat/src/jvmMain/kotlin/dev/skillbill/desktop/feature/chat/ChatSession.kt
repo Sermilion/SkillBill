@@ -108,8 +108,8 @@ class ChatSession internal constructor(
   internal val queuedState get() = thread.queuedState
   internal val queued: StateFlow<List<QueuedChatMessage>> get() = thread.queued
 
-  internal val modeState = MutableStateFlow(modeFor(item))
-  val mode: StateFlow<ChatPermissionMode> = modeState.asStateFlow()
+  internal val coordinationModeState = MutableStateFlow(coordinationModeFor(item))
+  val coordinationMode: StateFlow<ChatPermissionMode> = coordinationModeState.asStateFlow()
 
   /**
    * True only while the approval feed holds this window's operator registration for the chat's repository. Every card

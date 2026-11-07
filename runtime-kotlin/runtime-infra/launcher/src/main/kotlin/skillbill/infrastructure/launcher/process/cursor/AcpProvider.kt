@@ -18,7 +18,7 @@ data class AcpProvider(
       AcpProvider(
         SupportedAgent.CURSOR.wireValue,
         "Cursor",
-        listOf("acp"),
+        listOf("--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
         CursorAcpKeys.CURSOR_LOGIN,
         mcpDeclarationRequired = true,
       )

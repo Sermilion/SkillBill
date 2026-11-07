@@ -14,7 +14,7 @@ data class ChatAgent(
   val approvalUnavailableReason: String? = null,
 )
 
-/** [ReadOnly] while the execution runs; [Act] once the operator paused it to act. */
+/** Provider permission scope; operator chats start in [Act], independently of execution lifecycle. */
 enum class ChatPermissionMode { ReadOnly, Act }
 
 enum class CursorMcpDependency { Unspecified, ProjectUserOnly, TeamDashboardRequired }

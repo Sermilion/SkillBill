@@ -2,7 +2,6 @@ package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.data.runtime.currentDesktopTempRoot
-import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -54,14 +53,11 @@ internal suspend fun codexAppServerCompatibility(
     }
   }
 
-/** What every chat thread and turn asks Codex for; act chat routes approvals through Codex's auto-review agent. */
+/** Uses the same native bypass settings for new and resumed operator chats. */
 internal fun codexChatSettings(command: ChatCommand, request: ChatTurnRequest): CodexThreadSettings {
-  val readOnly = request.mode == ChatPermissionMode.ReadOnly
   return CodexThreadSettings(
     cwd = command.workingDirectory,
     model = request.agent.model,
     effort = request.agent.effort,
-    readOnly = readOnly,
-    autoReview = !readOnly,
   )
 }

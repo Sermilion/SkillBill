@@ -419,6 +419,7 @@ class RuntimeWorkControlRepository(
           request.profile,
           request.standaloneCheckout(),
           request.confirmation?.let { OperatorConfirmation(it.token, it.selection) },
+          proposalChanges = request.proposalChanges,
         ),
       )
     }

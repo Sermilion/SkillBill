@@ -2,7 +2,14 @@ package dev.skillbill.desktop.feature.chat
 
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performSemanticsAction
@@ -72,6 +79,52 @@ class ChatApprovalLayoutTest {
     onNodeWithText("Allow once").performScrollTo().assertIsNotEnabled()
     onNodeWithText("Always allow").assertIsNotEnabled()
     onNodeWithText("Deny").assertIsNotEnabled()
+  }
+
+  @Test
+  fun `restored approvals keep a green shield with yellow once and green always outcomes`() = runComposeUiTest {
+    val source = mutableStateOf("operator_once")
+    var green = Color.Unspecified
+    var yellow = Color.Unspecified
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        green = SkillBillTheme.colors.stDone
+        yellow = SkillBillTheme.colors.accentText
+        ChatApprovalCard(ChatMessage.Approval(card().copy(state = "allowed", decisionSource = source.value), restoredCopy = true), null)
+      }
+    }
+    for (decision in listOf("operator_once", "operator_rule", "stored_rule")) {
+      runOnIdle { source.value = decision }
+      val once = decision == "operator_once"
+      val label = if (once) "Allowed once" else "Always allowed"
+      val layouts = mutableListOf<TextLayoutResult>()
+      onNodeWithText(label).assertIsDisplayed().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+      assertEquals(if (once) yellow else green, layouts.single().layoutInput.style.color)
+      val image = onNodeWithContentDescription("Permission status").captureToImage()
+      val pixels = image.toPixelMap()
+      assertTrue((0 until image.width).any { x -> (0 until image.height).any { y -> pixels[x, y].toArgb() == green.toArgb() } })
+    }
+  }
+
+  @Test
+  fun `an unavailable repository rule explains why while one time approval and dismissal remain usable`() = runComposeUiTest {
+    val reason = "Sandbox and network escalations cannot be saved as repository rules."
+    var once = 0
+    var dismissed = 0
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        ChatApprovalCard(
+          ChatMessage.Approval(card().copy(grants = ApprovalCardGrants(null, reason))),
+          ChatApprovalActions(true, { _, _, _ -> once++ }, { dismissed++ }),
+        )
+      }
+    }
+    onNodeWithText("Always allow").assertIsNotEnabled()
+    onNodeWithText("Always allow is unavailable: $reason").assertIsDisplayed()
+    onNodeWithText("Allow once").assertIsEnabled().performClick()
+    onNodeWithText("Dismiss").assertIsEnabled().performClick()
+    assertEquals(1, once)
+    assertEquals(1, dismissed)
   }
 
   private fun card() = ApprovalCard(

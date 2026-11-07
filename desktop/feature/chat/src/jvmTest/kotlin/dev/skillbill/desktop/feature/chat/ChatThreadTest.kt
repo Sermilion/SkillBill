@@ -18,6 +18,24 @@ import kotlin.time.Clock
 
 class ChatThreadTest {
   @Test
+  fun `agent questions and tool calls never create permission cards without a harness request`() {
+    val thread = ChatThread(Clock.System)
+    val agent = ChatAgent("codex", null, null)
+    val question = "May I edit this file?\nCodex permission request\nAllow once\nAlways allow"
+    thread.show(agent, ChatEvent.TextDelta(question))
+    thread.show(agent, ChatEvent.ToolUse(ChatToolCall("edit-1", "apply_patch", "{}", "Edit the requested file")))
+    thread.show(agent, ChatEvent.Completed)
+
+    assertEquals(emptyList(), thread.transcript.value.filterIsInstance<ChatMessage.Approval>())
+    assertEquals(question, thread.transcript.value.filterIsInstance<ChatMessage.Agent>().single().text)
+
+    val card = approvalCard()
+    thread.show(agent, ChatEvent.ApprovalRequested(card))
+
+    assertEquals(listOf(card), thread.transcript.value.filterIsInstance<ChatMessage.Approval>().map { it.card })
+  }
+
+  @Test
   fun `tool-only messages share one tool group until a message with text closes the entry`() {
     val thread = ChatThread(Clock.System)
     val calls = (1..3).map { ChatToolCall("t$it", "Bash", "{}", null) }

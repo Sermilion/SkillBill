@@ -85,7 +85,10 @@ class AgentLauncherPreflightTest {
 
     assertNotEquals<AgentRunTermination>(AgentRunTermination.SpawnFailed, facts.termination)
     assertEquals("cursor-agent", runner.requests.last().launch.command.first())
-    assertEquals(listOf("cursor-agent", "acp"), runner.requests.last().launch.command)
+    assertEquals(
+      listOf("cursor-agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      runner.requests.last().launch.command,
+    )
   }
 
   @Test

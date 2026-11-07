@@ -107,7 +107,7 @@ class CodexPhaseSessionTest {
         *'"method":"initialize"'*)
           printf '%s\n' '{"id":1,"result":{"userAgent":"codex_cli_rs/0.166.0 (fixture)"}}' ;;
         *'"method":"thread/start"'*|*'"method":"thread/resume"'*)
-          printf '%s\n' "{\"id\":2,\"result\":{\"thread\":{\"id\":\"thread-1\"},\"cwd\":\"${'$'}PWD\",\"model\":\"worker-model\"}}" ;;
+          printf '%s\n' "{\"id\":2,\"result\":{\"thread\":{\"id\":\"thread-1\"},\"cwd\":\"${'$'}PWD\",\"model\":\"worker-model\",\"sandbox\":{\"type\":\"dangerFullAccess\"}}}" ;;
         *'"method":"turn/start"'*)
           printf '%s\n' '{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}'
           if [[ "${'$'}count" -lt 6 ]]; then

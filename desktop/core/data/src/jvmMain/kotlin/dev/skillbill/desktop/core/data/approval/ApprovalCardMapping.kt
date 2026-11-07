@@ -67,7 +67,7 @@ internal fun ApprovalGrantRefusal.readableReason(): String = when (this) {
   ApprovalGrantRefusal.NO_ONE_TIME_GRANT -> "The provider offered no one-time allow option."
   ApprovalGrantRefusal.READ_ONLY_WRITE_ACTION -> "Read-only chat: write actions cannot be allowed."
   ApprovalGrantRefusal.NOT_ORDINARY_ACTION ->
-    "Not eligible for a repository rule: this is not an ordinary tool or command."
+    "Sandbox or network escalations and other special requests cannot be saved as repository rules."
   ApprovalGrantRefusal.INCOMPLETE_INPUT -> "Not eligible for a repository rule: the action input is incomplete."
   ApprovalGrantRefusal.INCOMPLETE_SCOPE -> "Not eligible for a repository rule: the action scope is incomplete."
 }

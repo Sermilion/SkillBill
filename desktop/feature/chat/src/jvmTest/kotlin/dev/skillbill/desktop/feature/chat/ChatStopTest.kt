@@ -3,7 +3,6 @@ package dev.skillbill.desktop.feature.chat
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
-import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
 import dev.skillbill.desktop.core.domain.model.Lifecycle
@@ -240,7 +239,7 @@ class ChatStopTest {
     val header = MutableStateFlow(loaded(item))
     details.details = mapOf(item.id to header)
     fake.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
+      if (request.prompt.startsWith(ACT_PREFIX)) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
     }
     val workspace = workspace()
     workspace.open(item)
@@ -276,7 +275,7 @@ class ChatStopTest {
     val header = MutableStateFlow(loaded(item))
     details.details = mapOf(item.id to header)
     fake.events = { request ->
-      if (request.mode == ChatPermissionMode.Act) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
+      if (request.prompt.startsWith(ACT_PREFIX)) flow { awaitCancellation() } else flowOf(ChatEvent.Completed)
     }
     val workspace = workspace()
     workspace.open(item)

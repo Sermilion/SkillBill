@@ -42,12 +42,15 @@ class CursorAcpSessionTest {
   }
 
   @Test
-  fun `Junie opens a session without login or mode selection and its cards carry its own provider`() {
+  fun `Junie enables Brave mode before prompting and retains cards for actual provider requests`() {
     val harness = Harness(dependency = CursorAcpMcpDependency.Unspecified, provider = AcpProvider.Junie)
     harness.session.start()
     harness.respond("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"cursor_login"}]}""")
     assertEquals(JsonPrimitive("session/new"), harness.frames.last()[CursorAcpKeys.METHOD])
     harness.respond("""{"sessionId":"s"}""")
+    assertEquals(JsonPrimitive("session/set_config_option"), harness.frames.last()[CursorAcpKeys.METHOD])
+    assertFalse(harness.session.ready)
+    harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":true}]}""")
     assertEquals(JsonPrimitive("session/prompt"), harness.frames.last()[CursorAcpKeys.METHOD])
     assertTrue(harness.session.ready)
 
@@ -61,6 +64,55 @@ class CursorAcpSessionTest {
     )
     assertContains(harness.frames.last().toString(), "once-a")
     harness.session.close()
+  }
+
+  @Test
+  fun `Junie refuses an unacknowledged Brave mode before sending a prompt`() {
+    val harness = Harness(provider = AcpProvider.Junie)
+    harness.session.start()
+    harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+    harness.respond("""{"sessionId":"s"}""")
+    harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":false}]}""")
+
+    assertNotNull(harness.session.outcome()?.failure)
+    assertFalse(harness.frames.any { it.text(CursorAcpKeys.METHOD) == "session/prompt" })
+    harness.session.close()
+  }
+
+  @Test
+  fun `Cursor and Junie publishing requests show full cards and wait for the operator choice`() {
+    for (provider in listOf(AcpProvider.Cursor, AcpProvider.Junie)) {
+      val harness = Harness(provider = provider)
+      if (provider == AcpProvider.Cursor) {
+        harness.open()
+      } else {
+        harness.session.start()
+        harness.respond("""{"protocolVersion":1,"agentCapabilities":{}}""")
+        harness.respond("""{"sessionId":"s"}""")
+        harness.respond("""{"configOptions":[{"id":"brave_mode","currentValue":"on"}]}""")
+      }
+      val command = "gh issue create --repo example/tools --body 'Include the exact payload'"
+      val before = harness.frames.toList()
+
+      harness.permission("17", "publish", command)
+
+      val card = harness.cards.single()
+      assertEquals(provider.id, card.provider)
+      assertContains(card.inputText, command)
+      assertEquals(ApprovalState.PENDING, card.state)
+      assertEquals(before, harness.frames)
+      assertNull(harness.session.outcome())
+
+      assertEquals(
+        ApprovalDeliveryState.WRITTEN,
+        harness.session.deliver(card.copy(state = ApprovalState.ALLOWED, selectedOptionId = "once-publish")),
+      )
+      assertEquals(
+        Json.parseToJsonElement("""{"outcome":{"outcome":"selected","optionId":"once-publish"}}"""),
+        harness.frames.last()[CursorAcpKeys.RESULT],
+      )
+      harness.session.close()
+    }
   }
 
   @Test
@@ -205,6 +257,7 @@ class CursorAcpSessionTest {
   ) {
     val frames = mutableListOf<JsonObject>()
     val events = mutableListOf<CursorAcpEvent>()
+    val cards = mutableListOf<ApprovalRequestRecord>()
     val owner = Owner()
     val session =
       CursorAcpSession(
@@ -224,7 +277,7 @@ class CursorAcpSessionTest {
         },
         { true },
         events::add,
-        {},
+        cards::add,
         {},
       )
 

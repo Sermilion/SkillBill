@@ -17,7 +17,10 @@ class CursorAgentRunCommandBuildersTest {
   @Test
   fun `cursor normal launch carries prompt checkout and negotiated model without forced print flags`() {
     val command = CursorAgentRunCommandBuilder().build(request(model = "model", effort = "high"))
-    assertEquals(listOf("agent", "acp"), command.command)
+    assertEquals(
+      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      command.command,
+    )
     assertEquals("model[effort=high]", command.sessionModel)
     assertEquals("/tmp/skillbill-agent-run", command.workingDirectory.toString())
     assertEquals("Phase: implement", command.stdinText)
@@ -33,7 +36,10 @@ class CursorAgentRunCommandBuildersTest {
         request().copy(streamProviderOutput = true, streamOutputForLiveness = true),
       )
 
-    assertEquals(listOf("agent", "acp"), command.command)
+    assertEquals(
+      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      command.command,
+    )
     assertEquals(AgentRunIdlePolicy.OUTPUT_EXTENDED, command.idlePolicy)
   }
 

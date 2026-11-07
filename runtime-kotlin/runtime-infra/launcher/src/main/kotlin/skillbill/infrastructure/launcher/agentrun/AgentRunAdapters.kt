@@ -183,7 +183,6 @@ internal class ProcessAgentRunAdapter(
             effort = request.effortOverride,
             savedThread = null,
             outputSink = request.outputSink,
-            readOnly = request.readOnlyPhase,
             workspaceRoots = request.additionalWritableDirectories.map { it.toAbsolutePath().normalize().toString() },
           )
         val approvalDeadline = approvalEnclosingDeadline(clock, request.timeout)
@@ -417,7 +416,7 @@ internal class ProcessAgentRunAdapter(
               checkoutRoot = command.workingDirectory,
               runId = owned.runId,
               provider = CLAUDE_APPROVAL_PROVIDER,
-              executionMode = if (request.readOnlyPhase) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
+              executionMode = ApprovalExecutionMode.ACT,
               profileIdentity =
                 claudeProfileIdentity(
                   command.environment[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR]
@@ -458,8 +457,6 @@ internal class ProcessAgentRunAdapter(
         command.sessionModel,
         if (provider != AcpProvider.Cursor) {
           null
-        } else if (request.readOnlyPhase) {
-          "plan"
         } else {
           "agent"
         },
@@ -513,7 +510,7 @@ internal class ProcessAgentRunAdapter(
         request.repoRoot,
         owned.runId,
         agent.id,
-        if (request.readOnlyPhase) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
+        ApprovalExecutionMode.ACT,
         profile,
         deadline,
       )
@@ -543,7 +540,7 @@ internal class ProcessAgentRunAdapter(
         checkoutRoot = request.repoRoot,
         runId = owned.runId,
         provider = "codex",
-        executionMode = if (request.readOnlyPhase) ApprovalExecutionMode.READ_ONLY else ApprovalExecutionMode.ACT,
+        executionMode = ApprovalExecutionMode.ACT,
         profileIdentity = inheritedEnvironment[AgentHomeEnvironmentKeys.CODEX_HOME] ?: userHome?.toString().orEmpty(),
         enclosingDeadline = deadline,
       )

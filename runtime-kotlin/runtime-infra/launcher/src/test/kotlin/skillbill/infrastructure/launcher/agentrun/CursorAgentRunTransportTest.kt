@@ -19,7 +19,10 @@ class CursorAgentRunTransportTest {
         "terminal event " +
         "arrives last, so a capped drain spends its budget on the preamble",
     )
-    assertEquals(listOf("agent", "acp"), command.command)
+    assertEquals(
+      listOf("agent", "--force", "--trust", "--approve-mcps", "--sandbox", "disabled", "acp"),
+      command.command,
+    )
   }
 
   @Test
@@ -27,7 +30,7 @@ class CursorAgentRunTransportTest {
     val command = CursorAgentRunCommandBuilder().build(request().copy(streamOutputForLiveness = true))
 
     assertEquals(AgentRunApprovalProtocol.CURSOR_ACP, command.approvalProtocol)
-    assertFalse(command.command.contains("--force"))
+    assertTrue(command.command.contains("--force"))
   }
 
   @Test
