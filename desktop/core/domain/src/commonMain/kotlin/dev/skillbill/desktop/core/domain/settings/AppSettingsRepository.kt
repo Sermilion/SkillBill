@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.domain.settings
 
 import dev.skillbill.desktop.core.common.Outcome
 import kotlinx.coroutines.flow.Flow
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
 
 /** The app's preferences. Expected refusals come back as [SettingsRejection], never as exceptions. */
 interface AppSettingsRepository {
@@ -38,6 +39,10 @@ interface AppSettingsRepository {
 
   suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout): Outcome<Unit, SettingsRejection>
 
+  suspend fun setQaDevice(pick: QaDevicePick?): Outcome<Unit, SettingsRejection>
+
+  suspend fun readQaDevice(): Outcome<QaDevicePick?, SettingsRejection>
+
   suspend fun setFavorite(key: FavoriteWorkKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
 
   suspend fun setSpecFavorite(key: FavoriteSpecKey, favorite: Boolean): Outcome<Unit, SettingsRejection>
@@ -53,4 +58,6 @@ sealed interface SettingsRejection {
 
   /** The preferences file could not be written; the previous value stays. */
   data object WriteFailed : SettingsRejection
+
+  data object InvalidQaDevice : SettingsRejection
 }

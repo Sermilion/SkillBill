@@ -199,7 +199,15 @@ class WorkRunActionsTest {
       )
       val actions = workRunActions(database, status, goals, launcher)
 
-      assertEquals(WorkControlResult.Accepted, actions.launchForTest(target(), "codex"))
+      assertEquals(
+        WorkControlResult.Accepted,
+        actions.launchForTest(target(), "codex", QaNamedDevice(QaNamedDeviceKind.SERIAL, "R58M123")),
+      )
+      assertTrue(
+        (launches.single().kind as WorkRunLaunchKind.RuntimeCommand).arguments.containsAll(
+          listOf("--qa-device", "serial:R58M123"),
+        ),
+      )
 
       database.read { unit ->
         canceled.forEach { prior ->

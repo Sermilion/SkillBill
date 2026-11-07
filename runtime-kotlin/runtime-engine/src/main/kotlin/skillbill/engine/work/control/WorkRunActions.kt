@@ -99,6 +99,7 @@ public class WorkRunActions(
   internal fun launch(
     target: WorkRunTarget,
     agentId: String?,
+    qaDevice: QaNamedDevice? = null,
   ): WorkControlResult {
     val operation = operation@{ unit: UnitOfWork ->
       val item =
@@ -114,7 +115,7 @@ public class WorkRunActions(
         checkoutRejection(phase, target)?.let { return@operation WorkControlResult.Rejected(it) }
       }
       val arguments =
-        arguments(item, phase, unit, agent)
+        arguments(item, phase, unit, agent, qaDevice)
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
       val result =
         launcher.start(
@@ -184,7 +185,14 @@ public class WorkRunActions(
     val terminalValidation = completed && standaloneValidation
     val validationResume = standaloneValidation && isPausedOrBlocked(snapshot.lifecycleState)
     val agent = launchAgent(item, phase, unit)
-    val supported = arguments(item, phase, unit, agent ?: SupportedAgent.supportedIds.first()) != null
+    val supported =
+      arguments(
+        item,
+        phase,
+        unit,
+        agent ?: SupportedAgent.supportedIds.first(),
+        qaDevice = null,
+      ) != null
     val live =
       snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE || liveWorker ||
         item.goalStatus?.executionLiveness?.let { executionLivenessBlocksIdleSafeRefresh(it) } == true
@@ -248,6 +256,7 @@ public class WorkRunActions(
     phase: StandalonePhaseStatusRecord?,
     unit: UnitOfWork,
     agent: String,
+    qaDevice: QaNamedDevice?,
   ): List<String>? {
     if (phase != null) return phaseArguments(phase, agent)
     if (item.snapshot.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY) return null
@@ -259,7 +268,7 @@ public class WorkRunActions(
     ) {
       listOf("phase", "plan", issue, "--agent", agent)
     } else {
-      goalArguments(issue, agent)
+      goalArguments(issue, agent, qaDevice)
     }
   }
 

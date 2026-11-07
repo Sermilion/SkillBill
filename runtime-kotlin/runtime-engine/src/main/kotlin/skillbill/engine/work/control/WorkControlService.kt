@@ -73,10 +73,11 @@ public class WorkControlService(
     target: WorkRunTarget,
     action: WorkControlAction,
     agentId: String? = null,
+    qaDevice: QaNamedDevice? = null,
   ): WorkControlResult =
     when (action) {
       WorkControlAction.CANCEL -> cancellation.cancel(target)
-      WorkControlAction.LAUNCH -> runs.launch(target, agentId)
+      WorkControlAction.LAUNCH -> runs.launch(target, agentId, qaDevice)
       WorkControlAction.PAUSE, WorkControlAction.STOP, WorkControlAction.RECOVER ->
         WorkControlResult.Rejected(
           WorkControlRejection.INELIGIBLE_TARGET,

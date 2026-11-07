@@ -19,6 +19,7 @@ import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.TrayTab
 import dev.skillbill.desktop.core.domain.settings.CriterionMark
 import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
@@ -133,6 +134,34 @@ class DataStoreAppSettingsRepository(
 
   override suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout) =
     edit { it[AppPreferenceKeys.NEW_TASK_CHAT_LAYOUT] = layout.wireValue }
+
+  override suspend fun setQaDevice(pick: QaDevicePick?): Outcome<Unit, SettingsRejection> {
+    if (pick != null && !pick.isValid) {
+      return Outcome.Failure(SettingsRejection.InvalidQaDevice)
+    }
+    return edit { preferences ->
+      if (pick == null) {
+        preferences.remove(AppPreferenceKeys.QA_DEVICE_KIND)
+        preferences.remove(AppPreferenceKeys.QA_DEVICE_VALUE)
+        preferences.remove(AppPreferenceKeys.QA_DEVICE_DISPLAY_NAME)
+      } else {
+        preferences[AppPreferenceKeys.QA_DEVICE_KIND] = pick.kind.wireValue
+        preferences[AppPreferenceKeys.QA_DEVICE_VALUE] = pick.value
+        preferences[AppPreferenceKeys.QA_DEVICE_DISPLAY_NAME] = pick.displayName
+      }
+    }
+  }
+
+  override suspend fun readQaDevice(): Outcome<QaDevicePick?, SettingsRejection> = try {
+    val preferences = store.data.first()
+    var unsupported = false
+    val value = preferences.qaDevice { unsupported = true }
+    if (unsupported) diagnostics.record("desktop_settings_value_unsupported")
+    Outcome.Success(value)
+  } catch (_: IOException) {
+    diagnostics.record("desktop_settings_unreadable")
+    Outcome.Failure(SettingsRejection.ReadFailed)
+  }
 
   override suspend fun setNotification(kind: NotificationKind, enabled: Boolean) =
     edit { it[AppPreferenceKeys.notificationKey(kind)] = enabled }

@@ -201,7 +201,7 @@ class SettingsViewModel(
 
   private fun SettingsRejection.toPathError() = when (this) {
     SettingsRejection.BlankDatabasePath -> PathError.OnlySpaces
-    SettingsRejection.ReadFailed, SettingsRejection.WriteFailed -> PathError.WriteFailed
+    SettingsRejection.ReadFailed, SettingsRejection.WriteFailed, SettingsRejection.InvalidQaDevice -> PathError.WriteFailed
   }
 
   private data class PathSaveRequest(

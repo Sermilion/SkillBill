@@ -56,4 +56,5 @@ fun WorkRunActions.startGoalForTest(
 fun WorkRunActions.launchForTest(
   target: WorkRunTarget,
   agentId: String?,
-) = launch(target, agentId)
+  qaDevice: QaNamedDevice? = null,
+) = launch(target, agentId, qaDevice)

@@ -13,9 +13,11 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.qa.model.QaDeviceLease
+import skillbill.ports.qa.model.QaDeviceLeaseSnapshot
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaLeaseResult
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
@@ -31,6 +33,67 @@ class FileSystemQaDeviceLeases(
   private val diagnostics: RuntimeDiagnostics,
   private val environment: EnvironmentContext,
 ) : QaDeviceLeasePort {
+  override fun liveHolders(repoRoot: Path): QaDeviceLeaseSnapshot =
+    try {
+      val directory = QaPaths.leasesDirectory(QaPaths.qaRoot(environment, repoRoot))
+      snapshot(directory)
+    } catch (failure: SkillBillRuntimeException) {
+      failure.rethrowUnless(failure.isQaDeviceLeaseFailure)
+      unavailableSnapshot("repository_unavailable")
+    }
+
+  private fun snapshot(directory: Path): QaDeviceLeaseSnapshot =
+    try {
+      when {
+        Files.notExists(directory) -> QaDeviceLeaseSnapshot.Holders(emptyList())
+        !Files.isDirectory(directory) -> unavailableSnapshot("storage_unreadable")
+        else -> {
+          val files = Files.list(directory).use { entries -> entries.filter { it.extension == "json" }.toList() }
+          QaDeviceLeaseSnapshot.Holders(files.mapNotNull(::liveHolder))
+        }
+      }
+    } catch (_: IOException) {
+      unavailableSnapshot("storage_unreadable")
+    } catch (_: UncheckedIOException) {
+      unavailableSnapshot("storage_unreadable")
+    } catch (_: SecurityException) {
+      unavailableSnapshot("storage_unreadable")
+    }
+
+  private fun unavailableSnapshot(reason: String): QaDeviceLeaseSnapshot.Unavailable {
+    diagnostics.warning("qa device lease snapshot unavailable: seam=qa_device_lease_snapshot reason=$reason")
+    return QaDeviceLeaseSnapshot.Unavailable(reason)
+  }
+
+  private fun liveHolder(file: Path): QaDeviceLease? =
+    try {
+      val contents = readQaRecord(file)
+      if (contents == null) {
+        unreadableSnapshotRecord()
+        null
+      } else {
+        val record = QaLeaseRecordCodec.decodeLease(contents, file.toString())
+        record.takeUnless { inspector.livenessOf(it.owner.process) == RecordedProcessLiveness.DEAD }?.toLease()
+      }
+    } catch (failure: SkillBillRuntimeException) {
+      failure.rethrowUnless(failure.isQaDeviceLeaseFailure)
+      unreadableSnapshotRecord()
+      null
+    } catch (_: IOException) {
+      unreadableSnapshotRecord()
+      null
+    } catch (_: UncheckedIOException) {
+      unreadableSnapshotRecord()
+      null
+    } catch (_: SecurityException) {
+      unreadableSnapshotRecord()
+      null
+    }
+
+  private fun unreadableSnapshotRecord() {
+    diagnostics.warning("qa device lease record skipped: seam=qa_device_lease_snapshot reason=record_unreadable")
+  }
+
   override fun acquire(
     repoRoot: Path,
     deviceFingerprint: String,

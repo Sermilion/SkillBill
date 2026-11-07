@@ -18,6 +18,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.qa.QaOwnedResourcePort
 import skillbill.ports.qa.model.QaDeviceLease
+import skillbill.ports.qa.model.QaDeviceLeaseSnapshot
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaLeaseResult
 import skillbill.ports.qa.model.QaOwnedResource
@@ -206,6 +207,8 @@ class QaProgressCommandTest {
   }
 
   private object FakeLeasePort : QaDeviceLeasePort {
+    override fun liveHolders(repoRoot: Path): QaDeviceLeaseSnapshot = QaDeviceLeaseSnapshot.Holders(emptyList())
+
     override fun acquire(
       repoRoot: Path,
       deviceFingerprint: String,
