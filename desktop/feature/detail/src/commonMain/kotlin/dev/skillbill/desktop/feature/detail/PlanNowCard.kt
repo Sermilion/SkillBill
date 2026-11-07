@@ -74,7 +74,7 @@ internal fun PlanNowBlock(item: WorkItem, detail: Detail) {
     if (live) {
       if (noStructuredActivity) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          NowEventTile(LucideIcons.clock, colors.stBlocked)
+          NowEventTile(LucideIcons.clock, tint)
           BasicText("This agent does not stream its steps. Saved files appear as they land.", style = SkillBillTheme.type.tSm.copy(color = colors.fg2))
         }
       } else if (latest != null) {
