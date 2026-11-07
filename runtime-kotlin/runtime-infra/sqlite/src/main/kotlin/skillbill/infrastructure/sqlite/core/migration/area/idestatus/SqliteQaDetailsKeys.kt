@@ -1,10 +1,15 @@
 package skillbill.infrastructure.sqlite.core.migration.area.idestatus
 
 import skillbill.contracts.qa.QaChecklistPayloadKeys
+import skillbill.contracts.qa.QaDeviceLeasePayloadKeys
 import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.contracts.qa.QaOwnedResourcePayloadKeys
 
 internal object SqliteQaDetailsKeys {
+  const val PREVIEW: String = "preview"
+  const val INVOCATION_ID: String = QaDeviceLeasePayloadKeys.INVOCATION_ID
+  const val TARGETS: String = QaChecklistPayloadKeys.TARGETS
+  const val ACTIVE: String = "active"
   const val REPORT_PATH: String = QaChecklistPayloadKeys.REPORT_PATH
   const val INVOCATION_DIRECTORY: String = QaChecklistPayloadKeys.INVOCATION_DIRECTORY
   const val SKIP_REASON: String = QaOutcomePayloadKeys.SKIP_REASON

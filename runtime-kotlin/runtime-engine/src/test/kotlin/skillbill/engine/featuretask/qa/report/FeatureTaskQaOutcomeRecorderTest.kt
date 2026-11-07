@@ -7,6 +7,8 @@ import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.workflow.taskruntime.model.qa.QaRunDetails
+import skillbill.workflow.taskruntime.model.qa.QaRunPreview
 import skillbill.workflow.taskruntime.model.qa.QaRunRetainedResource
 import java.nio.file.Path
 import java.time.Clock
@@ -115,6 +117,26 @@ class FeatureTaskQaOutcomeRecorderTest {
       listOf(QaRunRetainedResource("process", "48213"), QaRunRetainedResource("volume", "qa-data")),
       recorder.find("wfl-goal")?.details?.retainedResources,
     )
+  }
+
+  @Test
+  fun `ending an earlier preview cannot stop the replacement and incomplete settlement preserves its identity`() {
+    val recorder = recorder()
+    val preview = QaRunPreview("qa-current", "/qa/current", listOf("desktop"), active = true)
+    database().transaction { unit ->
+      unit.featureTaskQaOutcomes.upsert(
+        FeatureTaskQaOutcomeRecords.attempted("wfl-goal", null, clock.instant()).copy(
+          details = QaRunDetails(preview = preview),
+        ),
+      )
+    }
+
+    recorder.recordPreviewEnded("wfl-goal", "qa-earlier")
+    assertEquals(preview, recorder.find("wfl-goal")?.details?.preview)
+    recorder.recordSettled("wfl-goal", QaVerdict.INCOMPLETE, "stopped", 0, QaSettledRun("tree"))
+    recorder.recordPreviewEnded("wfl-goal", "qa-current")
+
+    assertEquals(preview.copy(active = false), recorder.find("wfl-goal")?.details?.preview)
   }
 
   private fun database() = phaseRunDatabase(home, clock)

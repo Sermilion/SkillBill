@@ -308,18 +308,16 @@ class DetailViewModel(
   private fun currentPreviewRequest(detailState: DetailUiState): QaPreviewRequest? {
     val openSessionId = (session.state.value as? DatabaseSessionState.Open)?.sessionId ?: return null
     val detail = (detailState.sections as? SectionsUi.Loaded)?.detail ?: return null
-    if (!detailState.qaPreviewVisible || !detailState.itemResolved || !isStandaloneQa(detailState.header) ||
+    if (!detailState.qaPreviewVisible || !detailState.itemResolved ||
       detailState.header.control.sessionId != openSessionId
     ) return null
-    val run = qaDisplayedRun(detailState.header, detail, detailState.selectedQaRun) ?: return null
-    val checklist = run.qaChecklist ?: return null
-    if (!checklist.targets.any { it.name.equals("desktop", ignoreCase = true) }) return null
+    val preview = selectedQaPreview(detailState.header, detail, detailState.selectedQaRun, detailState.subtaskChoice.key) ?: return null
     return QaPreviewRequest(
       sessionId = openSessionId,
       workId = detailState.header.id,
-      invocationId = run.invocationId,
-      invocationDirectory = checklist.invocationDirectory,
-      active = qaRunLive(detailState.header, run),
+      invocationId = preview.invocationId,
+      invocationDirectory = preview.directory,
+      active = preview.active,
     )
   }
 
@@ -355,7 +353,7 @@ class DetailViewModel(
 
   private fun chooseSubtask(choice: SubtaskChoice) {
     subtaskSelections.set(item.id, choice)
-    mutableState.update { it.copy(subtaskChoice = choice) }
+    updatePreviewInputs { it.copy(subtaskChoice = choice) }
   }
 
   /** Inline, selecting the selected row again folds or unfolds its inspector; any other selection opens it. */

@@ -49,9 +49,7 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
   val collapse = rememberSectionCollapse()
   val item = state.header
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
-  val previewRun = detail?.takeIf { isStandaloneQa(item) }
-    ?.let { qaDisplayedRun(item, it, state.selectedQaRun) }
-    ?.takeIf { run -> run.qaChecklist?.targets?.any { it.name.equals("desktop", ignoreCase = true) } == true }
+  val previewRun = detail?.let { selectedQaPreview(item, it, state.selectedQaRun, state.subtaskChoice.key) }
   var resultTab by rememberSaveable(item.id) { mutableStateOf("assessment") }
   val selected = detail?.let { selectedSubtask(item, it, state.subtaskChoice.key) }
     ?: SubtaskKey.GoalFinish.takeIf { item.kind == WorkKind.Goal }

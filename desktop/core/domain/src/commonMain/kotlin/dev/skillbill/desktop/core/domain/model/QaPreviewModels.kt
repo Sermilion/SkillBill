@@ -17,3 +17,11 @@ sealed interface QaPreviewState {
 
   enum class Reason { SourceUnavailable, InvalidSource, IncompleteFrame, UnsupportedFormat, LimitsExceeded, ReadFailed }
 }
+
+data class GoalQaPreview(
+  val invocationId: String,
+  val invocationDirectory: String,
+  val targets: List<String>,
+  val active: Boolean,
+  val subtaskId: Int?,
+)
