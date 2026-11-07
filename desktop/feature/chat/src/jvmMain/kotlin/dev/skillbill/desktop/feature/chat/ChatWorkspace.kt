@@ -385,7 +385,7 @@ class ChatWorkspace(
     interrupt(session)
   }
 
-  /** Ends the running reply; the completion drain then sends the first queued message. */
+  /** Ends the running reply; the completion drain then sends all queued messages as one turn. */
   fun sendNow(id: String) {
     val session = sessions[id] ?: return
     if (!session.stoppableState.value || session.queuedState.value.isEmpty()) return
@@ -538,14 +538,13 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (session.goneState.value || (message.text.isBlank() && message.images.isEmpty())) return
     session.prefixChoiceState.value = null
-    session.queuedState.value += message
+    session.queuedState.update { it + message }
     drainQueue(session)
   }
 
   private fun drainQueue(session: ChatSession) {
     if (!session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return
-    val next = session.queuedState.value.firstOrNull() ?: return
-    session.queuedState.value = session.queuedState.value.drop(1)
+    val next = session.thread.takeQueuedMessage() ?: return
     session.busyState.value = true
     session.append(ChatMessage.Operator(next.text, next.action, next.images))
     if (next.pauseAndAct) pauseAndAct(session, next.text, next.images) else send(session, next.text, next.images)

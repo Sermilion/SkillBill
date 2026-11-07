@@ -550,7 +550,7 @@ class NewTaskDraftTest {
   }
 
   @Test
-  fun `messages queued during a reply run in order without splitting the streaming answer`() = runTest {
+  fun `messages queued during a reply send as one follow-up without splitting the streaming answer`() = runTest {
     val replies = mutableListOf<Channel<ChatEvent>>()
     chat.events = {
       val reply = Channel<ChatEvent>(Channel.UNLIMITED)
@@ -564,11 +564,12 @@ class NewTaskDraftTest {
     runCurrent()
     draft.say("second")
     draft.say("third")
+    draft.say("fourth")
     runCurrent()
 
     val thread = checkNotNull(draft.chat.value).thread
     assertEquals(1, chat.requests.size)
-    assertEquals(2, thread.queued.value.size)
+    assertEquals(3, thread.queued.value.size)
     replies[0].send(ChatEvent.TextDelta("after"))
     replies[0].send(ChatEvent.Completed)
     replies[0].close()
@@ -576,15 +577,21 @@ class NewTaskDraftTest {
 
     assertEquals(2, chat.requests.size)
     assertEquals("first", (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[0]).text)
-    assertEquals("second", (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[1]).text)
+    val combined = "second\n\nthird\n\nfourth"
+    assertEquals(combined, chat.requests[1].prompt)
+    assertEquals(combined, (thread.transcript.value.filterIsInstance<ChatMessage.Operator>()[1]).text)
     assertEquals("Before after", thread.transcript.value.filterIsInstance<ChatMessage.Agent>().first().text)
-    assertEquals(1, thread.queued.value.size)
+    assertTrue(thread.queued.value.isEmpty())
+    draft.say("later")
+    runCurrent()
+    assertEquals(2, chat.requests.size)
     replies[1].send(ChatEvent.Completed)
     replies[1].close()
     runCurrent()
 
     assertEquals(3, chat.requests.size)
-    assertEquals("third", thread.transcript.value.filterIsInstance<ChatMessage.Operator>().last().text)
+    assertEquals("later", chat.requests[2].prompt)
+    assertEquals("later", thread.transcript.value.filterIsInstance<ChatMessage.Operator>().last().text)
     assertTrue(thread.queued.value.isEmpty())
     draft.close()
   }
@@ -750,7 +757,7 @@ class NewTaskDraftTest {
   }
 
   @Test
-  fun `send now stops the running reply and sends queued messages in order`() = runTest {
+  fun `send now stops the running reply and sends queued messages as one follow-up`() = runTest {
     val replies = mutableListOf<Channel<ChatEvent>>()
     chat.events = {
       val reply = Channel<ChatEvent>(Channel.UNLIMITED)
@@ -770,14 +777,12 @@ class NewTaskDraftTest {
     replies[1].send(ChatEvent.Completed)
     replies[1].close()
     runCurrent()
-    replies[2].send(ChatEvent.Completed)
-    replies[2].close()
-    runCurrent()
     val transcript = checkNotNull(draft.chat.value).thread.transcript.value
     val stoppedAt = transcript.indexOfFirst { it is ChatMessage.Notice && it.text == STOPPED_NOTICE }
-    val secondOperator = transcript.indexOfFirst { it is ChatMessage.Operator && it.text == "second" }
+    val secondOperator = transcript.indexOfFirst { it is ChatMessage.Operator && it.text == "second\n\nthird" }
     assertTrue(stoppedAt >= 0 && secondOperator > stoppedAt)
-    assertEquals(listOf("first", "second", "third"), chat.requests.map { it.prompt })
+    assertEquals(listOf("first", "second\n\nthird"), chat.requests.map { it.prompt })
+    assertTrue(checkNotNull(draft.chat.value).thread.queued.value.isEmpty())
     draft.close()
   }
 

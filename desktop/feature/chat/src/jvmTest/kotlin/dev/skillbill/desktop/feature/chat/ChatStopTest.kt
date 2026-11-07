@@ -202,7 +202,7 @@ class ChatStopTest {
   }
 
   @Test
-  fun `send now stops the turn and sends the first queued message after stopped notice`() = runTest {
+  fun `send now stops the turn and sends the whole queue after stopped notice`() = runTest {
     val item = workItem("SKILL-469")
     details.details = mapOf(item.id to flowOf(loaded(item)))
     var turns = 0
@@ -210,7 +210,7 @@ class ChatStopTest {
       turns++
       when {
         turns == 1 -> flowOf(ChatEvent.Completed)
-        request.prompt.endsWith("first queued") -> flowOf(ChatEvent.Completed)
+        request.prompt.endsWith("first queued\n\nsecond queued") -> flowOf(ChatEvent.Completed)
         else -> flow { awaitCancellation() }
       }
     }
@@ -226,11 +226,12 @@ class ChatStopTest {
     runCurrent()
     val transcript = workspace.session(item.id)!!.transcript.value
     val stoppedAt = transcript.indexOfFirst { it is ChatMessage.Notice && it.text == STOPPED_NOTICE }
-    val firstOperatorAfter = transcript.drop(stoppedAt + 1).indexOfFirst { it is ChatMessage.Operator && it.text == "first queued" }
+    val combined = "first queued\n\nsecond queued"
+    val firstOperatorAfter = transcript.drop(stoppedAt + 1).indexOfFirst { it is ChatMessage.Operator && it.text == combined }
     assertTrue(stoppedAt >= 0 && firstOperatorAfter >= 0)
-    assertEquals(4, fake.requests.size)
-    assertTrue(fake.requests[2].prompt.endsWith("first queued"))
-    assertTrue(fake.requests[3].prompt.endsWith("second queued"))
+    assertEquals(3, fake.requests.size)
+    assertTrue(fake.requests[2].prompt.endsWith(combined))
+    assertTrue(workspace.session(item.id)!!.queued.value.isEmpty())
   }
 
   @Test

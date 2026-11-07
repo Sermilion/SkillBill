@@ -26,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -93,7 +94,7 @@ internal class NewTaskChat(
 
   fun send(text: String, action: ChatSuggestedAction? = null, onAccepted: () -> Unit = {}) {
     if (text.isBlank() || repositoryMissing || closing) return
-    thread.queuedState.value += QueuedChatMessage(text, action, pauseAndAct = false)
+    thread.queuedState.update { it + QueuedChatMessage(text, action, pauseAndAct = false) }
     onAccepted()
     drainQueue()
   }
@@ -112,8 +113,7 @@ internal class NewTaskChat(
 
   private fun drainQueue() {
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
-    val next = thread.queuedState.value.firstOrNull() ?: return
-    thread.queuedState.value = thread.queuedState.value.drop(1)
+    val next = thread.takeQueuedMessage() ?: return
     startTurn(next.text, next.action)
   }
 
