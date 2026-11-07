@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -63,6 +62,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbMenuItem
+import dev.skillbill.desktop.core.designsystem.component.SkeletonBlock
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -334,14 +334,13 @@ private fun BranchGroupHead(text: String) {
 
 @Composable
 private fun BranchSkeleton(modifier: Modifier) {
-  val colors = SkillBillTheme.colors
   Column(
     modifier.semantics { contentDescription = "Reading branches" },
     verticalArrangement = Arrangement.spacedBy(0.dp),
   ) {
     SKELETON_WIDTHS.forEach { fraction ->
       Box(Modifier.fillMaxWidth().height(30.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
-        Box(Modifier.fillMaxWidth(fraction).height(8.dp).background(colors.bgActive, RoundedCornerShape(SkillBillRadius.sm)))
+        SkeletonBlock(Modifier.fillMaxWidth(fraction).height(8.dp))
       }
     }
   }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -30,6 +29,7 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.component.SkeletonBlock
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -138,7 +138,7 @@ internal fun PlanSubtasksPending() {
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       BasicText("Subtasks appear here when the work is split.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
       listOf(.72f, .58f, .66f).forEach { fraction ->
-        Box(Modifier.fillMaxWidth(fraction).height(8.dp).background(SkillBillTheme.colors.borderSubtle, RoundedCornerShape(4.dp)))
+        SkeletonBlock(Modifier.fillMaxWidth(fraction).height(8.dp))
       }
     }
   }
