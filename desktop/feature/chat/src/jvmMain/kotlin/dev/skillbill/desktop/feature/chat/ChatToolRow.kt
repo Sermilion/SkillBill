@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.defaultScrollbarStyle
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -44,13 +42,13 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 
 private val OUTPUT_MAX_HEIGHT = 240.dp
 
@@ -67,11 +65,9 @@ internal fun ChatToolGroup(tools: List<ChatToolEntry>, streaming: Boolean) {
   val type = SkillBillTheme.type
   var choice by rememberSaveable { mutableStateOf<Boolean?>(null) }
   val open = choice ?: streaming
-  val shape = RoundedCornerShape(SkillBillRadius.md)
-  Column(Modifier.fillMaxWidth().border(1.dp, colors.border, shape).background(colors.bgPanel, shape)) {
+  SbBox(fill = colors.bgPanel, header = {
     Row(
       Modifier.fillMaxWidth()
-        .background(colors.bgRaised, if (open) RoundedCornerShape(topStart = SkillBillRadius.md, topEnd = SkillBillRadius.md) else shape)
         .clickable(role = Role.Button, onClickLabel = if (open) "Collapse tools" else "Expand tools") { choice = !open }
         .pointerHoverIcon(PointerIcon.Hand)
         .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
@@ -87,6 +83,7 @@ internal fun ChatToolGroup(tools: List<ChatToolEntry>, streaming: Boolean) {
       Spacer(Modifier.weight(1f))
       GroupStatus(tools)
     }
+  }) {
     if (open) ToolRows(tools, streaming)
   }
 }
@@ -115,10 +112,10 @@ private fun ToolRows(tools: List<ChatToolEntry>, streaming: Boolean) {
   }
   Box(Modifier.fillMaxWidth().then(if (maxHeight != null) Modifier.heightIn(max = maxHeight) else Modifier)) {
     Column(Modifier.fillMaxWidth().then(if (scrolls) Modifier.verticalScroll(scroll) else Modifier)) {
-      tools.forEach { tool ->
+      tools.forEachIndexed { index, tool ->
         key(tool.call.id) {
           Box(Modifier.onSizeChanged { size -> rowHeight = rowHeight?.let { minOf(it, size.height) } ?: size.height }) {
-            ChatToolRow(tool)
+            ChatToolRow(tool, topRule = index > 0)
           }
         }
       }
@@ -151,7 +148,7 @@ private fun GroupStatus(tools: List<ChatToolEntry>) {
 
 /** One tool call: its summary, duration and status; clicking shows the input and output. */
 @Composable
-internal fun ChatToolRow(tool: ChatToolEntry) {
+internal fun ChatToolRow(tool: ChatToolEntry, topRule: Boolean = true) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   var expanded by rememberSaveable(tool.call.id) { mutableStateOf(false) }
@@ -163,7 +160,8 @@ internal fun ChatToolRow(tool: ChatToolEntry) {
     expanded -> colors.fg2
     else -> colors.fgMuted
   }
-  Column(Modifier.fillMaxWidth().background(if (expanded) colors.bgInset else Color.Transparent).hairline(Edge.Top, colors.borderSubtle)) {
+  Column(Modifier.fillMaxWidth().background(if (expanded) colors.bgInset else Color.Transparent)
+    .then(if (topRule) Modifier.hairline(Edge.Top, colors.borderSubtle) else Modifier)) {
     Row(
       Modifier.fillMaxWidth()
         .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
@@ -221,15 +219,9 @@ private fun ToolDetails(tool: ChatToolEntry) {
 @Composable
 private fun OutputBox(error: Boolean = false, content: @Composable () -> Unit) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.sm)
-  Box(
-    Modifier.fillMaxWidth().heightIn(max = OUTPUT_MAX_HEIGHT)
-      .border(1.dp, if (error) colors.stFailed.copy(alpha = .4f) else colors.borderSubtle, shape)
-      .background(colors.bgFrame, shape)
-      .verticalScroll(rememberScrollState())
-      .horizontalScroll(rememberScrollState())
-      .padding(horizontal = 10.dp, vertical = 8.dp),
-  ) { content() }
+  SbBox(Modifier.heightIn(max = OUTPUT_MAX_HEIGHT), fill = colors.bgFrame, borderColor = if (error) colors.stFailed.copy(alpha = .4f) else colors.borderSubtle) {
+    Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp)) { content() }
+  }
 }
 
 

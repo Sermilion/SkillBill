@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -62,36 +63,38 @@ internal fun CommentComposer(
   DisposableEffect(Unit) { onDispose { currentFocusChanged(false) } }
   LaunchedEffect(Unit) { focus.requestFocus() }
   val colors = SkillBillTheme.colors
-  Column(modifier.fillMaxWidth().background(colors.bgPanel, RoundedCornerShape(7.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    BasicTextField(
-      value = text,
-      onValueChange = onText,
-      readOnly = saving,
-      modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).background(colors.bgInset, RoundedCornerShape(5.dp)).padding(8.dp)
-        .focusRequester(focus).onFocusChanged { onFocusChanged(it.isFocused) }
-        .semantics {
-          contentDescription = placeholder.ifEmpty { "Edit pending comment" }
-          problem?.let { error(it); liveRegion = LiveRegionMode.Polite }
-        }
-        .onPreviewKeyEvent { event ->
-          if (event.type == KeyEventType.KeyDown && event.key == Key.Enter && (event.isMetaPressed || event.isCtrlPressed)) {
-            if (text.isNotBlank() && !saving) onSubmit()
-            true
-          } else false
+  SbBox(modifier, fill = colors.bgPanel) {
+    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      BasicTextField(
+        value = text,
+        onValueChange = onText,
+        readOnly = saving,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).background(colors.bgInset, RoundedCornerShape(5.dp)).padding(8.dp)
+          .focusRequester(focus).onFocusChanged { onFocusChanged(it.isFocused) }
+          .semantics {
+            contentDescription = placeholder.ifEmpty { "Edit pending comment" }
+            problem?.let { error(it); liveRegion = LiveRegionMode.Polite }
+          }
+          .onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.Enter && (event.isMetaPressed || event.isCtrlPressed)) {
+              if (text.isNotBlank() && !saving) onSubmit()
+              true
+            } else false
+          },
+        textStyle = changesSans(11.5f, FontWeight.Normal, colors.fg),
+        cursorBrush = SolidColor(colors.fg),
+        decorationBox = { inner ->
+          if (text.isEmpty() && placeholder.isNotEmpty()) BasicText(placeholder, style = changesSans(11.5f, FontWeight.Normal, colors.fgMuted))
+          inner()
         },
-      textStyle = changesSans(11.5f, FontWeight.Normal, colors.fg),
-      cursorBrush = SolidColor(colors.fg),
-      decorationBox = { inner ->
-        if (text.isEmpty() && placeholder.isNotEmpty()) BasicText(placeholder, style = changesSans(11.5f, FontWeight.Normal, colors.fgMuted))
-        inner()
-      },
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      BasicText(hint, Modifier.weight(1f), style = changesSans(10.5f, FontWeight.Normal, colors.fgFaint))
-      SbButton("Cancel", onCancel, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
-      SbButton(primaryLabel, onSubmit, variant = SbButtonVariant.Primary, size = SbControlSize.Small,
-        shortcut = "⌘/Ctrl+↵", enabled = text.isNotBlank() && !saving)
+      )
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        BasicText(hint, Modifier.weight(1f), style = changesSans(10.5f, FontWeight.Normal, colors.fgFaint))
+        SbButton("Cancel", onCancel, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+        SbButton(primaryLabel, onSubmit, variant = SbButtonVariant.Primary, size = SbControlSize.Small,
+          shortcut = "⌘/Ctrl+↵", enabled = text.isNotBlank() && !saving)
+      }
+      problem?.let { Hint(it, tone = FeedbackTone.Error) }
     }
-    problem?.let { Hint(it, tone = FeedbackTone.Error) }
   }
 }

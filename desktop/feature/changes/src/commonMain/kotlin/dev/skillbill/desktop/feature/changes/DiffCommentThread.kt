@@ -3,9 +3,7 @@ package dev.skillbill.desktop.feature.changes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -46,12 +44,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
@@ -73,6 +67,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.SbTag
@@ -97,7 +92,6 @@ internal fun DiffCommentThread(
   modifier: Modifier = Modifier,
 ) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(7.dp)
   val railTarget = when (thread.state) {
     CommentState.Pending -> colors.accent
     CommentState.Open -> colors.stPlanning
@@ -114,19 +108,7 @@ internal fun DiffCommentThread(
     if (ui.draft != null) focusRequester.requestFocus()
   }
   DisposableEffect(thread.id) { onDispose { onReplyFocusChanged(thread.id, false) } }
-  Column(
-    modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(colors.bgPanel)
-      .then(if (thread.state == CommentState.Pending) Modifier.drawBehind {
-        val stroke = 1.dp.toPx()
-        drawRoundRect(
-          color = colors.accent.copy(alpha = .35f),
-          topLeft = Offset(stroke / 2, stroke / 2),
-          size = Size(size.width - stroke, size.height - stroke),
-          cornerRadius = CornerRadius(7.dp.toPx()),
-          style = Stroke(stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))),
-        )
-      } else Modifier.border(BorderStroke(1.dp, colors.border), shape)),
-  ) {
+  SbBox(modifier.height(IntrinsicSize.Min), fill = colors.bgPanel, borderColor = if (thread.state == CommentState.Pending) colors.accent.copy(alpha = .35f) else colors.borderSubtle) {
     Row(Modifier.height(IntrinsicSize.Min)) {
       Box(Modifier.width(3.dp).fillMaxHeight().drawBehind {
         drawLine(rail, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = size.width)

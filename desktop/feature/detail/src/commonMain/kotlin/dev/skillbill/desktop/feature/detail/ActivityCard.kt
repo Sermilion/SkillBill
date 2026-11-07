@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
@@ -31,6 +29,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
@@ -38,6 +37,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.ActivityBlock
@@ -58,9 +58,9 @@ internal fun ActivityCard(
   onToggle: () -> Unit,
 ) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(8.dp)
+  val shape = RoundedCornerShape(SkillBillRadius.md)
   val source = remember { MutableInteractionSource() }
-  Column(modifier.fillMaxWidth().clip(shape).background(colors.bgPanel).border(1.dp, if (group.status == ActivityStatus.RUNNING) colors.accentRing else colors.border, shape)) {
+  SbBox(modifier, fill = colors.bgPanel, borderColor = if (group.status == ActivityStatus.RUNNING) colors.accentRing else colors.borderSubtle) {
     Row(Modifier.fillMaxWidth().sbFocusRing(source, shape).semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
       .clickable(source, null, role = Role.Button, onClickLabel = if (open) "Collapse activity" else "Expand activity", onClick = onToggle)
       .padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

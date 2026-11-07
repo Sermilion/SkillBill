@@ -1,7 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +19,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -42,6 +39,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
 import dev.skillbill.desktop.core.designsystem.component.SbTag
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
@@ -50,9 +48,9 @@ import dev.skillbill.desktop.core.designsystem.status.StatusKind
 @Composable
 internal fun QaCaseCard(case: QaCaseView, invocationDirectory: String?, onOpenFinding: (String) -> Unit, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.lg)
+  val shape = RoundedCornerShape(SkillBillRadius.md)
   val border = if (case.status.label == "Running") colors.stActive else colors.borderSubtle
-  Column(Modifier.fillMaxWidth().clip(shape).background(colors.bgRaised).border(1.dp, border, shape)) {
+  SbBox(fill = colors.bgRaised, borderColor = border) {
     val interaction = remember { MutableInteractionSource() }
     Row(
       Modifier.fillMaxWidth().heightIn(min = 56.dp).sbFocusRing(interaction, shape)
@@ -104,35 +102,35 @@ private fun CaseStatusIcon(status: String) {
 @Composable
 private fun QaStepRow(step: QaStepView, invocationDirectory: String?, onOpenFinding: (String) -> Unit, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(SkillBillRadius.md)
   val running = step.display == QaStepDisplay.Running
-  val background = if (running) colors.stActive.copy(alpha = .10f) else Color.Transparent
   val frame = if (running) colors.stActive.copy(alpha = .35f) else Color.Transparent
-  Row(Modifier.fillMaxWidth().background(background, shape).border(1.dp, frame, shape).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { StepStatusIcon(step.display) }
-    BasicText(step.number.toString(), Modifier.width(18.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
-    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      val textColor = when (step.display) {
-        QaStepDisplay.Pending, QaStepDisplay.NotRun -> colors.fgMuted
-        else -> colors.fg
-      }
-      BasicText(step.text, style = SkillBillTheme.type.tBase.copy(color = textColor, fontWeight = if (running) FontWeight.SemiBold else FontWeight.Normal))
-      step.note?.let { note ->
-        val noteColor = when (step.display) {
-          QaStepDisplay.Failed -> colors.stFailed
-          QaStepDisplay.Running -> colors.stActive
-          else -> colors.fgMuted
+  SbBox(fill = if (running) colors.stActive.copy(alpha = .10f) else null, borderColor = frame) {
+    Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+      Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { StepStatusIcon(step.display) }
+      BasicText(step.number.toString(), Modifier.width(18.dp), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint))
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val textColor = when (step.display) {
+          QaStepDisplay.Pending, QaStepDisplay.NotRun -> colors.fgMuted
+          else -> colors.fg
         }
-        BasicText(note, style = SkillBillTheme.type.tSm.copy(color = noteColor))
-      }
-      if (step.findingId != null || (invocationDirectory != null && step.evidence.isNotEmpty())) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          step.findingId?.let { SbTag("Finding $it", tone = colors.stFailed, onClick = { onOpenFinding(it) }) }
-          if (invocationDirectory != null) step.evidence.forEach { path -> EvidenceChip(path) { onAction(DetailAction.OpenQaEvidence(path, invocationDirectory)) } }
+        BasicText(step.text, style = SkillBillTheme.type.tBase.copy(color = textColor, fontWeight = if (running) FontWeight.SemiBold else FontWeight.Normal))
+        step.note?.let { note ->
+          val noteColor = when (step.display) {
+            QaStepDisplay.Failed -> colors.stFailed
+            QaStepDisplay.Running -> colors.stActive
+            else -> colors.fgMuted
+          }
+          BasicText(note, style = SkillBillTheme.type.tSm.copy(color = noteColor))
+        }
+        if (step.findingId != null || (invocationDirectory != null && step.evidence.isNotEmpty())) {
+          FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            step.findingId?.let { SbTag("Finding $it", tone = colors.stFailed, onClick = { onOpenFinding(it) }) }
+            if (invocationDirectory != null) step.evidence.forEach { path -> EvidenceChip(path) { onAction(DetailAction.OpenQaEvidence(path, invocationDirectory)) } }
+          }
         }
       }
+      step.updatedAt?.let { BasicText(formatInstant(it, "HH:mm"), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint)) }
     }
-    step.updatedAt?.let { BasicText(formatInstant(it, "HH:mm"), style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint)) }
   }
 }
 

@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.Edge
+import dev.skillbill.desktop.core.designsystem.composite.hairline
 
 /** `.sb-doc` gap: the space between the detail document's blocks. */
 val DocBlockGap = 28.dp
@@ -176,15 +178,22 @@ fun LazyListScope.section(
   if (!collapsed) content()
 }
 
-/** `.sb-box`: a 1px [borderColor] frame, radius 8, with optional [fill] behind the content, clipped to the inner corners. */
+/** `.sb-box`: a clipped radius-8 frame with a 1px [borderColor], optional [fill] behind content, and an optional [header] band. */
 @Composable
 fun SbBox(
   modifier: Modifier = Modifier,
   fill: Color? = null,
   borderColor: Color = SkillBillTheme.colors.borderSubtle,
+  header: (@Composable RowScope.() -> Unit)? = null,
   content: @Composable ColumnScope.() -> Unit,
 ) {
-  Column(modifier.fillMaxWidth().sbBoxSegment(0, 1, fill, borderColor), content = content)
+  val colors = SkillBillTheme.colors
+  Column(modifier.fillMaxWidth().sbBoxSegment(0, 1, fill, borderColor)) {
+    header?.let {
+      Row(Modifier.fillMaxWidth().background(colors.bgRaised).hairline(Edge.Bottom, borderColor), verticalAlignment = Alignment.CenterVertically, content = it)
+    }
+    content()
+  }
 }
 
 /**

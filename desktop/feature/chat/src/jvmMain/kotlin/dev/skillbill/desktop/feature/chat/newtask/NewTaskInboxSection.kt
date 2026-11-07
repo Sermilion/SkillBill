@@ -1,7 +1,5 @@
 package dev.skillbill.desktop.feature.chat.newtask
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,9 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
@@ -48,6 +44,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlin.time.Instant
@@ -96,9 +93,8 @@ internal fun InboxSection(
       BasicText("Pick up where you left off", Modifier.semantics { heading() }, style = inboxTextStyle(12.sp).copy(fontWeight = FontWeight.Medium, color = colors.fgMuted))
       InboxFilterControl(filter, needsYou.size, savedCount) { filter = it }
     }
-    Column(
-      Modifier.fillMaxWidth().sbFocusRing(cardInteraction, shape).background(Color.White.copy(alpha = .012f), shape).clip(shape)
-        .border(1.dp, colors.borderSubtle, shape)
+    SbBox(
+      Modifier.sbFocusRing(cardInteraction, shape)
         .hoverable(cardInteraction)
         .semantics {
           contentDescription = "Pick up where you left off"
@@ -130,7 +126,7 @@ internal fun InboxSection(
             else -> false
           }
         }
-        .focusable(interactionSource = cardInteraction).padding(1.dp),
+        .focusable(interactionSource = cardInteraction),
     ) {
       if (items.isEmpty()) {
         BasicText("Nothing here. Start something below.", Modifier.padding(horizontal = 12.dp, vertical = 14.dp), style = inboxTextStyle(12.sp).copy(color = colors.fgFaint))
