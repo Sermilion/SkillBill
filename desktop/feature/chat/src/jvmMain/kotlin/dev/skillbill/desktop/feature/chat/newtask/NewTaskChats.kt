@@ -196,7 +196,7 @@ class NewTaskChats(
     if (draft in openState.value && draft.discard()) remove(draft)
   }
 
-  /** Deletes [entry], removing the open chat that holds it like the header Discard does. */
+  /** Deletes [entry], removing the open chat that holds it like a tab's Discard does. */
   internal fun discardSaved(entry: ChatHistoryEntry) {
     val holder = openState.value.firstOrNull { it.chat.value?.sessionId == entry.sessionId }
     if (holder != null) {
