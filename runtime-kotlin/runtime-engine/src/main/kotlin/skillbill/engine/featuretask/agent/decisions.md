@@ -1,3 +1,8 @@
+## [2026-11-07] Keep the QA device separate from requirements and durable goal inputs
+Context: SKILL-517 needs an operator-selected device for standalone and goal QA. Standalone QA treats intake as requirements, and goal QA takes no operator text.
+Decision: Carry the typed device through launch requests and QA execution context, beside lease guidance. Read goal selection from the current launch without persisting it in goal-quality inputs or continuation tokens.
+Reason: Putting the device in intake would change acceptance criteria. The spec requires launch-only goal selection and an unchanged goal-quality-execution schema version. A resume without the flag lets QA choose.
+
 ## [2026-11-06] Keep unblock snippets free of heading lines
 Context: QA reports include pasteable setup instructions, and the runtime report parser reads Markdown headings even inside fenced blocks.
 Decision: Put missing capabilities under `####` headings in a final `## Unblock` section and require snippets without lines starting with `#`.
