@@ -5,14 +5,20 @@ import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseLiveChecksLaunch
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.validation.check.ValidationLiveChecks
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
+import skillbill.ports.agentrun.model.AgentRunCommandEvent
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.ports.agentrun.model.AgentRunProcessSample
+import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -39,6 +45,56 @@ import kotlin.test.fail
 
 class DefaultPhaseRunnerTest {
   @TempDir lateinit var databaseHome: Path
+
+  @Test
+  fun `unobserved launches still receive the build observer`() {
+    val marker =
+      object : AgentRunBuildObserver {
+        override fun processes(
+          observedAt: Instant,
+          samples: List<AgentRunProcessSample>,
+        ) = Unit
+
+        override fun command(event: AgentRunCommandEvent) = Unit
+
+        override fun finished(observedAt: Instant) = Unit
+      }
+    val request = mutableListOf<SkillRunRequest>()
+    val state =
+      Proxy.newProxyInstance(
+        PhaseLaunchState::class.java.classLoader,
+        arrayOf(PhaseLaunchState::class.java),
+      ) { _, method, args ->
+        when (method.name) {
+          "prepareLaunch" -> args?.single()
+          "launchObservation" ->
+            PhaseLaunchObservation(
+              AgentRunActivityStampSink.NONE,
+              AgentRunWorktreeEditObserver.NONE,
+              buildObserver = marker,
+            )
+          "settlementTarget" -> null
+          "recordTokenUsage" -> Unit
+          "settledEnvelope" -> PhaseSettledEnvelopeRead.None
+          "toString" -> "BuildObserverPhaseRunState"
+          "hashCode" -> 0
+          "equals" -> false
+          else -> fail("unexpected phase state method ${method.name}")
+        }
+      } as PhaseLaunchState
+    val runner =
+      DefaultPhaseRunner(
+        GoalRunnerSubtaskLauncher { launch ->
+          request += launch.skillRunRequest
+          agentRunLaunchFacts(SupportedAgent.CLAUDE, stdout = "done")
+        },
+        NoopWorkflowGitOperations,
+      )
+
+    runner.run(input("validate"), state)
+
+    assertSame(marker, request.single().buildObserver)
+  }
 
   @Test
   fun `captured planning launches request provider output while uncaptured launches do not`() {
@@ -356,6 +412,7 @@ private val PrepareOnlyPhaseRunState: PhaseLaunchState =
   ) { _, method, args ->
     when (method.name) {
       "prepareLaunch" -> args?.single()
+      "launchObservation" -> PhaseLaunchObservation(AgentRunActivityStampSink.NONE, AgentRunWorktreeEditObserver.NONE)
       "toString" -> "PrepareOnlyPhaseRunState"
       "hashCode" -> 0
       "equals" -> false
@@ -370,6 +427,7 @@ private val TrackedPhaseRunState: PhaseLaunchState =
   ) { _, method, args ->
     when (method.name) {
       "prepareLaunch" -> args?.single()
+      "launchObservation" -> PhaseLaunchObservation(AgentRunActivityStampSink.NONE, AgentRunWorktreeEditObserver.NONE)
       "settlementTarget", "recordTokenUsage" -> null
       else -> fail("a tracked launch reached PhaseLaunchState.${method.name}")
     }

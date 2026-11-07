@@ -1,5 +1,6 @@
 package skillbill.engine.operation.core
 
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -43,6 +44,7 @@ class OperationExecutorBranchWorktreeTest {
           ): PhaseStepOutput = error("The fake operation launches no agent step.")
         },
         NoopWorkflowGitOperations,
+        AgentBuildObserverFactory.NONE,
       ),
       FixedProjectStorePort(repoRoot.resolve("project-store")),
       worktrees,

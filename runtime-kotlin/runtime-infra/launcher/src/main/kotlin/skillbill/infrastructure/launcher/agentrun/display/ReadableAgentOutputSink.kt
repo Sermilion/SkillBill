@@ -454,7 +454,7 @@ internal class ReadableAgentOutputSink(
     diagnostics.warning("seam=standalone_output_decode value_expected=known_event value_used=omitted:$type")
   }
 
-  private companion object {
+  companion object {
     const val MAX_EVENT_CHARS = 65_536
     const val MAX_LINE_CHARS = 1_536
     const val MAX_TOOL_NAME_CHARS = 100

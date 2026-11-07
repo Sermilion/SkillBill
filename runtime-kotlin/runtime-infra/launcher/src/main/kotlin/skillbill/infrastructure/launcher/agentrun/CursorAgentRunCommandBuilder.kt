@@ -60,6 +60,7 @@ internal class CursorAgentRunCommandBuilder(
           runtimeDatabaseEnvironment(!isReviewLaunch, databasePath),
       inheritEnvironment = !isReviewLaunch,
       conversationIsolation = governedReviewConversationIsolation(request),
+      streamsProviderEvents = streaming,
       idlePolicy =
         when {
           streamPartialOutput && request.streamOutputForLiveness -> AgentRunIdlePolicy.OUTPUT_EXTENDED

@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.runloop.durable
 
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.engine.featuretask.runner.runnerHarness
@@ -29,6 +30,7 @@ class DurablePlanningActivityTest {
         WorktreeEditJournalWriter(harness.io.database, clock, NoopRuntimeDiagnostics, harness.gitOperations),
         TestFeatureTaskRuntimeRunLoopEntry(),
         testDecompositionPlanner(),
+        AgentBuildObserverFactory.NONE,
       )
     val request =
       harness.request().copy(

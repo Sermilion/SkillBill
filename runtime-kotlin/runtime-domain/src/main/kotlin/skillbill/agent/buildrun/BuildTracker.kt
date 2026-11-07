@@ -23,20 +23,23 @@ class BuildTracker(private val clock: Clock) {
     observedAt: Instant = clock.instant(),
   ): List<BuildTrackerEvent> {
     if (finished) return emptyList()
-    val events = mutableListOf<BuildTrackerEvent>()
+    val existing = builds.toList()
+    val newBuilds = mutableListOf<TrackedBuild>()
     val seenKeys = matches.map { BuildKey(it.pid, it.startedAt) }.toSet()
     builds.filter { it.endedAt == null && it.key !in seenKeys }.forEach { build ->
       build.endedAt = observedAt
-      events += settleEnded(build)
     }
     val knownKeys = builds.map(TrackedBuild::key).toSet()
     matches.filter { BuildKey(it.pid, it.startedAt) !in knownKeys }.distinctBy { it.pid }.forEach { match ->
       val startedAt = match.startedAt ?: observedAt
       val build = TrackedBuild(BuildKey(match.pid, match.startedAt), match, startedAt, correlate(match, startedAt))
       builds += build
-      events += started(build)
+      newBuilds += build
     }
-    return events
+    val settlements = reconcileCalls()
+    val existingSettlements = settlements.filter { event -> existing.any { it.matches(event) } }
+    val newSettlements = settlements - existingSettlements.toSet()
+    return existingSettlements + newBuilds.map(::started) + newSettlements
   }
 
   @Synchronized
@@ -45,11 +48,12 @@ class BuildTracker(private val clock: Clock) {
     val call = calls.getOrPut(event.callId) { TrackedCall(event.callId, event.commandText, event.observedAt) }
     if (event.kind == BuildCommandEventKind.STARTED || call.completion != null) return emptyList()
     call.completion = event
-    val waiting = builds.filter { it.callId == call.id && it.endedAt != null && !it.settled }
-    val winner = waiting.maxByOrNull { it.endedAt ?: it.startedAt }
-    return waiting.map { build ->
-      if (build === winner) settle(build, completionOutcome(event), completionExit(event)) else settleUnknown(build)
+    if (event.completionProcessSamples == null) {
+      call.eligibleKeysAtCompletion =
+        builds.filter { it.callId == call.id && it.endedAt != null && !it.settled }.map(TrackedBuild::key).toSet()
+      return reconcileCalls()
     }
+    return emptyList()
   }
 
   @Synchronized
@@ -57,7 +61,9 @@ class BuildTracker(private val clock: Clock) {
     if (finished) return emptyList()
     finished = true
     builds.filter { it.endedAt == null }.forEach { it.endedAt = observedAt }
-    return builds.filterNot(TrackedBuild::settled).map(::settleUnknown)
+    val settlements = reconcileCalls()
+    val remaining = builds.filterNot(TrackedBuild::settled).map(::settleUnknown)
+    return settlements + remaining
   }
 
   private fun correlate(
@@ -79,9 +85,33 @@ class BuildTracker(private val clock: Clock) {
     name: String,
   ): Boolean = Regex(COMMAND_TOKEN_START + Regex.escape(name) + COMMAND_TOKEN_END).containsMatchIn(commandText)
 
-  private fun settleEnded(build: TrackedBuild): List<BuildTrackerEvent> {
-    val call = build.callId?.let(calls::get) ?: return emptyList()
-    return if (call.completion == null) emptyList() else listOf(settleUnknown(build))
+  private fun reconcileCalls(): List<BuildTrackerEvent> {
+    val events = mutableListOf<BuildTrackerEvent>()
+    calls.values.forEach { call ->
+      val completion = call.completion ?: return@forEach
+      val correlated = builds.filter { it.callId == call.id && !it.settled }
+      val eligible = correlated.filter { build -> call.isEligible(build) }
+      if (call.winner == null && eligible.isNotEmpty() && eligible.all { it.endedAt != null }) {
+        val winner =
+          eligible.maxWithOrNull(
+            compareBy<TrackedBuild> { it.endedAt }
+              .thenBy { builds.indexOf(it) },
+          )
+        if (winner != null) {
+          call.winner = winner.key
+          eligible.forEach { build ->
+            events +=
+              if (build === winner) {
+                settle(build, completionOutcome(completion), completionExit(completion))
+              } else {
+                settleUnknown(build)
+              }
+          }
+        }
+      }
+      correlated.filter { it.endedAt != null && it !in eligible }.forEach { events += settleUnknown(it) }
+    }
+    return events
   }
 
   private fun started(build: TrackedBuild): BuildTrackerEvent =
@@ -130,6 +160,9 @@ class BuildTracker(private val clock: Clock) {
     val startedAt: Instant?,
   )
 
+  private fun TrackedBuild.matches(event: BuildTrackerEvent): Boolean =
+    event is BuildTrackerEvent.Settled && event.pid == match.pid && event.startedAt == startedAt
+
   private class TrackedBuild(
     val key: BuildKey,
     val match: BuildMatch,
@@ -146,5 +179,21 @@ class BuildTracker(private val clock: Clock) {
     val startedAt: Instant,
   ) {
     var completion: BuildCommandEvent? = null
+    var eligibleKeysAtCompletion: Set<BuildKey>? = null
+    var winner: BuildKey? = null
+
+    fun isEligible(build: TrackedBuild): Boolean {
+      if (winner != null) return false
+      val event = completion ?: return false
+      val samples = event.completionProcessSamples
+      return if (samples == null) {
+        build.key in eligibleKeysAtCompletion.orEmpty()
+      } else {
+        samples.none { sample ->
+          sample.pid == build.key.pid &&
+            (sample.startedAt == null || build.key.startedAt == null || sample.startedAt == build.key.startedAt)
+        }
+      }
+    }
   }
 }

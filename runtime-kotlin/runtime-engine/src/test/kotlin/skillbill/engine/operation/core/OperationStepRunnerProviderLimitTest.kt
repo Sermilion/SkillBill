@@ -1,5 +1,6 @@
 package skillbill.engine.operation.core
 
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseLaunchFailure
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -46,6 +47,7 @@ class OperationStepRunnerProviderLimitTest {
           }
         },
         NoopWorkflowGitOperations,
+        AgentBuildObserverFactory.NONE,
       )
     val repo = Files.createTempDirectory("op-step-limit")
     try {

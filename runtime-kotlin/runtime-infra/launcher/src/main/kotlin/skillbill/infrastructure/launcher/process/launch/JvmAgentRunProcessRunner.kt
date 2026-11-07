@@ -274,6 +274,9 @@ class JvmAgentRunProcessRunner(
     var waitResult: Result<ProcessWait>? = null
     var primaryFailure: Throwable? = null
     var cleanupFailure: Throwable? = null
+    val buildSampleBinding =
+      (request.probes.buildObserver as? BuildCompletionSampleBinding)
+        ?.bindCompletionSamples(tree::samples)
     try {
       mcpStartupObservedAtStart = request.probes.mcpStartupProbe.readStartupObserved(degradation).value == true
       resources.stdout.start()
@@ -290,7 +293,16 @@ class JvmAgentRunProcessRunner(
       primaryFailure = failure
       rethrow(failure)
     } finally {
-      cleanupFailure = catchingNonCancellation { resources.lifetime.release(waitResult) }.exceptionOrNull()
+      try {
+        try {
+          cleanupFailure = catchingNonCancellation { resources.lifetime.release(waitResult) }.exceptionOrNull()
+        } finally {
+          request.probes.buildObserver.finishBuildObservation(clock.instant(), degradation)
+        }
+      } finally {
+        catchingNonCancellation { buildSampleBinding?.close() }
+          .onFailure { failure -> degradation.recordCleanupFailure("build_sample_binding_close", failure) }
+      }
       exportRunDegradationEvidence(degradation, request.launch.outputSink)
       if (primaryFailure != null && cleanupFailure != null && cleanupFailure !== primaryFailure) {
         primaryFailure.addSuppressed(cleanupFailure)

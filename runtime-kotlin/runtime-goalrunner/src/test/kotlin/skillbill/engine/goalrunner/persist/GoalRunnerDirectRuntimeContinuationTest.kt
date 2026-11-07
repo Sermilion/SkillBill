@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.application.testHarnessClock
 import skillbill.application.testProjectStore
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
@@ -39,6 +40,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
         childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       )
 
     val launchRequest =
@@ -81,6 +83,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
         childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       )
 
     val launchRequest =
@@ -123,6 +126,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
         childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       )
 
     val launchRequest =

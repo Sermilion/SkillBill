@@ -23,6 +23,11 @@ import java.nio.file.Path
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.time.Duration
 
+internal enum class AgentRunCommandKind {
+  AGENT,
+  RUNTIME_HARNESS,
+}
+
 internal data class AgentRunCommand(
   val command: List<String>,
   val workingDirectory: Path,
@@ -34,6 +39,8 @@ internal data class AgentRunCommand(
   val conversationIsolation: ReviewConversationIsolation? = null,
   val outputDecoder: AgentRunOutputDecoder? = null,
   val environmentPassthroughKeys: Set<String> = emptySet(),
+  val kind: AgentRunCommandKind = AgentRunCommandKind.AGENT,
+  val streamsProviderEvents: Boolean,
 )
 
 internal interface AgentRunCommandBuilder {
@@ -232,6 +239,7 @@ internal class ClaudeAgentRunCommandBuilder(
           else -> AgentRunIdlePolicy.DB_PROGRESS_ONLY
         },
       outputDecoder = AgentRunOutputDecoder.CLAUDE_STREAM_JSON.takeIf { streaming },
+      streamsProviderEvents = streaming,
       environmentPassthroughKeys =
         if (request.reviewEvidenceBroker != null) CLAUDE_PROVIDER_PASSTHROUGH_KEYS else emptySet(),
     )
@@ -351,6 +359,7 @@ internal class CodexAgentRunCommandBuilder(
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
       stdinText = launchPrompt(request),
+      streamsProviderEvents = true,
       environment =
         goalContinuationEnvironment(request) +
           runtimeDatabaseEnvironment(request.reviewEvidenceBroker == null, databasePath),

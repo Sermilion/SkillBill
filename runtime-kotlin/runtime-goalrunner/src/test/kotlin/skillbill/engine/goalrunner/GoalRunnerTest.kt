@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.goal.GoalRunnerManifestState
@@ -5716,6 +5717,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
         childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       )
 
     val launchRequest =
@@ -5770,6 +5772,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
         childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       )
 
     val launchRequest =
@@ -5811,6 +5814,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
         childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       )
 
     val launchRequest =
@@ -5850,6 +5854,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         diagnostics = NoopRuntimeDiagnostics,
         projectStore = testProjectStore,
         childFailureOutputStore = ChildFailureOutputStore { _, _, _ -> "test.log" },
+        buildObserverFactory = AgentBuildObserverFactory.NONE,
       )
     val launchRequest =
       reconciler.subtaskLaunchRequest(

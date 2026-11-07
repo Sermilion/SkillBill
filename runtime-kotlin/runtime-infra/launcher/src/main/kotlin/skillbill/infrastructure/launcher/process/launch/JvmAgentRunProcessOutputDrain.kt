@@ -169,6 +169,7 @@ internal class Utf8Drain(
   private fun flushOutput() {
     catchingNonCancellation {
       if (flushOutputStreamOnEnd) outputSink.write(outputStream, "\u0000")
+      (outputSink as? AgentRunOutputEndObserver)?.outputEnded(outputStream)
     }.onFailure { failure ->
       if (failure is Error) throw failure
       workerFailure = workerFailure ?: failure

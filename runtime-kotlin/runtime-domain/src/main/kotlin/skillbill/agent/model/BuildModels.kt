@@ -46,6 +46,7 @@ data class BuildCommandEvent(
   val kind: BuildCommandEventKind,
   val exitCode: Int?,
   val observedAt: Instant,
+  val completionProcessSamples: List<BuildProcessSample>? = null,
 )
 
 enum class BuildOutcome(val wireValue: String) {

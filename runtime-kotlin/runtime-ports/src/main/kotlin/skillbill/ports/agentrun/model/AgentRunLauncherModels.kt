@@ -50,6 +50,7 @@ data class SkillRunRequest(
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
   val validationCheckInvocationId: String? = null,
   val captureDisplayOutput: Boolean = false,
+  val buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

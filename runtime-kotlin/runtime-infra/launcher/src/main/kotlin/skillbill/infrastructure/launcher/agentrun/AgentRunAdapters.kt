@@ -3,8 +3,11 @@ package skillbill.infrastructure.launcher.agentrun
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import skillbill.contracts.time.JvmSystemClock
 import skillbill.error.core.catchingNonCancellation
+import skillbill.infrastructure.launcher.agentrun.display.BuildCommandTap
 import skillbill.infrastructure.launcher.agentrun.display.ReadableAgentOutputSink
+import skillbill.infrastructure.launcher.agentrun.display.SerializedBuildObserver
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessEnvironmentFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessProbeFields
@@ -19,6 +22,7 @@ import skillbill.install.model.AgentLauncherCli
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.agentLauncherUnavailableMessage
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
@@ -31,6 +35,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
+import java.time.Clock
 
 internal sealed interface LauncherResolution {
   data class Resolved(val command: List<String>) : LauncherResolution
@@ -44,6 +49,7 @@ internal class ProcessAgentRunAdapter(
   private val processRunner: AgentRunProcessRunner,
   private val executableLookup: ExecutableLookup = PathExecutableLookup(),
   private val diagnostics: RuntimeDiagnostics,
+  private val clock: Clock = JvmSystemClock,
 ) {
   fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
     val built = commandBuilder.build(request)
@@ -58,11 +64,26 @@ internal class ProcessAgentRunAdapter(
       } else {
         null
       }
-    val streamRequest = displaySink?.let { request.copy(outputSink = it) } ?: request
+    val serializedObserver =
+      request.buildObserver
+        .takeIf { it !== AgentRunBuildObserver.NONE && command.kind == AgentRunCommandKind.AGENT }
+        ?.let(::SerializedBuildObserver)
+    val tap =
+      serializedObserver
+        ?.takeIf { command.streamsProviderEvents }
+        ?.let { observer ->
+          BuildCommandTap(agent.id, displaySink ?: request.outputSink, observer, clock, diagnostics)
+        }
+    val streamRequest =
+      request.copy(
+        outputSink = tap ?: displaySink ?: request.outputSink,
+        buildObserver = serializedObserver ?: AgentRunBuildObserver.NONE,
+      )
     val result =
       try {
         processRunner.run(processRequest(command, streamRequest))
       } finally {
+        tap?.finish()
         displaySink?.finish()
       }
     result.spawnDenied?.let { denied -> return AgentRunLaunchDenied(agent, denied.pauseReason) }
@@ -193,6 +214,7 @@ internal class ProcessAgentRunAdapter(
         activityProbe = WorktreeActivityProbe(command.workingDirectory),
         activityStampSink = request.activityStampSink,
         worktreeEditObserver = request.worktreeEditObserver,
+        buildObserver = request.buildObserver,
         idlePolicy = command.idlePolicy,
       ),
     environmentFields =
@@ -419,10 +441,26 @@ internal data class AgentRunWorkerBinding(
 internal fun headlessAgentRunAdapters(
   processRunner: AgentRunProcessRunner,
   executableLookup: ExecutableLookup = PathExecutableLookup(),
+  builders: List<AgentRunCommandBuilder> = headlessAgentRunCommandBuilders(),
+  diagnostics: RuntimeDiagnostics,
+  clock: Clock = JvmSystemClock,
+): Map<SupportedAgent, ProcessAgentRunAdapter> =
+  builders.associate { builder ->
+    builder.agent to
+      ProcessAgentRunAdapter(
+        agent = builder.agent,
+        commandBuilder = builder,
+        processRunner = processRunner,
+        executableLookup = executableLookup,
+        diagnostics = diagnostics,
+        clock = clock,
+      )
+  }
+
+internal fun headlessAgentRunCommandBuilders(
   workerBinding: AgentRunWorkerBinding = AgentRunWorkerBinding(),
   providerEnvironment: Map<String, String> = emptyMap(),
-  diagnostics: RuntimeDiagnostics,
-): Map<SupportedAgent, ProcessAgentRunAdapter> =
+): List<AgentRunCommandBuilder> =
   listOf(
     ClaudeAgentRunCommandBuilder(
       providerEnvironment = providerEnvironment,
@@ -435,13 +473,4 @@ internal fun headlessAgentRunAdapters(
     ),
     JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
     CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
-  ).associate { builder ->
-    builder.agent to
-      ProcessAgentRunAdapter(
-        agent = builder.agent,
-        commandBuilder = builder,
-        processRunner = processRunner,
-        executableLookup = executableLookup,
-        diagnostics = diagnostics,
-      )
-  }
+  )

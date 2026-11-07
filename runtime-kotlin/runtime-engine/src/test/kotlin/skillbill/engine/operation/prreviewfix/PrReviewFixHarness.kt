@@ -6,6 +6,7 @@ import skillbill.application.review.diffcomment.model.DiffCommentListResult
 import skillbill.application.review.diffcomment.model.DiffCommentThreadResult
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -127,7 +128,7 @@ internal class PrReviewFixHarness : AutoCloseable {
         ),
       ),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
-      OperationStepRunner(runner, git),
+      OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
       FixedProjectStorePort(root.resolve("project-store")),
       RecordingBranchWorktreeResources(),
     )

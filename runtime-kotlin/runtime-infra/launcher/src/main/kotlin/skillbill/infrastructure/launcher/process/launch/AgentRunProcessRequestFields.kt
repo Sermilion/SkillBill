@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputSink
@@ -40,6 +41,7 @@ data class AgentRunProcessProbeFields(
   val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
   val worktreeEditObserver: AgentRunWorktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
   val idlePolicy: AgentRunIdlePolicy = AgentRunIdlePolicy.DB_PROGRESS_ONLY,
+  val buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE,
 )
 
 data class AgentRunProcessEnvironmentFields(

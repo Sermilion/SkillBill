@@ -2,6 +2,7 @@ package skillbill.engine.operation.core
 
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -50,7 +51,7 @@ internal class ChecklistOperationHarness : AutoCloseable {
         ),
       ),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
-      OperationStepRunner(runner, git),
+      OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
       FixedProjectStorePort(root.resolve("project-store")),
       RecordingBranchWorktreeResources(),
     )

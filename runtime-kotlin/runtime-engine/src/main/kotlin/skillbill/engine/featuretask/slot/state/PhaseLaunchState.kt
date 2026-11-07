@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlemen
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunBuildObserver
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -28,7 +29,7 @@ public interface PhaseLaunchState {
    */
   public fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget?
 
-  /** The activity and worktree-edit observation attached to a launch of [stepName]. */
+  /** The activity, worktree-edit and build observation attached to a launch of [stepName]. */
   public fun launchObservation(stepName: String): PhaseLaunchObservation
 
   /** Records the estimated token usage of one launch of [stepName]. */
@@ -49,6 +50,7 @@ public data class PhaseLaunchObservation(
   val activityStampSink: AgentRunActivityStampSink,
   val worktreeEditObserver: AgentRunWorktreeEditObserver,
   val progressEmitter: ((AgentRunProgressEmission) -> Unit)? = null,
+  val buildObserver: AgentRunBuildObserver = AgentRunBuildObserver.NONE,
 )
 
 public sealed interface PhaseSettledEnvelopeRead {

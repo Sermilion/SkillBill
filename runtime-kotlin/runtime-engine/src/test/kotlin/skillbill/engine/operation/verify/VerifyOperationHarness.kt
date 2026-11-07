@@ -26,6 +26,7 @@ import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -209,7 +210,7 @@ internal class VerifyOperationHarness : AutoCloseable {
       OperationExecutor(
         OperationRegistry(listOf(verify)),
         OperationConfirmationGate(proposals, git, clock),
-        OperationStepRunner(runner, git),
+        OperationStepRunner(runner, git, AgentBuildObserverFactory.NONE),
         FixedProjectStorePort(projectStoreRoot),
         RecordingBranchWorktreeResources(),
       )

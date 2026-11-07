@@ -40,6 +40,7 @@ class CodexOutputTokenProcessTest {
           workingDirectory = fixture,
           timeout = null,
           stdinText = "Original phase briefing",
+          streamsProviderEvents = false,
         )
       val request =
         AgentRunProcessRequest(

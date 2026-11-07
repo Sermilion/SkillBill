@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.launcher.mcp.resolveRuntimeMcpBin
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
@@ -16,6 +17,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Path
+import java.time.Clock
 
 class FileSystemAgentRunLauncher internal constructor(
   processRunner: AgentRunProcessRunner,
@@ -24,6 +26,7 @@ class FileSystemAgentRunLauncher internal constructor(
   private val providerEnvironment: Map<String, String> = emptyMap(),
   diagnostics: RuntimeDiagnostics,
   runtimeMcpBin: Path? = null,
+  clock: Clock = JvmSystemClock,
 ) : AgentRunLauncher {
   @Inject
   constructor(
@@ -32,6 +35,7 @@ class FileSystemAgentRunLauncher internal constructor(
     executableLookup: ExecutableLookup,
     environment: EnvironmentContext,
     diagnostics: RuntimeDiagnostics,
+    clock: Clock,
   ) : this(
     processRunner = processRunner as AgentRunProcessRunner,
     executableLookup = executableLookup,
@@ -39,15 +43,16 @@ class FileSystemAgentRunLauncher internal constructor(
     providerEnvironment = environment.environment,
     diagnostics = diagnostics,
     runtimeMcpBin = resolveRuntimeMcpBin(environment.environment, environment.userHome),
+    clock = clock,
   )
 
   private val adapters: Map<SupportedAgent, ProcessAgentRunAdapter> =
     headlessAgentRunAdapters(
       processRunner,
       executableLookup,
-      AgentRunWorkerBinding(databasePath, runtimeMcpBin),
-      providerEnvironment,
+      headlessAgentRunCommandBuilders(AgentRunWorkerBinding(databasePath, runtimeMcpBin), providerEnvironment),
       diagnostics,
+      clock,
     )
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =

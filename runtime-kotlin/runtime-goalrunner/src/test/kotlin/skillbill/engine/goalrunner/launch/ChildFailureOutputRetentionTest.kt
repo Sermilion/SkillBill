@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.launch
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.application.testHarnessClock
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
@@ -47,6 +48,7 @@ class ChildFailureOutputRetentionTest {
         manifestStore, outcomes, GoalRunnerProgressReader(outcomes), testActivityStampWriter(),
         testWorktreeEditJournalWriter(), testHarnessClock, NoopRuntimeDiagnostics, projectStore,
         FileSystemChildFailureOutputStore(),
+        AgentBuildObserverFactory.NONE,
       )
     val request = GoalRunnerRunRequest(issueKey = "SKILL-56", repoRoot = root, invokedAgentId = "codex")
     val state = requireNotNull(manifestStore.loadByIssueKey("SKILL-56", root))
@@ -114,6 +116,7 @@ class ChildFailureOutputRetentionTest {
         manifestStore, outcomes, GoalRunnerProgressReader(outcomes), testActivityStampWriter(),
         testWorktreeEditJournalWriter(), testHarnessClock, diagnostics, FixedProjectStorePort(root),
         ChildFailureOutputStore { _, _, _ -> throw IOException("disk full") },
+        AgentBuildObserverFactory.NONE,
       )
     val request = GoalRunnerRunRequest(issueKey = "SKILL-56", repoRoot = root, invokedAgentId = "codex")
     val state = requireNotNull(manifestStore.loadByIssueKey("SKILL-56", root))

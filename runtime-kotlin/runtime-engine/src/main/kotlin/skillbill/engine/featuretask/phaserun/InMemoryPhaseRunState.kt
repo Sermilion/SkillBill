@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
@@ -13,11 +14,14 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
+import skillbill.engine.featuretask.runloop.observability.AgentBuildObserverFactory
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.PhaseAttemptHistory
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -60,7 +64,6 @@ import java.time.Instant
 public class InMemoryPhaseRunState(
   public val facts: InMemoryPhaseRunFacts,
   public val executionPlan: ResolvedPhaseExecutionPlan,
-  public override val progress: FeatureTaskRuntimeRunState,
   public override val records: InMemoryPhaseRunRecords,
   public override val telemetry: FeatureTaskRuntimeRunObservability,
   public val invocationId: String,
@@ -69,7 +72,22 @@ public class InMemoryPhaseRunState(
   public val lifecycleTelemetry: LifecycleTelemetryService,
   public override val clock: Clock,
   public val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
+  private val buildObserverFactory: AgentBuildObserverFactory = AgentBuildObserverFactory.NONE,
 ) : PhaseRunState {
+  public override val progress: FeatureTaskRuntimeRunState =
+    FeatureTaskRuntimeRunState(
+      initialRecords = facts.request.goalQualityPhaseProgress?.phaseRecords.orEmpty(),
+      transitions = executionPlan.phaseTraversal(),
+      initialAttemptHistory =
+        PhaseAttemptHistory(
+          facts.request.goalQualityPhaseProgress?.phaseLedger.orEmpty(),
+          facts.request.goalQualityPhaseProgress?.attemptHighWaterMarks.orEmpty(),
+        ),
+      initialQaRepairState = facts.request.goalQualityPhaseProgress?.qaRepairState,
+      stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
+      resumeRulesFn = strategies.resumeRules(executionPlan),
+    )
+
   override val settlements: PhaseRunSettlements =
     GoalQualityPhaseRunSettlements(records)
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
@@ -145,11 +163,13 @@ public class InMemoryPhaseRunState(
 
   override fun launchObservation(stepName: String): PhaseLaunchObservation {
     val durableStamps = facts.request.activityStampSink
+    val buildObserver = buildObserverFactory.observer(facts.request.repoRoot, { invocationId }, { null })
     val output =
       facts.request.activityOutput
         ?: return PhaseLaunchObservation(
           durableStamps,
           AgentRunWorktreeEditObserver.NONE,
+          buildObserver = buildObserver,
         )
     var lastKind: String? = null
     var lastPublishedAt: Instant? = null
@@ -192,6 +212,7 @@ public class InMemoryPhaseRunState(
       activityStampSink = stampSink,
       worktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
       progressEmitter = progressEmitter,
+      buildObserver = buildObserver,
     )
   }
 
@@ -344,3 +365,34 @@ public const val QUALITY_CHECK_ROUTED_SKILL: String = "bill-code-check"
 private const val QUALITY_CHECK_SCOPE_TYPE = "working_tree"
 private const val ACTIVITY_REFRESH_SECONDS = 30L
 private val ACTIVITY_REFRESH_INTERVAL = Duration.ofSeconds(ACTIVITY_REFRESH_SECONDS)
+
+@Inject
+public class InMemoryPhaseRunStateFactory(
+  private val strategies: PhaseStrategyLookup,
+  private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
+  private val lifecycleTelemetry: LifecycleTelemetryService,
+  private val diagnostics: RuntimeDiagnostics,
+  private val clock: Clock,
+  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
+  private val buildObserverFactory: AgentBuildObserverFactory,
+) {
+  public fun create(
+    facts: InMemoryPhaseRunFacts,
+    executionPlan: ResolvedPhaseExecutionPlan,
+    records: InMemoryPhaseRunRecords,
+    invocationId: String,
+  ): InMemoryPhaseRunState =
+    InMemoryPhaseRunState(
+      facts = facts,
+      executionPlan = executionPlan,
+      records = records,
+      telemetry = FeatureTaskRuntimeRunObservability(records, facts, diagnostics),
+      invocationId = invocationId,
+      strategies = strategies,
+      reviewResultAssembly = reviewResultAssembly,
+      lifecycleTelemetry = lifecycleTelemetry,
+      clock = clock,
+      runLoopEntry = runLoopEntry,
+      buildObserverFactory = buildObserverFactory,
+    )
+}
