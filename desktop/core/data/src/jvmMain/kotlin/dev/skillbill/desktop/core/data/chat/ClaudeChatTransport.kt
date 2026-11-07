@@ -202,8 +202,10 @@ internal fun claudeArguments(request: ChatTurnRequest): List<String> = buildList
   request.agent.model?.let { addAll(listOf("--model", it)) }
   request.agent.effort?.let { addAll(listOf("--effort", it)) }
   addAll(listOf(if (request.firstTurn) "--session-id" else "--resume", request.sessionId))
-  // Permission requests go to the host as control requests; the operator answers them on an approval card.
+  // Permission requests go to the host as `can_use_tool` control requests on stdio; the operator answers them on an
+  // approval card. Without the stdio prompt tool the CLI has no host handler and denies every prompt with its ask reason.
   addAll(listOf("--permission-prompts", "host"))
+  addAll(listOf("--permission-prompt-tool", "stdio"))
   // The selected mode is enforced by the provider, not by prose: plan mode blocks edits and commands in read-only chat,
   // and `manual` prompts for every tool in act chat. A user or project default mode never applies.
   addAll(listOf("--permission-mode", if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "manual"))

@@ -32,6 +32,7 @@ class ClaudeChatTransportTest {
     assertEquals("plan", next[next.indexOf("--permission-mode") + 1])
     for (arguments in listOf(first, next)) {
       assertEquals("host", arguments[arguments.indexOf("--permission-prompts") + 1])
+      assertEquals("stdio", arguments[arguments.indexOf("--permission-prompt-tool") + 1])
       val bypassing = setOf("--dangerously-skip-permissions", "--restricted", "--tools", "--allowedTools")
       assertTrue(arguments.none { it in bypassing || it == "operator prompt" })
     }
