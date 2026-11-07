@@ -473,7 +473,7 @@ class PhaseStandaloneMonitorExecutionTest {
   }
 
   @Test
-  fun `an interrupted monitor preserves its cancellation and releases its clean owned worktree`() {
+  fun `an interrupted monitor preserves its cancellation and discards its unfinished owned worktree`() {
     val cancellation = CancellationException("operator stop")
     lateinit var worktree: Path
     val interruptedRun =
@@ -483,6 +483,7 @@ class PhaseStandaloneMonitorExecutionTest {
           beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
         ): FeatureTaskRuntimeRunReport {
           worktree = context.request.repoRoot
+          Files.writeString(worktree.resolve("unfinished.txt"), "cancelled repair")
           Thread.currentThread().interrupt()
           throw cancellation
         }
@@ -495,7 +496,7 @@ class PhaseStandaloneMonitorExecutionTest {
       Thread.interrupted()
     }
 
-    assertFalse(Files.exists(worktree), "cancellation must still settle the clean owned worktree")
+    assertFalse(Files.exists(worktree), "cancellation must discard the unfinished owned worktree")
     assertEquals("main", git(caller, "branch", "--show-current"))
     assertEquals(headSha, forkHead())
   }

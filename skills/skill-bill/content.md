@@ -493,20 +493,23 @@ token. After confirming the process is gone, rerun with the exact PR URL or `bra
 `--recover-stale-owner <owner-token>`. The option applies only to `phase monitor`,
 needs an explicit target, and is refused when the token is malformed or does not
 match the recorded owner. Recovery never takes over a live owner or a worktree with
-unfinished work.
+unfinished work other than verified owned work from a cancelled invocation.
 
 Status, events, and the printed report name the exact PR URL, repository, head
 branch and head repository, invocation, owned worktree, and the cleanup outcome. A clean
 run releases the worktree and branch. A worktree with uncommitted or untracked
 changes, unpublished commits, unknown publication state, unowned resources, or a
-failed cleanup is retained, and the report names its path and reason. Retained work
+failed cleanup is retained, and the report names its path and reason. Cancellation
+discards the verified owned worktree, branch and refs, including unfinished edits and
+unpublished commits, after the repair child stops. A retry cleans older cancelled
+retained work after same-host positive process-death evidence. Other retained work
 blocks a fresh monitor of the same target until it is resolved. A hard kill leaves no
 cleanup record and is handled as stale recovery, not as guaranteed cleanup.
 Canceling or rerunning a monitor from the desktop targets its exact invocation and
 PR URL or `branch:<name>`. A rerun launches `phase monitor <that URL or branch:<name>>` without checking the head
-branch out in the caller checkout. Cancel stops the owning process and keeps
-retained work. Goal finalization and `phase:pr` keep their branch-based monitoring
-unchanged.
+branch out in the caller checkout. Cancel stops the owning process and discards its
+verified owned work after the repair child stops. Goal finalization and `phase:pr`
+keep their branch-based monitoring unchanged.
 
 While CI is pending, progress reports identify the current PR and include available
 check links. Describe queued checks as waiting, and name running work only when the

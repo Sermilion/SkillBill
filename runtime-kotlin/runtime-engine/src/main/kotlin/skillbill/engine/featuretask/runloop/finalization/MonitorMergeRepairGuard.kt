@@ -4,14 +4,6 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
-/**
- * Returns why a merge-conflict repair cannot be published, or null when it can.
- *
- * A repair is publishable when HEAD already contains `origin/<base>`, or when an in-progress merge brings
- * base commits HEAD lacks. The base can move while the agent resolves conflicts, so `MERGE_HEAD` may be an
- * older base commit than the current `origin/<base>`. Publishing that merge keeps the base as a parent and
- * makes progress; if the pull request still conflicts, the next monitor round merges the newer tip.
- */
 internal fun WorkflowGitOperations.unmergedConflictBaseReason(
   repoRoot: Path,
   baseBranch: String,

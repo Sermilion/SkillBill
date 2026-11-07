@@ -26,7 +26,8 @@ interface StandaloneMonitorResources {
    * Takes the cross-process admission lock for the target and writes acquiring metadata before any ref or path
    * exists. A held lock, stale metadata, retained work, or corrupt metadata is reported as a blocked result;
    * a live owner is never superseded or signalled. An abandoned owner's unknown publication may be rechecked
-   * against the resolved target after same-host positive process-death evidence; unresolved retained work blocks.
+   * against the resolved target after same-host positive process-death evidence. Previously cancelled work is
+   * discarded after the same death check unless a repair child may still be running; other retained work blocks.
    */
   fun acquire(request: MonitorAcquireRequest): MonitorAcquisition
 
@@ -64,10 +65,11 @@ interface StandaloneMonitorResources {
   ): String?
 
   /**
-   * Removes only verified owned clean work whose commits are all published, otherwise retains the worktree and
-   * refs with an exact reason, then releases the fence. The primary outcome is persisted next to the retention or
-   * release, and `removalAllowed = false` forces retention. Never forces removal and never throws for a retained
-   * outcome; a failure to settle is returned as a retained cleanup failure.
+   * Removes verified owned clean work whose commits are all published. Cancellation discards verified owned
+   * work even with unfinished edits or unpublished commits. Other outcomes retain unfinished work with an exact
+   * reason, then release the fence. The primary outcome is persisted next to the retention or release, and
+   * `removalAllowed = false` forces retention even on cancellation. A failure to settle is returned as a retained
+   * cleanup failure.
    */
   fun settle(request: MonitorSettleRequest): MonitorSettlement
 

@@ -428,8 +428,11 @@ under the admission lock after confirming that the previous owner process is dea
 on the same host.
 It uses the resolved PR head remote to verify publication before removing owned
 resources. Dirty, untracked, unpublished, or unverifiable work remains retained.
-Explicit stale recovery uses the same resolved remote. Retention after an
-undrained repair child continues to block retry. A resolved monitor target
+Explicit stale recovery uses the same resolved remote. Cancellation discards the
+verified owned worktree, branch and refs, including unfinished edits and unpublished
+commits, after the repair child stops. A retry cleans up an older cancelled monitor's
+retained work after same-host positive process-death evidence, then admits a fresh
+monitor. Retention after an undrained repair child continues to block retry. A resolved monitor target
 that fails admission or setup records a blocked attempt with its exact PR and
 head branch. Its worktree path stays absent until a worktree exists, so desktop
 launch following can select the failure and display its reason.

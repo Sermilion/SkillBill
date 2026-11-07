@@ -112,7 +112,7 @@ class GitMonitorResources(
             null,
           )
         }
-      if (existing?.hasRecheckablePublication() == true &&
+      if (existing?.hasRecheckableSettlement() == true &&
         inspector.currentProcess().hostIdentity == existing.process.hostIdentity &&
         inspector.inspect(existing.process).isConfirmedDead()
       ) {
@@ -379,7 +379,7 @@ class GitMonitorResources(
       record == null -> refusal(MonitorRecoveryRefusal.NO_OWNERSHIP, directory, "No ownership record exists.")
       refused != null -> refused
       else ->
-        when (val settled = cleanup.settle(directory, record, request.target, abandonedOutcome(record))) {
+        when (val settled = cleanup.settle(directory, record, request.target, recoveryOutcome(record))) {
           MonitorSettlement.Released -> MonitorStaleRecovery.Recovered(record.ownerToken)
           is MonitorSettlement.Retained ->
             refusal(
@@ -393,10 +393,23 @@ class GitMonitorResources(
     }
   }
 
-  private fun MonitorOwnershipRecord.hasRecheckablePublication(): Boolean =
+  private fun MonitorOwnershipRecord.hasRecheckableSettlement(): Boolean =
     state == MonitorOwnershipState.RETAINED &&
-      retention?.reason == MonitorRetentionReason.PUBLICATION_UNKNOWN &&
-      outcome?.kind == MonitorOutcomeKind.ABANDONED
+      when (outcome?.kind) {
+        MonitorOutcomeKind.ABANDONED -> retention?.reason == MonitorRetentionReason.PUBLICATION_UNKNOWN
+        MonitorOutcomeKind.CANCELLED ->
+          retention?.reason in
+            setOf(
+              MonitorRetentionReason.DIRTY_WORKTREE,
+              MonitorRetentionReason.UNTRACKED_FILES,
+              MonitorRetentionReason.UNPUBLISHED_COMMITS,
+              MonitorRetentionReason.CLEANUP_FAILED,
+            )
+        else -> false
+      }
+
+  private fun recoveryOutcome(record: MonitorOwnershipRecord): MonitorPrimaryOutcome =
+    record.outcome?.takeIf { it.kind == MonitorOutcomeKind.CANCELLED } ?: abandonedOutcome(record)
 
   private fun abandonedOutcome(record: MonitorOwnershipRecord): MonitorPrimaryOutcome =
     MonitorPrimaryOutcome(
@@ -424,7 +437,7 @@ class GitMonitorResources(
           directory,
           "The recorded owner token differs from the expected one.",
         )
-      record.state == MonitorOwnershipState.RETAINED && !record.hasRecheckablePublication() ->
+      record.state == MonitorOwnershipState.RETAINED && !record.hasRecheckableSettlement() ->
         MonitorStaleRecovery.Refused(
           MonitorRecoveryRefusal.RETAINED_UNFINISHED,
           retainedPath(record, directory),

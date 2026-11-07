@@ -165,6 +165,95 @@ class GitMonitorResourcesLifecycleTest {
   }
 
   @Test
+  fun `cancellation discards unfinished work and unpublished commits and admits a fresh monitor`() {
+    val fixture = fixture()
+    val callerBefore = fixture.snapshot()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile("local.txt", "unpublished", worktree.path)
+    Files.writeString(worktree.path.resolve("feature.txt"), "unfinished")
+    Files.writeString(worktree.path.resolve("scratch.txt"), "untracked")
+
+    val outcome = MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "operator cancelled")
+    assertEquals(MonitorSettlement.Released, resources.settle(MonitorSettleRequest(fence, outcome)))
+
+    assertFalse(Files.exists(worktree.path))
+    assertEquals(emptyList(), fixture.refs("refs/skill-bill"))
+    assertEquals(emptyList(), fixture.refs("refs/heads/skill-bill"))
+    assertEquals(callerBefore, fixture.snapshot())
+    val released = assertNotNull(MonitorAdmissionFiles.read(fence.directory))
+    assertEquals(MonitorOwnershipState.RELEASED, released.state)
+    assertEquals(outcome, released.outcome)
+    val next = acquiredFence(acquireFor(resources, fixture))
+    val freshWorktree = prepare(fixture, next)
+    assertEquals(fixture.headSha, runGit(freshWorktree.path, "rev-parse", "HEAD"))
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
+  }
+
+  @Test
+  fun `retry cleans legacy cancelled retained work only after same host positive owner death`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    Files.writeString(worktree.path.resolve("feature.txt"), "cancelled edit")
+    assertIs<MonitorSettlement.Retained>(resources.settle(fence))
+    val legacy =
+      assertNotNull(MonitorAdmissionFiles.read(fence.directory)).copy(
+        outcome = MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "cancelled before upgrade"),
+      )
+    MonitorAdmissionFiles.write(fence.directory, legacy)
+
+    for (inspection in listOf(
+      FeatureTaskRuntimeProcessInspection.ExactLive,
+      FeatureTaskRuntimeProcessInspection.Unsupported("unknown"),
+    )) {
+      inspector.inspection = inspection
+      assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
+      assertEquals(legacy, MonitorAdmissionFiles.read(fence.directory))
+      assertEquals("cancelled edit", Files.readString(worktree.path.resolve("feature.txt")))
+    }
+    val foreignHost = resourcesWith(FakeMonitorProcessInspector(hostIdentity = "other-host"))
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(foreignHost, fixture))
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.NotRunning
+
+    val next = acquiredFence(acquireFor(resources, fixture))
+    assertEquals(fence.generation + 1, next.generation)
+    assertFalse(Files.exists(worktree.path))
+    assertFalse("refs/heads/${worktree.branch}" in fixture.refs("refs/heads/skill-bill"))
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
+    assertEquals(emptyList(), fixture.refs("refs/skill-bill"))
+    val repeated = acquiredFence(acquireFor(resources, fixture))
+    val repeatedWorktree = prepare(fixture, repeated)
+    Files.writeString(repeatedWorktree.path.resolve("feature.txt"), "cancelled again")
+    assertIs<MonitorSettlement.Retained>(resources.settle(repeated))
+    MonitorAdmissionFiles.write(
+      repeated.directory,
+      assertNotNull(MonitorAdmissionFiles.read(repeated.directory)).copy(outcome = legacy.outcome),
+    )
+    assertIs<MonitorStaleRecovery.Recovered>(resources.recoverStale(staleRequest(fixture, repeated.ownerToken)))
+    assertFalse(Files.exists(repeatedWorktree.path))
+    assertEquals(legacy.outcome, MonitorAdmissionFiles.read(repeated.directory)?.outcome)
+  }
+
+  @Test
+  fun `cancellation refuses to discard a worktree switched to a foreign branch`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    runGit(worktree.path, "checkout", "-b", "operator-work")
+    Files.writeString(worktree.path.resolve("feature.txt"), "operator edit")
+
+    val result =
+      resources.settle(
+        MonitorSettleRequest(fence, MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "cancelled")),
+      )
+
+    assertEquals(MonitorRetentionReason.UNOWNED_RESOURCE, assertIs<MonitorSettlement.Retained>(result).reason)
+    assertEquals("operator edit", Files.readString(worktree.path.resolve("feature.txt")))
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
+  }
+
+  @Test
   fun `unknown publication from an abandoned owner is rechecked only with positive death evidence`() {
     val fixture = fixture()
     val fence = acquiredFence(acquireFor(resources, fixture))
@@ -218,6 +307,7 @@ class GitMonitorResourcesLifecycleTest {
     val fixture = fixture()
     val fence = acquiredFence(acquireFor(resources, fixture))
     val worktree = prepare(fixture, fence)
+    Files.writeString(worktree.path.resolve("feature.txt"), "child still editing")
     val retained =
       resources.settle(
         MonitorSettleRequest(
