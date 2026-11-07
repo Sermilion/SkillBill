@@ -22,6 +22,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastEr
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkflowStateVersionMigration
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
 import skillbill.infrastructure.sqlite.core.migration.area.addReviewFindingActions
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
@@ -1004,4 +1005,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 107,
       name = "record-structured-plan-activity",
       operation = { connection -> StandalonePhaseStatusMigration.createStructuredActivity(connection) },
+    ) +
+    DatabaseMigration(
+      version = 108,
+      name = "migrate-workflow-state-0-4-and-rebuild-board",
+      operation = WorkflowStateVersionMigration::apply,
     )

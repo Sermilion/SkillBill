@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
+import skillbill.contracts.persistence.WorkBoardReadModelKeys
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.databaseIncompatible
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
@@ -44,7 +45,7 @@ internal object DatabaseMigrations {
         migration.apply(this, diagnostics)
         MigrationLedger.record(this, migration)
       }
-      if (pending.isNotEmpty()) refreshDesktopSignalGeneration(this)
+      if (pending.isNotEmpty()) invalidateDesktopReadModels(this)
       MigrationLedger.alignVersions(this, migrationSet)
       val appliedAfter = MigrationLedger.appliedNames(this)
       val highestVersion =
@@ -80,7 +81,19 @@ internal object DatabaseMigrations {
     return currentVersion
   }
 
-  private fun refreshDesktopSignalGeneration(connection: Connection) {
+  private fun invalidateDesktopReadModels(connection: Connection) {
+    val hasBoard =
+      connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").use { statement ->
+        statement.setString(1, WorkBoardReadModelKeys.STATE_TABLE)
+        statement.executeQuery().use { rows -> rows.next() }
+      }
+    if (hasBoard) {
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "UPDATE ${WorkBoardReadModelKeys.STATE_TABLE} SET ${WorkBoardReadModelKeys.COMPLETE} = 0",
+        )
+      }
+    }
     val exists =
       connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").use { statement ->
         statement.setString(1, DesktopReadSchema.GENERATION_TABLE)

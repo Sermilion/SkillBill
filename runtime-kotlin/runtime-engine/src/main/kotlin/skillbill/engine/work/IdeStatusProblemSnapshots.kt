@@ -6,6 +6,7 @@ import skillbill.ports.idestatus.model.IdeStatusProblem
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.work.model.WorkItem
 import java.time.Instant
 
 internal object IdeStatusProblemSnapshots {
@@ -112,6 +113,22 @@ internal object IdeStatusProblemSnapshots {
         exitLifecycle = IdeStatusLifecycleState.IDLE,
         freshness = IdeStatusFreshness.UNKNOWN,
       ),
+    )
+
+  fun blockedWorkRecord(
+    repositoryIdentity: String,
+    observedAt: Instant,
+    work: WorkItem,
+    message: String,
+  ): IdeStatusSnapshot =
+    incompatibleRecord(repositoryIdentity, observedAt, message, work.workflowId).copy(
+      lifecycleState = IdeStatusLifecycleState.BLOCKED,
+      issueKey = work.issueKey,
+      workflowFamily = work.workflowKind.toIdeFamily(),
+      title = work.issueKey ?: work.workflowId,
+      startedAt = work.startedAt,
+      summary =
+        "Saved data needs migration. Install a compatible runtime and retry; existing progress is retained.",
     )
 
   private fun problemSnapshot(parts: ProblemParts): IdeStatusSnapshot =

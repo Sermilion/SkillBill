@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.core.migration.area
 
 import skillbill.contracts.persistence.WorkBoardReadModelKeys
 import skillbill.infrastructure.sqlite.core.schema.installWorkBoardChangeTriggers
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.sql.Connection
 
 internal object WorkBoardReadModelMigration {
@@ -87,5 +88,33 @@ internal object WorkBoardReadModelRebuildMigration {
     connection.createStatement().use { statement ->
       statement.executeUpdate("UPDATE ${WorkBoardReadModelKeys.STATE_TABLE} SET ${WorkBoardReadModelKeys.COMPLETE} = 0")
     }
+  }
+}
+
+internal object WorkflowStateVersionMigration {
+  const val TARGET_VERSION = "0.4"
+
+  fun apply(
+    connection: Connection,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    var migrated = 0
+    listOf("feature_task_workflows", "feature_verify_workflows").forEach { table ->
+      val modePredicate = if (table == "feature_task_workflows") "AND mode = 'runtime'" else ""
+      connection.prepareStatement(
+        "UPDATE $table SET contract_version = ? " +
+          "WHERE contract_version IN ('0.1', '0.2', '0.3') $modePredicate " +
+          "AND CASE WHEN json_valid(steps_json) THEN json_type(steps_json) = 'array' ELSE 0 END " +
+          "AND CASE WHEN json_valid(artifacts_json) THEN json_type(artifacts_json) = 'object' ELSE 0 END",
+      ).use { statement ->
+        statement.setString(1, TARGET_VERSION)
+        migrated += statement.executeUpdate()
+      }
+    }
+    WorkBoardReadModelRebuildMigration.apply(connection)
+    diagnostics.info(
+      "seam=workflow_state_migration target_version=$TARGET_VERSION migrated_records=$migrated " +
+        "value_used=preserved_payloads_and_invalidated_board",
+    )
   }
 }
