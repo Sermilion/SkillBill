@@ -39,6 +39,28 @@ class AgentChatTransportsTest {
 
   // Codex names its own thread; losing it, even across an app restart, would start every later turn without the conversation.
   @Test
+  fun `codex and cursor preserve whole message boundaries instead of inserting paragraph text`() {
+    val codex = CodexStreamDecoder {}
+    val cursor = CursorStreamDecoder {}
+    val scripts = listOf(
+      codex to listOf(
+        """{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"Checking."}}""",
+        """{"type":"item.completed","item":{"id":"m2","type":"agent_message","text":"Done."}}""",
+      ),
+      cursor to listOf(
+        """{"type":"assistant","message":{"content":[{"type":"text","text":"Checking."}]}}""",
+        """{"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}""",
+      ),
+    )
+    scripts.forEach { (decoder, lines) ->
+      assertEquals(
+        listOf(ChatEvent.MessageStarted, ChatEvent.TextDelta("Checking."), ChatEvent.MessageStarted, ChatEvent.TextDelta("Done.")),
+        lines.flatMap(decoder::decode),
+      )
+    }
+  }
+
+  @Test
   fun `codex runs unsandboxed, maps items to events and resumes the reported thread after a restart`() = runTest {
     val launcher = ScriptedLauncher(
       listOf(
@@ -56,7 +78,7 @@ class AgentChatTransportsTest {
 
     val call = ChatToolCall("i1", "shell", "git status", "git status")
     assertEquals(
-      listOf(ChatEvent.ToolUse(call), ChatEvent.ToolResult("i1", "clean", false), ChatEvent.TextDelta("All clean."), ChatEvent.Completed),
+      listOf(ChatEvent.ToolUse(call), ChatEvent.ToolResult("i1", "clean", false), ChatEvent.MessageStarted, ChatEvent.TextDelta("All clean."), ChatEvent.Completed),
       first,
     )
     val firstArgs = launcher.commands[0].argv
@@ -89,7 +111,7 @@ class AgentChatTransportsTest {
         """{"type":"turn.completed","usage":{}}""",
       ).flatMap(decoder::decode)
     }
-    assertEquals(listOf(ChatEvent.TextDelta("ok"), ChatEvent.Completed), completed)
+    assertEquals(listOf(ChatEvent.MessageStarted, ChatEvent.TextDelta("ok"), ChatEvent.Completed), completed)
 
     val crashed = CodexStreamDecoder {}
     assertEquals(emptyList(), crashed.decode(warning))

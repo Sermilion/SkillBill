@@ -67,7 +67,6 @@ internal fun cursorArguments(request: ChatTurnRequest, chat: String?): List<Stri
 /** Decodes Cursor stream-json lines; without partial output each `assistant` line is one whole message. */
 internal class CursorStreamDecoder(private val onChat: (String) -> Unit) : ChatLineDecoder {
   private var reported = false
-  private var wroteText = false
 
   override fun decode(line: String): List<ChatEvent> {
     if (line.isBlank()) return emptyList()
@@ -80,9 +79,7 @@ internal class CursorStreamDecoder(private val onChat: (String) -> Unit) : ChatL
     }
     return when (root.string("type")) {
       "assistant" -> assistantText(root)?.let { text ->
-        val separated = if (wroteText) "\n\n$text" else text
-        wroteText = true
-        listOf(ChatEvent.TextDelta(separated))
+        listOf(ChatEvent.MessageStarted, ChatEvent.TextDelta(text))
       }.orEmpty()
       "tool_call" -> toolEvent(root)
       "result" -> if ((root["is_error"] as? JsonPrimitive)?.booleanOrNull == true) {

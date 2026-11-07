@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
@@ -11,6 +13,21 @@ import kotlin.test.assertEquals
 import kotlin.time.Clock
 
 class ChatThreadTest {
+  @Test
+  fun `stream chunks join within a message and separate messages survive history restoration`() {
+    val thread = ChatThread(Clock.System)
+    val call = ChatToolCall("t1", "shell", "git status", null)
+    listOf(
+      ChatEvent.MessageStarted, ChatEvent.TextDelta("Check"), ChatEvent.TextDelta("ing."), ChatEvent.ToolUse(call),
+      ChatEvent.MessageStarted, ChatEvent.TextDelta("Done."), ChatEvent.ToolResult("t1", "clean", false), ChatEvent.Completed,
+    ).forEach { thread.show(null, it) }
+    val messages = thread.transcript.value.filterIsInstance<ChatMessage.Agent>()
+    assertEquals(listOf("Checking.", "Done."), messages.map { it.text })
+    assertEquals(listOf(false, false), messages.map { it.streaming })
+    assertEquals("clean", messages.first().tools.single().result?.output)
+    assertEquals(listOf("Checking.", "Done."), thread.historyLines().map(::restored).filterIsInstance<ChatMessage.Agent>().map { it.text })
+  }
+
   @Test
   fun `history keeps action-only replies and selected operator actions for restoration`() {
     val suggested = listOf(ChatSuggestedAction("Review", "Review this", ChatPermissionMode.ReadOnly, NewTaskActionKind.Review))

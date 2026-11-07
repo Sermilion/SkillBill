@@ -20,7 +20,7 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
 
   fun accept(event: ChatEvent): List<ChatEvent> = when (event) {
     is ChatEvent.TextDelta -> text(event.text)
-    ChatEvent.Completed -> buildList {
+    ChatEvent.MessageStarted, ChatEvent.Completed -> buildList {
       val actions = metadata
       if (actions == null) {
         if (pending.isNotEmpty()) add(ChatEvent.TextDelta(pending))
@@ -35,6 +35,7 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
         }
       }
       pending = ""
+      metadata = null
       add(event)
     }
     is ChatEvent.Failed -> buildList {

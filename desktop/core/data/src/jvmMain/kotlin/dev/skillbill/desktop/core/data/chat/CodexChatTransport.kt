@@ -65,7 +65,6 @@ internal fun codexArguments(request: ChatTurnRequest, thread: String?): List<Str
  */
 internal class CodexStreamDecoder(private val onThread: (String) -> Unit) : ChatLineDecoder {
   private var lastError: String? = null
-  private var wroteText = false
   private val started = mutableSetOf<String>()
 
   override fun decode(line: String): List<ChatEvent> {
@@ -101,9 +100,7 @@ internal class CodexStreamDecoder(private val onThread: (String) -> Unit) : Chat
     }
     if (item.string("type") == "agent_message") {
       val text = item.string("text")?.takeIf { it.isNotBlank() } ?: return emptyList()
-      val separated = if (wroteText) "\n\n$text" else text
-      wroteText = true
-      return listOf(ChatEvent.TextDelta(separated))
+      return listOf(ChatEvent.MessageStarted, ChatEvent.TextDelta(text))
     }
     val call = toolCall(item) ?: return emptyList()
     return buildList {

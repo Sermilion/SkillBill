@@ -12,6 +12,21 @@ import kotlin.test.assertTrue
 
 class ChatReplyStreamTest {
   @Test
+  fun `message boundaries flush held text and actions without hiding the following message`() {
+    val stream = ChatReplyStream(RecordingDiagnostics())
+    assertEquals(listOf(ChatEvent.TextDelta("Before")), stream.accept(ChatEvent.TextDelta("Before`")))
+    assertEquals(listOf(ChatEvent.TextDelta("`"), ChatEvent.MessageStarted), stream.accept(ChatEvent.MessageStarted))
+    val action = ChatSuggestedAction("Inspect", "Inspect it", ChatPermissionMode.ReadOnly)
+    stream.accept(ChatEvent.TextDelta(
+      "```skillbill-actions\n" +
+        """[{"label":"Inspect","instruction":"Inspect it","mode":"read"}]""" + "\n```",
+    ))
+    assertEquals(listOf(ChatEvent.SuggestedActions(listOf(action)), ChatEvent.MessageStarted), stream.accept(ChatEvent.MessageStarted))
+    assertEquals(listOf(ChatEvent.TextDelta("After")), stream.accept(ChatEvent.TextDelta("After")))
+    assertEquals(listOf(ChatEvent.Completed), stream.accept(ChatEvent.Completed))
+  }
+
+  @Test
   fun `action metadata stays hidden across every stream split and becomes buttons only after completion`() {
     val answer = "I can inspect CI.\n\n"
     val metadata = """[{"label":"Inspect CI failure","instruction":"Inspect the failed CI job.","mode":"act"}]"""

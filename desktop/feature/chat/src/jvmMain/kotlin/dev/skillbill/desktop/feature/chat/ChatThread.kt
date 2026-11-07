@@ -112,6 +112,7 @@ internal class ChatThread(private val clock: Clock) {
 
 internal fun ChatThread.show(agent: ChatAgent?, event: ChatEvent) {
   when (event) {
+    ChatEvent.MessageStarted -> endStreaming()
     is ChatEvent.TextDelta -> appendDelta(event.text)
     is ChatEvent.ToolUse -> appendTool(event.call)
     is ChatEvent.ToolResult -> recordToolResult(event)

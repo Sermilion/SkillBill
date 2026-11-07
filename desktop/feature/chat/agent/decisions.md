@@ -1,3 +1,8 @@
+## [2026-11-07] Preserve provider message boundaries inside a chat turn
+Context: Paragraph separators fixed run-on text but still combined every assistant message in a turn into one transcript entry.
+Decision: Claude message starts and Codex and Cursor whole-message items emit MessageStarted. The reply parser settles buffered text and action metadata at that boundary, and the thread finishes its prior entry without completing the turn. Deltas within a message still append to one entry. Operator and finished assistant text share a copy control with copied feedback.
+Reason: Message identity comes from the provider rather than text formatting. Separate saved history lines preserve the boundary on resume, while late tool results still update their original entry.
+
 ## [2026-11-07] Fill the tab title so the close control keeps the trailing inset
 Context: A short tab title that does not fill leftover width stays at its text width, so the 20dp close control follows the title instead of the tab's trailing edge.
 Decision: The title fills the space between the marker and the close slot. The row stays padded 10dp at the start and 4dp at the end.

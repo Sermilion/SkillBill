@@ -73,6 +73,32 @@ class ClaudeChatTransportRunTest {
 
   // A background build the agent started used to die when its turn's process exited, and nothing reported back.
   @Test
+  fun `claude keeps deltas in their message and starts another entry after tools`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+    val turn = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    val start = """{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant"}}}"""
+    claude.print(
+      replay(uuid), start, textBlockStart(), textDelta("Check"), textDelta("ing."),
+      """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]}}""",
+      """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}""",
+      start, textBlockStart(), textDelta("Done."),
+      """{"type":"result","is_error":false}""",
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.MessageStarted, ChatEvent.TextDelta("Check"), ChatEvent.TextDelta("ing."),
+        ChatEvent.ToolUse(ChatToolCall("t1", "Bash", "{}", null)), ChatEvent.ToolResult("t1", "ok", false),
+        ChatEvent.MessageStarted, ChatEvent.TextDelta("Done."), ChatEvent.Completed,
+      ),
+      turn.await(),
+    )
+    transport.end("session-1")
+    claude.stopped.await()
+  }
+
+  @Test
   fun `the process outlives the turn, a reply the agent starts on its own reaches unprompted, and the next turn reuses it`() = runTest {
     val claude = FakeClaude()
     val diagnostics = RecordingDiagnostics()
