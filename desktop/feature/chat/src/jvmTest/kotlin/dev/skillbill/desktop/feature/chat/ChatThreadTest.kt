@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.ApprovalCard
+import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
@@ -8,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
+import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,6 +69,30 @@ class ChatThreadTest {
   }
 
   @Test
+  fun `output after an approval card continues below it and its tool result reaches the call above`() {
+    val thread = ChatThread(Clock.System)
+    val agent = ChatAgent("claude", null, null)
+    val call = ChatToolCall("bash-1", "Bash", "curl -sI https://example.com", "Fetch headers")
+    val card = approvalCard()
+    thread.show(agent, ChatEvent.TextDelta("Fetching."))
+    thread.show(agent, ChatEvent.ToolUse(call))
+    thread.show(agent, ChatEvent.ApprovalRequested(card))
+    thread.show(agent, ChatEvent.ToolResult(call.id, "HTTP/2 200", false))
+    thread.show(agent, ChatEvent.TextDelta("It returned 200."))
+
+    val (before, shown, after) = thread.transcript.value
+    before as ChatMessage.Agent
+    assertEquals("Fetching.", before.text)
+    assertEquals(false, before.streaming)
+    assertEquals(ChatEvent.ToolResult(call.id, "HTTP/2 200", false), before.tools.single().result)
+    assertEquals(card, (shown as ChatMessage.Approval).card)
+    after as ChatMessage.Agent
+    assertEquals("It returned 200.", after.text)
+    assertEquals(true, after.streaming)
+    assertEquals(3, thread.transcript.value.size)
+  }
+
+  @Test
   fun `a start confirmation notice restores as a confirmation`() {
     val text = "Started goal run APP-1. $START_AGAIN_SUFFIX"
     val notice = restored(ChatHistoryLine(ChatHistoryRole.Notice, text)) as ChatMessage.Notice
@@ -73,4 +100,24 @@ class ChatThreadTest {
     assertEquals(true, notice.confirmation)
     assertEquals(false, (restored(ChatHistoryLine(ChatHistoryRole.Notice, "Stopped")) as ChatMessage.Notice).confirmation)
   }
+
+  private fun approvalCard() = ApprovalCard(
+    key = ApprovalCardKey("approval-1", "repo", "run-1", "gen-1", "claude", "request-1", false),
+    checkoutRoot = "/repo",
+    providerSessionId = null,
+    title = "Bash",
+    reason = null,
+    subject = "curl -sI https://example.com",
+    inputText = "curl -sI https://example.com",
+    options = emptyList(),
+    actionFingerprint = null,
+    authorityScope = null,
+    createdAt = "2026-11-07T00:00:00Z",
+    deadlineAt = "2026-11-07T00:10:00Z",
+    state = "pending",
+    decisionSource = null,
+    selectedOptionId = null,
+    ruleId = null,
+    providerPayload = "{}",
+  )
 }

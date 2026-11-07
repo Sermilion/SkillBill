@@ -261,7 +261,7 @@ internal class ChatThread(private val clock: Clock) {
 
   fun suggestActions(actions: List<ChatSuggestedAction>) = updateStreaming { it.copy(actions = actions) }
 
-  // An approval card can follow the streaming reply, so every streaming reply ends, not only the last message.
+  // A card splits a reply, and a turn can be cut off right after one, so every streaming reply ends, not only the last message.
   fun endStreaming() = messages.update { list ->
     if (list.none { it is ChatMessage.Agent && it.streaming }) {
       list
@@ -270,14 +270,19 @@ internal class ChatThread(private val clock: Clock) {
     }
   }
 
-  // A streaming reply keeps taking output past an approval card that follows it; any other message starts a new reply.
+  // A card stays where it was requested: output after it finishes the reply above and continues in a new reply below it.
   private fun updateStreaming(change: (ChatMessage.Agent) -> ChatMessage.Agent) = messages.update { list ->
-    val index = list.indexOfLast { !it.isCard }
-    val last = list.getOrNull(index)
+    val last = list.lastOrNull()
     if (last is ChatMessage.Agent && last.streaming) {
-      list.toMutableList().also { it[index] = change(last) }
+      list.toMutableList().also { it[it.lastIndex] = change(last) }
     } else {
-      list + change(ChatMessage.Agent("", streaming = true, tools = emptyList(), startedAt = clock.now()))
+      val now = clock.now()
+      val settled = if (last?.isCard == true) {
+        list.map { if (it is ChatMessage.Agent && it.streaming) it.copy(streaming = false, finishedAt = now) else it }
+      } else {
+        list
+      }
+      settled + change(ChatMessage.Agent("", streaming = true, tools = emptyList(), startedAt = now))
     }
   }
 }
