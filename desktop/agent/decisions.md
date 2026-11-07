@@ -23,6 +23,36 @@ Decision: SbMarqueeText applies continuous basicMarquee only when reduced motion
 Reason: Following the existing reduced-motion gate avoids scrolling for operators who disable motion and still leaves readable truncated text.
 Revisit when: The design calls for wrapping or another overflow treatment under reduced motion.
 
+## [2026-11-07] Bind preview lifetime to the visible selected QA execution
+Context: Historical runs can retain framebuffer files, concurrent runs can be active, and a detail ViewModel can survive route disposal.
+Decision: Derive the request from the selected standalone desktop QA execution and current database session. Require visible route and pane authorization, clear frames on request changes, cancel the former observer and reject late generations. Terminal selections never read a source.
+Reason: File presence and ViewModel lifetime do not establish that the operator is viewing an active run. The selected execution and current visibility must authorize every published frame.
+
+## [2026-11-07] Confine framebuffer opens through directory handles
+Context: Preview reads must remain inside the selected invocation even if a path changes between validation and opening.
+Decision: Traverse the invocation and fixed preview child through scoped SecureDirectoryStream handles, reject symlinks and open the final regular file read-only without following links. Refuse the source when secure directory streams are unavailable.
+Reason: Path-string validation alone cannot confine the actual open. Directory-relative handles preserve that boundary during path replacement and close on every exit.
+
+## [2026-11-07] Use only the invocation-owned private framebuffer
+Context: QA can use an existing display when private capture is unavailable, but preview must never expose the operator's visible display.
+Decision: Capture only the registered owner-only live-preview child through private Xvfb -fbdir. Registration refusal disables capture. Reuse the existing resource registry and stop producer processes before releasing the child.
+Reason: Exact invocation ownership isolates concurrent runs and preserves retained-resource and cancellation cleanup behavior. Existing-display QA fallback supplies no authorized preview source.
+## [2026-11-07] Force the Linux source-run software renderer
+Context: SKILL-514 QA reported an X11 visual lookup crash during the source-run launch. QA-2 remains open after three repair attempts.
+Decision: Select Skiko SOFTWARE_COMPAT for Linux source runs through both the JVM property and SKIKO_RENDER_API.
+Reason: SKIKO_RENDER_API takes precedence over an inherited renderer setting, so the environment override is required to force the selected renderer.
+
+## [2026-11-07] Stamp copied source-run identities as one launch pair
+Context: A QA checkout can differ from the installed runtime. Dirty build identities require a matching commit and a shared non-empty install run id.
+Decision: Stage runtime-cli and prepared app resources from the same checkout, then stamp only the copied identity records with one fresh source-run UUID on every execution.
+Reason: BuildIdentityPlugin reads the install run id during configuration and omits it for clean trees. Stamping the staged pair supplies the dirty-build identity without changing gate rules or real-install behavior.
+
+## [2026-11-07] Isolate source-run settings and child-agent state
+Context: Desktop settings live under user.home without an environment override. A saved database path can override SKILL_BILL_DB, and blank TERM lets startup import login-shell exports.
+Decision: Recreate a scratch home for each QA launch, redirect JVM and child-process state and temp paths there, and set TERM to `dumb` only when inherited TERM is blank.
+Reason: Overriding SKILL_BILL_STATE_DIR alone leaves the operator's settings and database reachable. The TERM fallback preserves launch overrides. Scratch agent configuration means QA agents do not inherit the operator's login.
+Alternatives considered: Keeping the real user.home would require a production settings-path override, outside the spec's real-install constraints.
+
 ## [2026-11-07] Keep QA discovery explicit and picks owned by settings
 Context: The sidebar and New Task chip display the same persisted pick while device availability and leases can change independently.
 Decision: AppSettingsRepository owns the pick. Window-scoped QaDevicePickerState owns cancellable discovery on open and explicit refresh. Preserve a missing pick and match an AVD pick to its running emulator.

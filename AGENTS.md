@@ -2,7 +2,7 @@
 
 ## Project Context
 
-skill-bill governs skill authoring, routing, validation, installation, and measurement. It provides orchestration, telemetry, workflow state, and shells for review, checks, feature work, verification, and PRs.
+skill-bill governs skill authoring, routing, validation, installation, and measurement, with orchestration, telemetry, and workflow state.
 
 Non-negotiable contracts:
 
@@ -22,7 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Each goal runs in its own runtime-owned worktree under `<state>/goals/<repo>/<goal>/checkout`. The runtime removes it after recording completion unless it holds unpublished work. Standalone phases keep working in the caller's checkout. A desktop start naming a branch runs in that branch's checkout or a runtime-created sibling worktree, removed once its last run completes.
+Goals use runtime-owned worktrees at `<state>/goals/<repo>/<goal>/checkout`, removed after completion unless they hold unpublished work. Standalone phases use the caller's checkout. Desktop branch starts use that branch's checkout or a runtime-created sibling, removed after its last run.
 
 ## Product Intent
 
@@ -78,7 +78,7 @@ Code review: pack root + conforming manifest/`content.md`, manifest-registered p
 
 ## Writing And Comments
 
-Write direct, active prose; drop filler, stale wording, praise and repetition; preserve names, numbers and qualifications. Commits/PRs/docs: lead with the outcome, state what changed and why, and avoid unsupported terms such as "successfully", "perfect", "comprehensive", and "robust". Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
+Write direct, active prose; preserve names, numbers and qualifications. Commits/PRs/docs: state the outcome, change and reason; avoid unsupported praise. Prefer clear names and small functions over comments; do not add `//` or block comments in scoped Kotlin, and keep KDoc only on interfaces and their members (see Comments).
 
 ## Testing
 
@@ -88,16 +88,7 @@ No timing-based tests. Tests must not depend on wall-clock time or thread schedu
 
 ## Desktop QA
 
-The desktop app refuses a runtime built from a different commit, and a dirty tree also needs the same `SKILL_BILL_INSTALL_RUN_ID` in both builds. Never point QA at the operator's `~/.skill-bill/runtime`. Run these from `desktop/` in the QA checkout, in order, with one exported run id. A single Gradle call for both tasks races, because `:app:run` can read the runtime record before `installDist` writes it.
-
-```sh
-export SKILL_BILL_INSTALL_RUN_ID=qa-<invocation id>
-./gradlew :runtime-kotlin:runtime-cli:installDist
-SKILL_BILL_STATE_DIR=<dir>/state SKILL_BILL_REVIEW_DB=<dir>/state/review-metrics.db ../runtime-kotlin/runtime-cli/build/install/runtime-cli/bin/runtime-cli stats
-SKILL_BILL_RUNTIME_DIR=$PWD/../runtime-kotlin/runtime-cli/build/install SKILL_BILL_STATE_DIR=<dir>/state SKILL_BILL_REVIEW_DB=<dir>/state/review-metrics.db JAVA_TOOL_OPTIONS="-Duser.home=<dir>/home -Djava.io.tmpdir=<dir>/tmp" ./gradlew :app:run
-```
-
-`stats` creates the empty isolated store; without it the board shows "The selected database does not exist". The database variable is `SKILL_BILL_REVIEW_DB`; `SKILL_BILL_DB` does nothing. With an isolated home the New task screen reports "Not ready: no agent found", which is expected.
+QA launches with `cd desktop && ./gradlew :app:runFromSource`. It builds the same-checkout runtime, prepares matching build identities and uses a scratch home under `desktop/app/build/source-run/`. Keep QA state in the scratch paths documented in `desktop/QA.md`; never point QA at the operator's installed runtime.
 
 ## Comments
 

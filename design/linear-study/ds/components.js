@@ -659,13 +659,15 @@
     if (status === 'unread') return `<span class="sb-cmark" role="img" aria-label="New reply"><span class="dot"></span></span>`;
     return '<span class="sb-cmark"></span>';
   }
-  /* The open chats as tabs: { tabs: [{ id, label, status, on, tip }], count }. Tabs round on top and the selected one joins the
-   * panel. "+" follows the last tab. The count button at the far right shows only while tabs are clipped (main.js fitChatTabs)
-   * and carries a mark when a clipped tab is replying or has a new reply. */
+  /* The open chats as tabs: { tabs: [{ id, label, status, on, tip }], count }. The strip is the top of the New task screen, so
+   * it leads with the sidebar toggle while the sidebar is a drawer. Tabs round on top and the selected one joins the panel.
+   * Right-click, Shift+F10 or the menu key on a tab opens Close and Discard. "+" follows the last tab. The count button at the
+   * far right shows only while tabs are clipped (main.js fitChatTabs) and carries a mark when a clipped tab is replying or has a
+   * new reply. */
   function ChatTabs(o) {
     track('ChatTabs');
-    const tabs = o.tabs.map((t) => `<div class="${cx('sb-ctab', t.on && 'on', t.status === 'unread' && 'unread')}" role="tab" aria-selected="${!!t.on}" data-act="chat-select" data-arg="${esc(t.id)}" data-tab="${esc(t.id)}" data-status="${esc(t.status || '')}"${tipAttrs(t.tip || t.label)}>${ChatStatusMark(t.status)}<span class="label">${esc(t.label)}</span>${IconButton({ icon: 'x', label: `Close ${t.label}`, kbd: '⌘ W', act: 'chat-close', arg: t.id, size: 'sm' })}</div>`).join('');
-    return `<div class="sb-ctabs" role="tablist" aria-label="Open chats"><div class="sb-ctabs-scroll" data-ctabs>${tabs}</div>${IconButton({ icon: 'plus', label: 'New chat', kbd: '⌘ T', act: 'chat-new', size: 'sm' })}<button type="button" class="sb-ctabs-more" data-act="chat-menu" data-ctabs-more hidden aria-label="All ${o.count} open chats" data-tip="All open chats">${ChatStatusMark(null)}${o.count}${Icon('chevronDown', 'sm')}</button></div>`;
+    const tabs = o.tabs.map((t) => `<div class="${cx('sb-ctab', t.on && 'on', t.status === 'unread' && 'unread')}" role="tab" tabindex="0" aria-selected="${!!t.on}" aria-haspopup="menu" data-act="chat-select" data-arg="${esc(t.id)}" data-tab="${esc(t.id)}" data-ctx="chat:${esc(t.id)}" data-status="${esc(t.status || '')}"${tipAttrs(t.tip || t.label)}>${ChatStatusMark(t.status)}<span class="label">${esc(t.label)}</span>${IconButton({ icon: 'x', label: `Close ${t.label}`, kbd: '⌘ W', act: 'chat-close', arg: t.id, size: 'sm' })}</div>`).join('');
+    return `<div class="sb-ctabs" role="tablist" aria-label="Open chats">${IconButton({ icon: 'panelLeft', label: 'Toggle sidebar', kbd: '[', act: 'toggle-side', cls: 'sb-side-toggle' })}<div class="sb-ctabs-scroll" data-ctabs>${tabs}</div>${IconButton({ icon: 'plus', label: 'New chat', kbd: '⌘ T', act: 'chat-new', size: 'sm' })}<button type="button" class="sb-ctabs-more" data-act="chat-menu" data-ctabs-more hidden aria-label="All ${o.count} open chats" data-tip="All open chats">${ChatStatusMark(null)}${o.count}${Icon('chevronDown', 'sm')}</button></div>`;
   }
   /* A suggested next step: an action the agent offered (the first is `primary`), or a quick start under an empty composer.
    * `note` trails the label in faint text ("QA my branch on Pixel 8 Pro" once a QA device is picked). */

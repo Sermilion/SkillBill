@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -69,6 +70,7 @@ import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
 import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 import dev.skillbill.desktop.feature.chat.ChatMessage
 import kotlinx.coroutines.CoroutineScope
@@ -124,13 +126,17 @@ internal fun NewTaskChatMarker(status: NewTaskChatStatus, modifier: Modifier = M
   }
 }
 
-/** One tab per open chat in tab order, followed by the new-chat and overflow controls. */
+/**
+ * The top of the New task screen: one tab per open chat in tab order, followed by the new-chat and overflow controls. It leads
+ * with the sidebar toggle while the sidebar is a drawer, since the screen has no view header.
+ */
 @Composable
 internal fun NewTaskChatTabs(
   items: List<OpenChatItem>,
   selected: NewTaskDraft,
   onSelect: (NewTaskDraft) -> Unit,
   onClose: (NewTaskDraft) -> Unit,
+  onDiscard: (NewTaskDraft) -> Unit,
   onNew: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -140,6 +146,7 @@ internal fun NewTaskChatTabs(
   val scroll = rememberScrollState()
   val scope = rememberCoroutineScope()
   val focusRequester = remember { FocusRequester() }
+  val sidebarToggle = LocalSidebarToggle.current
   BoxWithConstraints(
     modifier.fillMaxWidth().height(36.dp).background(colors.bgFrame)
       .drawBehind { drawLine(colors.borderSubtle, Offset(0f, size.height - .5f), Offset(size.width, size.height - .5f), 1.dp.toPx()) }
@@ -148,7 +155,8 @@ internal fun NewTaskChatTabs(
     val gapPx = with(density) { 2.dp.toPx().roundToInt() }
     val plusSlotPx = with(density) { 24.dp.toPx().roundToInt() } + gapPx
     val moreSlotPx = with(density) { 48.dp.toPx().roundToInt() } + gapPx
-    val availablePx = with(density) { maxWidth.roundToPx() }
+    val togglePx = if (sidebarToggle != null) with(density) { 24.dp.toPx().roundToInt() } + gapPx else 0
+    val availablePx = with(density) { maxWidth.roundToPx() } - togglePx
     val minTabPx = with(density) { 112.dp.toPx().roundToInt() }
     val maxTabPx = with(density) { 196.dp.toPx().roundToInt() }
     val initial = tabStripMetrics((availablePx - plusSlotPx).toFloat(), items.size, minTabPx.toFloat(), maxTabPx.toFloat(), gapPx.toFloat())
@@ -180,6 +188,7 @@ internal fun NewTaskChatTabs(
     }
     val gapDp = with(density) { gapPx.toDp() }
     Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gapDp)) {
+      sidebarToggle?.let { SbIconButton(LucideIcons.panelLeft, "Toggle sidebar", it, size = SbControlSize.Small, shortcut = "[") }
       Box(
         Modifier.width(containerWidth).fillMaxHeight().padding(top = 4.dp).verticalWheelScrollsHorizontally(scroll, scope, with(density) { WHEEL_STEP_DP.dp.toPx() })
           .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
@@ -195,7 +204,7 @@ internal fun NewTaskChatTabs(
           Row(horizontalArrangement = Arrangement.spacedBy(gapDp)) {
             items.forEach { item ->
               key(item.draft) {
-                NewTaskChatTab(item, item.draft === selected, onClick = { onSelect(item.draft) }, onClose = { onClose(item.draft) }, modifier = Modifier.width(with(density) { metrics.tabWidth.toDp() }))
+                NewTaskChatTab(item, item.draft === selected, onClick = { onSelect(item.draft) }, onClose = { onClose(item.draft) }, onDiscard = { onDiscard(item.draft) }, modifier = Modifier.width(with(density) { metrics.tabWidth.toDp() }))
               }
             }
           }
@@ -236,37 +245,43 @@ private fun OverflowButton(count: Int, hiddenActivity: Boolean, selected: Boolea
 }
 
 @Composable
-private fun NewTaskChatTab(item: OpenChatItem, selected: Boolean, onClick: () -> Unit, onClose: () -> Unit, modifier: Modifier) {
+private fun NewTaskChatTab(item: OpenChatItem, selected: Boolean, onClick: () -> Unit, onClose: () -> Unit, onDiscard: () -> Unit, modifier: Modifier) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val unread = item.status == NewTaskChatStatus.NewReply
   val shape = RoundedCornerShape(topStart = SkillBillRadius.sm, topEnd = SkillBillRadius.sm, bottomStart = 0.dp, bottomEnd = 0.dp)
   val interaction = remember { MutableInteractionSource() }
   val hovered by interaction.collectIsHoveredAsState()
+  val menu = remember { ChatMenuAnchor() }
+  val focus = remember { FocusRequester() }
   val titleColor = when {
     selected || unread -> colors.fg
     hovered -> colors.fg2
     else -> colors.fgMuted
   }
-  Row(
-    modifier.fillMaxHeight()
-      .drawBehind {
-        when {
-          selected -> {
-            drawOutline(shape.createOutline(size, layoutDirection, this), colors.bgPanel)
-            drawTopEdges(colors.borderSubtle, SkillBillRadius.sm.toPx(), 1.dp.toPx())
+  Box(modifier.fillMaxHeight()) {
+    Row(
+      Modifier.fillMaxSize()
+        .drawBehind {
+          when {
+            selected -> {
+              drawOutline(shape.createOutline(size, layoutDirection, this), colors.bgPanel)
+              drawTopEdges(colors.borderSubtle, SkillBillRadius.sm.toPx(), 1.dp.toPx())
+            }
+            // Only the selected tab joins the content below, so the hover fill stops above the strip's 1dp hairline.
+            hovered -> drawOutline(shape.createOutline(size.copy(height = size.height - 1.dp.toPx()), layoutDirection, this), colors.bgHover)
           }
-          // Only the selected tab joins the content below, so the hover fill stops above the strip's 1dp hairline.
-          hovered -> drawOutline(shape.createOutline(size.copy(height = size.height - 1.dp.toPx()), layoutDirection, this), colors.bgHover)
         }
-      }
-      .hoverable(interaction).clickable(interaction, indication = null, onClick = onClick).sbFocusRing(interaction, shape)
-      .semantics { role = Role.Tab; this.selected = selected }.padding(start = 10.dp, end = 4.dp),
-    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
-  ) {
-    NewTaskChatMarker(item.status)
-    BasicText(item.title, Modifier.weight(1f), style = type.tSm.copy(color = titleColor, fontWeight = if (unread) FontWeight.Medium else type.tSm.fontWeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { if (hovered || selected) TabCloseButton(item.title, onClose) }
+        .focusRequester(focus).chatMenuTrigger(menu)
+        .hoverable(interaction).clickable(interaction, indication = null, onClick = onClick).sbFocusRing(interaction, shape)
+        .semantics { role = Role.Tab; this.selected = selected }.padding(start = 10.dp, end = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+      NewTaskChatMarker(item.status)
+      BasicText(item.title, Modifier.weight(1f), style = type.tSm.copy(color = titleColor, fontWeight = if (unread) FontWeight.Medium else type.tSm.fontWeight), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { if (hovered || selected) TabCloseButton(item.title, onClose) }
+    }
+    NewTaskChatMenu(menu, item, onClose, onDiscard, focus)
   }
 }
 

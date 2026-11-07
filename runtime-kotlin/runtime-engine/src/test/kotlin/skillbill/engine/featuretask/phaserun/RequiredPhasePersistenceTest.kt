@@ -39,6 +39,9 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.featuretask.slot.state.runStep
 import skillbill.engine.featuretask.slot.state.step
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.databaseBusy
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
@@ -48,17 +51,147 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import java.nio.file.Files
 import java.util.concurrent.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class RequiredPhasePersistenceTest {
+  @Test
+  fun `database contention after required start durably blocks without launching or replaying the phase`() {
+    withCapturedContext(hydratedPlanning = false) { context, launcherCount, _, assertNoGitEffects ->
+      val busy = databaseBusy(IllegalStateException("write unavailable"))
+      var briefings = 0
+      val records =
+        object : PhaseRunRecords by context.recorder {
+          override fun recordPhaseBriefing(
+            workflowId: String,
+            briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+            sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
+            attempt: Int,
+          ): RequiredPhaseWrite {
+            briefings++
+            throw busy
+          }
+        }
+      val intercepted = context.withRecords(records)
+
+      val loop = FeatureTaskRuntimeRunLoop(intercepted)
+      loop.advance("preplan", AgentRunOutputSink.NONE, false, null)
+      val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(loop.report())
+
+      val terminal = assertNotNull(context.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("preplan"))
+      assertEquals(WorkflowStepStatus.BLOCKED, terminal.status)
+      assertEquals(FeatureTaskRuntimeFailureDisposition.RETRYABLE, terminal.failureDisposition)
+      assertEquals(1, terminal.attemptCount)
+      assertEquals(terminal.blockedReason, report.blockedReason)
+      assertEquals("preplan", report.lastIncompletePhase)
+      assertEquals(1, briefings)
+      assertEquals(0, launcherCount())
+      assertNoGitEffects()
+    }
+  }
+
+  @Test
+  fun `contention after committed start preserves the saved attempt and manifest`() {
+    withCapturedContext(hydratedPlanning = false) { context, launcherCount, _, assertNoGitEffects ->
+      val busy = databaseBusy(IllegalStateException("phase coordinate binding unavailable"))
+      val manifest = listOf("src/Existing.kt")
+      var started: FeatureTaskRuntimePhaseStateRequest? = null
+      val records =
+        object : PhaseRunRecords by context.recorder {
+          override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
+            val committed = request.copy(fileManifestBefore = manifest)
+            context.recorder.recordRequiredPhaseStart(committed)
+            started = committed
+            throw busy
+          }
+        }
+      val intercepted = context.withRecords(records)
+
+      val outcome =
+        FeatureTaskRuntimeRunLoopPlanningBranch.runPreparedPhase(
+          intercepted,
+          phaseRun(intercepted, "preplan"),
+        )
+
+      val terminal = assertNotNull(context.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("preplan"))
+      assertEquals(WorkflowStepStatus.BLOCKED, terminal.status)
+      assertEquals(FeatureTaskRuntimeFailureDisposition.RETRYABLE, terminal.failureDisposition)
+      assertEquals(assertNotNull(started).attemptCount, terminal.attemptCount)
+      assertEquals(manifest, terminal.fileManifestBefore)
+      assertEquals(terminal.blockedReason, outcome.blockedReason)
+      assertEquals(0, launcherCount())
+      assertNoGitEffects()
+    }
+  }
+
+  @Test
+  fun `failed contention block persistence preserves the database error and cancellation`() {
+    listOf(databaseBusy(IllegalStateException("still unavailable")), CancellationException("cancelled")).forEach {
+        secondary ->
+      withCapturedContext(hydratedPlanning = false) { context, launcherCount, _, assertNoGitEffects ->
+        val busy = databaseBusy(IllegalStateException("write unavailable"))
+        val records =
+          object : PhaseRunRecords by context.recorder {
+            override fun recordPhaseBriefing(
+              workflowId: String,
+              briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+              sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
+              attempt: Int,
+            ): RequiredPhaseWrite = throw busy
+
+            override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean = throw secondary
+          }
+        val intercepted = context.withRecords(records)
+
+        val thrown =
+          assertFailsWith<RuntimeException> {
+            FeatureTaskRuntimeRunLoopPlanningBranch.runPreparedPhase(intercepted, phaseRun(intercepted, "preplan"))
+          }
+
+        assertSame(if (secondary is CancellationException) secondary else busy, thrown)
+        if (secondary !is CancellationException) assertTrue(secondary in busy.suppressed)
+        assertEquals(WorkflowStepStatus.RUNNING, context.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("preplan")?.status)
+        assertEquals(0, launcherCount())
+        assertNoGitEffects()
+      }
+    }
+  }
+
+  @Test
+  fun `non contention database failures keep their failure semantics`() {
+    withCapturedContext(hydratedPlanning = false) { context, launcherCount, _, assertNoGitEffects ->
+      val failure = SkillBillRuntimeException(DatabaseFailureCode.CORRUPT, "corrupt database")
+      val records =
+        object : PhaseRunRecords by context.recorder {
+          override fun recordPhaseBriefing(
+            workflowId: String,
+            briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+            sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
+            attempt: Int,
+          ): RequiredPhaseWrite = throw failure
+        }
+      val intercepted = context.withRecords(records)
+
+      val thrown =
+        assertFailsWith<SkillBillRuntimeException> {
+          FeatureTaskRuntimeRunLoopPlanningBranch.runPreparedPhase(intercepted, phaseRun(intercepted, "preplan"))
+        }
+
+      assertSame(failure, thrown)
+      assertEquals(0, launcherCount())
+      assertNoGitEffects()
+    }
+  }
+
   @Test
   fun rejectedStartPreventsOrdinaryAuditReviewGateAndCommitEffects() {
     listOf("preplan", "implement", "audit", "review", "validate", "build", "commit_push").forEach { phase ->

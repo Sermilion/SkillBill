@@ -25,6 +25,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           WorkflowStatus.ABANDONED.wireValue,
           WorkflowStatus.BLOCKED.wireValue,
           WorkflowStatus.PAUSED.wireValue,
+          WorkflowStatus.TIMED_OUT.wireValue,
         ),
       stepStatuses = WorkflowStepStatus.entries.map(WorkflowStepStatus::wireValue).toSet(),
       terminalStatuses =
@@ -32,6 +33,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           WorkflowStatus.COMPLETED.wireValue,
           WorkflowStatus.FAILED.wireValue,
           WorkflowStatus.ABANDONED.wireValue,
+          WorkflowStatus.TIMED_OUT.wireValue,
         ),
       workflowStatusEnums =
         setOf(
@@ -42,6 +44,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           WorkflowStatus.ABANDONED,
           WorkflowStatus.BLOCKED,
           WorkflowStatus.PAUSED,
+          WorkflowStatus.TIMED_OUT,
         ),
       stepStatusEnums = WorkflowStepStatus.entries.toSet(),
       terminalStatusEnums =
@@ -49,6 +52,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           WorkflowStatus.COMPLETED,
           WorkflowStatus.FAILED,
           WorkflowStatus.ABANDONED,
+          WorkflowStatus.TIMED_OUT,
         ),
       defaultInitialStepId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
       stepIds = (listOf(PhaseSlot.INTAKE) + SkeletonDefinition.FEATURE_RUN_SLOTS).flatMap { it.steps },

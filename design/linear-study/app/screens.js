@@ -1808,11 +1808,18 @@
   function newTask(st) {
     const c = ntChat(st);
     const tabs = S.ChatTabs({ count: st.nt.chats.length, tabs: st.nt.chats.map((t, i) => ({ id: t.id, label: chatLabel(t), status: chatStatus(t), on: i === st.nt.active, tip: `${chatLabel(t)} · ${t.repo || 'no repository'} · ${t.agent}` })) });
-    const header = S.ViewHeader({
-      crumbs: c.lines.length ? [{ label: 'New task' }, { label: chatLabel(c) }] : [{ label: 'New task' }],
-      actions: [c.lines.length ? S.Button({ label: 'Discard', size: 'sm', act: 'chat-discard', tip: 'Close this chat and remove it from Recent chats' }) : '', ...paneToggles(st)],
-    });
-    return workArea(st, header, tabs + (chatEmpty(c) ? ntHome(st, c) : ntTranscript(c)) + ntComposer(st, c));
+    /* No view header: the tab strip is the top of the screen, and Discard lives in each tab's right-click menu (chatTabMenu). */
+    return workArea(st, '', tabs + (chatEmpty(c) ? ntHome(st, c) : ntTranscript(c)) + ntComposer(st, c));
+  }
+  /* A chat tab's right-click menu (NewTaskChatTabMenu). Discard shows once the chat has messages: it closes the chat and removes it
+   * from Recent chats, where Close keeps it there. */
+  function chatTabMenu(st, id) {
+    const c = st.nt.chats.find((x) => String(x.id) === String(id));
+    if (!c) return '';
+    return S.Menu({ items: [
+      { icon: 'x', label: 'Close', kbd: '⌘ W', act: 'chat-close', arg: c.id },
+      c.lines.length ? { icon: 'trash', label: 'Discard', act: 'chat-discard', arg: c.id, danger: true } : null,
+    ].filter(Boolean) });
   }
 
   /* Repository and base branch picker (NewTaskRepositoryPicker). Picking a repository keeps it open and moves to the branch
@@ -1925,7 +1932,7 @@
   window.Screens = {
     buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
-    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, queuePanel,
+    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel,
     resumeListing, resumePalette, resumePaletteView,
     qaView, qaResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,

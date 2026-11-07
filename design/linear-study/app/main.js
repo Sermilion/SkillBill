@@ -380,6 +380,7 @@
     if (p.type === 'target') return X.targetPicker(st);
     if (p.type === 'queue') return X.queuePanel(st);
     if (p.type === 'chats') return X.chatMenu(st);
+    if (p.type === 'chat-tab') return X.chatTabMenu(st, p.arg);
     if (p.type === 'devices') return X.devicePanel(st);
     if (p.type === 'usage') {
       const usage = X.usageData(st);
@@ -1229,7 +1230,7 @@
     'chat-close'(id) { const c = chatById(id); st.popover = null; if (!c) return render(); if (c.stream) { st.dialog = { type: 'chat-close', arg: c.id }; return render(); } closeChat(c); },
     'chat-close-confirm'(id) { const c = chatById(id); if (c) closeChat(c); },
     'chat-reopen'(id) { const c = st.nt.closed[id]; if (!c) return; delete st.nt.closed[id]; st.nt.chats.push(c); st.toasts = []; renderToasts(); if (st.view !== 'newtask') go('newtask'); selectChat(c.id); },
-    'chat-discard'() { const c = ntCur(); stopReply(c); st.nt.saved = st.nt.saved.filter((x) => x.sessionId !== c.session); removeChat(c); st.popover = null; focusComposer(); render(); },
+    'chat-discard'(id) { const c = (id != null && chatById(id)) || ntCur(); stopReply(c); st.nt.saved = st.nt.saved.filter((x) => x.sessionId !== c.session); removeChat(c); st.popover = null; focusComposer(); render(); },
     'chat-menu'(a, el) { st.nt.menuQ = ''; st.popover = Object.assign({ type: 'chats', focus: st.nt.chats.length > 8 ? 'chat-menu-q' : null }, anchorPos(el)); render(); },
     /* Send; while a reply runs, Queue; with an empty draft and messages queued, Send now. "/resume" opens the resume palette. */
     'chat-send'() {
@@ -1356,6 +1357,11 @@
     const el = e.target.closest('[data-ctx]');
     if (!el) return;
     e.preventDefault();
+    if (el.dataset.ctx.startsWith('chat:')) {
+      /* Shift+F10 and the menu key fire contextmenu with no pointer position, so the menu opens under the tab. */
+      const at = e.clientX || e.clientY ? { x: e.clientX, y: e.clientY, top: e.clientY } : anchorPos(el);
+      st.popover = Object.assign({ type: 'chat-tab', arg: el.dataset.ctx.slice(5) }, at); render(); return;
+    }
     if (el.dataset.ctx.startsWith('spec:')) {
       const path = el.dataset.ctx.slice(5), sp = X.specOf(path);
       st.specSel = path;

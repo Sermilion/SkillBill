@@ -76,7 +76,6 @@ sealed interface NewTaskAction {
   data object Send : NewTaskAction
   data object Stop : NewTaskAction
   data object SendNow : NewTaskAction
-  data object Discard : NewTaskAction
   data object NewChat : NewTaskAction
   data object DismissResume : NewTaskAction
   data class ResumeDraft(val entry: ChatHistoryEntry) : NewTaskAction
@@ -163,7 +162,6 @@ class NewTaskViewModel(
       NewTaskAction.Send -> send(target)
       NewTaskAction.Stop -> target.stop()
       NewTaskAction.SendNow -> target.sendNow()
-      NewTaskAction.Discard -> chats.discard(target)
       NewTaskAction.NewChat -> chats.newChat()
       NewTaskAction.DismissResume -> mutableState.update { it.copy(resumePickerOpen = false) }
       is NewTaskAction.DiscardDraft -> chats.discardSaved(action.entry)

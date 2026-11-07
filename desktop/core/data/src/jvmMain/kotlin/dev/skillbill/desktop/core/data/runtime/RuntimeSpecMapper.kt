@@ -45,6 +45,7 @@ internal fun SpecBundleControl.toDomain() = SpecBundleControlView(
   everStarted = everStarted,
   workflowId = workflowId,
   repositoryIdentity = repositoryIdentity,
+  ownerRepoRoot = ownerRepoRoot,
   canStart = canStart,
   startLabel = startLabel,
   canPause = canPause,
