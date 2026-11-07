@@ -29,7 +29,7 @@ class ClaudeIncompleteCaptureTest {
               timedOut = false,
               interrupted = false,
               spawnFailed = false,
-              stdoutTruncated = true,
+              outputCaptureIncomplete = true,
             ),
           ),
         executableLookup = ALL_EXECUTABLES_AVAILABLE,

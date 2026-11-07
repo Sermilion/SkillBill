@@ -130,7 +130,8 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         checklist: StandaloneQaChecklist,
       ): StandaloneQaChecklistWriteResult = StandaloneQaChecklistWriteResult.MISSING
 
-      override fun appendValidationCheckEvent(record: ValidationCheckEventRecord) = Unit
+      override fun appendValidationCheckEvent(record: ValidationCheckEventRecord): Unit =
+        error("Standalone phase status repository is unavailable in this fixture.")
 
       override fun readValidationCheckEvents(invocationId: String): List<ValidationCheckEventRecord> = emptyList()
 
@@ -147,7 +148,9 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
       override fun writeOutputSnapshot(
         executionId: String,
         snapshot: StandalonePhaseOutputSnapshot,
-      ) = Unit
+      ) {
+        error("Standalone phase status repository is unavailable in this fixture.")
+      }
 
       override fun readOutputLines(
         executionId: String,

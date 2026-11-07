@@ -52,7 +52,6 @@ internal class NewTaskSavedChats(
   private val chats: ExecutionChatRepository,
   private val scope: CoroutineScope,
   private val toasts: ToastQueue,
-  private val changed: () -> Unit = {},
 ) {
   private val savedState = MutableStateFlow<List<ChatHistoryEntry>>(emptyList())
   private var savedRead: Job? = null
@@ -61,10 +60,9 @@ internal class NewTaskSavedChats(
   val saved: StateFlow<List<ChatHistoryEntry>> = savedState.asStateFlow()
 
   fun refresh() {
-    savedRead?.cancel()
-    savedRead = scope.launch {
-      savedState.value = chats.savedNewTaskDrafts().filterNot { it.sessionId in pendingDiscards }
-      changed()
+    scope.launch {
+      savedRead?.cancel()
+      savedRead = launch { savedState.value = chats.savedNewTaskDrafts().filterNot { it.sessionId in pendingDiscards } }
     }
   }
 
@@ -82,7 +80,6 @@ internal class NewTaskSavedChats(
     }
     pendingDiscards[entry.sessionId] = PendingDiscard.Undoable(job)
     savedState.value = savedState.value.filterNot { it.sessionId == entry.sessionId }
-    changed()
     job.start()
     toasts.show(ToastData(
       title = "Discarded ${chatTitle(entry.title).title}",

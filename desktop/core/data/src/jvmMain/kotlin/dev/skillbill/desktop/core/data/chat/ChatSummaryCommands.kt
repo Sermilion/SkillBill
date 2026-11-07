@@ -57,7 +57,7 @@ internal fun summaryTranscript(lines: List<ChatHistoryLine>): String {
     val label = when (line.role) {
       ChatHistoryRole.Operator -> "Operator"
       ChatHistoryRole.Agent -> "Agent"
-      ChatHistoryRole.Notice, ChatHistoryRole.Error -> return@mapNotNull null
+      ChatHistoryRole.Notice, ChatHistoryRole.Error, ChatHistoryRole.Approval, ChatHistoryRole.OperationCard -> return@mapNotNull null
     }
     line.role to "$label: ${line.text.take(LINE_LIMIT)}"
   }

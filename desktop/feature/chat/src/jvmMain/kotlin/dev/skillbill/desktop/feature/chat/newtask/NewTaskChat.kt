@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -63,7 +64,9 @@ internal class NewTaskChat(
   initiallyStarted: Boolean = false,
   initiallyPendingTurnLineIndex: Int? = null,
   val repositoryMissing: Boolean = false,
+  replay: NewTaskReplay? = null,
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+  private val onSaved: () -> Unit = {},
   approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
   retainedThread: ChatThread = ChatThread(clock),
   private val saveLock: Mutex = Mutex(),
@@ -85,11 +88,13 @@ internal class NewTaskChat(
   @Volatile
   private var closing = false
   @Volatile
-  private var started = initiallyStarted
-  internal var replayPreamble: String? = null
-  internal var replayAgentId: String? = null
-  internal var replayRepositoryRoot: String? = null
-  internal var replayBaseBranch: String? = null
+  var started = initiallyStarted
+    private set
+
+  /** Earlier conversation sent once with the first turn that reaches the agent; never saved. */
+  @Volatile
+  var pendingReplay: NewTaskReplay? = replay
+    private set
   @Volatile
   private var pendingTurnLineIndex: Int? = initiallyPendingTurnLineIndex
   @Volatile
@@ -136,13 +141,9 @@ internal class NewTaskChat(
     onRejected: (() -> Unit)? = null,
   ) {
     if (text.isBlank() || repositoryMissing || closing) return
-    thread.queuedState.value += QueuedChatMessage(
-      text,
-      action,
-      pauseAndAct = false,
-      cursorMcpDependency = cursorMcpDependency,
-      onRejected = onRejected,
-    )
+    thread.queuedState.update {
+      it + QueuedChatMessage(text, action, pauseAndAct = false, cursorMcpDependency = cursorMcpDependency, onRejected = onRejected)
+    }
     onAccepted()
     drainQueue()
   }
@@ -161,17 +162,8 @@ internal class NewTaskChat(
 
   private fun drainQueue() {
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
-    val queued = thread.queuedState.value
-    val next = queued.firstOrNull() ?: return
-    val batch = if (queued.size > 1 && queued.all { it.action == null && it.cursorMcpDependency == next.cursorMcpDependency }) queued else listOf(next)
-    val message = if (batch.size == 1) next else next.copy(
-      text = batch.joinToString("\n\n") { it.text },
-      onRejected = batch.mapNotNull { it.onRejected }.takeIf { it.isNotEmpty() }?.let { callbacks ->
-        { callbacks.forEach { callback -> callback() } }
-      },
-    )
-    thread.queuedState.value = queued.drop(batch.size)
-    startTurn(message.text, message.action, message.cursorMcpDependency, message.onRejected)
+    val next = thread.takeQueuedMessage() ?: return
+    startTurn(next.text, next.action, next.cursorMcpDependency, next.onRejected)
   }
 
   private fun startTurn(
@@ -314,7 +306,8 @@ internal class NewTaskChat(
     withContext(scope.coroutineContext.minusKey(Job)) { acceptPendingMessage() }
     var opened = false
     var seenEvent = false
-    val prompt = listOfNotNull(replayPreamble, text).joinToString("\n\n")
+    val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
+    val prompt = if (preamble == null) text else "$preamble\n\n$text"
     chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, cursorMcpDependency = cursorMcpDependency)).collect { event ->
       coroutineContext.ensureActive()
       if (!seenEvent) {
@@ -325,7 +318,7 @@ internal class NewTaskChat(
       if (opening) {
         opened = true
         started = true
-        replayPreamble = null
+        pendingReplay = null
       }
       thread.show(agent, event)
       if (opening && !save()) thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
@@ -375,7 +368,7 @@ internal class NewTaskChat(
   }
 
   private suspend fun save(): Boolean {
-    return saveLock.withLock {
+    val saved = saveLock.withLock {
       if (!canPersist()) return@withLock false
       val lines = snapshotLines()
       val title = lines.firstOrNull { it.role == ChatHistoryRole.Operator }?.text.orEmpty()
@@ -391,5 +384,7 @@ internal class NewTaskChat(
         ),
       )
     }
+    if (saved) onSaved()
+    return saved
   }
 }

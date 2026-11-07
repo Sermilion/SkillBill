@@ -518,6 +518,7 @@ class JvmAgentRunProcessRunner(
           args.outputTracker.markObserved()
           args.approval?.observe(chunk)
         },
+        flushOutputStreamOnEnd = args.request.launch.flushOutputStreamOnEnd,
         onStreamEnd = {
           (args.approval as? AgentRunSessionChannel)?.let { session ->
             catchingNonCancellation { session.finish() }
@@ -531,6 +532,7 @@ class JvmAgentRunProcessRunner(
         outputStream = AgentRunOutputStream.STDERR,
         outputSink = args.request.launch.outputSink,
         onChunkRead = { args.outputTracker.markObserved() },
+        flushOutputStreamOnEnd = args.request.launch.flushOutputStreamOnEnd,
       )
     return ProcessResources(
       stdout = stdout,

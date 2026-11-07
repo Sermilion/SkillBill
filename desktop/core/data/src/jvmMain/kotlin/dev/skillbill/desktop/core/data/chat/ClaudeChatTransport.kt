@@ -76,7 +76,10 @@ class ClaudeChatTransport internal constructor(
     val binding = ChatProcessBinding(request.mode, homes[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR].orEmpty())
     // A live process serves only the mode and profile its generation was opened for: a changed turn replaces it, and
     // the replaced generation's outstanding requests are cancelled when its job ends. `--resume` keeps the conversation.
-    sessions[request.sessionId]?.takeIf { it.binding != binding }?.let { stop(request.sessionId, it) }
+    // It also keeps the directory it started in, so a turn in another directory needs a new process.
+    sessions[request.sessionId]
+      ?.takeIf { it.binding != binding || it.workingDirectory != command.workingDirectory }
+      ?.let { stop(request.sessionId, it) }
     awaitStopped(request.sessionId)
     val session = registered(request, command, binding, uuid, sink)
     session.send(uuid, request.prompt, request.images)
@@ -122,7 +125,8 @@ class ClaudeChatTransport internal constructor(
    * the turn that needed it fails with the reason instead.
    */
   private fun open(sessionId: String, command: ChatCommand, binding: ChatProcessBinding): ClaudeLiveSession {
-    val session = ClaudeLiveSession(binding, diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
+    val session =
+      ClaudeLiveSession(binding, command.workingDirectory, diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
     val opening = approvals.open(
       sessionId = sessionId,
       repositoryRoot = command.workingDirectory,

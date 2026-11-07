@@ -48,7 +48,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
@@ -302,7 +301,7 @@ class ChatWorkspace(
     observeActive()
   }
 
-  /** Ends every chat, and the new-task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
+  /** Ends every chat, and every New task chat's agent process with its saved draft kept. Resumes are cancelled first, so a quit mid-act leaves the execution paused rather than half resumed. */
   suspend fun closeAll(): Boolean {
     if (!newTask.closeAll()) return false
     closeExecutionChats()
@@ -379,7 +378,7 @@ class ChatWorkspace(
         expectedDatabaseSessionId = open.sessionId,
         target = action.target,
         branch = action.branch,
-        checkoutRoot = session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot,
+        checkoutRoot = session.item.workingRoot(),
       )
       val outcome = controls.startNewTask(request)
       when (outcome) {
@@ -455,7 +454,7 @@ class ChatWorkspace(
     interrupt(session)
   }
 
-  /** Ends the running reply; the completion drain then sends the first queued message. */
+  /** Ends the running reply; the completion drain then sends all queued messages as one turn. */
   fun sendNow(id: String) {
     val session = sessions[id] ?: return
     if (!session.stoppableState.value || session.queuedState.value.isEmpty()) return
@@ -577,7 +576,9 @@ class ChatWorkspace(
   fun showResumable(id: String) {
     val session = sessions[id] ?: return
     scope.launch(session.job) {
-      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.checkoutRoot, session.sessionId)
+      // A removed worktree's sessions move first, so the listing at the repository root includes them.
+      if (session.turnJob == null) turns.followWorktree(session)
+      session.resumeChoicesState.value = chat.savedChats(session.item.id, session.item.workingRoot(), session.sessionId)
     }
   }
 
@@ -602,6 +603,7 @@ class ChatWorkspace(
     session.stoppableState.value = false
     launchTurn(session) {
       running?.cancelAndJoin()
+      turns.followWorktree(session)
       val lines = try {
         chat.openSavedChat(entry)
       } catch (failure: IOException) {
@@ -609,7 +611,7 @@ class ChatWorkspace(
         return@launchTurn
       }
       endAgent(session)
-      session.resumeFrom(entry.sessionId, session.item.checkoutRoot)
+      session.resumeFrom(entry.sessionId, session.item.workingRoot())
       session.agentState.value = entry.agent
       session.agentSupportedState.value = chat.supports(entry.agent.agentId)
       val shown = if (lines.isEmpty()) "The app can't read this session's messages; the agent still has them." else "Showing its last ${lines.size} messages."
@@ -644,7 +646,7 @@ class ChatWorkspace(
             kind = kind,
             keyChoice = null,
             expectedDatabaseSessionId = open.sessionId,
-            checkoutRoot = session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot,
+            checkoutRoot = session.item.workingRoot(),
           )
         }
       }, { turns.operationCardChanged(session) })
@@ -654,7 +656,7 @@ class ChatWorkspace(
     val session = sessions[id] ?: return
     if (session.goneState.value || (message.text.isBlank() && message.images.isEmpty())) return
     session.prefixChoiceState.value = null
-    session.queuedState.value += message
+    session.queuedState.update { it + message }
     drainQueue(session)
   }
 
@@ -668,15 +670,7 @@ class ChatWorkspace(
 
   private fun drainQueue(session: ChatSession) {
     if (!session.job.isActive || session.busyState.value || session.turnJob != null || session.resumeJob != null || session.goneState.value) return
-    val queued = session.queuedState.value
-    val next = queued.firstOrNull() ?: return
-    val batch = if (queued.size > 1 && queued.all { it.action == null && it.pauseAndAct == next.pauseAndAct }) queued else listOf(next)
-    val message = if (batch.size == 1) next else next.copy(
-      text = batch.map { it.text }.filter(String::isNotBlank).joinToString("\n\n"),
-      images = batch.flatMap { it.images },
-      cursorMcpDependency = batch.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified,
-    )
-    session.queuedState.value = queued.drop(batch.size)
+    val message = session.thread.takeQueuedMessage() ?: return
     session.busyState.value = true
     session.append(ChatMessage.Operator(message.text, message.action, message.images))
     if (message.pauseAndAct) pauseAndAct(session, message.text, message.images, message.cursorMcpDependency) else send(session, message.text, message.images, message.cursorMcpDependency)
@@ -816,7 +810,7 @@ class ChatWorkspace(
       approvalFlow.follow(
         thread = session.thread,
         live = session.approvalLiveState,
-        repositoryRoot = { session.item.checkoutRoot.takeIf(String::isNotBlank) ?: session.item.repositoryRoot },
+        repositoryRoot = { session.item.workingRoot() },
         // The chat's own process requests, and the execution's phase requests, whose run is the execution itself.
         owns = { it.key.runId == session.sessionId || it.key.runId == session.item.id },
         changed = { turns.approvalChanged(session) },
@@ -909,7 +903,8 @@ class ChatWorkspace(
             turns.markGone(it)
           } else if (state.sections !is DetailSections.Pending) {
             it.item = state.header
-            turns.followWorktree(it)
+            // A refresh during a streaming turn leaves the live process alone; the next accept follows the removed worktree.
+            if (it.turnJob == null) turns.followRoot(it)
             val title = state.header.issueKey ?: state.header.title
             tabState.update { s -> s.copy(tabs = s.tabs.map { t -> if (t.executionId == it.item.id) t.copy(title = title) else t }) }
             it.modeState.value = modeFor(state.header)

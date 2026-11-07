@@ -163,7 +163,7 @@ internal fun ChatComposer(
       )
       choices?.let { saved ->
         ResumePalette(
-          saved, workspace.now(), ResumeScope(session.item.branch ?: File(session.item.repositoryRoot).name, worktree = true),
+          saved, workspace.now(), ResumeScope(session.item.branch ?: File(session.item.workingRoot()).name, worktree = true),
           { session.item.branch }, focus, { workspace.resume(id, it) }, { workspace.dismissResume(id) },
         )
       }

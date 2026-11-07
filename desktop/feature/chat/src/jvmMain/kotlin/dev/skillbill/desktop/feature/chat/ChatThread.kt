@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ApprovalCard
 import dev.skillbill.desktop.core.domain.model.ApprovalCardKey
 import dev.skillbill.desktop.core.domain.model.ChatAgent
@@ -61,6 +62,10 @@ internal class ChatThread(private val clock: Clock) {
       action = pending.singleOrNull()?.action,
       pauseAndAct = pending.any { it.pauseAndAct },
       images = pending.flatMap { it.images },
+      cursorMcpDependency = pending.map { it.cursorMcpDependency }.distinct().singleOrNull() ?: CursorMcpDependency.Unspecified,
+      onRejected = pending.mapNotNull { it.onRejected }.takeIf { it.isNotEmpty() }?.let { callbacks ->
+        { callbacks.forEach { callback -> callback() } }
+      },
     )
   }
 

@@ -1,33 +1,12 @@
 package dev.skillbill.desktop.feature.detail
 
-import dev.skillbill.desktop.core.domain.model.ControlOutcome
-import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.Lifecycle
-import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
-import dev.skillbill.desktop.core.domain.model.OperationCardLookup
-import dev.skillbill.desktop.core.domain.model.OperationCardView
-import dev.skillbill.desktop.core.domain.model.OperatorDecision
-import dev.skillbill.desktop.core.domain.model.PurgeOutcome
-import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
-import dev.skillbill.desktop.core.domain.model.ExportOutcome
-import dev.skillbill.desktop.core.domain.model.ArchiveInspectOutcome
-import dev.skillbill.desktop.core.domain.model.ImportOutcome
-import dev.skillbill.desktop.core.domain.model.NewTaskStart
-import dev.skillbill.desktop.core.domain.model.NewTaskStartOutcome
-import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
-import dev.skillbill.desktop.core.domain.model.RecoveryPreview
-import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
-import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.workItem
-import dev.skillbill.desktop.core.ui.feedback.ToastQueue
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -92,24 +71,16 @@ class DetailControlsTest {
   }
 
   @Test
-  fun `a blank Retry fix never reaches the runtime and a recorded decision names the item's subtask`() = runTest {
-    val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(awaitsOperatorDecision = true, currentSubtaskId = "8")
-    val state = loadedState(item, incident = null)
-    val repository = DecisionRecordingControls()
-    val controls = DetailControls(backgroundScope, repository, ToastQueue(), {}, {}) { state }
+  fun `a goal awaiting a decision shows the command for its subtask and nothing else does`() {
+    val waiting = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(issueKey = "SKILL-1", awaitsOperatorDecision = true, currentSubtaskId = "8")
 
-    controls.onAction(ControlsAction.EditInstructions("   "))
-    controls.onAction(ControlsAction.RecordDecision)
-    runCurrent()
-    assertEquals(emptyList(), repository.decisions)
-
-    controls.onAction(ControlsAction.EditInstructions("Fix the null check"))
-    controls.onAction(ControlsAction.RecordDecision)
-    runCurrent()
-    assertEquals(listOf<Pair<OperatorDecision, String?>>(OperatorDecision.RETRY_FIX to "Fix the null check"), repository.decisions)
-
-    val recorded = decisionDraft(state.copy(controls = controls.state.value)).recorded!!
-    assertEquals("Decision recorded for subtask 8: retry fix. Resume the goal to apply it.", recordedText(recorded))
+    val notice = assertNotNull(runActionsView(loadedState(waiting, incident = null)).decision)
+    assertEquals(
+      "skill-bill goal operator-decision SKILL-1 --subtask 8 --decision retry_fix|accept_and_advance|abandon_subtask",
+      notice.command,
+    )
+    assertTrue(notice.text.startsWith("Subtask 8 "))
+    assertNull(runActionsView(loadedState(waiting.copy(awaitsOperatorDecision = false), incident = null)).decision)
   }
 
   private fun loadedState(item: WorkItem, incident: Incident?) = DetailUiState(
@@ -118,34 +89,4 @@ class DetailControlsTest {
     stale = false,
     renderedAt = epoch,
   )
-
-  /** Answers a decision with the item's own current subtask, so a confirmation naming another number shows. */
-  private class DecisionRecordingControls : WorkControlRepository {
-    val decisions = mutableListOf<Pair<OperatorDecision, String?>>()
-    override val reservations = MutableStateFlow<Set<String>>(emptySet())
-
-    override suspend fun recordOperatorDecision(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome {
-      decisions += decision to instructions
-      return DecisionOutcome.Recorded(checkNotNull(item.currentSubtaskId).toInt(), decision)
-    }
-
-    override suspend fun pauseAfterSubtask(item: WorkItem): ControlOutcome = error("unused")
-    override suspend fun pauseNow(item: WorkItem): ControlOutcome = error("unused")
-    override suspend fun cancel(item: WorkItem): ControlOutcome = error("unused")
-    override suspend fun launch(item: WorkItem, agentId: String?): ControlOutcome = error("unused")
-    override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): ControlOutcome = error("unused")
-    override suspend fun startNewTask(request: NewTaskStart): NewTaskStartOutcome = error("unused")
-    override suspend fun operationCardForLaunch(launchId: String): OperationCardView? = error("unused")
-    override suspend fun operationCard(token: String): OperationCardView? = error("unused")
-    override suspend fun revalidateOperationCard(token: String): OperationCardLookup = error("unused")
-    override suspend fun dismissOperationCard(token: String): OperationCardDismissOutcome = error("unused")
-    override suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome = error("unused")
-    override suspend fun recover(item: WorkItem, preview: RecoveryPreview): RecoveryOutcome = error("unused")
-    override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome = error("unused")
-    override suspend fun preflightExport(issueKey: String, repoRoot: String?): ExportPreflightOutcome = error("unused")
-    override suspend fun export(issueKey: String, repoRoot: String?, outputPath: String): ExportOutcome =
-      error("unused")
-    override suspend fun inspectArchive(archivePath: String, repoRoot: String?): ArchiveInspectOutcome = error("unused")
-    override suspend fun import(archivePath: String, repoRoot: String?, fingerprint: String): ImportOutcome = error("unused")
-  }
 }

@@ -9,6 +9,7 @@ import skillbill.contracts.operationcard.OperationCardProjection
 import skillbill.contracts.operationcard.OperationCardStatus
 import skillbill.contracts.operationcard.OperationLaunchContext
 import skillbill.contracts.operationcard.OperationLaunchRetention
+import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.execution.launchArguments
@@ -230,10 +231,10 @@ public class WorkNewTaskStart(
   ): NewTaskStartResult {
     val phaseId = request.phaseId
     val target = request.target
-    if (qaDevice != null && phaseId != QA_PHASE) {
-      return NewTaskStartResult.Refused("A named QA device is only valid for the QA phase.")
-    }
     if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
+    if (qaDevice != null && phaseId != QA_PHASE) {
+      return NewTaskStartResult.Refused("$QA_DEVICE_FLAG applies only to the $QA_PHASE phase.")
+    }
     standaloneIntakeRefusal(target, phaseId)?.let { return it }
     val place = if (phaseId == MONITOR_PHASE) checkout.copy(branch = null) else checkout
     val run =
@@ -621,33 +622,37 @@ public class WorkNewTaskStart(
     intake: String?,
     phaseId: String,
   ): NewTaskStartResult.Refused? {
-    if (intake.isNullOrBlank()) return null
+    if (intake == null) return null
     val trimmed = intake.trim()
-    return when (phaseId) {
-      MONITOR_PHASE -> monitorIntakeRefusal(trimmed)
-      QA_PHASE -> qaIntakeRefusal(trimmed)
-      else -> NewTaskStartResult.Refused("Intake is supported only for standalone monitor and QA runs.")
-    }
+    if (trimmed.isEmpty()) return null
+    val reason =
+      when (phaseId) {
+        MONITOR_PHASE -> monitorIntakeRefusal(trimmed)
+        QA_PHASE -> qaInstructionsRefusal(trimmed)
+        else -> "Intake is supported only for standalone QA and monitor runs."
+      }
+    return reason?.let(NewTaskStartResult::Refused)
   }
 
-  private fun monitorIntakeRefusal(intake: String): NewTaskStartResult.Refused? =
+  private fun monitorIntakeRefusal(intake: String): String? =
     when {
       intake.contains(' ') || intake.any { it.isISOControl() } ->
-        NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
-      intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) || intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
-        NewTaskStartResult.Refused("Monitor intake must name the target directly, not as a phase option.")
+        "Monitor intake must be a single token naming the target."
+      intake.startsWithPhaseOption() -> "Monitor intake must name the target directly, not as a phase option."
       else -> null
     }
 
-  private fun qaIntakeRefusal(intake: String): NewTaskStartResult.Refused? =
-    if (
-      intake.startsWith('-') || intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) ||
-      intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX)
-    ) {
-      NewTaskStartResult.Refused("QA instructions cannot begin with a CLI option or phase intake key.")
-    } else {
-      null
+  private fun qaInstructionsRefusal(instructions: String): String? =
+    when {
+      instructions.startsWithPhaseOption() ->
+        "QA instructions cannot start with mode: or target:, because the CLI would read them as a phase option."
+      instructions.toByteArray(Charsets.UTF_8).size > MAX_INTAKE_BYTES ->
+        "QA instructions are too long. Shorten them to under $MAX_INTAKE_BYTES bytes."
+      else -> null
     }
+
+  private fun String.startsWithPhaseOption(): Boolean =
+    startsWith(PHASE_OPTION_MODE_PREFIX) || startsWith(PHASE_OPTION_TARGET_PREFIX)
 
   private fun runFailure(
     exit: CompletionStage<WorkRunExit>,
@@ -806,8 +811,8 @@ public class WorkNewTaskStart(
     const val QA_PHASE = "qa"
     val STANDALONE_PHASES = setOf("review", "validation", QA_PHASE, "pr", MONITOR_PHASE)
     val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
-    const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
-    const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
+    const val PHASE_OPTION_MODE_PREFIX = "mode:"
+    const val PHASE_OPTION_TARGET_PREFIX = "target:"
     const val CONFIRM_PREFIX = "confirm:"
     const val SELECT_PREFIX = "select:"
     val SUCCESSFUL_EXITS = setOf(0, OperationCardExitCodes.AWAITING_CONFIRMATION)

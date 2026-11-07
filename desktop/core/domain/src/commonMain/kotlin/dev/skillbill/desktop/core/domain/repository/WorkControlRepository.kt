@@ -1,12 +1,10 @@
 package dev.skillbill.desktop.core.domain.repository
 
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
-import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
 import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
 import dev.skillbill.desktop.core.domain.model.OperationCardView
 import dev.skillbill.desktop.core.domain.model.OperationCardLookup
-import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
 import dev.skillbill.desktop.core.domain.model.ExportOutcome
@@ -50,8 +48,6 @@ interface WorkControlRepository {
   suspend fun recoveryPreview(item: WorkItem, confirmedPrerequisites: Set<IncidentPrerequisite>): RecoveryPreviewOutcome
 
   suspend fun recover(item: WorkItem, preview: RecoveryPreview): RecoveryOutcome
-
-  suspend fun recordOperatorDecision(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome
 
   suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome
 

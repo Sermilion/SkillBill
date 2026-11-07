@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.approval.model.ApprovalExecutionMode
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.error.core.catchingNonCancellation
+import skillbill.infrastructure.launcher.agentrun.display.ReadableAgentOutputSink
 import skillbill.infrastructure.launcher.process.codex.CodexPhaseSession
 import skillbill.infrastructure.launcher.process.codex.CodexSessionChannel
 import skillbill.infrastructure.launcher.process.codex.CodexSessionLaunch
@@ -190,10 +191,35 @@ internal class ProcessAgentRunAdapter(
           openCodexSession(settings, request, approvalDeadline)
         }.run(launch)
       } else {
-        processRunner.run(process)
+        runWithDisplaySink(request, process)
       }
     result.spawnDenied?.let { denied -> return AgentRunLaunchDenied(agent, denied.pauseReason) }
     return launchFacts(request, command, result)
+  }
+
+  private fun runWithDisplaySink(
+    request: SkillRunRequest,
+    process: AgentRunProcessRequest,
+  ): AgentRunProcessResult {
+    if (!request.captureDisplayOutput) return processRunner.run(process)
+    val displaySink = ReadableAgentOutputSink(agent.id, request.outputSink, diagnostics)
+    val displayProcess =
+      process.copy(
+        launch =
+          process.launch.copy(
+            outputSink = displaySink,
+            flushOutputStreamOnEnd = true,
+            continuation =
+              process.launch.continuation?.let { continueLaunch ->
+                { result -> continueLaunch(result)?.copy(flushOutputStreamOnEnd = true) }
+              },
+          ),
+      )
+    return try {
+      processRunner.run(displayProcess)
+    } finally {
+      displaySink.finish()
+    }
   }
 
   private fun launchFacts(
@@ -209,6 +235,8 @@ internal class ProcessAgentRunAdapter(
         "spawnFailed=${result.spawnFailed}, processStarted=${result.processStarted}."
     }
     val normalizedStdout = decoded.text
+    val processStdoutTruncated =
+      result.stdoutTruncated || (result.outputCaptureIncomplete && normalizedStdout.isBlank())
     val decodedBodyBytes =
       if (result.sessionOutcome == null && normalizedStdout == result.stdout) {
         result.stdoutBytes
@@ -233,15 +261,15 @@ internal class ProcessAgentRunAdapter(
       liveness = result.liveness,
       processStarted = result.processStarted,
       mcpStartupObserved = result.mcpStartupObserved,
-      stdoutTruncated = result.stdoutTruncated || result.sessionCapture?.truncated == true,
+      stdoutTruncated = processStdoutTruncated || result.sessionCapture?.truncated == true,
       stdoutByteSize =
-        if (result.sessionOutcome == null && result.stdoutTruncated) {
+        if (result.sessionOutcome == null && processStdoutTruncated) {
           result.stdoutByteSize
         } else {
           decodedBodyBytes.size.toLong()
         },
       stdoutSha256 =
-        if (result.sessionOutcome == null && result.stdoutTruncated) {
+        if (result.sessionOutcome == null && processStdoutTruncated) {
           result.stdoutSha256
         } else {
           launcherSha256Hex(decodedBodyBytes)

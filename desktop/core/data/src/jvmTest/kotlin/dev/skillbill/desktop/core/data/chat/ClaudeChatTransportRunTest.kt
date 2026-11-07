@@ -6,6 +6,8 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.ChatScope
+import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
@@ -160,6 +162,29 @@ class ClaudeChatTransportRunTest {
     claude.stopped.await()
   }
 
+  // A live process keeps the directory it started in; reusing it after the goal's worktree moved sent the turn to a dead path.
+  @Test
+  fun `a turn in another directory stops the live process and resumes the session in a new one there`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+    val first = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    claude.print(replay(uuid), """{"type":"result","is_error":false,"result":""}""")
+    first.await()
+
+    val moved = chatRequest(firstTurn = false)
+    val second = async { transport.run(moved.copy(scope = (moved.scope as ChatScope.Execution).copy(repositoryRoot = "/work/main"))).toList() }
+    claude.stopped.await()
+    val (secondUuid, _) = claude.nextMessage()
+    claude.print(replay(secondUuid), """{"type":"result","is_error":false,"result":""}""")
+    assertEquals(listOf<ChatEvent>(ChatEvent.Completed), second.await())
+
+    assertEquals(listOf("/work/skill-bill", "/work/main"), claude.opened.map { it.workingDirectory })
+    assertTrue("--resume" in claude.opened[1].argv)
+
+    transport.end("session-1")
+  }
+
   // Closing a tab or `/clear` cancels the turn; the agent and its commands must not keep running unseen.
   @Test
   fun `cancelling a turn before its reply stops the process`() = runTest {
@@ -243,7 +268,7 @@ class ClaudeChatTransportRunTest {
   @Test
   fun `a turn's user frame is held until the provider answers initialize`() {
     val diagnostics = RecordingDiagnostics()
-    val session = ClaudeLiveSession(ChatProcessBinding(ChatPermissionMode.Act, ""), diagnostics) {}
+    val session = ClaudeLiveSession(ChatProcessBinding(ChatPermissionMode.Act, ""), "/work/skill-bill", diagnostics) {}
     session.approval = ClaudeChatApproval("/work/skill-bill", { true }, {}, diagnostics, onCard = {})
 
     session.send("uuid-1", "operator prompt", emptyList())
@@ -255,8 +280,50 @@ class ClaudeChatTransportRunTest {
     assertTrue(session.initializedSignal.isCompleted)
   }
 
+  // Claude streams each message between tool calls as its own text block; joined without a break they read as one run-on paragraph.
+  @Test
+  fun `a new text block after a tool call starts a new paragraph, but a new turn does not`() = runTest {
+    val claude = FakeClaude()
+    val transport = transport(claude)
+
+    val first = async { transport.run(chatRequest()).toList() }
+    val (uuid, _) = claude.nextMessage()
+    claude.print(
+      replay(uuid),
+      textBlockStart(),
+      textDelta("Probing each take."),
+      """{"type":"assistant","message":{"content":[{"type":"tool_use","id":"bash-1","name":"Bash","input":{}}]}}""",
+      """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"bash-1","content":"ok"}]}}""",
+      textBlockStart(),
+      textDelta("Take 1 hit the cap."),
+      """{"type":"result","is_error":false,"result":""}""",
+    )
+    assertEquals(
+      listOf(
+        ChatEvent.TextDelta("Probing each take."),
+        ChatEvent.ToolUse(ChatToolCall("bash-1", "Bash", "{}", null)),
+        ChatEvent.ToolResult("bash-1", "ok", false),
+        ChatEvent.TextDelta("\n\n"),
+        ChatEvent.TextDelta("Take 1 hit the cap."),
+        ChatEvent.Completed,
+      ),
+      first.await(),
+    )
+
+    val second = async { transport.run(chatRequest(firstTurn = false)).toList() }
+    val (secondUuid, _) = claude.nextMessage()
+    claude.print(replay(secondUuid), textBlockStart(), textDelta("Done."), """{"type":"result","is_error":false,"result":""}""")
+    assertEquals(listOf(ChatEvent.TextDelta("Done."), ChatEvent.Completed), second.await())
+
+    transport.end("session-1")
+    claude.stopped.await()
+  }
+
   private fun replay(uuid: String) =
     """{"type":"user","uuid":"$uuid","isReplay":true,"message":{"role":"user","content":"operator prompt"}}"""
+
+  private fun textBlockStart() =
+    """{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}"""
 
   private fun textDelta(text: String) = """{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"$text"}}}"""
 }

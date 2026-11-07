@@ -81,6 +81,11 @@ class AgentSessionCatalog(
     }
   }
 
+  /**
+   * Moves the Claude sessions of [fromRoot] to [toRoot] and rewrites the cwd of its Codex sessions, in every profile; Cursor chats
+   * are not touched. A profile or session that cannot be moved counts as failed. Moves run one at a time across every window, so a
+   * second window's move finds nothing left instead of racing the first one's file moves.
+   */
   internal suspend fun move(fromRoot: String, toRoot: String): SessionMoveResult = moveLock.withLock {
     val profiles = profiles()
     var failed = 0
@@ -102,6 +107,7 @@ class AgentSessionCatalog(
     SessionMoveResult(claudeMoved, codexMoved, failed)
   }
 
+  /** Points listed Claude sessions of [fromRoot] at their moved file, so a resume picked from an earlier listing still reads its lines. */
   private fun relocateListed(fromRoot: String, toRoot: String) {
     val source = "projects/${claudeProjectName(fromRoot)}"
     val target = "projects/${claudeProjectName(toRoot)}"

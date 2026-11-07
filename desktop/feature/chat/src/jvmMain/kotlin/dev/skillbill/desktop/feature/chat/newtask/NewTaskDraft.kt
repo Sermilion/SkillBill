@@ -32,7 +32,6 @@ import dev.skillbill.desktop.feature.chat.chipText
 import dev.skillbill.desktop.feature.chat.restored
 import dev.skillbill.desktop.feature.chat.restoredDraft
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,11 +55,10 @@ data class NewTaskOffer(
 )
 
 private val GOAL_KINDS = setOf(NewTaskKind.GoalRun, NewTaskKind.PlanOnly)
-
 private fun NewTaskKind.startName(): String =
   NewTaskActionKind.entries.firstOrNull { it.toNewTaskKind() == this }?.wire ?: name.lowercase()
 
-/** What the operator set up on New task, with its chat. It lives with the window, so navigation and session switches keep it. */
+/** One open New task chat: what the operator set up for it, with its conversation. [NewTaskChats] owns the open set for the window. */
 class NewTaskDraft internal constructor(
   private val chats: ExecutionChatRepository,
   private val workControls: WorkControlRepository,
@@ -69,7 +67,7 @@ class NewTaskDraft internal constructor(
   windowScope: WindowCoroutineScope,
   private val clock: Clock,
   private val approvals: ApprovalFeedRepository = UnavailableApprovalFeed,
-  private val savedChatActions: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
+  private val savedChats: NewTaskSavedChats = NewTaskSavedChats(chats, windowScope.scope, toasts),
 ) {
   private val scope = windowScope.scope
   private val cardOwners = IdentityHashMap<ChatThread, NewTaskChat>()
@@ -119,10 +117,8 @@ class NewTaskDraft internal constructor(
   internal val offer: StateFlow<NewTaskOffer> = offerState.asStateFlow()
   internal var cursorMcpDependency by mutableStateOf(CursorMcpDependency.Unspecified)
 
-  /** The selected repository's saved drafts, newest first, as of the latest [refreshSaved]. */
-  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChatActions.saved
-
-  internal fun discardSaved(entry: ChatHistoryEntry) = savedChatActions.discardSaved(entry)
+  /** Every repository's saved drafts, newest first, as of the latest [refreshSaved]. */
+  internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
   internal fun canSend(): Boolean = canAdmitTurn(text)
 
@@ -283,14 +279,10 @@ class NewTaskDraft internal constructor(
               if (ownsChat(current)) {
                 offerState.value = NewTaskOffer(started = message)
                 record(checkNotNull(current), ChatMessage.Notice("$message. $START_AGAIN_SUFFIX", confirmation = true))
-                outcome.awaitFailure?.let { awaitFailure ->
-                  scope.launch {
-                    awaitFailure()?.let { reason -> showStartProblem(current, kind, "$message failed. $reason") }
-                  }
-                }
               } else {
                 toasts.show(ToastMessage(ToastTone.Confirmation, message))
               }
+              observeRunFailure(current, kind, outcome)
             } else {
               reportStandalone(current, kind, outcome, startRequest)
             }
@@ -320,7 +312,7 @@ class NewTaskDraft internal constructor(
     }
   }
 
-  /** Ends the chat and deletes its saved draft; the selections and any typed text stay. */
+  /** Ends the chat and deletes its saved draft; the selections and any typed text stay. False when there was no chat to discard. */
   internal fun discard(): Boolean {
     if (closing) return false
     val current = chatState.value ?: return false
@@ -333,6 +325,16 @@ class NewTaskDraft internal constructor(
       saveLock?.withLock { chats.deleteSavedChat(current.sessionId) } ?: chats.deleteSavedChat(current.sessionId)
     }
     return true
+  }
+
+  /** Discards [entry], allowing undo unless it is the open chat. */
+  internal fun discardSaved(entry: ChatHistoryEntry) {
+    if (closing) return
+    if (chatState.value?.sessionId == entry.sessionId) {
+      discard()
+      return
+    }
+    savedChats.discardSaved(entry)
   }
 
   /** Writes any running reply, then ends the chat's agent process and keeps its saved draft, for "New chat" and a window close. */
@@ -361,27 +363,16 @@ class NewTaskDraft internal constructor(
     val branch = baseBranch.ifBlank { null }
     if (current.repositoryRoot == repo.root && current.baseBranch == branch && current.agent.agentId == agent.agentId) return
     val lines = current.thread.transcript.value
-    val replay = newTaskReplayPreamble(
-      NewTaskReplay(
-        current.replayAgentId ?: current.agent.agentId,
-        current.replayRepositoryRoot ?: current.repositoryRoot,
-        current.replayBaseBranch ?: current.baseBranch,
-        lines,
-      ),
-      repo.root,
-      branch,
-    )
     val previousId = current.sessionId
+    val replay = (current.pendingReplay?.takeIf { !current.started }
+      ?: NewTaskReplay(current.agent.agentId, current.repositoryRoot, current.baseBranch, lines))
+      .takeIf { newTaskReplayPreamble(it, repo.root, branch) != null }
     current.end()
-    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent)
-    next.replayPreamble = replay
-    next.replayAgentId = current.replayAgentId ?: current.agent.agentId
-    next.replayRepositoryRoot = current.replayRepositoryRoot ?: current.repositoryRoot
-    next.replayBaseBranch = current.replayBaseBranch ?: current.baseBranch
+    val next = open(UUID.randomUUID().toString(), repo.root, branch, agent, replay = replay)
+    val switched = "Switched to ${chipText(agent)} in ${repo.name}."
+    val notice = if (replay != null) "$switched It gets the earlier conversation with your next message." else switched
     next.thread.showCapability(agent)
-    next.thread.replaceTranscript(
-      lines + ChatMessage.Notice("Switched to ${chipText(agent)} in ${repo.name}. It gets the earlier conversation with your next message."),
-    )
+    next.thread.replaceTranscript(lines + ChatMessage.Notice(notice))
     scope.launch {
       current.job.join()
       if (!cards.hasOutstanding(current.thread)) {
@@ -402,7 +393,7 @@ class NewTaskDraft internal constructor(
     }
   }
 
-  /** Reopens [entry] on its agent session, or with only Discard offered when its repository no longer exists. */
+  /** Opens [entry] in this empty draft on its agent session, or with only Discard offered when its repository no longer exists. */
   internal fun resume(entry: ChatHistoryEntry): Boolean {
     val context = entry.newTask ?: return false
     if (entry.sessionId in invalidDrafts || chatState.value != null) return false
@@ -431,7 +422,7 @@ class NewTaskDraft internal constructor(
   }
 
   internal fun refreshSaved() {
-    savedChatActions.refresh()
+    savedChats.refresh()
   }
 
   internal fun dispose() {
@@ -448,6 +439,7 @@ class NewTaskDraft internal constructor(
     started: Boolean = false,
     pendingTurnLineIndex: Int? = null,
     missing: Boolean = false,
+    replay: NewTaskReplay? = null,
   ): NewTaskChat {
     val thread = retainedThreads.getOrPut(sessionId) { ChatThread(clock) }
     val saveLock = saveLocks.getOrPut(sessionId) { Mutex() }
@@ -463,7 +455,9 @@ class NewTaskDraft internal constructor(
       started,
       pendingTurnLineIndex,
       missing,
+      replay,
       chatDispatcher,
+      ::refreshSaved,
       approvals,
       thread,
       saveLock,
@@ -494,10 +488,7 @@ class NewTaskDraft internal constructor(
   private suspend fun showStartProblem(current: NewTaskChat?, kind: NewTaskKind, message: String) {
     when {
       !ownsChat(current) -> toasts.show(ToastMessage(ToastTone.Problem, message))
-      kind in GOAL_KINDS -> {
-        offerState.value = offerState.value.copy(started = null)
-        record(checkNotNull(current), ChatMessage.Error(null, message))
-      }
+      kind in GOAL_KINDS -> record(checkNotNull(current), ChatMessage.Error(null, message))
       else -> checkNotNull(current).thread.append(ChatMessage.Notice(message))
     }
   }
@@ -534,13 +525,29 @@ class NewTaskDraft internal constructor(
     }
     val launchId = outcome.launchId
     launchId?.let { cards.remember(it, request) }
+    observeRunFailure(current, kind, outcome) {
+      if (launchId != null) showParkedCard(current, kind, launchId, silentWhenAbsent = true)
+    }
+  }
+
+  /** Reports why a started run stopped; [onCleanExit] runs instead when it ended without a failure. */
+  private fun observeRunFailure(
+    current: NewTaskChat?,
+    kind: NewTaskKind,
+    outcome: NewTaskStartOutcome.Started,
+    onCleanExit: suspend () -> Unit = {},
+  ) {
     val awaitFailure = outcome.awaitFailure ?: return
+    val startedMessage = offerState.value.started
     scope.launch {
       val reason = awaitFailure()
-      when {
-        reason != null -> showStartProblem(current, kind, "$name stopped. $reason")
-        launchId != null -> showParkedCard(current, kind, launchId, silentWhenAbsent = true)
+      if (reason == null) {
+        onCleanExit()
+        return@launch
       }
+      if (ownsChat(current) && offerState.value.started == startedMessage) offerState.value = offerState.value.copy(started = null)
+      val name = if (kind in GOAL_KINDS) "${kind.startName()} ${outcome.issueKey}" else kind.startName()
+      showStartProblem(current, kind, "$name stopped. $reason")
     }
   }
 

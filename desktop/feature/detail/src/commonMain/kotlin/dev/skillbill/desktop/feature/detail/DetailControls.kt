@@ -2,8 +2,6 @@ package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.domain.model.WorkItem
-import dev.skillbill.desktop.core.domain.model.DecisionOutcome
-import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
@@ -81,23 +79,6 @@ internal class DetailControls(
       ControlsAction.ApplyRecovery -> applyRecovery(ui, view)
       ControlsAction.DismissRecovery ->
         update { if (it.inFlight == InFlightControl.Recover) it else it.copy(recoveryDialog = null) }
-      is ControlsAction.EditInstructions -> update { it.copy(decisionInstructions = action.text) }
-      ControlsAction.RecordDecision -> recordDecision(ui)
-    }
-  }
-
-  private fun recordDecision(ui: DetailUiState): Boolean {
-    val instructions = mutableState.value.decisionInstructions.trim()
-    if (ui.header.awaitsOperatorDecision && instructions.isBlank()) return true
-    if (!ui.header.awaitsOperatorDecision || mutableState.value.inFlight != null) return false
-    return call(InFlightControl.RecordDecision) {
-      when (val result = controls.recordOperatorDecision(ui.header, OperatorDecision.RETRY_FIX, instructions)) {
-        is DecisionOutcome.Recorded -> mutableState.update { it.copy(recordedDecision = result) }
-        DecisionOutcome.InstructionsRequired -> problem("Enter retry instructions before recording the decision.")
-        DecisionOutcome.Unavailable -> problem("The operator decision is no longer available. Refresh the details.")
-        is DecisionOutcome.Refused -> problem(result.reason)
-        is DecisionOutcome.Failed -> problem(readProblemText(result.problem))
-      }
     }
   }
 
