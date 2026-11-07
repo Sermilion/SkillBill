@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.core.designsystem.overlay
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -68,11 +66,12 @@ import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.component.Kbd
+import dev.skillbill.desktop.core.designsystem.component.SbElevation
+import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.composite.runAfterCurrentEvent
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
-import dev.skillbill.desktop.core.designsystem.layeredShadow
 
 private const val paletteTopFraction = 0.14f
 private val paletteInputHeight = 52.dp
@@ -121,7 +120,6 @@ fun CommandPalette(
   var highlight by remember(groups) { mutableIntStateOf(0) }
   val input = remember { FocusRequester() }
   var inputFocused by remember { mutableStateOf(false) }
-  val shape = RoundedCornerShape(SkillBillRadius.lg)
   val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
   val focusTarget by rememberUpdatedState(returnFocusTo)
   LaunchedEffect(Unit) { input.requestFocus() }
@@ -131,8 +129,7 @@ fun CommandPalette(
   ModalLayer(onDismiss, paletteTopFraction) {
     Column(
       Modifier.width(SkillBillSize.commandMenu.coerceAtMost((windowWidth - paletteWindowMargin).coerceAtLeast(0.dp)))
-        .layeredShadow(SkillBillTheme.shadows.modal, shape).background(colors.bgOverlay, shape)
-        .border(1.dp, colors.borderStrong, shape).clip(shape)
+        .sbOverlaySurface(SbElevation.Modal)
         // Context, input, list and footer sit inside this 1px border.
         .padding(1.dp)
         .semantics { paneTitle = "Command palette" }

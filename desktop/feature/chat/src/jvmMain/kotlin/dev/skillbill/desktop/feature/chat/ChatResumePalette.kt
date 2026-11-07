@@ -1,7 +1,5 @@
 package dev.skillbill.desktop.feature.chat
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -22,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -55,7 +52,6 @@ import androidx.compose.ui.unit.min
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.designsystem.composite.Edge
@@ -64,12 +60,13 @@ import dev.skillbill.desktop.core.designsystem.component.Kbd
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.component.SbElevation
+import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
-import dev.skillbill.desktop.core.designsystem.layeredShadow
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.ui.input.ShellLayer
@@ -103,14 +100,13 @@ internal fun ResumePalette(
     val current = listing.shown.getOrNull(selected)
     val resume: () -> Unit = { current?.let(onResume) }
     BoxWithConstraints(Modifier.fillMaxSize().clickable(onClick = onDismiss)) {
-      val shape = RoundedCornerShape(SkillBillRadius.lg)
       Column(
         Modifier.align(Alignment.TopCenter).padding(top = maxHeight * .12f)
           .width(min(860.dp, (maxWidth - 48.dp).coerceAtLeast(0.dp))).height(min(520.dp, maxHeight * .76f))
-          .layeredShadow(SkillBillTheme.shadows.modal, shape).background(colors.bgOverlay, shape)
+          .sbOverlaySurface(SbElevation.Modal)
           .focusProperties { canFocus = false }
           .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-          .border(1.dp, colors.border, shape).padding(1.dp)
+          .padding(1.dp)
           .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { onDismiss(); true } else false },
       ) {
         FilterBar(query, scope, onQuery = { query = it; active = 0 }, onMove = { step ->

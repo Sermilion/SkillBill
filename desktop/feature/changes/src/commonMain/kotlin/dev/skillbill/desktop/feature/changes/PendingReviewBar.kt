@@ -1,14 +1,11 @@
 package dev.skillbill.desktop.feature.changes
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,7 +21,8 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.designsystem.component.SbElevation
+import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
 import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.ui.changes.changesSans
 import androidx.compose.ui.text.font.FontWeight
@@ -33,8 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 @OptIn(ExperimentalLayoutApi::class)
 internal fun PendingReviewBar(count: Int, review: ReviewBarUi, onAction: (ChangesWindowAction) -> Unit, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
-  Column(modifier.layeredShadow(SkillBillTheme.shadows.modal, RoundedCornerShape(9.dp)).background(colors.bgOverlay, RoundedCornerShape(9.dp))
-    .border(1.dp, colors.borderStrong, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+  Column(modifier.sbOverlaySurface(SbElevation.Modal).padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
     FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       StatusDot(colors.accent, Modifier.padding(2.dp), pulse = true)
       if (review.confirmingDiscard) {
@@ -59,7 +56,7 @@ internal fun PendingReviewBar(count: Int, review: ReviewBarUi, onAction: (Change
 @Composable
 internal fun ReviewToast(text: String, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
-  Row(modifier.semantics { liveRegion = LiveRegionMode.Polite }.layeredShadow(SkillBillTheme.shadows.modal, RoundedCornerShape(8.dp)).background(colors.bgOverlay, RoundedCornerShape(8.dp)).border(1.dp, colors.borderStrong, RoundedCornerShape(8.dp)).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+  Row(modifier.semantics { liveRegion = LiveRegionMode.Polite }.sbOverlaySurface(SbElevation.Modal).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
     BasicText("✓", style = changesSans(12f, FontWeight.Bold, colors.stDone))
     BasicText(text, style = changesSans(11f, FontWeight.Medium, colors.fg))
   }

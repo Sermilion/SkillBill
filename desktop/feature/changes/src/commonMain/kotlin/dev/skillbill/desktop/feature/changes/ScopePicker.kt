@@ -1,7 +1,5 @@
 package dev.skillbill.desktop.feature.changes
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -32,7 +30,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -64,7 +61,8 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.list.sbRowSurface
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
-import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.designsystem.component.SbElevation
+import dev.skillbill.desktop.core.designsystem.component.sbOverlaySurface
 import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
@@ -89,8 +87,6 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
     CommitPicker(state, onAction, search)
     return
   }
-  val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(10.dp)
   val below = with(LocalDensity.current) { PICKER_BELOW_BUTTON.roundToPx() }
   val close = { onAction(ChangesWindowAction.ClosePicker) }
   val rows = filterSubtasks(state.subtasks, state.pickerQuery)
@@ -112,10 +108,7 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
     }
     Column(
       Modifier.width(PICKER_WIDTH)
-        .layeredShadow(SkillBillTheme.shadows.popover, shape)
-        .clip(shape)
-        .background(colors.bgOverlay, shape)
-        .border(1.dp, colors.borderStrong, shape)
+        .sbOverlaySurface(SbElevation.Popover)
         .onPreviewKeyEvent { event ->
           if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
           when (event.key) {
@@ -158,7 +151,6 @@ internal fun ScopePicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
 @Composable
 private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAction) -> Unit, search: FocusRequester) {
   val colors = SkillBillTheme.colors
-  val shape = RoundedCornerShape(10.dp)
   val rows = filterCommits(state.commits, state.subtasks, state.pickerQuery)
   var keyboardSha by remember(state.pickerQuery) { mutableStateOf<String?>(null) }
   val listState = rememberLazyListState()
@@ -179,8 +171,7 @@ private fun CommitPicker(state: ChangesWindowUiState, onAction: (ChangesWindowAc
       }
     }
     Column(
-      Modifier.width(PICKER_WIDTH).layeredShadow(SkillBillTheme.shadows.popover, shape).clip(shape)
-        .background(colors.bgOverlay, shape).border(1.dp, colors.borderStrong, shape)
+      Modifier.width(PICKER_WIDTH).sbOverlaySurface(SbElevation.Popover)
         .onPreviewKeyEvent { event ->
           if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
           val selectable = rows
