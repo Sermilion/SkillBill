@@ -814,3 +814,11 @@ phase recorder rejects oversized generated trace evidence before its owner-fence
 output correction can reuse the attempt. Settlement guidance identifies an ok response as receipt
 pending runtime validation, not completed workflow authority. Limits and existing saved state remain
 unchanged.
+
+## [2026-11-07] Retry completed CI repairs that publish no change
+
+Context: SKILL-453 stopped after a repair claimed completion without publishing a fix, although the failing CI checks remained actionable.
+
+Decision: A qualified completed repair with unchanged publication and failing CI consumes one monitor repair attempt and returns to repair. Derive its identity from the monitor attempt, retaining the existing cap and evidence checks. Reconstruct the same identities from retained completion, producer, publication and Git evidence on resume; existing published repair identities remain unchanged. No durable shape or version changes are required.
+
+Alternatives considered: retrying without accounting can loop forever; blocking on the first no-change repair prevents recovery within the existing allowance.

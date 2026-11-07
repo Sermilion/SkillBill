@@ -524,10 +524,15 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 
 ## Goal CI monitoring
 
-Monitoring counts distinct published repair commits only after CI fails on those
-commits. Resume reconstructs qualified failures from retained runtime producer,
-completion, publication, and Git evidence. Repeated observations of a commit keep
-one failure. A later repair replacing the latest phase record does not erase a
+Monitoring counts distinct published repair commits after CI fails on those
+commits. A completed repair that publishes no change while CI still fails also
+consumes one of the three attempts and returns to repair instead of blocking
+immediately. These failures use the monitor attempt identity, so separate no-change
+repairs count separately even on the same commit. Resume derives them from the
+existing completed repair, publication and monitor evidence without rewriting
+records. Resume reconstructs qualified failures from retained runtime producer,
+completion, publication, and Git evidence. Repeated observations of a published
+repair commit keep one failure. A later repair replacing the latest phase record does not erase a
 previously qualified failure. Missing or contradictory history stays unknown, does not add a failure, and does not exhaust the cap. Missing monitor output blocks cap-sensitive resume. Initial CI failure, pending checks, unassociated observations, and merge conflicts do not consume this budget. Green checks complete monitoring only when the observed PR head matches the latest completed pushed publication.
 
 Before choosing a host or container for CI repair, read the applicable `AGENTS.md`
