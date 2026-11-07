@@ -146,10 +146,18 @@ class NewTaskChats(
 
   internal val saved: StateFlow<List<ChatHistoryEntry>> = savedChats.saved
 
+  init {
+    // A summary written in the background changes its Recent chats row.
+    scope.launch { chats.summaryUpdates.collect { refreshSaved() } }
+  }
+
   /** Shows [draft]. It never ends, flushes, closes or stops any chat, so the others keep streaming. */
   fun select(draft: NewTaskDraft) {
     if (draft !in openState.value) return
+    val outgoing = selectedState.value
     selectedState.value = draft
+    // Leaving an idle chat summarizes it; a busy one is summarized when it is closed.
+    if (outgoing !== draft) outgoing.chat.value?.takeUnless { it.thread.busy.value }?.let { chats.requestSummary(it.sessionId) }
     newReplyState.update { it - draft }
   }
 
@@ -243,7 +251,10 @@ class NewTaskChats(
   internal fun disposeAll() = openState.value.forEach { it.dispose() }
 
   /** Closes every open chat. False when any one fails to save; that chat stays open, so calling again retries it. */
-  internal suspend fun closeAll(): Boolean = openState.value.map { it.close() }.all { it }
+  internal suspend fun closeAll(): Boolean = openState.value.map { draft ->
+    val idleChat = draft.chat.value?.takeUnless { it.thread.busy.value }
+    draft.close().also { closed -> if (closed && idleChat != null) chats.requestSummary(idleChat.sessionId) }
+  }.all { it }
 
   private suspend fun close(draft: NewTaskDraft) {
     if (draft !in openState.value || !closingDrafts.add(draft)) return
@@ -256,6 +267,7 @@ class NewTaskChats(
       if (chat != null) {
         // Read after close(): the session id can rotate while the last turn finishes.
         val sessionId = chat.sessionId
+        chats.requestSummary(sessionId)
         toasts.show(ToastData("Closed \"$title\". It stays in Recent chats.", actions = listOf(ToastAction("Reopen") { reopen(sessionId) })))
       }
     } finally {

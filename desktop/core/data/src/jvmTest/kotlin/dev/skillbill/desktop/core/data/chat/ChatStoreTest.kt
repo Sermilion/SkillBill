@@ -213,4 +213,32 @@ class ChatStoreTest {
       assertEquals(listOf(ChatHistoryLine(ChatHistoryRole.Operator, "why blocked?")), chats.getValue(session).lines, session)
     }
   }
+
+  // A summary call that outlives a discard must not bring the chat back through the update fallback.
+  @Test
+  fun `a summary for a chat with no file writes nothing`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+
+    assertEquals(false, store.saveSummary("gone", "About nothing.", Instant.fromEpochMilliseconds(1)))
+    assertEquals(false, File(host.userHome, "$CHAT_STORE_PATH/gone.json").exists())
+  }
+
+  // A summary that bumps updated_at reorders the list, and one that is never stale again misses new turns.
+  @Test
+  fun `a summary keeps order and update time and a later turn makes the chat stale again`() {
+    val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    store.saveChat(entry("old", 1))
+    store.saveChat(entry("new", 2))
+
+    assertTrue(store.saveSummary("old", "Why CI blocked.", Instant.fromEpochMilliseconds(1)))
+
+    assertEquals(listOf("new" to 2L, "old" to 1L), store.savedChats("wf-1").map { it.sessionId to it.updatedAt.toEpochMilliseconds() })
+    assertEquals(null, store.staleForSummary("old"))
+    assertEquals(listOf("new"), store.staleSummaries(5).map { it.sessionId })
+
+    store.saveChat(entry("old", 3))
+
+    assertEquals("old", store.staleForSummary("old")?.sessionId)
+    assertEquals(listOf("old"), store.staleSummaries(1).map { it.sessionId })
+  }
 }

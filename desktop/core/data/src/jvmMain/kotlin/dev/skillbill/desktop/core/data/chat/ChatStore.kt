@@ -144,6 +144,26 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
       ?: allFiles().mapNotNull(::readFile).firstOrNull { it.agentSession == sessionId }?.toEntry()
   }
 
+  /** Writes [summary] onto an existing record only, keeping `updated_at`, so a chat deleted during the call stays deleted. */
+  internal fun saveSummary(sessionId: String, summary: String, sourceUpdatedAt: Instant): Boolean = synchronized(lock) {
+    val file = fileFor(sessionId) ?: return@synchronized false
+    val stored = readFile(file) ?: return@synchronized false
+    write(file, stored.copy(summary = summary, summarySourceUpdatedAt = sourceUpdatedAt))
+  }
+
+  /** The chat of [sessionId], found as [savedFor] finds it, when its summary is missing or older than its last save. */
+  internal fun staleForSummary(sessionId: String): ChatHistoryEntry? = synchronized(lock) {
+    val stored = fileFor(sessionId)?.let(::readFile)?.takeIf { it.toEntry() != null }
+      ?: allFiles().mapNotNull(::readFile).firstOrNull { it.agentSession == sessionId }
+    stored?.takeIf { it.needsSummary() }?.toEntry()
+  }
+
+  /** Every chat that needs a summary, newest first, at most [limit]. */
+  internal fun staleSummaries(limit: Int): List<ChatHistoryEntry> = synchronized(lock) {
+    allFiles().mapNotNull(::readFile).filter { it.needsSummary() }
+      .sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }.take(limit).mapNotNull(StoredChat::toEntry)
+  }
+
   private fun chatsOf(executionId: String): List<StoredChat> =
     allFiles().mapNotNull(::readFile).filter { it.executionId == executionId }.sortedByDescending { it.updatedAt ?: Instant.DISTANT_PAST }
 
@@ -160,11 +180,14 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
   private fun update(sessionId: String, change: (StoredChat) -> StoredChat): Boolean = synchronized(lock) {
     val file = fileFor(sessionId) ?: return@synchronized false
-    val updated = change(readFile(file) ?: StoredChat(sessionId))
+    write(file, change(readFile(file) ?: StoredChat(sessionId)))
+  }
+
+  private fun write(file: File, stored: StoredChat): Boolean {
     val temporary = File(directory, "${file.name}.tmp")
-    try {
+    return try {
       directory.mkdirs()
-      temporary.writeText(encode(updated).toString(), Charsets.UTF_8)
+      temporary.writeText(encode(stored).toString(), Charsets.UTF_8)
       Files.move(temporary.toPath(), file.toPath(), REPLACE_EXISTING)
       true
     } catch (_: IOException) {
@@ -201,6 +224,10 @@ private fun StoredChat.toEntry(): ChatHistoryEntry? {
   val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator } ?: return null
   return ChatHistoryEntry(sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines, newTask, summary)
 }
+
+/** Staleness rule: a listable chat whose summary source differs from its `updated_at`. */
+private fun StoredChat.needsSummary(): Boolean =
+  toEntry() != null && summarySourceUpdatedAt?.toEpochMilliseconds() != updatedAt?.toEpochMilliseconds()
 
 private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList {
   var index = 0

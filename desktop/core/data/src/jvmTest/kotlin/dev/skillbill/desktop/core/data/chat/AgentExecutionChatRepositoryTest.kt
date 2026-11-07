@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
@@ -38,7 +39,10 @@ class AgentExecutionChatRepositoryTest {
     val repository = run {
       val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
       val store = ChatStore(host, diagnostics, Clock.System)
-      AgentExecutionChatRepository(setOf(claude), unusedConfig, store, AgentSessionCatalog(host, FakeAppSettingsRepository(), store, diagnostics), diagnostics)
+      val settings = FakeAppSettingsRepository()
+      val summarizer = ChatSummarizer(host, settings, { error("unused") }, store, diagnostics, ApplicationCoroutineScope(backgroundScope))
+      val catalog = AgentSessionCatalog(host, settings, store, diagnostics)
+      AgentExecutionChatRepository(setOf(claude), unusedConfig, store, catalog, diagnostics, summarizer)
     }
 
     val events = repository.send(chatRequest(agent = ChatAgent("codex", null, null))).toList()
