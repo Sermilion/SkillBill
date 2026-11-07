@@ -78,11 +78,11 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkItem
 
-internal fun DetailSections.planActivitySection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit) {
+internal fun DetailSections.planActivitySection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit, onOpenBriefing: ((String) -> Unit)? = null) {
   val screen = requireNotNull(planScreenState)
   val events = planActivity(item, detail)
   planSection("plan-activity", "Activity", count = "${events.size} events", tools = { PlanActivityControls(screen, events) }) {
-    item(key = "plan-activity-feed-panel") { PlanActivityFeed(item, detail, screen, onAction) }
+    item(key = "plan-activity-feed-panel") { PlanActivityFeed(item, detail, screen, onAction, onOpenBriefing) }
   }
 }
 
@@ -147,7 +147,7 @@ private fun PlanFollowToggle(on: Boolean, onToggle: () -> Unit) {
 }
 
 @Composable
-private fun PlanActivityFeed(item: WorkItem, detail: Detail, screen: PlanScreenState, onAction: (DetailAction) -> Unit) {
+private fun PlanActivityFeed(item: WorkItem, detail: Detail, screen: PlanScreenState, onAction: (DetailAction) -> Unit, onOpenBriefing: ((String) -> Unit)? = null) {
   val events = planActivity(item, detail)
   val list = screen.activityFeed
   val rows = planActivityRows(events, screen.filter)
@@ -195,7 +195,8 @@ private fun PlanActivityFeed(item: WorkItem, detail: Detail, screen: PlanScreenS
         }
         if (id !in closed) items(groupRows, key = { it.key }) { event ->
           val first = groupRows.firstOrNull()?.key == event.key
-          PlanActivityRow(event, planRoots(item), item.running && (event.key == newestKey || event.children.any { it.key == newestKey }), first, onAction)
+          val hasBriefing = detail.standalonePlan?.stages?.any { it.phaseId == event.phaseId && !it.briefingText.isNullOrBlank() } == true
+          PlanActivityRow(event, planRoots(item), item.running && (event.key == newestKey || event.children.any { it.key == newestKey }), first, onAction, onOpenBriefing.takeIf { hasBriefing })
         }
       }
       if (tail) item(key = "plan-activity-tail") { PlanActivityTail() }
@@ -222,7 +223,7 @@ private fun PlanActivityGroup(view: PlanStageView, groupEvents: List<PlanActivit
 }
 
 @Composable
-internal fun PlanActivityRow(event: PlanActivityEvent, roots: List<String> = emptyList(), live: Boolean = false, first: Boolean = false, onAction: (DetailAction) -> Unit = {}) {
+internal fun PlanActivityRow(event: PlanActivityEvent, roots: List<String> = emptyList(), live: Boolean = false, first: Boolean = false, onAction: (DetailAction) -> Unit = {}, onOpenBriefing: ((String) -> Unit)? = null) {
   var open by rememberSaveable(event.key) { mutableStateOf(false) }
   val expandable = event.kind == "note" || (event.kind == "read" && event.children.isNotEmpty())
   val colors = SkillBillTheme.colors
@@ -252,10 +253,18 @@ internal fun PlanActivityRow(event: PlanActivityEvent, roots: List<String> = emp
           unitPrefix(event, colors)
           BasicText(text, style = SkillBillTheme.type.tSm.copy(color = colors.fg2, lineHeight = 20.sp), maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
         }
-        event.kind == "phase" -> BasicText(buildString {
-          append(event.text.substringBefore(": "))
-          event.text.substringAfter(": ", "").takeIf(String::isNotBlank)?.let { append(" · $it") }
-        }, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted, lineHeight = 20.sp), maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
+        event.kind == "phase" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          BasicText(buildString {
+            append(event.text.substringBefore(": "))
+            event.text.substringAfter(": ", "").takeIf(String::isNotBlank)?.let { append(" · $it") }
+          }, Modifier.weight(1f), style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted, lineHeight = 20.sp), maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
+          val phaseId = event.key.substringBefore(":").takeIf { event.key.endsWith(":start") }
+          if (phaseId != null && event.phaseId == phaseId && onOpenBriefing != null) BasicText(
+            "briefing",
+            Modifier.clickable(role = Role.Button, onClickLabel = "Open $phaseId briefing") { onOpenBriefing.invoke(phaseId) },
+            style = SkillBillTheme.type.tXs.copy(color = colors.accentText),
+          )
+        }
         event.kind == "write" -> Row {
           unitPrefix(event, colors)
           BasicText("$verb ", style = SkillBillTheme.type.tSm.copy(color = if (event.state == "failed") colors.stBlocked else colors.fgMuted, lineHeight = 20.sp))

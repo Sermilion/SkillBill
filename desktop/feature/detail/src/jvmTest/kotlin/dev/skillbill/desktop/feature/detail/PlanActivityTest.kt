@@ -147,6 +147,33 @@ class PlanActivityTest {
   }
 
   @Test
+  fun `phase start briefing link opens that stage raw briefing`() = runComposeUiTest {
+    val base = workItem("plan", kind = WorkKind.Phase)
+    val item = base.copy(standaloneExecution = true, control = base.control.copy(phaseId = "plan", invocationId = "plan"))
+    val raw = "The exact plan stage briefing"
+    val progress = StandalonePlanProgress(
+      null,
+      listOf(
+        StandalonePlanStage("preplan", epoch, epoch + 10.seconds, null, "completed"),
+        StandalonePlanStage("plan", epoch + 11.seconds, epoch + 20.seconds, raw, "completed"),
+        StandalonePlanStage("plan_subtasks", epoch + 21.seconds, null, null, "running"),
+      ),
+      1, 1, 1, listOf(1), 1, null, null, emptyList(), null,
+    )
+    val detail = emptyDetail.copy(standalonePlan = progress)
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {})) {}
+      }
+    }
+
+    onNodeWithTag("plan-stage-plan").performClick()
+    onNodeWithText("briefing").performClick()
+    onNodeWithText(raw).assertIsDisplayed()
+    onNodeWithText("Exactly what the agent received").assertIsDisplayed()
+  }
+
+  @Test
   @OptIn(kotlin.time.ExperimentalTime::class)
   fun `quiet Now block reports elapsed time from the UI ticker`() = runTest {
     val ticker = UiTicker(object : Clock {

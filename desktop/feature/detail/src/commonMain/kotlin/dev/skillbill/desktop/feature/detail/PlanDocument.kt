@@ -38,7 +38,6 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.component.ReasonBlock
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -89,15 +88,10 @@ internal fun DetailSections.planDocument(
     item(key = "plan-now") { PlanNowBlock(item, detail) }
   }
   if (blockedIds.isNotEmpty() || detail.incident != null || view.decision != null) incident(state, view, onAction, planHeader = true)
-  planActivitySection(item, detail, onAction)
+  planActivitySection(item, detail, onAction) { phaseId -> revealPlanBriefing(screen, phaseId) }
   planBundle(item, detail, onAction)
   planTranscript(item, detail, state, screen, onAction)
-  val briefings = plan?.stages.orEmpty().mapNotNull { stage -> stage.briefingText?.takeIf(String::isNotBlank)?.let { stage.phaseId to it } }
-  if (briefings.isNotEmpty()) planSection("plan-briefing", "Briefing", "${briefings.size} stages", collapsedByDefault = true) {
-    items(briefings, key = { "plan-briefing-${it.first}" }) { (id, text) ->
-      ReasonBlock("$id briefing", text, onCopy = { onAction(DetailAction.Copy(it)) })
-    }
-  }
+  planBriefingSection(item, detail, screen, onAction)
   pageFooter(DetailList.Executions, state, onAction)
 }
 
@@ -238,7 +232,7 @@ private fun PlanParentRow(file: PlanParentFile, modifier: Modifier, onOpen: (Str
 }
 
 @Composable
-private fun PlanBundleDivider(label: String, modifier: Modifier) {
+internal fun PlanBundleDivider(label: String, modifier: Modifier = Modifier) {
   Box(modifier.fillMaxWidth().background(SkillBillTheme.colors.bgInset).padding(horizontal = 12.dp, vertical = 4.dp)) {
     BasicText(
       label,
