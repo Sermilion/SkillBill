@@ -4,6 +4,7 @@ import skillbill.application.review.service.StandaloneReviewReportReader
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.qa.report.QaReportParser
+import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.engine.work.validation.validationChecksFor
@@ -94,13 +95,6 @@ internal fun supersededPhase(
 
 private const val DISPLAYED_PHASE_SCAN = 100
 
-/**
- * The workflow's live state, used for its current execution row.
- *
- * Workflow execution rows are written once at launch and never updated, so a row's stored lifecycle is
- * only its launch state. The current execution takes the workflow's projected lifecycle, and any earlier
- * execution ended when a later launch replaced it.
- */
 internal data class WorkflowExecutionCurrentState(
   val executionId: String?,
   val lifecycleState: IdeStatusLifecycleState,
@@ -109,12 +103,12 @@ internal data class WorkflowExecutionCurrentState(
 
 internal fun workExecutionHistory(
   unitOfWork: UnitOfWork,
-  standalone: StandalonePhaseStatusRecord?,
-  workflowId: String,
+  candidate: IdeStatusCandidate,
   page: WorkDetailPagePosition,
   limit: Int,
   current: WorkflowExecutionCurrentState? = null,
 ): List<WorkExecutionInstance> {
+  val standalone = candidate.standaloneStatus
   val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
   val offset = if (anchor == null) page.offset else 0
   return if (standalone != null) {
@@ -132,7 +126,7 @@ internal fun workExecutionHistory(
       .map { workExecutionInstance(it, standalone.invocationId, unitOfWork) }
   } else {
     unitOfWork.standalonePhaseStatuses
-      .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
+      .readWorkflowExecutions(candidate.workflowId, page.observedAt, offset, limit, anchor)
       .map { workflowExecutionInstance(it, current) }
   }
 }

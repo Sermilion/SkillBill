@@ -6,6 +6,8 @@ import dev.skillbill.desktop.core.domain.model.ChangeScope
 import dev.skillbill.desktop.core.domain.model.ChangesState
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.QaPreviewRequest
+import dev.skillbill.desktop.core.domain.model.QaPreviewState
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.RunOptions
@@ -39,6 +41,10 @@ data class DetailUiState(
   val qaCaseOverrides: Map<QaCaseKey, Boolean> = emptyMap(),
   val validationCheckOverrides: Map<ValidationCheckKey, Boolean> = emptyMap(),
   val selectedQaRun: String? = null,
+  val qaPreviewVisible: Boolean = false,
+  val qaPreview: QaPreviewState = QaPreviewState.Ended,
+  internal val qaPreviewRequest: QaPreviewRequest? = null,
+  internal val qaPreviewGeneration: Long = 0,
   val activity: ActivityResult = ActivityResult.Loading,
   val verifyCriteriaFilter: VerifyCriteriaFilter = VerifyCriteriaFilter.All,
   val fixSelection: Map<String, FixRoute> = emptyMap(),
@@ -120,6 +126,7 @@ sealed interface DetailAction {
   data class ToggleValidationCheck(val key: ValidationCheckKey) : DetailAction
   data class SetAllQaCases(val keys: List<QaCaseKey>, val open: Boolean) : DetailAction
   data class SelectQaRun(val invocationId: String?) : DetailAction
+  data class SetQaPreviewVisible(val visible: Boolean) : DetailAction
   data class OpenQaReport(val path: String) : DetailAction
   data class OpenQaEvidence(val path: String, val invocationDirectory: String) : DetailAction
   /** Opens .skill-bill/phases/qa.md without writing it. */

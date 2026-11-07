@@ -49,6 +49,9 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
   val collapse = rememberSectionCollapse()
   val item = state.header
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
+  val previewRun = detail?.takeIf { isStandaloneQa(item) }
+    ?.let { qaDisplayedRun(item, it, state.selectedQaRun) }
+    ?.takeIf { run -> run.qaChecklist?.targets?.any { it.name.equals("desktop", ignoreCase = true) } == true }
   var resultTab by rememberSaveable(item.id) { mutableStateOf("assessment") }
   val selected = detail?.let { selectedSubtask(item, it, state.subtaskChoice.key) }
     ?: SubtaskKey.GoalFinish.takeIf { item.kind == WorkKind.Goal }
@@ -68,6 +71,9 @@ internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<Ass
         val sections = DetailSections(this, collapse, listState, assessmentOrder)
         if (detail != null) {
           sections.item(key = "inspector") { InspectorSection(item, detail, selected, onAction) }
+          if (state.qaPreviewVisible) {
+            previewRun?.let { run -> sections.item(key = "qa-preview") { QaPreview(run.invocationId, state.qaPreview) } }
+          }
           if (selected == SubtaskKey.GoalFinish) {
             if (resultTab == "assessment") {
               if (detail.goalAssessment != null) sections.goalAssessmentSection(detail) else sections.item(key = "assessment-unavailable") {

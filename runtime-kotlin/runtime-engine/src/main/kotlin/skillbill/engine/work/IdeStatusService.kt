@@ -383,14 +383,7 @@ public class IdeStatusService(
     val runtimeRead =
       (goalStatus?.currentChildWorkflowId ?: item?.taskRuntimeWorkflowId())
         ?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
-    val history =
-      detailExecutionHistory(
-        candidate,
-        context,
-        request,
-        position,
-        WorkflowExecutionCurrentState(snapshot.execution?.executionId, snapshot.lifecycleState, completion.first),
-      )
+    val history = snapshot.detailExecutionHistory(candidate, context, request, position, completion.first)
     val moreLists = detailMoreLists(history.size > request.pageSize, goalRead, validationRead, runtimeRead, request)
     val planOutput = standalonePlanOutput(standalone, context.unitOfWork)
     val detailItem =
@@ -572,20 +565,19 @@ public class IdeStatusService(
       null to null
     }
 
-  private fun detailExecutionHistory(
+  private fun IdeStatusSnapshot.detailExecutionHistory(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
     request: WorkDetailRequest,
     position: WorkDetailPagePosition,
-    current: WorkflowExecutionCurrentState,
+    finishedAt: Instant?,
   ) = if (request.includesDetailList(WorkDetailList.EXECUTIONS)) {
     workExecutionHistory(
       context.unitOfWork,
-      candidate.standaloneStatus,
-      candidate.workflowId,
+      candidate,
       position,
       request.pageSize + 1,
-      current,
+      WorkflowExecutionCurrentState(execution?.executionId, lifecycleState, finishedAt),
     )
   } else {
     emptyList()
