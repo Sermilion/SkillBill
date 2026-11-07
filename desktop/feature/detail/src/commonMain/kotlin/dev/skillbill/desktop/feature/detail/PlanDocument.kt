@@ -158,7 +158,7 @@ private fun DetailSections.planBundle(item: WorkItem, detail: Detail, onAction: 
       }
     }
     if (units.isNotEmpty()) {
-      val wave = planWaveLabel(requireNotNull(plan))
+      val wave = if (planFinished(item, detail)) null else planWaveLabel(requireNotNull(plan))
       val label = "SUBTASK SPECS" + (wave?.let { " · ${it.uppercaseInvariant()}" } ?: "")
       item(key = "plan-bundle-divider") { PlanBundleDivider(label, Modifier.sbBoxSegment(parents.size, total)) }
       itemsIndexed(units, key = { _, unit -> "plan-unit-${unit.subtaskId}" }) { index, unit ->
