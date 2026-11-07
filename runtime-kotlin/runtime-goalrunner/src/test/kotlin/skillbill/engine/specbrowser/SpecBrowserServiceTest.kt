@@ -257,6 +257,122 @@ class SpecBrowserServiceTest {
     }
   }
 
+  @Test
+  fun `shared project store resolves the active goal from a non-selected clone`() {
+    establishTemporarySchemaReadiness("spec-browser-shared-store").use { schema ->
+      val root = schema.tempDir.toRealPath()
+      val repoA = Files.createDirectories(root.resolve("clone-a"))
+      val repoB = Files.createDirectories(root.resolve("clone-b"))
+      val unrelatedRepo = Files.createDirectories(root.resolve("unrelated-clone"))
+      Files.createDirectories(repoA.resolve(".git"))
+      Files.createDirectories(repoB.resolve(".git"))
+      Files.createDirectories(unrelatedRepo.resolve(".git"))
+      val specsRoot = Files.createDirectories(root.resolve("shared-store/specs"))
+      writeBundle(specsRoot, "SKILL-148-shared", "SKILL-148", "complete", listOf(1 to "complete"))
+      writeBundle(specsRoot, "SKILL-150-unstarted", "SKILL-150", "pending", listOf(1 to "pending"))
+      val environment = mapOf("HOME" to root.toString())
+      val database = sqliteSessionFactoryForTests(root, schema.dbPath.toString(), environment, ideStatusClock)
+      val manifests = runningGoal(schema, database, repoB)
+      val active = goalManifestState(repoB, testGoalRepositoryIdentity(repoB), "w-child")
+      manifests.persistControlState("goal-1", active.controlState.copy(executionLease = liveLease))
+      completedGoal(database, manifests, repoA)
+      unrelatedGoal(schema, database, manifests, unrelatedRepo)
+      val entry =
+        ProjectCatalogEntry(
+          "test-project",
+          root.resolve("shared-store"),
+          specsRoot,
+          listOf(repoA, repoB),
+          null,
+          repoA,
+          true,
+        )
+      val service = harness(database, repoA, listOf(entry)).service
+
+      val snapshot = service.snapshot("test-project", repoA)
+      val control = service.control("test-project", "SKILL-148-shared", repoA)
+      val unstarted = service.control("test-project", "SKILL-150-unstarted", repoA)
+      val deletion = service.deleteBundle("test-project", "SKILL-148-shared", repoA)
+
+      val activeBundle = snapshot.roots.filterIsInstance<SpecBrowserNode.Bundle>().single { it.issueKey == "SKILL-148" }
+      assertEquals(SpecBrowserStatus.RUNNING, activeBundle.status)
+      assertEquals(SpecBundleRunState.RUNNING, control.runState)
+      assertEquals("goal-1", control.workflowId)
+      assertEquals(testGoalRepositoryIdentity(repoB), control.repositoryIdentity)
+      assertEquals(repoB.toString(), control.ownerRepoRoot)
+      assertFalse(control.canStart)
+      assertFalse(control.canDelete)
+      assertEquals(SpecBundleRunState.NOT_STARTED, unstarted.runState)
+      assertTrue(unstarted.canStart)
+      assertIs<SpecBundleDeletion.Refused>(deletion)
+      assertTrue(Files.exists(specsRoot.resolve("SKILL-148-shared/spec.md")))
+    }
+  }
+
+  private fun completedGoal(
+    database: DatabaseSessionFactory,
+    manifests: GoalRunnerManifestStore,
+    repo: Path,
+  ) {
+    val completedBase = goalManifestState(repo, testGoalRepositoryIdentity(repo), "w-completed")
+    val completed =
+      completedBase.copy(
+        parentWorkflowId = "goal-a-completed",
+        manifest =
+          completedBase.manifest.copy(
+            status = "complete",
+            subtasks = completedBase.manifest.subtasks.map { it.copy(status = "complete") },
+          ),
+      )
+    database.transaction { unit ->
+      unit.workflowStates.saveFeatureTaskWorkflow(
+        runtimeRecord("goal-a-completed", ideStatusObservedAt.toString()),
+        FeatureTaskWorkflowMode.RUNTIME,
+      )
+    }
+    manifests.save(completed)
+    manifests.persistControlState(completed.parentWorkflowId, completed.controlState)
+    database.transaction { unit ->
+      val record = requireNotNull(unit.workflowStates.getFeatureTaskWorkflow("goal-a-completed"))
+      unit.workflowStates.saveFeatureTaskWorkflow(
+        runtimeRecord("goal-a-completed", ideStatusObservedAt.toString(), currentStep = "pr")
+          .copy(artifactsJson = record.artifactsJson),
+        FeatureTaskWorkflowMode.RUNTIME,
+      )
+    }
+  }
+
+  private fun unrelatedGoal(
+    schema: TemporarySchemaDatabase,
+    database: DatabaseSessionFactory,
+    manifests: GoalRunnerManifestStore,
+    repo: Path,
+  ) {
+    val state =
+      goalManifestState(repo, testGoalRepositoryIdentity(repo), "w-unrelated")
+        .copy(parentWorkflowId = "goal-unrelated")
+    database.transaction { unit ->
+      listOf("goal-unrelated", "w-unrelated").forEach { id ->
+        unit.workflowStates.saveFeatureTaskWorkflow(
+          runtimeRecord(id, ideStatusObservedAt.toString()),
+          FeatureTaskWorkflowMode.RUNTIME,
+        )
+      }
+    }
+    schema.connection.prepareStatement(
+      "INSERT INTO goal_issue_progress " +
+        "(parent_workflow_id, issue_key, first_started_at, status, last_activity_at, state_entered_at) " +
+        "VALUES ('goal-unrelated', 'SKILL-148', ?, 'running', ?, ?)",
+    ).use {
+      it.setString(1, ideStatusObservedAt.minusSeconds(60).toString())
+      it.setString(2, ideStatusObservedAt.minusSeconds(30).toString())
+      it.setString(3, ideStatusObservedAt.minusSeconds(30).toString())
+      it.executeUpdate()
+    }
+    manifests.save(state)
+    manifests.persistControlState(state.parentWorkflowId, state.controlState)
+  }
+
   private fun runningGoal(
     schema: TemporarySchemaDatabase,
     database: DatabaseSessionFactory,

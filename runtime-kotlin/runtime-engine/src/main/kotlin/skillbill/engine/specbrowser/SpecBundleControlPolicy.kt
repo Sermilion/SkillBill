@@ -35,6 +35,7 @@ internal fun specBundleControl(facts: SpecBundleControlFacts): SpecBundleControl
       everStarted = facts.everStarted,
       workflowId = live?.workflowId,
       repositoryIdentity = live?.repositoryIdentity,
+      ownerRepoRoot = live?.ownerRepoRoot,
       canStart = false,
       startLabel = options?.launchLabel ?: START_LABEL,
       canPause = false,
@@ -42,19 +43,23 @@ internal fun specBundleControl(facts: SpecBundleControlFacts): SpecBundleControl
       canCancel = false,
       canDelete = !state.isLive(),
       purgeVisible = facts.everStarted,
-      canPurge = facts.everStarted && !state.isLive(),
+      canPurge = facts.everStarted && !state.isLive() && live?.targetAvailable == true,
       agentId = options?.agentId,
       agentChoices = options?.agentChoices.orEmpty(),
       unavailableReason = options?.unavailableReason,
     )
   return when (state) {
-    SpecBundleRunState.NOT_STARTED -> base.copy(canStart = true, agentChoices = SupportedAgent.supportedIds)
+    SpecBundleRunState.NOT_STARTED ->
+      base.copy(
+        canStart = live?.targetAvailable != false,
+        agentChoices = SupportedAgent.supportedIds,
+      )
     SpecBundleRunState.RUNNING ->
       base.copy(canPause = live?.pauseEligible == true, canCancel = options?.canCancel == true)
     SpecBundleRunState.PAUSE_REQUESTED -> base.copy(pauseRequested = true, canCancel = options?.canCancel == true)
     SpecBundleRunState.PAUSED, SpecBundleRunState.BLOCKED ->
-      base.copy(canStart = options?.canLaunch == true, canCancel = options?.canCancel == true)
-    SpecBundleRunState.CANCELED -> base.copy(canStart = options?.canLaunch == true)
+      base.copy(canStart = options?.canLaunch == true && live.targetAvailable, canCancel = options?.canCancel == true)
+    SpecBundleRunState.CANCELED -> base.copy(canStart = options?.canLaunch == true && live.targetAvailable)
     SpecBundleRunState.COMPLETE, SpecBundleRunState.UNAVAILABLE -> base
   }
 }
@@ -92,6 +97,7 @@ private fun unavailableControl(
     everStarted = false,
     workflowId = null,
     repositoryIdentity = null,
+    ownerRepoRoot = null,
     canStart = false,
     startLabel = START_LABEL,
     canPause = false,

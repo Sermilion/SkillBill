@@ -933,7 +933,7 @@ class SpecsPaneModel(
     purgeConfirmationFor = null
     setToolbar { copy(purgeDialogOpen = false) }
     runControl(target) { captured ->
-      when (val outcome = controls.purge(key, captured.project.repoRoot)) {
+      when (val outcome = controls.purge(key, captured.control.ownerRepoRoot)) {
         is PurgeOutcome.Purged, PurgeOutcome.NothingToRemove -> Unit
         is PurgeOutcome.Refused -> problem(purgeFailure(outcome.reason))
         is PurgeOutcome.Incomplete -> problem(purgeFailure("Run data is still present: ${outcome.leftovers.joinToString(", ")}"))

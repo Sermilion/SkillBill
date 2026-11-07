@@ -117,6 +117,8 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
   val inspectRequests = mutableListOf<String>()
   val importRequests = mutableListOf<String>()
   val importDetails = mutableListOf<Triple<String, String?, String>>()
+  val purgeRequests = mutableListOf<Pair<String, String?>>()
+  var purgeOutcome: PurgeOutcome = PurgeOutcome.NothingToRemove
 
   override suspend fun pauseAfterSubtask(item: WorkItem) = record(ControlCall("pauseAfterSubtask", item))
 
@@ -138,7 +140,10 @@ class FakeWorkControlRepository(var outcome: ControlOutcome = ControlOutcome.Int
 
   override suspend fun recover(item: WorkItem, preview: RecoveryPreview): RecoveryOutcome = notFaked("recover")
 
-  override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome = notFaked("purge")
+  override suspend fun purge(issueKey: String, repoRoot: String?): PurgeOutcome {
+    purgeRequests += issueKey to repoRoot
+    return purgeOutcome
+  }
 
   override suspend fun preflightExport(issueKey: String, repoRoot: String?): ExportPreflightOutcome {
     preflightRequests += issueKey to repoRoot
