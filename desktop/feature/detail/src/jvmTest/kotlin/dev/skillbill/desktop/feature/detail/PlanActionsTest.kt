@@ -65,8 +65,8 @@ class PlanActionsTest {
       DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
     } }
 
-    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("1. Detail view"))
-    onNodeWithText("1. Detail view").performClick()
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Detail view"))
+    onNodeWithText("Detail view").performClick()
 
     runOnIdle { assertEquals(listOf<DetailAction>(DetailAction.OpenSpecFile("/specs/OAC-86/spec_subtask_1.md")), actions) }
   }
@@ -150,8 +150,8 @@ class PlanActionsTest {
     } }
 
     onAllNodesWithText("Reading the repo").assertCountEquals(2)
-    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("1. Detail view"))
-    onNodeWithText("1. Detail view").assertExists()
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Detail view"))
+    onNodeWithText("Detail view").assertExists()
     onNodeWithText("Implement").assertDoesNotExist()
     onNodeWithText("Implement turns on when every spec is saved").assertDoesNotExist()
     runOnIdle { assertFalse(planImplementationEnabled(item, detail)) }
@@ -246,6 +246,32 @@ class PlanActionsTest {
     assertTrue(controls.onAction(ControlsAction.ImplementPlan))
     runCurrent()
     assertEquals(2, requests)
+  }
+
+  @Test
+  fun `a plan with units and no report opens the derived manifest path`() = runComposeUiTest {
+    val plan = StandalonePlanProgress(
+      null, emptyList(), 0, 1, 1, listOf(1), 5, null, null,
+      listOf(StandalonePlanUnit(1, "Detail view", "/specs/X/spec_subtask_1.md", emptyList(), "writing", epoch, null, null, null)),
+      null,
+    )
+    val detail = emptyDetail.copy(standalonePlan = plan)
+    val base = workItem("plan-invocation", kind = WorkKind.Phase)
+    val item = base.copy(
+      issueKey = "X",
+      standaloneExecution = true,
+      running = true,
+      control = base.control.copy(phaseId = "plan", invocationId = "plan-invocation"),
+    )
+    val actions = mutableListOf<DetailAction>()
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+    } }
+
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("decomposition-manifest.yaml"))
+    onNodeWithText("not yet").assertDoesNotExist()
+    onNodeWithText("decomposition-manifest.yaml").performClick()
+    runOnIdle { assertEquals(listOf<DetailAction>(DetailAction.OpenSpecFile("/specs/X/decomposition-manifest.yaml")), actions) }
   }
 
 }

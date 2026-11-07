@@ -1,24 +1,34 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -29,12 +39,12 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.ReasonBlock
+import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
-import dev.skillbill.desktop.core.domain.model.StandalonePlanUnit
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.launch
 
@@ -79,27 +89,9 @@ internal fun DetailSections.planDocument(
     item(key = "plan-now") { PlanNowBlock(item, detail) }
   }
   if (blockedIds.isNotEmpty() || detail.incident != null || view.decision != null) incident(state, view, onAction, planHeader = true)
-  if (plan?.units.isNullOrEmpty() && detail.planActivity.none { it.kind != "stream" }) planOutputTail(item, detail)
   planActivitySection(item, detail, onAction)
-  if (plan != null && plan.units.isNotEmpty()) {
-    planRows(item, plan, detail, onAction)
-  } else {
-    planSection("plan-subtasks", "Subtasks") {
-      item(key = "plan-subtasks-pending") { PlanSubtasksPending() }
-    }
-  }
-  planBundle(detail, plan?.units.orEmpty(), onAction)
-  val transcriptCount = detail.planOutputLines.size
-  planSection(
-    "plan-transcript",
-    "Transcript",
-    count = "$transcriptCount lines",
-    tools = {
-      SbButton(if (screen.transcriptExpanded) "Raw" else "Structured", { screen.transcriptExpanded = !screen.transcriptExpanded }, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
-    },
-  ) {
-    item(key = "plan-transcript-log") { PlanOutputLog(state, detail, onAction, raw = screen.transcriptExpanded) }
-  }
+  planBundle(item, detail, onAction)
+  planTranscript(item, detail, state, screen, onAction)
   val briefings = plan?.stages.orEmpty().mapNotNull { stage -> stage.briefingText?.takeIf(String::isNotBlank)?.let { stage.phaseId to it } }
   if (briefings.isNotEmpty()) planSection("plan-briefing", "Briefing", "${briefings.size} stages", collapsedByDefault = true) {
     items(briefings, key = { "plan-briefing-${it.first}" }) { (id, text) ->
@@ -158,28 +150,109 @@ private fun buildBlockedReason(prefix: String, reason: String?) = buildAnnotated
   }
 }
 
-private fun DetailSections.planBundle(detail: Detail, units: List<StandalonePlanUnit>, onAction: (DetailAction) -> Unit) {
-  val files = detail.standalonePlan?.report?.bundleFiles.orEmpty()
-  val saved = units.filter { it.state == "saved" }.map { it.specPath }
-  val first = listOf("decomposition-manifest.yaml", "decomposition-manifest.yml", "spec.md")
-    .mapNotNull { name -> files.firstOrNull { fileName(it) == name } }
-  val ordered = (first + saved).distinct()
-  val pending = if (units.isEmpty()) listOf("decomposition-manifest.yaml", "spec.md")
-    .filter { name -> ordered.none { fileName(it) == name || name.endsWith(".yaml") && fileName(it) == name.removeSuffix(".yaml") + ".yml" } } else emptyList()
-  planSection("plan-bundle", "Spec bundle", count = "${ordered.size} ${if (ordered.size == 1) "file" else "files"}") {
-    item(key = "plan-bundle-chips") { PlanBundleChips(ordered, pending) { onAction(DetailAction.OpenSpecFile(it)) } }
+private fun DetailSections.planBundle(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit) {
+  val plan = detail.standalonePlan
+  val units = plan?.units.orEmpty()
+  val parents = planParentFiles(item, detail)
+  val count = if (units.isNotEmpty()) "${units.count { it.state == "saved" }}/${units.size} subtask specs saved"
+    else "${parents.count { it.saved }} of 2 files"
+  val total = parents.size + 1 + units.size
+  planSection("plan-bundle", "Spec bundle", count = count) {
+    parents.forEachIndexed { index, file ->
+      item(key = "plan-bundle-file-${file.name}") {
+        PlanParentRow(file, Modifier.sbBoxSegment(index, total)) { onAction(DetailAction.OpenSpecFile(it)) }
+      }
+    }
+    if (units.isNotEmpty()) {
+      val wave = planWaveLabel(requireNotNull(plan))
+      val label = "SUBTASK SPECS" + (wave?.let { " · ${it.uppercaseInvariant()}" } ?: "")
+      item(key = "plan-bundle-divider") { PlanBundleDivider(label, Modifier.sbBoxSegment(parents.size, total)) }
+      itemsIndexed(units, key = { _, unit -> "plan-unit-${unit.subtaskId}" }) { index, unit ->
+        PlanSubtaskRow(unit, item, detail, Modifier.sbBoxSegment(parents.size + 1 + index, total)) {
+          onAction(DetailAction.OpenSpecFile(unit.specPath))
+        }
+      }
+    } else {
+      item(key = "plan-bundle-hint") { PlanBundleHint(Modifier.sbBoxSegment(parents.size, total)) }
+    }
   }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+internal data class PlanParentFile(val name: String, val path: String?, val saved: Boolean)
+
+internal fun planParentFiles(item: WorkItem, detail: Detail): List<PlanParentFile> {
+  val plan = detail.standalonePlan
+  val units = plan?.units.orEmpty()
+  val bundle = plan?.report?.bundleFiles.orEmpty()
+  val writes = planActivity(item, detail).filter { it.kind == "write" }
+  return PLAN_PARENT_FILES.map { name ->
+    val matched = bundle.firstOrNull { parentFileMatches(fileName(it), name) }
+      ?: writes.firstOrNull { event ->
+        val named = event.path ?: event.openPath
+        named != null && parentFileMatches(fileName(named), name)
+      }?.let { event -> event.openPath ?: event.path }
+    val path = matched ?: units.firstOrNull()?.specPath?.let { derivedParentPath(it, name) }
+    PlanParentFile(name, path, matched != null || units.isNotEmpty())
+  }
+}
+
+private val PLAN_PARENT_FILES = listOf("spec.md", "decomposition-manifest.yaml")
+
+private fun parentFileMatches(file: String, name: String): Boolean =
+  file == name || name == "decomposition-manifest.yaml" && file == "decomposition-manifest.yml"
+
+private fun String.uppercaseInvariant(): String = buildString(length) {
+  for (ch in this@uppercaseInvariant) append(ch.uppercaseChar())
+}
+
+private fun derivedParentPath(specPath: String, name: String): String {
+  val directory = specPath.replace('\\', '/').substringBeforeLast('/', "")
+  return if (directory.isEmpty()) name else "$directory/$name"
+}
+
 @Composable
-private fun PlanBundleChips(paths: List<String>, pending: List<String>, onOpen: (String) -> Unit) {
-  FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    paths.forEach { path -> EvidenceChip(path) { onOpen(path) } }
-    pending.forEach { name ->
-      Row(Modifier.border(1.dp, SkillBillTheme.colors.borderSubtle, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-        BasicText(name, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgFaint))
-      }
+private fun PlanParentRow(file: PlanParentFile, modifier: Modifier, onOpen: (String) -> Unit) {
+  val colors = SkillBillTheme.colors
+  val path = file.path
+  Row(
+    modifier.fillMaxWidth()
+      .then(if (file.saved && path != null) Modifier.clickable(role = Role.Button, onClickLabel = "Open ${file.name}") { onOpen(path) } else Modifier)
+      .padding(horizontal = 12.dp, vertical = 8.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+      if (file.saved) CompositionLocalProvider(LocalContentColor provides colors.stDone) { SbIcon(LucideIcons.check, 12.dp) }
+      else PlanDashedRing(colors.fgFaint)
     }
+    BasicText(
+      file.name,
+      Modifier.weight(1f),
+      style = SkillBillTheme.type.tXs.copy(fontFamily = SkillBillTheme.type.t2xs.fontFamily, color = colors.fg),
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
+    if (file.saved && path != null) CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(LucideIcons.external, 12.dp) }
+    else if (!file.saved) BasicText("not yet", style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint))
+  }
+}
+
+@Composable
+private fun PlanBundleDivider(label: String, modifier: Modifier) {
+  Box(modifier.fillMaxWidth().background(SkillBillTheme.colors.bgInset).padding(horizontal = 12.dp, vertical = 4.dp)) {
+    BasicText(
+      label,
+      Modifier.semantics { heading() },
+      style = SkillBillTheme.type.t2xs.copy(color = SkillBillTheme.colors.fgMuted, fontWeight = FontWeight.Medium, letterSpacing = 0.02.em),
+    )
+  }
+}
+
+@Composable
+private fun PlanBundleHint(modifier: Modifier) {
+  Column(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    BasicText("Subtask specs appear here when the work is split.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+    Box(Modifier.fillMaxWidth(.72f).height(8.dp).background(SkillBillTheme.colors.bgInset, RoundedCornerShape(4.dp)))
+    Box(Modifier.fillMaxWidth(.58f).height(8.dp).background(SkillBillTheme.colors.bgInset, RoundedCornerShape(4.dp)))
   }
 }

@@ -1,8 +1,12 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runComposeUiTest
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.PlanOutputLine
@@ -13,6 +17,7 @@ import dev.skillbill.desktop.core.testing.workItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalTestApi::class)
@@ -37,21 +42,29 @@ class PlanProgressTest {
   }
 
   @Test
-  fun `the full output filter preserves attribution and restores interleaved lines`() = runComposeUiTest {
+  fun `the transcript shows the newest line last and copies raw text oldest first`() = runComposeUiTest {
+    val newest = "[subtask 3] Tool Bash {\"command\":\"./gradlew :desktop:check\"}"
+    val oldest = "[subtask 1] Reading the mapper"
     val lines = listOf(
-      PlanOutputLine("a", "[subtask 1] Reading the mapper", epoch, 1, 1),
-      PlanOutputLine("b", "[subtask 2] Writing acceptance criteria", epoch, 2, 2),
+      PlanOutputLine("b", newest, epoch, 3, 2),
+      PlanOutputLine("a", oldest, epoch, 1, 1),
     )
-    val detail = emptyDetail.copy(planOutputLines = lines, standalonePlan = progress(listOf(unit(1), unit(2))))
-    val item = workItem("plan", kind = WorkKind.Phase)
-    val state = DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch)
-    setContent { SkillBillTheme(reducedMotion = true) { PlanOutputLog(state, detail, onAction = {}) } }
-    onNodeWithText("[subtask 1] Reading the mapper").assertExists()
-    onNodeWithText("Subtask 2").performClick()
-    onNodeWithText("[subtask 1] Reading the mapper").assertDoesNotExist()
-    onNodeWithText("[subtask 2] Writing acceptance criteria").assertExists()
-    onNodeWithText("All output").performClick()
-    onNodeWithText("[subtask 1] Reading the mapper").assertExists()
+    val detail = emptyDetail.copy(planOutputLines = lines, standalonePlan = progress(listOf(unit(1), unit(3))))
+    val base = workItem("plan", kind = WorkKind.Phase)
+    val item = base.copy(standaloneExecution = true, control = base.control.copy(phaseId = "plan", invocationId = "plan"))
+    val actions = mutableListOf<DetailAction>()
+    setContent { SkillBillTheme(reducedMotion = true) {
+      DetailScreen(DetailUiState(item, SectionsUi.Loaded(detail, null, emptyMap(), emptySet()), false, epoch), DetailScreenHost(false, "Ctrl I", {}), actions::add)
+    } }
+
+    val shown = "[subtask 3] Bash(./gradlew :desktop:check)"
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText(shown))
+    val olderTop = onNodeWithText("[subtask 1] Reading the mapper").fetchSemanticsNode().boundsInRoot.top
+    val newerTop = onNodeWithText(shown).fetchSemanticsNode().boundsInRoot.top
+    assertTrue(newerTop > olderTop)
+    onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Copy"))
+    onNodeWithText("Copy").performClick()
+    runOnIdle { assertEquals(listOf<DetailAction>(DetailAction.Copy("$oldest\n$newest")), actions) }
   }
 
   private fun unit(id: Int) = StandalonePlanUnit(id, "Subtask $id", "/specs/$id.md", emptyList(), "writing", epoch, null, null, null)
