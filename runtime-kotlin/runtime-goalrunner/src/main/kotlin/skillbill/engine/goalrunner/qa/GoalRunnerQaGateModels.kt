@@ -26,6 +26,16 @@ public sealed interface GoalQaGateResult {
     public val reason: String,
     public val stepId: String,
   ) : GoalQaGateResult
+
+  /**
+   * The retained quality execution failed an integrity check during the [stepId] stage (build, qa or
+   * validate), so the goal must block there instead of publishing.
+   */
+  public data class Blocked(
+    public val reason: String,
+    public val stepId: String,
+    public val failureCode: String?,
+  ) : GoalQaGateResult
 }
 
 public enum class GoalQaSkipReason(internal val wireValue: String) {

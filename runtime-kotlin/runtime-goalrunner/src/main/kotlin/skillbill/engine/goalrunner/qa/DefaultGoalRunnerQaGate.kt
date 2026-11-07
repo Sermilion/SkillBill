@@ -16,6 +16,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.quality.GoalQualityAdmissionRequest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.history.accumulateGoalFinalRepairWarnings
@@ -35,6 +36,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 
@@ -53,23 +55,48 @@ public class DefaultGoalRunnerQaGate(
   private val diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerQaGate {
   private val repairOutputs = GoalQualityRepairOutputs(outcomeStore)
+  private val currentStage = ThreadLocal<String>()
 
   override fun run(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalQaGateResult {
+    enterStage(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD)
+    return try {
+      runContained(state, request)
+    } catch (failure: SkillBillRuntimeException) {
+      if (failure.code !in INTEGRITY_FAILURES) throw failure
+      blockedAtCurrentStage(failure)
+    } finally {
+      currentStage.remove()
+    }
+  }
+
+  private fun runContained(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalQaGateResult {
     var invocationId: String? = null
     return catchingNonCancellation { runQa(state, request) { invocationId = it } }.getOrElse { failure ->
-      if ((failure as? SkillBillRuntimeException)?.code in
-        setOf(
-          WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
-          WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
-        )
-      ) {
-        throw failure
-      }
+      if ((failure as? SkillBillRuntimeException)?.code in INTEGRITY_FAILURES) throw failure
       containFailure(state, request, containableFailure(failure), invocationId)
     }
+  }
+
+  private fun enterStage(stepId: String) = currentStage.set(stepId)
+
+  private fun blockedAtCurrentStage(failure: SkillBillRuntimeException): GoalQaGateResult.Blocked {
+    val stepId = currentStage.get() ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "goal_qa_gate: quality integrity failed at '$stepId'",
+      failure,
+    )
+    return GoalQaGateResult.Blocked(
+      reason = failure.message?.takeIf(String::isNotBlank) ?: "Final goal quality state could not be verified.",
+      stepId = stepId,
+      failureCode = failure.failureCodeLabel(),
+    )
   }
 
   private fun containFailure(
@@ -171,6 +198,7 @@ public class DefaultGoalRunnerQaGate(
     admitted(execution.invocationId)
     val paused = buildBoundary.run(state, request, quality)
     if (paused != null) return paused
+    enterStage(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA)
     return continueAfterInitialBuild(state, request, quality, parentInvariants, execution.invocationId)
   }
 
@@ -255,6 +283,7 @@ public class DefaultGoalRunnerQaGate(
     quality: GoalQualityExecutionRecord,
     baseline: String,
   ): GoalQaGateResult {
+    enterStage(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
     staleValidationContinuation(state, request, quality)?.let { return it }
     val execution = requireNotNull(quality.execution)
     val settledFingerprint =
@@ -687,6 +716,7 @@ public class DefaultGoalRunnerQaGate(
     branch: String,
     quality: GoalQualityExecutionRecord,
   ): ValidationAfterQaStep {
+    enterStage(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
     var current = transitionQuality(outcomeStore, state, quality, quality.startValidation())
     val attempt = runValidationPhase(state, request, current, branch)
     if (attempt is ValidationPhaseAttempt.Contained) return ValidationAfterQaStep.Settled(attempt.result)
@@ -737,6 +767,7 @@ public class DefaultGoalRunnerQaGate(
     quality: GoalQualityExecutionRecord,
     parentInvariants: FeatureTaskRuntimeRunInvariantsRead,
   ): GoalQaGateResult {
+    enterStage(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
     var current = quality
     resumeAcceptedValidation(state, request, current)?.let { return it }
     current = requireLatestQuality(outcomeStore, state, current)
@@ -1144,4 +1175,12 @@ public class DefaultGoalRunnerQaGate(
         projectStore.resolve(request.repoRoot),
       ),
     )
+
+  private companion object {
+    val INTEGRITY_FAILURES =
+      setOf(
+        WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+      )
+  }
 }

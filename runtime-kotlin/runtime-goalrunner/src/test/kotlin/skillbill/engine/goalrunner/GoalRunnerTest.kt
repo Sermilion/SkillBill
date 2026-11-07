@@ -548,6 +548,47 @@ class GoalRunnerTest {
   }
 
   @Test
+  fun `a quality integrity failure blocks the goal at its finish stage before publication`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val outcomes = RecordingOutcomeStore()
+    val pr = RecordingPullRequestPort()
+    val reason = "Running initial build has incomplete or conflicting accepted terminal evidence."
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
+          outcomeStore = outcomes,
+          pullRequestPort = pr,
+        ).copy(
+          qaGate =
+            GoalRunnerQaGate { _, _ ->
+              GoalQaGateResult.Blocked(
+                reason,
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+                "WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION",
+              )
+            },
+        ),
+      )
+
+    val report = assertIs<GoalRunnerRunReport.Stopped>(runner.run(runRequest()))
+
+    assertEquals(GoalRunnerStopReason.BLOCKED, report.stop.reason)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD, report.stop.lastResumableStep)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD, report.stop.failurePhaseId)
+    assertEquals("WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION", report.stop.failureCode)
+    assertEquals(reason, report.stop.blockedReason)
+    assertTrue(pr.requests.isEmpty())
+    val blocked = outcomes.blockedWorkflows.single()
+    assertEquals(store.parentWorkflowId, blocked.workflowId)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD, blocked.failurePhaseId)
+  }
+
+  @Test
   fun `exhausted assessment stops before goal QA and pull request publication`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
     val outcomes = RecordingOutcomeStore()
@@ -6046,6 +6087,7 @@ internal class RecordingOutcomeStore : TestGoalQualityOutcomeStore(settled = tru
         request.blockedReason,
         request.lastResumableStep,
         request.supervisionEvent,
+        request.failurePhaseEvidence?.phaseId,
       )
     return GoalRunnerAcceptedBlock("implement", "bi_test")
   }
@@ -6168,6 +6210,7 @@ internal data class BlockedWorkflow(
   val blockedReason: String,
   val lastResumableStep: String,
   val supervisionEvent: GoalRunnerSupervisionEvent?,
+  val failurePhaseId: String? = null,
 )
 
 internal data class ReopenBlockedPhaseCall(

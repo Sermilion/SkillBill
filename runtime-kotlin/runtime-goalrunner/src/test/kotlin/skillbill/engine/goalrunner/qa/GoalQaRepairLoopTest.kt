@@ -50,7 +50,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
-import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.quality.GoalQualityPreQaBuildState
 import skillbill.install.model.SupportedAgent
@@ -80,17 +79,16 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 
 class GoalQaRepairLoopTest {
   @TempDir lateinit var home: Path
@@ -199,12 +197,12 @@ class GoalQaRepairLoopTest {
         buildGateRunner = ThrowingBuildGateRunner(failure),
       )
 
-    val thrown = assertFailsWith<SkillBillRuntimeException> { fixture.gate.run(fixture.state, fixture.request) }
+    val blocked = assertIs<GoalQaGateResult.Blocked>(fixture.gate.run(fixture.state, fixture.request))
 
-    assertEquals(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, thrown.code)
-    assertContains(assertNotNull(thrown.message), "gate runner exploded")
-    assertFalse(assertNotNull(thrown.message).contains("after interruption"), thrown.message)
-    assertSame(failure, thrown.cause)
+    assertEquals("WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION", blocked.failureCode)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD, blocked.stepId)
+    assertContains(blocked.reason, "gate runner exploded")
+    assertFalse(blocked.reason.contains("after interruption"), blocked.reason)
   }
 
   @Test

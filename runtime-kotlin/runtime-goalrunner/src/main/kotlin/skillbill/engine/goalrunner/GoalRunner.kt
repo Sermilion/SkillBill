@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
+import skillbill.engine.diagnostics.block.FailurePhaseEvidence
 import skillbill.engine.goal.GoalRunnerManifestState
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
 import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
@@ -166,6 +167,7 @@ public class GoalRunner(
         stopReason = stop.reason,
         failureCode = stop.failureCode,
         recoveryCommand = stop.recoveryCommand,
+        failurePhaseEvidence = stop.failurePhaseId?.let(::FailurePhaseEvidence),
         executionGeneration = executionGeneration,
         executionOwnerToken = executionOwnerToken,
       ),
