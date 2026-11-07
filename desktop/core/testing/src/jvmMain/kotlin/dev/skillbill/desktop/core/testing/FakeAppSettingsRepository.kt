@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.TrayTab
 import dev.skillbill.desktop.core.domain.settings.CriterionMark
 import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
@@ -36,6 +37,7 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   }
   var favoriteWriteFailure = false
   var specFavoriteWriteFailure = false
+  var qaDeviceReadFailure = false
   var favoriteReadFailure: Boolean
     get() = favoriteReadFailureState.value
     set(value) { favoriteReadFailureState.value = value }
@@ -54,6 +56,14 @@ class FakeAppSettingsRepository(initial: AppSettings = AppSettings.DEFAULT) : Ap
   override suspend fun setHistoryWindow(window: HistoryWindow) = change { it.copy(historyWindow = window) }
 
   override suspend fun setNewTaskChatLayout(layout: NewTaskChatLayout) = change { it.copy(newTaskChatLayout = layout) }
+
+  override suspend fun setQaDevice(pick: QaDevicePick?): Outcome<Unit, SettingsRejection> {
+    if (pick != null && !pick.isValid) return Outcome.Failure(SettingsRejection.InvalidQaDevice)
+    return change { it.copy(qaDevice = pick) }
+  }
+
+  override suspend fun readQaDevice(): Outcome<QaDevicePick?, SettingsRejection> =
+    if (qaDeviceReadFailure) Outcome.Failure(SettingsRejection.ReadFailed) else Outcome.Success(settings.value.qaDevice)
 
   override suspend fun setNotification(kind: NotificationKind, enabled: Boolean) =
     change { it.copy(notifications = it.notifications + (kind to enabled)) }

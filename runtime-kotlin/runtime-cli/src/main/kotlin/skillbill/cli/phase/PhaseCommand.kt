@@ -11,6 +11,7 @@ import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.service.RequestedReviewMode
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
+import skillbill.cli.kernel.agent.resolveRequestedQaDevice
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.GOAL_EXIT_PAUSED
@@ -27,9 +28,12 @@ import skillbill.cli.kernel.work.incidentPayload
 import skillbill.cli.kernel.work.incidentText
 import skillbill.cli.kernel.work.readGoalIncidentDetails
 import skillbill.cli.model.CliRunInputs
+import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.launchArguments
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -87,11 +91,17 @@ class PhaseCommand(
       "Monitor only: reclaim a stale monitor owner. Pass the owner token the blocked monitor " +
         "reported, with an explicit target.",
   ).multiple()
+  private val qaDevices by option(
+    QA_DEVICE_FLAG,
+    help = "QA only: run QA on this device, serial:<serial> or avd:<name>. Never part of the intake.",
+  ).multiple()
 
   override fun run() {
     val invocation = PhaseInvocationParser.parse(name, rest)
     val recoverStaleOwner = PhaseInvocationParser.recoverStaleOwnerToken(recoverStaleOwners)
     PhaseInvocationParser.requireRecoverableMonitor(invocation, recoverStaleOwner)
+    val qaDevice = resolveRequestedQaDevice(qaDevices)
+    PhaseInvocationParser.requireQaDevicePhase(invocation, qaDevice)
     val repoRoot = resolveCliRepositoryRoot(null, inputs)
     val invokedAgentId = requireInvokingAgentId(agent, inputs.environment, "--agent")
     if (SkeletonDefinition.byId(invocation.definitionId).runStateKind == SkeletonRunStateKind.DURABLE) {
@@ -116,7 +126,9 @@ class PhaseCommand(
             definitionId = invocation.definitionId,
             repoRoot = repoRoot,
             invokedAgentId = invokedAgentId,
-            launchArguments = listOf("phase", invocation.definitionId) + rest + listOf("--agent", invokedAgentId),
+            launchArguments =
+              listOf("phase", invocation.definitionId) + rest + listOf("--agent", invokedAgentId) +
+                qaDevice.launchArguments(),
             intake = invocation.intake,
             codeReviewMode = invocation.mode?.let(RequestedReviewMode::parse),
             reviewInvocation = ReviewInvocation(target = invocation.target),
@@ -126,6 +138,7 @@ class PhaseCommand(
             eventSink = stdoutSink,
             activityOutput = { _, activity -> inputs.liveStdout("$activity\n") },
             recoverStaleOwner = recoverStaleOwner,
+            qaDevice = qaDevice,
           ),
         )
       } ?: return
@@ -288,6 +301,15 @@ object PhaseInvocationParser {
         else -> null
       }
     refusal?.let { throw UsageError(it) }
+  }
+
+  fun requireQaDevicePhase(
+    invocation: PhaseInvocation,
+    device: QaNamedDevice?,
+  ) {
+    if (device != null && invocation.definitionId != SkeletonDefinition.QA.id) {
+      throw UsageError("$QA_DEVICE_FLAG applies only to `phase ${SkeletonDefinition.QA.id}`.")
+    }
   }
 
   private fun definitionId(name: String): String {

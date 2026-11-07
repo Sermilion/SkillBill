@@ -41,10 +41,6 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.hoverSpec
-import dev.skillbill.desktop.core.designsystem.component.SbButton
-import dev.skillbill.desktop.core.designsystem.component.SbControlSize
-import dev.skillbill.desktop.core.designsystem.navigation.Crumb
-import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
@@ -70,24 +66,17 @@ internal class NewTaskScreenHost(
 @Composable
 internal fun NewTaskScreen(state: NewTaskUiState, chats: NewTaskChats, host: NewTaskScreenHost, onAction: (NewTaskAction) -> Unit) {
   val selected by chats.selected.collectAsState()
-  val selectedChat = selected.chat.collectAsState().value
   val pendingClose by chats.pendingClose.collectAsState()
   val items = rememberOpenChatItems(chats)
   LaunchedEffect(Unit) { chats.refreshSaved() }
   Column(Modifier.fillMaxSize().onPreviewKeyEvent { handleChatShortcut(it, chats) }) {
-    ViewHeader(
-      crumbs = listOf(Crumb("New task")),
-      actions = {
-        if (selectedChat != null) SbButton("Discard", { onAction(NewTaskAction.Discard) }, size = SbControlSize.Small)
-      },
-    )
     when (state.newTaskChatLayout) {
       NewTaskChatLayout.Tabs -> {
-        NewTaskChatTabs(items, selected, chats::select, chats::requestClose, onNew = chats::newChat)
+        NewTaskChatTabs(items, selected, chats::select, chats::requestClose, chats::discard, onNew = chats::newChat)
         key(selected) { NewTaskChatContent(state, selected, chats, host, onAction) }
       }
       NewTaskChatLayout.SideList -> Row(Modifier.weight(1f)) {
-        NewTaskChatList(items, selected, chats::select, chats::newChat, chats::requestClose)
+        NewTaskChatList(items, selected, chats::select, chats::newChat, chats::requestClose, chats::discard)
         Column(Modifier.weight(1f)) {
           key(selected) { NewTaskChatContent(state, selected, chats, host, onAction) }
         }
@@ -181,6 +170,7 @@ private fun ColumnScope.NewTaskChatContent(
       NewTaskChips(
         host.onStart?.takeIf { startable }?.let { onStart -> { wire, target -> onStart(wire, target, null) } },
         Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
+        qaDeviceName = state.qaDeviceName,
       )
     }
     NewTaskComposer(state, draft, focus, host.now, onAction)
@@ -225,7 +215,7 @@ private fun NewTaskHomeBody(
             style = type.tBase.copy(color = colors.fgMuted),
           )
         }
-        StepLine(progress, reducedMotion, preview)
+        StepLine(progress, preview)
         if (recent.isNotEmpty()) {
           RecentChatsSection(
             chats = recent,

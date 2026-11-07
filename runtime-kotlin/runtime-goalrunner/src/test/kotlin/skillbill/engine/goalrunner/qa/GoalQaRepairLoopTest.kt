@@ -4,6 +4,8 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
+import skillbill.engine.featuretask.model.execution.QaNamedDevice
+import skillbill.engine.featuretask.model.execution.QaNamedDeviceKind
 import skillbill.engine.featuretask.phaserun.PhaseRunEntryFixture
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -92,6 +94,20 @@ import kotlin.test.assertNull
 
 class GoalQaRepairLoopTest {
   @TempDir lateinit var home: Path
+
+  @Test
+  fun `goal QA prompt carries the device from the current launch`() {
+    val fixture =
+      Fixture(
+        verdicts = listOf(QaVerdict.PASSED),
+        qaFixOutput = { "" },
+        qaDevice = QaNamedDevice(QaNamedDeviceKind.AVD, "Pixel_8_API_35"),
+      )
+
+    fixture.gate.run(fixture.state, fixture.request)
+
+    assertContains(fixture.prompts("qa").single(), "AVD `Pixel_8_API_35`")
+  }
 
   @Test
   fun `goal QA hands the finding to qa_fix, builds and retests the repaired tree, then validates once`() {
@@ -348,6 +364,7 @@ class GoalQaRepairLoopTest {
     buildGateRunner: ValidationGateRunner? = null,
     freeFormReport: String? = null,
     limitFirstQa: Boolean = false,
+    qaDevice: QaNamedDevice? = null,
   ) {
     private val clock = Clock.systemUTC()
     private val database: DatabaseSessionFactory = phaseRunDatabase(home, clock)
@@ -423,7 +440,13 @@ class GoalQaRepairLoopTest {
             subtasks = listOf(DecompositionSubtask(id = 1, name = "Implementation", specPath = "subtask.md")),
           ),
       )
-    val request = GoalRunnerRunRequest(issueKey = "SKILL-500", repoRoot = home, invokedAgentId = "claude")
+    val request =
+      GoalRunnerRunRequest(
+        issueKey = "SKILL-500",
+        repoRoot = home,
+        invokedAgentId = "claude",
+        qaDevice = qaDevice,
+      )
     val gate: DefaultGoalRunnerQaGate
 
     init {

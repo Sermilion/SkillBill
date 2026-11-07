@@ -184,8 +184,29 @@
     const hay = [it.id, it.issue, it.title, it.repo, it.branch, it.phase, it.op, it.summary].filter(Boolean).join(' ').toLowerCase();
     return q.toLowerCase().split(/\s+/).every((t) => hay.includes(t));
   }
+  /* ---------- Build indicator ----------
+   * The build a run's agent is inside, or its last build. SKILL-417 follows st.build (the #build/<state>/<type> routes);
+   * other runs keep the fixed samples in D.BUILD.runs. Null when no build tool command was seen. */
+  function buildOf(st, it) {
+    const fixed = D.BUILD.runs[it.id];
+    if (fixed) return Object.assign({ t0: D.T0 }, fixed);
+    if (it.id !== D.BUILD.focus) return null;
+    const pick = (st && st.build) || D.BUILD.live;
+    const t = D.BUILD.types[pick.type];
+    if (!t || pick.state === 'idle') return null;
+    const b = Object.assign({ t0: D.T0, pid: 48213, started: '14:28' }, t);
+    const sec = 1000, M = 60000;
+    if (pick.state === 'running') Object.assign(b, { state: 'running', ms: Math.round(t.usual * 0.62), prev: ['done', S.fmtDur(t.usual - 8 * sec, true), '18m ago'] });
+    if (pick.state === 'first') Object.assign(b, { state: 'running', ms: Math.round(t.usual * 0.4), usual: null });
+    if (pick.state === 'slow') Object.assign(b, { state: 'running', ms: t.usual + 1 * M + 55 * sec, prev: ['done', S.fmtDur(t.usual + 4 * sec, true), '18m ago'] });
+    if (pick.state === 'passed') Object.assign(b, { state: 'passed', ms: t.usual - 6 * sec, exit: 0, ago: '2m ago' });
+    if (pick.state === 'failed') Object.assign(b, { state: 'failed', ms: Math.round(t.usual * 0.3), exit: 1, ago: '1m ago' });
+    return b;
+  }
   function workRow(st, it, i) {
     const meta = [];
+    const build = buildOf(st, it);
+    if (build && (build.state === 'running' || build.state === 'failed')) meta.push(S.BuildChip(build));
     if (it.stalled) meta.push(S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false, tip: `No progress for ${it.stalled}` }));
     if (it.pauseRequested) meta.push(S.Label({ text: 'Pause requested', color: 'var(--st-paused)', dot: true }));
     if (it.lifecycle !== 'terminal') meta.push(S.Label({ text: stepText(it), mono: true, dot: false, tip: it.kind === 'goal' ? 'Current phase' : 'Current step' }));
@@ -1379,6 +1400,9 @@
       eyebrow: [plan ? planBadge(it) : lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), it.lifecycle !== 'terminal' ? S.Label({ text: it.fresh && !it.refreshFailed ? 'fresh' : 'stale', color: it.fresh && !it.refreshFailed ? 'var(--st-done)' : 'var(--fg-faint)' }) : '', plan && it.model ? S.Label({ text: `${it.model}${it.effort ? ` · ${it.effort} effort` : ''}`, dot: false }) : ''],
       title: it.title, sub: location, actions: [runActions(st, it)],
     }));
+    /* Validation runs get no strip: their live card already names the running check command. */
+    const build = !val && !ver && buildOf(st, it);
+    if (build) parts.push(S.BuildStrip(build));
     if (it.pauseRequested && !val) parts.push(S.Hint({ tone: 'info', icon: 'pause', text: 'Pause recorded. The goal pauses at its next checkpoint.' }));
     if (it.reason && !val && !ver && !plan) parts.push(S.ReasonBlock({ label: 'Run reason', text: it.reason, color: LIFE[it.lifecycle][1], open: st.reasonOpen.has(it.id), act: 'reason-toggle', arg: it.id }));
     if (!val) parts.push(decisionPanel(st, it));
@@ -1784,11 +1808,18 @@
   function newTask(st) {
     const c = ntChat(st);
     const tabs = S.ChatTabs({ count: st.nt.chats.length, tabs: st.nt.chats.map((t, i) => ({ id: t.id, label: chatLabel(t), status: chatStatus(t), on: i === st.nt.active, tip: `${chatLabel(t)} · ${t.repo || 'no repository'} · ${t.agent}` })) });
-    const header = S.ViewHeader({
-      crumbs: c.lines.length ? [{ label: 'New task' }, { label: chatLabel(c) }] : [{ label: 'New task' }],
-      actions: [c.lines.length ? S.Button({ label: 'Discard', size: 'sm', act: 'chat-discard', tip: 'Close this chat and remove it from Recent chats' }) : '', ...paneToggles(st)],
-    });
-    return workArea(st, header, tabs + (chatEmpty(c) ? ntHome(st, c) : ntTranscript(c)) + ntComposer(st, c));
+    /* No view header: the tab strip is the top of the screen, and Discard lives in each tab's right-click menu (chatTabMenu). */
+    return workArea(st, '', tabs + (chatEmpty(c) ? ntHome(st, c) : ntTranscript(c)) + ntComposer(st, c));
+  }
+  /* A chat tab's right-click menu (NewTaskChatTabMenu). Discard shows once the chat has messages: it closes the chat and removes it
+   * from Recent chats, where Close keeps it there. */
+  function chatTabMenu(st, id) {
+    const c = st.nt.chats.find((x) => String(x.id) === String(id));
+    if (!c) return '';
+    return S.Menu({ items: [
+      { icon: 'x', label: 'Close', kbd: '⌘ W', act: 'chat-close', arg: c.id },
+      c.lines.length ? { icon: 'trash', label: 'Discard', act: 'chat-discard', arg: c.id, danger: true } : null,
+    ].filter(Boolean) });
   }
 
   /* Repository and base branch picker (NewTaskRepositoryPicker). Picking a repository keeps it open and moves to the branch
@@ -1899,9 +1930,9 @@
   }
 
   window.Screens = {
-    app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
+    buildOf, app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
-    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, queuePanel,
+    newTask, ntChat, chatLabel, chatStatus, chatEmpty, ntSendButton, pickerItems, targetPicker, targetPickerView, chatMenu, chatTabMenu, queuePanel,
     resumeListing, resumePalette, resumePaletteView,
     qaView, qaResults, devicePanel, usageData,
     isPlanRun, planStrip, planNow, planTeaser, planActivity, planBundle, planTranscript, planBriefing, PLAN_STAGES,

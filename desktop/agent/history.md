@@ -6,11 +6,23 @@ Areas: desktop/core/data, desktop/core/domain, desktop/feature/detail, platform-
 - QaPreviewSource confines read-only, no-follow opens of live-preview/Xvfb_screen0 through scoped SecureDirectoryStream handles. The bounded XWD v7 decoder checks offsets, masks, stride and allocation limits, accepts both pixel byte orders and returns opaque ARGB.
 - Each observer reads one bounded snapshot at a time and waits 250 milliseconds after an attempt. Degraded-reason transitions emit bounded diagnostic categories. Rejected frames clear the image; later valid frames can recover.
 - DetailViewModel keys observation by database session, work, selected invocation, directory and liveness. Mandatory route and pane visibility wiring cancels hidden collection; generation checks reject late frames. Terminal selections are Ended without source reads.
-- Adjacent runtime helper refactoring preserves execution projection behavior. Removed non-interface KDoc rationale remains in runtime-kotlin/agent/decisions.md.
 - Limits: private file-backed Xvfb, SecureDirectoryStream support and the supported XWD format are required. Ambient displays, goal QA and legacy runs without that source supply no preview. Frames may tear during repaint. No database or command-contract change.
-- Finalization reports environment_unavailable for QA or validation; this entry establishes no live-QA or validation pass.
+- The latest frame fits the existing pane and preserves its aspect ratio. Localized labels and image descriptions identify the selected run. The panel has no recording, input, export or expanded-viewer controls.
 Feature flag: N/A
 Acceptance criteria: 1/1 implemented for the parent; 5/5 implemented for subtask 1
+
+## [2026-11-07] SKILL-517 QA device picker in sidebar
+Areas: desktop/app/shell/qadevice, desktop/core/data, desktop/core/domain, desktop/core/datastore, desktop/core/designsystem, desktop/feature/chat, desktop/feature/settings; runtime-engine, runtime-cli, runtime-goalrunner, runtime-contracts, runtime-ports, runtime-infra/workflow
+- MEDIUM feature. The sidebar footer has an upward device picker, and the New Task QA chip names the saved pick. Ready devices and stopped AVDs are pickable; leased, unauthorized, offline and unsupported devices are disabled.
+- Window-scoped QaDevicePickerState owns cancellable discovery on open and explicit refresh, with no polling. Pure presentation rules match AVD picks to running emulators, retain missing picks and skip disabled rows during keyboard navigation. reusable
+- Discovery resolves SDK tools through ANDROID_HOME, ANDROID_SDK_ROOT, repository local.properties and PATH. Injected command execution bounds output and subprocess duration; unknown running AVD identities suppress stopped candidates.
+- Read-only lease snapshots join fingerprinted holders across normalized roots from the loaded Work board. Live and unverifiable owners remain occupied; unavailable occupancy is diagnosed and does not prevent adb discovery.
+- AppSettingsRepository owns the persisted Serial/Avd pick and display name. Atomic writes preserve the previous pick on failure; malformed preferences decode to diagnosed auto without exposing stored identities. QaDevicePick and QaDeviceDiscoveryRepository are reusable.
+- Eligible launches read one confirmed settings snapshot before launch writes and retain it through allocation retries. Read failure refuses launch. Work-board QA and goal relaunches replace recorded device arguments with the current pick; auto clears the old selector.
+- The runtime carries the selection through a typed --qa-device channel outside intake and acceptance criteria. Missing hardware stays selected so QA can skip with a reason rather than substitute another target.
+- Limits: Android only, advisory occupancy and explicit refresh. No UI emulator controls or operation:verify targeting. Runtime port and settings implementations need the added members; goal-quality inputs and lease schemas retain their versions.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented across runtime and desktop
 
 ## [2026-11-06] SKILL-513 docked, resizable chat pane with persisted width
 Areas: desktop/app, desktop/core/datastore, desktop/core/domain, desktop/core/testing, desktop/core/ui, desktop/feature/chat

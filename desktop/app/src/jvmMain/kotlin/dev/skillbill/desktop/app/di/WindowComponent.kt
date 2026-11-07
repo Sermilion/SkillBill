@@ -7,6 +7,7 @@ import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
 import dev.skillbill.desktop.app.shell.ShellBoardState
 import dev.skillbill.desktop.app.shell.FavoritesSidebarState
+import dev.skillbill.desktop.app.shell.qadevice.QaDevicePickerState
 import dev.skillbill.desktop.core.common.AppDispatchers
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.feature.chat.ChatPaneWidth
@@ -56,6 +57,7 @@ interface WindowComponent {
   val chatPaneWidth: ChatPaneWidth
   val board: ShellBoardState
   val favorites: FavoritesSidebarState
+  val qaDevice: QaDevicePickerState
   val boardRepository: WorkBoardRepository
   val details: WorkDetailRepository
   val controls: WorkControlRepository

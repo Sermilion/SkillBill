@@ -12,6 +12,8 @@ import dev.skillbill.desktop.core.domain.settings.NewTaskChatLayout
 import dev.skillbill.desktop.core.domain.settings.SettingsRejection
 import dev.skillbill.desktop.core.domain.settings.CriterionMark
 import dev.skillbill.desktop.core.domain.settings.CriterionMarkKey
+import dev.skillbill.desktop.core.domain.qa.QaDevicePick
+import dev.skillbill.desktop.core.domain.qa.QaDevicePickKind
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -148,5 +150,68 @@ class DataStoreAppSettingsRepositoryTest {
     assertEquals(NewTaskChatLayout.Tabs, repository.settings.first().newTaskChatLayout)
     assertEquals(Outcome.Success(Unit), repository.setNewTaskChatLayout(NewTaskChatLayout.SideList))
     assertEquals(NewTaskChatLayout.SideList, repository.settings.first().newTaskChatLayout)
+  }
+
+  @Test
+  fun `QA device selection round trips and clearing preserves unrelated settings`() = runTest {
+    val file = File(directory, "qa-device.preferences_pb")
+    val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { file }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+    val serial = QaDevicePick(QaDevicePickKind.Serial, "R58M123", "Pixel phone")
+    assertEquals(Outcome.Success(Unit), repository.setQaDevice(serial))
+    store.edit { it[AppPreferenceKeys.CLAUDE_CONFIG_DIR] = "/agent/config" }
+
+    assertEquals(Outcome.Success(serial), repository.readQaDevice())
+    val avd = QaDevicePick(QaDevicePickKind.Avd, "Pixel_8_API_35", "Pixel 8")
+    assertEquals(Outcome.Success(Unit), repository.setQaDevice(avd))
+    assertEquals(avd, repository.settings.first().qaDevice)
+    assertEquals(Outcome.Success(Unit), repository.setQaDevice(null))
+    assertEquals(null, repository.settings.first().qaDevice)
+    assertEquals("/agent/config", store.data.first()[AppPreferenceKeys.CLAUDE_CONFIG_DIR])
+    assertEquals(null, store.data.first()[AppPreferenceKeys.QA_DEVICE_KIND])
+  }
+
+  @Test
+  fun `partial or malformed QA device preferences decode to null without exposing identity`() {
+    val reported = mutableListOf<String>()
+    val prefs = mutablePreferencesOf(
+      AppPreferenceKeys.QA_DEVICE_KIND to "bluetooth",
+      AppPreferenceKeys.QA_DEVICE_VALUE to "private-serial",
+    )
+
+    assertEquals(null, prefs.toAppSettings { reported += it }.qaDevice)
+    assertEquals(listOf("qa_device_invalid"), reported)
+  }
+
+  @Test
+  fun `QA device read failure stays distinct from the automatic selection`() = runTest {
+    val store = object : DataStore<Preferences> {
+      override val data = flow<Preferences> { throw IOException("unavailable") }
+      override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences = error("unexpected write")
+    }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+
+    assertEquals(Outcome.Failure(SettingsRejection.ReadFailed), repository.readQaDevice())
+  }
+
+  @Test
+  fun `a failed QA device write leaves the previously stored choice`() = runTest {
+    val original = QaDevicePick(QaDevicePickKind.Serial, "R58M123", "Pixel phone")
+    val initial = mutablePreferencesOf(
+      AppPreferenceKeys.QA_DEVICE_KIND to original.kind.wireValue,
+      AppPreferenceKeys.QA_DEVICE_VALUE to original.value,
+      AppPreferenceKeys.QA_DEVICE_DISPLAY_NAME to original.displayName,
+    )
+    val store = object : DataStore<Preferences> {
+      override val data = flowOf(initial)
+      override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences = throw IOException("read-only")
+    }
+    val repository = DataStoreAppSettingsRepository(store, RecordingDiagnostics())
+
+    assertEquals(
+      Outcome.Failure(SettingsRejection.WriteFailed),
+      repository.setQaDevice(QaDevicePick(QaDevicePickKind.Avd, "Pixel_8_API_35", "Pixel 8")),
+    )
+    assertEquals(Outcome.Success(original), repository.readQaDevice())
   }
 }

@@ -958,6 +958,29 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
   };
   const QA_DEVICES = { live: 'mixed', lists: DEVICE_LISTS };
 
+  /* Build indicator: build tool commands the runtime finds in a run's agent process tree, matched
+   * against the repository's platform pack. `types` is what SKILL-417 builds per project type (the #build/<state>/<type>
+   * routes switch it); `runs` are the fixed builds of other runs on the board. `usual` is the median of the same command's
+   * last five runs in the repository. */
+  const BUILD = {
+    live: { state: 'running', type: 'android' },
+    focus: 'SKILL-417',
+    types: {
+      android: { tool: 'Gradle 8.10', kind: 'Android', cmd: './gradlew :app:assembleDebug', short: 'gradlew assembleDebug', usual: 3 * M + 10000 },
+      kotlin: { tool: 'Gradle 8.10', kind: 'Kotlin/JVM', cmd: './gradlew :runtime-engine:test', short: 'gradlew test', usual: 2 * M + 20000 },
+      ts: { tool: 'pnpm 9', kind: 'TypeScript', cmd: 'pnpm build', short: 'pnpm build', usual: 48000 },
+      go: { tool: 'Go 1.23', kind: 'Go', cmd: 'go test ./...', short: 'go test', usual: 1 * M + 5000 },
+      rust: { tool: 'Cargo', kind: 'Rust', cmd: 'cargo build --release', short: 'cargo build', usual: 4 * M },
+      ios: { tool: 'Xcode 16', kind: 'iOS', cmd: 'xcodebuild -scheme Newsreader build', short: 'xcodebuild', usual: 5 * M + 30000 },
+    },
+    runs: {
+      'ph-sb-validation': { tool: 'Gradle 8.10', kind: 'Kotlin/JVM', cmd: './gradlew clean check createDistributable --no-build-cache', short: 'gradlew check', state: 'running', ms: 6 * M + 5000, usual: 4 * M + 10000, pid: 51877, started: '14:24', prev: ['done', '4m 02s', '41m ago'] },
+      'ph-rk-validation': { tool: 'Gradle 8.10', kind: 'Kotlin/JVM', cmd: './gradlew build', short: 'gradlew build', state: 'failed', ms: 48000, usual: 2 * M, exit: 1, ago: '1m ago', pid: 50211, started: '14:29' },
+      'ph-atl-pr': { tool: 'pnpm 9', kind: 'TypeScript', cmd: 'pnpm build', short: 'pnpm build', state: 'running', ms: 22000, usual: 1 * M + 5000, pid: 52003, started: '14:30' },
+      'PAY-19': { tool: 'Go 1.23', kind: 'Go', cmd: 'go test ./...', short: 'go test', state: 'passed', ms: 1 * M + 12000, usual: 1 * M + 10000, exit: 0, ago: '4m ago', pid: 49120, started: '14:26' },
+    },
+  };
+
   const USAGE = {
     providers: ['Codex', 'Claude', 'Cursor'],
     accounts: { Codex: 'Personal account', Claude: 'Work account', Cursor: 'Personal account, legacy plan' },
@@ -981,5 +1004,5 @@ Stopped the desktop app and private display processes. Stopped the Gradle and Ko
 
   window.DATA = { T0, REPOS, AGENTS, AGENT_CHOICES, PHASE_ORDER, GOAL_FINISH, items, history, valRoutes, projects, specs, NOTIFICATIONS, CLAUDE_DIRS, PHASE_GROUPS, MATRIX, BUDGET,
     REPO_BRANCHES, LONG_BRANCH, CHAT_HISTORY, NEW_TASK_CHATS, NEW_TASK_SELECTED, CHAT_REPLIES, NEW_TASK_STEPS, QUICK_STARTS,
-    QA, QA_DEVICES, VAL, VERIFY, USAGE };
+    QA, QA_DEVICES, VAL, VERIFY, USAGE, BUILD };
 })();

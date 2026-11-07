@@ -13,6 +13,23 @@ Context: QA can use an existing display when private capture is unavailable, but
 Decision: Capture only the registered owner-only live-preview child through private Xvfb -fbdir. Registration refusal disables capture. Reuse the existing resource registry and stop producer processes before releasing the child.
 Reason: Exact invocation ownership isolates concurrent runs and preserves retained-resource and cancellation cleanup behavior. Existing-display QA fallback supplies no authorized preview source.
 
+## [2026-11-07] Keep QA discovery explicit and picks owned by settings
+Context: The sidebar and New Task chip display the same persisted pick while device availability and leases can change independently.
+Decision: AppSettingsRepository owns the pick. Window-scoped QaDevicePickerState owns cancellable discovery on open and explicit refresh. Preserve a missing pick and match an AVD pick to its running emulator.
+Reason: Explicit discovery avoids background adb polling. Both UI surfaces observe saved settings so rejected writes retain the prior pick. Disconnecting hardware must not silently select auto.
+Revisit when: Live device updates become a requirement or device picks need a narrower scope than app settings.
+
+## [2026-11-07] Read the confirmed QA pick before eligible launches
+Context: The general settings flow converts an I/O failure to empty preferences, which cannot distinguish auto from an unreadable saved selector.
+Decision: Use readQaDevice against one store snapshot before launch writes, retain it through allocation retries and refuse eligible launches on read failure.
+Reason: Storage failure must not silently launch QA with auto targeting or combine selector values from different reads. Hardware discovery must not erase a saved pick.
+
+## [2026-11-07] Keep picker lease discovery advisory and read-only
+Context: The picker needs repository lease occupancy, but occupancy can change after discovery and the writer's lock helper creates storage.
+Decision: Read typed lease snapshots through the active runtime port without writer locks, reclamation or file changes. Retain unverifiable owners and diagnose unavailable occupancy.
+Reason: Discovery must not acquire or release devices. QA owns actual lease acquisition, and an unavailable occupancy read must not prevent adb discovery.
+Alternatives considered: Reusing the writer's lock helper would mutate storage during a read.
+
 ## [2026-11-06] Save the chat width after a drag settles and flush it on window close
 Context: Dragging the chat divider changes the width many times per second. Writing each value to DataStore is wasteful, and a width changed just before quitting could be lost.
 Decision: ChatPaneWidth updates its state flow immediately and saves through AppSettingsRepository.setChatWidthDp after a 300 ms pause. Closing the window cancels the pending timer and writes the last value once, bounded by a one-second timeout. A rejected write is dropped, not retried. The width is clamped to 360 to 2000 dp on write and again on read.

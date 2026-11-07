@@ -4,7 +4,6 @@ import skillbill.application.review.service.StandaloneReviewReportReader
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.qa.report.QaReportParser
-import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.engine.work.validation.validationChecksFor
@@ -101,18 +100,17 @@ internal data class WorkflowExecutionCurrentState(
   val finishedAt: Instant?,
 )
 
-internal fun workExecutionHistory(
-  unitOfWork: UnitOfWork,
-  candidate: IdeStatusCandidate,
+internal fun UnitOfWork.workExecutionHistory(
+  standalone: StandalonePhaseStatusRecord?,
+  workflowId: String,
   page: WorkDetailPagePosition,
   limit: Int,
   current: WorkflowExecutionCurrentState? = null,
 ): List<WorkExecutionInstance> {
-  val standalone = candidate.standaloneStatus
   val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
   val offset = if (anchor == null) page.offset else 0
   return if (standalone != null) {
-    unitOfWork.standalonePhaseStatuses.readPhaseExecutions(
+    standalonePhaseStatuses.readPhaseExecutions(
       StandalonePhaseExecutionQuery(
         standalone.repositoryIdentity,
         standalone.phaseId,
@@ -123,10 +121,10 @@ internal fun workExecutionHistory(
         anchor,
       ),
     )
-      .map { workExecutionInstance(it, standalone.invocationId, unitOfWork) }
+      .map { workExecutionInstance(it, standalone.invocationId, this) }
   } else {
-    unitOfWork.standalonePhaseStatuses
-      .readWorkflowExecutions(candidate.workflowId, page.observedAt, offset, limit, anchor)
+    standalonePhaseStatuses
+      .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
       .map { workflowExecutionInstance(it, current) }
   }
 }
