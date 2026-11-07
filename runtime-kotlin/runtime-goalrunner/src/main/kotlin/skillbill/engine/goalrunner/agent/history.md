@@ -1,5 +1,15 @@
 # goalrunner boundary history
 
+## [2026-11-07] SKILL-514 — reorder assessment quality gates
+Areas: runtime-goalrunner assessment, QA, finalization and persistence; runtime-engine phase execution; runtime-domain quality model; runtime-contracts; orchestration/contracts; runtime-core; docs
+- Assessment repairs commit locally and use independent next-round source verification; full validation is deferred to final quality.
+- Finalization settles a durable initial pack build before optional QA, then always reaches full validation on non-paused paths. QA repair builds remain separate.
+- Quality records bind build and validation progress to plans, attempts and source evidence, preserving accepted work and warnings across resume and legacy adoption.
+- reusable: source-bound quality evidence and independent build/QA/validation boundaries support safe continuation without replaying accepted repairs.
+- Limits: provider pauses retain the active attempt; unavailable build evidence skips QA with a warning and continues validation.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-11-04] SKILL-474: transfer paused goals by archive
 Areas: runtime-goalrunner, runtime-cli, runtime-contracts, runtime-ports, runtime-infra/sqlite, orchestration/contracts, desktop
 - Goal export writes a versioned zip containing specs and purge-owned workflow and planning state. It refuses non-idle work, branch mismatches, sibling worktrees and unclassified rows.
