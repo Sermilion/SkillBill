@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
@@ -16,6 +17,7 @@ import dev.skillbill.desktop.feature.chat.ChatThread
 import dev.skillbill.desktop.feature.chat.QueuedChatMessage
 import dev.skillbill.desktop.feature.chat.STOPPED_NOTICE
 import dev.skillbill.desktop.feature.chat.show
+import dev.skillbill.desktop.feature.chat.savedText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -92,9 +94,9 @@ internal class NewTaskChat(
     observeUnprompted()
   }
 
-  fun send(text: String, action: ChatSuggestedAction? = null, onAccepted: () -> Unit = {}) {
-    if (text.isBlank() || repositoryMissing || closing) return
-    thread.queuedState.update { it + QueuedChatMessage(text, action, pauseAndAct = false) }
+  fun send(text: String, action: ChatSuggestedAction? = null, images: List<ChatImage> = emptyList(), onAccepted: () -> Unit = {}) {
+    if ((text.isBlank() && images.isEmpty()) || repositoryMissing || closing) return
+    thread.queuedState.update { it + QueuedChatMessage(text, action, pauseAndAct = false, images = images) }
     onAccepted()
     drainQueue()
   }
@@ -114,11 +116,11 @@ internal class NewTaskChat(
   private fun drainQueue() {
     if (closing || repositoryMissing || thread.busyState.value || turnJob != null || turnRunning) return
     val next = thread.takeQueuedMessage() ?: return
-    startTurn(next.text, next.action)
+    startTurn(next.text, next.action, next.images)
   }
 
-  private fun startTurn(text: String, action: ChatSuggestedAction?) {
-    thread.append(ChatMessage.Operator(text, action))
+  private fun startTurn(text: String, action: ChatSuggestedAction?, images: List<ChatImage>) {
+    thread.append(ChatMessage.Operator(text, action, images))
     pendingTurnLineIndex = snapshotLines().lastIndex
     pendingAcceptance = null
     thread.busyState.value = true
@@ -127,7 +129,7 @@ internal class NewTaskChat(
     val turn = scope.launch(job + dispatcher, start = CoroutineStart.LAZY) {
       turnJob = coroutineContext[Job]
       try {
-        runTurn(text)
+        runTurn(text, images)
       } finally {
         finishTurn(coroutineContext.job)
       }
@@ -243,7 +245,7 @@ internal class NewTaskChat(
     }
   }
 
-  private suspend fun runTurn(text: String) {
+  private suspend fun runTurn(text: String, images: List<ChatImage>) {
     if (!save()) {
       thread.append(ChatMessage.Notice(COULD_NOT_SAVE_NOTICE))
       return
@@ -253,7 +255,7 @@ internal class NewTaskChat(
     var seenEvent = false
     val preamble = pendingReplay?.takeIf { !started }?.let { newTaskReplayPreamble(it, repositoryRoot, baseBranch) }
     val prompt = if (preamble == null) text else "$preamble\n\n$text"
-    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt)).collect { event ->
+    chat.send(ChatTurnRequest(sessionId, !started, agent, ChatScope.NewTask(repositoryRoot, baseBranch), ChatPermissionMode.Act, prompt, images)).collect { event ->
       coroutineContext.ensureActive()
       if (!seenEvent) {
         seenEvent = true
@@ -289,7 +291,7 @@ internal class NewTaskChat(
 
   private fun snapshotLines(): List<ChatHistoryLine> = thread.transcript.value.mapNotNull { message ->
     when (message) {
-      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text, selectedAction = message.action)
+      is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.savedText(), selectedAction = message.action)
       is ChatMessage.Agent -> if (!message.streaming && (message.text.isNotBlank() || message.actions.isNotEmpty())) {
         ChatHistoryLine(ChatHistoryRole.Agent, message.text, actions = message.actions)
       } else null

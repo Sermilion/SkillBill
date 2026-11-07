@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
+import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
@@ -190,6 +191,13 @@ class NewTaskChatsTest {
     assertFalse(chats.resume(entry("broken").copy(newTask = null)))
     assertEquals(listOf(a, b, c), chats.open.value)
     assertSame(c, chats.selected.value)
+    val imageDraft = chats.newChat()
+    val image = ChatImage(byteArrayOf(1), "image/png")
+    imageDraft.addPastedImage(image)
+    assertTrue(chats.resume(entry("saved-z")))
+    assertNotSame(imageDraft, chats.selected.value)
+    assertNull(imageDraft.chat.value)
+    assertEquals(listOf(image), imageDraft.images)
     runCurrent()
     assertEquals(emptyList(), chat.ended)
   }

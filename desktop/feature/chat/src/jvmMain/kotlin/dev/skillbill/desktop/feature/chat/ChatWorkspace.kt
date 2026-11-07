@@ -390,6 +390,8 @@ class ChatWorkspace(
     if (queued.isNotEmpty()) {
       session.queuedState.value = emptyList()
       drafts[id] = restoredDraft(queued, drafts[id].orEmpty())
+      val restoredImages = queued.flatMap { it.images }
+      if (restoredImages.isNotEmpty()) pastedImages[id] = restoredImages + pastedImages[id].orEmpty()
     }
     interrupt(session)
   }
