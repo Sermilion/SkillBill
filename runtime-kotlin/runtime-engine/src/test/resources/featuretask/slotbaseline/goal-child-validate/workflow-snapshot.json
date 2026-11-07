@@ -2240,7 +2240,7 @@
             "status": "deferred"
         }
     },
-    "contract_version": "0.3",
+    "contract_version": "0.4",
     "current_step_id": "commit_push",
     "mode": "runtime",
     "session_id": "__NORMALIZED_SESSION_ID__",

@@ -1,3 +1,15 @@
+## [2026-11-07] SKILL-514 seeded desktop source-run QA
+Areas: runtime-application test fixtures, runtime-core, runtime-contracts, runtime-domain, runtime-engine/specbrowser, runtime-infra/sqlite, orchestration/contracts
+- DesktopFixtureCatalog and DesktopFixtureDatabaseWriter provide reusable QAFIX cases and port-level writes for task workflows, goals, phases, verify runs, standalone phases and spec bundles. Database rows share one UnitOfWork transaction; bundle files follow its commit.
+- The opt-in `:runtime-core:writeDesktopFixtureDb` task composes RuntimeComponent for real migrations, board projection and project storage under `runtime-core/build/desktop-fixture/home`. Completion evidence uses a resolved execution plan and checkout HEAD.
+- Fixture phases include typed records and ledger entries. Coverage reads persisted board, detail and spec-browser results; a desktop-local mirror covers internal VerifyRunState without adding a runtime dependency.
+- Fixture generation verifies checkout registration, approved output paths and operator-home identity before cleanup. The existing cleanup decision records the accepted exception for verified build outputs beneath operator state.
+- TASK_RUNTIME accepts timed_out as terminal, SQLite retains terminal timestamps, and IDE status projects FAILED. Workflow-state advances to 0.4 while 0.1, 0.2 and 0.3 remain readable through normalization.
+- Spec browsing resolves live goals across registered project checkouts, protects bundles held by any live owner, carries ownerRepoRoot for controls, and refuses ambiguous mutation targets.
+- Limits: generator-owned leases and standalone rows can become stale or interrupted after exit; running and pause-requested goal bundles then read as paused. Fixture output directories require exclusive task ownership.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented for fixture subtask 2
+
 ## [2026-11-06] SKILL-512 main checkout after goal worktree removal
 Areas: runtime-ports, runtime-infra, runtime-domain, runtime-goalrunner, runtime-application, runtime-cli, runtime-contracts, runtime-engine
 - GoalWorktreeResources gains checkoutGoalBranch, returning a sealed checked-out, skipped-for-uncommitted-changes or failed result. The git adapter refuses a blank or dash-leading branch, uncommitted tracked changes, an in-progress merge, rebase, am, cherry-pick or revert, and a missing local branch. It no-ops when HEAD is already on the branch and never forces, merges, stashes, resets or cleans.
