@@ -145,7 +145,7 @@ internal fun codexAppServerTurn(
   }
 }
 
-private class CodexAppServerRpc(
+internal class CodexAppServerRpc(
   private val input: Channel<ChatProcessInput>,
   private val output: ReceiveChannel<ChatProcessOutput>,
   private val diagnostics: Diagnostics,
@@ -229,15 +229,10 @@ private class CodexAppServerRpc(
           val item = params.obj("item")
           if (item != null) {
             if (item.string("status") == "declined") providerFailure = "Codex declined the requested action: $item"
-            val permissionControlled = approval.itemCompleted(params, item)
-            if (permissionControlled == null) {
-              item.string("id")?.let { itemId -> itemFacts.remove(codexItemKey(threadId, requireNotNull(eventTurnId), itemId)) }
-              continue
-            }
-            if (permissionControlled && toolFailed(item)) {
-              providerFailure = providerFailure ?: "Codex permission-controlled action failed: ${toolOutput(item)}"
-            }
+            // A failed command is an ordinary tool result the agent repairs; only a declined action ends the turn.
+            val tracked = approval.itemCompleted(params, item)
             item.string("id")?.let { itemId -> itemFacts.remove(codexItemKey(threadId, requireNotNull(eventTurnId), itemId)) }
+            if (tracked == null) continue
           }
         }
         else -> Unit

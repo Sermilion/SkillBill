@@ -4,7 +4,19 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import skillbill.approval.model.ApprovalProviderDisposition
+import skillbill.contracts.approval.ApprovalProviderRequestId
+import skillbill.contracts.approval.ApprovalState
+import skillbill.infrastructure.launcher.process.interaction.AgentRunSessionOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.ports.approval.model.ApprovalDecisionResult
+import skillbill.ports.approval.model.ApprovalDeliveryState
+import skillbill.ports.approval.model.ApprovalOwnerKey
+import skillbill.ports.approval.model.ApprovalOwnerSession
+import skillbill.ports.approval.model.ApprovalPendingWait
+import skillbill.ports.approval.model.ApprovalProviderClearance
+import skillbill.ports.approval.model.ApprovalRegistrationCommand
+import skillbill.ports.approval.model.ApprovalRegistrationResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -161,6 +173,63 @@ class CodexSessionChannelTest {
     }
   }
 
+  @Test
+  fun `an approved command that exits non-zero is a tool result and the turn still completes`() {
+    val outcome = approvedCommandTurn(ApprovalState.ALLOWED, """"status":"failed","exitCode":1,""" +
+      """"aggregatedOutput":"CONFLICT (content): Merge conflict in App.kt",""")
+
+    assertTrue(outcome.completed, outcome.failure)
+    assertNull(outcome.failure)
+    assertEquals("Final answer", outcome.text)
+  }
+
+  @Test
+  fun `a declined command still fails the turn`() {
+    val outcome = approvedCommandTurn(ApprovalState.DENIED, """"status":"declined",""")
+
+    assertFalse(outcome.completed)
+    assertContains(outcome.failure.orEmpty(), "declined")
+  }
+
+  private fun approvedCommandTurn(
+    decision: ApprovalState,
+    completion: String,
+  ): AgentRunSessionOutcome {
+    val process = SessionProcess()
+    val channel = channel()
+    val owner = Owner()
+    channel.bind(owner)
+    try {
+      channel.attach(process)
+      channel.observe("""{"id":1,"result":{"userAgent":"codex_cli_rs/0.166.0 (test)"}}""" + "\n")
+      channel.observe(threadResponse())
+      channel.observe("""{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}""" + "\n")
+      channel.observe(
+        """{"method":"item/started","params":{"threadId":"thread-1","turnId":"turn-1",""" +
+          """"item":{"id":"cmd","type":"commandExecution","command":"git merge origin/main",""" +
+          """"cwd":"/checkout","status":"inProgress"}}}""" + "\n",
+      )
+      channel.observe(
+        """{"id":7,"method":"item/commandExecution/requestApproval","params":{"threadId":"thread-1",""" +
+          """"turnId":"turn-1","itemId":"cmd","command":"git merge origin/main","cwd":"/checkout",""" +
+          """"commandActions":[{"type":"unknown","command":"git merge origin/main"}],""" +
+          """"availableDecisions":null}}""" + "\n",
+      )
+      val request = owner.requests.single().request
+      assertEquals(ApprovalDeliveryState.WRITTEN, channel.deliver(request.copy(state = decision)))
+      channel.observe(
+        """{"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1",""" +
+          """"item":{"id":"cmd","type":"commandExecution","command":"git merge origin/main",""" +
+          """"cwd":"/checkout",$completion"durationMs":5}}}""" + "\n",
+      )
+      channel.observe(item("Final answer"))
+      channel.observe(terminal())
+      return assertNotNull(channel.outcome())
+    } finally {
+      channel.finish()
+    }
+  }
+
   private fun channel(
     savedThread: String? = null,
     readOnly: Boolean = false,
@@ -219,4 +288,36 @@ private class SessionProcess : Process() {
   override fun exitValue(): Int = 0
 
   override fun destroy() = Unit
+}
+
+private class Owner : ApprovalOwnerSession {
+  override val key = ApprovalOwnerKey("repo", "run", "generation")
+  val requests = mutableListOf<ApprovalRegistrationCommand>()
+
+  override fun register(command: ApprovalRegistrationCommand): ApprovalRegistrationResult {
+    val fingerprint = command.canonicalInput
+    val request =
+      command.request.copy(
+        actionFingerprint = fingerprint,
+        authorityScope = fingerprint?.let { command.request.authorityScope?.copy(actionFingerprint = it) },
+      )
+    requests += command.copy(request = request)
+    return ApprovalRegistrationResult.Registered(request)
+  }
+
+  override fun resolveByProvider(
+    approvalId: String,
+    providerRequestId: ApprovalProviderRequestId,
+    disposition: ApprovalProviderDisposition,
+  ): ApprovalDecisionResult = ApprovalDecisionResult.Missing
+
+  override fun clearByProvider(
+    approvalId: String,
+    providerRequestId: ApprovalProviderRequestId,
+    clearance: ApprovalProviderClearance,
+  ): ApprovalDecisionResult = ApprovalDecisionResult.Missing
+
+  override fun pendingWait(): ApprovalPendingWait? = null
+
+  override fun release() = Unit
 }

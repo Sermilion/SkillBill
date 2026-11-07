@@ -1,0 +1,117 @@
+package dev.skillbill.desktop.core.data.chat
+
+import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.testing.RecordingDiagnostics
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
+import skillbill.approval.model.ApprovalProviderDisposition
+import skillbill.contracts.approval.ApprovalProviderRequestId
+import skillbill.contracts.approval.ApprovalRequestRecord
+import skillbill.contracts.approval.ApprovalState
+import skillbill.ports.approval.model.ApprovalDecisionResult
+import skillbill.ports.approval.model.ApprovalDeliveryState
+import skillbill.ports.approval.model.ApprovalOwnerKey
+import skillbill.ports.approval.model.ApprovalOwnerSession
+import skillbill.ports.approval.model.ApprovalPendingWait
+import skillbill.ports.approval.model.ApprovalProviderClearance
+import skillbill.ports.approval.model.ApprovalRegistrationCommand
+import skillbill.ports.approval.model.ApprovalRegistrationResult
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+class CodexAppServerRpcTest {
+  // A merge conflict, red build or failing test is something the agent repairs, so the turn must not end on it.
+  @Test
+  fun `an approved command that exits non-zero is a tool result and the turn still completes`() {
+    val events = approvedCommandTurn(
+      ApprovalState.ALLOWED,
+      """"status":"failed","exitCode":1,"aggregatedOutput":"CONFLICT (content): Merge conflict in App.kt"""",
+    )
+
+    assertTrue(events.filterIsInstance<ChatEvent.ToolResult>().single().isError)
+    assertEquals(ChatEvent.Completed, events.last())
+    assertTrue(events.none { it is ChatEvent.Failed })
+  }
+
+  @Test
+  fun `a declined command still fails the turn`() {
+    val events = approvedCommandTurn(ApprovalState.DENIED, """"status":"declined"""")
+
+    val failure = assertIs<ChatEvent.Failed>(events.last())
+    assertContains(failure.detail.orEmpty(), "declined")
+  }
+
+  private fun approvedCommandTurn(decision: ApprovalState, completion: String): List<ChatEvent> = runBlocking {
+    val owner = Owner()
+    val approval = CodexChatApproval({ true }, {}, RecordingDiagnostics(), {}, "/checkout")
+    approval.bind(owner)
+    approval.bindTurn("thread", "turn")
+    val output = Channel<ChatProcessOutput>(Channel.UNLIMITED)
+    val events = mutableListOf<ChatEvent>()
+    val rpc = CodexAppServerRpc(Channel(Channel.UNLIMITED), output, RecordingDiagnostics(), { events += it }, approval)
+    val drain = launch { rpc.drainTurn("thread", "turn") }
+    output.send(line("""{"method":"item/started","params":{"threadId":"thread","turnId":"turn","item":$COMMAND,"status":"inProgress"}}}"""))
+    output.send(
+      line(
+        """{"id":7,"method":"item/commandExecution/requestApproval","params":{"threadId":"thread","turnId":"turn",""" +
+          """"itemId":"cmd","command":"git merge origin/main","cwd":"/checkout",""" +
+          """"commandActions":[{"type":"unknown","command":"git merge origin/main"}],"availableDecisions":null}}""",
+      ),
+    )
+    while (owner.requests.isEmpty()) yield()
+    assertEquals(ApprovalDeliveryState.WRITTEN, approval.deliver(owner.requests.single().copy(state = decision)))
+    output.send(line("""{"method":"item/completed","params":{"threadId":"thread","turnId":"turn","item":$COMMAND,$completion}}}"""))
+    output.send(
+      line(
+        """{"method":"item/completed","params":{"threadId":"thread","turnId":"turn",""" +
+          """"item":{"id":"m","type":"agentMessage","text":"Resolved the conflict."}}}""",
+      ),
+    )
+    output.send(line("""{"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed"}}}"""))
+    drain.join()
+    approval.release()
+    events
+  }
+
+  private fun line(text: String) = ChatProcessOutput.Line(text)
+
+  private class Owner : ApprovalOwnerSession {
+    override val key = ApprovalOwnerKey("repo", "run", "generation")
+    val requests = mutableListOf<ApprovalRequestRecord>()
+
+    override fun register(command: ApprovalRegistrationCommand): ApprovalRegistrationResult {
+      val request = command.request.copy(
+        actionFingerprint = command.canonicalInput,
+        authorityScope = command.canonicalInput?.let { command.request.authorityScope?.copy(actionFingerprint = it) },
+      )
+      requests += request
+      return ApprovalRegistrationResult.Registered(request)
+    }
+
+    override fun resolveByProvider(
+      approvalId: String,
+      providerRequestId: ApprovalProviderRequestId,
+      disposition: ApprovalProviderDisposition,
+    ): ApprovalDecisionResult = ApprovalDecisionResult.Missing
+
+    override fun clearByProvider(
+      approvalId: String,
+      providerRequestId: ApprovalProviderRequestId,
+      clearance: ApprovalProviderClearance,
+    ): ApprovalDecisionResult = ApprovalDecisionResult.Missing
+
+    override fun pendingWait(): ApprovalPendingWait? = null
+
+    override fun release() = Unit
+  }
+
+  private companion object {
+    // The open object lets each frame append its own status fields before closing the item.
+    const val COMMAND = """{"id":"cmd","type":"commandExecution","command":"git merge origin/main","cwd":"/checkout""""
+  }
+}
