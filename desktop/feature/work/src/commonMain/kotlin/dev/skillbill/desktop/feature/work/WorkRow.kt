@@ -1,9 +1,11 @@
 package dev.skillbill.desktop.feature.work
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Avatar
+import dev.skillbill.desktop.core.designsystem.component.BuildChip
 import dev.skillbill.desktop.core.designsystem.component.ProgressRing
 import dev.skillbill.desktop.core.designsystem.component.ProgressRingTone
 import dev.skillbill.desktop.core.designsystem.component.SbClock
@@ -17,6 +19,8 @@ import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.status.statusKind
+import dev.skillbill.desktop.core.ui.status.showsChip
+import dev.skillbill.desktop.core.ui.status.toSbBuild
 import kotlin.time.Instant
 
 /** The id a row shows: the issue key for goals, the phase or operation id otherwise, as the prototype's `rowKey`. */
@@ -54,6 +58,7 @@ internal fun WorkRow(item: WorkItem, focused: Boolean, renderedAt: Instant?, nar
     status = { StatusIcon(kind, (if (planning) planned else item.progress)?.let { it.done.toFloat() / it.total.coerceAtLeast(1) }) },
     summary = item.summary.ifBlank { null },
     meta = {
+      item.build?.takeIf { it.showsChip() }?.let { build -> BuildChip(remember(build) { build.toSbBuild() }) }
       item.stalledSince?.let { since -> SbLabel("Stalled", SbLabelStyle.Tint(SkillBillTheme.colors.stBlocked), tooltip = stalledTooltip(since, renderedAt)) }
       if (item.pauseRequested) SbLabel("Pause requested", SbLabelStyle.Dot(SkillBillTheme.colors.stPaused))
       if (item.lifecycle != Lifecycle.Terminal) {
