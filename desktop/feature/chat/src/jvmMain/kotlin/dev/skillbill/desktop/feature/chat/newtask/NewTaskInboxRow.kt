@@ -63,7 +63,7 @@ internal fun InboxRunRow(item: WorkItem, now: Instant, divider: Boolean, selecte
     selected = selected,
     leading = { InboxGlyph(InboxGlyphKind.Blocked, colors.stBlocked) },
     prefix = { BasicText(item.issueKey ?: item.id, style = inboxTextStyle(11.5.sp, mono = true).copy(color = colors.fgMuted), maxLines = 1) },
-    middle = { highlighted -> InboxTitle(item.title, item.exactPauseReason ?: item.reason ?: item.summary.takeIf(String::isNotBlank), monoSecondary = false, highlighted = highlighted) },
+    middle = { highlighted, _ -> InboxTitle(item.title, item.exactPauseReason ?: item.reason ?: item.summary.takeIf(String::isNotBlank), monoSecondary = false, highlighted = highlighted) },
     badge = { InboxBadge(item.stepLabel) },
     trailing = { _ -> InboxTime(shortAgo(item.control.updatedAt, now)) },
   )
@@ -80,7 +80,7 @@ internal fun InboxChatRow(entry: ChatHistoryEntry, selectedRoot: String?, now: I
     divider = divider,
     selected = selected,
     leading = { InboxGlyph(if (title.imageName != null) InboxGlyphKind.Image else InboxGlyphKind.Chat, if (title.imageName != null) colors.data2 else colors.fgFaint) },
-    middle = { highlighted -> InboxTitle(displayTitle, title.imageName, monoSecondary = true, highlighted = highlighted, marquee = entry.summary != null) },
+    middle = { highlighted, hovered -> InboxTitle(displayTitle, title.imageName, monoSecondary = true, highlighted = highlighted, marquee = entry.summary != null && hovered) },
     badge = if (open || repoLabel != null) {
       {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -171,7 +171,7 @@ private fun InboxRow(
   onClick: () -> Unit,
   divider: Boolean,
   leading: @Composable () -> Unit,
-  middle: @Composable (highlighted: Boolean) -> Unit,
+  middle: @Composable (highlighted: Boolean, hovered: Boolean) -> Unit,
   trailing: @Composable (highlighted: Boolean) -> Unit,
   blocked: Boolean = false,
   selected: Boolean = false,
@@ -208,7 +208,7 @@ private fun InboxRow(
   ) {
     Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { leading() }
     prefix?.invoke()
-    Box(Modifier.weight(1f)) { middle(highlighted) }
+    Box(Modifier.weight(1f)) { middle(highlighted, hovered) }
     badge?.invoke()
     Box(Modifier.width(52.dp), contentAlignment = Alignment.CenterEnd) { trailing(highlighted) }
   }
