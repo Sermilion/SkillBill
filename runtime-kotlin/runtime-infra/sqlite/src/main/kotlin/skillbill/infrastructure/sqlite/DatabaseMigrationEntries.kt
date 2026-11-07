@@ -21,6 +21,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastEr
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkflowStateVersionMigration
 import skillbill.infrastructure.sqlite.core.migration.area.addApprovalNotRequiredDelivery
 import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
 import skillbill.infrastructure.sqlite.core.migration.area.addOperatorApprovalLeasesAndGrantFacts
@@ -1017,36 +1018,41 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ) +
     DatabaseMigration(
       version = 108,
+      name = "migrate-workflow-state-0-4-and-rebuild-board",
+      operation = WorkflowStateVersionMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 109,
       name = "add-operator-approval-records-and-rules",
       operation = ::addOperatorApprovalRecordsAndRules,
     ) +
     DatabaseMigration(
-      version = 109,
+      version = 110,
       name = "add-operator-approval-leases-and-grant-facts",
       operation = ::addOperatorApprovalLeasesAndGrantFacts,
     ) +
     DatabaseMigration(
-      version = 110,
+      version = 111,
       name = "add-operator-approval-owner-lease-expiry",
       operation = ::addOperatorApprovalOwnerLeaseExpiry,
     ) +
     DatabaseMigration(
-      version = 111,
+      version = 112,
       name = "add-operation-proposal-cards",
       operation = ::addOperationProposalCards,
     ) +
     DatabaseMigration(
-      version = 112,
+      version = 113,
       name = "add-operation-launch-retention",
       operation = ::addOperationLaunchRetention,
     ) +
     DatabaseMigration(
-      version = 113,
+      version = 114,
       name = "add-operation-confirmation-executions",
       operation = ::addOperationConfirmationExecutions,
     ) +
     DatabaseMigration(
-      version = 114,
+      version = 115,
       name = "add-approval-not-required-delivery",
       operation = ::addApprovalNotRequiredDelivery,
     )

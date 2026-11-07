@@ -290,6 +290,101 @@ class CliWorkBoardTest {
     assertEquals(listOf("recent-terminal-invocation"), ids)
   }
 
+  @Test
+  fun `installation migrates an older goal and restores a board cache that omitted it`() {
+    val home = Files.createTempDirectory("cli-upgrade-omitted-goal")
+    val repo = Files.createTempDirectory("cli-upgrade-omitted-goal-repo")
+    val dbPath = home.resolve("metrics.db")
+    val identity = "repo-root-realpath-v1:${repo.toRealPath()}"
+    val now = Instant.parse("2026-11-07T18:00:00Z")
+    insertBlockedGoalParent(dbPath, identity)
+    insertGoalProgress(dbPath, now)
+    val before =
+      ensureTestDatabase(dbPath).use { connection ->
+        connection.createStatement().use { statement ->
+          statement.executeUpdate("UPDATE feature_task_workflows SET contract_version = '0.3'")
+          statement.executeUpdate("DELETE FROM work_board_items")
+          statement.executeUpdate("UPDATE work_board_read_model_state SET complete = 1")
+          statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 108")
+          statement.execute("PRAGMA user_version = 107")
+          statement.executeQuery(
+            "SELECT steps_json, artifacts_json FROM feature_task_workflows WHERE workflow_id = 'goal-parent'",
+          )
+            .use { rows ->
+              assertTrue(rows.next())
+              rows.getString(1) to rows.getString(2)
+            }
+        }
+      }
+    val args = listOf("--db", dbPath.toString(), "install", "migrate-data")
+    val context = CliRuntimeContext(environment = emptyMap(), userHome = home)
+    repeat(2) {
+      val migrated = CliRuntime.run(args, context)
+      assertEquals(0, migrated.exitCode, migrated.stderr + migrated.stdout)
+    }
+    val board = CliRuntime.run(listOf("--db", dbPath.toString(), "work", "board"), context)
+    assertEquals(0, board.exitCode, board.stderr)
+    val items = decodeJsonObject(board.stdout)["items"] as List<*>
+    assertTrue(items.any { ((it as Map<*, *>)["snapshot"] as Map<*, *>)["workflow_id"] == "goal-parent" })
+    ensureTestDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT contract_version, steps_json, artifacts_json " +
+            "FROM feature_task_workflows WHERE workflow_id = 'goal-parent'",
+        )
+          .use { rows ->
+            assertTrue(rows.next())
+            assertEquals("0.4", rows.getString(1))
+            assertEquals(before, rows.getString(2) to rows.getString(3))
+          }
+      }
+    }
+  }
+
+  @Test
+  fun `unreadable saved goals stay visible with a typed problem without changing their data`() {
+    listOf("99.0" to "[]", "0.4" to "invalid JSON").forEach { (version, steps) ->
+      val home = Files.createTempDirectory("cli-board-incompatible-goal")
+      val repo = Files.createTempDirectory("cli-board-incompatible-goal-repo")
+      val dbPath = home.resolve("metrics.db")
+      insertBlockedGoalParent(dbPath, "repo-root-realpath-v1:${repo.toRealPath()}")
+      insertGoalProgress(dbPath, Instant.parse("2026-11-07T18:00:00Z"))
+      ensureTestDatabase(dbPath).use { connection ->
+        connection.prepareStatement("UPDATE feature_task_workflows SET contract_version = ?, steps_json = ?").use {
+          it.setString(1, version)
+          it.setString(2, steps)
+          it.executeUpdate()
+        }
+        connection.createStatement().use {
+          it.executeUpdate("UPDATE work_board_read_model_state SET complete = 0")
+        }
+      }
+      val result =
+        CliRuntime.run(
+          listOf("--db", dbPath.toString(), "work", "board"),
+          CliRuntimeContext(environment = emptyMap(), userHome = home),
+        )
+      assertEquals(0, result.exitCode, result.stderr)
+      val item = (decodeJsonObject(result.stdout)["items"] as List<*>).single() as Map<*, *>
+      val snapshot = item["snapshot"] as Map<*, *>
+      assertEquals("goal-parent", snapshot["workflow_id"])
+      assertEquals("SKILL-9", snapshot["issue_key"])
+      assertEquals("blocked", snapshot["lifecycle_state"])
+      assertEquals("incompatible_record", (snapshot["problem"] as Map<*, *>)["code"])
+      ensureTestDatabase(dbPath).use { connection ->
+        connection.createStatement().use { statement ->
+          statement.executeQuery(
+            "SELECT contract_version, steps_json FROM feature_task_workflows WHERE workflow_id = 'goal-parent'",
+          ).use { rows ->
+            assertTrue(rows.next())
+            assertEquals(version, rows.getString(1))
+            assertEquals(steps, rows.getString(2))
+          }
+        }
+      }
+    }
+  }
+
   private fun insertBlockedGoalParent(
     dbPath: Path,
     identity: String,

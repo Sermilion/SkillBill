@@ -2368,13 +2368,14 @@ private val expectedMigrationDefinitions =
     105 to "record-validation-check-events",
     106 to "record-standalone-plan-output-history",
     107 to "record-structured-plan-activity",
-    108 to "add-operator-approval-records-and-rules",
-    109 to "add-operator-approval-leases-and-grant-facts",
-    110 to "add-operator-approval-owner-lease-expiry",
-    111 to "add-operation-proposal-cards",
-    112 to "add-operation-launch-retention",
-    113 to "add-operation-confirmation-executions",
-    114 to "add-approval-not-required-delivery",
+    108 to "migrate-workflow-state-0-4-and-rebuild-board",
+    109 to "add-operator-approval-records-and-rules",
+    110 to "add-operator-approval-leases-and-grant-facts",
+    111 to "add-operator-approval-owner-lease-expiry",
+    112 to "add-operation-proposal-cards",
+    113 to "add-operation-launch-retention",
+    114 to "add-operation-confirmation-executions",
+    115 to "add-approval-not-required-delivery",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

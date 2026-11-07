@@ -58,7 +58,13 @@ Per-repo customization: top-level custom fields allowed; runtime-consumed fields
 
 Every YAML under `orchestration/contracts/` is a runtime contract. New contracts: Draft 2020-12 schema in YAML → Kotlin `*_CONTRACT_VERSION` → parity test → a failure-code entry in the owner's `RuntimeFailureCode` enum, thrown as `SkillBillRuntimeException` → loud-fail at every parse seam. Detail: `runtime-kotlin/ARCHITECTURE.md`.
 
-Schema bumps loud-fail legacy records; runtime quarantines and regenerates in-band. Producer-side gate: feature-task phases owning a bounded planning projection (`preplan`, `plan`, `implement`) re-enter their own fix loop when completed output fails the projection contract.
+Every schema change must ship a migration path for existing persisted data in the same change. Compatible changes must prove that existing records remain readable; version bumps or incompatible changes require explicit migration steps. Validate the source and migrated records, apply coupled updates atomically, and make repeated migration safe. Preserve run identity, completed work, commits, checkpoints, and history. Cover the previous supported version with a regression test, and retain earlier migration steps so older supported records can reach the current version.
+
+Installation and upgrades must preserve all existing runs and persisted user and runtime data. Apply required migrations automatically before the new installation reads or resumes that data. A failed migration must preserve the original data and leave a usable recovery path; installation must not reset, discard, or replace existing data with defaults. Verify upgrade behavior against populated previous-version stores, including interrupted migration and repeated installation.
+
+Run migrations before strict current-version validation and before board or status projection. Unsupported or corrupt records must retain their original data and remain visible with a typed error and recovery guidance. A schema mismatch must not hide an existing run, reset completed work, or regenerate durable evidence as a substitute for migration. Derived caches may be rebuilt from preserved source records after migration; any quarantine or regeneration must retain the original data and emit a diagnostic.
+
+Producer-side gate: feature-task phases owning a bounded planning projection (`preplan`, `plan`, `implement`) re-enter their own fix loop when completed output fails the projection contract.
 
 ## Add-ons
 
