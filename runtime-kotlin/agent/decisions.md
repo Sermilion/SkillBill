@@ -1,3 +1,23 @@
+## [2026-11-07] Consume operation confirmation before execution
+Context: A parked operation must not be confirmable through output the chat agent can echo or by repeated card clicks.
+Decision: Bind confirmation to a persisted proposal card and consume it with compare-and-swap before execution; reject raw confirm/select starts and unoffered pr-review-fix choices.
+Reason: Only the operator card action admits execution and a consumed proposal cannot run twice. A crash after consumption may leave the result uncertain.
+
+## [2026-11-07] Do not replay a consumed confirmation after owner death
+Context: The owner can die after consuming a confirmation but before reporting whether the operation ran.
+Decision: When death is verified, settle the card as consumed_uncertain and refuse replay; if liveness is unknown, leave it confirming.
+Reason: Replaying a possibly half-run operation risks duplicate effects, while treating an unverifiable owner as dead risks concurrent execution.
+
+## [2026-11-07] Classify parked launches by exit code and launch identity
+Context: Desktop needs to associate detached parked operations with their persisted proposal cards.
+Decision: Map exit code 4 to awaiting_confirmation and pass the launch id to link the run with saved launch context; preserve the CLI exit and text contract.
+Reason: The exit code identifies the parked state without parsing prose, and launch identity locates the card without changing existing CLI consumers.
+
+## [2026-11-07] Restore operation cards from their durable row
+Context: Chat history can outlive a card state change or process restart.
+Decision: Persist only card identity in chat history and re-read the card from the store on resume.
+Reason: The store remains the current source of truth, so resumed cards show current state and do not act on stale copies.
+
 ## [2026-11-04] Keep review comment writes outside settlement
 Context: Review findings and repair receipts are authoritative workflow evidence; diff comments are an auxiliary projection.
 Decision: Write finding threads and outcome replies beside the owning review or receipt mutation, treating failures as best-effort and diagnostic.

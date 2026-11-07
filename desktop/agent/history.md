@@ -1,3 +1,6 @@
+## [2026-11-07] SKILL-453 history pointer
+Cross-cutting approval broker, provider adapters, parked-operation cards and limits are recorded in the root [agent/history.md](../../agent/history.md#2026-11-07-skill-453-operator-approval-cards-and-provider-refusal-boundaries).
+
 ## [2026-11-04] SKILL-474: export and import goal archives
 Areas: desktop/app, desktop/core/data, desktop/core/domain, desktop/core/ui, desktop/feature/specs, desktop/feature/work, runtime-goalrunner
 - Specs and Work offer export and global import with native file selection. Live export opens a pause-first dialog before file selection.
