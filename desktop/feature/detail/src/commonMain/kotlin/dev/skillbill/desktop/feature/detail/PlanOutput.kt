@@ -119,7 +119,7 @@ private fun PlanTranscriptBox(
       )
     } else {
       val listState = rememberLazyListState()
-      LaunchedEffect(lines.size, expanded) {
+      LaunchedEffect(lines, expanded) {
         if (!expanded) listState.scrollToItem(lines.lastIndex)
       }
       LaunchedEffect(expanded) {
