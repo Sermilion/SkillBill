@@ -29,6 +29,9 @@ class UsageProfileResolver(private val host: HostEnvironment) {
     )
   }
 
+  internal fun resolveCodex(profile: UsageProfileLookup): EffectiveUsageProfile =
+    EffectiveUsageProfile(profile, codexEnvironment(host.variables, profile.configurationReference))
+
   internal fun cursor(selectedProfile: String?): EffectiveUsageProfile {
     val environment = cursorEnvironment(host.variables, selectedProfile)
     return EffectiveUsageProfile(

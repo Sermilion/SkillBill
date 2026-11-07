@@ -17,6 +17,8 @@ interface UsageRepository {
 
   fun observe(request: UsageRequest): Flow<UsageResult>
 
+  fun observeDemand(ownerId: String): Flow<UsageResult>
+
   fun acquireDemand(demand: UsageDemand): UsageDemandResult
 
   fun updateDemand(demand: UsageDemand): UsageDemandResult

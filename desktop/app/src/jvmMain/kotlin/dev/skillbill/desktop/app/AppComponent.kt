@@ -8,6 +8,7 @@ import dev.skillbill.desktop.app.tray.TrayAvailability
 import dev.skillbill.desktop.feature.tray.TrayViewModel
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
+import dev.skillbill.desktop.core.common.AppDispatchers
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
@@ -61,6 +62,11 @@ interface AppProviders {
   @Provides
   @SingleIn(AppScope::class)
   fun databaseDispatcher(): DatabaseDispatcher = DatabaseDispatcher()
+
+  @Provides
+  @SingleIn(AppScope::class)
+  fun appDispatchers(database: DatabaseDispatcher): AppDispatchers =
+    AppDispatchers(Dispatchers.Main, Dispatchers.IO, database.dispatcher)
 
   @Provides
   fun clock(): Clock = Clock.System

@@ -7,8 +7,6 @@ import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
 import dev.skillbill.desktop.app.shell.ShellBoardState
 import dev.skillbill.desktop.app.shell.FavoritesSidebarState
-import dev.skillbill.desktop.core.common.AppDispatchers
-import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.feature.chat.ChatPaneWidth
 import dev.skillbill.desktop.feature.specs.SpecsPaneModel
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
@@ -83,7 +81,4 @@ interface WindowProviders {
   @Provides
   fun appNavigator(navigator: WindowNavigator): AppNavigator = navigator
 
-  @Provides
-  fun appDispatchers(database: DatabaseDispatcher): AppDispatchers =
-    AppDispatchers(Dispatchers.Main, Dispatchers.IO, database.dispatcher)
 }

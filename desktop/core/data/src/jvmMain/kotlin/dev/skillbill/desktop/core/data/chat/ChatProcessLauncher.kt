@@ -3,24 +3,42 @@ package dev.skillbill.desktop.core.data.chat
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.di.AppScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.runInterruptible
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.nio.charset.StandardCharsets
+import java.util.LinkedHashSet
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.LockSupport
 import kotlin.concurrent.thread
 
 /** One agent process: [environment] replaces the inherited one, and [stdin] is written once and closed. */
@@ -52,6 +70,43 @@ fun interface LiveChatProcessLauncher {
    * is not used.
    */
   fun open(command: ChatCommand, input: ReceiveChannel<String>): Flow<ChatProcessOutput>
+}
+
+sealed interface BoundedProcessStart {
+  data class Started(val connection: BoundedProtocolConnection) : BoundedProcessStart
+  data class Failed(val kind: Kind) : BoundedProcessStart
+
+  enum class Kind { Busy, Deadline, StartFailure }
+}
+
+sealed interface BoundedProtocolInput {
+  data class Line(val text: String) : BoundedProtocolInput
+  data class Failed(val kind: Kind) : BoundedProtocolInput
+  data object Exited : BoundedProtocolInput
+
+  enum class Kind { LineTooLarge, ResponseTooLarge, QueueFull, InvalidUtf8, Transport }
+}
+
+interface BoundedProtocolConnection {
+  suspend fun sendLine(line: String): Boolean
+  suspend fun receive(): BoundedProtocolInput
+  fun beginResponseBudget()
+  fun endResponseBudget()
+  suspend fun close()
+}
+
+fun interface BoundedProtocolLauncher {
+  suspend fun start(command: ChatCommand): BoundedProcessStart
+}
+
+@Inject
+@SingleIn(AppScope::class)
+@ContributesBinding(AppScope::class)
+class ProcessBoundedProtocolLauncher(private val diagnostics: Diagnostics) : BoundedProtocolLauncher {
+  override suspend fun start(command: ChatCommand): BoundedProcessStart {
+    if (!File(command.workingDirectory).isDirectory) return BoundedProcessStart.Failed(BoundedProcessStart.Kind.StartFailure)
+    return UsageProcessStartup.start(command, diagnostics)
+  }
 }
 
 /** The only chat file that names a process type. */
@@ -167,19 +222,363 @@ private fun runProcess(command: ChatCommand, diagnostics: Diagnostics, feed: sus
     }
   }.flowOn(Dispatchers.IO)
 
+private object UsageProcessStartup {
+  private const val START_DEADLINE_MS = 15_000L
+  private val occupied = AtomicBoolean(false)
+
+  suspend fun start(command: ChatCommand, diagnostics: Diagnostics): BoundedProcessStart {
+    if (!occupied.compareAndSet(false, true)) return BoundedProcessStart.Failed(BoundedProcessStart.Kind.Busy)
+    val result = CompletableDeferred<BoundedProcessOwnership?>()
+    val slotReleased = AtomicBoolean(false)
+    val releaseStartup = { if (slotReleased.compareAndSet(false, true)) occupied.set(false) }
+    val handoff = AtomicInteger(PENDING)
+    val decision = CountDownLatch(1)
+    thread(isDaemon = true, name = "usage-process-start") {
+      val created = try {
+        val builder = ProcessBuilder(command.argv).directory(File(command.workingDirectory))
+        builder.environment().clear()
+        builder.environment().putAll(command.environment)
+        builder.start()
+      } catch (_: Exception) {
+        null
+      }
+      val ownership = try {
+        created?.let { process -> BoundedProcessOwnership(process, diagnostics, releaseStartup) }
+      } catch (_: Exception) {
+        diagnostics.record("usage.process_cleanup_failure")
+        null
+      }
+      val registeredOwnership = try {
+        ownership?.also(ChatProcesses::registerBounded)
+      } catch (_: Exception) {
+        diagnostics.record("usage.process_cleanup_failure")
+        ownership?.let(ChatProcesses::destroyOwnedTree)
+        null
+      }
+      result.complete(registeredOwnership)
+      if (registeredOwnership == null) {
+        releaseStartup()
+        return@thread
+      }
+      val processOwnership = registeredOwnership
+      while (true) {
+        try {
+          decision.await()
+          break
+        } catch (_: InterruptedException) {
+          handoff.compareAndSet(PENDING, ABANDONED)
+          break
+        }
+      }
+      if (handoff.get() == ABANDONED) cleanupAbandoned(processOwnership)
+    }
+    return try {
+      val awaited = withTimeoutOrNull(START_DEADLINE_MS) { StartupAwait(result.await()) }
+      val ownership = awaited?.ownership
+      if (awaited == null) {
+        handoff.compareAndSet(PENDING, ABANDONED)
+        decision.countDown()
+        BoundedProcessStart.Failed(BoundedProcessStart.Kind.Deadline)
+      } else if (ownership == null) {
+        handoff.set(ABANDONED)
+        decision.countDown()
+        BoundedProcessStart.Failed(BoundedProcessStart.Kind.StartFailure)
+      } else if (handoff.compareAndSet(PENDING, CLAIMED)) {
+        decision.countDown()
+        try {
+          BoundedProcessStart.Started(BoundedProcessConnection(ownership))
+        } catch (_: Exception) {
+          cleanupAbandoned(ownership)
+          BoundedProcessStart.Failed(BoundedProcessStart.Kind.StartFailure)
+        }
+      } else {
+        decision.countDown()
+        BoundedProcessStart.Failed(BoundedProcessStart.Kind.Deadline)
+      }
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+      handoff.compareAndSet(PENDING, ABANDONED)
+      decision.countDown()
+      throw cancelled
+    }
+  }
+
+  private data class StartupAwait(val ownership: BoundedProcessOwnership?)
+
+  private fun cleanupAbandoned(ownership: BoundedProcessOwnership) = ChatProcesses.destroyOwnedTree(ownership)
+
+  private const val PENDING = 0
+  private const val CLAIMED = 1
+  private const val ABANDONED = 2
+}
+
+private class BoundedProcessConnection(
+  private val ownership: BoundedProcessOwnership,
+) : BoundedProtocolConnection {
+  private val process = ownership.process
+  private val incoming = Channel<BoundedProtocolInput>(32)
+  private val terminal = CompletableDeferred<BoundedProtocolInput>()
+  private val writerLock = Mutex()
+  private val framer = BoundedStdoutFramer()
+  private val closed = AtomicBoolean(false)
+  private val stderrTail = StringBuilder()
+  private val writes = ArrayBlockingQueue<PendingWrite>(1)
+  private val pendingWrite = AtomicReference<PendingWrite?>()
+  private val writer = thread(start = false, isDaemon = true, name = "usage-protocol-stdin") { writeLines() }
+
+  init {
+    writer.start()
+    thread(isDaemon = true, name = "usage-protocol-stdout") { readFrames(process.inputStream) }
+    thread(isDaemon = true, name = "usage-protocol-stderr") { drainStderr(process.errorStream) }
+    thread(isDaemon = true, name = "usage-process-exit") {
+      try {
+        process.waitFor()
+        fail(BoundedProtocolInput.Exited)
+      } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+        fail(BoundedProtocolInput.Exited)
+      }
+    }
+  }
+
+  override suspend fun sendLine(line: String): Boolean = writerLock.withLock {
+    if (closed.get()) return@withLock false
+    val write = PendingWrite(line, CompletableDeferred())
+    pendingWrite.set(write)
+    try {
+      if (closed.get() || !writes.offer(write)) return@withLock false
+      write.result.await()
+    } catch (cancelled: CancellationException) {
+      fail(BoundedProtocolInput.Exited)
+      throw cancelled
+    } finally {
+      pendingWrite.compareAndSet(write, null)
+    }
+  }
+
+  override suspend fun receive(): BoundedProtocolInput = select {
+    terminal.onAwait { it }
+    incoming.onReceiveCatching { it.getOrNull() ?: terminal.await() }
+  }
+
+  override fun beginResponseBudget() {
+    framer.beginResponseBudget()
+  }
+
+  override fun endResponseBudget() {
+    framer.endResponseBudget()
+  }
+
+  override suspend fun close() {
+    fail(BoundedProtocolInput.Exited)
+  }
+
+  private fun writeLines() {
+    try {
+      while (!closed.get()) {
+        val write = writes.take()
+        if (closed.get()) break
+        process.outputStream.write((write.line + "\n").toByteArray(StandardCharsets.UTF_8))
+        process.outputStream.flush()
+        write.result.complete(true)
+      }
+    } catch (_: InterruptedException) {
+      Thread.currentThread().interrupt()
+    } catch (_: IOException) {
+      fail(BoundedProtocolInput.Failed(BoundedProtocolInput.Kind.Transport))
+    }
+  }
+
+  private fun readFrames(input: InputStream) {
+    val chunk = ByteArray(4096)
+    try {
+      while (!closed.get()) {
+        val count = input.read(chunk)
+        if (count < 0) {
+          fail(BoundedProtocolInput.Exited)
+          return
+        }
+        val failure = framer.accept(chunk, count) { line ->
+          incoming.trySend(BoundedProtocolInput.Line(line)).isSuccess
+        }
+        if (failure != null) {
+          fail(BoundedProtocolInput.Failed(failure))
+          return
+        }
+      }
+    } catch (_: IOException) {
+      fail(BoundedProtocolInput.Failed(BoundedProtocolInput.Kind.Transport))
+    }
+  }
+
+  private fun drainStderr(input: InputStream) {
+    val chunk = ByteArray(1024)
+    try {
+      while (true) {
+        val count = input.read(chunk)
+        if (count < 0) return
+        synchronized(stderrTail) {
+          val text = String(chunk, 0, count, StandardCharsets.UTF_8)
+          stderrTail.append(text)
+          if (stderrTail.length > MAX_STDERR_CHARS) stderrTail.delete(0, stderrTail.length - MAX_STDERR_CHARS)
+        }
+      }
+    } catch (_: IOException) {
+      if (!closed.get()) ownership.diagnostics.record("usage.process_stderr_failure")
+    }
+  }
+
+  private fun fail(outcome: BoundedProtocolInput) {
+    if (terminal.complete(outcome)) {
+      closed.set(true)
+      incoming.cancel()
+      pendingWrite.get()?.result?.complete(false)
+      writes.clear()
+      writer.interrupt()
+      thread(isDaemon = true, name = "usage-process-cleanup") { cleanup() }
+    }
+  }
+
+  private fun cleanup() {
+    ChatProcesses.destroyOwnedTree(ownership)
+  }
+
+  private data class PendingWrite(val line: String, val result: CompletableDeferred<Boolean>)
+
+  companion object { private const val MAX_STDERR_CHARS = 2000 }
+}
+
 private object ChatProcesses {
   const val STDERR_TAIL = 2000
   const val STDERR_DRAIN_MS = 2000L
   const val STOP_GRACE_MS = 3000L
   const val FORCE_WAIT_MS = 1000L
   val live: MutableSet<Process> = ConcurrentHashMap.newKeySet()
+  private val boundedOwnership = ConcurrentHashMap<Process, BoundedProcessOwnership>()
   private val hookInstalled = AtomicBoolean(false)
 
   fun installShutdownHook() {
     if (hookInstalled.compareAndSet(false, true)) {
-      Runtime.getRuntime().addShutdownHook(Thread({ live.forEach(::signalTree) }, "chat-shutdown"))
+      Runtime.getRuntime().addShutdownHook(Thread({
+        boundedOwnership.values.toList().forEach(::destroyOwnedTree)
+        live.filterNot(boundedOwnership::containsKey).forEach(::signalTree)
+      }, "chat-shutdown"))
     }
   }
+
+  fun registerBounded(ownership: BoundedProcessOwnership) {
+    val process = ownership.process
+    boundedOwnership[process] = ownership
+    live += process
+    synchronized(ownership.lock) {
+      observeLocked(ownership)
+      ownership.observer = BoundedProcessObservationScheduling.scheduler.schedule(
+        { observe(ownership) },
+        OBSERVATION_INTERVAL_MS,
+      )
+    }
+    installShutdownHook()
+  }
+
+  private fun observe(ownership: BoundedProcessOwnership) {
+    synchronized(ownership.lock) {
+      if (!ownership.cleanupStarted) observeLocked(ownership)
+    }
+  }
+
+  private fun observeLocked(ownership: BoundedProcessOwnership) {
+    val roots = buildList {
+      if (isAlive(ownership.root)) add(ownership.root)
+      ownership.descendants.filterTo(this, ::isAlive)
+    }
+    roots.forEach { root ->
+      try {
+        root.descendants().use { descendants -> descendants.forEach { ownership.descendants.add(it) } }
+      } catch (_: Exception) {
+        if (ownership.observationFailureRecorded.compareAndSet(false, true)) {
+          ownership.diagnostics.record("usage.process_observation_failure")
+        }
+      }
+    }
+  }
+
+  fun destroyOwnedTree(ownership: BoundedProcessOwnership) {
+    val current = Thread.currentThread()
+    val owner = synchronized(ownership.lock) {
+      if (ownership.cleanupStarted) {
+        if (ownership.cleanupThread === current) return
+        false
+      } else {
+        ownership.cleanupStarted = true
+        ownership.cleanupThread = current
+        ownership.observer?.cancel()
+        observeLocked(ownership)
+        true
+      }
+    }
+    if (!owner) {
+      ownership.cleanupFinished.join()
+      return
+    }
+    cleanupOwned(ownership)
+  }
+
+  private fun cleanupOwned(ownership: BoundedProcessOwnership) {
+    val process = ownership.process
+    val root = ownership.root
+    val known = synchronized(ownership.lock) { (ownership.descendants + root).toList() }
+    var failed = false
+    known.forEach { if (isAlive(it) && runCatching { it.destroy() }.isFailure) failed = true }
+    if (failed) ownership.recordCleanupFailure()
+
+    val gracefulDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(STOP_GRACE_MS)
+    waitForHandles(known, gracefulDeadline)
+    val survivors = known.filter(::isAlive)
+    if (survivors.isNotEmpty()) {
+      ownership.diagnostics.record("chat.process_force_killed")
+      survivors.forEach { if (runCatching { it.destroyForcibly() }.isFailure) ownership.recordCleanupFailure() }
+    }
+    waitForHandles(known, Long.MAX_VALUE)
+    runCatching { process.outputStream.close() }.onFailure { ownership.recordCleanupFailure() }
+    runCatching { process.inputStream.close() }.onFailure { ownership.recordCleanupFailure() }
+    runCatching { process.errorStream.close() }.onFailure { ownership.recordCleanupFailure() }
+    live -= process
+    boundedOwnership.remove(process, ownership)
+    ownership.releaseStartup()
+    ownership.cleanupFinished.complete(Unit)
+  }
+
+  private fun waitForHandles(handles: List<ProcessHandle>, deadlineNanos: Long) {
+    var interrupted = false
+    handles.filter(::isAlive).forEach { handle ->
+      while (isAlive(handle)) {
+        try {
+          if (deadlineNanos == Long.MAX_VALUE) {
+            handle.onExit().get()
+          } else {
+            val remaining = deadlineNanos - System.nanoTime()
+            if (remaining <= 0L) break
+            handle.onExit().get(remaining, TimeUnit.NANOSECONDS)
+          }
+        } catch (_: InterruptedException) {
+          interrupted = true
+        } catch (_: java.util.concurrent.TimeoutException) {
+          break
+        } catch (_: Exception) {
+          if (isAlive(handle)) {
+            if (deadlineNanos != Long.MAX_VALUE) break
+            ownershipWait()
+          }
+        }
+      }
+    }
+    if (interrupted) Thread.currentThread().interrupt()
+  }
+
+  private fun ownershipWait() {
+    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100))
+  }
+
+  private fun isAlive(handle: ProcessHandle): Boolean = runCatching { handle.isAlive }.getOrDefault(true)
 
   fun destroyTree(process: Process, diagnostics: Diagnostics) {
     if (!process.isAlive || !live.remove(process)) return
@@ -198,5 +597,58 @@ private object ChatProcesses {
   private fun signalTree(process: Process) {
     process.toHandle().descendants().forEach { it.destroy() }
     process.destroy()
+  }
+
+  private const val OBSERVATION_INTERVAL_MS = 100L
+}
+
+private class BoundedProcessOwnership(
+  val process: Process,
+  val diagnostics: Diagnostics,
+  private val release: () -> Unit,
+) {
+  val root = process.toHandle()
+  val lock = Any()
+  val descendants = LinkedHashSet<ProcessHandle>()
+  val cleanupFinished = CompletableFuture<Unit>()
+  val observationFailureRecorded = AtomicBoolean(false)
+  private val cleanupFailureRecorded = AtomicBoolean(false)
+  var observer: BoundedProcessObservationHandle? = null
+  var cleanupStarted = false
+  var cleanupThread: Thread? = null
+
+  fun recordCleanupFailure() {
+    if (cleanupFailureRecorded.compareAndSet(false, true)) diagnostics.record("usage.process_cleanup_failure")
+  }
+
+  fun releaseStartup() = release()
+}
+
+internal fun interface BoundedProcessObservationHandle {
+  fun cancel()
+}
+
+internal fun interface BoundedProcessObservationScheduler {
+  fun schedule(task: () -> Unit, intervalMillis: Long): BoundedProcessObservationHandle
+}
+
+internal object BoundedProcessObservationScheduling {
+  @Volatile
+  var scheduler: BoundedProcessObservationScheduler = ExecutorBoundedProcessObservationScheduler
+}
+
+private object ExecutorBoundedProcessObservationScheduler : BoundedProcessObservationScheduler {
+  private val executor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { task ->
+    Thread(task, "usage-process-observer").apply { isDaemon = true }
+  }
+
+  override fun schedule(task: () -> Unit, intervalMillis: Long): BoundedProcessObservationHandle {
+    val scheduled: ScheduledFuture<*> = executor.scheduleWithFixedDelay(
+      task,
+      intervalMillis,
+      intervalMillis,
+      TimeUnit.MILLISECONDS,
+    )
+    return BoundedProcessObservationHandle { scheduled.cancel(false) }
   }
 }

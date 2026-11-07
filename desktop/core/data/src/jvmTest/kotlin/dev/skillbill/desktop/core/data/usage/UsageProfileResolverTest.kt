@@ -1,9 +1,14 @@
 package dev.skillbill.desktop.core.data.usage
 
+import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.settings.AppSettings
 import dev.skillbill.desktop.core.domain.usage.model.UsageProvider
+import dev.skillbill.desktop.core.domain.usage.model.UsageResult
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
+import dev.skillbill.desktop.core.data.usage.codex.CodexUsageReader
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -42,7 +47,9 @@ class UsageProfileResolverTest {
   fun `Claude profile lookup follows chat profile before the selected setting`() = runTest {
     val host = HostEnvironment(emptyMap(), "/home/operator", "")
     val settings = FakeAppSettingsRepository(AppSettings.DEFAULT.copy(claudeConfigDir = "/settings/claude"))
-    val repository = ProviderUsageRepository(UsageProfileResolver(host), settings)
+    val repository = ProviderUsageRepository(UsageProfileResolver(host), settings, CodexUsageReader { _ ->
+      UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable))
+    }, ApplicationCoroutineScope(backgroundScope))
 
     assertEquals("/chat/claude", repository.profileLookup(UsageProvider.Claude, "/chat/claude").configurationReference)
     assertEquals("/settings/claude", repository.profileLookup(UsageProvider.Claude, null).configurationReference)

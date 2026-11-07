@@ -15,6 +15,9 @@ import dev.skillbill.desktop.core.domain.usage.model.UsageResult
 import dev.skillbill.desktop.core.domain.usage.model.UsageSessionStatus
 import dev.skillbill.desktop.core.data.usage.ProviderUsageRepository
 import dev.skillbill.desktop.core.data.usage.UsageProfileResolver
+import dev.skillbill.desktop.core.data.usage.codex.CodexUsageReader
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableCode
+import dev.skillbill.desktop.core.domain.usage.model.UsageUnavailableReason
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
@@ -49,6 +52,10 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 class ClaudeChatTransportRunTest {
+  private val unusedCodexReader = CodexUsageReader { _ ->
+    UsageResult.Unavailable(UsageUnavailableReason(UsageUnavailableCode.ProviderUnavailable))
+  }
+
   // One scripted claude process: the test reads what the app writes to stdin and decides what stdout prints.
   private class FakeClaude(val holdStop: CompletableDeferred<Unit>? = null) : LiveChatProcessLauncher {
     val opened: MutableList<ChatCommand> = Collections.synchronizedList(mutableListOf())
@@ -88,7 +95,7 @@ class ClaudeChatTransportRunTest {
         diagnostics,
         ApplicationCoroutineScope(backgroundScope),
         profiles,
-        ProviderUsageRepository(profiles, FakeAppSettingsRepository()),
+        ProviderUsageRepository(profiles, FakeAppSettingsRepository(), unusedCodexReader, ApplicationCoroutineScope(backgroundScope)),
         Clock.System,
       )
     }
@@ -101,7 +108,7 @@ class ClaudeChatTransportRunTest {
     val clock = object : Clock {
       override fun now() = Instant.fromEpochMilliseconds(10_000)
     }
-    val repository = ProviderUsageRepository(profiles, settings)
+    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope))
     val claude = FakeClaude()
     val diagnostics = RecordingDiagnostics()
     val transport = ClaudeChatTransport(
@@ -148,7 +155,7 @@ class ClaudeChatTransportRunTest {
     val host = HostEnvironment(emptyMap(), "/home/operator", "")
     val settings = FakeAppSettingsRepository()
     val profiles = UsageProfileResolver(host)
-    val repository = ProviderUsageRepository(profiles, settings)
+    val repository = ProviderUsageRepository(profiles, settings, unusedCodexReader, ApplicationCoroutineScope(backgroundScope))
     val appJob = Job(backgroundScope.coroutineContext[Job])
     val clock = object : Clock {
       override fun now() = Instant.fromEpochMilliseconds(10_000)
