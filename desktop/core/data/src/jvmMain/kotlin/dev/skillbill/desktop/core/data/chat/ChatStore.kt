@@ -69,6 +69,8 @@ private object ChatStoreKeys {
   const val TITLE = "title"
   const val TARGET = "target"
   const val BRANCH = "branch"
+  const val SUMMARY = "summary"
+  const val SUMMARY_SOURCE_UPDATED_AT = "summary_source_updated_at_ms"
 }
 
 /** What one session file holds; the workspace writes the conversation fields and the transports write the resume fields. */
@@ -81,6 +83,8 @@ private data class StoredChat(
   val agentSession: String? = null,
   val exchanges: List<ChatExchange> = emptyList(),
   val newTask: ChatNewTaskContext? = null,
+  val summary: String? = null,
+  val summarySourceUpdatedAt: Instant? = null,
 )
 
 /**
@@ -195,7 +199,7 @@ class ChatStore(host: HostEnvironment, private val diagnostics: Diagnostics, pri
 
 private fun StoredChat.toEntry(): ChatHistoryEntry? {
   val operator = lines.firstOrNull { it.role == ChatHistoryRole.Operator } ?: return null
-  return ChatHistoryEntry(sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines, newTask)
+  return ChatHistoryEntry(sessionId, executionId, agent ?: return null, updatedAt ?: Instant.DISTANT_PAST, operator.text, lines, newTask, summary)
 }
 
 private fun List<ChatHistoryLine>.toExchanges(): List<ChatExchange> = buildList {
@@ -253,6 +257,8 @@ private fun encode(chat: StoredChat): JsonObject = buildJsonObject {
     put(ChatStoreKeys.NEW_TASK_SESSION_ESTABLISHED, newTask.sessionEstablished)
     newTask.pendingTurnLineIndex?.let { put(ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX, it) }
   }
+  chat.summary?.let { put(ChatStoreKeys.SUMMARY, it) }
+  chat.summarySourceUpdatedAt?.let { put(ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT, it.toEpochMilliseconds()) }
   put(
     ChatStoreKeys.EXCHANGES,
     buildJsonArray {
@@ -298,6 +304,8 @@ private fun decode(root: JsonObject, fallbackSessionId: String, diagnostics: Dia
         (root[ChatStoreKeys.NEW_TASK_PENDING_TURN_LINE_INDEX] as? JsonPrimitive)?.intOrNull,
       )
     },
+    summary = root.string(ChatStoreKeys.SUMMARY)?.takeIf { it.isNotBlank() },
+    summarySourceUpdatedAt = (root[ChatStoreKeys.SUMMARY_SOURCE_UPDATED_AT] as? JsonPrimitive)?.longOrNull?.let(Instant::fromEpochMilliseconds),
   )
 }
 
