@@ -276,17 +276,21 @@ public class DefaultGoalRunnerQaGate(
     }
     val changedContentsWarning =
       if (baseline == settledFingerprint || acceptedWriterOwnsCurrentContents) {
-        null
+        if (acceptedWriterOwnsCurrentContents) {
+          null
+        } else {
+          codeChangedAfterQa(outcomeStore, gitOperations, state, request, execution)
+        }
       } else {
         val testedTree =
-          outcomeStore.recordedGoalQaOutcome(
-            qaOutcomeWorkflowId(
-              state,
-              execution.invocationId,
-            ),
-          )?.testedTreeIdentity
-        if (testedTree == null) {
-          "Repository contents changed after final quality settled, and QA has no recorded tested tree."
+          execution.qaTestedTreeIdentity?.takeIf(String::isNotBlank)
+            ?: outcomeStore.recordedGoalQaOutcome(
+              qaOutcomeWorkflowId(state, execution.invocationId),
+            )?.takeIf { it.outcome == StandaloneQaOutcome.PASSED }
+              ?.testedTreeIdentity?.takeIf(String::isNotBlank)
+        val retainedSourceWarning = codeChangedAfterQa(outcomeStore, gitOperations, state, request, execution)
+        retainedSourceWarning ?: if (testedTree == null) {
+          "Repository contents changed after final quality settled, and QA tested-tree evidence is unavailable."
         } else {
           "Repository contents changed after final quality settled; QA tested tree $testedTree."
         }
@@ -328,7 +332,7 @@ public class DefaultGoalRunnerQaGate(
         return settleSkipped(state, request, quality, GoalQaSkipReason.DISABLED_POLICY)
       }
       earlySkipReason(outcomeStore, gitOperations, capabilities, state, request)?.let {
-        return settleSkipped(state, request, quality, it)
+        return settleSkipped(state, request, quality, it.reason, it.testedTreeIdentity)
       }
     }
     when (val read = parentInvariants) {
@@ -377,6 +381,7 @@ public class DefaultGoalRunnerQaGate(
     request: GoalRunnerRunRequest,
     quality: GoalQualityExecutionRecord,
     reason: GoalQaSkipReason,
+    testedTreeIdentity: String? = null,
   ): GoalQaGateResult {
     var current = quality
     if (current.execution?.status == GoalQualityExecutionStatus.QA_PENDING) {
@@ -389,7 +394,7 @@ public class DefaultGoalRunnerQaGate(
           current,
           current.acceptQa(
             observation,
-            null,
+            testedTreeIdentity,
             contextWarning,
             skipReason = reason.wireValue,
           ),

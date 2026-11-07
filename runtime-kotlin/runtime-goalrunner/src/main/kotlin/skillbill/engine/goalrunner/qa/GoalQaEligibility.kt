@@ -21,17 +21,19 @@ internal fun earlySkipReason(
   capabilities: QaCapabilityResolver,
   state: GoalRunnerManifestState,
   request: GoalRunnerRunRequest,
-): GoalQaSkipReason? {
-  if (childrenAlreadyRanQa(outcomeStore, state)) return GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA
+): GoalQaSkipDecision? {
+  if (childrenAlreadyRanQa(outcomeStore, state)) {
+    return GoalQaSkipDecision(GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA)
+  }
   val prior = outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)
   if (prior?.outcome == StandaloneQaOutcome.PASSED) {
     val current = gitOperations.repositoryTreeIdentity(request.repoRoot)
     if (current is WorkflowGitOperationResult.Ok && current.value.trim() == prior.testedTreeIdentity) {
-      return GoalQaSkipReason.ALREADY_SETTLED_ON_TREE
+      return GoalQaSkipDecision(GoalQaSkipReason.ALREADY_SETTLED_ON_TREE, prior.testedTreeIdentity)
     }
   }
   return if (capabilities.resolve(request.repoRoot) is QaCapabilityResolution.Absent) {
-    GoalQaSkipReason.UNSUPPORTED_TARGET
+    GoalQaSkipDecision(GoalQaSkipReason.UNSUPPORTED_TARGET)
   } else {
     null
   }

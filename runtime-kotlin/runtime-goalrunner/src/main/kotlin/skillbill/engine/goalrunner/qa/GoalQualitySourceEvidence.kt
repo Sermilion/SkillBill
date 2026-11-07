@@ -379,18 +379,48 @@ internal fun codeChangedAfterQa(
   request: GoalRunnerRunRequest,
   execution: GoalQualityExecution? = outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution,
 ): String? {
-  val tested =
-    if (execution != null) {
-      execution.qaTestedTreeIdentity?.takeIf(String::isNotBlank) ?: return null
-    } else {
-      outcomeStore.recordedGoalQaOutcome(qaOutcomeWorkflowId(state, null))
-        ?.takeIf { it.outcome != StandaloneQaOutcome.SKIPPED }
-        ?.testedTreeIdentity?.takeIf(String::isNotBlank) ?: return null
+  if (execution?.skipReason == GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA.wireValue) {
+    val skippedAt = execution.postQaContentFingerprint?.takeIf(String::isNotBlank)
+    val validatedAt = execution.finalValidationContentFingerprint?.takeIf(String::isNotBlank)
+    return when {
+      skippedAt == null || validatedAt == null ->
+        "Could not establish whether final validation changed after per-subtask QA was skipped " +
+          "because skip-boundary content evidence is unavailable."
+      skippedAt == validatedAt -> null
+      else ->
+        "Final validation changed repository contents after per-subtask QA was skipped; " +
+          "child QA did not test the assembled parent tree."
     }
+  }
+  val tested =
+    execution?.qaTestedTreeIdentity?.takeIf(String::isNotBlank)
+      ?: if (execution?.skipReason == GoalQaSkipReason.ALREADY_SETTLED_ON_TREE.wireValue) {
+        outcomeStore.recordedGoalQaOutcome(qaOutcomeWorkflowId(state, execution.invocationId))
+          ?.takeIf { it.outcome == StandaloneQaOutcome.PASSED }
+          ?.testedTreeIdentity?.takeIf(String::isNotBlank)
+      } else if (execution == null) {
+        outcomeStore.recordedGoalQaOutcome(qaOutcomeWorkflowId(state, null))
+          ?.takeIf { it.outcome != StandaloneQaOutcome.SKIPPED }
+          ?.testedTreeIdentity?.takeIf(String::isNotBlank)
+      } else {
+        null
+      }
+  if (tested == null) {
+    return if (execution?.skipReason == GoalQaSkipReason.ALREADY_SETTLED_ON_TREE.wireValue) {
+      "QA tested-tree evidence is unavailable for the retained skip decision."
+    } else {
+      null
+    }
+  }
   val current = gitOperations.repositoryTreeIdentity(request.repoRoot)
-  if (current is WorkflowGitOperationResult.Ok && current.value.trim() == tested) return null
-  return "validate changed code after QA settled; QA does not re-run, so the published change differs from the " +
-    "tree QA tested ($tested)."
+  return when {
+    current !is WorkflowGitOperationResult.Ok ->
+      "QA tested tree $tested, but the current repository tree could not be observed."
+    current.value.trim() == tested -> null
+    else ->
+      "validate changed code after QA settled; QA does not re-run, so the published change differs from the " +
+        "tree QA tested ($tested)."
+  }
 }
 
 internal fun requireCurrentValidationEvidence(
