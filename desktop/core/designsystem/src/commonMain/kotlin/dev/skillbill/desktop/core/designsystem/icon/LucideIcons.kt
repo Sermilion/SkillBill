@@ -365,6 +365,32 @@ object LucideIcons {
       line(12.0f, 17.0f, 12.0f, 21.0f)
     }
   }
+  val smartphone: ImageVector by lazy {
+    imageVector("smartphone") {
+      rect(5.0f, 2.0f, 14.0f, 20.0f, 2.0f)
+      line(12.0f, 18.0f, 12.01f, 18.0f)
+    }
+  }
+  val wifi: ImageVector by lazy {
+    imageVector("wifi") {
+      path("M5 12.55a11 11 0 0 1 14.08 0")
+      path("M1.42 9a16 16 0 0 1 21.16 0")
+      path("M8.53 16.11a6 6 0 0 1 6.95 0")
+      line(12.0f, 20.0f, 12.01f, 20.0f)
+    }
+  }
+  val chevronsUpDown: ImageVector by lazy {
+    imageVector("chevrons-up-down") {
+      path("m7 15 5 5 5-5")
+      path("m7 9 5-5 5 5")
+    }
+  }
+  val sparkles: ImageVector by lazy {
+    imageVector("sparkles") {
+      path("m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z")
+      path("m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z")
+    }
+  }
   val user: ImageVector by lazy {
     imageVector("user") {
       circle(12.0f, 8.0f, 5.0f)

@@ -375,6 +375,17 @@ class NewTaskHomeTest {
   }
 
   @Test
+  fun `QA chip includes the picked device name`() = runComposeUiTest {
+    setContent {
+      SkillBillTheme(reducedMotion = true) {
+        NewTaskChips(null, qaDeviceName = "Pixel 8")
+      }
+    }
+
+    onNodeWithText("QA my branch on Pixel 8").assertExists()
+  }
+
+  @Test
   fun `clicking a suggested goal forwards its exact action fields through the host`() = runComposeUiTest {
     val action = ChatSuggestedAction(
       "Plan selected change",

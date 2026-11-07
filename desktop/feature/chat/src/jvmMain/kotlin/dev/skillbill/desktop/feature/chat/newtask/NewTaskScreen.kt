@@ -180,6 +180,7 @@ private fun ColumnScope.NewTaskChatContent(
       NewTaskChips(
         host.onStart?.takeIf { startable }?.let { onStart -> { wire, target -> onStart(wire, target, null) } },
         Modifier.widthIn(max = COMPOSER_MAX_WIDTH).fillMaxWidth(),
+        qaDeviceName = state.qaDeviceName,
       )
     }
     NewTaskComposer(state, draft, focus, host.now, onAction)
