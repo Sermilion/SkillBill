@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -43,6 +41,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 
@@ -174,7 +173,7 @@ private fun QaVerdictMark(view: QaResultsView) {
     QaResultsTone.Done -> colors.stDone
     QaResultsTone.Faint -> colors.fgMuted
   }
-  Box(Modifier.size(8.dp).background(color, CircleShape).clearAndSetSemantics { })
+  StatusDot(color, Modifier.clearAndSetSemantics { })
   BasicText(view.word, style = SkillBillTheme.type.tSmMedium.copy(color = color), maxLines = 1)
 }
 

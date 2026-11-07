@@ -7,11 +7,8 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +36,7 @@ import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.tabular
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 
 private val SEGMENT_HEIGHT = 22.dp
 private val TAB_HEIGHT = 24.dp
@@ -108,7 +106,7 @@ fun <T> ViewTabs(tabs: List<ViewTab<T>>, selected: T, onSelect: (T) -> Unit) {
           tab.icon?.let { SbIcon(it, SbIconSize.Sm) }
           BasicText(tab.label, style = SkillBillTheme.type.tSmMedium.copy(color = color, lineHeight = 1.em), maxLines = 1, softWrap = false)
           tab.count?.let { BasicText(it.toString(), style = SkillBillTheme.type.tSmMedium.tabular().copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1) }
-          if (tab.attention) Box(Modifier.size(6.dp).background(colors.stBlocked, CircleShape))
+          if (tab.attention) StatusDot(colors.stBlocked)
         }
       }
     }

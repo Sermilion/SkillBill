@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
@@ -111,7 +112,7 @@ internal fun NewTaskChatMarker(status: NewTaskChatStatus, modifier: Modifier = M
   Box(modifier.size(14.dp), contentAlignment = Alignment.Center) {
     when (status) {
       NewTaskChatStatus.Replying -> SbSpinner(size = 11.dp, contentDescription = "Replying")
-      NewTaskChatStatus.NewReply -> Box(Modifier.size(7.dp).background(SkillBillTheme.colors.accent, CircleShape).semantics { contentDescription = "New reply" })
+      NewTaskChatStatus.NewReply -> StatusDot(SkillBillTheme.colors.accent, Modifier.semantics { contentDescription = "New reply" })
       NewTaskChatStatus.Idle -> Unit
     }
   }

@@ -13,16 +13,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -36,6 +33,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbDivider
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ActivityStatus
 import dev.skillbill.desktop.core.ui.changes.changesMono
 import dev.skillbill.desktop.core.ui.changes.changesSans
@@ -106,8 +104,7 @@ internal fun ActivityDot(status: ActivityStatus, modifier: Modifier = Modifier) 
     ActivityStatus.COMPLETE -> colors.stDone
     else -> colors.fgFaint
   }
-  Box(modifier.size(7.dp).alpha(activityPulse(status == ActivityStatus.RUNNING))
-    .then(if (status == ActivityStatus.PENDING) Modifier.border(1.dp, color, CircleShape) else Modifier.background(color, CircleShape)))
+  StatusDot(color, modifier, hollow = status == ActivityStatus.PENDING, pulse = status == ActivityStatus.RUNNING)
 }
 
 @Composable

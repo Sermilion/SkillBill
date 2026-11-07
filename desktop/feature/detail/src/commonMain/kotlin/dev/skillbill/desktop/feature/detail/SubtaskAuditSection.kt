@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -30,6 +28,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.AuditAttempt
 import dev.skillbill.desktop.core.domain.model.AuditCriterion
 import dev.skillbill.desktop.core.domain.model.AuditOutcome
@@ -124,7 +123,7 @@ private fun FailedCriteria(audit: SubtaskAuditResult, subtaskId: Int) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Box(Modifier.size(6.dp).background(SkillBillTheme.colors.stDone, CircleShape))
+        StatusDot(SkillBillTheme.colors.stDone)
         BasicText(
           "${met.size} ${if (met.size == 1) "criterion" else "criteria"} met",
           Modifier.weight(1f),
@@ -159,10 +158,7 @@ private fun CriterionRow(criterion: AuditCriterion, modifier: Modifier) {
     verticalAlignment = Alignment.Top,
     horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    Box(
-      Modifier.padding(top = 5.dp).size(6.dp)
-        .background(if (criterion.met) colors.stDone else colors.stFailed, CircleShape),
-    )
+    StatusDot(if (criterion.met) colors.stDone else colors.stFailed, Modifier.padding(top = 5.dp))
     BasicText(criterion.ref, style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted), maxLines = 1)
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
       SbTooltip(criterion.text) {
@@ -188,7 +184,7 @@ private fun UnmetCriterionRow(criterion: AuditCriterion, modifier: Modifier) {
     verticalAlignment = Alignment.Top,
     horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    Box(Modifier.padding(top = 5.dp).size(6.dp).background(colors.stFailed, CircleShape))
+    StatusDot(colors.stFailed, Modifier.padding(top = 5.dp))
     BasicText(criterion.ref, style = SkillBillTheme.type.monoSm.copy(color = colors.fgMuted), maxLines = 1)
     Box(Modifier.weight(1f)) {
       SbTooltip(criterion.text) {
@@ -211,7 +207,7 @@ private fun VerdictLine(label: String, detail: String?, color: androidx.compose.
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    Box(Modifier.size(7.dp).background(color, CircleShape))
+    StatusDot(color)
     BasicText(
       listOfNotNull(label, detail).joinToString(" · "),
       style = SkillBillTheme.type.tSmMedium.copy(color = color),
@@ -230,12 +226,7 @@ private fun AuditAttemptLine(attempt: AuditAttempt) {
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    Box(
-      Modifier.size(6.dp).background(
-        if (attempt.passed) SkillBillTheme.colors.stDone else SkillBillTheme.colors.stFailed,
-        CircleShape,
-      ),
-    )
+    StatusDot(if (attempt.passed) SkillBillTheme.colors.stDone else SkillBillTheme.colors.stFailed)
     BasicText(
       "Attempt ${attempt.number} · $status$next",
       style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgMuted),

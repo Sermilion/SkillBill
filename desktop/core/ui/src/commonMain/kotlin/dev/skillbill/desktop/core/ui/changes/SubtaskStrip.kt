@@ -1,13 +1,6 @@
 package dev.skillbill.desktop.core.ui.changes
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
@@ -38,7 +31,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -61,8 +53,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.LocalReducedMotion
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ScopeSubtask
 import dev.skillbill.desktop.core.domain.model.ScopeSubtaskState
 import dev.skillbill.desktop.core.domain.model.SubtaskStats
@@ -385,28 +377,15 @@ private fun StripTip(subtask: ScopeSubtask, stats: SubtaskStats?, position: Offs
   }
 }
 
-/** A 7 dp dot in the subtask state's color: RUNNING a pulsing accent, DONE done, INTERRUPTED failed, NOT_STARTED a hollow faint ring. */
+/** A 6 dp dot in the subtask state's color: RUNNING a pulsing accent, DONE done, INTERRUPTED failed, NOT_STARTED a hollow faint ring. */
 @Composable
 fun ScopeStateDot(state: ScopeSubtaskState, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
   when (state) {
-    ScopeSubtaskState.RUNNING -> {
-      val alpha = if (LocalReducedMotion.current) {
-        1f
-      } else {
-        val pulse by rememberInfiniteTransition(label = "running-dot").animateFloat(
-          initialValue = 1f,
-          targetValue = 0.35f,
-          animationSpec = infiniteRepeatable(tween(800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-          label = "running-dot-alpha",
-        )
-        pulse
-      }
-      Box(modifier.size(7.dp).alpha(alpha).background(colors.accent, CircleShape))
-    }
-    ScopeSubtaskState.DONE -> Box(modifier.size(7.dp).background(colors.stDone, CircleShape))
-    ScopeSubtaskState.INTERRUPTED -> Box(modifier.size(7.dp).background(colors.stFailed, CircleShape))
-    ScopeSubtaskState.NOT_STARTED -> Box(modifier.size(7.dp).border(1.dp, colors.fgFaint, CircleShape))
+    ScopeSubtaskState.RUNNING -> StatusDot(colors.accent, modifier, pulse = true)
+    ScopeSubtaskState.DONE -> StatusDot(colors.stDone, modifier)
+    ScopeSubtaskState.INTERRUPTED -> StatusDot(colors.stFailed, modifier)
+    ScopeSubtaskState.NOT_STARTED -> StatusDot(colors.fgFaint, modifier, hollow = true)
   }
 }
 

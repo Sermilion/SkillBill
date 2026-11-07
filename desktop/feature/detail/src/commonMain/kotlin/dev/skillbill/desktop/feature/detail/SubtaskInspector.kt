@@ -1,16 +1,12 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -28,6 +24,7 @@ import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.tabular
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
@@ -41,7 +38,6 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.list.SubtaskChip
-import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.WorkDependency
@@ -113,7 +109,7 @@ private fun SubtaskProperties(detail: Detail, subtask: WorkSubtask, onAction: (D
       val checks = record.result?.checks?.size ?: 0
       val word = when (passed) { true -> "passed"; false -> "failed"; null -> record.integrityProblem }
       if (word != null) PropertyRow("Validation") {
-        Box(Modifier.size(6.dp).background(if (passed == false) colors.stFailed else if (passed == true) colors.stDone else colors.fgFaint, CircleShape))
+        StatusDot(if (passed == false) colors.stFailed else if (passed == true) colors.stDone else colors.fgFaint)
         PropertyText(if (checks > 0) "$word · $checks ${if (checks == 1) "check" else "checks"}" else word)
       }
     }

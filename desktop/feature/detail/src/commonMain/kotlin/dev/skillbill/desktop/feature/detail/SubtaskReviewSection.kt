@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -29,6 +27,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ReviewFindingStatus
 import dev.skillbill.desktop.core.domain.model.ReviewPass
 import dev.skillbill.desktop.core.domain.model.ReviewReportFinding
@@ -89,7 +88,7 @@ private fun RunningReviewPassBlock(pass: RunningReviewPass, modifier: Modifier) 
     }
   Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      Box(Modifier.size(7.dp).background(SkillBillTheme.colors.stActive, CircleShape))
+      StatusDot(SkillBillTheme.colors.stActive)
       Box(Modifier.weight(1f)) { InspectorLine("Pass ${pass.passNumber}", details) }
     }
     if (pass.lanes.isNotEmpty()) RunningReviewLanes(pass)
@@ -192,7 +191,7 @@ private fun SeverityBadge(severity: String) {
 private fun FindingState(status: ReviewFindingStatus) {
   val color = status.color()
   Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-    Box(Modifier.size(6.dp).background(color, CircleShape))
+    StatusDot(color)
     BasicText(status.label(), style = SkillBillTheme.type.tSmMedium.copy(color = color), maxLines = 1, softWrap = false)
   }
 }

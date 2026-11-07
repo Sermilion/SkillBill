@@ -3,13 +3,10 @@ package dev.skillbill.desktop.feature.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -32,6 +29,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -57,7 +55,7 @@ internal fun ChatPill(
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (dot) Box(Modifier.size(6.dp).background(ink, CircleShape))
+    if (dot) StatusDot(ink)
     if (icon != null) CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(icon, SbIconSize.Xs) }
     BasicText(
       text,

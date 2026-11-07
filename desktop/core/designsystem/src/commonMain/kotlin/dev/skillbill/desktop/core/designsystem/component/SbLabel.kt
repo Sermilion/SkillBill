@@ -5,10 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -29,6 +26,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import dev.skillbill.desktop.core.designsystem.status.StatusDot
 
 /** `Label({ dot: false })` is [Plain]; `Dot(null)` keeps the fg-faint dot that `Label` draws when no color is given. */
 sealed interface SbLabelStyle {
@@ -74,7 +72,7 @@ fun SbLabel(
     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     when (style) {
-      is SbLabelStyle.Dot -> androidx.compose.foundation.layout.Box(Modifier.size(7.dp).background(style.color ?: colors.fgFaint, CircleShape))
+      is SbLabelStyle.Dot -> StatusDot(style.color ?: colors.fgFaint)
       is SbLabelStyle.Tint, SbLabelStyle.Mono, SbLabelStyle.Plain -> Unit
     }
     CompositionLocalProvider(LocalContentColor provides textColor) {
