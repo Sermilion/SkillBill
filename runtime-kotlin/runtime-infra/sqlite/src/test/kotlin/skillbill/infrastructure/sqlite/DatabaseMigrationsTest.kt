@@ -37,13 +37,6 @@ private val GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_OUT_OF_BAND_ACCEPTANCE.label()
 private val GOAL_REVIEW_POLICY_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_REVIEW_POLICY.label()
-private val DIAGNOSIS_TABLES =
-  listOf(
-    "block_incident_diagnosis_evidence",
-    "block_incident_diagnosis_prerequisites",
-    "block_incident_diagnosis_quarantine",
-    "block_incident_diagnoses",
-  )
 
 class DatabaseMigrationsTest {
   @Test
@@ -97,7 +90,11 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(
         1,
-        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-existing'"),
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = " +
+            "'wftr-existing'",
+        ),
       )
       assertEquals(
         0,
@@ -119,11 +116,16 @@ class DatabaseMigrationsTest {
         )
         statement.executeUpdate(
           "INSERT INTO worktree_edit_journal " +
-            "(workflow_id, phase_id, recorded_at, path, lines_added, lines_removed, source) VALUES " +
-            "('wfl-a', 'implement', '2026-10-28T10:00:00Z', 'old-a.kt', 1, 0, 'worktree_probe'), " +
-            "('wfl-a', 'implement', '2026-10-28T10:00:01Z', 'new-a.kt', 2, 0, 'worktree_probe'), " +
-            "('wfl-b', 'review', '2026-10-28T10:00:00Z', 'old-b.kt', 3, 0, 'worktree_probe'), " +
-            "('wfl-b', 'review', '2026-10-28T10:00:02Z', 'new-b.kt', 4, 0, 'worktree_probe')",
+            "(workflow_id, phase_id, recorded_at, path, lines_added, lines_removed, " +
+            "source) VALUES " +
+            "('wfl-a', 'implement', '2026-10-28T10:00:00Z', 'old-a.kt', 1, 0, " +
+            "'worktree_probe'), " +
+            "('wfl-a', 'implement', '2026-10-28T10:00:01Z', 'new-a.kt', 2, 0, " +
+            "'worktree_probe'), " +
+            "('wfl-b', 'review', '2026-10-28T10:00:00Z', 'old-b.kt', 3, 0, " +
+            "'worktree_probe'), " +
+            "('wfl-b', 'review', '2026-10-28T10:00:02Z', 'new-b.kt', 4, 0, " +
+            "'worktree_probe')",
         )
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 90")
         statement.execute("PRAGMA user_version = 89")
@@ -140,241 +142,24 @@ class DatabaseMigrationsTest {
         1,
         scalarInt(
           connection,
-          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-a' AND path = 'new-a.kt'",
+          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-a' " +
+            "AND path = 'new-a.kt'",
         ),
       )
       assertEquals(
         1,
         scalarInt(
           connection,
-          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-b' AND path = 'new-b.kt'",
-        ),
-      )
-      assertEquals(
-        1,
-        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-preserved'"),
-      )
-    }
-  }
-
-  @Test
-  fun `product report migration preserves incidents and starts with empty report tables`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-product-reports-upgrade").resolve("upgrade.db")
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      connection.createStatement().use { statement ->
-        statement.executeUpdate(
-          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
-            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
-            "('bi_${"a".repeat(64)}', '0.1', 1, 'accepted_phase_block', 'kept incident', " +
-            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
-            "'unknown_historical')",
-        )
-        statement.execute("DROP TABLE block_incident_report_links")
-        statement.execute("DROP TABLE block_incident_reports")
-        revertDesktopChangeSignals(connection)
-        listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
-          statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
-        }
-        revertWorkBoardReadModel(connection)
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 80")
-        statement.execute("PRAGMA user_version = 79")
-        statement.executeUpdate(
-          "UPDATE room_master_table SET identity_hash = '7915a1b532fab60d83518e19b12c4aa0' WHERE id = 42",
-        )
-      }
-    }
-
-    DatabaseRuntime.migrateExistingDatabase(dbPath, SqliteTestDiagnostics)
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
-      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents WHERE reason = 'kept incident'"))
-      assertEquals(0, scalarInt(connection, "SELECT count(*) FROM block_incident_reports"))
-      assertEquals(0, scalarInt(connection, "SELECT count(*) FROM block_incident_report_links"))
-      connection.createStatement().use { statement ->
-        statement.executeQuery(
-          "SELECT create_unresolved, attempt_open, last_remote_failure FROM block_incident_reports",
-        ).use { rows -> assertFalse(rows.next()) }
-        statement.executeQuery(
-          "SELECT pending_comment_body, pending_comment_sha256, pending_comment_recovery_attempts " +
-            "FROM block_incident_report_links",
-        ).use { rows -> assertFalse(rows.next()) }
-      }
-      assertTrue(
-        scalarInt(
-          connection,
-          "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name LIKE 'block_incident_report%'",
-        ) > 0,
-      )
-    }
-  }
-
-  @Test
-  fun `block incident migration upgrades version 65 without changing existing workflows`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-block-incident-upgrade").resolve("upgrade.db")
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      connection.createStatement().use { statement ->
-        statement.executeUpdate(
-          "INSERT INTO feature_task_workflows(workflow_id, mode, contract_version) " +
-            "VALUES ('wftr-existing', 'prose', '1.0')",
-        )
-        val blockIncidentTables =
-          statement.executeQuery(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'block\\_incident%' ESCAPE '\\' " +
-              "ORDER BY name = 'block_incidents'",
-          ).use { rows -> generateSequence { if (rows.next()) rows.getString(1) else null }.toList() }
-        blockIncidentTables.forEach { table -> statement.execute("DROP TABLE $table") }
-        statement.execute("DROP TABLE feature_task_runtime_worker_generations")
-        revertWorkBoardReadModel(connection)
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 66")
-        statement.execute("PRAGMA user_version = 65")
-      }
-    }
-
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      assertEquals(
-        1,
-        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-existing'"),
-      )
-      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
-      assertTrue(
-        scalarInt(
-          connection,
-          "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'block_incidents'",
-        ) > 0,
-      )
-    }
-  }
-
-  @Test
-  fun `block incident migration preserves immutable occurrence rows and publishes revisions`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-block-incidents").resolve("incidents.db")
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      connection.createStatement().use { statement ->
-        statement.executeUpdate(
-          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
-            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
-            "('bi_${"a".repeat(64)}', '0.1', 1, 'accepted_phase_block', 'original failure', " +
-            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
-            "'unknown_historical')",
-        )
-        assertFailsWith<SQLException> {
-          statement.executeUpdate(
-            "UPDATE block_incidents SET reason = 'rewritten failure' WHERE occurrence_token = 'bi_${"a".repeat(64)}'",
-          )
-        }
-      }
-      assertEquals(1, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
-      assertEquals(1, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'phases'"))
-      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents"))
-    }
-  }
-
-  @Test
-  fun `block incident diagnosis migration upgrades version 76 and keeps diagnosis history immutable`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-block-diagnosis-upgrade").resolve("upgrade.db")
-    val token = "bi_${"a".repeat(64)}"
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      connection.createStatement().use { statement ->
-        statement.executeUpdate(
-          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
-            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
-            "('$token', '0.1', 1, 'accepted_phase_block', 'original failure', " +
-            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
-            "'unknown_historical')",
-        )
-        DIAGNOSIS_TABLES.forEach { table -> statement.execute("DROP TABLE $table") }
-        statement.execute("DROP TABLE IF EXISTS block_incident_recovery_attempts")
-        statement.execute("DROP TABLE IF EXISTS feature_task_runtime_worker_generations")
-        statement.execute("DROP TABLE block_incident_report_links")
-        statement.execute("DROP TABLE block_incident_reports")
-        revertWorkBoardReadModel(connection)
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 77")
-        statement.execute("PRAGMA user_version = 76")
-      }
-    }
-
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents WHERE occurrence_token = '$token'"))
-      DIAGNOSIS_TABLES.forEach { table ->
-        assertEquals(1, scalarInt(connection, "SELECT count(*) FROM sqlite_master WHERE name = '$table'"))
-      }
-      connection.createStatement().use { statement ->
-        statement.executeUpdate(
-          "INSERT INTO block_incident_diagnoses (occurrence_token, revision, summary, what_happened, certainty, " +
-            "responsible_category, proposed_recovery_action, no_workaround_known, degradations, " +
-            "investigator_kind, completed_at) VALUES ('$token', 2, 'summary', 'what happened', 'unknown', " +
-            "'unresolved', 'none', 1, '', 'deterministic', '2026-10-21T12:01:00Z')",
-        )
-        assertFailsWith<SQLException> {
-          statement.executeUpdate("UPDATE block_incident_diagnoses SET summary = 'rewritten'")
-        }
-        assertFailsWith<SQLException> { statement.executeUpdate("DELETE FROM block_incident_diagnoses") }
-      }
-    }
-  }
-
-  @Test
-  fun `block incident recovery migration preserves existing incidents and adds a unique attempt key`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-block-recovery-upgrade").resolve("upgrade.db")
-    val token = "bi_${"b".repeat(64)}"
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      connection.createStatement().use { statement ->
-        statement.executeUpdate(
-          "INSERT INTO feature_task_workflows(workflow_id, mode, contract_version) " +
-            "VALUES ('wftr-recovery-existing', 'prose', '1.0')",
-        )
-        statement.executeUpdate(
-          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
-            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
-            "('$token', '0.1', 1, 'accepted_phase_block', 'original failure', " +
-            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
-            "'unknown_historical')",
-        )
-        statement.execute("DROP TABLE block_incident_recovery_attempts")
-        statement.execute("DROP TABLE feature_task_runtime_worker_generations")
-        statement.execute("DROP TABLE block_incident_report_links")
-        statement.execute("DROP TABLE block_incident_reports")
-        revertDesktopChangeSignals(connection)
-        listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
-          statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
-        }
-        revertWorkBoardReadModel(connection)
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 78")
-        statement.execute("PRAGMA user_version = 77")
-      }
-    }
-
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents WHERE occurrence_token = '$token'"))
-      assertEquals(
-        1,
-        scalarInt(
-          connection,
-          "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-recovery-existing'",
+          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-b' " +
+            "AND path = 'new-b.kt'",
         ),
       )
       assertEquals(
         1,
         scalarInt(
           connection,
-          "SELECT count(*) FROM sqlite_master " +
-            "WHERE name = 'block_incident_recovery_attempts'",
-        ),
-      )
-      assertEquals(
-        2,
-        scalarInt(
-          connection,
-          "SELECT count(*) FROM pragma_index_list('block_incident_recovery_attempts') " +
-            "WHERE \"unique\" = 1",
-        ),
-      )
-      assertEquals(
-        3,
-        scalarInt(
-          connection,
-          "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' " +
-            "AND tbl_name = 'block_incident_recovery_attempts'",
+          "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = " +
+            "'wftr-preserved'",
         ),
       )
     }
@@ -407,9 +192,13 @@ class DatabaseMigrationsTest {
     val dbPath = Files.createTempDirectory("runtime-kotlin-desktop-v54").resolve("legacy.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-agent-activity-revisions'")
         statement.executeUpdate(
-          "UPDATE schema_migrations SET version = 54, name = 'save-standalone-phase-launch' " +
+          "DELETE FROM schema_migrations WHERE name = " +
+            "'separate-agent-activity-revisions'",
+        )
+        statement.executeUpdate(
+          "UPDATE schema_migrations SET version = 54, name = " +
+            "'save-standalone-phase-launch' " +
             "WHERE name = 'complete-desktop-launch-schema'",
         )
         statement.executeUpdate("DELETE FROM desktop_change_revisions WHERE topic = 'activity'")
@@ -418,7 +207,8 @@ class DatabaseMigrationsTest {
           statement.execute(
             "CREATE TRIGGER desktop_change_agent_activity_stamps_$operation " +
               "AFTER $operation ON agent_activity_stamps BEGIN " +
-              "UPDATE desktop_change_revisions SET revision = revision + 1 WHERE topic = 'phases'; END",
+              "UPDATE desktop_change_revisions SET revision = revision + 1 WHERE topic = " +
+              "'phases'; END",
           )
         }
         statement.execute("PRAGMA user_version = 54")
@@ -428,7 +218,8 @@ class DatabaseMigrationsTest {
       DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
         connection.createStatement().use { statement ->
           statement.executeQuery(
-            "SELECT launch_agent_id, launch_arguments_json FROM standalone_phase_status LIMIT 0",
+            "SELECT launch_agent_id, launch_arguments_json FROM " +
+              "standalone_phase_status LIMIT 0",
           ).use {
             assertEquals(2, it.metaData.columnCount)
           }
@@ -453,16 +244,24 @@ class DatabaseMigrationsTest {
     val dbPath = Files.createTempDirectory("runtime-kotlin-desktop-v86").resolve("legacy.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-desktop-change-signals'")
+        statement.executeUpdate(
+          "DELETE FROM schema_migrations WHERE name = " +
+            "'separate-desktop-change-signals'",
+        )
         statement.execute("DROP TABLE desktop_change_items")
         statement.execute("DROP TABLE desktop_signal_generation")
         statement.executeUpdate("DELETE FROM desktop_change_revisions WHERE topic = 'specs'")
         statement.execute("DROP TRIGGER desktop_change_worktree_edit_journal_insert")
         statement.execute(
-          "CREATE TRIGGER desktop_change_worktree_edit_journal_insert AFTER INSERT ON worktree_edit_journal BEGIN " +
-            "UPDATE desktop_change_revisions SET revision = revision + 1 WHERE topic IN ('goals', 'phases'); END",
+          "CREATE TRIGGER desktop_change_worktree_edit_journal_insert AFTER INSERT " +
+            "ON worktree_edit_journal BEGIN " +
+            "UPDATE desktop_change_revisions SET revision = revision + 1 WHERE topic " +
+            "IN ('goals', 'phases'); END",
         )
-        statement.executeUpdate("UPDATE desktop_change_revisions SET revision = 7 WHERE topic IN ('goals', 'phases')")
+        statement.executeUpdate(
+          "UPDATE desktop_change_revisions SET revision = 7 WHERE topic IN ('goals', " +
+            "'phases')",
+        )
         statement.execute("PRAGMA user_version = 86")
       }
     }
@@ -475,8 +274,10 @@ class DatabaseMigrationsTest {
       assertEquals(1, scalarInt(connection, "SELECT count(*) FROM desktop_signal_generation"))
       connection.createStatement().use { statement ->
         statement.executeUpdate(
-          "INSERT INTO worktree_edit_journal (workflow_id, recorded_at, path, lines_added, lines_removed, source) " +
-            "VALUES ('wftr-journal', '2026-10-28T00:00:00Z', 'a.kt', 1, 0, 'worktree_probe')",
+          "INSERT INTO worktree_edit_journal (workflow_id, recorded_at, path, " +
+            "lines_added, lines_removed, source) " +
+            "VALUES ('wftr-journal', '2026-10-28T00:00:00Z', 'a.kt', 1, 0, " +
+            "'worktree_probe')",
         )
       }
       assertEquals(7, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
@@ -518,13 +319,16 @@ class DatabaseMigrationsTest {
               "(workflow_id TEXT PRIMARY KEY, generation_json TEXT NOT NULL)",
           )
           statement.executeUpdate(
-            "INSERT INTO feature_task_runtime_audit_generations VALUES ('legacy-workflow', 'unreadable old state')",
+            "INSERT INTO feature_task_runtime_audit_generations VALUES " +
+              "('legacy-workflow', 'unreadable old state')",
           )
           statement.executeUpdate(
-            "INSERT INTO schema_migrations (version, name) VALUES (23, 'add-feature-task-runtime-audit-generations')",
+            "INSERT INTO schema_migrations (version, name) VALUES (23, " +
+              "'add-feature-task-runtime-audit-generations')",
           )
           statement.executeUpdate(
-            "CREATE TRIGGER reject_audit_updates BEFORE UPDATE ON feature_task_runtime_audit_generations " +
+            "CREATE TRIGGER reject_audit_updates BEFORE UPDATE ON " +
+              "feature_task_runtime_audit_generations " +
               "BEGIN SELECT RAISE(FAIL, 'retired audit storage must not be updated'); END",
           )
         }
@@ -556,7 +360,8 @@ class DatabaseMigrationsTest {
         migrationRows(connection).singleOrNull { row ->
           row.version == 22 && row.name == "drop-delegated-review-lifecycle-tables"
         },
-        "Migration version 22 drop-delegated-review-lifecycle-tables should be recorded.",
+        "Migration version 22 drop-delegated-review-lifecycle-tables should be " +
+          "recorded.",
       )
     }
   }
@@ -569,13 +374,16 @@ class DatabaseMigrationsTest {
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 22")
         statement.executeUpdate(
-          "CREATE TABLE IF NOT EXISTS review_lifecycle_events (review_id TEXT NOT NULL, payload TEXT NOT NULL)",
+          "CREATE TABLE IF NOT EXISTS review_lifecycle_events (review_id TEXT NOT " +
+            "NULL, payload TEXT NOT NULL)",
         )
         statement.executeUpdate(
-          "CREATE TABLE IF NOT EXISTS review_delegated_lifecycle (review_id TEXT PRIMARY KEY, payload TEXT NOT NULL)",
+          "CREATE TABLE IF NOT EXISTS review_delegated_lifecycle (review_id TEXT " +
+            "PRIMARY KEY, payload TEXT NOT NULL)",
         )
         statement.executeUpdate(
-          "CREATE INDEX IF NOT EXISTS idx_review_lifecycle_events_review ON review_lifecycle_events(review_id)",
+          "CREATE INDEX IF NOT EXISTS idx_review_lifecycle_events_review ON " +
+            "review_lifecycle_events(review_id)",
         )
         statement.executeUpdate(
           "CREATE INDEX IF NOT EXISTS idx_review_delegated_lifecycle_review " +
@@ -672,17 +480,25 @@ class DatabaseMigrationsTest {
       )
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-monitor-target'")
+        statement.executeUpdate(
+          "DELETE FROM schema_migrations WHERE name = " +
+            "'record-standalone-monitor-target'",
+        )
         revertDesktopChangeSignals(connection)
         targetColumns.forEach { column ->
           statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN $column")
         }
         statement.executeUpdate(
-          "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
-            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
-            "current_step, started_at, updated_at, lease_owner, lease_generation, lease_expires_at) VALUES " +
-            "('legacy-execution', 'repo', 'main', 'legacy-monitor', 'monitor', 'store', '4', '3', 'active', " +
-            "'monitor', '2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 2, '2026-10-17T00:00:00Z')",
+          "INSERT INTO standalone_phase_status (execution_id, repository_identity, " +
+            "branch_correlation, " +
+            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, " +
+            "lifecycle_state, " +
+            "current_step, started_at, updated_at, lease_owner, lease_generation, " +
+            "lease_expires_at) VALUES " +
+            "('legacy-execution', 'repo', 'main', 'legacy-monitor', 'monitor', " +
+            "'store', '4', '3', 'active', " +
+            "'monitor', '2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 2, " +
+            "'2026-10-17T00:00:00Z')",
         )
         statement.execute("PRAGMA user_version = 58")
       }
@@ -694,7 +510,8 @@ class DatabaseMigrationsTest {
       }
       connection.createStatement().use { statement ->
         statement.executeQuery(
-          "SELECT run_sequence, status_revision, lease_generation, monitor_pr_key, monitor_cleanup_disposition " +
+          "SELECT run_sequence, status_revision, lease_generation, monitor_pr_key, " +
+            "monitor_cleanup_disposition " +
             "FROM standalone_phase_status WHERE execution_id = 'legacy-execution'",
         ).use {
           assertTrue(it.next())
@@ -718,15 +535,23 @@ class DatabaseMigrationsTest {
     val dbPath = Files.createTempDirectory("runtime-kotlin-db-v58-launch-scope").resolve("legacy.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-phase-launch-scope'")
+        statement.executeUpdate(
+          "DELETE FROM schema_migrations WHERE name = " +
+            "'record-standalone-phase-launch-scope'",
+        )
         revertDesktopChangeSignals(connection)
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN launch_scope")
         statement.executeUpdate(
-          "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
-            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
-            "current_step, started_at, updated_at, lease_owner, lease_generation, lease_expires_at) VALUES " +
-            "('legacy-execution', 'repo', 'main', 'legacy-plan', 'plan', 'store', '1', '1', 'active', 'plan', " +
-            "'2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 1, '2026-10-17T00:00:00Z')",
+          "INSERT INTO standalone_phase_status (execution_id, repository_identity, " +
+            "branch_correlation, " +
+            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, " +
+            "lifecycle_state, " +
+            "current_step, started_at, updated_at, lease_owner, lease_generation, " +
+            "lease_expires_at) VALUES " +
+            "('legacy-execution', 'repo', 'main', 'legacy-plan', 'plan', 'store', '1', " +
+            "'1', 'active', 'plan', " +
+            "'2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 1, " +
+            "'2026-10-17T00:00:00Z')",
         )
         statement.execute("PRAGMA user_version = 57")
       }
@@ -735,7 +560,8 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeQuery(
-          "SELECT launch_scope FROM standalone_phase_status WHERE execution_id = 'legacy-execution'",
+          "SELECT launch_scope FROM standalone_phase_status WHERE execution_id = " +
+            "'legacy-execution'",
         ).use {
           assertTrue(it.next())
           assertEquals("standalone", it.getString(1))
@@ -756,15 +582,25 @@ class DatabaseMigrationsTest {
     val dbPath = Files.createTempDirectory("runtime-kotlin-db-v57-agent-environment").resolve("legacy.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-launch-agent-environment'")
+        statement.executeUpdate(
+          "DELETE FROM schema_migrations WHERE name = " +
+            "'record-launch-agent-environment'",
+        )
         revertDesktopChangeSignals(connection)
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN agent_environment_json")
-        statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN agent_environment_json")
+        statement.execute(
+          "ALTER TABLE ide_status_workflow_execution DROP COLUMN " +
+            "agent_environment_json",
+        )
         statement.executeUpdate(
-          "INSERT INTO ide_status_workflow_execution (execution_id, repository_identity, branch_correlation, " +
-            "workflow_id, invocation_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
-            "started_at, updated_at) VALUES ('legacy-execution', 'repo', 'main', 'legacy-goal', " +
-            "'legacy-invocation', 'store', '1', '1', 'active', '2026-10-13T00:00:00Z', '2026-10-13T00:00:00Z')",
+          "INSERT INTO ide_status_workflow_execution (execution_id, " +
+            "repository_identity, branch_correlation, " +
+            "workflow_id, invocation_id, status_store_id, run_sequence, " +
+            "status_revision, lifecycle_state, " +
+            "started_at, updated_at) VALUES ('legacy-execution', 'repo', 'main', " +
+            "'legacy-goal', " +
+            "'legacy-invocation', 'store', '1', '1', 'active', '2026-10-13T00:00:00Z', " +
+            "'2026-10-13T00:00:00Z')",
         )
         statement.execute("PRAGMA user_version = 56")
       }
@@ -778,7 +614,8 @@ class DatabaseMigrationsTest {
           }
         }
         statement.executeQuery(
-          "SELECT agent_environment_json FROM ide_status_workflow_execution WHERE execution_id = 'legacy-execution'",
+          "SELECT agent_environment_json FROM ide_status_workflow_execution WHERE " +
+            "execution_id = 'legacy-execution'",
         ).use {
           assertTrue(it.next())
           assertEquals(null, it.getString(1))
@@ -799,10 +636,12 @@ class DatabaseMigrationsTest {
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'abandon-stale-verify-workflows'")
         statement.executeUpdate(
-          "INSERT INTO feature_verify_workflows (workflow_id, workflow_status, updated_at, finished_at) VALUES " +
+          "INSERT INTO feature_verify_workflows (workflow_id, workflow_status, " +
+            "updated_at, finished_at) VALUES " +
             "('wfv-stale', 'running', datetime('now', '-3 days'), NULL), " +
             "('wfv-fresh', 'running', datetime('now', '-1 hours'), NULL), " +
-            "('wfv-done', 'completed', datetime('now', '-3 days'), '2026-01-01T00:00:00.000Z')",
+            "('wfv-done', 'completed', datetime('now', '-3 days'), " +
+            "'2026-01-01T00:00:00.000Z')",
         )
       }
     }
@@ -811,7 +650,8 @@ class DatabaseMigrationsTest {
       val rows =
         connection.createStatement().use { statement ->
           statement.executeQuery(
-            "SELECT workflow_id, workflow_status, finished_at FROM feature_verify_workflows ORDER BY workflow_id",
+            "SELECT workflow_id, workflow_status, finished_at FROM " +
+              "feature_verify_workflows ORDER BY workflow_id",
           ).use { result ->
             buildMap {
               while (result.next()) {
@@ -847,9 +687,13 @@ class DatabaseMigrationsTest {
           """.trimIndent(),
         )
         statement.executeUpdate("ALTER TABLE feature_task_runtime_sessions DROP COLUMN phase_strategies")
-        statement.executeUpdate("ALTER TABLE feature_task_runtime_sessions DROP COLUMN phase_strategy_availability")
         statement.executeUpdate(
-          "DELETE FROM schema_migrations WHERE name = 'add-feature-task-phase-strategy-telemetry-columns'",
+          "ALTER TABLE feature_task_runtime_sessions DROP COLUMN " +
+            "phase_strategy_availability",
+        )
+        statement.executeUpdate(
+          "DELETE FROM schema_migrations WHERE name = " +
+            "'add-feature-task-phase-strategy-telemetry-columns'",
         )
         statement.executeUpdate("PRAGMA user_version = 48")
       }
@@ -966,7 +810,8 @@ class DatabaseMigrationsTest {
       1,
       scalarInt(
         connection,
-        "SELECT COUNT(*) FROM telemetry_outbox WHERE event_name = 'skillbill_feature_task_runtime_finished'",
+        "SELECT COUNT(*) FROM telemetry_outbox WHERE event_name = " +
+          "'skillbill_feature_task_runtime_finished'",
       ),
     )
   }
@@ -1037,7 +882,8 @@ class DatabaseMigrationsTest {
 
       assertTrue(
         columnNames(connection, "producer_output_evidence").contains("generation"),
-        "The branch-numbered ledger row must not mask this build's version 16 migration.",
+        "The branch-numbered ledger row must not mask this build's version 16 " +
+          "migration.",
       )
       val names = migrationRows(connection).map { row -> row.name }
       assertTrue(
@@ -1080,7 +926,8 @@ class DatabaseMigrationsTest {
       assertEquals(
         DatabaseMigrations.migrations.map { migration -> migration.version to migration.name },
         migrationRows(connection).map { row -> row.version to row.name },
-        "Every ledger row must carry the version this build assigns to its migration.",
+        "Every ledger row must carry the version this build assigns to its " +
+          "migration.",
       )
       val highest =
         connection.createStatement().use { statement ->
@@ -1120,7 +967,8 @@ class DatabaseMigrationsTest {
         DriverManager.getConnection("jdbc:sqlite:$dbPath").use { migrator ->
           migrator.createStatement().use { it.execute("PRAGMA busy_timeout = 0") }
           assertFailsWith<SQLException>(
-            "A version-keyed ledger must take the write lock so ensureNameKeyed runs inside it.",
+            "A version-keyed ledger must take the write lock so ensureNameKeyed runs " +
+              "inside it.",
           ) { DatabaseMigrations.apply(migrator) }
         }
       } finally {
@@ -1132,7 +980,8 @@ class DatabaseMigrationsTest {
       DatabaseMigrations.apply(connection)
       assertFalse(
         versionIsPrimaryKey(connection),
-        "ensureNameKeyed must rebuild the ledger as name-keyed once it holds the write lock.",
+        "ensureNameKeyed must rebuild the ledger as name-keyed once it holds the " +
+          "write lock.",
       )
       assertEquals(
         DatabaseMigrations.migrations.map { migration -> migration.name },
@@ -1147,7 +996,10 @@ class DatabaseMigrationsTest {
     val dbPath = Files.createTempDirectory("runtime-kotlin-db-gate-column-heal").resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use {
-        it.executeUpdate("DELETE FROM schema_migrations WHERE name = 'ensure-schema-columns-and-heals'")
+        it.executeUpdate(
+          "DELETE FROM schema_migrations WHERE name = " +
+            "'ensure-schema-columns-and-heals'",
+        )
         revertDesktopChangeSignals(connection)
         it.executeUpdate("ALTER TABLE feature_task_workflows DROP COLUMN interruption_reason")
       }
@@ -1168,7 +1020,8 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertTrue(
         "interruption_reason" in tableColumns(connection, "feature_task_workflows"),
-        "DatabaseColumnMigrations.apply must heal the column when its ledger migration is pending.",
+        "DatabaseColumnMigrations.apply must heal the column when its ledger " +
+          "migration is pending.",
       )
       assertEquals(
         "2026-05-01T10:00:00Z",
@@ -1703,7 +1556,8 @@ class DatabaseMigrationsEnsureDatabaseTest {
       assertEquals(
         before,
         scalarInt(connection, "SELECT COUNT(*) FROM telemetry_outbox WHERE skill_bill_version IS NULL"),
-        "Pre-migration rows must stay version-absent rather than being given a fabricated version.",
+        "Pre-migration rows must stay version-absent rather than being given a " +
+          "fabricated version.",
       )
     }
   }
@@ -1764,9 +1618,11 @@ class DatabaseMigrationsEnsureDatabaseTest {
         1,
         scalarInt(
           connection,
-          "SELECT COUNT(*) FROM unaddressed_findings WHERE review_run_id IS NULL AND finding_id IS NULL",
+          "SELECT COUNT(*) FROM unaddressed_findings WHERE review_run_id IS NULL AND " +
+            "finding_id IS NULL",
         ),
-        "A row that predates the key must stay unresolved, never bucketed to a guessed review run.",
+        "A row that predates the key must stay unresolved, never bucketed to a " +
+          "guessed review run.",
       )
       assertTrue("review_finding_outcomes" in tableNames(connection))
     }
@@ -1874,7 +1730,8 @@ class DatabaseMigrationsReviewAttributionTest {
         scalarInt(
           connection,
           "SELECT COUNT(*) FROM findings f " +
-            "WHERE NOT EXISTS (SELECT 1 FROM review_runs r WHERE r.review_run_id = f.review_run_id)",
+            "WHERE NOT EXISTS (SELECT 1 FROM review_runs r WHERE r.review_run_id = " +
+            "f.review_run_id)",
         ),
         "AC-009: no finding may be left without its review_runs parent.",
       )
@@ -1917,7 +1774,11 @@ class DatabaseMigrationsReviewAttributionTest {
         statement.executeUpdate("INSERT INTO feature_implement_sessions (session_id) VALUES ('fis-defaults')")
       }
 
-      assertTrue("source" in columns, "source must be healed even when every migration version is already recorded.")
+      assertTrue(
+        "source" in columns,
+        "source must be healed even when every migration version is already " +
+          "recorded.",
+      )
       assertEquals("production", featureImplementColumnValue(connection, "source"))
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
     }
@@ -1953,7 +1814,8 @@ class DatabaseMigrationsReviewAttributionTest {
           pkValue = "fis-legacy-duration",
           columnName = "started_at",
         ),
-        "Feature implement started_at must be recovered from the matching legacy workflow row.",
+        "Feature implement started_at must be recovered from the matching legacy " +
+          "workflow row.",
       )
     }
   }
@@ -2217,7 +2079,8 @@ class DatabaseMigrationsReviewAttributionTest {
           """.trimIndent(),
         )
         statement.execute(
-          "INSERT INTO review_runs (review_run_id, routed_skill, detected_scope, detected_stack, raw_text) " +
+          "INSERT INTO review_runs (review_run_id, routed_skill, detected_scope, " +
+            "detected_stack, raw_text) " +
             "VALUES ('rvw-unresolvable', 'bill-kmp-code-review, bill-ios-code-review', " +
             "'whatever the agent felt like', 'kotlin, ios', 'raw')",
         )
@@ -2241,13 +2104,15 @@ class DatabaseMigrationsReviewAttributionTest {
         1,
         connection.createStatement().use { statement ->
           statement.executeQuery(
-            "SELECT COUNT(*) FROM schema_migrations WHERE name = 'backfill-review-attribution-canonicals'",
+            "SELECT COUNT(*) FROM schema_migrations WHERE name = " +
+              "'backfill-review-attribution-canonicals'",
           ).use { resultSet ->
             resultSet.next()
             resultSet.getInt(1)
           }
         },
-        "The canonical backfill must be recorded once as a one-shot ledger migration.",
+        "The canonical backfill must be recorded once as a one-shot ledger " +
+          "migration.",
       )
     }
   }
@@ -2351,14 +2216,16 @@ class DatabaseMigrationsReviewAttributionTest {
             AND (review_policy_json IS NOT NULL OR out_of_band_acceptances_json IS NOT NULL)
           """.trimIndent(),
         ),
-        "A rejected legacy acceptance must not leave a review policy or acceptance control row behind.",
+        "A rejected legacy acceptance must not leave a review policy or acceptance " +
+          "control row behind.",
       )
       assertEquals(artifactsBefore, legacyGoalParentArtifactsJson(dbPath))
       assertEquals(
         0,
         scalarInt(
           connection,
-          "SELECT COUNT(*) FROM schema_migrations WHERE name = 'migrate-legacy-goal-runner-controls'",
+          "SELECT COUNT(*) FROM schema_migrations WHERE name = " +
+            "'migrate-legacy-goal-runner-controls'",
         ),
         "The failed migration must not be recorded as applied.",
       )
@@ -2369,7 +2236,8 @@ class DatabaseMigrationsReviewAttributionTest {
     DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
       scalarString(
         connection,
-        "SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = 'wftr-legacy-goal-parent'",
+        "SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = " +
+          "'wftr-legacy-goal-parent'",
       )
     }
 
@@ -2500,6 +2368,13 @@ private val expectedMigrationDefinitions =
     105 to "record-validation-check-events",
     106 to "record-standalone-plan-output-history",
     107 to "record-structured-plan-activity",
+    108 to "add-operator-approval-records-and-rules",
+    109 to "add-operator-approval-leases-and-grant-facts",
+    110 to "add-operator-approval-owner-lease-expiry",
+    111 to "add-operation-proposal-cards",
+    112 to "add-operation-launch-retention",
+    113 to "add-operation-confirmation-executions",
+    114 to "add-approval-not-required-delivery",
   )
 
 private object NoopMigrationDiagnostics : RuntimeDiagnostics {

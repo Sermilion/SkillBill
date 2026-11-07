@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,8 @@ internal data class QueuedChatMessage(
   val action: ChatSuggestedAction?,
   val pauseAndAct: Boolean,
   val images: List<ChatImage> = emptyList(),
+  val cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  val onRejected: (() -> Unit)? = null,
 )
 
 /**
@@ -107,6 +110,13 @@ class ChatSession internal constructor(
 
   internal val modeState = MutableStateFlow(modeFor(item))
   val mode: StateFlow<ChatPermissionMode> = modeState.asStateFlow()
+
+  /**
+   * True only while the approval feed holds this window's operator registration for the chat's repository. Every card
+   * control is disabled while it is false, and a restored or stored card never turns it on.
+   */
+  internal val approvalLiveState = MutableStateFlow(false)
+  val approvalLive: StateFlow<Boolean> = approvalLiveState.asStateFlow()
 
   internal val goneState = MutableStateFlow(false)
   val gone: StateFlow<Boolean> = goneState.asStateFlow()

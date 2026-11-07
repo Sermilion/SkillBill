@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.NewTaskActionKind
@@ -222,6 +223,25 @@ class NewTaskDraftTest {
 
     assertEquals(listOf(true, true, false), chat.requests.map { it.firstTurn })
     assertEquals(1, chat.requests.map { it.sessionId }.distinct().size)
+    draft.close()
+  }
+
+  @Test
+  fun `a refused new task restores the submitted MCP declaration with its text`() = runTest {
+    val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+    chat.events = { flow { for (event in reply) emit(event) } }
+    val draft = draft()
+    draft.cursorMcpDependency = CursorMcpDependency.TeamDashboardRequired
+    draft.say("use the team server")
+    runCurrent()
+    draft.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
+
+    reply.send(ChatEvent.Failed(ChatFailure.AgentUnsupported, null))
+    reply.close()
+    runCurrent()
+
+    assertEquals("use the team server", draft.text)
+    assertEquals(CursorMcpDependency.TeamDashboardRequired, draft.cursorMcpDependency)
     draft.close()
   }
 
@@ -743,6 +763,7 @@ class NewTaskDraftTest {
     val draft = draft()
     draft.say("first")
     runCurrent()
+    draft.cursorMcpDependency = CursorMcpDependency.ProjectUserOnly
     draft.say("q1")
     draft.say("q2")
     runCurrent()
@@ -751,6 +772,7 @@ class NewTaskDraftTest {
     runCurrent()
     assertEquals(1, chat.requests.size)
     assertEquals("q1\n\nq2\n\nexisting", draft.text)
+    assertEquals(CursorMcpDependency.Unspecified, draft.cursorMcpDependency)
     replies[0].close()
     runCurrent()
     draft.close()

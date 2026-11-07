@@ -266,13 +266,11 @@ class AgentRunCommandBuildersTest {
     val qaLaunch = request().copy(additionalWritableDirectories = listOf(invocation))
 
     val claude = ClaudeAgentRunCommandBuilder(emptyMap()).build(qaLaunch).command
-    val codex = CodexAgentRunCommandBuilder().build(qaLaunch).command
 
     assertEquals(
       listOf("/tmp/skillbill-agent-run", invocation.toString()),
       claude.windowed(2).filter { it.first() == "--add-dir" }.map { it.last() },
     )
-    assertEquals(listOf("--add-dir", invocation.toString()), codex.windowed(2).single { it.first() == "--add-dir" })
   }
 
   @Test
@@ -396,55 +394,14 @@ class AgentRunCommandBuildersTest {
   }
 
   @Test
-  fun `codex renders exact commands for each directive shape`() {
+  fun `codex selects app server while model and effort stay available to the session adapter`() {
     val builder = CodexAgentRunCommandBuilder()
-    assertTrue(builder.build(request()).inheritEnvironment)
+    val built = builder.build(request(model = "gpt-sol", effort = "xhigh"))
 
-    assertEquals(
-      listOf(
-        "codex",
-        "exec",
-        "--json",
-        "--cd",
-        "/tmp/skillbill-agent-run",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--config",
-        "shell_environment_policy.inherit=all",
-        "--model",
-        "gpt-sol",
-        "--config",
-        "model_reasoning_effort=xhigh",
-      ),
-      builder.build(request(model = "gpt-sol", effort = "xhigh")).command,
-    )
-    assertEquals(
-      listOf(
-        "codex",
-        "exec",
-        "--json",
-        "--cd",
-        "/tmp/skillbill-agent-run",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--config",
-        "shell_environment_policy.inherit=all",
-        "--model",
-        "gpt-sol",
-      ),
-      builder.build(request(model = "gpt-sol")).command,
-    )
-    assertEquals(
-      listOf(
-        "codex",
-        "exec",
-        "--json",
-        "--cd",
-        "/tmp/skillbill-agent-run",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--config",
-        "shell_environment_policy.inherit=all",
-      ),
-      builder.build(request()).command,
-    )
+    assertEquals(listOf("codex", "app-server", "--listen", "stdio://"), built.command)
+    assertEquals(AgentRunApprovalProtocol.CODEX_APP_SERVER, built.approvalProtocol)
+    assertEquals("Phase: implement", built.stdinText)
+    assertTrue(built.inheritEnvironment)
   }
 
   @Test
@@ -455,7 +412,8 @@ class AgentRunCommandBuildersTest {
           request().copy(promptOverride = "Phase: $phase"),
         ).command
 
-      assertTrue(command.contains("--dangerously-bypass-approvals-and-sandbox"))
+      assertFalse(command.contains("--dangerously-bypass-approvals-and-sandbox"))
+      assertFalse(command.contains("shell_environment_policy.inherit=all"))
       assertFalse(command.contains("read-only"))
     }
   }
@@ -470,7 +428,8 @@ class AgentRunCommandBuildersTest {
       )
 
     assertEquals(MODEL_DIRECTIVE_CAPABLE_AGENTS, builders.map { it.agent }.toSet())
-    builders.forEach { builder ->
+    assertEquals("model[effort=high]", CursorAgentRunCommandBuilder().build(request("model", "high")).sessionModel)
+    builders.filter { it.agent == SupportedAgent.CLAUDE }.forEach { builder ->
       val command = builder.build(request(model = "model", effort = "high")).command
       assertTrue(command.contains("--model"))
       assertTrue(

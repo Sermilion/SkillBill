@@ -21,6 +21,7 @@ internal class CursorAgentRunCommandBuilder(
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.CURSOR
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CURSOR_STREAM_JSON
+  override val approvalProtocol: AgentRunApprovalProtocol = AgentRunApprovalProtocol.CURSOR_ACP
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
 
   override fun continuation(
@@ -32,6 +33,13 @@ internal class CursorAgentRunCommandBuilder(
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)
 
+    require(request.effortOverride == null || request.modelOverride != null) {
+      "Cursor effort directive requires a model directive."
+    }
+    val sessionModel =
+      request.modelOverride?.let { model ->
+        request.effortOverride?.let { effort -> mergeModelEffort(model, effort) } ?: model
+      }
     val streamPartialOutput = request.streamProviderOutput
 
     val streaming = streamPartialOutput || request.streamOutputForLiveness
@@ -60,6 +68,8 @@ internal class CursorAgentRunCommandBuilder(
           runtimeDatabaseEnvironment(!isReviewLaunch, databasePath),
       inheritEnvironment = !isReviewLaunch,
       conversationIsolation = governedReviewConversationIsolation(request),
+      approvalProtocol = if (isReviewLaunch) null else approvalProtocol,
+      sessionModel = sessionModel,
       idlePolicy =
         when {
           streamPartialOutput && request.streamOutputForLiveness -> AgentRunIdlePolicy.OUTPUT_EXTENDED
@@ -78,6 +88,10 @@ internal class CursorAgentRunCommandBuilder(
   ): List<String> =
     buildList {
       add("agent")
+      if (!isReviewLaunch) {
+        add("acp")
+        return@buildList
+      }
       add("--print")
 
       if (isReviewLaunch) {
@@ -109,7 +123,8 @@ internal class CursorAgentRunCommandBuilder(
       request.effortOverride?.let { effort ->
         if (request.modelOverride == null) {
           require(false) {
-            "Cursor effort directive requires a model directive; add a model directive or remove the effort assignment."
+            "Cursor effort directive requires a model directive; add a model directive " +
+              "or remove the effort assignment."
           }
         }
       }
@@ -136,8 +151,10 @@ internal class CursorAgentRunCommandBuilder(
       existingEffort == effort -> model
       else ->
         error(
-          "Conflicting effort directive: model string '$model' declares effort='$existingEffort', but " +
-            "directive specifies effort='$effort'. Remove the conflict from the execution_matrix or " +
+          "Conflicting effort directive: model string '$model' declares " +
+            "effort='$existingEffort', but " +
+            "directive specifies effort='$effort'. Remove the conflict from the " +
+            "execution_matrix or " +
             "phase assignment.",
         )
     }

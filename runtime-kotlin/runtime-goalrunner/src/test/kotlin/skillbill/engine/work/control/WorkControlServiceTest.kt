@@ -14,6 +14,7 @@ import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerBlockRecoveryAdapter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.StubGoalManifestStore
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
@@ -43,6 +44,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.operation.EmptyOperationCardRepository
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -345,6 +347,7 @@ private class GoalControlsFixture(
         newTaskDiagnostics,
         InPlaceGoalWorktreeResources,
         RecordingBranchWorktreeResources(),
+        OperationCardLaunches(EmptyOperationCardRepository, NoOperationCardLifecycle) { emptyMap() },
       ),
     )
 

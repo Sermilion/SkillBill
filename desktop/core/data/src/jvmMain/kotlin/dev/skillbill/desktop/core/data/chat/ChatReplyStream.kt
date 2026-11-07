@@ -20,6 +20,7 @@ internal class ChatReplyStream(private val diagnostics: Diagnostics) {
 
   fun accept(event: ChatEvent): List<ChatEvent> = when (event) {
     is ChatEvent.TextDelta -> text(event.text)
+    is ChatEvent.Notice -> listOf(event)
     ChatEvent.Completed -> buildList {
       val actions = metadata
       if (actions == null) {

@@ -720,8 +720,13 @@ A retryable block first goes to read-only report admission. That admission retur
 independent source verification, or `advance` for a concrete external obstacle.
 Both `progress` and `advance` consume the attempt. An agent stopping after one
 partial edit is not an external obstacle.
-A completed repair claim, with verdict `completed`, `satisfied`, or no verdict,
-goes directly to independent source verification. A verifier's `progress` verdict
+A completed repair claim with an explicit verdict `completed` or `satisfied`
+goes directly to independent source verification. A repair report with an omitted
+or unrecognized verdict first goes through the same read-only report admission,
+whether submitted through the completion tool or captured from final prose.
+An unfinished report is recorded as incomplete against its original reservation
+and returns to repair planning; missing metadata never establishes completion.
+A verifier's `progress` verdict
 rejects that completion claim and consumes one unsuccessful outcome.
 The third unsuccessful outcome blocks that criterion. Explicit operator resume of
 the blocked goal resets the active failure counts to zero and grants three new

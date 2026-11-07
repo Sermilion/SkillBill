@@ -12,6 +12,7 @@ import dev.skillbill.desktop.core.domain.model.ChatNewTaskContext
 import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
@@ -462,6 +463,28 @@ class ChatWorkspaceTest {
     workspace.send(item.id, "text only")
     runCurrent()
     assertEquals(emptyList(), chat.requests.last().images)
+    workspace.closeAll()
+  }
+
+  @Test
+  fun `a refused draft restores its own MCP declaration after the picker changes`() = runTest {
+    val item = workItem("SKILL-453")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+    val reply = Channel<ChatEvent>(Channel.UNLIMITED)
+    chat.events = { flow { for (event in reply) emit(event) } }
+
+    workspace.send(item.id, "use the team server", cursorMcpDependency = CursorMcpDependency.TeamDashboardRequired)
+    runCurrent()
+    workspace.cursorMcpDependencies[item.id] = CursorMcpDependency.ProjectUserOnly
+    reply.send(ChatEvent.Failed(ChatFailure.AgentUnsupported, null))
+    reply.close()
+    runCurrent()
+
+    assertEquals("use the team server", workspace.drafts[item.id])
+    assertEquals(CursorMcpDependency.TeamDashboardRequired, workspace.cursorMcpDependencies[item.id])
     workspace.closeAll()
   }
 

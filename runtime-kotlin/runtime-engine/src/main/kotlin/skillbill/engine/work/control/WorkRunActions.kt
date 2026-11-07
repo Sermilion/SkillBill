@@ -92,7 +92,7 @@ public class WorkRunActions(
         )
       when (val launched = launcher.start(request)) {
         is WorkRunLaunchResult.Refused -> WorkControlResult.LaunchFailed(launched.reason)
-        is WorkRunLaunchResult.Started -> WorkControlResult.Accepted
+        is WorkRunLaunchResult.Started, is WorkRunLaunchResult.AwaitingConfirmation -> WorkControlResult.Accepted
       }
     }
   }

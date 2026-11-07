@@ -1,5 +1,17 @@
 package skillbill.ports.persistence
 
+import skillbill.approval.model.ApprovalGrantFacts
+import skillbill.approval.model.ApprovalProviderDisposition
+import skillbill.contracts.approval.ApprovalRequestRecord
+import skillbill.contracts.approval.ApprovalRuleRecord
+import skillbill.ports.approval.ApprovalStore
+import skillbill.ports.approval.model.ApprovalConsumerLease
+import skillbill.ports.approval.model.ApprovalDeliveryState
+import skillbill.ports.approval.model.ApprovalOwnerKey
+import skillbill.ports.approval.model.ApprovalOwnerLease
+import skillbill.ports.approval.model.ApprovalRegistration
+import skillbill.ports.approval.model.ApprovalRequestIdentity
+import skillbill.ports.approval.model.ApprovalStoredRequest
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.InMemoryBlockIncidentRecoveryRepository
@@ -45,7 +57,9 @@ import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import skillbill.ports.idestatus.model.WorkValidationBranchRun
+import skillbill.ports.operation.OperationCardRepository
 import skillbill.ports.operation.OperationProposalRepository
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
@@ -116,8 +130,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         checklist: StandaloneQaChecklist,
       ): StandaloneQaChecklistWriteResult = StandaloneQaChecklistWriteResult.MISSING
 
-      override fun appendValidationCheckEvent(record: ValidationCheckEventRecord): Unit =
-        error("Standalone phase status repository is unavailable in this fixture.")
+      override fun appendValidationCheckEvent(record: ValidationCheckEventRecord) = Unit
 
       override fun readValidationCheckEvents(invocationId: String): List<ValidationCheckEventRecord> = emptyList()
 
@@ -134,9 +147,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
       override fun writeOutputSnapshot(
         executionId: String,
         snapshot: StandalonePhaseOutputSnapshot,
-      ) {
-        error("Standalone phase status repository is unavailable in this fixture.")
-      }
+      ) = Unit
 
       override fun readOutputLines(
         executionId: String,
@@ -154,6 +165,66 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
     UnavailableFeatureTaskPhaseSettlementRepository
   open override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository()
   open override val operationProposals: OperationProposalRepository = UnavailableOperationProposalRepository
+  open override val operationCards: OperationCardRepository = UnavailableOperationCardRepository
+  open override val approvals: ApprovalStore =
+    object : ApprovalStore {
+      override fun register(
+        request: ApprovalRequestRecord,
+        facts: ApprovalGrantFacts,
+      ): ApprovalRegistration = ApprovalRegistration.IdentityConflict
+
+      override fun find(identity: ApprovalRequestIdentity): ApprovalStoredRequest? = null
+
+      override fun settleAndClaim(
+        identity: ApprovalRequestIdentity,
+        settled: ApprovalRequestRecord,
+        rule: ApprovalRuleRecord?,
+        claimedAt: String,
+      ): Boolean = false
+
+      override fun settleWithoutDelivery(
+        identity: ApprovalRequestIdentity,
+        settled: ApprovalRequestRecord,
+      ): Boolean = false
+
+      override fun recordProviderDisposition(
+        identity: ApprovalRequestIdentity,
+        disposition: ApprovalProviderDisposition,
+      ): Boolean = false
+
+      override fun finishDelivery(
+        identity: ApprovalRequestIdentity,
+        state: ApprovalDeliveryState,
+      ): Boolean = false
+
+      override fun activeRules(repositoryIdentity: String): List<ApprovalRuleRecord> = emptyList()
+
+      override fun revokeRule(
+        ruleId: String,
+        repositoryIdentity: String,
+        revokedAt: String,
+      ): Boolean = false
+
+      override fun pending(
+        repositoryIdentity: String,
+        owner: ApprovalOwnerKey?,
+      ): List<ApprovalStoredRequest> = emptyList()
+
+      override fun claimedDeliveries(owner: ApprovalOwnerKey): List<ApprovalStoredRequest> = emptyList()
+
+      override fun recent(
+        repositoryIdentity: String,
+        limit: Int,
+      ): List<ApprovalStoredRequest> = emptyList()
+
+      override fun saveOwner(lease: ApprovalOwnerLease) = Unit
+
+      override fun owner(key: ApprovalOwnerKey): ApprovalOwnerLease? = null
+
+      override fun saveConsumer(lease: ApprovalConsumerLease) = Unit
+
+      override fun consumer(repositoryIdentity: String): ApprovalConsumerLease? = null
+    }
   open override val blockIncidents: BlockIncidentRepository = InMemoryBlockIncidentRepository()
   open override val blockIncidentRecoveries: BlockIncidentRecoveryRepository = InMemoryBlockIncidentRecoveryRepository()
   open override val productReports: ProductReportRepository = InMemoryProductReportRepository()

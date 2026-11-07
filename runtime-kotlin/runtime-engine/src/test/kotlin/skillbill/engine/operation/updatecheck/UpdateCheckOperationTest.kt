@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.operation.core.NoOperationCardLifecycle
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationConfirmationGate
 import skillbill.engine.operation.core.OperationExecutor
@@ -19,6 +20,7 @@ import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.RuntimeVersion
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.operation.UnavailableOperationCardRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.process.ReleaseCatalogPort
 import skillbill.ports.process.model.ReleaseCatalogEntry
@@ -121,12 +123,14 @@ class UpdateCheckOperationTest {
         OperationRegistry(listOf(UpdateCheckOperation(service))),
         OperationConfirmationGate(
           UnavailableOperationProposalRepository,
+          UnavailableOperationCardRepository,
           NoopWorkflowGitOperations,
           Clock.systemUTC(),
         ),
         OperationStepRunner(UnlaunchablePhaseRunner, NoopWorkflowGitOperations),
         FixedProjectStorePort(home.resolve("project-store")),
         RecordingBranchWorktreeResources(),
+        NoOperationCardLifecycle,
       )
     val result =
       executor.execute(

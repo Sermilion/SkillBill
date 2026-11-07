@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.infrastructure.launcher.process.interaction.AgentRunApprovalChannelOpening
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
@@ -20,7 +21,7 @@ data class AgentRunProcessLaunchFields(
   val stdinText: String? = null,
   val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
   val continuation: ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null,
-  val flushOutputStreamOnEnd: Boolean = false,
+  val session: AgentRunApprovalChannelOpening? = null,
 )
 
 data class AgentRunProcessTimingFields(
@@ -55,12 +56,17 @@ data class AgentRunProcessReviewFields(
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
 )
 
+data class AgentRunProcessApprovalFields(
+  val channel: AgentRunApprovalChannelOpening? = null,
+)
+
 data class AgentRunProcessRequest(
   val launch: AgentRunProcessLaunchFields,
   val timing: AgentRunProcessTimingFields = AgentRunProcessTimingFields(),
   val probes: AgentRunProcessProbeFields = AgentRunProcessProbeFields(),
   val environmentFields: AgentRunProcessEnvironmentFields = AgentRunProcessEnvironmentFields(),
   val review: AgentRunProcessReviewFields = AgentRunProcessReviewFields(),
+  val approval: AgentRunProcessApprovalFields = AgentRunProcessApprovalFields(),
 ) {
   init {
     require(launch.command.isNotEmpty()) { "Agent run command is required." }

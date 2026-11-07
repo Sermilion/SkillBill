@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.SelectedAgentHomes
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
 import kotlinx.coroutines.CoroutineStart
@@ -22,27 +23,40 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
+import skillbill.ports.approval.claudeProfileIdentity
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Keeps one `claude -p` process per chat session in the execution's worktree, with permission checks skipped as executions
- * run, and writes each turn to it as a stream-json message. The process outlives the turn, so a background command the agent
+ * Keeps one `claude -p` process per chat session in the execution's worktree, with permission requests answered through a
+ * broker approval card instead of skipped, and writes each turn to it as a stream-json message. The process outlives the turn, so a background command the agent
  * started keeps running, and the reply the agent starts when it finishes reaches [unprompted]. A turn cancelled before its
  * reply ends stops the process; [end] stops it between turns. A resumed session runs with the config directory it came from,
  * else the one the settings select.
  */
-@Inject
 @SingleIn(AppScope::class)
-class ClaudeChatTransport(
+class ClaudeChatTransport internal constructor(
   private val host: HostEnvironment,
   private val settings: AppSettingsRepository,
   private val launcher: LiveChatProcessLauncher,
+  private val approvals: ChatApprovalOpener,
   private val diagnostics: Diagnostics,
   appScope: ApplicationCoroutineScope,
 ) : ChatTransport {
+  @Inject
+  constructor(
+    host: HostEnvironment,
+    settings: AppSettingsRepository,
+    launcher: LiveChatProcessLauncher,
+    approvals: ChatApprovalAuthority,
+    diagnostics: Diagnostics,
+    appScope: ApplicationCoroutineScope,
+  ) : this(host, settings, launcher, ChatApprovalOpener(approvals::open), diagnostics, appScope)
+
   override val agentId = "claude"
+  override val approvalCapable = true
 
   private val scope = appScope.scope
   private val sessions = ConcurrentHashMap<String, ClaudeLiveSession>()
@@ -59,10 +73,12 @@ class ClaudeChatTransport(
     )
     val uuid = UUID.randomUUID().toString()
     val sink = Channel<ChatEvent>(Channel.UNLIMITED)
-    // A live process keeps the directory it started in, so a turn in another directory needs a new process.
-    sessions[request.sessionId]?.takeIf { it.workingDirectory != command.workingDirectory }?.let { stop(request.sessionId, it) }
+    val binding = ChatProcessBinding(request.mode, homes[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR].orEmpty())
+    // A live process serves only the mode and profile its generation was opened for: a changed turn replaces it, and
+    // the replaced generation's outstanding requests are cancelled when its job ends. `--resume` keeps the conversation.
+    sessions[request.sessionId]?.takeIf { it.binding != binding }?.let { stop(request.sessionId, it) }
     awaitStopped(request.sessionId)
-    val session = registered(request.sessionId, command, uuid, sink)
+    val session = registered(request, command, binding, uuid, sink)
     session.send(uuid, claudeMessage(request), request.images)
     var answered = false
     try {
@@ -82,10 +98,17 @@ class ClaudeChatTransport(
     sessions[sessionId]?.let { stop(sessionId, it) }
   }
 
-  private fun registered(sessionId: String, command: ChatCommand, uuid: String, sink: Channel<ChatEvent>): ClaudeLiveSession {
+  private fun registered(
+    request: ChatTurnRequest,
+    command: ChatCommand,
+    binding: ChatProcessBinding,
+    uuid: String,
+    sink: Channel<ChatEvent>,
+  ): ClaudeLiveSession {
+    val sessionId = request.sessionId
     while (true) {
       var created: ClaudeLiveSession? = null
-      val session = sessions.computeIfAbsent(sessionId) { open(sessionId, command).also { created = it } }
+      val session = sessions.computeIfAbsent(sessionId) { open(sessionId, command, binding).also { created = it } }
       if (session.register(uuid, sink)) {
         created?.job?.start()
         return session
@@ -94,12 +117,54 @@ class ClaudeChatTransport(
     }
   }
 
-  private fun open(sessionId: String, command: ChatCommand): ClaudeLiveSession {
-    val session = ClaudeLiveSession(command.workingDirectory, diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
+  /**
+   * Each process gets its own broker generation before it starts. A process that cannot be given one is never started:
+   * the turn that needed it fails with the reason instead.
+   */
+  private fun open(sessionId: String, command: ChatCommand, binding: ChatProcessBinding): ClaudeLiveSession {
+    val session = ClaudeLiveSession(binding, diagnostics) { event -> unpromptedEvents.tryEmit(sessionId to event) }
+    val opening = approvals.open(
+      sessionId = sessionId,
+      repositoryRoot = command.workingDirectory,
+      mode = binding.mode,
+      // The child's effective home: claudeEnvironment already dropped the default-home sentinel from this map.
+      profileIdentity = claudeProfileIdentity(
+        command.environment[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR],
+        runCatching { Path.of(host.userHome) }.getOrNull(),
+      ),
+      writeLine = { line -> session.input.writeAndAwaitBlocking(line) },
+      stopProcess = { stop(sessionId, session) },
+      onCard = session::showCard,
+    )
     session.job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+      var watchdog: Job? = null
       try {
-        launcher.open(command, session.input).collect(session::accept)
+        when (opening) {
+          is ChatApprovalOpening.Refused -> session.accept(ChatProcessOutput.StartFailed(opening.reason))
+          is ChatApprovalOpening.Opened -> {
+            session.approval = opening.approval
+            // The database session closed after the generation opened and before the process started: never start it.
+            if (opening.approval.isReleased) {
+              session.accept(ChatProcessOutput.StartFailed(SESSION_CHANGED_REASON))
+            } else {
+              val process = launch(start = CoroutineStart.LAZY) {
+                launcher.openAcknowledged(command, session.input).collect(session::accept)
+              }
+              process.start()
+              if (!session.input.writeAndAwait(opening.approval.initializeFrame())) {
+                session.failStartup("Claude initialization delivery is uncertain; it will not be replayed.")
+              }
+              // No user frame is sent before the provider answers initialize; silence means an incompatible CLI.
+              watchdog = launch {
+                val answered = withTimeoutOrNull(INITIALIZE_WAIT_MS) { session.initializedSignal.await() }
+                if (answered == null) session.failStartup(INITIALIZE_TIMEOUT_MESSAGE)
+              }
+              process.join()
+            }
+          }
+        }
       } finally {
+        watchdog?.cancel()
         sessions.remove(sessionId, session)
         session.abandon()
       }
@@ -123,6 +188,10 @@ class ClaudeChatTransport(
   private companion object {
     const val UNPROMPTED_BUFFER = 1024
     const val STOP_WAIT_MS = 5000L
+    const val INITIALIZE_WAIT_MS = 60_000L
+    const val INITIALIZE_TIMEOUT_MESSAGE =
+      "The installed Claude CLI did not answer the host permission initialize request. " +
+        "Update Claude Code; the chat was not started."
   }
 }
 
@@ -133,7 +202,13 @@ internal fun claudeArguments(request: ChatTurnRequest): List<String> = buildList
   request.agent.model?.let { addAll(listOf("--model", it)) }
   request.agent.effort?.let { addAll(listOf("--effort", it)) }
   addAll(listOf(if (request.firstTurn) "--session-id" else "--resume", request.sessionId))
-  add("--dangerously-skip-permissions")
+  // Permission requests go to the host as `can_use_tool` control requests on stdio; the operator answers them on an
+  // approval card. Without the stdio prompt tool the CLI has no host handler and denies every prompt with its ask reason.
+  addAll(listOf("--permission-prompts", "host"))
+  addAll(listOf("--permission-prompt-tool", "stdio"))
+  // The selected mode is enforced by the provider, not by prose: plan mode blocks edits and commands in read-only chat,
+  // and `manual` prompts for every tool in act chat. A user or project default mode never applies.
+  addAll(listOf("--permission-mode", if (request.mode == ChatPermissionMode.ReadOnly) "plan" else "manual"))
   addAll(listOf("--system-prompt-snapshot", "off"))
   // The process outlives a mode change, so the mode travels with each message instead of the system prompt.
   addAll(listOf("--append-system-prompt", scopeSystemPrompt(request.scope)))

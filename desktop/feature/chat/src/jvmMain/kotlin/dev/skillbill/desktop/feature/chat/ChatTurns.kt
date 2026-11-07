@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatImage
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
+import dev.skillbill.desktop.core.domain.model.CursorMcpDependency
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -21,8 +22,8 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.GoalWorktreeState
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import java.io.File
@@ -41,11 +42,8 @@ internal const val SESSIONS_MOVED_SENTENCE = "Earlier Claude and Codex chats wer
 internal const val NOTHING_TO_MOVE_SENTENCE = "Cursor and Junie chats start fresh."
 internal const val MOVE_FAILED_SENTENCE = "Some earlier chats could not be moved and start fresh."
 internal const val MAIN_CHECKOUT_NOT_SWITCHED_NOTICE = "The main checkout was not switched to the goal branch"
-
-/** Agents whose sessions the move carries to the repository root; every other agent's chat restarts there. */
 private val CONTINUABLE_AGENTS = setOf("claude", "codex")
 
-/** The removed-worktree notice; a null [result] means the move threw. */
 internal fun removedWorktreeNotice(root: String, result: SessionMoveResult?): String {
   val sentence = when {
     result == null || result.failed > 0 -> MOVE_FAILED_SENTENCE
@@ -59,7 +57,6 @@ internal fun removedWorktreeNotice(root: String, result: SessionMoveResult?): St
 internal fun modeFor(header: WorkItem): ChatPermissionMode =
   if (header.running || header.lifecycle == Lifecycle.Active) ChatPermissionMode.ReadOnly else ChatPermissionMode.Act
 
-/** The directory an execution's agent runs in: its checkout while that directory exists, else the repository root. */
 internal fun WorkItem.workingRoot(): String =
   if (checkoutRoot.isNotBlank() && File(checkoutRoot).isDirectory) checkoutRoot else repositoryRoot
 
@@ -93,26 +90,17 @@ internal class ChatTurns(
     }
     val header = state?.header ?: session.item
     session.item = header
-    followRoot(session)
+    followWorktree(session)
+    if (header.goalWorktree != null && session.started && session.startedRoot != header.workingRoot()) {
+      chat.end(session.sessionId)
+      session.restart(UUID.randomUUID().toString())
+    }
     session.modeState.value = modeFor(header)
     if (sections is DetailSections.Loaded) return ExecutionRead(header, sections.detail, sections.runOptions)
     session.append(ChatMessage.Notice(UNREADABLE_NOTICE))
     return ExecutionRead(header, null, null)
   }
 
-  /** Follows a removed worktree, then ends the agent session when the started root is not the one the next turn runs in. */
-  suspend fun followRoot(session: ChatSession) {
-    followWorktree(session)
-    if (session.item.goalWorktree != null && session.started && session.startedRoot != session.item.workingRoot()) {
-      chat.end(session.sessionId)
-      session.restart(UUID.randomUUID().toString())
-    }
-  }
-
-  /**
-   * Once per session, when the worktree is gone: ends the agent process, moves the goal's Claude and Codex sessions to the repository
-   * root and posts the notice. A started Claude or Codex session whose move had no failure keeps its id and resumes in the root.
-   */
   suspend fun followWorktree(session: ChatSession) {
     if (worktreeGone(session.item) && !session.worktreeRemovedNoticed) moveSessions(session)
     followMainCheckout(session)
@@ -132,17 +120,19 @@ internal class ChatTurns(
           null
         }
         session.worktreeRemovedNoticed = true
-        if (session.agentState.value?.agentId in CONTINUABLE_AGENTS && session.started && result?.failed == 0) session.startedRoot = root
+        if (session.agentState.value?.agentId in CONTINUABLE_AGENTS && session.started && result?.failed == 0) {
+          session.startedRoot = root
+        } else if (session.started) {
+          session.restart(UUID.randomUUID().toString())
+        }
         session.append(ChatMessage.Notice(removedWorktreeNotice(root, result)))
       }
     }
   }
 
-  /** The worktree is removed, or the runtime still lists it but its directory is gone. */
   private fun worktreeGone(item: WorkItem): Boolean =
     item.goalWorktree?.state == GoalWorktreeState.Removed || (item.goalWorktree != null && item.workingRoot() != item.checkoutRoot)
 
-  /** Tells the operator once per session that the main checkout stayed where it was after the worktree was removed. */
   private fun followMainCheckout(session: ChatSession) {
     val worktree = session.item.goalWorktree ?: return
     val notSwitched = worktree.mainCheckout == MainCheckoutOutcome.SkippedUncommittedChanges || worktree.mainCheckout == MainCheckoutOutcome.Failed
@@ -162,16 +152,24 @@ internal class ChatTurns(
   }
 
   /** Sends [text] with the full snapshot on a first turn and the diff since the last delivered one after that. */
-  suspend fun turn(session: ChatSession, read: ExecutionRead, mode: ChatPermissionMode, text: String, prefix: String? = null, images: List<ChatImage> = emptyList()) {
+  suspend fun turn(
+    session: ChatSession,
+    read: ExecutionRead,
+    mode: ChatPermissionMode,
+    text: String,
+    prefix: String? = null,
+    images: List<ChatImage> = emptyList(),
+    cursorMcpDependency: CursorMcpDependency = CursorMcpDependency.Unspecified,
+  ): Boolean {
     val agent = session.agentState.value ?: resolve(session, read) ?: run {
       session.append(ChatMessage.Notice(NO_AGENT_NOTICE))
-      return
+      return false
     }
     val current = snapshot(read.header, read.detail)
     val delivered = session.delivered
     val context = if (session.started && delivered != null) diff(delivered, current).render() else current.render()
     val prompt = listOfNotNull(prefix, context, text.takeIf { it.isNotBlank() }).joinToString("\n\n")
-    stream(session, agent, read.header, mode, prompt, current, images)
+    return stream(session, agent, read.header, mode, prompt, current, images, cursorMcpDependency)
   }
 
   /** Resolves the session's agent without a turn, so a chat that skips the opening turn can still be sent to. */
@@ -183,10 +181,10 @@ internal class ChatTurns(
     chat.resolveAgent(read.header, read.detail, read.runOptions)?.also {
       session.agentState.value = it
       session.agentSupportedState.value = chat.supports(it.agentId)
+      session.thread.showCapability(it)
     }
 
-  // The snapshot counts as delivered, and the CLI session as created, only once the turn produced output. A turn that ends
-  // without cancellation saves the chat, so a later window can resume it.
+  // A provider session and snapshot count as delivered only after a non-failure update. Refused setup leaves saved history intact.
   private suspend fun stream(
     session: ChatSession,
     agent: ChatAgent,
@@ -195,26 +193,30 @@ internal class ChatTurns(
     prompt: String,
     sent: ExecutionSnapshot,
     images: List<ChatImage>,
-  ) {
+    cursorMcpDependency: CursorMcpDependency,
+  ): Boolean {
     val root = header.workingRoot()
     val scope = ChatScope.Execution(header.id, header.kind, header.issueKey, header.title, root)
-    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt, images)
+    val request = ChatTurnRequest(session.sessionId, !session.started, agent, scope, mode, prompt, images, cursorMcpDependency)
     var delivered = false
     try {
       chat.send(request).collect { event ->
         session.thread.dropUnprompted = false
         if (event !is ChatEvent.Failed && !delivered) {
-          delivered = true
-          session.delivered = sent
-          session.started = true
-          session.startedRoot = root
+          if (event !is ChatEvent.Notice) {
+            delivered = true
+            session.delivered = sent
+            session.started = true
+            session.startedRoot = root
+          }
         }
         session.thread.show(agent, event)
       }
     } finally {
       session.endStreaming()
     }
-    if (session.started) save(session, agent)
+    if (session.started && delivered) save(session, agent)
+    return delivered
   }
 
   /**
@@ -223,6 +225,11 @@ internal class ChatTurns(
    */
   suspend fun unprompted(session: ChatSession, event: ChatEvent) {
     if (session.thread.dropUnprompted) return
+    if (event is ChatEvent.ApprovalRequested || event is ChatEvent.Notice) {
+      // A card is not a reply: it neither holds the composer nor ends with a completion, so it never starts an own turn.
+      session.thread.show(session.agentState.value, event)
+      return
+    }
     val ownTurn = session.turnJob == null
     if (ownTurn) {
       session.busyState.value = true
@@ -247,6 +254,19 @@ internal class ChatTurns(
       !session.started -> session.restart(UUID.randomUUID().toString())
       agent != null -> save(session, agent)
     }
+  }
+
+  /** Saves the chat after an approval outcome changed outside a turn, so the saved copy shows the final outcome. */
+  suspend fun approvalChanged(session: ChatSession) {
+    val agent = session.agentState.value
+    if (agent != null && session.started) save(session, agent)
+  }
+
+  /** Saves the chat after an operation card changed outside a turn; false when the chat has no agent to save under. */
+  internal suspend fun operationCardChanged(session: ChatSession): Boolean {
+    val agent = session.agentState.value ?: return false
+    save(session, agent)
+    return true
   }
 
   private suspend fun save(session: ChatSession, agent: ChatAgent) {

@@ -14,43 +14,26 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class CursorAgentRunCommandBuildersTest {
-  fun `cursor normal launch emits flags, workspace, prompt, timeout, environment, approvals`() {
-    val builder = CursorAgentRunCommandBuilder()
-    val command = builder.build(request())
-
-    assertEquals(
-      listOf(
-        "agent",
-        "--print",
-        "--force",
-        "--trust",
-        "--approve-mcps",
-        "--workspace",
-        "/tmp/skillbill-agent-run",
-        "--output-format",
-        "json",
-      ),
-      command.command,
-    )
-    assertEquals("agent", command.command.first())
+  @Test
+  fun `cursor normal launch carries prompt checkout and negotiated model without forced print flags`() {
+    val command = CursorAgentRunCommandBuilder().build(request(model = "model", effort = "high"))
+    assertEquals(listOf("agent", "acp"), command.command)
+    assertEquals("model[effort=high]", command.sessionModel)
     assertEquals("/tmp/skillbill-agent-run", command.workingDirectory.toString())
-    assertEquals(3.seconds, command.timeout)
     assertEquals("Phase: implement", command.stdinText)
-    assertEquals(AgentRunIdlePolicy.DB_PROGRESS_ONLY, command.idlePolicy)
-    assertEquals("1", command.environment["SKILL_BILL_GOAL_CONTINUATION"])
-    assertTrue(command.inheritEnvironment)
-    assertTrue(command.environmentPassthroughKeys.isEmpty())
+    assertEquals(3.seconds, command.timeout)
+    assertEquals(AgentRunApprovalProtocol.CURSOR_ACP, command.approvalProtocol)
   }
 
   @Test
-  fun `cursor provider-output launch adds --stream-partial-output and OUTPUT_EXTENDED idle policy`() {
+  fun `cursor ACP launch retains provider output liveness without print transport flags`() {
     val builder = CursorAgentRunCommandBuilder()
     val command =
       builder.build(
         request().copy(streamProviderOutput = true, streamOutputForLiveness = true),
       )
 
-    assertTrue(command.command.contains("--stream-partial-output"))
+    assertEquals(listOf("agent", "acp"), command.command)
     assertEquals(AgentRunIdlePolicy.OUTPUT_EXTENDED, command.idlePolicy)
   }
 
@@ -61,10 +44,11 @@ class CursorAgentRunCommandBuildersTest {
 
     assertFalse(
       command.command.contains("--stream-partial-output"),
-      "partial deltas must not be requested for liveness alone; they are indistinguishable from " +
+      "partial deltas must not be requested for liveness alone; they are " +
+        "indistinguishable from " +
         "finished turns at harvest time",
     )
-    assertTrue(command.command.contains("stream-json"), "the terminal-event transport is still required")
+    assertEquals(AgentRunApprovalProtocol.CURSOR_ACP, command.approvalProtocol)
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, command.idlePolicy)
   }
 
@@ -77,13 +61,11 @@ class CursorAgentRunCommandBuildersTest {
   }
 
   @Test
-  fun `cursor model-only directive emits --model flag`() {
+  fun `cursor model-only directive reaches ACP setup`() {
     val builder = CursorAgentRunCommandBuilder()
     val command = builder.build(request(model = "claude-opus-4-8"))
 
-    assertTrue(command.command.contains("--model"))
-    val modelIndex = command.command.indexOf("--model")
-    assertEquals("claude-opus-4-8", command.command[modelIndex + 1])
+    assertEquals("claude-opus-4-8", command.sessionModel)
   }
 
   @Test
@@ -91,9 +73,7 @@ class CursorAgentRunCommandBuildersTest {
     val builder = CursorAgentRunCommandBuilder()
     val command = builder.build(request(model = "claude-opus-4-8", effort = "high"))
 
-    assertTrue(command.command.contains("--model"))
-    val modelIndex = command.command.indexOf("--model")
-    assertEquals("claude-opus-4-8[effort=high]", command.command[modelIndex + 1])
+    assertEquals("claude-opus-4-8[effort=high]", command.sessionModel)
   }
 
   @Test
@@ -113,8 +93,7 @@ class CursorAgentRunCommandBuildersTest {
     val builder = CursorAgentRunCommandBuilder()
     val command = builder.build(request(model = "claude-opus-4-8[effort=high]", effort = "high"))
 
-    val modelIndex = command.command.indexOf("--model")
-    assertEquals("claude-opus-4-8[effort=high]", command.command[modelIndex + 1])
+    assertEquals("claude-opus-4-8[effort=high]", command.sessionModel)
   }
 
   @Test
@@ -209,7 +188,8 @@ class CursorAgentRunCommandBuildersTest {
     assertFalse(decoder.undecodable(CursorReviewStreamError("provider said no")))
     assertFalse(
       AgentRunOutputDecoder.PLAIN.undecodable(CursorReviewStreamMalformedError("truncated", RuntimeException())),
-      "the default policy keeps propagating; only a decoder that owns the transport may degrade",
+      "the default policy keeps propagating; only a decoder that owns the " +
+        "transport may degrade",
     )
   }
 

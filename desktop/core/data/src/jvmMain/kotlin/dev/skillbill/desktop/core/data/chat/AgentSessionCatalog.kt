@@ -62,7 +62,13 @@ class AgentSessionCatalog(
   }
 
   internal fun open(entry: ChatHistoryEntry): List<ChatHistoryLine> {
-    if (entry.agent.agentId in handleAgents) store.saveAgentSession(entry.sessionId, entry.sessionId)
+    if (entry.agent.agentId == "codex" && store.agentSession(entry.sessionId) == null) {
+      if (!store.saveChat(entry) || !store.saveAgentSession(entry.sessionId, entry.sessionId)) {
+        throw IOException("Could not save the provider thread for this chat. Try opening it again.")
+      }
+    } else if (entry.agent.agentId == "cursor") {
+      store.saveAgentSession(entry.sessionId, entry.sessionId)
+    }
     if (entry.lines.isNotEmpty()) return entry.lines
     val file = listed[entry.sessionId]?.file ?: return emptyList()
     return readSafely("chat.session_lines_unreadable") {
@@ -74,11 +80,6 @@ class AgentSessionCatalog(
     }
   }
 
-  /**
-   * Moves the Claude sessions of [fromRoot] to [toRoot] and rewrites the cwd of its Codex sessions, in every profile; Cursor chats
-   * are not touched. A profile or session that cannot be moved counts as failed. Moves run one at a time across every window, so a
-   * second window's move finds nothing left instead of racing the first one's file moves.
-   */
   internal suspend fun move(fromRoot: String, toRoot: String): SessionMoveResult = moveLock.withLock {
     val profiles = profiles()
     var failed = 0
@@ -100,7 +101,6 @@ class AgentSessionCatalog(
     SessionMoveResult(claudeMoved, codexMoved, failed)
   }
 
-  /** Points listed Claude sessions of [fromRoot] at their moved file, so a resume picked from an earlier listing still reads its lines. */
   private fun relocateListed(fromRoot: String, toRoot: String) {
     val source = "projects/${claudeProjectName(fromRoot)}"
     val target = "projects/${claudeProjectName(toRoot)}"
@@ -131,7 +131,7 @@ class AgentSessionCatalog(
     return Profiles(
       claude = agentProfiles(home, "claude", "projects", listOf(claudeSelected, variables[AgentHomeEnvironmentKeys.CLAUDE_CONFIG_DIR])),
       codex = agentProfiles(home, "codex", "sessions", listOf(variables[AgentHomeEnvironmentKeys.CODEX_HOME])),
-      cursor = agentProfiles(home, "cursor", "chats", listOf(variables[CURSOR_CONFIG_DIR], xdgCursor)),
+      cursor = agentProfiles(home, "cursor", "chats", listOf(variables[AgentHomeEnvironmentKeys.CURSOR_CONFIG_DIR], xdgCursor)),
     )
   }
 

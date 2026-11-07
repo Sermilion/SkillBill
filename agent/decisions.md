@@ -1,3 +1,9 @@
+## [2026-11-07] SKILL-453 operator approvals are broker-owned and host-controlled
+Context: Chat previously ran agents with execution permissions and relied on prompt guidance for ReadOnly behavior.
+Decision: Only an operator decision persisted by ApprovalBroker can authorize tool execution. Claude uses host permission prompts without a bypass; unsupported approval paths refuse before launch.
+Reason: The operator needs enforceable control over tool execution, and provider restrictions must remain authoritative.
+Alternatives considered: Agent prose, suggested actions, and agent-authored tokens cannot grant consent; forced execution is not an approval fallback.
+
 ## [2026-11-02] Admit desktop chat intake through the runtime before launch
 Context: New-task chat starts need goal intake and issue-key rules, while concurrent starts and database switches can invalidate a prepared launch.
 Decision: Runtime work control owns admission, allocation, re-admission and preflight. Desktop work control owns session fencing and launch reservations. Allocated-key collisions can retry; supplied-key collisions return a refusal. Terminal dispatcher prose and NewTaskIssueKeyAllocator remain separate allocation owners.

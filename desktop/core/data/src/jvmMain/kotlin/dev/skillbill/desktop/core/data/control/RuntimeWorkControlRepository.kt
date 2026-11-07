@@ -17,7 +17,12 @@ import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.ControlRejection
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
+import dev.skillbill.desktop.core.domain.model.OperationCardDismissOutcome
+import dev.skillbill.desktop.core.domain.model.OperationCardView
+import dev.skillbill.desktop.core.domain.model.OperationCardLookup
+import dev.skillbill.desktop.core.domain.model.OperatorDecision
 import dev.skillbill.desktop.core.domain.model.PrerequisiteInstruction
 import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.ExportPreflightOutcome
@@ -53,7 +58,12 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.contracts.operationcard.OperationCardProjection
 import skillbill.di.core.RuntimeComponent
+import skillbill.engine.work.control.WorkControlService
+import skillbill.engine.operation.core.OperationCardRevalidation
+import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
+import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportRequest
 import skillbill.engine.goalrunner.model.GoalRunnerExportRefusalCategory
@@ -72,6 +82,9 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.engine.work.control.model.WorkControlAction
 import kotlinx.coroutines.future.await
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.OperationCardDismissal
+import skillbill.engine.work.control.model.OperationStartRequest
+import skillbill.engine.work.control.model.OperatorConfirmation
 import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.engine.work.control.model.WorkControlRejection
@@ -83,6 +96,7 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkRecoveryPreviewResult
 import skillbill.ports.work.model.WorkStoreObservation
+import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
@@ -95,6 +109,9 @@ import kotlin.time.toJavaInstant
 private val RESERVATION_BOARD = BoardQuery(HistoryWindow.DEFAULT, filter = "", pageSize = WorkPaginationLimits.DEFAULT_PAGE_SIZE)
 
 private val NO_SESSION = ReadProblem.Runtime("The database session is not open.")
+
+private const val DATABASE_CHANGED_REASON = "The database changed. Reload the card."
+private val DATABASE_CHANGED = ReadProblem.Runtime(DATABASE_CHANGED_REASON)
 
 /**
  * Run controls and goal writes against the open session's runtime. Every request first checks that the item was read from
@@ -237,12 +254,6 @@ class RuntimeWorkControlRepository(
     val session = request.expectedDatabaseSessionId?.let(sessions::currentComponent)
       ?: return NewTaskStartOutcome.Refused("The database changed. Try again.")
     if (!sessionIsCurrent(session)) return NewTaskStartOutcome.Refused("The database changed. Try again.")
-    val readiness = callInSession(session, "control_new_task_schema", { Outcome.Failure(it) }, stale = { Outcome.Failure(NO_SESSION) }) { runtime ->
-      runtime.databaseSchema.migrateExistingDatabase()
-      Outcome.Success(Unit)
-    }
-    if (readiness is Outcome.Failure) return if (!sessionIsCurrent(session)) NewTaskStartOutcome.Refused("The database changed. Try again.")
-      else NewTaskStartOutcome.Failed(readiness.error)
     when (request.kind) {
       NewTaskKind.Review, NewTaskKind.Validation, NewTaskKind.Qa, NewTaskKind.Pr, NewTaskKind.Monitor ->
         return startStandaloneTask(request, session, qaDevice)
@@ -332,9 +343,10 @@ class RuntimeWorkControlRepository(
                   is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
                   is NewTaskStartResult.Running -> {
                     launches.releaseOnExit(handle, started.failure)
-                    NewTaskStartOutcome.Started(prepared.key, request.kind) { started.failure.await() }
+                    NewTaskStartOutcome.Started(prepared.key, request.kind, awaitFailure = { started.failure.await() })
                   }
                   NewTaskStartResult.Started -> NewTaskStartOutcome.Started(prepared.key, request.kind)
+                  is NewTaskStartResult.AwaitingConfirmation -> NewTaskStartOutcome.Refused("A goal run cannot wait for a confirmation.")
                 }
               }
             }.let { it to keyWasTaken }
@@ -399,11 +411,64 @@ class RuntimeWorkControlRepository(
     return startReservedStandalone(request, session, operationId, settleOnStarted = false) { runtime ->
       runtime.workControlService.startOperation(
         Path.of(request.repoRoot),
-        operationId,
-        request.target,
-        request.agentId,
-        request.standaloneCheckout(),
+        OperationStartRequest(
+          operationId,
+          request.target,
+          request.agentId,
+          request.profile,
+          request.standaloneCheckout(),
+          request.confirmation?.let { OperatorConfirmation(it.token, it.selection) },
+        ),
       )
+    }
+  }
+
+  override suspend fun operationCardForLaunch(launchId: String): OperationCardView? =
+    readOperationCard("control_operation_card_for_launch") { it.operationCardForLaunch(launchId) }
+
+  override suspend fun operationCard(token: String): OperationCardView? =
+    readOperationCard("control_operation_card") { it.operationCard(token) }
+
+  override suspend fun revalidateOperationCard(token: String): OperationCardLookup {
+    val session = sessions.sessions.value ?: return OperationCardLookup.Unavailable(DATABASE_CHANGED)
+    return callInSession(
+      session,
+      "control_revalidate_operation_card",
+      { OperationCardLookup.Unavailable(it) },
+      stale = { OperationCardLookup.Unavailable(DATABASE_CHANGED) },
+    ) { runtime ->
+      if (!sessionIsCurrent(session)) return@callInSession OperationCardLookup.Unavailable(DATABASE_CHANGED)
+      when (val result = runtime.workControlService.revalidateOperationCard(token)) {
+        OperationCardRevalidation.Missing -> OperationCardLookup.Missing
+        is OperationCardRevalidation.Present -> OperationCardLookup.Present(
+          result.card.toView(result.canConfirm, result.reason),
+        )
+      }
+    }
+  }
+
+  override suspend fun dismissOperationCard(token: String): OperationCardDismissOutcome {
+    val session = sessions.sessions.value ?: return OperationCardDismissOutcome.Stale(DATABASE_CHANGED_REASON)
+    return callInSession(
+      session,
+      "control_dismiss_operation_card",
+      { OperationCardDismissOutcome.Stale(DATABASE_CHANGED_REASON) },
+      stale = { OperationCardDismissOutcome.Stale(DATABASE_CHANGED_REASON) },
+    ) { runtime ->
+      when (val dismissed = runtime.workControlService.dismissOperationCard(token)) {
+        OperationCardDismissal.Dismissed -> OperationCardDismissOutcome.Dismissed
+        is OperationCardDismissal.Stale -> OperationCardDismissOutcome.Stale(dismissed.reason)
+      }
+    }
+  }
+
+  private suspend fun readOperationCard(
+    name: String,
+    read: (WorkControlService) -> OperationCardProjection?,
+  ): OperationCardView? {
+    val session = sessions.sessions.value ?: return null
+    return callInSession(session, name, { null }, stale = { null }) { runtime ->
+      read(runtime.workControlService)?.toView()
     }
   }
 
@@ -452,8 +517,10 @@ class RuntimeWorkControlRepository(
             is NewTaskStartResult.Refused -> NewTaskStartOutcome.Refused(started.reason)
             is NewTaskStartResult.Running -> {
               launches.releaseOnExit(handle, started.failure)
-              NewTaskStartOutcome.Started(id, request.kind) { started.failure.await() }
+              NewTaskStartOutcome.Started(id, request.kind, { started.failure.await() }, started.launchId)
             }
+            is NewTaskStartResult.AwaitingConfirmation ->
+              NewTaskStartOutcome.AwaitingConfirmation(id, request.kind, started.launchId)
             else -> NewTaskStartOutcome.Started(id, request.kind)
           }
         }
@@ -516,6 +583,39 @@ class RuntimeWorkControlRepository(
       }
       val kinds = preview.confirmedPrerequisites.mapTo(mutableSetOf()) { it.toRuntime() }
       runtime.workControlService.recover(target, preview.incidentToken, preview.incidentRevision, kinds).toRecoveryOutcome(diagnostics)
+    }
+  }
+
+  override suspend fun recordOperatorDecision(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome {
+    decisionPrecheck(item, decision, instructions)?.let { return it }
+    val session = currentSession(item)
+      ?: return DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    val issueKey = checkNotNull(item.issueKey)
+    val subtaskId = checkNotNull(item.currentSubtaskId?.toIntOrNull())
+    val observation = item.control.databaseFile?.toObservation()
+      ?: return DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    if (!sessionIsCurrent(session, item)) return DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    return callInSession(session, "operator_decision", DecisionOutcome::Failed, stale = {
+      DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+    }) { runtime ->
+      if (!sessionIsCurrent(session, item)) return@callInSession DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+      val request = GoalRunnerOperatorDecisionRequest(
+        issueKey = issueKey,
+        subtaskId = subtaskId,
+        decision = GoalSubtaskOperatorDecision.valueOf(decision.name),
+        repoRoot = Path.of(item.repositoryRoot),
+        instructions = instructions?.trim()?.ifBlank { null },
+      )
+      when (val result = runtime.databaseSession.transactionFenced(observation) {
+        if (!sessionIsCurrent(session, item)) null else runtime.goalOperatorDecisionService.record(request)
+      }) {
+        FencedTransactionResult.ChangedTarget -> DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+        is FencedTransactionResult.Committed -> when (val recorded = result.value) {
+          null -> DecisionOutcome.Refused(ControlRejection.CHANGED_TARGET.name)
+          is GoalRunnerOperatorDecisionResult.Recorded -> DecisionOutcome.Recorded(recorded.subtaskId, decision)
+          is GoalRunnerOperatorDecisionResult.Rejected -> DecisionOutcome.Refused(recorded.reason)
+        }
+      }
     }
   }
 
@@ -734,6 +834,14 @@ class RuntimeWorkControlRepository(
       is Outcome.Failure -> if (closed) stale?.invoke() ?: failed(result.error) else failed(result.error)
     }
   }
+}
+
+/** The blank-retry and missing-goal checks, run before any runtime call so the request's own `require` never throws. */
+internal fun decisionPrecheck(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome? = when {
+  item.issueKey.isNullOrBlank() -> DecisionOutcome.Unavailable
+  (item.currentSubtaskId?.toIntOrNull() ?: 0) <= 0 -> DecisionOutcome.Unavailable
+  decision == OperatorDecision.RETRY_FIX && instructions.isNullOrBlank() -> DecisionOutcome.InstructionsRequired
+  else -> null
 }
 
 private fun DatabaseFileIdentity.toObservation() = DatabaseFileObservation(Path.of(path), fileKey)

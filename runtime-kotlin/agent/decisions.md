@@ -1,3 +1,23 @@
+## [2026-11-07] Consume operation confirmation before execution
+Context: A parked operation must not be confirmable through output the chat agent can echo or by repeated card clicks.
+Decision: Bind confirmation to a persisted proposal card and consume it with compare-and-swap before execution; reject raw confirm/select starts and unoffered pr-review-fix choices.
+Reason: Only the operator card action admits execution and a consumed proposal cannot run twice. A crash after consumption may leave the result uncertain.
+
+## [2026-11-07] Do not replay a consumed confirmation after owner death
+Context: The owner can die after consuming a confirmation but before reporting whether the operation ran.
+Decision: When death is verified, settle the card as consumed_uncertain and refuse replay; if liveness is unknown, leave it confirming.
+Reason: Replaying a possibly half-run operation risks duplicate effects, while treating an unverifiable owner as dead risks concurrent execution.
+
+## [2026-11-07] Classify parked launches by exit code and launch identity
+Context: Desktop needs to associate detached parked operations with their persisted proposal cards.
+Decision: Map exit code 4 to awaiting_confirmation and pass the launch id to link the run with saved launch context; preserve the CLI exit and text contract.
+Reason: The exit code identifies the parked state without parsing prose, and launch identity locates the card without changing existing CLI consumers.
+
+## [2026-11-07] Restore operation cards from their durable row
+Context: Chat history can outlive a card state change or process restart.
+Decision: Persist only card identity in chat history and re-read the card from the store on resume.
+Reason: The store remains the current source of truth, so resumed cards show current state and do not act on stale copies.
+
 ## [2026-11-07] Keep live runtime trees across install replacement
 Context: A goal child JVM loads engine directive resources lazily. Pre-install `clear-state` and `activate_staged_runtime_pair` used `rm -rf` on `~/.skill-bill/runtime/runtime-cli`, which unlinked JARs still mapped by that JVM. A later `getResourceAsStream` then failed with `Missing directive resource`.
 Decision: Pre-install wipe no longer deletes `runtime/`. Activation renames each live tree into `runtime/retired/` before moving the staged tree into place, keeps the newest retired copy of each component, and restores the retired tree if the replacement `mv` fails.
@@ -3556,15 +3576,3 @@ The application environment guard matched `Thread(` as a substring, rejecting do
 ## [2026-11-04] Test temp dirs live under the Gradle user home
 
 Each Test task sets `java.io.tmpdir` to `<gradle-user-home>/sbt-<hash>`. `/tmp` is a RAM-backed tmpfs on developer machines, and leaked fixture dirs filled it and pushed other memory into swap. A module `build/` directory is not an option because tests need paths outside any git repository, and Unix socket tests need a short root for the 104-byte macOS path limit. The task deletes the directory on success and keeps it on failure for debugging. A later test task removes any `sbt-*` directory untouched for 24 hours, which covers failed runs from checkouts that no longer exist. `desktop/build-logic` carries the same rule because the two builds share no convention code.
-
-## [2026-11-05] Keep JVM temp writers behind each build's authority
-
-The `sbt-<hash>` directory under the Gradle user home remains the fallback outside a run. Inside a run, `AgentRunScratchSpace` supplies `<state>/scratch/jvm`; its seven-day age sweep removes abandoned entries. The JVM itself still writes `/tmp/hsperfdata_<user>` and `/tmp/.java_pid<pid>` under Q3, so those two files are outside the application rule.
-
-The runtime exemptions are narrow. `JdkHostPlatformPort.kt` is the only runtime reader of `java.io.tmpdir`. `RuntimeTempRoot.kt` compares the configured root with the real `/tmp` path and returns `/tmp` only when the configured value is blank and fallback directory creation failed. `GovernedReviewEvidenceEndpoint.kt` uses `/tmp` only for its Unix socket fallback when the path is too long, then removes the directory on close. `DesktopTempRoot.kt` holds the same temp-root decision for desktop code.
-
-The decomposition lock stays under `<state>/locks`. Run temp roots differ, but two runs must resolve the same lock file to exclude each other. The source guard catches literal `/tmp` paths and default-root temp creation, including absent, string, `null`, and all-caps first arguments. It cannot distinguish a lowercase variable or qualified constant from a `Path`; those forms remain review cases. No production call currently uses either form.
-
-## [2026-11-06] validation_check resolves its run from the server environment
-
-The `validation_check` MCP tool reads its run identity from `SKILL_BILL_VALIDATION_INVOCATION_ID` in the server process environment and never from tool arguments. An agent therefore cannot address another run's row, and a user-global server without the variable neither lists the tool nor records anything; a call returns `no_run_identity`. The recorder writes `current_activity` and inserts `validation_check_events` rows through narrow writes that leave `status_revision`, `updated_at` and the lease columns unchanged. `StandalonePhaseStatusEventSink` compare-and-sets on the revision it holds in memory, so a bumped revision would make its next persist stale.

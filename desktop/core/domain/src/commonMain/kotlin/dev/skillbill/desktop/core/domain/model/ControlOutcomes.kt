@@ -95,6 +95,22 @@ sealed interface RecoveryOutcome {
   data class Failed(val problem: ReadProblem) : RecoveryOutcome
 }
 
+enum class OperatorDecision { RETRY_FIX, ACCEPT_AND_ADVANCE, ABANDON_SUBTASK }
+
+sealed interface DecisionOutcome {
+  data class Recorded(val subtaskId: Int, val decision: OperatorDecision) : DecisionOutcome
+
+  /** A retry needs instructions; nothing was sent. */
+  data object InstructionsRequired : DecisionOutcome
+
+  /** The item has no goal issue key or current subtask to decide on; nothing was sent. */
+  data object Unavailable : DecisionOutcome
+
+  data class Refused(val reason: String) : DecisionOutcome
+
+  data class Failed(val problem: ReadProblem) : DecisionOutcome
+}
+
 sealed interface PurgeOutcome {
   data class Purged(val removedRows: Int, val removedPaths: Int, val specActions: Int) : PurgeOutcome
 
@@ -153,7 +169,8 @@ enum class NewTaskKind { GoalRun, PlanOnly, Review, Validation, Qa, Pr, Monitor,
 
 /**
  * [repoRoot] names the repository the start belongs to. A standalone phase or operation runs in a checkout of [branch] when
- * set, else in [checkoutRoot] when set, else in [repoRoot].
+ * set, else in [checkoutRoot] when set, else in [repoRoot]. [profile] is the chosen agent's config directory; null runs
+ * the agent as the app is configured to.
  */
 data class NewTaskStart(
   val repoRoot: String,
@@ -168,6 +185,8 @@ data class NewTaskStart(
   val reuseRequested: Boolean = false,
   val branch: String? = null,
   val checkoutRoot: String? = null,
+  val confirmation: OperationCardConfirmation? = null,
+  val profile: String? = null,
 )
 
 fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {
@@ -183,12 +202,19 @@ fun NewTaskActionKind.toNewTaskKind(): NewTaskKind = when (this) {
 }
 
 sealed interface NewTaskStartOutcome {
-  /** [awaitFailure] suspends until the run exits, and returns why it failed, or null after a clean exit. */
+  /**
+   * [awaitFailure] suspends until a standalone run exits, and returns why it failed, or null after a clean exit.
+   * [launchId] names an operation launch whose approval card the run may park.
+   */
   data class Started(
     val issueKey: String,
     val kind: NewTaskKind,
     val awaitFailure: (suspend () -> String?)? = null,
+    val launchId: String? = null,
   ) : NewTaskStartOutcome
+
+  /** The operation exited parked: its approval card for [launchId] is stored and waits for the operator. */
+  data class AwaitingConfirmation(val issueKey: String, val kind: NewTaskKind, val launchId: String) : NewTaskStartOutcome
 
   data class NeedsKey(val choices: List<String>) : NewTaskStartOutcome
 

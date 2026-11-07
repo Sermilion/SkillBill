@@ -42,6 +42,21 @@ class ChatStoreTest {
     assertEquals("thread-9", reader.agentSession("new"))
   }
 
+  @Test
+  fun `cursor resume binding survives restart and remains paired with its provider session`() {
+    val writer = ChatStore(host, RecordingDiagnostics(), Clock.System)
+    val binding = CursorSessionBinding("/profiles/cursor-work", "/work/project")
+    assertTrue(writer.saveCursorSession("cursor-chat", "cursor-session", binding))
+    assertTrue(writer.saveAgentSession("legacy-chat", "legacy-session"))
+
+    val reader = ChatStore(host, RecordingDiagnostics(), Clock.System)
+
+    assertEquals("cursor-session", reader.agentSession("cursor-chat"))
+    assertEquals(binding, reader.cursorSessionBinding("cursor-chat"))
+    assertEquals("legacy-session", reader.agentSession("legacy-chat"))
+    assertEquals(null, reader.cursorSessionBinding("legacy-chat"))
+  }
+
   // Every chat open saves a file, so without a cap the directory grows for the life of the machine.
   @Test
   fun `saving keeps only the newest twenty chats of an execution`() {

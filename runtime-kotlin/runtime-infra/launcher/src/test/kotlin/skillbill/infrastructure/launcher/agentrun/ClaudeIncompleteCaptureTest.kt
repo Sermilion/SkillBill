@@ -29,11 +29,12 @@ class ClaudeIncompleteCaptureTest {
               timedOut = false,
               interrupted = false,
               spawnFailed = false,
-              outputCaptureIncomplete = true,
+              stdoutTruncated = true,
             ),
           ),
         executableLookup = ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       ).launchFacts(request().copy(streamProviderOutput = true))
 
     assertEquals("", facts.stdout)

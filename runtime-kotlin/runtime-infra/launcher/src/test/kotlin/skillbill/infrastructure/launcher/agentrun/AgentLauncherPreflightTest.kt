@@ -2,6 +2,7 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.agentrun.model.AgentRunApprovalRequirement
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -18,6 +19,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentLauncherPreflightTest {
   private fun request(): SkillRunRequest =
     SkillRunRequest(
+      approval = AgentRunApprovalRequirement.OutsideApproval,
       issueKey = "SKILL-162",
       repoRoot = Path.of("/tmp/skillbill-launcher-preflight"),
       subtaskId = 1,
@@ -33,6 +35,7 @@ class AgentLauncherPreflightTest {
       processRunner = RecordingAgentRunProcessRunner(),
       executableLookup = lookup,
       diagnostics = NoopRuntimeDiagnostics,
+      clock = LAUNCH_TEST_CLOCK,
     )
 
   @Test
@@ -45,6 +48,7 @@ class AgentLauncherPreflightTest {
         processRunner = runner,
         executableLookup = executablesAvailable(),
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )
 
     val facts = adapter.launchFacts(request())
@@ -74,13 +78,14 @@ class AgentLauncherPreflightTest {
         processRunner = runner,
         executableLookup = executablesAvailable("cursor-agent"),
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )
 
     val facts = adapter.launchFacts(request())
 
     assertNotEquals<AgentRunTermination>(AgentRunTermination.SpawnFailed, facts.termination)
-    assertEquals("cursor-agent", runner.requests.single().launch.command.first())
-    assertContains(runner.requests.single().launch.command, "--print")
+    assertEquals("cursor-agent", runner.requests.last().launch.command.first())
+    assertEquals(listOf("cursor-agent", "acp"), runner.requests.last().launch.command)
   }
 
   @Test
@@ -93,11 +98,12 @@ class AgentLauncherPreflightTest {
         processRunner = runner,
         executableLookup = executablesAvailable("agent", "cursor-agent"),
         diagnostics = NoopRuntimeDiagnostics,
+        clock = LAUNCH_TEST_CLOCK,
       )
 
     adapter.launch(request())
 
-    assertEquals("agent", runner.requests.single().launch.command.first())
+    assertEquals("agent", runner.requests.last().launch.command.first())
   }
 }
 

@@ -28,6 +28,8 @@ Cross-cutting properties:
 - Project-tunable via `.agents/skill-overrides.md`.
 - Decomposes itself when too big.
 
+Cursor ACP does not supply team-dashboard MCP servers. Each Cursor chat request must explicitly declare `Project/user configuration only` or `Requires team dashboard server` in the composer; an unmade choice is unsupported and the request is refused before session setup. The project/user choice states only that the submitted work does not depend on team-dashboard servers. It does not assert that a local MCP server exists or grant permission to use tools. Ordinary runtime phase launches use the invocation-scoped `SKILL_BILL_CURSOR_MCP_DEPENDENCY` environment input (`project-user-only` or `team-dashboard-required`), or a typed `SkillRunRequest` declaration. Missing, invalid, and conflicting declarations refuse the launch. Cursor does not infer this requirement from prompt text or saved history.
+
 It is a tiny CI/CD for the feature itself, not just the code.
 
 The completeness audit has separate inspection and repair steps.
@@ -168,3 +170,33 @@ The normal repository validator also runs the exemption-free platform substance 
 This is the governance layer that keeps the other ten features from rotting — once you have seen what they enable, you also see why this one exists.
 
 </details>
+
+## Operator approval adapters
+
+Codex card-required chat and phase workers use app-server stdio. Admission checks
+the installed 0.166.0 protocol schemas before a turn. Command and file decisions
+are one-time grants; app rules never write provider session or policy amendments.
+Network-context commands, permission grants and MCP elicitation are refused with
+their own documented negative responses. Other blocking interactions stop their
+owning session and retain the complete unsupported request.
+
+Cursor card-required chat and phase workers use ACP v1 through the declared
+`agent` / `cursor-agent` aliases. Setup checks authentication, saved-session load,
+model/effort, mode and content capabilities before sending a prompt. App rules
+select an offered `allow_once` option; Cursor's remembered options remain unavailable.
+ACP does not supply team-dashboard MCP servers. Work requiring those servers is
+unsupported in this integration; no substitute server or permission is inferred.
+
+Junie remains selectable for historical content, but card-required chat and phase
+launches refuse before starting a process. The visible reason is that Junie ACP
+exists, but required permission-request coverage is unverified for this integration.
+ACP v1 is the documented stable reference and v2 is draft; neither is claimed as a
+negotiated Junie version. Enabling card-required execution requires Junie-specific
+authoritative permission semantics; a supported installed version and help output;
+an observed negotiated ACP version; exact permission request/response ids and
+options; safe denial, cancellation and provider-restriction behavior; and real-provider
+parity evidence at both chat and phase launch roots. The evidence must cover shell
+commands, file edits and tools, original request/session correlation, and prove
+provider restrictions remain effective without bypass flags. A new process must not
+inherit historical card authority. Until those prerequisites are met, no successful
+Junie approval adapter or automatic provider switch is claimed.

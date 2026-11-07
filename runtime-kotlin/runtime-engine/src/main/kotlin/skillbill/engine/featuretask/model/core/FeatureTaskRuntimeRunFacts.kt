@@ -102,24 +102,24 @@ public interface FeatureTaskRuntimeRunFacts {
   /** The workspace, expected identity, and pack guidance of a standalone QA run; null for every other run. */
   public val qaExecution: QaExecutionContext?
 
-  /** The device the operator named for this QA run; null lets QA choose. Never part of the intake. */
   public val qaDevice: QaNamedDevice?
+
+  public val goalQualityPhaseProgress: GoalQualityPhaseProgress?
+
+  public val goalQualityValidationOccurrence: Int
 
   public val goalHistoryWriterInput: GoalHistoryWriterInput?
 
-  public val goalQualityPhaseProgress: GoalQualityPhaseProgress?
-  public val goalQualityValidationOccurrence: Int
   public val goalQualityAutomaticRecovery: Boolean
 
   public val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan?
 
+  public val validationCheckInvocationId: String?
+
   public val qaOutcomeWorkflowId: String get() = workflowId
 
-  /**
-   * The standalone validation invocation whose agent launches may report live checks; null for every other run,
-   * including goal, goal-child and goal-quality validation.
-   */
-  public val validationCheckInvocationId: String?
+  /** The run id every agent launch of this run is owned by for operator approvals; never blank for a launch. */
+  public val approvalRunId: String get() = workflowId
 }
 
 public data class PhaseInstructions(

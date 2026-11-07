@@ -3,7 +3,12 @@ package skillbill.engine.work.control
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.GOAL_INTAKE_URL_MARKER
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
-import skillbill.contracts.qa.QaDeviceLaunchTokens.QA_DEVICE_FLAG
+import skillbill.contracts.operationcard.OperationCardExitCodes
+import skillbill.contracts.operationcard.OperationCardOperationIds
+import skillbill.contracts.operationcard.OperationCardProjection
+import skillbill.contracts.operationcard.OperationCardStatus
+import skillbill.contracts.operationcard.OperationLaunchContext
+import skillbill.contracts.operationcard.OperationLaunchRetention
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.QaNamedDevice
 import skillbill.engine.featuretask.model.execution.launchArguments
@@ -14,11 +19,15 @@ import skillbill.engine.goal.GoalPreflightRequest
 import skillbill.engine.goal.GoalPreflightResult
 import skillbill.engine.goal.GoalPreflightVerdict
 import skillbill.engine.goal.goalRepositoryIdentity
+import skillbill.engine.operation.core.OperationCardRevalidation
 import skillbill.engine.work.control.model.NewTaskIdentityPolicy
 import skillbill.engine.work.control.model.NewTaskIntakeRequest
 import skillbill.engine.work.control.model.NewTaskPreparation
 import skillbill.engine.work.control.model.NewTaskRunKind
 import skillbill.engine.work.control.model.NewTaskStartResult
+import skillbill.engine.work.control.model.OperationCardDismissal
+import skillbill.engine.work.control.model.OperationStartRequest
+import skillbill.engine.work.control.model.OperatorConfirmation
 import skillbill.engine.work.control.model.StandaloneCheckout
 import skillbill.engine.work.control.model.StandalonePhaseRequest
 import skillbill.install.model.SupportedAgent
@@ -35,6 +44,7 @@ import skillbill.ports.workflow.branchworktree.BranchWorktreeResources
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeCreation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolder
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeHolderKind
+import skillbill.ports.workflow.branchworktree.model.BranchWorktreeObservation
 import skillbill.ports.workflow.branchworktree.model.BranchWorktreeRelease
 import skillbill.ports.workflow.goalworktree.GoalWorktreeResources
 import skillbill.workflow.model.WorkflowStatus
@@ -54,6 +64,7 @@ public class WorkNewTaskStart(
   private val diagnostics: RuntimeDiagnostics,
   private val goalWorktrees: GoalWorktreeResources,
   private val branchWorktrees: BranchWorktreeResources,
+  private val launches: OperationCardLaunches,
 ) {
   public fun prepareNewTask(
     repoRoot: Path,
@@ -166,14 +177,7 @@ public class WorkNewTaskStart(
       )
     val refusal = startRefusal(checked, prepared)
     if (refusal != null) {
-      val occupied =
-        checked.verdict in
-          setOf(
-            GoalPreflightVerdict.ALREADY_RUNNING,
-            GoalPreflightVerdict.RESUMABLE,
-            GoalPreflightVerdict.GOAL_CONTINUATION,
-            GoalPreflightVerdict.TERMINAL_ONLY,
-          )
+      val occupied = checked.verdict in OCCUPIED_VERDICTS
       return if (prepared.allocated && occupied) NewTaskStartResult.KeyTaken else NewTaskStartResult.Refused(refusal)
     }
     val key = checked.issueKey
@@ -192,14 +196,15 @@ public class WorkNewTaskStart(
             "--repo-root",
             repoRoot.toString(),
             "--no-live-output",
-          ) + qaDevice.launchArguments()
+          )
       }
       NewTaskRunKind.PLAN -> {
         ownership = "$identity:$key:plan"
         args = listOf("phase", "plan", prepared.intake, "--agent", agentId)
       }
     }
-    return launchRuntimeCommand(repoRoot, ownership, args)
+    val deviceArguments = if (kind == NewTaskRunKind.GOAL) qaDevice.launchArguments() else emptyList()
+    return launchRuntimeCommand(repoRoot, ownership, args + deviceArguments)
   }
 
   private fun startRefusal(
@@ -225,31 +230,171 @@ public class WorkNewTaskStart(
   ): NewTaskStartResult {
     val phaseId = request.phaseId
     val target = request.target
-    if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
     if (qaDevice != null && phaseId != QA_PHASE) {
-      return NewTaskStartResult.Refused("$QA_DEVICE_FLAG applies only to the $QA_PHASE phase.")
+      return NewTaskStartResult.Refused("A named QA device is only valid for the QA phase.")
     }
+    if (phaseId !in STANDALONE_PHASES) return NewTaskStartResult.Refused("Unsupported standalone phase '$phaseId'.")
     standaloneIntakeRefusal(target, phaseId)?.let { return it }
     val place = if (phaseId == MONITOR_PHASE) checkout.copy(branch = null) else checkout
-    val run = StandaloneRun("phase", BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, phaseId), qaDevice)
+    val run =
+      StandaloneRun(
+        "phase",
+        phaseId,
+        BranchWorktreeHolder(BranchWorktreeHolderKind.PHASE, phaseId),
+        qaDevice = qaDevice.takeIf { phaseId == QA_PHASE },
+      )
     return launchStandaloneCommand(repoRoot, run, target, agentId, place)
   }
 
   public fun startOperation(
     repoRoot: Path,
+    request: OperationStartRequest,
+  ): NewTaskStartResult {
+    val operationId = request.operationId
+    val confirmation = request.confirmation
+    return when {
+      operationId !in STANDALONE_OPERATIONS ->
+        NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
+      confirmation != null -> confirmOperation(repoRoot, operationId, confirmation)
+      else -> proposalTargetRefusal(operationId, request.target) ?: startProposal(repoRoot, request)
+    }
+  }
+
+  private fun proposalTargetRefusal(
     operationId: String,
     target: String?,
-    agentId: String,
-    checkout: StandaloneCheckout = StandaloneCheckout(),
+  ): NewTaskStartResult.Refused? =
+    when {
+      target.orEmpty().split(WHITESPACE).any { it.startsWith(CONFIRM_PREFIX) || it.startsWith(SELECT_PREFIX) } ->
+        NewTaskStartResult.Refused("An operation target cannot carry a confirm: or select: token.")
+      operationId == OperationCardOperationIds.VERIFY && target.isNullOrBlank() ->
+        NewTaskStartResult.Refused("Verify needs an intake before it can start.")
+      else -> null
+    }
+
+  private fun startProposal(
+    repoRoot: Path,
+    request: OperationStartRequest,
   ): NewTaskStartResult {
-    if (operationId !in STANDALONE_OPERATIONS) {
-      return NewTaskStartResult.Refused("Unsupported standalone operation '$operationId'.")
+    val operationId = request.operationId
+    val profile =
+      when (
+        val resolved =
+          OperationAgentHomes.effectiveProfile(
+            request.agentId,
+            request.profile,
+            launches.agentHomes(),
+            environment.userHome,
+          )
+      ) {
+        is OperationProfileResolution.Refused -> return NewTaskStartResult.Refused(resolved.reason)
+        is OperationProfileResolution.Resolved -> resolved.profile
+      }
+    val launchId = launches.newLaunchId().takeIf { launches.tracks(operationId) }
+    val holderId = launchId?.let { launches.holderId(operationId, it) } ?: operationId
+    val run =
+      StandaloneRun(
+        "operation",
+        operationId,
+        BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, holderId),
+        launchId,
+        profile,
+      )
+    return launchStandaloneCommand(repoRoot, run, request.target, request.agentId, request.checkout)
+  }
+
+  public fun dismissOperationCard(token: String): OperationCardDismissal {
+    val (dismissed, launch) = launches.dismiss(token)
+    if (!dismissed) {
+      launches.find(token)?.takeIf { it.status == OperationCardStatus.CANCELLED }?.let(launches::withdraw)
+      return OperationCardDismissal.Stale("Operation card '$token' is no longer awaiting confirmation.")
     }
-    if (operationId == "verify" && target.isNullOrBlank()) {
-      return NewTaskStartResult.Refused("Verify needs an intake before it can start.")
+    launches.find(token)?.let(launches::withdraw)
+    launch?.let { releaseAfterRefusal(Path.of(it.checkoutRoot), operationHolder(it)) }
+    return OperationCardDismissal.Dismissed
+  }
+
+  public fun operationCard(token: String): OperationCardProjection? = launches.find(token)
+
+  public fun operationCardForLaunch(launchId: String): OperationCardProjection? = launches.findByLaunch(launchId)
+
+  public fun revalidateOperationCard(token: String): OperationCardRevalidation = launches.revalidate(token)
+
+  private fun operationHolder(launch: OperationLaunchContext): BranchWorktreeHolder =
+    BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, launch.holderId)
+
+  private fun confirmOperation(
+    repoRoot: Path,
+    operationId: String,
+    confirmation: OperatorConfirmation,
+  ): NewTaskStartResult {
+    val selection = confirmation.selection?.trim()?.takeIf(String::isNotEmpty)
+    val refusal = confirmationRefusal(operationId, selection) ?: revalidationRefusal(confirmation.token)
+    if (refusal != null) return NewTaskStartResult.Refused(refusal)
+    return when (val admitted = launches.admit(confirmation.token, operationId, selection)) {
+      is CardAdmission.Refused -> NewTaskStartResult.Refused(admitted.reason)
+      is CardAdmission.Admitted ->
+        launchConfirmation(repoRoot, ConfirmationRun(confirmation.token, admitted.executionId), selection, admitted)
     }
-    val run = StandaloneRun("operation", BranchWorktreeHolder(BranchWorktreeHolderKind.OPERATION, operationId))
-    return launchStandaloneCommand(repoRoot, run, target, agentId, checkout)
+  }
+
+  private fun confirmationRefusal(
+    operationId: String,
+    selection: String?,
+  ): String? =
+    when {
+      !launches.tracks(operationId) -> "Operation '$operationId' has no confirmation card."
+      operationId == OperationCardOperationIds.PR_REVIEW_FIX && selection == null ->
+        "Select the threads to fix before confirming."
+      selection != null && (selection.any(Char::isISOControl) || selection.startsWith("-")) ->
+        "The selection '$selection' is not valid."
+      else -> null
+    }
+
+  private fun revalidationRefusal(token: String): String? =
+    when (val revalidation = launches.revalidate(token)) {
+      is OperationCardRevalidation.Missing -> "The operation card is missing; start a new proposal from chat."
+      is OperationCardRevalidation.Present ->
+        if (revalidation.canConfirm) {
+          null
+        } else {
+          revalidation.reason ?: "The original proposal is unavailable; start a new proposal from chat."
+        }
+    }
+
+  private fun launchConfirmation(
+    repoRoot: Path,
+    run: ConfirmationRun,
+    selection: String?,
+    admitted: CardAdmission.Admitted,
+  ): NewTaskStartResult {
+    val launch = admitted.launch
+    val operationId = admitted.card.operationId
+    val checkoutRoot = Path.of(launch.checkoutRoot)
+    val checkoutGone = repositoryEnclosingRootPort.optionalRealPath(checkoutRoot) == null
+    if (launch.selectedAgent !in SupportedAgent.supportedIds || checkoutGone) {
+      launches.childEnded(run.token, run.executionId)
+      return NewTaskStartResult.Refused("The launch checkout or agent is no longer available; dismiss this card.")
+    }
+    val args =
+      buildList {
+        add("operation")
+        add(operationId)
+        if (operationId == OperationCardOperationIds.PR_REVIEW_FIX) addAll(launch.originalArguments)
+        add("$CONFIRM_PREFIX${run.token}")
+        selection?.let { add("$SELECT_PREFIX$it") }
+        add("--agent")
+        add(launch.selectedAgent)
+      }
+    val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
+    val ownership = "$identity:$operationId:standalone:confirm:${run.token}"
+    val binding =
+      OperationBinding(
+        launch.launchId,
+        run,
+        OperationAgentHomes.pinned(launch.selectedAgent, launch.selectedProfile),
+      )
+    return launchRuntimeCommand(checkoutRoot, ownership, args, binding)
   }
 
   private fun launchStandaloneCommand(
@@ -259,46 +404,118 @@ public class WorkNewTaskStart(
     agentId: String,
     checkout: StandaloneCheckout,
   ): NewTaskStartResult {
-    val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
-    val splitPrReviewMode =
-      if (run.verb == "operation" && run.holder.id == "pr-review-fix") {
-        PR_REVIEW_FIX_MODE_TARGET.matchEntire(launchTarget.orEmpty())
-      } else {
-        null
-      }
-    val argvTarget =
-      splitPrReviewMode?.groupValues?.getOrNull(2)?.trim()?.takeIf(String::isNotBlank)
-        ?: launchTarget.takeUnless { splitPrReviewMode != null }
+    val arguments = standaloneArguments(run, target)
     val branch = checkout.branch?.trim()?.takeIf(String::isNotBlank)
-    standaloneLaunchRefusal(repoRoot, argvTarget, branch, agentId)?.let { return it }
+    standaloneLaunchRefusal(repoRoot, arguments.argvTarget, branch, agentId)?.let { return it }
     val workspace =
-      when (val resolved = branch?.let { branchCheckout(repoRoot, it, run.holder) }) {
-        null -> StandaloneWorkspace(checkout.checkoutRoot ?: repoRoot, held = false)
+      when (val resolved = standaloneWorkspace(repoRoot, run, branch, checkout.checkoutRoot)) {
         is BranchCheckout.Ready -> resolved.workspace
         is BranchCheckout.Refused -> return NewTaskStartResult.Refused(resolved.reason)
       }
+    val retention =
+      when (val retained = launchRetention(run, workspace)) {
+        is LaunchRetention.Kept -> retained.retention
+        is LaunchRetention.Refused -> return NewTaskStartResult.Refused(retained.reason)
+      }
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
-    val ownedTarget = launchTarget.takeUnless { run.holder.id == QA_PHASE }
+    val ownedTarget = arguments.launchTarget.takeUnless { run.holder.id == QA_PHASE }
     val ownership =
       listOfNotNull("$identity:${run.holder.id}:standalone", ownedTarget, branch?.let { "branch:$it" })
         .joinToString(":")
     val args =
-      buildList {
-        add(run.verb)
-        add(run.holder.id)
-        if (splitPrReviewMode != null) {
-          add("mode:${splitPrReviewMode.groupValues[1]}")
-          argvTarget?.let(::add)
-        } else {
-          launchTarget?.let(::add)
-        }
-        add("--agent")
-        add(agentId)
-        addAll(run.qaDevice.launchArguments())
-      }
-    val result = launchRuntimeCommand(workspace.root, ownership, args)
+      listOf(run.verb, run.name) + arguments.operation + listOf("--agent", agentId) +
+        run.qaDevice.launchArguments()
+    if (run.launchId != null) {
+      val context =
+        OperationLaunchContext(
+          launchId = run.launchId,
+          operationId = run.name,
+          repositoryIdentity = identity,
+          databaseIdentity = "",
+          checkoutRoot = workspace.root.toString(),
+          branch = branch.orEmpty(),
+          originalArguments = arguments.operation,
+          selectedAgent = agentId,
+          selectedProfile = run.profile,
+          holderId = run.holder.id,
+          retention = retention,
+        )
+      saveLaunch(context, workspace, run.holder)
+    }
+    val binding =
+      run.launchId?.let { OperationBinding(it, null, OperationAgentHomes.pinned(agentId, run.profile)) }
+    val result = launchRuntimeCommand(workspace.root, ownership, args, binding)
     if (result is NewTaskStartResult.Refused && workspace.held) releaseAfterRefusal(workspace.root, run.holder)
     return result
+  }
+
+  private fun standaloneArguments(
+    run: StandaloneRun,
+    target: String?,
+  ): StandaloneArguments {
+    val launchTarget = target?.trim()?.takeIf(String::isNotBlank)
+    val splitPrReviewMode =
+      PR_REVIEW_FIX_MODE_TARGET.matchEntire(launchTarget.orEmpty())
+        ?.takeIf { run.verb == "operation" && run.name == OperationCardOperationIds.PR_REVIEW_FIX }
+        ?: return StandaloneArguments(launchTarget, launchTarget, listOfNotNull(launchTarget))
+    val argvTarget = splitPrReviewMode.groupValues[2].trim().takeIf(String::isNotBlank)
+    return StandaloneArguments(
+      launchTarget,
+      argvTarget,
+      listOfNotNull("mode:${splitPrReviewMode.groupValues[1]}", argvTarget),
+    )
+  }
+
+  private fun standaloneWorkspace(
+    repoRoot: Path,
+    run: StandaloneRun,
+    branch: String?,
+    checkoutRoot: Path?,
+  ): BranchCheckout {
+    if (branch != null) return branchCheckout(repoRoot, branch, run.holder)
+    val root = checkoutRoot ?: repoRoot
+    return BranchCheckout.Ready(
+      StandaloneWorkspace(root, held = run.launchId != null && branchWorktrees.hold(root, run.holder)),
+    )
+  }
+
+  private fun launchRetention(
+    run: StandaloneRun,
+    workspace: StandaloneWorkspace,
+  ): LaunchRetention {
+    if (run.launchId == null) return LaunchRetention.Kept(null)
+    val retention =
+      when (val observation = branchWorktrees.observe(workspace.root, run.holder)) {
+        is BranchWorktreeObservation.CallerOwned ->
+          if (workspace.held) {
+            LaunchRetention.Refused("The managed checkout ownership record is missing; no proposal was launched.")
+          } else {
+            LaunchRetention.Kept(OperationLaunchRetention.CALLER_OWNED)
+          }
+        is BranchWorktreeObservation.RuntimeManaged ->
+          if (observation.holderPresent) {
+            LaunchRetention.Kept(OperationLaunchRetention.MANAGED_HOLDER)
+          } else {
+            LaunchRetention.Refused("The managed checkout does not retain this operation holder.")
+          }
+        is BranchWorktreeObservation.Unavailable -> LaunchRetention.Refused(observation.reason)
+      }
+    if (retention is LaunchRetention.Refused && workspace.held) releaseAfterRefusal(workspace.root, run.holder)
+    return retention
+  }
+
+  private fun saveLaunch(
+    context: OperationLaunchContext,
+    workspace: StandaloneWorkspace,
+    holder: BranchWorktreeHolder,
+  ) {
+    var saved = false
+    try {
+      launches.save(context)
+      saved = true
+    } finally {
+      if (!saved && workspace.held) releaseAfterRefusal(workspace.root, holder)
+    }
   }
 
   private fun standaloneLaunchRefusal(
@@ -335,26 +552,42 @@ public class WorkNewTaskStart(
     workingDirectory: Path,
     ownership: String,
     args: List<String>,
-  ): NewTaskStartResult =
-    database.transaction { unit ->
-      when (
-        val launched =
-          launcher.start(
-            WorkRunLaunchRequest(
-              workingDirectory,
-              unit.dbPath,
-              ownership,
-              WorkRunLaunchKind.RuntimeCommand(args),
-              emptyMap(),
-            ),
-          )
-      ) {
-        is WorkRunLaunchResult.Refused -> NewTaskStartResult.Refused(launched.reason)
-        is WorkRunLaunchResult.Started ->
-          launched.exit?.let { NewTaskStartResult.Running(runFailure(it, launched.logPath)) }
-            ?: NewTaskStartResult.Started
+    binding: OperationBinding? = null,
+  ): NewTaskStartResult {
+    val launchId = binding?.launchId
+    val launched =
+      database.transaction { unit ->
+        launcher.start(
+          WorkRunLaunchRequest(
+            workingDirectory,
+            unit.dbPath,
+            ownership,
+            WorkRunLaunchKind.RuntimeCommand(args),
+            emptyMap(),
+            launchId,
+            binding?.agentHomes,
+          ),
+        )
       }
+    val confirmation = binding?.confirmation
+    return when (launched) {
+      is WorkRunLaunchResult.Refused -> {
+        confirmation?.let { launches.childEnded(it.token, it.executionId) }
+        NewTaskStartResult.Refused(launched.reason)
+      }
+      is WorkRunLaunchResult.AwaitingConfirmation -> {
+        confirmation?.let { launches.childEnded(it.token, it.executionId) }
+        launchId?.let(NewTaskStartResult::AwaitingConfirmation) ?: NewTaskStartResult.Started
+      }
+      is WorkRunLaunchResult.Started ->
+        launched.exit?.let { exit ->
+          confirmation?.let { run ->
+            exit.whenComplete { _, _ -> launches.childEnded(run.token, run.executionId) }
+          }
+          NewTaskStartResult.Running(runFailure(exit, launched.logPath), launchId)
+        } ?: NewTaskStartResult.Started
     }
+  }
 
   private fun releaseAfterRefusal(
     checkoutRoot: Path,
@@ -388,44 +621,40 @@ public class WorkNewTaskStart(
     intake: String?,
     phaseId: String,
   ): NewTaskStartResult.Refused? {
-    if (intake == null) return null
+    if (intake.isNullOrBlank()) return null
     val trimmed = intake.trim()
-    if (trimmed.isEmpty()) return null
-    val reason =
-      when (phaseId) {
-        MONITOR_PHASE -> monitorIntakeRefusal(trimmed)
-        QA_PHASE -> qaInstructionsRefusal(trimmed)
-        else -> "Intake is supported only for standalone QA and monitor runs."
-      }
-    return reason?.let(NewTaskStartResult::Refused)
+    return when (phaseId) {
+      MONITOR_PHASE -> monitorIntakeRefusal(trimmed)
+      QA_PHASE -> qaIntakeRefusal(trimmed)
+      else -> NewTaskStartResult.Refused("Intake is supported only for standalone monitor and QA runs.")
+    }
   }
 
-  private fun monitorIntakeRefusal(intake: String): String? =
+  private fun monitorIntakeRefusal(intake: String): NewTaskStartResult.Refused? =
     when {
       intake.contains(' ') || intake.any { it.isISOControl() } ->
-        "Monitor intake must be a single token naming the target."
-      intake.startsWithPhaseOption() -> "Monitor intake must name the target directly, not as a phase option."
+        NewTaskStartResult.Refused("Monitor intake must be a single token naming the target.")
+      intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) || intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX) ->
+        NewTaskStartResult.Refused("Monitor intake must name the target directly, not as a phase option.")
       else -> null
     }
 
-  private fun qaInstructionsRefusal(instructions: String): String? =
-    when {
-      instructions.startsWithPhaseOption() ->
-        "QA instructions cannot start with mode: or target:, because the CLI would read them as a phase option."
-      instructions.toByteArray(Charsets.UTF_8).size > MAX_INTAKE_BYTES ->
-        "QA instructions are too long. Shorten them to under $MAX_INTAKE_BYTES bytes."
-      else -> null
+  private fun qaIntakeRefusal(intake: String): NewTaskStartResult.Refused? =
+    if (
+      intake.startsWith('-') || intake.startsWith(MONITOR_INTAKE_MODE_PREFIX) ||
+      intake.startsWith(MONITOR_INTAKE_TARGET_PREFIX)
+    ) {
+      NewTaskStartResult.Refused("QA instructions cannot begin with a CLI option or phase intake key.")
+    } else {
+      null
     }
-
-  private fun String.startsWithPhaseOption(): Boolean =
-    startsWith(PHASE_OPTION_MODE_PREFIX) || startsWith(PHASE_OPTION_TARGET_PREFIX)
 
   private fun runFailure(
     exit: CompletionStage<WorkRunExit>,
     log: Path,
   ): CompletionStage<String?> =
     exit.handle { finished, failure ->
-      if (failure == null && finished.code == 0) {
+      if (failure == null && finished.code in SUCCESSFUL_EXITS) {
         null
       } else {
         "${stopReason(finished?.failureLogLines.orEmpty())} Full log: $log"
@@ -506,14 +735,44 @@ public class WorkNewTaskStart(
 
   private data class StandaloneRun(
     val verb: String,
+    val name: String,
     val holder: BranchWorktreeHolder,
+    val launchId: String? = null,
+    val profile: String? = null,
     val qaDevice: QaNamedDevice? = null,
+  )
+
+  private data class OperationBinding(
+    val launchId: String?,
+    val confirmation: ConfirmationRun?,
+    val agentHomes: Map<String, String>?,
+  )
+
+  private data class ConfirmationRun(
+    val token: String,
+    val executionId: Long,
   )
 
   private data class StandaloneWorkspace(
     val root: Path,
     val held: Boolean,
   )
+
+  private data class StandaloneArguments(
+    val launchTarget: String?,
+    val argvTarget: String?,
+    val operation: List<String>,
+  )
+
+  private sealed interface LaunchRetention {
+    data class Kept(
+      val retention: OperationLaunchRetention?,
+    ) : LaunchRetention
+
+    data class Refused(
+      val reason: String,
+    ) : LaunchRetention
+  }
 
   private sealed interface BranchCheckout {
     data class Ready(
@@ -547,8 +806,18 @@ public class WorkNewTaskStart(
     const val QA_PHASE = "qa"
     val STANDALONE_PHASES = setOf("review", "validation", QA_PHASE, "pr", MONITOR_PHASE)
     val STANDALONE_OPERATIONS = setOf("verify", "pr-review-fix")
-    const val PHASE_OPTION_MODE_PREFIX = "mode:"
-    const val PHASE_OPTION_TARGET_PREFIX = "target:"
+    const val MONITOR_INTAKE_MODE_PREFIX = "mode:"
+    const val MONITOR_INTAKE_TARGET_PREFIX = "target:"
+    const val CONFIRM_PREFIX = "confirm:"
+    const val SELECT_PREFIX = "select:"
+    val SUCCESSFUL_EXITS = setOf(0, OperationCardExitCodes.AWAITING_CONFIRMATION)
+    val OCCUPIED_VERDICTS =
+      setOf(
+        GoalPreflightVerdict.ALREADY_RUNNING,
+        GoalPreflightVerdict.RESUMABLE,
+        GoalPreflightVerdict.GOAL_CONTINUATION,
+        GoalPreflightVerdict.TERMINAL_ONLY,
+      )
   }
 }
 

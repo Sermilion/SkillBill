@@ -15,20 +15,19 @@ class CursorAgentRunTransportTest {
 
     assertFalse(
       command.command.contains("stream-json"),
-      "a launch nobody streams must not request the whole-session transport; its terminal event " +
+      "a launch nobody streams must not request the whole-session transport; its " +
+        "terminal event " +
         "arrives last, so a capped drain spends its budget on the preamble",
     )
-    assertTrue(command.command.contains("json"))
+    assertEquals(listOf("agent", "acp"), command.command)
   }
 
   @Test
   fun `a streamed launch still requests the per-event transport`() {
     val command = CursorAgentRunCommandBuilder().build(request().copy(streamOutputForLiveness = true))
 
-    assertTrue(
-      command.command.contains("stream-json"),
-      "liveness needs per-event output to prove the launch is working",
-    )
+    assertEquals(AgentRunApprovalProtocol.CURSOR_ACP, command.approvalProtocol)
+    assertFalse(command.command.contains("--force"))
   }
 
   @Test
@@ -45,7 +44,8 @@ class CursorAgentRunTransportTest {
   @Test
   fun `buffered result with progress glued onto NO_FINDINGS harvests the register`() {
     val glued =
-      "I'll fetch the bound evidence then score the parse return type is the core change.reachaNO_FINDINGS"
+      "I'll fetch the bound evidence then score the parse return type is the " +
+        "core change.reachaNO_FINDINGS"
     val decoded =
       AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(
         """{"type":"result","subtype":"success","is_error":false,"result":"$glued",""" +
@@ -76,7 +76,8 @@ class CursorAgentRunTransportTest {
   @Test
   fun `buffered result with progress glued onto NO_FINDINGS and verdict harvests register and verdict`() {
     val glued =
-      "I'll fetch the bound evidence then score the parse return type is the core change.reachaNO_FINDINGS" +
+      "I'll fetch the bound evidence then score the parse return type is the " +
+        "core change.reachaNO_FINDINGS" +
         "verdict: approved"
     val decoded =
       AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(
@@ -115,7 +116,8 @@ class CursorAgentRunTransportTest {
   @Test
   fun `last assistant Finding none wins over concatenated progress`() {
     val progress =
-      "I'll assess the head-commit code and tests against the subtask spec, without editing files or running builds."
+      "I'll assess the head-commit code and tests against the subtask spec, " +
+        "without editing files or running builds."
     val jsonl =
       """
       {"type":"assistant","message":{"content":[{"type":"text","text":"$progress"}]}}
@@ -129,7 +131,8 @@ class CursorAgentRunTransportTest {
   @Test
   fun `buffered result with progress glued onto Finding none harvests the assessment line`() {
     val glued =
-      "I'll assess the head-commit code and tests against the subtask spec, without editing files or running builds." +
+      "I'll assess the head-commit code and tests against the subtask spec, " +
+        "without editing files or running builds." +
         "Finding: none"
     val decoded =
       AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(
@@ -154,9 +157,11 @@ class CursorAgentRunTransportTest {
   fun `progress sentences glued onto a finding harvest the finding line`() {
     val glued =
       "I'll follow the bill-code-review skill and fetch the assigned evidence." +
-        "MCP read_evidence is still blocked. I'll read the assigned files from there." +
+        "MCP read_evidence is still blocked. I'll read the assigned files from " +
+        "there." +
         "[F-001] Major | High | specialist=bill-kotlin-code-review-architecture | " +
-        "path=\\\"runtime-kotlin/Foo.kt\\\" | line=12 | endpoint close leaks on spawn failure"
+        "path=\\\"runtime-kotlin/Foo.kt\\\" | line=12 | endpoint close leaks on " +
+        "spawn failure"
     val decoded =
       AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(
         """{"type":"result","subtype":"success","is_error":false,"result":"$glued"}""",
@@ -164,7 +169,8 @@ class CursorAgentRunTransportTest {
 
     assertEquals(
       "[F-001] Major | High | specialist=bill-kotlin-code-review-architecture | " +
-        "path=\"runtime-kotlin/Foo.kt\" | line=12 | endpoint close leaks on spawn failure",
+        "path=\"runtime-kotlin/Foo.kt\" | line=12 | endpoint close leaks on spawn " +
+        "failure",
       decoded.text,
     )
   }

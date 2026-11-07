@@ -1,3 +1,10 @@
+## [2026-11-07] SKILL-453 operator approval cards and provider refusal boundaries
+Areas: runtime-kotlin, desktop/core/{domain,data}, desktop/feature/chat, orchestration/contracts, docs
+- Added durable, typed operator approval requests and revocable repository-scoped rules, with provider request identity preserved and transactional broker decisions. Runtime and desktop share the persisted approval store and render complete approval cards; rules match the provider profile and exact action input. reusable
+- Parked verify and pr-review-fix operations publish persisted proposal cards; only a card action admits confirmation through compare-and-swap. Claude uses host prompts, Codex and Cursor use interactive protocol adapters, and Junie refuses card-required execution where permission support is unverified.
+- Reusable: the approval broker and card lifecycle serve provider prompts and parked-operation confirmation; unsupported providers refuse before launch rather than falling back to forced execution.
+- Limits: managed organization policy is deferred; authenticated live provider parity was not established for Codex, Cursor or Junie. Desktop consumers require the approval and operation-card schema migrations. Feature flag: N/A. Acceptance criteria: 17/17 implemented.
+
 ## [2026-11-05] SKILL-483.1 stop writing to shared tmp
 Areas: runtime-kotlin/runtime-infra, runtime-core, runtime-cli, runtime-mcp, runtime-kotlin/build-logic, desktop/app, desktop/core/data, desktop/benchmark, desktop/build-logic
 - Runtime temp resolution uses an explicit on-disk root; decomposition locks use a host-shared state directory. Review socket fallback removes its endpoint artifacts on close.
