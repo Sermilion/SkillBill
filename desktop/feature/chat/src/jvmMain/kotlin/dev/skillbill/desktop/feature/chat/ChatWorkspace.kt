@@ -26,6 +26,7 @@ import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
+import dev.skillbill.desktop.core.ui.usage.model.SelectedNewTaskUsageContext
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import dev.skillbill.desktop.feature.chat.newtask.NewTaskChats
@@ -38,12 +39,15 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -97,6 +101,8 @@ class ChatWorkspace(
   override val newTaskDraftOpen: StateFlow<Boolean> = newTask.anyChatOpen
 
   override val newTaskOpenChats: StateFlow<Int> = newTask.openCount
+  private val selectedUsageContextState = MutableStateFlow<SelectedNewTaskUsageContext>(SelectedNewTaskUsageContext.Absent(0))
+  override val selectedNewTaskUsageContext: StateFlow<SelectedNewTaskUsageContext> = selectedUsageContextState.asStateFlow()
   private val turns = ChatTurns(chat, details, clock)
   private val sessions = LinkedHashMap<String, ChatSession>()
   private val resumeJobs = LinkedHashSet<Job>()
@@ -133,6 +139,28 @@ class ChatWorkspace(
 
   init {
     scope.launch { snapshotFlow { panes.chatOpen }.collect { open -> if (!open && paneState.value) setPaneOpen(false) } }
+    scope.launch {
+      var nextToken = 0L
+      newTask.selected.collectLatest { draft ->
+        val token = ++nextToken
+        selectedUsageContextState.value = SelectedNewTaskUsageContext.Pending(token)
+        combine(draft.chat, snapshotFlow { draft.agentId to draft.selectedAgent }) { chat, choice -> chat to choice }
+          .flatMapLatest { (selectedChat, choice) ->
+            val (agentId, selectedAgent) = choice
+            when {
+              agentId.isNullOrBlank() -> flowOf(SelectedNewTaskUsageContext.Absent(token))
+              selectedChat != null && selectedChat.agent.agentId == agentId ->
+                combine(selectedChat.sessionIdFlow, selectedChat.thread.busy) { sessionId, active ->
+                  SelectedNewTaskUsageContext.Ready(token, selectedChat.agent, sessionId, active)
+                }
+              selectedChat != null -> flowOf(SelectedNewTaskUsageContext.Pending(token))
+              selectedAgent?.agentId == agentId -> flowOf(SelectedNewTaskUsageContext.Ready(token, selectedAgent, null, false))
+              else -> flowOf(SelectedNewTaskUsageContext.Pending(token))
+            }
+          }
+          .collect { selectedUsageContextState.value = it }
+      }
+    }
   }
 
   /** The agents a chat can switch to. */

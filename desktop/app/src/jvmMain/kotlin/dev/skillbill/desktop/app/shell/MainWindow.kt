@@ -51,6 +51,8 @@ import dev.skillbill.desktop.feature.changes.ChangesWindowViewModel
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.awt.GraphicsEnvironment
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 
 private const val MIN_WINDOW_WIDTH = 560
 private const val MIN_WINDOW_HEIGHT = 420
@@ -92,6 +94,7 @@ fun ApplicationScope.MainWindow(
 ) {
   DisposableEffect(window) {
     onDispose {
+      window.usage.release()
       window.terminal.close()
       window.specsPane.close()
       window.chat.closeChats()
@@ -104,12 +107,13 @@ fun ApplicationScope.MainWindow(
   val changesEntry by changes.current.collectAsState()
   val changesKeys = remember { ChangesWindowKeys() }
   val closeScope = rememberCoroutineScope()
+  val windowState = rememberWindowState(size = remember(uiScale) { comfortableWindowSize(uiScale) }, position = WindowPosition(Alignment.Center))
   Window(
     onCloseRequest = { closeScope.launch { if (window.chat.closeChatsSafely()) onCloseRequest() } },
     visible = visible,
     title = "Skill Bill",
     icon = skillBillIcon(),
-    state = rememberWindowState(size = remember(uiScale) { comfortableWindowSize(uiScale) }, position = WindowPosition(Alignment.Center)),
+    state = windowState,
     onPreviewKeyEvent = onPreviewKeyEvent@{ event ->
       // The Changes panel is modal: its keys win, and no shell shortcut fires under it.
       if (changesEntry != null) return@onPreviewKeyEvent changesKeys.handle(event)
@@ -133,6 +137,27 @@ fun ApplicationScope.MainWindow(
     },
   ) {
     val awtWindow = this.window
+    DisposableEffect(awtWindow, windowState, visible) {
+      fun publish(focused: Boolean = awtWindow.isFocused) = window.usage.setWindowFacts(visible, windowState.isMinimized, focused)
+      val windowListener = object : WindowAdapter() {
+        override fun windowIconified(e: WindowEvent) = publish()
+        override fun windowDeiconified(e: WindowEvent) = publish()
+        override fun windowOpened(e: WindowEvent) = publish()
+        override fun windowClosing(e: WindowEvent) = publish()
+        override fun windowGainedFocus(e: WindowEvent) = publish(true)
+        override fun windowLostFocus(e: WindowEvent) = publish(false)
+      }
+      publish()
+      awtWindow.addWindowListener(windowListener)
+      awtWindow.addWindowFocusListener(windowListener)
+      onDispose {
+        awtWindow.removeWindowListener(windowListener)
+        awtWindow.removeWindowFocusListener(windowListener)
+      }
+    }
+    LaunchedEffect(visible, windowState.isMinimized) {
+      window.usage.setWindowFacts(visible, windowState.isMinimized, awtWindow.isFocused)
+    }
     SideEffect { awtWindow.minimumSize = uiScale.windowDimension(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT) }
     LaunchedEffect(visible, focusRequest) {
       if (visible) {
@@ -245,6 +270,13 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         },
       )
     }
+  }
+  SideEffect {
+    window.usage.setSidebarFacts(
+      settings = topRoute is SettingsRoute,
+      inlineVisible = sidebar != null && !drawerMode,
+      drawerIsOpen = sidebar != null && drawerMode && panes.drawerOpen,
+    )
   }
   ShellFrame(sidebar, drawerMode, panes.drawerOpen, onDismissDrawer = { panes.drawerOpen = false }) {
     WorkArea(drawerMode, right, bottom, rightWidth = if (chatShown) null else SkillBillSize.specsPane) {

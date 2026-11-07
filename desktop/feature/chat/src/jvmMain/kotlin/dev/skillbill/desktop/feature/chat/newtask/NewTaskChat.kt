@@ -26,6 +26,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -58,9 +61,9 @@ internal class NewTaskChat(
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
   private val onSaved: () -> Unit = {},
 ) {
-  @Volatile
-  var sessionId: String = initialSessionId
-    private set
+  private val sessionIdState = MutableStateFlow(initialSessionId)
+  val sessionIdFlow: StateFlow<String> = sessionIdState.asStateFlow()
+  val sessionId: String get() = sessionIdState.value
 
   val thread = ChatThread(clock)
   val job: Job = SupervisorJob(scope.coroutineContext[Job])
@@ -167,7 +170,7 @@ internal class NewTaskChat(
   private suspend fun rotateSession() {
     val old = sessionId
     saveLock.withLock {
-      sessionId = UUID.randomUUID().toString()
+      sessionIdState.value = UUID.randomUUID().toString()
       chat.deleteSavedChat(old)
     }
     unpromptedJob?.cancel()

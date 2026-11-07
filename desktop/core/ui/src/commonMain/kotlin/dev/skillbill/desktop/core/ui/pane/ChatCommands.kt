@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.ui.pane
 
 import dev.skillbill.desktop.core.domain.model.ReviewFindingsAction
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.ui.usage.model.SelectedNewTaskUsageContext
 import kotlinx.coroutines.flow.StateFlow
 
 /** The Cmd key's label on macOS and the Ctrl key's elsewhere. */
@@ -20,6 +21,9 @@ interface ChatCommands {
 
   /** How many New task chats are open, counting empty ones. */
   val newTaskOpenChats: StateFlow<Int>
+
+  /** The selected New task's execution-bound usage context, independent of screen rendering. */
+  val selectedNewTaskUsageContext: StateFlow<SelectedNewTaskUsageContext>
 
   /** Hides the pane when it shows [item]'s chat, or any chat when [item] is null; otherwise opens [item]'s chat, or only shows the pane. */
   fun toggleChat(item: WorkItem?)
