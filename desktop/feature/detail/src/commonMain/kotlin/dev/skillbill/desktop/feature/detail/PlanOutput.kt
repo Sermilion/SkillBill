@@ -1,7 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +24,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 
@@ -72,8 +71,10 @@ internal fun DetailSections.planOutputTail(detail: Detail) {
   if (text.isEmpty()) return
   section("plan-output-tail", "Agent output", count = "latest ${text.size} lines") {
     item(key = "plan-output-tail-lines") {
-      Column(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(8.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        text.forEach { line -> BasicText(line, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+      SbBox {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+          text.forEach { line -> BasicText(line, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
       }
     }
   }

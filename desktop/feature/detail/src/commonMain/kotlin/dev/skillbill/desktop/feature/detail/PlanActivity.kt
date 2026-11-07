@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,6 +52,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.Section
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.domain.model.Detail
@@ -95,25 +94,27 @@ internal fun PlanActivityPanel(item: WorkItem, detail: Detail, state: DetailUiSt
       SbButton("Follow", { follow = !follow }, variant = if (follow) SbButtonVariant.Secondary else SbButtonVariant.Ghost, icon = LucideIcons.arrowDown, size = SbControlSize.Small, modifier = Modifier.semantics { stateDescription = if (follow) "Following latest activity" else "Paused" })
       SbButton("Transcript", { transcript = !transcript }, variant = SbButtonVariant.Ghost, icon = LucideIcons.external, size = SbControlSize.Small)
     }
-    Box(Modifier.fillMaxWidth().height(282.dp).border(1.dp, SkillBillTheme.colors.borderSubtle, RoundedCornerShape(8.dp))) {
-      LazyColumn(Modifier.fillMaxSize().testTag("plan-activity-feed").nestedScroll(scroll).onPreviewKeyEvent { event ->
-        if (event.type == KeyEventType.KeyDown && event.key in setOf(Key.DirectionUp, Key.PageUp, Key.MoveHome)) follow = false
-        if (event.type == KeyEventType.KeyDown && event.key == Key.MoveEnd) follow = true
-        false
-      }, state = list) {
-        stageIds.forEach { id ->
-          stickyHeader(key = "group-$id") {
-            val phase = stages.firstOrNull { it.phaseId == id }
-            val status = when (phase?.status) { "running" -> if (item.running) "active" else "paused"; "completed" -> "done"; else -> phase?.status ?: "queued" }
-            PlanActivityGroup(id, status, phase, events.filter { it.phaseId == id }, id !in closed) { closed = if (id in closed) closed - id else closed + id }
+    SbBox(Modifier.height(282.dp)) {
+      Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().testTag("plan-activity-feed").nestedScroll(scroll).onPreviewKeyEvent { event ->
+          if (event.type == KeyEventType.KeyDown && event.key in setOf(Key.DirectionUp, Key.PageUp, Key.MoveHome)) follow = false
+          if (event.type == KeyEventType.KeyDown && event.key == Key.MoveEnd) follow = true
+          false
+        }, state = list) {
+          stageIds.forEach { id ->
+            stickyHeader(key = "group-$id") {
+              val phase = stages.firstOrNull { it.phaseId == id }
+              val status = when (phase?.status) { "running" -> if (item.running) "active" else "paused"; "completed" -> "done"; else -> phase?.status ?: "queued" }
+              PlanActivityGroup(id, status, phase, events.filter { it.phaseId == id }, id !in closed) { closed = if (id in closed) closed - id else closed + id }
+            }
+            if (id !in closed) items(rows.filter { it.phaseId == id }, key = { it.key }) { event -> PlanActivityRow(event, onAction) }
           }
-          if (id !in closed) items(rows.filter { it.phaseId == id }, key = { it.key }) { event -> PlanActivityRow(event, onAction) }
+          if (item.running) item(key = "working") {
+            BasicText(if (planQuietSince(item, detail) == null) "Agent is working" else "Waiting for new activity", Modifier.padding(12.dp), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
+          }
         }
-        if (item.running) item(key = "working") {
-          BasicText(if (planQuietSince(item, detail) == null) "Agent is working" else "Waiting for new activity", Modifier.padding(12.dp), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
-        }
+        if (!follow) SbButton("Jump to latest", { follow = true }, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), variant = SbButtonVariant.Secondary, icon = LucideIcons.arrowDown, size = SbControlSize.Small)
       }
-      if (!follow) SbButton("Jump to latest", { follow = true }, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), variant = SbButtonVariant.Secondary, icon = LucideIcons.arrowDown, size = SbControlSize.Small)
     }
     if (transcript) PlanOutputLog(state, detail, onAction, raw = true)
   }

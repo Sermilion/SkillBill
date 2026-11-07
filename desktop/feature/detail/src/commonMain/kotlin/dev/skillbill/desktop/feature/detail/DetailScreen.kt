@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -26,7 +24,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
@@ -34,6 +31,7 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -336,9 +334,8 @@ private fun DetailSections.qaDocument(
 
 private fun DetailSections.placeholder(key: String, height: Dp) {
   item(key = key) {
-    val shape = RoundedCornerShape(SkillBillRadius.md)
-    Box(Modifier.padding(top = DocBlockGap).fillMaxWidth().heightIn(min = height).border(1.dp, SkillBillTheme.colors.borderSubtle, shape).padding(12.dp), contentAlignment = Alignment.TopStart) {
-      BasicText("Loading", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+    SbBox(Modifier.padding(top = DocBlockGap).heightIn(min = height)) {
+      BasicText("Loading", Modifier.padding(12.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
     }
   }
 }

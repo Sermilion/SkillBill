@@ -27,10 +27,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.LocalUiTicker
 import dev.skillbill.desktop.core.designsystem.component.SbSpinner
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
@@ -134,10 +134,12 @@ internal fun PlanGlyph(state: String, color: Color) {
 
 @Composable
 internal fun PlanSubtasksPending() {
-  Column(Modifier.fillMaxWidth().border(1.dp, SkillBillTheme.colors.border, RoundedCornerShape(SkillBillRadius.md)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    BasicText("Subtasks appear here when the work is split.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
-    listOf(.72f, .58f, .66f).forEach { fraction ->
-      Box(Modifier.fillMaxWidth(fraction).height(8.dp).background(SkillBillTheme.colors.borderSubtle, RoundedCornerShape(4.dp)))
+  SbBox {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      BasicText("Subtasks appear here when the work is split.", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
+      listOf(.72f, .58f, .66f).forEach { fraction ->
+        Box(Modifier.fillMaxWidth(fraction).height(8.dp).background(SkillBillTheme.colors.borderSubtle, RoundedCornerShape(4.dp)))
+      }
     }
   }
 }

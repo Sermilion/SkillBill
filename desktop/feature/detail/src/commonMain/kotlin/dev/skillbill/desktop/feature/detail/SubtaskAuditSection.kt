@@ -1,13 +1,11 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -92,7 +89,10 @@ private fun AuditResult(audit: SubtaskAuditResult, verdict: String?, summary: St
         if (audit.criteria.isNotEmpty()) {
           CriterionBox {
             audit.criteria.forEachIndexed { index, criterion ->
-              CriterionRow(criterion, Modifier.fillMaxWidth().sbBoxSegment(index, audit.criteria.size))
+              CriterionRow(
+                criterion,
+                Modifier.fillMaxWidth().sbBoxSegment(index, audit.criteria.size, fill = SkillBillTheme.colors.bgInset),
+              )
             }
           }
         }
@@ -114,12 +114,20 @@ private fun FailedCriteria(audit: SubtaskAuditResult, subtaskId: Int) {
     unmet.forEachIndexed { index, criterion ->
       UnmetCriterionRow(
         criterion,
-        Modifier.fillMaxWidth().sbBoxSegment(index, unmet.size + if (met.isNotEmpty()) 1 else 0),
+        Modifier.fillMaxWidth().sbBoxSegment(
+          index,
+          unmet.size + if (met.isNotEmpty()) 1 else 0,
+          fill = SkillBillTheme.colors.bgInset,
+        ),
       )
     }
     if (met.isNotEmpty()) {
       Row(
-        Modifier.fillMaxWidth().sbBoxSegment(unmet.size, unmet.size + 1).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().sbBoxSegment(
+          unmet.size,
+          unmet.size + 1,
+          fill = SkillBillTheme.colors.bgInset,
+        ).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
@@ -135,7 +143,11 @@ private fun FailedCriteria(audit: SubtaskAuditResult, subtaskId: Int) {
         met.forEachIndexed { index, criterion ->
           CriterionRow(
             criterion,
-            Modifier.fillMaxWidth().sbBoxSegment(unmet.size + 1 + index, unmet.size + 1 + met.size),
+            Modifier.fillMaxWidth().sbBoxSegment(
+              unmet.size + 1 + index,
+              unmet.size + 1 + met.size,
+              fill = SkillBillTheme.colors.bgInset,
+            ),
           )
         }
       }
@@ -145,9 +157,7 @@ private fun FailedCriteria(audit: SubtaskAuditResult, subtaskId: Int) {
 
 @Composable
 private fun CriterionBox(content: @Composable () -> Unit) {
-  Column(
-    Modifier.fillMaxWidth().background(SkillBillTheme.colors.bgInset, RoundedCornerShape(SkillBillRadius.md)),
-  ) { content() }
+  Column(Modifier.fillMaxWidth()) { content() }
 }
 
 @Composable

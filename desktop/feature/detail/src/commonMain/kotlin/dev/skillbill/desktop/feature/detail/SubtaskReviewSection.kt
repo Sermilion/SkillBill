@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,7 +18,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
@@ -123,9 +120,13 @@ private fun RunningReviewLanes(pass: RunningReviewPass) {
 
 @Composable
 private fun InspectorFindingsBox(findings: List<ReviewReportFinding>) {
-  Column(Modifier.fillMaxWidth().background(SkillBillTheme.colors.bgInset, RoundedCornerShape(SkillBillRadius.md))) {
+  Column(Modifier.fillMaxWidth()) {
     findings.forEachIndexed { index, finding ->
-      InspectorFindingRow(index, finding, Modifier.fillMaxWidth().sbBoxSegment(index, findings.size))
+      InspectorFindingRow(
+        index,
+        finding,
+        Modifier.fillMaxWidth().sbBoxSegment(index, findings.size, fill = SkillBillTheme.colors.bgInset),
+      )
     }
   }
 }
