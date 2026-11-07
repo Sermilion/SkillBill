@@ -1,9 +1,13 @@
 package dev.skillbill.desktop.feature.chat
 
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +20,16 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -40,7 +52,7 @@ import dev.skillbill.desktop.core.domain.model.PROVIDER_REMEMBER_OPTION_KIND
 
 private const val ALLOW_KIND = "allow"
 private const val DENY_KIND = "deny"
-private val INPUT_MAX_HEIGHT = 220.dp
+private const val VISIBLE_TEXT_LINES = 3
 
 /**
  * What a card surface can do. [live] is the feed's registration for the card's repository; the decision callbacks send an
@@ -98,59 +110,44 @@ internal fun ChatApprovalCard(message: ChatMessage.Approval, actions: ChatApprov
   val offReason = message.controlsOffReason(actions?.live == true)
   val outcome = card.outcomeText()
   val decision = if (card.isPending) emptyList() else card.decisionLines()
+  var expanded by rememberSaveable(card.key) { mutableStateOf(false) }
   Column(
     Modifier.fillMaxWidth()
       .border(1.dp, if (card.isPending) colors.borderStrong else colors.border, shape)
       .background(colors.bgRaised, shape)
-      .padding(12.dp)
+      .padding(10.dp)
       .semantics {
         liveRegion = LiveRegionMode.Polite
         contentDescription = listOf("Permission request ${card.title}", outcome).plus(decision).joinToString(". ") + "."
       },
-    verticalArrangement = Arrangement.spacedBy(8.dp),
+    verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
       CompositionLocalProvider(LocalContentColor provides if (card.isPending) colors.accentText else colors.fgMuted) {
         SbIcon(LucideIcons.shield, SbIconSize.Md)
       }
-      BasicText(card.title, Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg))
-      BasicText(outcome, style = type.tSm.copy(color = if (card.isPending) colors.accentText else colors.fgMuted))
+      BasicText(card.title, Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    SelectionContainer {
-      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        card.reason?.let { BasicText(it, style = type.tSm.copy(color = colors.fg2)) }
-        BasicText(card.subject, style = type.tBase.copy(color = colors.fg))
-        if (card.inputText.isNotBlank()) {
-          // The whole input is kept; a long one scrolls inside its own bounded box instead of being cut.
-          BasicText(
-            card.inputText,
-            Modifier.fillMaxWidth().heightIn(max = INPUT_MAX_HEIGHT).background(colors.bgOverlay, RoundedCornerShape(SkillBillRadius.sm))
-              .verticalScroll(rememberScrollState()).padding(8.dp),
-            style = type.tSm.copy(color = colors.fg2, fontFamily = FontFamily.Monospace),
-          )
-        }
-        BasicText(card.metaText(), style = type.tSm.copy(color = colors.fgMuted))
-        decision.forEach { BasicText(it, style = type.tSm.copy(color = colors.fg2)) }
-        card.deliveryText()?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
-        if (card.providerDisposition != "none") {
-          BasicText("The provider ${card.providerDisposition.replace('_', ' ')}.", style = type.tSm.copy(color = colors.fgMuted))
-        }
-        // A settled or restored card keeps every provider option, in order, with the chosen one marked; no control is shown.
-        if (!card.isPending) card.options.forEach { ReadOnlyOption(card, it) }
-      }
-    }
+    BasicText(outcome, style = type.tSm.copy(color = if (card.isPending) colors.accentText else colors.fgMuted))
+    ApprovalScrollText(card.reason?.takeIf { it.isNotBlank() } ?: card.subject, type.tSm.copy(color = colors.fg2))
     if (card.isPending) ApprovalControls(message, actions, offReason)
-    actions?.onOpenRules?.let { open ->
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       SbButton(
-        label = "Repository rules",
-        onClick = open,
+        label = if (expanded) "Hide details" else "Show details",
+        onClick = { expanded = !expanded },
         variant = SbButtonVariant.Ghost,
         size = SbControlSize.Small,
-        icon = LucideIcons.shield,
-        modifier = Modifier.semantics { contentDescription = "Show and revoke always-allow rules for this repository" },
+        icon = if (expanded) LucideIcons.chevronUp else LucideIcons.chevronDown,
+        modifier = Modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
       )
+      actions?.onOpenRules?.let { open ->
+        SbButton(label = "Repository rules", onClick = open, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+      }
     }
-    message.refusal?.let { BasicText(it, style = type.tSm.copy(color = colors.stFailed), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
+    if (expanded) {
+      ApprovalScrollText(card.detailsText(decision), type.tSm.copy(color = colors.fgMuted, fontFamily = FontFamily.Monospace))
+    }
+    message.refusal?.let { ApprovalScrollText(it, type.tSm.copy(color = colors.stFailed), Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
   }
 }
 
@@ -162,47 +159,74 @@ private fun ApprovalCard.metaText(): String = listOfNotNull(
 ).joinToString("  ·  ")
 
 @Composable
+private fun ApprovalScrollText(text: String, style: TextStyle, modifier: Modifier = Modifier) {
+  val scroll = rememberScrollState()
+  val maxHeight = with(LocalDensity.current) { (style.lineHeight.toPx() * VISIBLE_TEXT_LINES).toDp() }
+  Box(modifier.fillMaxWidth().heightIn(max = maxHeight)) {
+    SelectionContainer {
+      BasicText(text, Modifier.fillMaxWidth().verticalScroll(scroll).padding(end = 12.dp), style = style)
+    }
+    Box(Modifier.matchParentSize()) {
+      VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+    }
+  }
+}
+
+private fun ApprovalCard.detailsText(decision: List<String>): String = buildList {
+  add(subject)
+  if (inputText.isNotBlank() && inputText != subject) add(inputText)
+  add(metaText())
+  addAll(decision)
+  deliveryText()?.let(::add)
+  if (providerDisposition != "none") add("The provider ${providerDisposition.replace('_', ' ')}.")
+  options.forEach { option ->
+    val selected = option.optionId == selectedOptionId && !decidedByRule
+    add(option.label + " (${option.kind})" + if (selected) " — selected" else "")
+    if (option.kind == PROVIDER_REMEMBER_OPTION_KIND) add(REMEMBER_UNAVAILABLE)
+    else if (option.kind != ALLOW_KIND && option.kind != DENY_KIND) add("Unavailable: this choice is not supported from this card.")
+  }
+  if (isPending && options.any { it.kind == ALLOW_KIND }) {
+    add(grants?.alwaysAllowUnavailable ?: "Always allow saves this exact action for this repository; revoke it under Repository rules.")
+  }
+}.joinToString("\n")
+
+@Composable
 private fun ApprovalControls(message: ChatMessage.Approval, actions: ChatApprovalActions?, offReason: String?) {
   val colors = SkillBillTheme.colors
   val card = message.card
   val enabled = offReason == null && actions != null
   val grants = card.grants
-  val type = SkillBillTheme.type
   val allowOption = card.options.firstOrNull { it.kind == ALLOW_KIND }
-  val alwaysUnavailable = grants?.alwaysAllowUnavailable
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    // One option per row: its full label wraps and stays selectable, so a long provider label is never clipped.
-    var firstAllow = true
-    card.options.forEach { option ->
-      val primary = option.kind == ALLOW_KIND && firstAllow
-      if (option.kind == ALLOW_KIND) firstAllow = false
-      OptionRow(card, option, primary, enabled && option.isSelectable(grants?.oneTimeUnavailable), actions)
-    }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      if (allowOption != null) {
+      card.options.filter { it.kind == ALLOW_KIND || it.kind == DENY_KIND }.forEach { option ->
+        val primary = option == allowOption
+        val label = if (card.options.count { it.kind == option.kind } > 1) option.label
+          else if (option.kind == ALLOW_KIND) "Allow once" else "Deny"
         SbButton(
-          label = alwaysAllowLabel(card),
-          onClick = { actions?.onDecide(card.key, allowOption.optionId, true) },
+          label = label,
+          onClick = { actions?.onDecide(card.key, option.optionId, false) },
+          tooltip = option.label,
+          modifier = Modifier.semantics { contentDescription = option.label },
+          variant = if (primary) SbButtonVariant.Primary else if (option.kind == DENY_KIND) SbButtonVariant.Danger else SbButtonVariant.Secondary,
           size = SbControlSize.Small,
-          enabled = enabled && alwaysUnavailable == null,
+          enabled = enabled && option.isSelectable(grants?.oneTimeUnavailable),
         )
       }
-      SbButton(
-        label = "Dismiss",
-        onClick = { actions?.onDismiss(card.key) },
-        variant = SbButtonVariant.Ghost,
-        size = SbControlSize.Small,
-        enabled = enabled,
-      )
-    }
-    if (allowOption != null) {
-      BasicText(
-        alwaysUnavailable ?: "Allows this exact action in this repository from now on; revoke it under Repository rules.",
-        style = type.tSm.copy(color = colors.fgMuted),
-      )
+      if (allowOption != null) {
+        SbButton(
+          label = "Always allow",
+          tooltip = alwaysAllowLabel(card) + ": this exact action only",
+          onClick = { actions?.onDecide(card.key, allowOption.optionId, true) },
+          size = SbControlSize.Small,
+          enabled = enabled && grants?.alwaysAllowUnavailable == null,
+        )
+      }
+      SbButton(label = "Dismiss", onClick = { actions?.onDismiss(card.key) }, variant = SbButtonVariant.Ghost,
+        size = SbControlSize.Small, enabled = enabled)
     }
     val note = offReason ?: grants?.oneTimeUnavailable?.let { "Allowing is unavailable: $it" }
-    note?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted)) }
+    note?.let { ApprovalScrollText(it, SkillBillTheme.type.tSm.copy(color = colors.fgMuted)) }
   }
 }
 
@@ -234,60 +258,9 @@ private fun ApprovalCard.selectedLabel(): String? = when (decisionSource) {
 private val ApprovalCard.decidedByRule: Boolean
   get() = decisionSource == "operator_rule" || decisionSource == "stored_rule"
 
-/** One provider option of a card that can no longer be answered: full wrapping label, kind and whether it was chosen. */
-@Composable
-private fun ReadOnlyOption(card: ApprovalCard, option: ApprovalCardOption) {
-  val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  val selected = option.optionId == card.selectedOptionId && !card.decidedByRule
-  val suffix = buildString {
-    append(" (${option.kind})")
-    if (selected) append(" — selected")
-    if (option.kind == PROVIDER_REMEMBER_OPTION_KIND) append(" — not available as app consent")
-  }
-  BasicText(
-    option.label + suffix,
-    style = (if (selected) type.tSmMedium else type.tSm).copy(color = if (selected) colors.fg else colors.fgMuted),
-  )
-}
-
 // A deny needs no grant; an allow needs the runtime's one-time answer to be available. A remembering option is never one.
 private fun ApprovalCardOption.isSelectable(oneTimeUnavailable: String?): Boolean = when (kind) {
   ALLOW_KIND -> oneTimeUnavailable == null
   DENY_KIND -> true
   else -> false
-}
-
-@Composable
-private fun OptionRow(card: ApprovalCard, option: ApprovalCardOption, primary: Boolean, enabled: Boolean, actions: ChatApprovalActions?) {
-  val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  val button = when (option.kind) {
-    ALLOW_KIND -> if (primary) SbButtonVariant.Primary else SbButtonVariant.Secondary
-    DENY_KIND -> SbButtonVariant.Danger
-    else -> null
-  }
-  Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-    SelectionContainer(Modifier.weight(1f)) {
-      Column {
-        BasicText(option.label, style = type.tSm.copy(color = colors.fg))
-        // A remembering choice has no button, so the reason it cannot be chosen is text, not only a hover.
-        if (button == null) {
-          val why = if (option.kind == PROVIDER_REMEMBER_OPTION_KIND) REMEMBER_UNAVAILABLE else "Unavailable: this choice is not supported from this card."
-          BasicText(why, style = type.tSm.copy(color = colors.fgMuted))
-        }
-      }
-    }
-    if (button != null) {
-      SbButton(
-        label = if (option.kind == ALLOW_KIND) "Allow" else "Deny",
-        onClick = { actions?.onDecide(card.key, option.optionId, false) },
-        // The visible label is short; the accessible name is the provider's full option label.
-        modifier = Modifier.semantics { contentDescription = option.label },
-        variant = button,
-        size = SbControlSize.Small,
-        enabled = enabled,
-      )
-    }
-  }
 }
